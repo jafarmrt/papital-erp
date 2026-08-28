@@ -2,7 +2,7 @@
 #  Papital ERP - Local Startup Script
 #  Starts: Portable PostgreSQL -> Dev Server (API + Frontend)
 #  URL: http://localhost:3000
-#  NOTE: Always stop with .\stop-local.ps1 — never Ctrl+C this window.
+#  NOTE: Always stop with .\stop-local.ps1 - never Ctrl+C this window.
 # ============================================================
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -36,7 +36,7 @@ if (Test-PgPort) {
     if (Test-PgPort) {
         Write-Host "      PostgreSQL started." -ForegroundColor Green
     } else {
-        Write-Host "      PostgreSQL did NOT come up — check .pgdata\server.log" -ForegroundColor Red
+        Write-Host "      PostgreSQL did NOT come up - check .pgdata\server.log" -ForegroundColor Red
         exit 1
     }
 }
