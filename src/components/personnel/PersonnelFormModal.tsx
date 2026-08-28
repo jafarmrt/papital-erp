@@ -272,19 +272,25 @@ export function PersonnelFormModal({
                 </select>
               </div>
 
-              {/* V10-4.4: مدل حقوق ثابت/ترکیبی */}
+              {/* V10-4.4 / V1.3.1: مدل حقوق — گزینه‌های متمایز با توضیح صریح تفاوت‌ها */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">مدل حقوق</label>
                 <select
-                  value={formData.salaryType || 'none'}
+                  value={formData.salaryType === 'monthly_fixed' || formData.salaryType === 'mixed' ? formData.salaryType : 'piecework'}
                   onChange={(e) => setFormData((prev) => ({ ...prev, salaryType: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 >
-                  <option value="none">پرداخت بر اساس کارکرد پرکیسی</option>
-                  <option value="piecework">پرکیسی (با نرخ عناوین کاری)</option>
-                  <option value="monthly_fixed">حقوق ثابت ماهانه</option>
-                  <option value="mixed">ترکیبی (ثابت + پرکیسی)</option>
+                  <option value="piecework">پرکیسی — کارمزد بر اساس عناوین کاری</option>
+                  <option value="monthly_fixed">حقوق ثابت ماهانه — بدون کارمزد</option>
+                  <option value="mixed">ترکیبی — حقوق ثابت + کارمزد پرکیسی</option>
                 </select>
+                <p className="text-[10px] text-slate-500 mt-1 leading-5">
+                  {formData.salaryType === 'monthly_fixed'
+                    ? 'این شخص فقط حقوق ماهانه ثابت می‌گیرد؛ فیش او صرفاً بابت حقوق پایه صادر می‌شود و ردیف کارکرد پرکیسی ندارد.'
+                    : formData.salaryType === 'mixed'
+                      ? 'فیش این شخص = حقوق ماهانه ثابت + جمع کارکرد پرکیسی همان دوره (دو ردیف جدا در فیش).'
+                      : 'فیش این شخص فقط بر اساس نرخ عناوین کاری و مقدار کارکرد ثبت‌شده محاسبه می‌شود؛ حقوق پایه ثابت ندارد.'}
+                </p>
               </div>
 
               {(formData.salaryType === 'monthly_fixed' || formData.salaryType === 'mixed') && (

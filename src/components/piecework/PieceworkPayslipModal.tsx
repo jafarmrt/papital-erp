@@ -112,7 +112,7 @@ export function PieceworkPayslipModal({
 
           {/* Items Breakdown Table */}
           <div>
-            <h3 className="text-xs font-black text-slate-800 mb-2">ریز کارکردهای انجام‌شده در این دوره:</h3>
+            <h3 className="text-xs font-black text-slate-800 mb-2">ریز مبانی محاسبه فیش (کارکرد پرکیسی و حقوق پایه):</h3>
             <table className="w-full text-right border-collapse text-xs border border-slate-300">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-300 text-slate-800 font-bold">
@@ -137,9 +137,35 @@ export function PieceworkPayslipModal({
                     <td className="p-2 text-center font-bold">{formatPersianPrice(item.totalAmount)}</td>
                   </tr>
                 ))}
+                {/* ردیف توضیحی حقوق ثابت: مبنا و بابت مبلغ اضافه‌شده */}
+                {(Number(viewingPayroll.totalFixedAmount) || 0) > 0 && (
+                  <tr className="bg-indigo-50/60">
+                    <td className="p-2 border-l border-slate-200 text-slate-500">{formatPersianNumber((viewingPayroll.items?.length || 0) + 1)}</td>
+                    <td className="p-2 border-l border-slate-200 font-bold">
+                      {formatPersianDate(viewingPayroll.startDate)} تا {formatPersianDate(viewingPayroll.endDate)}
+                    </td>
+                    <td className="p-2 border-l border-slate-200 font-sans font-bold text-indigo-800">
+                      حقوق ثابت ماهانه — بابت حقوق پایه ثبت‌شده در پرونده پرسنلی
+                    </td>
+                    <td className="p-2 border-l border-slate-200 text-center font-bold">۱ دوره ماهانه</td>
+                    <td className="p-2 border-l border-slate-200 text-center">{formatPersianPrice(viewingPayroll.totalFixedAmount)}</td>
+                    <td className="p-2 text-center font-bold text-indigo-800">+{formatPersianPrice(viewingPayroll.totalFixedAmount)}</td>
+                  </tr>
+                )}
+                {(!viewingPayroll.items || viewingPayroll.items.length === 0) && (Number(viewingPayroll.totalFixedAmount) || 0) <= 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-4 text-center text-slate-400 font-sans">در این دوره ردیف کارکرد پرکیسی ثبت نشده است.</td>
+                  </tr>
+                )}
               </tbody>
-            </table>
-          </div>
+          </table>
+          {/* توضیح مبنای محاسبه برای پرسنل */}
+          <p className="text-[10px] text-slate-500 mt-1.5 leading-5">
+            {(Number(viewingPayroll.totalFixedAmount) || 0) > 0
+              ? `ردیف «حقوق ثابت ماهانه» بابت حقوق پایه ماهانه ثبت‌شده در پرونده پرسنلی (${viewingPayroll.personnelName}) برای دوره فوق اضافه شده است.`
+              : 'مبالغ این فیش صرفاً بر اساس ردیف‌های کارکرد پرکیسی (نرخ عناوین کاری) محاسبه شده است.'}
+          </p>
+        </div>
 
           {/* Totals Summary Card */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
