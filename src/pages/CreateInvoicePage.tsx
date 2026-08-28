@@ -7,7 +7,7 @@ import { Plus, Trash2, Printer, Edit3, X, GitBranch } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { cn, formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
+import { cn, formatPersianPrice, formatPersianNumber, formatPersianCode, formatPersianDate, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
@@ -129,7 +129,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setDocType(doc.type || 'invoice');
       setStatus(doc.status || 'proforma');
       setRefNumber(doc.ref_number || p.ref_number || '');
-      if (doc.date) setDate(new Date(doc.date));
+      if (doc.date) setDate(formatPersianDate(doc.date, { englishDigits: true }));
       setBuyerName(doc.buyer_name || '');
       setBuyerCity(doc.buyer_city || '');
       setBuyerPhone(doc.buyer_phone || '');
@@ -758,7 +758,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 {proformas.map((p) => (
                   <tr key={p.id} className={cn("hover:bg-slate-50", editingDocId === p.id && "bg-amber-50/60 font-bold")}>
                     <td className="p-3 font-mono font-bold">{p.ref_number}</td>
-                    <td className="p-3 font-mono">{new Date(p.date).toLocaleDateString('fa-IR')}</td>
+                    <td className="p-3 font-mono">{formatPersianDate(p.date)}</td>
                     <td className="p-3">{p.buyer_name || '-'}</td>
                     <td className="p-3 text-center">
                       <div className="flex justify-center items-center gap-2">

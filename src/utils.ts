@@ -312,6 +312,24 @@ export function formatQuantityOrTime(val: number | string | null | undefined, un
   }
 }
 
+/**
+ * تشخیص رشته‌های میلادی بدون پسوند منطقه‌زمانی (مثل `2026-08-28T15:30:00` که
+ * businessClock به‌صورت ساعت محلیِ منطقه توافقی می‌نویسد). این مقادیر نباید با
+ * `new Date()` (تفسیر وابسته به مرورگر) پارس شوند — بخش‌های عددی مستقیم جلالی می‌شوند.
+ * اگر رشته Z یا آفست صریح داشته باشد null برمی‌گردد تا مسیر عادی (Intl با display TZ) برود.
+ */
+function formatWallClockGregorian(englishStr: string, withTime: boolean): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/.exec(englishStr.trim());
+  if (!m) return null;
+  if (/[zZ]$/.test(englishStr) || /[+-]\d{2}:?\d{2}$/.test(englishStr)) return null;
+  const [, Y, M, D, H, MI, S] = m;
+  const utc = new Date(Date.UTC(Number(Y), Number(M) - 1, Number(D), Number(H || 0), Number(MI || 0), Number(S || 0)));
+  const opts: Intl.DateTimeFormatOptions = withTime
+    ? { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
+    : { year: 'numeric', month: '2-digit', day: '2-digit' };
+  return new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'UTC', ...opts }).format(utc);
+}
+
 export function formatPersianDate(dateInput: any, options?: { englishDigits?: boolean }): string {
   if (!dateInput) return '-';
   try {
@@ -371,6 +389,10 @@ export function formatPersianDate(dateInput: any, options?: { englishDigits?: bo
       }
       return options?.englishDigits ? normalized : toPersianDigits(normalized);
     }
+
+    // رشته میلادی بدون TZ = ساعت محلیِ منطقه توافقی — بدون تفسیر مرورگر
+    const wall = formatWallClockGregorian(englishStr, false);
+    if (wall) return options?.englishDigits ? toEnglishDigits(wall) : toPersianDigits(wall);
 
     // Gregorian string or Date object
     const cleanStr = englishStr.replace(' ', 'T');
@@ -462,6 +484,9 @@ export function formatPersianDateTime(dateInput: any): string {
       if (/^1[345]\d{2}/.test(englishStr)) {
         return toPersianDigits(rawStr);
       }
+      // رشته میلادی بدون TZ = ساعت محلیِ منطقه توافقی — بدون تفسیر وابسته به مرورگر
+      const wall = formatWallClockGregorian(englishStr, true);
+      if (wall) return toPersianDigits(wall);
       const cleanStr = englishStr.replace(' ', 'T');
       d = new Date(cleanStr);
       if (isNaN(d.getTime())) {
