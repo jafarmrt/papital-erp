@@ -895,7 +895,36 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
     .where(and(eq(pieceworkPayrolls.isDeleted, 0), inArray(pieceworkPayrolls.personnelId, pIds)))
     .orderBy(desc(pieceworkPayrolls.id));
 
-    res.json(rows);
+    // ریز کارکردهای هر فیش — تا فیشی که پرسنل می‌بیند کاملاً با فیش صدورکننده یکسان باشد
+    const payrollIds = rows.map(r => r.id);
+    let itemsByPayroll = new Map<number, any[]>();
+    if (payrollIds.length > 0) {
+      const logs = await orm.select({
+        id: pieceworkLogs.id,
+        payrollId: pieceworkLogs.payrollId,
+        date: pieceworkLogs.date,
+        taskId: pieceworkLogs.taskId,
+        taskTitle: pieceworkTasks.title,
+        taskCode: pieceworkTasks.code,
+        taskCategory: pieceworkTasks.category,
+        unit: pieceworkTasks.unit,
+        quantity: pieceworkLogs.quantity,
+        unitRate: pieceworkLogs.unitRate,
+        totalAmount: pieceworkLogs.totalAmount,
+        notes: pieceworkLogs.notes
+      })
+      .from(pieceworkLogs)
+      .innerJoin(pieceworkTasks, eq(pieceworkLogs.taskId, pieceworkTasks.id))
+      .where(and(inArray(pieceworkLogs.payrollId, payrollIds), eq(pieceworkLogs.isDeleted, 0)))
+      .orderBy(pieceworkLogs.date);
+      for (const lg of logs) {
+        const arr = itemsByPayroll.get(lg.payrollId) || [];
+        arr.push(lg);
+        itemsByPayroll.set(lg.payrollId, arr);
+      }
+    }
+
+    res.json(rows.map(r => ({ ...r, items: itemsByPayroll.get(r.id) || [] })));
   } catch (err: any) {
     logger.error({ message: 'Error fetching my payrolls', error: err });
     throw err;
@@ -1020,9 +1049,36 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
     });
 
     // V10-4.4: مدل حقوق ثابت/ترکیبی — سهم حقوق ماهانه بدون نیاز به ردیف کارکرد
+    // V1.3.2: حقوق ماهانه فقط «یک بار» در هر ماه جلالی به پرسنل تعلق می‌گیرد —
+    // جمع سهم ثابت فیش‌های قبلی همان ماه از سهم فعلی کسر می‌شود تا صدور چند فیش در یک ماه منجر به پرداخت تکراری نشود.
     const salaryType = String((pInfo as any).salaryType || 'none');
     const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
-    const fixedPortion = fixedIncluded ? Number(pInfo.monthlySalary || 0) : 0;
+    let fixedPortion = fixedIncluded ? Number(pInfo.monthlySalary || 0) : 0;
+
+    let fixedDedupNote = '';
+    if (fixedIncluded && fixedPortion > 0) {
+      const targetMonthKey = sDate.slice(0, 7); // '1405/06'
+      const priorFixedPayrolls = await orm.select({
+        id: pieceworkPayrolls.id,
+        payrollNumber: pieceworkPayrolls.payrollNumber,
+        startDate: pieceworkPayrolls.startDate,
+        totalFixedAmount: pieceworkPayrolls.totalFixedAmount
+      })
+      .from(pieceworkPayrolls)
+      .where(and(
+        eq(pieceworkPayrolls.personnelId, pId),
+        eq(pieceworkPayrolls.isDeleted, 0)
+      ));
+      const sameMonthFixed = priorFixedPayrolls.filter(pr => String(pr.startDate || '').slice(0, 7) === targetMonthKey);
+      const alreadyGranted = sameMonthFixed.reduce((sum, pr) => sum + Number(pr.totalFixedAmount || 0), 0);
+      if (alreadyGranted > 0) {
+        fixedPortion = Math.max(0, fixedPortion - alreadyGranted);
+        const refs = sameMonthFixed.map(pr => pr.payrollNumber).join('، ');
+        fixedDedupNote = alreadyGranted >= Number(pInfo.monthlySalary || 0)
+          ? `سهم حقوق ثابت ماه ${targetMonthKey} قبلاً به‌طور کامل در فیش(های) ${refs} محاسبه شده است؛ این فیش فقط کارکرد پرکیسی را پوشش می‌دهد.`
+          : `سهم حقوق ثابت این ماه با کسر مبلغ قبلی (فیش ${refs}) محاسبه شد.`;
+      }
+    }
 
     if (eligibleLogs.length === 0 && fixedPortion <= 0) {
       return res.status(400).json({ error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' });
@@ -1040,6 +1096,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
     const payrollNumber = `PAY-${seq}`;
 
     const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${sDate} تا ${eDate})`;
+    const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
 
     const [newPayroll] = await orm.insert(pieceworkPayrolls).values({
       payrollNumber,
@@ -1053,7 +1110,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
       totalDeductions: totDeductions,
       netPayable: net,
       status: 'approved',
-      notes: notes ? String(notes).trim() : '',
+      notes: finalNotes,
       createdById: currentUserId,
       isDeleted: 0
     }).returning();

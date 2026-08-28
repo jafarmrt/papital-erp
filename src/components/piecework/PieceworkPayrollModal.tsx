@@ -28,6 +28,8 @@ interface PieceworkPayrollModalProps {
   payrollPreviewLogs: PieceworkLog[];
   // V10-4.4: پرسنل حقوق ثابت/ترکیبی بدون کارکرد هم فیش می‌گیرد
   allowNoLogs?: boolean;
+  // V1.3.2: هشدار سهم باقی‌مانده حقوق ثابت ماه انتخابی
+  fixedRemainingHint?: string | null;
   isSaving?: boolean;
 }
 
@@ -50,6 +52,7 @@ export function PieceworkPayrollModal({
   setPayrollNotes,
   payrollPreviewLogs,
   allowNoLogs = false,
+  fixedRemainingHint = null,
   isSaving = false
 }: PieceworkPayrollModalProps) {
   const appCurrency = useAppCurrency();
@@ -127,6 +130,15 @@ export function PieceworkPayrollModal({
                   {formatPersianPrice(payrollPreviewLogs.reduce((sum, l) => sum + (l.totalAmount || 0), 0), appCurrency)}
                 </span>
               </div>
+              {fixedRemainingHint && (
+                <div className={`text-[11px] font-bold leading-5 rounded-lg p-2 border ${
+                  fixedRemainingHint.startsWith('هشدار')
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                }`}>
+                  {fixedRemainingHint}
+                </div>
+              )}
             </div>
           )}
 

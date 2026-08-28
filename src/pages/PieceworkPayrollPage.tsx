@@ -72,6 +72,7 @@ export function PieceworkPayrollPage() {
     payrollNotes,
     setPayrollNotes,
     payrollFixedIncluded,
+    payrollFixedRemainingHint,
     viewingPayroll,
     setViewingPayroll,
     categoriesList,
@@ -269,6 +270,7 @@ export function PieceworkPayrollPage() {
         setPayrollNotes={setPayrollNotes}
         payrollPreviewLogs={payrollPreviewLogs}
         allowNoLogs={payrollFixedIncluded}
+        fixedRemainingHint={payrollFixedRemainingHint}
         isSaving={isSavingPayroll}
       />
 
