@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, Plus, Eye, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw } from 'lucide-react';
+import { FileText, Plus, Eye, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatPersianNumber, formatPersianPrice, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -96,9 +96,16 @@ export function PieceworkPayrollsTab({
                 payrollsList.map((payroll) => {
                   const isPaid = payroll.status === 'paid';
                   const isSyncing = syncingId === payroll.id;
+                  // V1.3.4: ردیف توضیحی حقوق ثابت در خود لیست
+                  const fixedAmount = Number((payroll as any).totalFixedAmount || 0);
+                  const dedupNote = (payroll.notes || '')
+                    .split(' | ')
+                    .find((seg: string) => seg.includes('سهم حقوق ثابت')) || '';
+                  const hasFixedRow = fixedAmount > 0 || dedupNote !== '';
 
                   return (
-                    <tr key={payroll.id} className="hover:bg-slate-50/80 transition-all text-slate-700">
+                    <React.Fragment key={payroll.id}>
+                    <tr className="hover:bg-slate-50/80 transition-all text-slate-700">
                       <td className="p-3 font-mono font-black text-slate-900">{payroll.payrollNumber}</td>
                       <td className="p-3 font-black text-slate-900">{payroll.personnelName}</td>
                       <td className="p-3 font-mono text-slate-600">
@@ -173,6 +180,29 @@ export function PieceworkPayrollsTab({
                         </div>
                       </td>
                     </tr>
+                    {hasFixedRow && (
+                      <tr className="bg-indigo-50/40">
+                        <td colSpan={10} className="p-2.5 border-b border-indigo-100">
+                          <div className="flex flex-col gap-0.5">
+                            {fixedAmount > 0 && (
+                              <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-800">
+                                <Wallet size={12} className="shrink-0" />
+                                <span>
+                                  سهم حقوق ثابت ماهانه این فیش: <span className="font-mono">+{formatPersianPrice(fixedAmount)}</span> — بابت حقوق پایه ثبت‌شده در پرونده پرسنلی
+                                </span>
+                              </div>
+                            )}
+                            {dedupNote && (
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700">
+                                <Info size={11} className="shrink-0" />
+                                <span>{dedupNote}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })
               )}
