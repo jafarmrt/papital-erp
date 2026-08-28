@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS, authenticateToken } from '../middleware/auth.js';
+import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
@@ -223,7 +223,8 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
     let logoPath = logo || '';
     if (logoPath && logoPath.startsWith('data:image')) {
-      logoPath = await uploadBase64ToStorage(logoPath, 'image');
+      // پیشوند 'logo' → فایل لوگو در /uploads عمومی سرو می‌شود (صفحه ورود بدون نشست)
+      logoPath = await uploadBase64ToStorage(logoPath, 'image', 'logo');
     }
 
     const [user] = await orm.insert(users).values({
@@ -260,7 +261,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     const { password: _, ...userWithoutPassword } = user;
     
     // Set secure HttpOnly cookie
-    res.cookie(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
     res.json({ success: true, user: { ...userWithoutPassword, full_name: user.fullName || user.username }, token });
   } finally {
@@ -316,7 +317,7 @@ router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
       const { password: _, ...userWithoutPassword } = user;
       
       // Set secure HttpOnly cookie
-      res.cookie(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
       await logActivity({
         userId: user.id,
@@ -376,7 +377,7 @@ const logoutHandler = asyncHandler(async (req: any, res: any) => {
     });
   }
 
-  res.clearCookie(AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS);
+  res.clearCookie(AUTH_COOKIE_NAME, getAuthCookieOptions(req));
 
   res.json({ success: true, message: 'خروج از حساب با موفقیت انجام شد' });
 });

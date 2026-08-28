@@ -14,7 +14,7 @@ import {
   eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions,
   projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs
 } from '../db/schema.js';
-import { authenticateToken, AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS } from '../middleware/auth.js';
+import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
@@ -147,7 +147,8 @@ router.post('/settings', authorize('admin', 'manager'), validate(settingsSchema)
       for (const item of settings) {
         let val = item.value;
         if (item.key === 'company_logo' && val && val.startsWith('data:image')) {
-          val = await uploadBase64ToStorage(val, 'image');
+          // پیشوند 'logo' → سرو عمومی در صفحه ورود (بدون نشست)
+          val = await uploadBase64ToStorage(val, 'image', 'logo');
         }
         // V10-1.1: TZ اعتبارسنجی سمت سرور برای ساعت توافقی واحد
         if (item.key === 'display_timezone') {
@@ -383,7 +384,7 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
     await runSeed();
 
     // Clear authentication cookie so the current session terminates immediately
-    res.clearCookie(AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS);
+    res.clearCookie(AUTH_COOKIE_NAME, getAuthCookieOptions(req));
 
     res.json({
       success: true,

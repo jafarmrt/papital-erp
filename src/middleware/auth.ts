@@ -41,6 +41,23 @@ export const AUTH_COOKIE_OPTIONS = {
   path: '/'
 };
 
+/**
+ * V1.3.8: کوکی احراز هویت بر اساس پروتکل واقعی درخواست تنظیم می‌شود.
+ * - HTTPS (دامنه با SSL / پیش‌نمایش AI Studio): Secure + SameSite=None (پشتیبانی iframe)
+ * - HTTP (سرور مجازی قبل از تنظیم دامنه): بدون Secure + SameSite=Lax — چون مرورگرهای
+ *   مدرن کوکی Secure را روی HTTP ذخیره نمی‌کنند و ورود/تصاویر از کار می‌افتاد.
+ */
+export const getAuthCookieOptions = (req?: any) => {
+  const isHttps = req?.secure === true || req?.headers?.['x-forwarded-proto'] === 'https';
+  return {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+    path: '/'
+  };
+};
+
 export const generateCsrfToken = (): string => {
   return crypto.randomBytes(32).toString('hex');
 };

@@ -6,6 +6,22 @@ import { AIUpdateLog } from './types';
  */
 export const v1Updates: AIUpdateLog[] = [
   {
+    version: 'v1.3.8',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'رفع نمایش نیامدن تصاویر آپلودی روی سرور (کوکی شرطی HTTP/HTTPS)',
+    summary: 'کوکی احراز هویت با پرچم Secure روی HTTP خالص توسط مرورگرهای مدرن ذخیره نمی‌شود؛ در نتیجه درخواست‌های نمایش تصاویر (/uploads) بدون کوکی با 401 رد می‌شدند. کوکی اکنون بر اساس پروتکل واقعی درخواست تنظیم می‌شود (HTTP: بدون Secure با SameSite=Lax — HTTPS: با Secure و SameSite=None مثل قبل) و فایل‌های لوگوی شرکت عمومی سرو می‌شوند.',
+    author: 'AI Agent (V1.3.8 — Conditional Auth Cookie & Public Branding Images)',
+    changes: [
+      'getAuthCookieOptions(req): کوکی ورود بر اساس پروتکل واقعی (req.secure / X-Forwarded-Proto) — HTTPS: Secure + SameSite=None (پیش‌نمایش iframe و دامنه SSL)، HTTP: بدون Secure + SameSite=Lax',
+      'اعمال در همه نقاط Set/Clear کوکی: setup، login، logout و reset سیستم',
+      'لوگوی شرکت (setup و تنظیمات) با پیشوند logo- در نام فایل ذخیره می‌شود تا در گارد /uploads عمومی و بدون نشست سرو شود (نمایش در صفحه ورود)',
+      'پس از تنظیم دامنه و SSL، پرچم Secure و SameSite=None به‌صورت خودکار بازمی‌گردند — بدون هیچ تغییر دستی'
+    ],
+    fixes: [
+      'نمایش نیامدن تصاویر آپلودی روی سرور مجازی (401 روی /uploads به‌دلیل کوکی Secure روی HTTP)'
+    ]
+  },
+  {
     version: 'v1.3.7',
     date: '۶ شهریور ۱۴۰۵',
     title: 'رفع صفحه سفید در دسترسی HTTP مستقیم به سرور (CSP)',

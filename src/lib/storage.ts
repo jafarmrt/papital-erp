@@ -7,7 +7,7 @@ const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024;
 // Allowed MIME formats
 const ALLOWED_MIME_TYPES = new Set(['jpeg', 'jpg', 'png', 'webp', 'gif', 'svg+xml']);
 
-export const uploadBase64ToStorage = async (base64String: string, type: 'image' | 'thumbnail' = 'image'): Promise<string> => {
+export const uploadBase64ToStorage = async (base64String: string, type: 'image' | 'thumbnail' = 'image', namePrefix?: string): Promise<string> => {
   if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:image')) {
     return base64String;
   }
@@ -37,7 +37,9 @@ export const uploadBase64ToStorage = async (base64String: string, type: 'image' 
     throw new Error('حجم تصویر ارسالی بیش از حد مجاز است (حداکثر ۳ مگابایت)');
   }
   
-  const fileName = `${uuidv4()}.${ext}`;
+  // V1.3.8: پیشوند نام فایل (مثل 'logo') باعث می‌شود فایل در گارد /uploads عمومی و
+  // بدون احراز هویت سرو شود — برای لوگوی شرکت که در صفحه ورود (بدون نشست) نمایش داده می‌شود.
+  const fileName = `${namePrefix ? namePrefix + '-' : ''}${uuidv4()}.${ext}`;
   const uploadDir = path.join(process.cwd(), 'public', 'uploads');
   
   if (!fs.existsSync(uploadDir)) {
