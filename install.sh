@@ -31,7 +31,14 @@ if [ "$(id -u)" -ne 0 ]; then
     die "Run as root or install sudo first."
   fi
 else
-  SUDO=""
+  # Root: still use sudo (it always exists for the postgres -u steps and works as root).
+  # Fallback to empty SUDO only if sudo is somehow missing.
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+  else
+    SUDO=""
+  fi
+  log "Running as root."
 fi
 
 # ---------- 1) Source mode: git clone OR current directory (uploaded zip) ----------
@@ -64,7 +71,7 @@ PG_MAJOR="$(psql --version 2>/dev/null | grep -oE '^[0-9]+' | head -1 || true)"
 if [ -z "$PG_MAJOR" ] || [ "$PG_MAJOR" -lt 14 ]; then
   log "Installing PostgreSQL 16 from PGDG repository..."
   . /etc/os-release
-  curl -fsSL "https://www.postgresql.org/media/keys/ACCC4CF8.asc" | $SUDO gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+  curl -fsSL "https://www.postgresql.org/media/keys/ACCC4CF8.asc" | $SUDO gpg --batch --yes --dearmor -o /usr/share/keyrings/pgdg.gpg
   echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
     | $SUDO tee /etc/apt/sources.list.d/pgdg.list >/dev/null
   $SUDO apt-get update -y
@@ -77,7 +84,8 @@ $SUDO systemctl enable --now postgresql
 # Node.js 22 LTS via NodeSource
 if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]; then
   log "Installing Node.js 22 LTS..."
-  curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash -
+  # NOTE: no `-E` here — with empty $SUDO (root) bash would try to run a command named "-E"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO bash -
   $SUDO apt-get install -y nodejs
 fi
 success "System dependencies installed (node $(node -v), $(psql --version | head -1))"
@@ -137,7 +145,7 @@ fi
 
 # ---------- 5) Install & build ----------
 log "[4/7] Installing npm dependencies (npm ci)..."
-npm ci --omit=dev=false
+npm ci
 log "[5/7] Building application..."
 npm run build
 success "Build completed (dist/server.cjs)."
