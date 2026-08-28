@@ -8,6 +8,7 @@ import { ConfirmDialogHost } from './ConfirmDialogHost';
 
 // Lazy-loaded page components for Code Splitting (FE-001)
 const Dashboard = lazy(() => import('../pages/Dashboard'));
+const InventoryStatusPage = lazy(() => import('../pages/InventoryStatusPage'));
 const CustomersPage = lazy(() => import('../pages/CustomersPage'));
 const PricingPage = lazy(() => import('../pages/PricingPage'));
 const GalleryPage = lazy(() => import('../pages/GalleryPage'));
@@ -51,8 +52,8 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
       <ConfirmDialogHost />
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        {/* V10-5.0: وضعیت انبار = محتوای داشبورد فعلی؛ داشبورد سراسری جدید آینده جایگزین «/» می‌شود */}
-        <Route path="/inventory-status" element={<Dashboard />} />
+        {/* V10-5.0: وضعیت انبار = داشبورد تحلیلی و هوش تجاری انبار */}
+        <Route path="/inventory-status" element={<InventoryStatusPage />} />
         <Route path="/crm" element={
           <ProtectedRoute requiredPerm="crm.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <CRMPage user={user} />

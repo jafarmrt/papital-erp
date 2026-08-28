@@ -1178,5 +1178,32 @@ export interface FiscalYearClosingResult {
   closingVouchers: JournalVoucher[];
 }
 
+export interface FairTradePrinciple {
+  number: number;
+  title: string;
+  description: string;
+  icon?: any;
+  tag: string;
+}
 
+export interface CalendarEventItem {
+  id: string | number;
+  date: string;
+  title: string;
+  subtitle?: string;
+  type: 'crm_followup' | 'crm_close' | 'daily_log' | 'event';
+  color?: string;
+  raw?: any;
+}
 
+export interface DashboardShortcutItem {
+  id: string;
+  title: string;
+  description: string;
+  path: string;
+  iconName: string;
+  category: string;
+  permission?: string;
+  badge?: string;
+  colorTheme: string;
+}

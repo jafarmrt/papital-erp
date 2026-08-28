@@ -405,6 +405,7 @@ export function useDailyLogs(user: User) {
   return {
     logs,
     stats,
+    loadLogsAndStats,
     systemUsers,
     projects,
     loading,
