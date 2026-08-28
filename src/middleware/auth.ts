@@ -108,7 +108,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     // V9-2.2: اعتبارسنجی زنده وضعیت کاربر — حذف نرم و ابطال نشست (tokenVersion)
     try {
       const [liveUser] = await orm
-        .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion })
+        .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName })
         .from(users)
         .where(eq(users.id, Number(payload.id)))
         .limit(1);
@@ -123,8 +123,9 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
         return res.status(401).json({ error: 'نشست شما به دلیل تغییر نقش یا اطلاعات کاربری منقضی شده است. لطفاً مجدداً وارد شوید.' });
       }
 
-      // نقش و توکن CSRF همیشه از وضعیت زنده دیتابیس بازخوانی می‌شوند
-      req.user = { ...payload, role: liveUser.role };
+      // نقش، نام کامل و توکن CSRF همیشه از وضعیت زنده دیتابیس بازخوانی می‌شوند
+      // یک موجودیت هویت کاربر: full_name همیشه در req.user موجود است
+      req.user = { ...payload, role: liveUser.role, full_name: liveUser.fullName || (payload as any).full_name || payload.username };
     } catch (dbErr) {
       // در صورت خطای موقت دیتابیس، اعتبارسنجی DB را نقض نکنیم اما لاگ ثبت شود
       return res.status(500).json({ error: 'خطا در اعتبارسنجی نشست کاربر' });

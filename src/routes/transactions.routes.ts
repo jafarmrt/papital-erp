@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { orm } from '../db/drizzle.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
-import { transactions, items } from '../db/schema.js';
+import { transactions, items, users } from '../db/schema.js';
 import { eq, desc, sql, and, gte, lte, or, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { validate, numericIdString } from '../middleware/validate.js';
@@ -62,7 +62,8 @@ router.get('/transactions', async (req, res) => {
         ilike(items.code, s),
         ilike(transactions.documentRef, s),
         ilike(transactions.notes, s),
-        ilike(transactions.createdBy, s)
+        ilike(transactions.createdBy, s),
+        ilike(users.fullName, s)
       )!);
     }
 
@@ -77,6 +78,7 @@ router.get('/transactions', async (req, res) => {
       documentType: transactions.documentType,
       documentRef: transactions.documentRef,
       user: transactions.createdBy,
+      userFullName: users.fullName,
       notes: transactions.notes,
       location: transactions.location,
       reversalOfId: transactions.reversalOfId,
@@ -87,7 +89,9 @@ router.get('/transactions', async (req, res) => {
       itemType: items.type
     })
     .from(transactions)
-    .innerJoin(items, eq(transactions.itemId, items.id));
+    .innerJoin(items, eq(transactions.itemId, items.id))
+    // یک موجودیت هویت کاربر: نمایش همیشه «نام کامل» کاربر (resolve از جدول users) با fallback به مقدار ثبت‌شده
+    .leftJoin(users, eq(users.username, transactions.createdBy));
 
     if (whereClause) {
       query = query.where(whereClause) as any;
@@ -109,7 +113,7 @@ router.get('/transactions', async (req, res) => {
       date: row.date,
       document_type: row.documentType,
       document_ref: row.documentRef,
-      user: row.user,
+      user: row.userFullName || row.user,
       notes: row.notes,
       location: row.location,
       reversal_of_id: row.reversalOfId,

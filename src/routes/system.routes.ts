@@ -234,19 +234,29 @@ router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => 
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const logs = await orm.select()
+    const logs = await orm.select({
+      log: activityLogs,
+      resolvedFullName: users.fullName
+    })
       .from(activityLogs)
+      .leftJoin(users, eq(users.username, activityLogs.username))
       .where(whereClause)
       .orderBy(desc(activityLogs.id))
       .limit(limit)
       .offset(offset);
+
+    // یک موجودیت هویت کاربر: نام کامل ثبت‌شده > نام کامل از جدول users > username
+    const data = logs.map(({ log: l, resolvedFullName }) => ({
+      ...l,
+      userFullName: l.userFullName || resolvedFullName || l.username
+    }));
 
     const [{ count }] = await orm.select({ count: sql<number>`count(*)` })
       .from(activityLogs)
       .where(whereClause);
 
     res.json({
-      data: logs,
+      data,
       total: Number(count),
       page,
       limit,
