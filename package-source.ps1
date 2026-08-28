@@ -33,6 +33,13 @@ foreach ($d in $excludeDirs) {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Normalize line endings of shell scripts to LF (required for Linux execution)
+Get-ChildItem $stage -Recurse -Include *.sh -File | ForEach-Object {
+    $c = [System.IO.File]::ReadAllText($_.FullName)
+    $c = $c -replace "`r`n", "`n"
+    [System.IO.File]::WriteAllText($_.FullName, $c, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 # Compress
 if (Test-Path $zipName) { Remove-Item $zipName -Force }
 Compress-Archive -Path "$stage\*" -DestinationPath $zipName -Force
