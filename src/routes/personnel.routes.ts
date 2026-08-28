@@ -97,6 +97,8 @@ router.get('/personnel/export', async (req, res) => {
         nationalId: personnel.nationalId,
         phone: personnel.phone,
         employmentStatus: personnel.employmentStatus,
+        salaryType: personnel.salaryType,
+        monthlySalary: personnel.monthlySalary,
         jobTitle: personnel.jobTitle,
         education: personnel.education,
         specializedSkills: personnel.specializedSkills,
@@ -338,6 +340,9 @@ router.get('/personnel', async (req, res) => {
         nationalId: personnel.nationalId,
         phone: personnel.phone,
         employmentStatus: personnel.employmentStatus,
+        // V1.3.3 (باگ اصلی): بدون این دو فیلد، فرم پرسنل پس از ذخیره/رفرش به پیش‌فرض برمی‌گشت
+        salaryType: personnel.salaryType,
+        monthlySalary: personnel.monthlySalary,
         jobTitle: personnel.jobTitle,
         education: personnel.education,
         endDate: personnel.endDate,
@@ -406,6 +411,9 @@ router.get('/personnel/:id', validate(paramsIdSchema), async (req, res) => {
         nationalId: personnel.nationalId,
         phone: personnel.phone,
         employmentStatus: personnel.employmentStatus,
+        // V1.3.3: فیلدهای مدل حقوق
+        salaryType: personnel.salaryType,
+        monthlySalary: personnel.monthlySalary,
         jobTitle: personnel.jobTitle,
         education: personnel.education,
         endDate: personnel.endDate,
