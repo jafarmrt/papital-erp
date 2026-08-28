@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { formatPersianDateTime } from '../../utils';
 
 interface WooCommerceTabProps {
   wcStoreUrl: string;
@@ -346,7 +347,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                         {log.documentId ? `#${log.documentId}` : '—'}
                       </td>
                       <td className="p-3 text-slate-500 font-mono text-[11px]">
-                        {log.createdAt ? new Date(log.createdAt).toLocaleString('fa-IR') : '—'}
+                        {log.createdAt ? formatPersianDateTime(log.createdAt) : '—'}
                       </td>
                       <td className="p-3 text-slate-600 max-w-xs truncate" title={log.errorMessage || ''}>
                         {log.errorMessage ? (

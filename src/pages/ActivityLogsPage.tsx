@@ -9,7 +9,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { ActivityLog } from '../types';
-import { formatPersianNumber, extractDateString } from '../utils';
+import { formatPersianNumber, formatPersianDateTime, extractDateString } from '../utils';
 import { useSearch } from '../SearchContext';
 import {
   useActivityLogsQuery,
@@ -73,23 +73,8 @@ export default function ActivityLogsPage() {
     setPage(1);
   };
 
-  const formatPersianDateTime = (dateStr: string) => {
-    if (!dateStr) return '—';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      return new Intl.DateTimeFormat('fa-IR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }).format(d);
-    } catch {
-      return dateStr;
-    }
-  };
+  // ساعت ثبت در سجل به‌صورت UTC ISO ذخیره می‌شود؛ نمایش همیشه با «ساعت توافقی سامانه»
+  // (display_timezone از تنظیمات) از فرمتر مرکزی utils انجام می‌شود — فرمتر محلی حذف شد.
 
   const getActionBadge = (action: string) => {
     switch (action) {

@@ -59,6 +59,15 @@ export function invalidateTimezoneCache(): void {
 }
 
 /**
+ * لحظه دقیق سیستم به‌صورت UTC ISO با پسوند Z — مخصوص ستون‌های timestamp لاگ‌ها
+ * (Audit Trail و ...). UTC ذخیره می‌شود تا نمایش در هر مرورگری با
+ * `display_timezone` سامانه بدون خطای شیفت انجام شود (قاعده V10-1.x Business Clock).
+ */
+export function systemNowUtcIso(): string {
+  return new Date().toISOString();
+}
+
+/**
  * نقطه "اکنون" در منطقه توافقی، به شکل ISO-like `YYYY-MM-DDTHH:mm:ss`
  * (بدون Z و بدون تبدیل UTC) تا با مقایسه‌های لغوی ستون‌های date سازگار بماند.
  */

@@ -1,6 +1,7 @@
 import { orm } from '../db/drizzle.js';
 import { activityLogs } from '../db/schema.js';
 import { logger } from '../middleware/logger.js';
+import { systemNowUtcIso } from '../lib/businessClock.js';
 
 // Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
 const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpassword|currentpassword|old_password|oldpassword|confirmpassword|confirm_password|token|access_token|accesstoken|refresh_token|refreshtoken|auth_token|authtoken|secret|jwt|apikey|api_key|authorization|cookie|card_number|credit_card|cvv|ssn)$/i;
@@ -143,7 +144,7 @@ export async function logActivity(params: AuditLogParams) {
       description: params.description,
       details: sanitizedDetails,
       ipAddress: ipAddress || '',
-      timestamp: new Date().toISOString()
+      timestamp: systemNowUtcIso()
     });
   } catch (err) {
     logger.error({ message: 'Error recording hardened activity log', error: err });

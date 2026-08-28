@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
+import { getDisplayTimezoneClient } from '../utils';
 import {
   Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Lock,
   Send, FileText, GitPullRequest, Wrench, Play, Activity, Layers, CheckSquare
@@ -180,7 +181,7 @@ export default function SystemHealthDiagnostic() {
             پایش سلامت و تست یکپارچگی سیستم (Phase 21 Integration & Health Audit)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            آخرین استعلام: {new Date(health.checkTimestamp).toLocaleTimeString('fa-IR')}
+            آخرین استعلام: {new Date(health.checkTimestamp).toLocaleTimeString('fa-IR', { timeZone: getDisplayTimezoneClient() })}
           </p>
         </div>
 
