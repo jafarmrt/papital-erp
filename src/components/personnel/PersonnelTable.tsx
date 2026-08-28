@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, Eye, Edit2, Trash2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { Personnel } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianCode } from '../../utils';
 
 interface PersonnelTableProps {
   personnelList: Personnel[];
@@ -100,7 +100,7 @@ export function PersonnelTable({
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/80 transition-all text-slate-700 font-bold">
                       <td className="p-3 font-mono text-slate-900">
-                        {p.personnelCode ? formatPersianNumber(p.personnelCode) : '---'}
+                        {p.personnelCode ? formatPersianCode(p.personnelCode) : '---'}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
@@ -119,10 +119,10 @@ export function PersonnelTable({
                         {p.jobTitle || '---'}
                       </td>
                       <td className="p-3 font-mono text-slate-800">
-                        {p.phone ? formatPersianNumber(p.phone) : '---'}
+                        {p.phone ? formatPersianCode(p.phone) : '---'}
                       </td>
                       <td className="p-3 font-mono text-slate-600">
-                        {p.nationalId ? formatPersianNumber(p.nationalId) : '---'}
+                        {p.nationalId ? formatPersianCode(p.nationalId) : '---'}
                       </td>
                       <td className="p-3">
                         {p.employmentStatus === 'فعال' && (

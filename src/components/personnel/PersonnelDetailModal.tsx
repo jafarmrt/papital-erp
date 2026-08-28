@@ -14,7 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Personnel } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianCode, formatPersianNumber } from '../../utils';
 
 interface PersonnelDetailModalProps {
   isOpen: boolean;
@@ -87,14 +87,14 @@ export function PersonnelDetailModal({
               <span className="text-[10px] text-slate-400 block">شماره تماس</span>
               <span className="font-bold font-mono text-slate-800 mt-0.5 flex items-center gap-1">
                 <Phone size={12} className="text-blue-500" />
-                {personnel.phone ? formatPersianNumber(personnel.phone) : '---'}
+                {personnel.phone ? formatPersianCode(personnel.phone) : '---'}
               </span>
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
               <span className="text-[10px] text-slate-400 block">کد ملی</span>
               <span className="font-bold font-mono text-slate-800 mt-0.5 block">
-                {personnel.nationalId ? formatPersianNumber(personnel.nationalId) : '---'}
+                {personnel.nationalId ? formatPersianCode(personnel.nationalId) : '---'}
               </span>
             </div>
 
@@ -172,13 +172,13 @@ export function PersonnelDetailModal({
               <div>
                 <span className="text-[10px] text-slate-500 block">نام بانک / کارت:</span>
                 <span className="font-bold font-mono text-slate-800 mt-0.5 block">
-                  {personnel.bankName || 'بانک'} - {personnel.cardNumber ? formatPersianNumber(personnel.cardNumber) : '---'}
+                  {personnel.bankName || 'بانک'} - {personnel.cardNumber ? formatPersianCode(personnel.cardNumber) : '---'}
                 </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-500 block">شماره حساب:</span>
                 <span className="font-bold font-mono text-slate-800 mt-0.5 block">
-                  {personnel.accountNumber ? formatPersianNumber(personnel.accountNumber) : '---'}
+                  {personnel.accountNumber ? formatPersianCode(personnel.accountNumber) : '---'}
                 </span>
               </div>
               <div className="sm:col-span-2">

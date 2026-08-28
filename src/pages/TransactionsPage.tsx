@@ -7,7 +7,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { useSearch } from '../SearchContext';
-import { formatPersianNumber, formatPersianDate, extractDateString } from '../utils';
+import { formatPersianNumber, formatPersianCode, formatPersianDate, extractDateString } from '../utils';
 import RunningKardexModal from '../components/RunningKardexModal';
 import { useTransactionsQuery } from '../hooks/queries';
 
@@ -213,7 +213,7 @@ export default function TransactionsPage() {
                     <span className="text-xs font-normal text-slate-500 mr-1">{t.item_unit}</span>
                   </td>
                   <td className="p-3">
-                    <div className="font-bold text-slate-800">{formatPersianNumber(t.document_ref || '-')}</div>
+                    <div className="font-bold text-slate-800">{formatPersianCode(t.document_ref || '-')}</div>
                     <div className="text-xs text-slate-500">{t.document_type}</div>
                   </td>
                   <td className="p-3 text-center">

@@ -13,7 +13,7 @@ import { toast } from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianNumber, formatPersianPrice, formatCurrencyLabel, formatPersianDate, extractDateString } from '../utils';
+import { formatPersianNumber, formatPersianCode, formatPersianPrice, formatCurrencyLabel, formatPersianDate, extractDateString } from '../utils';
 import { Money } from '../components/Money';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
@@ -509,7 +509,7 @@ export default function InvoicesListPage() {
                     {/* Ref Number */}
                     <td className="p-3">
                       <span className="font-mono font-black text-slate-800 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 inline-block text-[11px]">
-                        {formatPersianNumber(doc.ref_number)}
+                        {formatPersianCode(doc.ref_number)}
                       </span>
                     </td>
 
@@ -735,7 +735,7 @@ export default function InvoicesListPage() {
                       {selectedDocDetails.type === 'receipt' ? 'رسید ورود و فاکتور خرید' : selectedDocDetails.type === 'invoice' ? 'صورتحساب فروش کالا' : 'جزئیات سند انبارداری'}
                     </span>
                     <span className="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                      شماره: {formatPersianNumber(selectedDocDetails.ref_number)}
+                      شماره: {formatPersianCode(selectedDocDetails.ref_number)}
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-500 font-mono mt-0.5">
@@ -821,7 +821,7 @@ export default function InvoicesListPage() {
                   entityType="document"
                   entityId={selectedDocDetails.id}
                   workflowCode="DOC_APPROVAL_WORKFLOW"
-                  title={`چرخه تاییدات و گردش‌کار سند شماره ${formatPersianNumber(selectedDocDetails.ref_number)}`}
+                  title={`چرخه تاییدات و گردش‌کار سند شماره ${formatPersianCode(selectedDocDetails.ref_number)}`}
                   onStateChange={() => {
                     loadData();
                   }}
@@ -929,7 +929,7 @@ export default function InvoicesListPage() {
               <div className="flex items-center gap-2">
                 <GitBranch className="w-5 h-5 text-purple-400 shrink-0" />
                 <h3 className="font-bold text-xs sm:text-sm">
-                  چرخه تاییدات و گردش‌کار سند شماره {formatPersianNumber(workflowDoc.ref_number)}
+                  چرخه تاییدات و گردش‌کار سند شماره {formatPersianCode(workflowDoc.ref_number)}
                 </h3>
               </div>
               <button

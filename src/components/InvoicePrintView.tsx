@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate } from '../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, formatPersianDate } from '../utils';
 import { fetchJson } from '../api';
 
 export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
@@ -91,7 +91,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
       <div className="flex justify-between items-center mb-3 text-xs border-b pb-2">
         <div className="font-bold flex items-center gap-2">
           <span>شماره سند:</span>
-          <span className="font-mono text-sm bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{formatPersianNumber(printedDoc.ref_number)}</span>
+          <span className="font-mono text-sm bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{formatPersianCode(printedDoc.ref_number)}</span>
         </div>
         <div className="font-bold flex items-center gap-2">
           <span>تاریخ ثبت:</span>
@@ -108,7 +108,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
             </tr>
             <tr>
               <td className="py-1 px-2 border w-1/3"><strong>نام فروشنده:</strong> {companyInfo.name}</td>
-              <td colSpan={3} className="py-1 px-2 border"><strong>تلفن:</strong> {companyInfo.phone ? formatPersianNumber(companyInfo.phone) : '-'}</td>
+              <td colSpan={3} className="py-1 px-2 border"><strong>تلفن:</strong> {companyInfo.phone ? formatPersianCode(companyInfo.phone) : '-'}</td>
             </tr>
             <tr>
               <td colSpan={4} className="py-1 px-2 border"><strong>نشانی:</strong> {companyInfo.address || '-'}</td>
@@ -120,7 +120,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
             <tr>
               <td className="py-1 px-2 border w-1/4"><strong>نام خریدار:</strong> {printedDoc.buyer_name || '-'}</td>
               <td className="py-1 px-2 border w-1/4"><strong>استان / شهر:</strong> {printedDoc.buyer_city || '-'}</td>
-              <td colSpan={2} className="py-1 px-2 border"><strong>تلفن:</strong> {formatPersianNumber(printedDoc.buyer_phone || '-')}</td>
+              <td colSpan={2} className="py-1 px-2 border"><strong>تلفن:</strong> {formatPersianCode(printedDoc.buyer_phone || '-')}</td>
             </tr>
             <tr>
               <td colSpan={4} className="py-1 px-2 border"><strong>نشانی:</strong> {printedDoc.buyer_address || '-'}</td>
@@ -138,7 +138,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
             <tr>
               <td className="py-1 px-2 border w-1/3"><strong>نام تامین‌کننده:</strong> {printedDoc.buyer_name || 'تامین‌کننده ناشناس / عمومی'}</td>
               <td className="py-1 px-2 border w-1/3"><strong>استان / شهر:</strong> {printedDoc.buyer_city || '-'}</td>
-              <td className="py-1 px-2 border w-1/3"><strong>تلفن تماس:</strong> {formatPersianNumber(printedDoc.buyer_phone || '-')}</td>
+              <td className="py-1 px-2 border w-1/3"><strong>تلفن تماس:</strong> {formatPersianCode(printedDoc.buyer_phone || '-')}</td>
             </tr>
             <tr>
               <td colSpan={4} className="py-1 px-2 border"><strong>نشانی / محل تامین:</strong> {printedDoc.buyer_address || '-'}</td>
@@ -197,7 +197,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
             return (
               <tr key={item.id || idx} className="h-7 hover:bg-slate-50 break-inside-avoid">
                 <td className="border p-1 font-medium bg-slate-50">{formatPersianNumber(idx + 1)}</td>
-                <td className="border p-1 font-mono text-[11px]" dir="ltr">{formatPersianNumber(item.code || '-')}</td>
+                <td className="border p-1 font-mono text-[11px]" dir="ltr">{formatPersianCode(item.code || '-')}</td>
                 <td className="border p-1 font-bold text-right pr-3 text-slate-800">{item.name}</td>
                 <td className="border p-1 font-bold font-mono">{formatPersianNumber(itemQty)}</td>
                 <td className="border p-1 text-slate-600">{item.unit || 'عدد'}</td>

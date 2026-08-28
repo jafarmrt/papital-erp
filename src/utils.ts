@@ -252,6 +252,21 @@ export function formatPersianNumber(val: number | string | null | undefined, max
   }
 }
 
+/**
+ * فرمتر شناسه‌ها (کد پرسنلی، کد ملی، تلفن، شماره سند و...) — فقط ارقام فارسی
+ * بدون هیچ جداکننده سه‌رقمی، چون این فیلدها مقدار عددی/ریالی نیستند.
+ */
+export function formatPersianCode(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
+  try {
+    const rawStr = String(val).trim();
+    if (!rawStr) return '';
+    return toPersianDigits(toEnglishDigits(rawStr));
+  } catch {
+    return '';
+  }
+}
+
 export function formatCurrencyLabel(c?: string): string {
   if (!c || c === 'IRR' || c === 'ریال') return 'ریال';
   if (c === 'USD') return 'دلار';

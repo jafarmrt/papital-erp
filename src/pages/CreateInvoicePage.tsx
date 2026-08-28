@@ -7,7 +7,7 @@ import { Plus, Trash2, Printer, Edit3, X, GitBranch } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { cn, formatPersianPrice, formatPersianNumber, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
+import { cn, formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
@@ -643,7 +643,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                     const rowFinal = rowTotal - d.discount;
                     return (
                     <tr key={i} className="hover:bg-slate-50">
-                      <td className="p-3 font-mono text-slate-500" dir="ltr">{formatPersianNumber(d.item.code)}</td>
+                      <td className="p-3 font-mono text-slate-500" dir="ltr">{formatPersianCode(d.item.code)}</td>
                       <td className="p-3 font-bold text-slate-800">{d.item.name}</td>
                       <td className="p-3 text-center">
                         <span className="font-bold">{formatPersianNumber(d.quantity)}</span> <span className="text-slate-500 text-xs">{d.item.unit}</span>
@@ -795,7 +795,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <div className="flex items-center gap-2">
                 <GitBranch className="w-5 h-5 text-purple-400 shrink-0" />
                 <h3 className="font-bold text-xs sm:text-sm">
-                  چرخه تاییدات و گردش‌کار پیش‌فاکتور {formatPersianNumber(workflowModalDoc.ref_number)}
+                  چرخه تاییدات و گردش‌کار پیش‌فاکتور {formatPersianCode(workflowModalDoc.ref_number)}
                 </h3>
               </div>
               <button
