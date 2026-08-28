@@ -1,0 +1,118 @@
+# deploy/k8s/erp-deployment.yaml — PHASE 9 (14.4)
+# Kubernetes manifests for the ERP production deployment.
+# Probe paths are aligned with src/app.ts: /health/live, /health/ready, /health/startup.
+#
+# Create the secret before first apply:
+#   kubectl create secret generic erp-secrets \
+#     --from-literal=database-url="$DATABASE_URL" \
+#     --from-literal=jwt-secret="$JWT_SECRET" \
+#     --from-literal=allowed-origins="$ALLOWED_ORIGINS" \
+#     --from-literal=erp-setup-token="$ERP_SETUP_TOKEN" \
+#     --from-literal=erp-webhook-secret-token="$ERP_WEBHOOK_SECRET_TOKEN"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: erp
+  labels:
+    app: erp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: erp
+  template:
+    metadata:
+      labels:
+        app: erp
+    spec:
+      containers:
+      - name: erp
+        image: registry.example.com/erp:v8.29.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: erp-secrets
+              key: database-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: erp-secrets
+              key: jwt-secret
+        - name: ALLOWED_ORIGINS
+          valueFrom:
+            secretKeyRef:
+              name: erp-secrets
+              key: allowed-origins
+        - name: ERP_SETUP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: erp-secrets
+              key: erp-setup-token
+        - name: ERP_WEBHOOK_SECRET_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: erp-secrets
+              key: erp-webhook-secret-token
+        - name: ALLOW_SEED_IN_PRODUCTION
+          value: "false"
+        # ... سایر env vars طبق .env.production.example
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: 3000
+          failureThreshold: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: erp
+spec:
+  selector:
+    app: erp
+  ports:
+  - port: 80
+    targetPort: 3000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: erp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: erp
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

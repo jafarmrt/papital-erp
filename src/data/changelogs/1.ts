@@ -1,0 +1,341 @@
+import { AIUpdateLog } from './types';
+
+/**
+ * V10 — فایل فعال سری 1.x.y
+ * مدخل‌های جدید هر ریلیز به این فایل (بالای آرایه) اضافه می‌شوند.
+ */
+export const v1Updates: AIUpdateLog[] = [
+  {
+    version: 'v1.1.1',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'پیکربندی سیستمی درون‌برنامه‌ای و قفل‌کردن اجرای آزمون‌ها روی دیتابیس زنده',
+    summary: 'اجرای آزمون‌های یکپارچگی از داخل برنامه (که داده‌های واقعی در دیتابیس زنده می‌نوشت و شماره‌گذاری اسناد را مصرف می‌کرد) به‌صورت پیش‌فرض قفل شد و به‌جای تب اجرای تست، تب «پیکربندی سیستمی» با کنترل امن فلگ‌های env (اعمال زنده بدون ری‌استارت) و کارت وضعیت محیط اضافه شد. اجرای استاندارد آزمون‌ها همچنان دستور خط فرمان npm run test است.',
+    author: 'AI Agent (V1.1.1 — Runtime Configuration & Test-Runner Quarantine)',
+    changes: [
+      'سرویس جدید src/lib/runtimeFlags.ts: خواندن فلگ‌های runtime از appSettings با کش ۶۰ ثانیه‌ای (الگوی businessClock)، اولویت «مقدار سامانه ← متغیر محیطی ← پیش‌فرض امن false» و تابع ابطال کش پس از ذخیره تنظیمات',
+      'انتقال گیت endpoint های تست (/api/system/tests/run و /api/system/clean-test-data) از زمانِ ثبت مسیر به زمانِ درخواست: در production همیشه مسدود، در محیط دیگر تابع فلگ runtime_enable_test_endpoints (پیش‌فرض پس از seed: خاموش) با پیام خطای 403 فارسی راهنما',
+      'تب جدید «پیکربندی سیستمی» (فقط admin) با سه بخش: کارت فقط-خواندنی حالت اجرا (NODE_ENV + Node version با توضیح کامل تفاوت development/production/test)، کلید فعال/غیرفعال اندپوینت‌های تست با هشدار آلودگی دیتابیس و مصرف شماره اسناد، و فهرست متغیرهای فقط-فایل قفل‌شده (ERP_ALLOW_TEST_CLEANUP، JWT_SECRET، DATABASE_URL، ALLOW_SEED_IN_PRODUCTION) با وضعیت set/not-set و دلیل قفل‌بودن هرکدام',
+      'گسترش GET /api/system/env: نمایش nodeEnv، nodeVersion، وضعیت مؤثر فلگ تست و منبع آن (db/env/default) و وضعیت set/not-set شش متغیر کلیدی — بدون افشای مقدار هیچ secret (فعال‌سازی فراخوانی‌کننده واقعی این endpoint که تاکنون بدون فراخوانی‌کننده بود)',
+      'اعتبارسنجی سمت سرور کلید runtime_enable_test_endpoints در POST /settings: فقط مقدار true/false، فقط نقش admin (manager رد می‌شود) + ابطال کش فلگ‌ها پس از هر ذخیره تنظیمات',
+      'seed پیش‌فرض runtime_enable_test_endpoints=false (insert-if-missing) و تغییر ENABLE_TEST_ENDPOINTS در .env به false؛ مستندسازی کامل هر دو فلگ به‌همراه هشدارها در .env.example',
+      'حذف تب «آزمون‌های یکپارچگی (فاز ۲۱)» و کامپوننت SystemTestRunner از صفحه تنظیمات — پانزده سوئیت تست دست‌نخورده باقی مانده و مسیر اجرای یگانه آن‌ها npm run test است (که ERP_ALLOW_TEST_CLEANUP=1 را خودکار ست می‌کند)'
+    ],
+    fixes: [
+      'رفع آلودگی دیتابیس زنده توسط اجرای درون‌برنامه‌ای آزمون‌ها: تا پیش از این نسخه، اجرای تست از تب تنظیمات اسناد/فاکتور/کاربر آزمایشی واقعی می‌ساخت و چون ERP_ALLOW_TEST_CLEANUP تنظیم نبود، پاکسازی کامل با گارد ایمنی V10-0.1 رد می‌شد و artifacts در دیتابیس می‌ماندند (لاگ‌های REFUSED تأیید شده)',
+      'جلوگیری از پرش شماره‌گذاری اسناد و سند حسابداری ناشی از مصرف sequence های اتمیک (document_counters و voucher_number_seq) توسط سناریوهای E2E آزمون‌ها'
+    ]
+  },
+  {
+    version: 'v1.1.0',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'انتشار پایدار v1.1.0 — تکمیل نقشه راه V10 (نصاب لینوکس، سوییت رگرسیون V10 و sign-off)',
+    summary: 'این نسخه پایان نقشه راه V10 است: نصاب و آپدیت‌کننده خودکار لینوکس (systemd + backup خودکار پیش از آپدیت)، سوییت رگرسیون شش‌سناریویی V10 در چرخه تست، یکپارچه‌سازی نهایی مستندات و حذف اسکریپت‌های منسوخ. بزرگ‌ترین تغییرات رفتاری V10 در سری v1.0.x عرضه شده و با قاعده semver، این ریلیز minor اعلام می‌شود.',
+    author: 'AI Agent (V10 Phase 7.2/7.4/7.5 — Release Engineering & Sign-off)',
+    changes: [
+      'install.sh: نصاب تعاملی Ubuntu/Debian — deps (Node 22 LTS، PostgreSQL 14+/PGDG، git)، clone، تولید .env با openssl (JWT_SECRET/ERP_SETUP_TOKEN/DB)، build، ثبت systemd unit (papital-erp) با --env-file، health-probe loop و بنر پایانی',
+      'update.sh: backup خودکار pre-deployment (scripts/backup.sh) → git pull --ff-only → npm ci → build → restart (systemd/pm2) → health verify — بدون db:push (مهاجرت فقط از migrator اتمیک در startup)',
+      'سوییت رگرسیون V10 (v10RegressionSuite) با ۶ سناریو: قرارداد پاکت کاردکس {item,summary,entries}، یکتایی ۸ درخواست موازی next-code، قفل پرداخت خزانه‌ای فیش paid (ConflictError)، deny-list منو + bypass مدیر، refusal پاکسازی تست بدون پرچم ایمنی (canary no-op) و idempotence نرمال‌سازی تاریخ (دو اجرای scanIntegrity سالم)',
+      'ادغام essentials سند runbook در README بخش «عملیات» (بازیابی backup، rollback، OOM/Pool، migration شکست‌خورده، چرخش secretها، cron بکاپ)',
+      'حذف کامل پوشه docs/ و اسکریپت‌های منسوخ VPS (install-ubuntu/setup-vps/deploy/update-vps/uninstall-ubuntu) و UBUNTU_INSTALL_GUIDE.md — تاریخچه در Git',
+      'sign-off انتشار: آرشیو CHANGELOG.md بخش v1.1.0 + به‌روزرسانی Documentation Map و V10 Execution State در AGENTS.md §31'
+    ],
+    fixes: [
+      'رفع خطر اجرای db:push در استقرار — مسیر یگانه مهاجرت، migrator اتمیک داخلی است'
+    ]
+  },
+  {
+    version: 'v1.0.14',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'فاز ۷ (زیرفازهای ۷.۱ و ۷.۳): تجمیع مستندات در مرجع یگانه + README کاملاً جدید',
+    summary: 'مستندات پراکنده یکپارچه شد: AGENTS.md رسماً مرجع یگانه قواعد معماری و حاکمیت اعلام و نقشه مستندات به سرش اضافه شد؛ GEMINI.md به stub سه‌خطی ارجاعی تبدیل و فایل‌های تکراری DEVELOPER.md و DEVELOPER_GUIDE.md حذف شدند (تاریخچه در Git). README که encoding خراب داشت از نو نوشته شد: معماری، پیش‌نیازها، دو مسیر نصب (ویندوز محلی با start-local.ps1 و سرور/VPS)، جریان به‌روزرسانی، جدول کامل متغیرهای محیطی، سلامت/عیب‌یابی و قواعد خلاصه توسعه. نقشه راه V10 نیز بخش «In-Flight Roadmap Pointer» گرفت.',
+    author: 'AI Agent (V10 Phase 7.1/7.3 — Documentation Consolidation)',
+    changes: [
+      'AGENTS.md: بلوک Documentation Map در سر فایل — اعلام مرجع یگانه + مسیر همه اسناد (blueprint، TECH_DEBT، CHANGELOG، runbook، README)',
+      'GEMINI.md: کاهش از ۳۲KB mirror به stub ۳ خطی با ارجاع به AGENTS.md',
+      'حذف DEVELOPER.md و DEVELOPER_GUIDE.md (محتوای آن‌ها پیش‌تر در AGENTS.mdSections 1..31 ادغام و همیشه به‌روز بود؛ تاریخچه در Git محفوظ است)',
+      'README.md: بازنویسی کامل (رفع mojibake) با ۹ بخش: معرفی، معماری، پیش‌نیازها، نصب ویندوز محلی، نصب VPS، به‌روزرسانی، جدول env (شامل ERP_SETUP_TOKEN و پرچم‌های ایمنی)، سلامت/عیب‌یابی، قواعد خلاصه توسعه',
+      'docs/V10_MASTER_BLUEPRINT.md: بخش جدید «۰. In-Flight Roadmap Pointer» — وضعیت لحظه‌ای فازها، نسخه جاری و ارجاع سریع به اسناد حاکمیتی'
+    ],
+    fixes: [
+      'رفع encoding خراب README که راهنمای نصب را غیرقابل‌خوانده می‌کرد',
+      'رفع دوباره‌نگاری مستندات که موجب واگرایی قواعد بین فایل‌ها می‌شد (اکنون فقط AGENTS.md تغییر می‌کند)'
+    ]
+  },
+  {
+    version: 'v1.0.13',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۶ کامل (زیرفازهای ۶.۱ و ۶.۲): وضعیت اتوماسیون اسناد، گزارش حسابداری پروژه‌ها و امضای تاییدکنندگان در چاپ',
+    summary: 'مرکز گزارش‌های حسابداری دو نمای جدید گرفت: «وضعیت اتوماسیون اسناد» که پوشش واقعی سند دوبل خودکار را به تفکیک نوع سند می‌سنجد و شکاف‌ها (انبارگردانی/انتقال/پیش‌فاکتور) را شفاف می‌کند، و «گزارش پروژه‌ها» با گردش بدهکار/بستانکار هر پروژه و ریز تراکنش‌ها با تراز جاری. همچنین چاپ فاکتور/حواله در صورت وجود گردش کار تایید، گرید سه‌ستونه امضای تاییدکنندگان (نام/مرحله/تاریخ) را از تاریخچه ورکفلو نمایش می‌دهد.',
+    author: 'AI Agent (V10 Phase 6 — Automation Status, Project Report & Print Signatures)',
+    changes: [
+      'endpoint GET /accounting/automation-status: join اسناد نهایی/پیش‌فاکتور با journal_vouchers (reference_module=invoice) و محاسبه coverage per docType + شناسایی gapها',
+      'endpoint GET /accounting/reports/project-summary: group by روی journal_voucher_items با detailed_type=project به‌همراه join عنوان/کد پروژه',
+      'endpoint GET /accounting/reports/project-detail: ریز گردش پروژه با تراز جاری محاسبه‌شده و مرتب‌سازی بر اساس تاریخ/شماره سند',
+      'endpoint GET /accounting/doc-signatures: استخراج تاییدکنندگان سند از workflow_instances + workflow_history_logs (حداکثر ۳ امضا)',
+      'FinancialReportsTab: دو زیرتب جدید «وضعیت اتوماسیون اسناد» و «گزارش پروژه‌ها»',
+      'AutomationStatusView: کارت‌های خلاصه (کل اسناد/پوشش/درصد) + جدول وضعیت per docType + بنر شکاف اتوماسیون',
+      'ProjectReportView: جدول خلاصه پروژه‌ها (کد، عنوان، تعداد آرتیکل، گردش، تراز) + جدول ریز با تراز جاری + فیلتر پروژه',
+      'InvoicePrintView: بخش امضا پویا شد — با وجود امضاهای ورکفلو گرید سه‌ستونه تاییدکنندگان رندر می‌شود، در غیر این صورت امضای کلاسیک خریدار/فروشنده حفظ می‌شود'
+    ],
+    fixes: [
+      'شفاف‌سازی شکاف اتوماسیون: اسناد انبارگردانی/انتقال بدون سند دوبل خودکار اکنون در گزارش قابل رصد هستند'
+    ]
+  },
+  {
+    version: 'v1.0.12',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'هات‌فیکس ۵.۳: رفع خطای «خطا در دریافت نقش‌ها» و پیام «نقشی برای ویرایش یافت نشد» در کنترل نمایش منو',
+    summary: 'پنل کنترل نمایش منو به اشتباه نقش‌ها را از مسیر /users/roles دریافت می‌کرد که توسط روت پارامتری /users/:id با اعتبارسنجی شناسه عددی شکار و رد می‌شد؛ نتیجه‌اش خطای دریافت نقش‌ها و نمایش خالی پنل بود. منبع دریافت به /roles (همان منبع استفاده‌شده در ماتریس نقش‌ها) اصلاح شد.',
+    author: 'AI Agent (V10 Phase 5.3 — Roles Endpoint Fix)',
+    changes: [
+      'MenuVisibilityPanel: endpoint دریافت فهرست نقش‌ها از /users/roles به /roles اصلاح شد (هم‌راستا با useRolesQuery)',
+      'گرفتن roles پیش از رندر چک‌لیست اکنون همان مسیر تایید‌شده سامانه است و خطای اعتبارسنجی numeric-id رخ نمی‌دهد'
+    ],
+    fixes: [
+      'رفع پیغام خطای «خطا در دریافت نقش‌ها» در گوشه پایین صفحه',
+      'رفع پیام «نقشی برای ویرایش یافت نشد» و خالی بودن چیپ‌های انتخاب نقش'
+    ]
+  },
+  {
+    version: 'v1.0.11',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'هات‌فیکس ۵.۳: بازطراحی کامل رابط «کنترل نمایش منو» و پایدارسازی اعمال آن در سایدبار',
+    summary: 'بر اساس بازخورد کاربر، رابط کنترل دید منو بازطراحی شد: جدول عریض نقش×مسیر با انتخاب‌گر نقش (چیپ) و چک‌لیست گروه‌بندی‌شده با کلیدهای روشن/خاموش جایگزین شد، عبارات فنی نسخه از رابط حذف گردید و مسیر داده از کوئری عمومی تنظیمات به endpoint اختصاصی menu-visibility با کش کنترل‌شده منتقل شد تا تغییرات بلافاصله و بدون وابستگی به کش ۵ دقیقه‌ای تنظیمات در سایدبار اعمال شود.',
+    author: 'AI Agent (V10 Phase 5.3 — Menu Visibility UX Hotfix)',
+    changes: [
+      'حذف عبارت نسخه «(V10-5.3)» و جargon فنی (deny-list و امثال آن) از رابط کاربری — متن راهنما ساده و کاربرپسند بازنویسی شد',
+      'endpoint اختصاصی GET /menu-visibility (احراز هویت‌شده، بدون گیت admin) برای تغذیه مستقیم سایدبار',
+      'هوک useMenuVisibilityQuery با staleTime بی‌نهایت و بدون refetch-on-focus تا ویرایش‌های ذخیره‌نشده پنل با تغییر پنجره پاک نشوند؛ ذخیره هر دو کلید تنظیمات و این endpoint را invalidate می‌کند',
+      'UI جدید: چیپ‌های انتخاب نقش با badge تعداد موارد مخفی، چک‌لیست آیتم‌های منو گروه‌بندی‌شده با سوئیچ دوحالته، دکمه‌های «نمایش همه/مخفی همه» برای هر گروه، دکمه «پیش‌فرض» برای بازگشت نقش به حالت بدون override، حالت ذخیره‌شده/تغییر‌نسبته واضح',
+      'جابجایی پنل به بالای تب «نقش‌ها» برای دسترسی سریع‌تر'
+    ],
+    fixes: [
+      'رفع عدم اعمال به‌موقع تغییرات در سایدبار (وابستگی به کش stale تنظیمات حذف شد)',
+      'رفع تجربه کاربری نامناسب جدول عریض در پیش‌نمایش'
+    ]
+  },
+  {
+    version: 'v1.0.10',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۵ (زیرفاز ۵.۳): کنترل دید منو per-role — ماتریس نقش×مسیر با ذخیره در تنظیمات سامانه',
+    summary: 'مدیران اکنون می‌توانند برای هر نقش مشخص کنند کدام آیتم‌های منو مخفی شوند: JSON با ساختار {roleCode: ["/path", ...]} در کلید menu_visibility از تنظیمات ذخیره و در getMenuGroups اعمال می‌شود (مدل deny-list؛ مدیر ارشد همیشه همه را می‌بیند). UI ماتریس نقش×مسیر به بخش نقش‌ها اضافه شد و از همان منبع یگانه منو (menuConfig) کاتالوگ مسیرها را می‌سازد تا هیچ آیتمی از قلم نیفتد. ProtectedRoute دست‌نخورده ماند — مخفی‌سازی فقط دید منو است، نه گیت امنیتی.',
+    author: 'AI Agent (V10 Phase 5.3 — Per-Role Menu Visibility)',
+    changes: [
+      'menuConfig: پارامتر سوم getMenuGroups با تایپ MenuVisibilityMap + اعمال deny-list پس از محاسبه permissionها + فیلتر خودکار گروه‌های خالی توسط Sidebar',
+      'fix نال‌امنی: همه ارجاعات user.role در system group به user?.role تبدیل شدند (ضمنی blueپرینت 5.3)',
+      'Sidebar: تغذیه نقشه دید از useSettingsQuery (کلید menu_visibility) با نرمال‌سازی دفاعی JSON',
+      'کامپوننت جدید MenuVisibilityPanel (کاربران ← نقش‌ها): جدول نقش×مسیر گروه‌بندی‌شده با کاتالوگ زنده منو، چک‌باکس دید per-role، اکشن‌های سریع «نمایش همه/مخفی همه» per نقش، شمارنده مخفی‌سازی‌های فعال، حالت dirty و ذخیره با useSaveSettingsMutation (invalidation خودکار کش → سایدبار بلافاصله به‌روز می‌شود)',
+      'نرمال‌سازی ذخیره: فقط نقش‌های موجود و pathهای معتبر کاتالوگ نگهداری می‌شوند؛ خالی = بدون override',
+      'admin ستون قفل‌شده (همیشه نمایش)؛ مسیرها فقط دیدی هستند و URL همچنان طبق permissionها کنترل می‌شود'
+    ],
+    fixes: [
+      'رفع ناسازگاری دید منو برای نقش‌هایی که permission وسیع دارند ولی نباید همه ورودی‌ها را ببینند (مثلاً مخفی کردن گالری از انباردار)'
+    ]
+  },
+  {
+    version: 'v1.0.9',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۵ (زیرفازهای ۵.۱ و ۵.۲): یکسان‌سازی واژگان دسترسی، آزادسازی production_manager و enforce کردن permissionهای مرده',
+    summary: 'کلیدهای قدیمی و بی‌معنا در ماتریس دسترسی با واژگان کاتالوگ یکسان شدند؛ مسیرهای تایید مواد اولیه که تا پیش از این production_manager را عملاً مسدود کرده بودند بر کلید رسمی pending_materials.approve سوار شدند؛ permissionهای مرده در events و inventory از role-name های هاردکد به authorizePermission مبتنی بر کاتالوگ تبدیل شدند؛ تناقض viewer با daily_logs.create رفع و workflow.execute به نقش‌های عملیاتی سید شد؛ حذف سند اکنون بر documents.delete enforce می‌شود و پاکسازی grants ناشناخته با متغیر محیطی opt-in فراهم است.',
+    author: 'AI Agent (V10 Phase 5.1/5.2 — RBAC Vocabulary & Dead Permission Enforcement)',
+    changes: [
+      'pendingMaterials approve/reject: authorize با ۶ توکن مخلوط (شامل warehouse_manager/warehouse.approve/items.create/items.edit غیرسید‌شده) → authorizePermission(\'pending_materials.approve\') — production_manager اکنون واقعاً می‌تواند تایید کند',
+      'piecework sync-voucher: حذف توکن legacy financial_manager → authorizePermission(\'piecework.payroll\', \'personnel.manage\')',
+      'documents DELETE: enforce authorizePermission(\'documents.delete\') مطابق ماتریس سید‌شده (admin/manager/cfo/accountant از قبل دارنده کلید بودند)',
+      'events.routes (۴۲ نقطه): تمام GET ها → events.view و تمام mutationها (webhook/rule/DLQ/outbox/replay/purge/simulate) → events.manage — بدون role-name هاردکد',
+      'inventory.routes (۱۳ نقطه): kardex/3way/alloctions/negative-policy/transfer به کلیدهای کاتالوگ: warehouse.view / warehouse.transfer / inventory.reconcile / projects.edit (ترکیب OR حفظ دسترسی قبلی نقش‌های عملیاتی)',
+      'seed: افزودن workflow.execute به production_manager + warehouse_keeper + treasurer؛ حذف daily_logs.create از viewer (تناقض فقط-مشاهده)',
+      'seed: مکانیزم اختیاری پاکسازی grants ناشناخته با env=ERP_SEED_PERMISSION_CLEANUP=true (پیش‌فرض خاموش — merge-only حفظ شد)',
+      'menuConfig: آیتم «رویدادها و اتوماسیون سازمانی» از admin-only به hasPerm(\'events.view\') هم‌راستا با API شد'
+    ],
+    fixes: [
+      'رفع مسدودیت واقعی production_manager در تایید مواد اولیه (کلیدهای مصرفی هیچ‌گاه سید نشده بودند)',
+      'رفع دسترسی خاموش manager به عملیات خطرناک DLQ/Outbox (قبلاً با role-name مدیر بود، اکنون نیازمند events.manage صریح است؛ manager سید دارد)'
+    ]
+  },
+  {
+    version: 'v1.0.8',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۵ (زیرفاز ۵.۰): بازآرایی کامل منوی سامانه طبق ساختار مصوب — ۸ گروه جدید، صفحه «وضعیت انبار» و ادغام ۵.۴',
+    summary: 'منوی کنار صفحه به ۸ گروه مصوب کاربر بازآرایی شد: گروه مستقل «انبار» با زیرمنوی جدید «وضعیت انبار» (محتوای داشبورد فعلی؛ داشبورد سراسری آینده در ریشه قرار خواهد گرفت)، تغییر نام «ورود به انبار» به «ورود و خروج انبار»، انتقال «صدور فاکتور» به فروش و مشتریان، «لیست اسناد» به گزارش‌ها و «سجل تغییرات» به مدیریت و سیستم. برچسب «هشدار نقطه سفارش» به درخواست کاربر بازگردانده شد و «گزارش کار روزانه» طبق زیرفاز ۵.۴ به گروه منابع انسانی منتقل گردید. نقشه راه V10 نیز بازآرایی شد: ۵.۴ در ۵.۰ ادغام و ۵.۳ (دید per-role) روی منوی پایدار جدید زمان‌بندی شد.',
+    author: 'AI Agent (V10 Phase 5.0 — Menu Restructure per User Blueprint)',
+    changes: [
+      'گروه جدید «انبار»: وضعیت انبار /inventory-status (visible برای همه، همتای داشبورد فعلی) + محصولات و مواد اولیه + ورود و خروج انبار + تأیید مواد اولیه جدید + کدهای ترنسفر + هشدار نقطه سفارش + قیمت‌گذاری اقلام + گالری تصویری + انبارگردانی دوره‌ای',
+      'Route جدید /inventory-status در AppRoutes (بدون permission گیت اضافه، همتای «/» تا داشبورد سراسری آینده ساخته شود)',
+      'گروه «فروش و مشتریان»: افزودن صدور فاکتور و پیش‌فاکتور (/invoices/create)',
+      'گروه «گزارش‌ها و نظارت»: افزودن لیست اسناد و فاکتورها (/invoices)',
+      'گروه «مدیریت و سیستم»: انتقال سجل تغییرات (/activity-logs) از گزارش‌ها — سایر آیتم‌ها دست‌نخورده',
+      'حذف گروه قدیمی «عملیات انبار و فاکتورها» و ادغام کامل آن؛ تغییر عنوان گروه کالا به «انبار»',
+      'برچسب «هشدار نقطه سفارش» بازگردانی شد (v1.0.4 آن را «تحلیل گردش کالا و هشدار تامین» کرده بود)؛ CTA میانبر داشبورد هم‌راستا؛ محتوای تحلیل گردش کالا در همان صفحه حفظ شد',
+      'V10-5.4: گزارش کار روزانه از گروه production به منابع انسانی منتقل شد',
+      'بررسی پوشش کامل: ۳۰ آیتم منو در برابر تمام routeهای AppRoutes — هیچ صفحه‌ای از منو حذف نشد (تنها تغییر موردی: مکان/عنوان)'
+    ],
+    fixes: [
+      'رفع پراکندگی عملیاتی: تمام کارهای انبار (از وضعیت تا انبارگردانی) اکنون زیر یک گروه جمع است',
+      'رفع دوباره‌نویسی عنوان گروه‌ها/آیتم‌های ناهمگون با واژگان مصوب کاربر'
+    ]
+  },
+  {
+    version: 'v1.0.7',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۴ (زیرفاز ۴.۴): قفل پرداخت حقوق از خزانه‌داری + مدل حقوق ثابت/ترکیبی — سخت‌ترین بازطراحی چرخه حقوق',
+    summary: 'گذار دستی status=paid کاملاً مسدود شد و تنها مسیر پرداخت، endpoint جدید register-payment با سرویس تراکنشی PayrollPaymentService است: قفل انحصاری فیش (FOR UPDATE)، برداشت وجه از حساب خزانه با شماره تراکنش اتمیک (SEQUENCE)، صدور سند تسویه دوبل (بدهکار حقوق پرداختنی / بستانکار حساب منتخب)، رویداد Outbox و به‌روزرسانی وضعیت — همگی در یک database transaction. همچنین مدل حقوق پرسنل به none/piecework/monthly_fixed/mixed توسعه یافت، فیش‌ها سهم حقوق ثابت را در totalFixedAmount نگه می‌دارند و صدور فیش بدون کارکرد برای پرسنل حقوق‌بگیر ممکن شد.',
+    author: 'AI Agent (V10 Phase 4.4 — Payroll Payment Lock & Salary Models)',
+    changes: [
+      'migration alt_038: treasury_transactions.payroll_id (FK) + idx_tt_payroll؛ personnel.salary_type (none|piecework|monthly_fixed|mixed) و monthly_salary؛ piecework_payrolls.total_fixed_amount',
+      'سرویس جدید PayrollPaymentService (src/services/accounting/payrollPayment.service.ts) — registerPayrollPayment با ترتیب قفل bank→payroll طبق lockOrder، محاسبه مانده با FinancialDecimal، generateTransactionNumber از SEQUENCE، voucher تسویه با AccountMappingService (3201) و پیکربندی detailedType=personnel، درج tx خزانه با payrollId، رویداد TREASURY_TRANSACTION_APPROVED در Outbox و sync لاگ‌های فرزند در همان tx',
+      'PUT /piecework/payrolls/:id/status: درخواست status=paid با ConflictError و پیام هدایت به مسیر خزانه رد می‌شود (پیش‌تر هر وضعیتی بی‌صدا ثبت می‌شد)',
+      'POST /piecework/payrolls/:id/register-payment (authorize personnel.manage/admin): zod strict برای bankAccountId/method/amount/paymentDate/paymentReference/notes؛ پاسخ شامل شماره تراکنش و شماره سند تسویه + audit-log کامل',
+      'route صدور فیش: گارد empty-logs فقط برای پرسنل بدون سهم ثابت برقرار است؛ net = کارکرد + سهم ثابت + پاداش − کسورات؛ ذخیره totalFixedAmount؛ unlink لاگ‌ها ایمن به آرایه خالی',
+      'کامپوننت جدید PayrollPaymentModal: انتخاب حساب بانکی/صندوق (با نمایش مانده)، روش پرداخت، تاریخ، مرجع و توضیحات + تایید دومرحله‌ای ConfirmModal — جایگزین دکمه‌های toggle در لیست فیش‌ها و فیش چاپی',
+      'PayslipModal: ردیف تفکیکی «سهم حقوق ثابت ماهانه» در کارت جوامع (فقط وقتی >۰)؛ عنوان‌های فیش بدون تغییر برای سازگاری چاپ',
+      'PersonnelFormModal + personnel.routes: فیلدهای مدل حقوق و مبلغ ماهانه (POST/PUT با zod enum) — تکمیل چرخه داده از فرم تا فیش',
+      'menuConfig و هدر صفحه به «حقوق و دستمزد» تغییر نام یافت'
+    ],
+    fixes: [
+      'رفع امکان پرداخت دوبل/ناهمزمان: قفل FOR UPDATE و ConflictError روی فیش پرداخت‌شده',
+      'رفع عدم توازن حسابداری حقوق: پرداخت‌ها دیگر بدون سند تسویه Cr bank نمی‌مانند (قبلاً فقط accrual Dr expense/Cr payable صادر می‌شد)',
+      'رفع توقف صدور فیش برای حقوق‌بگیران ثابت بدون ردیف کارکرد در دوره'
+    ]
+  },
+  {
+    version: 'v1.0.6',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۴ (زیرفاز ۴.۳): رسمی‌سازی اتصالات CRM — لینک مستقیم سند به پرونده فروش، رفع گره gated leads و شفافیت حسابرسی sync مشتری',
+    summary: 'اسناد (پیش‌فاکتور/فاکتور) اکنون با ستون رسمی crm_lead_id به پرونده فروش متصل می‌شوند؛ اتکا به تگ متنی «CRM #n» در یادداشت‌ها حذف و سوابق موجود backfill شدند. حذف یا ابطال پیش‌فاکتور، پرونده را بازگشایی می‌کند (hasProforma=0، proformaId=null) تا پیش‌فاکتور مجدد صادر شود — پایان گره یک‌طرفه. تغییرات بی‌سروصدای نام/تلفن مشتری هنگام همگام‌سازی از CRM با گزارش اختلاف قبل-بعد ثبت می‌شود و تبدیل به مشتری هرگز وضعیت «موفق» را تخریب نمی‌کند.',
+    author: 'AI Agent (V10 Phase 4.3 — Formal CRM Links)',
+    changes: [
+      'migration alt_037: documents.crm_lead_id INTEGER REFERENCES crm_leads(id) + index + backfill idempotent از برچسب‌های متنی legacy',
+      'schema.ts: فیلد crmLeadId روی جدول documents با AnyPgColumn برای شکستن استنتاج چرخه‌ای documents↔crmLeads',
+      'POST /documents: خواندن صریح body.crmLeadId (validation منفی/NaN با ValidationError) و stamp بعد از ساخت سند — مسیرهای خودکار و دستی هر دو پوشش داده شدند؛ عبارت regex «CRM #n» دیگر هیچ نقشی ندارد',
+      'PUT /documents/:id: schema برای crmLeadId باز شد؛ ارسال null لینک را قطع می‌کند (امکان مدیریت اتصال در ویرایش)',
+      'DELETE /documents/:id: اگر سند حذف‌شده پیش‌فاکتورِ یک lead فعال باشد → hasProforma=0 و proformaId=null و activity «بازگشایی پرونده» ثبت می‌شود؛ audit-log دیلیت نیز حالت ungated شدن را گزارش می‌کند',
+      'syncCustomerFromCRMLead: signature جدید با CrmAuditContext؛ هر overwrite phone/contactName/name در سه شاخه جستجو با logActivity و details.changes (before/after) ثبت و خطاها ایزوله می‌شوند (بدون شکست عملیات اصلی)',
+      'convert-to-customer: preserve-won-state — اگر پرونده «موفق» است مرحله/وضعیت حفظ می‌شود و به proposal/active دموته نمی‌گردد'
+    ],
+    fixes: [
+      'رفع permanently-gated leads: پس از این نسخه، حذف/ابطال پیش‌فاکتور امکان صدور مجدد و چرخه صحیح فروش را برمی‌گرداند',
+      'رفع overwrite بی‌سروصدای name/phone مشتریان بدون رد حسابرسی',
+      'رفع دموتی خودکار وضعیت موفق هنگام تبدیل به مشتری'
+    ]
+  },
+  {
+    version: 'v1.0.5',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۴ (بسته زیرفازهای ۴.۱ و ۴.۲): فروشنده مسئول CRM از پرسنل — لینک رسمی با snapshot متنی',
+    summary: 'مفهوم «فروشنده/مسئول تسک» در CRM از کاربران سیستم به پرسنل سازمان منتقل شد: migration اتمیک ستون‌های assigned_personnel_id را برای crm_leads و crm_activities اضافه و داده‌های متنی قدیمی را best-effort به لینک پرسنلی backfill کرد؛ روت‌های CRUD هر دو مفهوم (id + snapshot نام) را ذخیره می‌کنند، فیلترها id-محور شدند و dropdownها به فهرست پرسنل فعال تغییر منبع دادند. پیش‌فرض فروشنده = پرسنلِ متصل به حساب کاربری جاری. قابلیت ۴.۲ (اتصال User↔Personnel در فرم پرسنل) ممیزی شد — از قبل کامل پیاده بود.',
+    author: 'AI Agent (V10 Phase 4.1/4.2 — CRM Sellers as Personnel)',
+    changes: [
+      'migration alt_036: assigned_personnel_id INTEGER NULL REFERENCES personnel(id) روی crm_leads + crm_activities همراه index اختصاصی (idx_crm_lead_personnel / idx_crm_act_personnel)',
+      'backfill ایدم‌پوتنت داخل migration: تطابق case-insensitive و trim‌شدهٔ نام snapshot (assigned_to) با full_name پرسنل → لینک خودکار سوابق موجود',
+      'schema.ts: کلیدهای خارجی تعریف شد (references: personnel.id) برای یکپارچگی Drizzle',
+      'crm.routes.ts: helper واحد resolveAssignee — اولویت id معتبر (با NotFoundError)، سپس تطابق نام جهت حفظ سازگاری؛ write-path POST/PUT leads و POST activities همیشه زوج (id, name) می‌نویسد',
+      'schemas Zod هر سه endpoint برای پذیرش assignedPersonnelId (number|string|null) توسعه یافت',
+      'GET /crm/leads: فیلتر فروشنده بر assignedPersonnelId؛ پارامتر قدیمی assignedTo همچنان سازگار',
+      'فرمت پاسخ lead/activity شامل assigned_personnel_id + assignedPersonnelId (dual-format مطابق قاعده #5 AGENTS)',
+      'اطلاع‌رسانی «تسک جدید» اکنون ابتدا مسیر personnel.userId را می‌پیماید و سپس تطابق نام؛ رفتار قبلی خالی نماندن notif حفظ شد',
+      'useCRMData: usersList → personnelList (+ mentionUsers جداگانه فقط برای منشن @ در MentionTextarea)؛ default انتخاب = پرسنلی که userId === user جاری',
+      'CRMLeadModal / CRMInteractionModal: dropdown فروشنده/مسئول از پرسنل فعال با jobTitle؛ رکوردهای قدیمی بدون لینک به‌صورت گزینه fallback نمایش داده می‌شوند',
+      'CRMPage & CRMFollowupsView: فیلتر فروشنده/مسئول id-محور با fallback متنی برای snapshotهای بدون لینک'
+    ],
+    fixes: [
+      'رفع پراکندگی شناسنامه‌ای نقش فروشنده که عملاً رشته آزاد بود؛ پس از این نسخه هر تسک/فرصت یک مالک مشخص انسانی (پرسنل) دارد',
+      'رفع شکست پنهان اطلاعات‌رسانی تسک وقتی نام snapshot با هیچ user منطبق نبود — مسیر پرسنل→userId جایگزین شد'
+    ]
+  },
+  {
+    version: 'v1.0.4',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۳ کامل (زیرفازهای ۳.۱ تا ۳.۴): UX یکدست — حذف دیالوگ‌های native، چاپ استاندارد، انتقال تحلیل گردش کالا و مودال تایید انبارگردانی',
+    summary: 'تمامی window.confirm/alert باقی‌مانده (۲۱ نقطه در ۱۹ فایل شامل hooks) با ConfirmModal استاندارد و toast جایگزین شد؛ زیرساخت چاپ یکدست (.no-print + doc-print-area) اضافه و chrome مودال‌های چاپ حذف شد؛ تحلیل گردش کالا (نمودار ماهانه + ویجت‌های تند/کند/راکد) از داشبورد به صفحه مستقل منتقل گردید؛ ثبت انبارگردانی اکنون با مودال خلاصه شمارش (منطبق/اضافی/کسری) تایید دو مرحله‌ای دارد. همچنین طبق تصمیم کاربر، prefix گوشواره آویز بزرگ و دو تکه از N به E اصلاح شد.',
+    author: 'AI Agent (V10 Phase 3 — Unified UX)',
+    changes: [
+      'ایجاد ConfirmDialogHost: هاست سراسری تایید مبتنی بر ConfirmModal با API Promise-based (confirmAction) — سوار بر AppRoutes؛ الگوی blueپرینت برای hooks («برگرداندن Promise»)',
+      'حذف ۱۵ نقطه window.confirm: WorkflowDelegationTab, WebhookManagementSubTab, TaskTitlesSettingsTab(×2), ChequesTab, ChartOfAccountsTab, BankAndTreasuryTab, InventoryControlPresetTab, DeadLetterQueueSubTab, CategoriesTab, AutoActionsSubTab, useProjectInventory(×2), useDailyLogs, useCRMData, ProjectBomAllocationsTab',
+      'حذف ۶ نقطه confirm خام در usePiecework(×3), usePersonnel, CustomersPage, TransfersPage',
+      'تبدیل alert → toast: ReorderAlertsPage(×2), ProjectBomAllocationsTab(×2), PieceworkPayrollsTab(success/error)',
+      'FiscalYearClosingTab بررسی شد — از قبل مودال غنی اختصاصی داشت (native نبود) و دست‌نخورده ماند',
+      'index.css: کلاس استاندارد .no-print در @media print + قاعده body.printing-doc برای ایزوله‌سازی doc-print-area در چاپ از داخل مودال',
+      'PrintDocModal کارتابل: header/footer/backdrop با no-print حذف از خروجی چاپگر و بدنه print با .doc-print-area ایزوله شد',
+      'کامپوننت ژنریک DocPrintModal (src/components/print/) با بخش امضای سه‌ستونه (تنظیم‌کننده/تحویل‌گیرنده/تایید انبار) به سبک فیش حقوقی — پیاده‌سازی چاپ «کارت ترنسفر» با جدول محصولات متصل روی TransfersPage',
+      'لیست اسناد انبار (InvoicesListPage) ممیزی شد: flow چاپ A4 از قبل موجود بود و نیازی به تغییر نداشت',
+      'V10-3.3: کامپوننت MovementAnalysisSection (src/pages/reorder/) — نمودار ماهانه ورود/خروج و سه ویجت تندگردش/کندگردش/راکد با همان کش مشترک useDashboardBIStatsQuery بین داشبورد و مقصد',
+      'ReorderAlertsPage: بخش تحلیل بین stat-cards و filter bar درج شد؛ Dashboard این بخش‌ها را حذف کرد (تصمیم: بدون duplicate)؛ منوی Sidebar به «تحلیل گردش کالا و هشدار تامین» تغییر نام یافت؛ CTA میانبر داشبورد هم‌راستا شد',
+      'V10-3.4: InventoryAuditPage — handleSubmitAudit اکنون خلاصه را محاسبه و مودال باز می‌کند: تعداد ردیف شمارش‌شده، منطبق، اضافی(+)/کسری(−) با مقدار تجمعی + محل/شماره سند/یادداشت؛ ثبت قطعی فقط با confirmSubmitAudit',
+      'seed.ts: prefix «گوشواره آویز بزرگ» و «گوشواره دو تکه» از N به E (تصمیم صریح کاربر: تمام گوشواره‌ها E بجز میخی=S و تمام گردنبندها=N) — همگام‌سازی خودکار seed در startup'
+    ],
+    fixes: [
+      'رفع ریسک کرش UI بخاطر دیالوگ‌های native در iframe پرِیویو (confirm/alert مرورگری در محیط embedded نمایش داده نمی‌شوند)',
+      'رفع چاپ آلوده PrintDocModal که header/footer صفحه پشت مودال را نیز چاپ می‌کرد',
+      'رفع ثبت یکمرتبه‌ای بدون بازبینی خلاصه مغایرت در انبارگردانی (ریسک خطای انسانی بدون گارد دوم)'
+    ]
+  },
+  {
+    version: 'v1.0.3',
+    date: '۵ شهریور ۱۴۰۵',
+    title: 'فاز ۲ کامل (زیرفازهای ۲.۱، ۲.۲ و ۲.۳): کدگذاری اتمیک کالا، ادغام صفحه محصولات/مواد اولیه و استاندارد تصاویر ۳۰۰KB',
+    summary: 'کدگذاری کالا از الگوی ممنوع MAX()+1 به شمارنده اتمیک PostgreSQL (جدول item_code_counters با قفل سطر و UPSERT) منتقل شد و endpoint واحد GET/POST /items/next-code با پشتیبانی peek بدون مصرف شمارنده تحویل گردید؛ UI فرم کالا بخش‌بندی‌دار شد (سال طراحی / حرف کتگوری / کد ترنسفر / شماره سری) همراه با رزرو اتمیک یک‌کلیکی؛ دوخط‌تیره کدهای مواد اولیه (B-H--101) رفع و seed بازنویسی شد. صفحات محصولات و مواد اولیه در یک صفحه تب‌دار canonical (/products) ادغام شدند. آپلود تصاویر کل سامانه به فشرده‌سازی واحد ۳۰۰KB استاندارد شد.',
+    author: 'AI Agent (V10 Phase 2 — Items & Coding)',
+    changes: [
+      'migration اتمیک alt_035: ایجاد جدول item_code_counters با کلید مرکب (scope, prefix_key) — DB-001 compliant',
+      'ItemCatalogService: متدهای consumeNextItemCode / peekNextItemCode با الگوی قفل سطر شمارنده (.for(\'update\')) + cold-start seeding اتمیک (INSERT ON CONFLICT DO NOTHING + retry-lock) مشابه DocumentService.getNextRef',
+      'route جدید: POST /items/next-code (تخصیص اتمیک + لاگ حسابرسی، مجوز admin/manager) و GET /items/next-code (peek فقط‌خواندنی — بارگذاری فرم هرگز شماره مصرف نمی‌کند)',
+      'حذف routeهای معیوب MAX()+1: GET /items/next-product-code (یتیم) حذف و مسیر یتیم /categories/next-code به سرویس اتمیک متصل شد',
+      'UI فرم کالا: سازنده کد چهاربخشی محصول با برچسب/tooltip برای هر segment («سال طراحی»، «حرف کتگوری»، «کد ترنسفر»، «شماره سری») + دکمه «رزرو شماره سری بعدی (اتمیک)» با badge وضعیت رزرو — سال طراحی پیش‌فرض از تاریخ جلالی امروز (حذف هاردکد ۱۴۰۳)',
+      'رفع دوخط‌تیره مواد اولیه: builders استاندارد buildRawItemCode/buildProductCode در کلاینت + prefixهای seed بدون dash انتهایی (T/B-H/M-G/...) — قالب جدید تک‌خط B-H-101',
+      'هم‌راستاسازی regex ورود اکسل مواد اولیه با قالب جدید به‌همراه سازگاری با داده تاریخی دوخط‌تیره ({1,2} dash)',
+      'V10-2.2: ادغام دو مسیر تکراری product/raw_material در ItemsPage با تب دوتایی (الگوی GalleryPage) روی مسیر canonical /products?type=raw_material + redirect حفظ‌شده از /materials + هم‌راستاسازی منوی Sidebar، جستجوی سراسری و میانبر داشبورد؛ رفع تیتر تکراری «مدیریت مدیریت»',
+      'V10-2.3: helper واحد compressTo300KB (canvas با کاهش تدریجی کیفیت/ابعاد تا عبور از سقف ۳۰۰KB) اعمال‌شده روی آپلود ترنسفر (قبلاً ۲MB)، پروفایل کاربر (۵MB خام)، راه‌اندازی اولیه (۵MB خام)، لوگوی تنظیمات (بدون هیچ validation) و تصویر کالا (گیت خام ۱MB)',
+      'GalleryPage: badge موجودی (با واحد اندازه‌گیری و رنگ وضعیت) + badge WAC روی هر کارت — فیلدهای payload که قبلاً دریافت اما رندر نمی‌شدند'
+    ],
+    fixes: [
+      'رفع کرش/سکوت fetchNextProductCode که همیشه null برمی‌گرداند (endpoint ناموجود /items/next-code قبل از این نسخه واقعاً وجود نداشت)',
+      'رفع خطای race condition در تولید شماره سری کالا تحت درخواست همزمان (الگو ممنوع COUNT/MAX+1 حذف شد)',
+      'رفع متن کهنه و نادرست «حداکثر ۱۰۰ کیلوبایت» در فرم مشخصات کالا',
+      'رفع ورود لوگوی چندمگابایتی خام base64 بدون validation به تنظیمات'
+    ]
+  },
+  {
+    version: 'v1.0.2',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'فاز ۱ (زیرفاز ۱.۲): مهاجرت نرمال‌سازی تاریخ‌ها به ISO میلادی با پورت کامل الگوریتم جلالی در SQL',
+    summary: 'مهاجرت اتمیک alt_034 جهت رفع دوگانه‌گی تقویمی در ستون‌های تاریخی مالی: timestampهای شیفت‌شدهٔ جلالی (سال‌های ۱۳xx/۱۴xx میلادی) در documents و transactions با پورت کامل و راستی‌آزموده الگوریتم jalaali-js به PL/pgSQL تبدیل و زمان واقعی آن‌ها بازیابی شد؛ متن‌های جلالی TEXT جدول journal_vouchers به ISO یکدست شدند؛ کلیدهای شمارنده شمارهگذاری اسناد از سال میلادی به سال جلالی remap و ادغام GREATEST شدند.',
+    author: 'AI Agent (V10 Phase 1.2 — Date Normalization Migration)',
+    changes: [
+      'پورت خط‌به‌خط jalaali-js به چهار تابع SQL immutable: v10_jal_cal / v10_g2d / v10_d2g / v10_jalali_to_gregorian_ts',
+      'اعتبارسنجی ریاضی قبل از اجرا روی ۷ anchor جفتی شامل اسفند کبیسه ۱۴۰۴ — تطابق صددرصدی خروجی SQL با مرجع Node',
+      'UPDATE اتمیک documents.date و transactions.date برای رکوردهای شیفت‌شده با حفظ time-of-day',
+      'یکدست‌سازی journal_vouchers.date به فرمت ISO (شامل روز/ماه تک‌رقمی که نسخه اولیه الگو را جا انداخته بود)',
+      'remap document_ref_counters: کلیدهای 20xx حذف و بر کلیدهای جلالی (-621/-622) با merge GREATEST منعکس شدند تا پیوستگی ترتیب شماره‌ها حفظ شود',
+      'gurd RAISE EXCEPTION داخلی migration — هرگونه باقیماندن مقدار شیفت‌شده باعث rollback کل می‌شود',
+      'checkFiscalPeriodOpen به resolveJalaliFiscalYear متصل شد تا قفل دوره مالی پس از ISO شدن تاریخ‌ها همچنان با کلیدهای CLOSING-14xx جفت بماند',
+      'اصلاح نظم FK در cleanup اسکوپ‌دار: document_items/bom_allocations/transactions پیش از حذف آیتم‌ها'
+    ],
+    fixes: [
+      'رفع bucket های غلط نمودار ماهانه داشبورد (۱۴۰۵ میلادی به‌جای معادل واقعی)',
+      'رفع نتیجه خالی فیلترهای بازه تاریخ برای اسناد ثبت‌شده از UI (مقایسه لغوی دو تقویم)',
+      'رفع شکست اعلام قطعی دوره مالی پس از نرمال‌سازی تاریخ‌ها'
+    ]
+  },
+  {
+    version: 'v1.0.1',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'فاز ۱ (زیرفازهای ۱.۱ و ۱.۳): ساعت توافقی واحد — منبع یگانه تاریخ/ساعت سامانه',
+    summary: 'پیاده‌سازی معماری «ساعت توافقی» مطابق تصمیم محصولی: منطقه زمانی رسمی سامانه از تنظیمات `display_timezone` خوانده می‌شود (پیش‌فرض Asia/Tehran و قابل تغییر برای آینده)؛ سرور و کلاینت هر دو از همین یک منبع تغذیه می‌شوند تا کاربران در شهرهای مختلف نتایج یکسان ببینند. همچنین رفع off-by-one در استخراج تاریخ از DatePicker که به UTC-midnight shift معروف است.',
+    author: 'AI Agent (V10 Phase 1.1/1.3 — Unified Business Clock)',
+    changes: [
+      'ایجاد src/lib/businessClock.ts سمت سرور: getDisplayTimezone با کش ۶۰ ثانیه، businessNowIsoDateTime/businessTodayIsoDate/businessTodayJalaliDash و resolveJalaliFiscalYear',
+      'قاعده صریح شمارهگذاری اسناد: partition key شمارنده‌ها همیشه «سال جلالی» است — پایان پرش بین ۱۴۰۵/۲۰۲۶ بر اساس فرمت رشته تاریخ',
+      'اعتبارسنجی سمت سرور مقدار display_timezone هنگام ذخیره تنظیمات + ابطال کش پس از save',
+      'افزودن مقدار اولیه به seed و /api/setup برای نصب‌های تازه',
+      'کلاینت: setDisplayTimezone ماژولی + TimezoneProvider روی AppRoutes که از کش React Query تنظیمات تغذیه می‌شود — همه فرمتورهای getTodayJalali/getPast/Future/formatPersianDate/formatPersianDateTime اکنون با timeZone تزریق‌شده کار می‌کنند',
+      'رفع off-by-one در extractDateString: استخراج مستقیم بخش‌های Y/M/D در TZ نمایش به جای toISOString().split("T")[0]',
+      'GeneralSettingsTab: فیلد انتخاب منطقه زمانی با گزینه‌های مجاز + راهنمای فارسی'
+    ],
+    fixes: [
+      'رفع ناهماهنگی دید کاربرانِ در شهرهای مختلف از تاریخ‌ها و گزارش‌ها',
+      'رفع شکست پارتیشن‌بندی سال مالی شماره‌گذاری اسناد بین دو تقویم',
+      'رفع شیفت یک روزه در ثبت تاریخ‌های انتخابی شب‌هنگام'
+    ]
+  }
+];

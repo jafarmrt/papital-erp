@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+@media print {
+  body, html, #root {
+    overflow: visible !important;
+    height: auto !important;
+    background: #ffffff !important;
+  }
+  /* V10-3.2: کلاس استاندارد حذف در چاپ — استفاده‌کنندگان حسابداری و صفحات چاپی */
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+  /* V10-3.2: چاپ متمرکز از داخل مودال — فقط ناحیه doc-print-area به چاپگر می‌رود */
+  body.printing-doc * {
+    visibility: hidden !important;
+  }
+  body.printing-doc .doc-print-area,
+  body.printing-doc .doc-print-area * {
+    visibility: visible !important;
+  }
+  body.printing-doc .doc-print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+  }
+  aside, header {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  div {
+    overflow: visible !important;
+  }
+}
+

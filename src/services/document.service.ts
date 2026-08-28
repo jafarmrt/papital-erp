@@ -1,0 +1,1270 @@
+import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
+import { orm } from '../db/drizzle.js';
+import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers } from '../db/schema.js';
+import { roundFinancial, getTodayJalaliDate } from '../utils.js';
+import { resolveJalaliFiscalYear, businessNowIsoDateTime } from '../lib/businessClock.js';
+import { fin, FinancialMath } from '../lib/financialDecimal.js';
+import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
+import { MAX_PAGE_LIMIT } from '../lib/pagination.js';
+import { NotFoundError, ValidationError, InsufficientStockError } from '../errors/customErrors.js';
+import { domainEventBus } from './events/domainEventBus.js';
+import { DomainEventType } from './events/domainEvents.js';
+import { OutboxService } from './events/outboxService.js';
+import { VoucherSyncService } from './accounting/voucherSync.service.js';
+import { VoucherService } from './accounting/voucher.service.js';
+import { NegativeStockPolicyService } from './inventory/negativeStockPolicy.service.js';
+import { logger } from '../middleware/logger.js';
+import { logActivity } from '../lib/auditLogger.js';
+
+type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
+
+export interface GetDocumentsFilter {
+  type?: string;
+  status?: string;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+  offset?: number;
+  isExport?: boolean;
+}
+
+export interface DocumentLineItemInput {
+  itemId: number | string;
+  quantity: number | string;
+  unit_price?: number;
+  unitPrice?: number;
+  price?: number;
+  discount?: number;
+  location?: string;
+  targetLoc?: string;
+  physical_stock?: number;
+  unit?: string;
+  system_stock?: number;
+}
+
+export interface CreateDocumentInput {
+  docType?: string;
+  type?: string;
+  refNumber?: string;
+  date?: string;
+  items: DocumentLineItemInput[];
+  user?: string;
+  inOut?: 'in' | 'out';
+  buyer_name?: string;
+  buyerName?: string;
+  buyer_city?: string;
+  buyerCity?: string;
+  buyer_phone?: string;
+  buyerPhone?: string;
+  buyer_address?: string;
+  buyerAddress?: string;
+  status?: string;
+  notes?: string;
+  location?: string;
+  currency?: string;
+  skipVoucherSync?: boolean;
+  externalTx?: DbClient;
+}
+
+export interface UpdateDocumentInput {
+  refNumber?: string;
+  date?: string;
+  user?: string;
+  buyer_name?: string;
+  buyerName?: string;
+  buyer_city?: string;
+  buyerCity?: string;
+  buyer_phone?: string;
+  buyerPhone?: string;
+  buyer_address?: string;
+  buyerAddress?: string;
+  status?: string;
+  notes?: string;
+  location?: string;
+  currency?: string;
+  items?: DocumentLineItemInput[];
+  expectedVersion?: number;
+  version?: number;
+}
+
+export interface FormattedDocumentItem {
+  document_id: number;
+  item_id: number;
+  quantity: number;
+  unit_price: number;
+  unitPrice?: number;
+  discount: number;
+  location: string;
+  name: string | null;
+  item_name?: string | null;
+  itemName?: string | null;
+  code: string | null;
+  unit: string | null;
+  category: string | null;
+  variance?: number;
+  system_stock?: number;
+}
+
+export interface FormattedDocument {
+  id: number;
+  refNumber: string;
+  ref_number: string;
+  type: string;
+  date: string;
+  user: string;
+  status: string;
+  notes: string | null;
+  buyerName: string | null;
+  buyer_name: string | null;
+  buyerCity: string | null;
+  buyer_city: string | null;
+  buyerPhone: string | null;
+  buyer_phone: string | null;
+  buyerAddress: string | null;
+  buyer_address: string | null;
+  currency: string;
+  version: number;
+  isDeleted: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  deletedBy?: string | null;
+  itemsCount: number;
+  totalQuantity: number;
+  totalAmount: number;
+  total_amount?: number;
+  totalDiscount: number;
+  grossAmount: number;
+  items: FormattedDocumentItem[];
+}
+
+export interface PaginatedDocumentsResult {
+  data: FormattedDocument[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export class DocumentService {
+  /**
+   * Updates the notes of a specific document.
+   */
+  static async updateDocumentNotes(id: number, notes: string): Promise<void> {
+    await orm.update(documents).set({ notes }).where(eq(documents.id, id));
+  }
+
+  /**
+   * Updates an existing document (proforma or draft) and its line items.
+   */
+  static async updateDocument(id: number, body: UpdateDocumentInput): Promise<void> {
+    const { 
+      refNumber, date, user,
+      buyer_name, buyer_city, buyer_phone, buyer_address,
+      status, notes, location, currency, items: docLines
+    } = body;
+
+    const [existingDoc] = await orm.select().from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
+    if (!existingDoc) {
+      throw new NotFoundError('سند مورد نظر یافت نشد.');
+    }
+
+    if (existingDoc.status === 'final') {
+      throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
+    }
+
+    if (status === 'final') {
+      throw new ValidationError(
+        'نهایی‌سازی سند از مسیر ویرایش مجاز نیست؛ عملیات نهایی‌سازی باید از مسیر «نهایی‌سازی و تایید» انجام شود تا کسر موجودی انبار، صدور سند حسابداری و گردش کار به‌درستی اجرا گردند.'
+      );
+    }
+
+    if (body.expectedVersion !== undefined || body.version !== undefined) {
+      checkOccVersion(existingDoc, {
+        entityType: 'Document',
+        entityId: id,
+        expectedVersion: Number(body.expectedVersion ?? body.version)
+      });
+    }
+
+    await orm.transaction(async (tx) => {
+      await tx.update(documents).set({
+        refNumber: refNumber ? String(refNumber) : existingDoc.refNumber,
+        date: date || existingDoc.date,
+        user: user || existingDoc.user,
+        notes: notes !== undefined ? notes : existingDoc.notes,
+        buyerName: buyer_name !== undefined ? buyer_name : existingDoc.buyerName,
+        buyerCity: buyer_city !== undefined ? buyer_city : existingDoc.buyerCity,
+        buyerPhone: buyer_phone !== undefined ? buyer_phone : existingDoc.buyerPhone,
+        buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
+        status: status || existingDoc.status,
+        currency: currency || existingDoc.currency,
+        version: nextVersion(existingDoc.version)
+      }).where(eq(documents.id, id));
+
+      if (Array.isArray(docLines)) {
+        await tx.delete(documentItems).where(eq(documentItems.documentId, id));
+
+        const docLocation = location || 'main';
+
+        for (const item of docLines) {
+          const { itemId, quantity, unit_price, unitPrice, discount, location: itemLoc } = item;
+          const price = unit_price ?? unitPrice ?? 0;
+          const disc = discount || 0;
+          const qty = Number(quantity);
+          const targetLoc = itemLoc || docLocation;
+
+          if (!Number.isFinite(qty) || qty <= 0) {
+            throw new ValidationError(`مقدار/تعداد برای کالای با شناسه ${itemId} باید عددی بزرگ‌تر از صفر باشد.`);
+          }
+          if (!Number.isFinite(Number(price)) || Number(price) < 0) {
+            throw new ValidationError(`قیمت واحد برای کالای با شناسه ${itemId} نمی‌تواند منفی یا نامعتبر باشد.`);
+          }
+
+          await tx.insert(documentItems).values({
+            documentId: id,
+            itemId: Number(itemId),
+            quantity: qty,
+            unitPrice: price,
+            discount: disc,
+            location: targetLoc
+          });
+        }
+      }
+    });
+  }
+
+  /**
+   * Resolves fiscal year from a date string/number and the invoice start-number setting.
+   */
+  private static async resolveRefContext(
+    tx: DbClient,
+    type: string,
+    dateOrFiscalYear?: string | number
+  ): Promise<{ fiscalYear: number; startNumber: number }> {
+    // V10-1.1: قاعده صریح و واحد — partition key شمارنده‌ها همیشه «سال جلالی» است،
+    // نه پرش بین ۱۴۰۵/۲۰۲۶ بسته به فرمت رشته تاریخ.
+    let fiscalYear = resolveJalaliFiscalYear(dateOrFiscalYear ?? null);
+
+    let startNumber = 1;
+    if (type === 'invoice') {
+      const startSetting = await tx.select().from(appSettings).where(eq(appSettings.key, 'invoice_start_number'));
+      if (startSetting.length > 0 && !isNaN(parseInt(startSetting[0].value, 10))) {
+        startNumber = parseInt(startSetting[0].value, 10);
+      }
+    }
+
+    return { fiscalYear, startNumber };
+  }
+
+  /**
+   * Scans existing documents of the given type and returns the maximum numeric refNumber suffix.
+   */
+  private static async getMaxExistingRefNumber(tx: DbClient, type: string): Promise<number> {
+    const existingDocs = await tx
+      .select({ refNumber: documents.refNumber })
+      .from(documents)
+      .where(and(
+        eq(documents.type, type),
+        eq(documents.isDeleted, 0)
+      ));
+
+    let maxNum = 0;
+    for (const doc of existingDocs) {
+      if (doc.refNumber) {
+        const numStr = String(doc.refNumber).replace(/\D/g, '');
+        if (numStr) {
+          const val = parseInt(numStr, 10);
+          if (!isNaN(val) && val > maxNum) {
+            maxNum = val;
+          }
+        }
+      }
+    }
+    return maxNum;
+  }
+
+  /**
+   * Peeks the next reference number for a document type WITHOUT incrementing any counter.
+   * Used by form prefill endpoints so that abandoned forms / page loads never burn document numbers.
+   */
+  static async peekNextRef(type: string, dateOrFiscalYear?: string | number): Promise<string> {
+    const { fiscalYear, startNumber } = await DocumentService.resolveRefContext(orm, type, dateOrFiscalYear);
+
+    const [counter] = await orm
+      .select()
+      .from(documentRefCounters)
+      .where(and(
+        eq(documentRefCounters.docType, type),
+        eq(documentRefCounters.fiscalYear, fiscalYear)
+      ));
+
+    if (counter) {
+      return String(Math.max(counter.lastRefNumber + 1, startNumber));
+    }
+
+    // Cold start: peek from max existing document number (read-only, no counter write)
+    const maxNum = await DocumentService.getMaxExistingRefNumber(orm, type);
+    return String(Math.max(maxNum + 1, startNumber));
+  }
+
+  /**
+   * Calculates the next reference number for a given document type using the atomic document_ref_counters table.
+   * Lock contention on the documents table is completely avoided by locking only the target counter row.
+   */
+  static async getNextRef(type: string, dateOrFiscalYear?: string | number, externalTx?: DbClient): Promise<string> {
+    const execute = async (tx: DbClient) => {
+      const { fiscalYear, startNumber } = await DocumentService.resolveRefContext(tx, type, dateOrFiscalYear);
+
+      // Lock only the specific counter row for (docType, fiscalYear)
+      const [counter] = await tx
+        .select()
+        .from(documentRefCounters)
+        .where(and(
+          eq(documentRefCounters.docType, type),
+          eq(documentRefCounters.fiscalYear, fiscalYear)
+        ))
+        .for('update');
+
+      let nextNum: number;
+      if (counter) {
+        nextNum = Math.max(counter.lastRefNumber + 1, startNumber);
+        await tx
+          .update(documentRefCounters)
+          .set({ lastRefNumber: nextNum })
+          .where(and(
+            eq(documentRefCounters.docType, type),
+            eq(documentRefCounters.fiscalYear, fiscalYear)
+          ));
+      } else {
+        // V9-1.2: cold-start atomic seeding — INSERT ... ON CONFLICT DO NOTHING eliminates the
+        // MAX()+1 race where two concurrent first calls computed the same number.
+        const maxNum = await DocumentService.getMaxExistingRefNumber(tx, type);
+        const seedNum = Math.max(maxNum + 1, startNumber);
+
+        const inserted = await tx
+          .insert(documentRefCounters)
+          .values({
+            docType: type,
+            fiscalYear,
+            lastRefNumber: seedNum,
+          })
+          .onConflictDoNothing({
+            target: [documentRefCounters.docType, documentRefCounters.fiscalYear]
+          })
+          .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
+
+        if (inserted.length > 0) {
+          // This transaction won the seeding race — the seeded value is ours to consume
+          nextNum = seedNum;
+        } else {
+          // A concurrent transaction seeded the counter first — lock and increment atomically
+          const [retryCounter] = await tx
+            .select()
+            .from(documentRefCounters)
+            .where(and(
+              eq(documentRefCounters.docType, type),
+              eq(documentRefCounters.fiscalYear, fiscalYear)
+            ))
+            .for('update');
+
+          nextNum = Math.max((retryCounter?.lastRefNumber || 0) + 1, startNumber);
+          await tx
+            .update(documentRefCounters)
+            .set({ lastRefNumber: nextNum })
+            .where(and(
+              eq(documentRefCounters.docType, type),
+              eq(documentRefCounters.fiscalYear, fiscalYear)
+            ));
+        }
+      }
+
+      return String(nextNum);
+    };
+
+    if (externalTx) {
+      return await execute(externalTx);
+    }
+    return await orm.transaction(async (tx) => execute(tx));
+  }
+
+  /**
+   * Creates a new document and applies associated inventory changes.
+   */
+  static async createDocument(body: CreateDocumentInput): Promise<number> {
+    const { 
+      docType: rawDocType, type: rawType, refNumber, date, items: docLines, user, inOut,
+      buyer_name, buyerName, buyer_city, buyerCity, buyer_phone, buyerPhone, buyer_address, buyerAddress,
+      status, notes, location, currency, externalTx
+    } = body;
+
+    const docType = rawDocType || rawType || 'invoice';
+    const docStatus = status || 'final';
+    const docLocation = location || 'main';
+
+    const finalBuyerName = buyerName || buyer_name || '';
+    const finalBuyerCity = buyerCity || buyer_city || '';
+    const finalBuyerPhone = buyerPhone || buyer_phone || '';
+    const finalBuyerAddress = buyerAddress || buyer_address || '';
+
+    const execute = async (tx: DbClient): Promise<number> => {
+      let finalRefNumber = refNumber;
+      if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
+        finalRefNumber = await DocumentService.getNextRef(docType, date, tx);
+      } else {
+        // Sync document_ref_counters with custom refNumber if it has numeric digits
+        const digits = String(finalRefNumber).replace(/\D/g, '');
+        if (digits) {
+          const val = parseInt(digits, 10);
+          if (!isNaN(val) && val > 0 && val <= 2147483647) {
+            let year = new Date().getFullYear();
+            if (date) {
+              const d = new Date(date);
+              if (!isNaN(d.getTime())) year = d.getFullYear();
+            }
+            const [existingCounter] = await tx
+              .select()
+              .from(documentRefCounters)
+              .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
+              .for('update');
+            if (existingCounter) {
+              if (val > existingCounter.lastRefNumber) {
+                await tx
+                  .update(documentRefCounters)
+                  .set({ lastRefNumber: val })
+                  .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
+              }
+            } else {
+              await tx
+                .insert(documentRefCounters)
+                .values({ docType, fiscalYear: year, lastRefNumber: val })
+                .onConflictDoUpdate({
+                  target: [documentRefCounters.docType, documentRefCounters.fiscalYear],
+                  set: { lastRefNumber: sql`GREATEST(${documentRefCounters.lastRefNumber}, ${val})` }
+                });
+            }
+          }
+        }
+      }
+
+      const [insertedDoc] = await tx.insert(documents).values({
+        type: docType,
+        refNumber: String(finalRefNumber),
+        date,
+        user,
+        notes: notes || '',
+        buyerName: finalBuyerName,
+        buyerCity: finalBuyerCity,
+        buyerPhone: finalBuyerPhone,
+        buyerAddress: finalBuyerAddress,
+        status: docStatus,
+        currency: currency || 'IRR',
+        isDeleted: 0
+      }).returning({ id: documents.id });
+      const docId = insertedDoc.id;
+
+      if (docType === 'audit') {
+        await tx.select({ code: warehouses.code }).from(warehouses);
+        for (const item of docLines) {
+          const { itemId, system_stock, physical_stock, location: itemLoc } = item;
+          const targetLoc = itemLoc || docLocation;
+          const variance = Number(physical_stock) - Number(system_stock);
+
+          await tx.insert(documentItems).values({
+            documentId: docId,
+            itemId: Number(itemId),
+            quantity: Number(physical_stock || 0),
+            unitPrice: 0,
+            discount: 0,
+            location: targetLoc
+          });
+
+          if (variance !== 0) {
+            const txType = variance > 0 ? 'in' : 'out';
+            const absVariance = Math.abs(variance);
+            const txNotes = variance > 0 ? 'اضافی انبارگردانی دوره‌ای' : 'کسری انبارگردانی دوره‌ای';
+
+            await tx.insert(transactions).values({
+              itemId: Number(itemId),
+              documentId: docId,
+              type: txType,
+              quantity: absVariance,
+              date,
+              documentType: 'audit',
+              documentRef: String(finalRefNumber),
+              createdBy: user,
+              notes: txNotes,
+              location: targetLoc,
+              isDeleted: 0
+            });
+
+            const [itemData] = await tx
+              .select({ stocks: items.stocks, currentStock: items.currentStock })
+              .from(items)
+              .where(eq(items.id, Number(itemId)))
+              .for('update');
+
+            const currentStocks = (itemData?.stocks as Record<string, number>) || {};
+            currentStocks[targetLoc] = fin(physical_stock).round(4).toNumber();
+            
+            const newTotalStock = Object.values(currentStocks)
+              .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
+              .round(4)
+              .toNumber();
+
+            await tx.update(items).set({
+              stocks: currentStocks,
+              currentStock: newTotalStock
+            }).where(eq(items.id, Number(itemId)));
+          }
+        }
+      } else {
+        for (const item of docLines) {
+          const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
+          const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
+          const disc = discount || 0;
+          const qty = Number(quantity);
+          const targetLoc = itemLoc || docLocation;
+
+          if (docStatus === 'final') {
+            await DocumentService.applyStockMovement(tx, {
+              itemId: Number(itemId),
+              documentId: docId,
+              inOut,
+              quantity: qty,
+              price,
+              date,
+              documentType: docType,
+              documentRef: String(finalRefNumber),
+              user,
+              targetLoc,
+            });
+          }
+
+          await tx.insert(documentItems).values({
+            documentId: docId,
+            itemId: Number(itemId),
+            quantity: qty,
+            unitPrice: price,
+            discount: disc,
+            location: targetLoc
+          });
+        }
+      }
+
+      // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with document creation)
+      const isApproved = docStatus === 'final';
+      if (docType === 'invoice' || docType === 'proforma') {
+        const invEvent = domainEventBus.createEvent(
+          isApproved ? DomainEventType.INVOICE_APPROVED : DomainEventType.INVOICE_CREATED,
+          'Document',
+          String(docId),
+          {
+            documentId: docId,
+            refNumber: String(finalRefNumber),
+            docType,
+            buyerName: buyer_name || '',
+            currency: currency || 'IRR',
+            itemCount: docLines?.length || 0,
+            status: docStatus
+          },
+          { userName: user }
+        );
+        await OutboxService.saveToOutbox(tx, invEvent);
+      } else if (docType === 'receipt' || docType === 'production_receipt' || docType === 'purchase') {
+        const purchEvent = domainEventBus.createEvent(
+          isApproved ? DomainEventType.PURCHASE_APPROVED : DomainEventType.PURCHASE_CREATED,
+          'Document',
+          String(docId),
+          {
+            documentId: docId,
+            refNumber: String(finalRefNumber),
+            supplierName: buyer_name || '',
+            currency: currency || 'IRR',
+            itemCount: docLines?.length || 0,
+            status: docStatus
+          },
+          { userName: user }
+        );
+        await OutboxService.saveToOutbox(tx, purchEvent);
+      }
+
+      if (docStatus === 'final') {
+        if (docType === 'invoice' || docType === 'proforma') {
+          await VoucherSyncService.syncSalesInvoiceVoucher(docId, { username: user }, tx);
+        } else if (['receipt', 'production_receipt', 'purchase'].includes(docType)) {
+          await VoucherSyncService.syncPurchaseInvoiceVoucher(docId, { username: user }, tx);
+        } else if (['remittance', 'waste', 'return'].includes(docType)) {
+          await VoucherSyncService.syncWarehouseDocumentVoucher(docId, { username: user }, tx);
+        }
+      }
+
+      return docId;
+    };
+
+    // V9-P0: پشتیبانی از تراکنش خارجی (externalTx) برای اجرای اتمیک در تراکنش فراخواننده
+    if (externalTx) {
+      return await execute(externalTx);
+    }
+    return await orm.transaction(execute);
+  }
+
+  /**
+   * Retrieves a list of documents, optionally filtered by type, status, date range, search query, and pagination.
+   */
+  static async getDocuments(
+    typeOrFilter?: string | GetDocumentsFilter
+  ): Promise<FormattedDocument[] | PaginatedDocumentsResult> {
+    const filter: GetDocumentsFilter = typeof typeOrFilter === 'string'
+      ? { type: typeOrFilter }
+      : (typeOrFilter || {});
+
+    const conditions = [eq(documents.isDeleted, 0)];
+
+    if (filter.type && filter.type !== 'all') {
+      conditions.push(eq(documents.type, filter.type));
+    }
+    if (filter.status && filter.status !== 'all') {
+      conditions.push(eq(documents.status, filter.status));
+    }
+    if (filter.startDate) {
+      conditions.push(gte(documents.date, filter.startDate));
+    }
+    if (filter.endDate) {
+      const endCondition = filter.endDate.length <= 10 ? filter.endDate + 'T23:59:59.999Z' : filter.endDate;
+      conditions.push(lte(documents.date, endCondition));
+    }
+    if (filter.search && filter.search.trim() !== '') {
+      const s = `%${filter.search.trim()}%`;
+      conditions.push(or(
+        ilike(documents.refNumber, s),
+        ilike(documents.buyerName, s),
+        ilike(documents.notes, s),
+        ilike(documents.user, s),
+        ilike(documents.buyerPhone, s),
+        ilike(documents.buyerCity, s)
+      )!);
+    }
+
+    const whereClause = and(...conditions);
+
+    let query = orm.select().from(documents).where(whereClause).orderBy(desc(documents.id));
+
+    // V9-1.3: گارد دفاعی — مقدار NaN/منفی در page/limit هرگز نباید LIMIT را حذف کند
+    const safePage = Number.isFinite(filter.page) && (filter.page as number) > 0 ? (filter.page as number) : 1;
+    const rawLimit = filter.limit;
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit as number, 0), MAX_PAGE_LIMIT) : ((typeof typeOrFilter === 'object' && filter.page) ? 50 : 0);
+    const page = safePage;
+    const offset = filter.offset !== undefined && Number.isFinite(filter.offset) ? filter.offset : (page - 1) * limit;
+
+    if (!filter.isExport && limit > 0) {
+      query = query.limit(limit).offset(offset) as typeof query;
+    }
+
+    const docs = await query;
+
+    // Fetch items ONLY for these retrieved docs to calculate totals efficiently
+    const docIds = docs.map(d => d.id);
+    let allItems: Array<{
+      document_id: number;
+      item_id: number;
+      quantity: number;
+      unit_price: number;
+      discount: number;
+      location: string;
+      name: string | null;
+      code: string | null;
+      unit: string | null;
+      category: string | null;
+    }> = [];
+    if (docIds.length > 0) {
+      allItems = await orm.select({
+        document_id: documentItems.documentId,
+        item_id: documentItems.itemId,
+        quantity: documentItems.quantity,
+        unit_price: documentItems.unitPrice,
+        discount: documentItems.discount,
+        location: documentItems.location,
+        name: items.name,
+        code: items.code,
+        unit: items.unit,
+        category: items.category
+      })
+      .from(documentItems)
+      .leftJoin(items, eq(documentItems.itemId, items.id))
+      .where(and(inArray(documentItems.documentId, docIds), eq(documentItems.isDeleted, 0)));
+    }
+
+    const formattedDocs: FormattedDocument[] = docs.map(d => {
+      const dItems = allItems.filter(i => i.document_id === d.id);
+      const itemsCount = dItems.length;
+      // V9-1.3: جمع‌های مالی با FinancialDecimal — حذف خطای شناور float
+      const totalQuantity = dItems.reduce((acc, i) => fin(acc).add(Number(i.quantity || 0)).toNumber(), 0);
+      const totalAmount = dItems.reduce(
+        (acc, i) => fin(acc).add(fin(Number(i.quantity || 0)).multiply(Number(i.unit_price || 0)).subtract(Number(i.discount || 0))).toNumber(),
+        0
+      );
+      const totalDiscount = dItems.reduce((acc, i) => fin(acc).add(Number(i.discount || 0)).toNumber(), 0);
+      const grossAmount = dItems.reduce(
+        (acc, i) => fin(acc).add(fin(Number(i.quantity || 0)).multiply(Number(i.unit_price || 0))).toNumber(),
+        0
+      );
+
+      return {
+        ...d,
+        buyer_name: d.buyerName,
+        buyer_city: d.buyerCity,
+        buyer_phone: d.buyerPhone,
+        buyer_address: d.buyerAddress,
+        ref_number: d.refNumber,
+        itemsCount,
+        totalQuantity,
+        totalAmount,
+        totalDiscount,
+        grossAmount,
+        items: dItems
+      };
+    });
+
+    if (filter.isExport || (filter.limit === undefined && filter.page === undefined && typeof typeOrFilter === 'string')) {
+      return formattedDocs;
+    }
+
+    // Calculate total count using SQL COUNT
+    const [countResult] = await orm.select({ count: sql`count(*)`.mapWith(Number) })
+      .from(documents)
+      .where(whereClause);
+    
+    const total = countResult?.count || 0;
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
+
+    return {
+      data: formattedDocs,
+      total,
+      page,
+      limit: limit > 0 ? limit : total,
+      totalPages: totalPages > 0 ? totalPages : 1
+    };
+  }
+
+  /**
+   * Retrieves a document by its ID, with its associated items.
+   */
+  static async getDocumentById(id: number): Promise<FormattedDocument | null> {
+    const [doc] = await orm.select().from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
+    if (!doc) return null;
+
+    const itemsResult = await orm.execute(sql`
+      SELECT di.*, i.name, i.code, i.unit, i.category
+      FROM ${documentItems} di
+      LEFT JOIN ${items} i ON di.item_id = i.id
+      WHERE di.document_id = ${doc.id} AND (di.is_deleted IS NULL OR di.is_deleted = 0)
+    `);
+
+    const txs = doc.type === 'audit'
+      ? await orm.select().from(transactions).where(eq(transactions.documentId, doc.id))
+      : [];
+
+    const rows = (itemsResult.rows || []) as Array<Record<string, unknown>>;
+
+    const totalCalculated = rows.reduce((sum: number, row: Record<string, unknown>) => {
+      const qty = Number(row.quantity || 0);
+      const price = Number(row.unit_price || 0);
+      const discount = Number(row.discount || 0);
+      return fin(sum).add(fin(qty).multiply(price).subtract(discount)).toNumber();
+    }, 0);
+
+    const formattedItems: FormattedDocumentItem[] = rows.map((row: Record<string, unknown>) => {
+      const matchingTx = txs.find(t => t.itemId === Number(row.item_id));
+      const variance = matchingTx 
+        ? (matchingTx.type === 'in' ? matchingTx.quantity : -matchingTx.quantity)
+        : 0;
+      const itemName = (row.name as string) || (row.item_name as string) || (row.code as string) || 'کالا';
+      return {
+        document_id: Number(row.document_id),
+        item_id: Number(row.item_id),
+        quantity: Number(row.quantity || 0),
+        unit_price: Number(row.unit_price || 0),
+        unitPrice: Number(row.unit_price || 0),
+        discount: Number(row.discount || 0),
+        location: String(row.location || 'main'),
+        name: itemName,
+        item_name: itemName,
+        itemName: itemName,
+        code: (row.code as string) || null,
+        unit: (row.unit as string) || null,
+        category: (row.category as string) || null,
+        variance,
+        system_stock: Number(row.quantity || 0) - variance
+      };
+    });
+
+    const totalQuantity = formattedItems.reduce((acc, i) => acc + Number(i.quantity || 0), 0);
+    const totalDiscount = formattedItems.reduce((acc, i) => acc + Number(i.discount || 0), 0);
+    const grossAmount = formattedItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || 0)), 0);
+
+    return {
+      ...doc,
+      buyer_name: doc.buyerName,
+      buyerName: doc.buyerName,
+      buyer_city: doc.buyerCity,
+      buyerCity: doc.buyerCity,
+      buyer_phone: doc.buyerPhone,
+      buyerPhone: doc.buyerPhone,
+      buyer_address: doc.buyerAddress,
+      buyerAddress: doc.buyerAddress,
+      ref_number: doc.refNumber,
+      refNumber: doc.refNumber,
+      itemsCount: formattedItems.length,
+      totalQuantity,
+      totalDiscount,
+      grossAmount,
+      total_amount: totalCalculated,
+      totalAmount: totalCalculated,
+      items: formattedItems
+    };
+  }
+
+  /**
+   * Retrieves a document by its ID or reference number (refNumber).
+   */
+  static async getDocumentByIdOrRef(idOrRef: string | number): Promise<FormattedDocument | null> {
+    const numericId = Number(idOrRef);
+    if (!isNaN(numericId) && numericId > 0) {
+      const doc = await this.getDocumentById(numericId);
+      if (doc) return doc;
+    }
+    const [docByRef] = await orm.select().from(documents).where(eq(documents.refNumber, String(idOrRef)));
+    if (docByRef) {
+      return await this.getDocumentById(docByRef.id);
+    }
+    return null;
+  }
+
+  /**
+   * Applies stock movement for a single document item (creates transaction and updates item stocks/WAC).
+   */
+  public static async applyStockMovement(
+    tx: DbClient,
+    params: {
+      itemId: number;
+      documentId: number;
+      inOut: 'in' | 'out';
+      quantity: number;
+      price: number;
+      date: string;
+      documentType: string;
+      documentRef: string;
+      user: string;
+      targetLoc: string;
+    }
+  ): Promise<void> {
+    const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc } = params;
+    const qty = Number(quantity);
+    const priceNum = Number(price);
+
+    // V9-P0: گارد دفاعی — مقدار منفی/نامعتبر جهت in/out را برعکس می‌کند و WAC را خراب می‌کند
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new ValidationError(
+        `مقدار گردش انبار باید عددی بزرگ‌تر از صفر باشد (مقدار دریافتی: ${String(quantity)}).`
+      );
+    }
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      throw new ValidationError(
+        `قیمت واحد در گردش انبار نمی‌تواند منفی یا نامعتبر باشد (مقدار دریافتی: ${String(price)}).`
+      );
+    }
+
+    // Atomically fetch and lock the item row before performing any inventory calculation
+    const [itemData] = await tx
+      .select({
+        id: items.id,
+        name: items.name,
+        code: items.code,
+        unit: items.unit,
+        stocks: items.stocks,
+        currentStock: items.currentStock,
+        weightedAverageCost: items.weightedAverageCost,
+        version: items.version
+      })
+      .from(items)
+      .where(eq(items.id, itemId))
+      .for('update');
+
+    if (!itemData) {
+      throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سیستم یافت نشد.`);
+    }
+
+    const currentStocks = (itemData.stocks as Record<string, number>) || {};
+    const currentLocStock = Number(currentStocks[targetLoc] || 0);
+
+    if (inOut === 'out') {
+      if (currentLocStock < qty) {
+        const policy = await NegativeStockPolicyService.getPolicy(tx);
+
+        switch (policy) {
+          case 'forbidden':
+            throw new InsufficientStockError(
+              `موجودی کافی در انبار ${targetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
+            );
+
+          case 'warning':
+            logger.warn(
+              `[Stock Warning] Negative stock applied for item ${itemId} (${itemData.name}) at ${targetLoc}: ` +
+              `current=${currentLocStock}, requested=${qty}`
+            );
+            // ادامه عملیات — کسر به مقدار منفی می‌رسد
+            break;
+
+          case 'allowed':
+            // ادامه عملیات بدون هشدار
+            break;
+
+          default:
+            // default = forbidden
+            throw new InsufficientStockError(
+              `موجودی کافی در انبار ${targetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
+            );
+        }
+      }
+    }
+
+    await tx.insert(transactions).values({
+      itemId,
+      documentId,
+      type: inOut,
+      quantity: qty,
+      unitPrice: price,
+      totalPrice: fin(price).multiply(qty).round(4).toNumber(),
+      date,
+      documentType,
+      documentRef: String(documentRef),
+      createdBy: user,
+      notes: '',
+      location: targetLoc,
+      isDeleted: 0,
+    });
+
+    const updatedLocStock = inOut === 'in'
+      ? fin(currentLocStock).add(qty).round(4).toNumber()
+      : fin(currentLocStock).subtract(qty).round(4).toNumber();
+    currentStocks[targetLoc] = updatedLocStock;
+
+    // Single source of truth: total currentStock is strictly the sum of all location stocks
+    const newTotalStock = Object.values(currentStocks)
+      .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
+      .round(4)
+      .toNumber();
+    const oldTotalStock = Number(itemData.currentStock || 0);
+
+    let newWAC = Number(itemData.weightedAverageCost || 0);
+    if (inOut === 'in') {
+      newWAC = FinancialMath.calculateWAC(oldTotalStock, newWAC, qty, price).toNumber();
+    }
+
+        await tx
+          .update(items)
+          .set({
+            stocks: currentStocks,
+            currentStock: newTotalStock,
+            weightedAverageCost: newWAC,
+            version: nextVersion(itemData.version)
+          })
+          .where(eq(items.id, itemId));
+
+        // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with stock updates)
+        const eventType = inOut === 'in' ? DomainEventType.STOCK_RECEIVED : DomainEventType.STOCK_ISSUED;
+        const stockEvent = domainEventBus.createEvent(
+          eventType,
+          'Item',
+          String(itemId),
+          {
+            itemId,
+            itemCode: itemData.code,
+            itemName: itemData.name,
+            movementType: inOut,
+            quantity: qty,
+            unitPrice: price,
+            warehouseLocation: targetLoc,
+            previousStock: oldTotalStock,
+            newStock: newTotalStock,
+            referenceDocType: documentType,
+            referenceDocNumber: documentRef
+          },
+          { userName: user }
+        );
+        await OutboxService.saveToOutbox(tx, stockEvent);
+      }
+
+  /**
+   * Finalizes a draft or proforma document, performing stock checks, deducting/adding inventory,
+   * and automatically generating double-entry accounting journal vouchers.
+   */
+  static async finalizeDocument(id: number, user?: string): Promise<void> {
+    await orm.transaction(async (tx) => {
+      const [doc] = await tx.select().from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
+        .for('update');
+
+      if (!doc) {
+        throw new NotFoundError(`سند با شناسه ${id} یافت نشد`);
+      }
+      if (doc.status === 'final') {
+        logger.info({ message: `[DocumentService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
+        return;
+      }
+
+      const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
+
+      await tx.update(documents).set({ 
+        status: 'final',
+        type: targetType
+      }).where(eq(documents.id, id));
+
+      const docLines = await tx.select().from(documentItems).where(eq(documentItems.documentId, id));
+      const inOut = (targetType === 'receipt' || targetType === 'return') ? 'in' : 'out';
+
+      for (const item of docLines) {
+        const targetLoc = item.location || 'main';
+        const qty = item.quantity;
+        const price = item.unitPrice || 0;
+
+        await DocumentService.applyStockMovement(tx, {
+          itemId: item.itemId,
+          documentId: id,
+          inOut,
+          quantity: qty,
+          price,
+          date: doc.date,
+          documentType: targetType,
+          documentRef: doc.refNumber,
+          user: user || doc.user,
+          targetLoc,
+        });
+      }
+
+      // Auto-generate double-entry accounting voucher for the finalized document
+      if (targetType === 'invoice' || targetType === 'proforma') {
+        await VoucherSyncService.syncSalesInvoiceVoucher(id, {
+          username: user || doc.user,
+        }, tx);
+      } else if (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'purchase') {
+        await VoucherSyncService.syncPurchaseInvoiceVoucher(id, {
+          username: user || doc.user,
+        }, tx);
+      } else if (['remittance', 'waste', 'return'].includes(targetType)) {
+        await VoucherSyncService.syncWarehouseDocumentVoucher(id, {
+          username: user || doc.user,
+        }, tx);
+      }
+    });
+  }
+
+  /**
+   * Soft deletes a document and performs a cascade soft-delete on associated documentItems and transactions,
+   * reverting any finalized inventory changes and recording audit logs.
+   */
+  static async deleteDocument(id: number, user?: string): Promise<void> {
+    await orm.transaction(async (tx) => {
+      const [doc] = await tx.select().from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
+        .for('update');
+      if (!doc) return;
+
+    const deletedByUser = user || doc.user || 'system';
+    // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
+    const nowIso = await businessNowIsoDateTime();
+
+      // 1. Soft-delete document with deletedAt & deletedBy
+      await tx.update(documents).set({
+        isDeleted: 1,
+        deletedAt: nowIso,
+        deletedBy: deletedByUser,
+      }).where(eq(documents.id, id));
+
+      // 2. Cascade soft-delete document_items
+      await tx.update(documentItems).set({
+        isDeleted: 1,
+      }).where(eq(documentItems.documentId, id));
+
+      // 3. Cascade soft-delete transactions + ثبت تراکنش‌های معکوس مطابق الگوی DB-009
+      const originalTxs = await tx.select().from(transactions)
+        .where(and(eq(transactions.documentId, doc.id), eq(transactions.isDeleted, 0)));
+
+      await tx.update(transactions).set({
+        isDeleted: 1,
+      }).where(eq(transactions.documentId, doc.id));
+
+      for (const orig of originalTxs) {
+        const origQty = Number(orig.quantity) || 0;
+        if (origQty > 0) {
+          await tx.insert(transactions).values({
+            itemId: orig.itemId,
+            documentId: doc.id,
+            type: orig.type === 'in' ? 'out' : 'in',
+            quantity: origQty,
+            unitPrice: Number(orig.unitPrice) || 0,
+            totalPrice: Number(orig.totalPrice) || 0,
+            date: nowIso,
+            documentType: orig.documentType || doc.type,
+            documentRef: `REV-${orig.documentRef || doc.refNumber || id}`,
+            createdBy: deletedByUser,
+            notes: `تراکنش معکوس حذف سند ${doc.refNumber || id} (معکوس تراکنش #${orig.id})`,
+            location: orig.location || 'main',
+            reversalOfId: orig.id,
+            isDeleted: 0,
+          });
+        }
+      }
+
+      // 4. Revert stock for final documents
+      const docLines = await tx.select().from(documentItems).where(eq(documentItems.documentId, id));
+      const inOut = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
+
+      if (doc.status === 'final') {
+        for (const item of docLines) {
+          const qty = item.quantity;
+          const targetLoc = item.location || 'main';
+
+          const [itemData] = await tx.select({ stocks: items.stocks, currentStock: items.currentStock, weightedAverageCost: items.weightedAverageCost, version: items.version }).from(items).where(eq(items.id, item.itemId)).for('update');
+          if (!itemData) continue;
+          const currentStocks = (itemData.stocks as Record<string, number>) || {};
+          const currentLocStock = Number(currentStocks[targetLoc] || 0);
+          
+          currentStocks[targetLoc] = inOut === 'in'
+            ? fin(currentLocStock).subtract(qty).round(4).toNumber()
+            : fin(currentLocStock).add(qty).round(4).toNumber();
+          
+          const oldTotalStock = Number(itemData.currentStock || 0);
+          const newTotalStock = Object.values(currentStocks)
+            .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
+            .round(4)
+            .toNumber();
+          
+          let newWAC = Number(itemData.weightedAverageCost || 0);
+          if (inOut === 'in') {
+            if (newTotalStock <= 0) {
+              newWAC = Number(itemData.weightedAverageCost || 0);
+            } else {
+              const unitP = Number(item.unitPrice || 0);
+              const oldTotalVal = fin(oldTotalStock).multiply(newWAC);
+              const revertVal = fin(qty).multiply(unitP);
+              const remainingVal = oldTotalVal.subtract(revertVal);
+              if (remainingVal.isNegative() || newTotalStock <= 0) {
+                newWAC = Number(itemData.weightedAverageCost || 0);
+              } else {
+                newWAC = remainingVal.divide(newTotalStock).round(4).toNumber();
+              }
+            }
+          }
+
+          await tx.update(items).set({
+            stocks: currentStocks,
+            currentStock: newTotalStock,
+            weightedAverageCost: newWAC,
+            version: nextVersion(itemData.version)
+          }).where(eq(items.id, item.itemId));
+        }
+
+        // V9-1.1: برگشت سند حسابداری متناظر (صدور سند معکوس) در همان تراکنش
+        const linkedVouchers = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
+          .from(journalVouchers)
+          .where(and(
+            eq(journalVouchers.referenceModule, 'invoice'),
+            eq(journalVouchers.referenceId, id),
+            eq(journalVouchers.isDeleted, 0)
+          ));
+
+        for (const lv of linkedVouchers) {
+          await VoucherService.reverseVoucher({
+            voucherId: lv.id,
+            date: getTodayJalaliDate(),
+            reason: `حذف سند انبار شماره ${doc.refNumber || id} (${doc.type || ''})`,
+            username: deletedByUser,
+            externalTx: tx,
+          });
+        }
+      }
+
+      // 5. Audit log
+      await logActivity({
+        username: deletedByUser,
+        action: 'DELETE',
+        entity: 'اسناد انبار',
+        entityId: id,
+        description: `حذف (Soft-Delete Cascade) سند انبار شماره "${doc.refNumber || id}" (نوع: ${doc.type || ''})`,
+        details: {
+          documentId: id,
+          refNumber: doc.refNumber,
+          docType: doc.type,
+          deletedAt: nowIso,
+          deletedBy: deletedByUser
+        }
+      });
+    });
+  }
+
+  /**
+   * Reconciles and rebuilds inventory stocks directly from the transaction ledger (Event Sourcing).
+   * Ensures 100% mathematical consistency between location breakdown (stocks) and current_stock.
+   */
+  static async reconcileAndRebuildStock(targetItemId?: number): Promise<{
+    reconciledCount: number;
+    discrepanciesFixed: number;
+  }> {
+    return await orm.transaction(async (tx) => {
+      // Fetch all items or specific item
+      const condition = targetItemId 
+        ? and(eq(items.id, targetItemId), eq(items.isDeleted, 0)) 
+        : eq(items.isDeleted, 0);
+      const allActiveItems = await tx.select().from(items).where(condition).for('update');
+
+      let discrepanciesFixed = 0;
+
+      for (const it of allActiveItems) {
+        // Fetch all active transactions for this item
+        const txList = await tx
+          .select({
+            type: transactions.type,
+            quantity: transactions.quantity,
+            location: transactions.location
+          })
+          .from(transactions)
+          .where(and(eq(transactions.itemId, it.id), eq(transactions.isDeleted, 0)));
+
+        const locationStocks: Record<string, number> = {};
+        for (const t of txList) {
+          const loc = t.location || 'main';
+          const q = Number(t.quantity) || 0;
+          const current = locationStocks[loc] || 0;
+          locationStocks[loc] = roundFinancial(t.type === 'in' ? current + q : current - q);
+        }
+
+        const totalRebuiltStock = roundFinancial(
+          Object.values(locationStocks).reduce((sum, val) => sum + (Number(val) || 0), 0)
+        );
+
+        const oldCurrentStock = Number(it.currentStock || 0);
+        const oldStocksObj = (it.stocks as Record<string, number>) || {};
+
+        // Check if there was any discrepancy
+        const hasDiff = oldCurrentStock !== totalRebuiltStock || 
+          JSON.stringify(oldStocksObj) !== JSON.stringify(locationStocks);
+
+        if (hasDiff) {
+          discrepanciesFixed++;
+          await tx.update(items).set({
+            stocks: locationStocks,
+            currentStock: totalRebuiltStock
+          }).where(eq(items.id, it.id));
+        }
+      }
+
+      return {
+        reconciledCount: allActiveItems.length,
+        discrepanciesFixed
+      };
+    });
+  }
+}

@@ -1,0 +1,712 @@
+import React, { useState } from 'react';
+import { confirmAction } from '../ConfirmDialogHost';
+import { 
+  CreditCard, 
+  Plus, 
+  Search, 
+  Filter, 
+  CheckCircle2, 
+  Clock, 
+  AlertTriangle, 
+  ArrowDownLeft, 
+  ArrowUpRight, 
+  FileText, 
+  Trash2, 
+  Check, 
+  X, 
+  Calendar,
+  History
+} from 'lucide-react';
+import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { SearchableSelect } from '../SearchableSelect';
+import { useAppCurrency } from '../../hooks/useAppCurrency';
+import type { Cheque, ChequeType, ChequeStatus, BankAccount, Customer, Personnel } from '../../types';
+import toast from 'react-hot-toast';
+import DatePicker from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
+
+interface ChequesTabProps {
+  cheques: Cheque[];
+  bankAccounts: BankAccount[];
+  customers: Customer[];
+  personnelList: Personnel[];
+  loading: boolean;
+  onRefresh: () => void;
+  onCreateCheque: (data: any) => Promise<void>;
+  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number) => Promise<void>;
+  onDeleteCheque: (id: number) => Promise<void>;
+}
+
+export function ChequesTab({
+  cheques,
+  bankAccounts,
+  customers,
+  personnelList,
+  loading,
+  onRefresh,
+  onCreateCheque,
+  onUpdateStatus,
+  onDeleteCheque,
+}: ChequesTabProps) {
+  const appCurrency = useAppCurrency();
+  const curLbl = formatCurrencyLabel(appCurrency);
+  const safeCheques = Array.isArray(cheques) ? cheques : [];
+  const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
+  const safeCustomers = Array.isArray(customers) ? customers : [];
+  const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
+
+  // Modals
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [newFormData, setNewFormData] = useState({
+    type: 'received' as ChequeType,
+    chequeNumber: '',
+    sayadNumber: '',
+    bankName: '',
+    branch: '',
+    issueDate: new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date()).replace(/\//g, '-'),
+    dueDate: '',
+    amount: 0,
+    currency: 'IRR',
+    partyType: 'customer' as 'customer' | 'personnel' | 'supplier' | 'other',
+    partyId: null as number | null,
+    partyName: '',
+    drawerName: '',
+    payeeName: '',
+    bankAccountId: null as number | null,
+    description: '',
+  });
+
+  const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
+  const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
+  const [statusDescription, setStatusDescription] = useState('');
+  const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
+
+  const statusLabels: Record<ChequeStatus, { label: string; badge: string }> = {
+    received: { label: 'دریافت شده', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },
+    in_treasury: { label: 'در خزانه / صندوق', badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300' },
+    in_safe: { label: 'نزد صندوق', badge: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200' },
+    in_collection: { label: 'در جریان وصول (خوابانده به حساب)', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
+    passed: { label: 'وصول شده (پاس شده)', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' },
+    bounced: { label: 'واخواست / برگشت خورده', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' },
+    returned: { label: 'عودت داده شده به مشتری', badge: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' },
+    spent: { label: 'خرج شده / واگذار به غیر', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
+  };
+
+  const handleCreateCheque = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFormData.chequeNumber.trim() || !newFormData.bankName.trim() || !newFormData.dueDate.trim()) {
+      toast.error('شماره چک، نام بانک و تاریخ سررسید الزامی است');
+      return;
+    }
+    if (!newFormData.partyName.trim()) {
+      toast.error('نام طرف حساب الزامی است');
+      return;
+    }
+    if (newFormData.amount <= 0) {
+      toast.error('مبلغ چک باید بزرگتر از صفر باشد');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onCreateCheque(newFormData);
+      toast.success('چک با موفقیت در سیستم ثبت شد');
+      setIsNewModalOpen(false);
+    } catch (err) {
+      toast.error(err.message || 'خطا در ثبت چک');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateStatusSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusModalCheque) return;
+
+    setIsSaving(true);
+    try {
+      await onUpdateStatus(
+        statusModalCheque.id, 
+        targetStatus, 
+        statusDescription, 
+        targetBankAccountId || undefined
+      );
+      toast.success('وضعیت چک به‌روزرسانی شد');
+      setStatusModalCheque(null);
+    } catch (err) {
+      toast.error(err.message || 'خطا در تغییر وضعیت چک');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (cheque: Cheque) => {
+    if (!(await confirmAction({ title: 'حذف چک', message: `آیا از حذف چک شماره ${cheque.chequeNumber} (${cheque.bankName}) اطمینان دارید؟` }))) return;
+    try {
+      await onDeleteCheque(cheque.id);
+      toast.success('چک حذف شد');
+    } catch (err) {
+      toast.error(err.message || 'خطا در حذف چک');
+    }
+  };
+
+  const filteredCheques = safeCheques.filter(c => {
+    const matchSearch = !searchQuery.trim() ||
+      c.chequeNumber.includes(searchQuery.trim()) ||
+      (c.sayadNumber && c.sayadNumber.includes(searchQuery.trim())) ||
+      c.partyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.bankName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchType = selectedTypeFilter === 'all' || c.type === selectedTypeFilter;
+    const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
+    return matchSearch && matchType && matchStatus;
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+        <div>
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h3 className="font-bold text-slate-900 dark:text-white text-lg">دفتر چک صیادی (دریافتی و پرداختی)</h3>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            پیگیری سررسید، گردش وضعیت صیادی، خواباندن به حساب و وصول با صدور سند خودکار
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            setNewFormData({
+              type: 'received',
+              chequeNumber: '',
+              sayadNumber: '',
+              bankName: '',
+              branch: '',
+              issueDate: getTodayJalaliDate(),
+              dueDate: '',
+              amount: 0,
+              currency: 'IRR',
+              partyType: 'customer',
+              partyId: null,
+              partyName: '',
+              drawerName: '',
+              payeeName: '',
+              bankAccountId: null,
+              description: '',
+            });
+            setIsNewModalOpen(true);
+          }}
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-md shadow-indigo-900/20"
+        >
+          <Plus className="w-4 h-4" />
+          <span>ثبت چک صیادی جدید</span>
+        </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="جستجو در شماره چک، شناسه صیاد ۱۶ رقمی، طرف حساب یا بانک..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pr-9 pl-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <select
+            value={selectedTypeFilter}
+            onChange={e => setSelectedTypeFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+          >
+            <option value="all">همه انواع چک (دریافتی/پرداختی)</option>
+            <option value="received">چک‌های دریافتی</option>
+            <option value="paid">چک‌های پرداختی</option>
+          </select>
+
+          <select
+            value={selectedStatusFilter}
+            onChange={e => setSelectedStatusFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+          >
+            <option value="all">همه وضعیت‌ها</option>
+            <option value="received">دریافت شده</option>
+            <option value="in_collection">در جریان وصول</option>
+            <option value="passed">وصول شده (پاس)</option>
+            <option value="bounced">برگشت خورده</option>
+            <option value="returned">عودت داده شده</option>
+            <option value="spent">خرج شده</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Cheques Table */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-right border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold">
+                <th className="py-3 px-3 w-10 text-center">#</th>
+                <th className="py-3 px-3 w-24 text-center">نوع</th>
+                <th className="py-3 px-4 w-44">شماره و صیاد</th>
+                <th className="py-3 px-4">بانک و شعبه</th>
+                <th className="py-3 px-4">طرف حساب</th>
+                <th className="py-3 px-3 w-28 text-center">سررسید</th>
+                <th className="py-3 px-4 w-36 text-left">{`مبلغ (${formatCurrencyLabel(cheques[0]?.currency || appCurrency)})`}</th>
+                <th className="py-3 px-4 w-36 text-center">وضعیت</th>
+                <th className="py-3 px-4 w-28 text-center">عملیات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
+              {filteredCheques.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-10 text-slate-400">چکی ثبت نشده است</td>
+                </tr>
+              ) : (
+                filteredCheques.map((c, idx) => {
+                  const statusInfo = statusLabels[c.status] || statusLabels.received;
+
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition">
+                      <td className="py-3 px-3 text-center text-slate-400 font-bold">{idx + 1}</td>
+
+                      <td className="py-3 px-3 text-center">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          c.type === 'received'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                            : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                        }`}>
+                          {c.type === 'received' ? 'دریافتی' : 'پرداختی'}
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="font-mono font-bold text-slate-900 dark:text-white">
+                          {c.chequeNumber}
+                        </div>
+                        {c.sayadNumber && (
+                          <div className="text-[10px] font-mono text-slate-400 tracking-wider mt-0.5">
+                            صیاد: {c.sayadNumber}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300">
+                        <div className="font-semibold">{c.bankName}</div>
+                        {c.branch && <div className="text-[10px] text-slate-400">شعبه: {c.branch}</div>}
+                      </td>
+
+                      <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">
+                        {c.partyName}
+                      </td>
+
+                      <td className="py-3 px-3 text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        {formatPersianDate(c.dueDate)}
+                      </td>
+
+                      <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">
+                        {formatPersianPrice(c.amount)}
+                      </td>
+
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => {
+                            setStatusModalCheque(c);
+                            setTargetStatus(c.status === 'received' ? 'in_collection' : 'passed');
+                            setStatusDescription('');
+                            setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
+                          }}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition hover:opacity-80 ${statusInfo.badge}`}
+                        >
+                          {statusInfo.label}
+                        </button>
+                      </td>
+
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setHistoryModalCheque(c)}
+                            title="تاریخچه وضعیت چک"
+                            className="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+                          >
+                            <History className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(c)}
+                            title="حذف چک"
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* New Cheque Modal */}
+      {isNewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-4">
+              ثبت مشخصات چک صیادی جدید
+            </h3>
+
+            <form onSubmit={handleCreateCheque} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    نوع چک *
+                  </label>
+                  <select
+                    value={newFormData.type}
+                    onChange={e => setNewFormData({ ...newFormData, type: e.target.value as ChequeType })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  >
+                    <option value="received">چک دریافتی (از مشتری)</option>
+                    <option value="paid">چک پرداختی (به تأمین‌کننده)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    شماره چک (سریال) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: 123456"
+                    value={newFormData.chequeNumber}
+                    onChange={e => setNewFormData({ ...newFormData, chequeNumber: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  شناسه صیاد ۱۶ رقمی
+                </label>
+                <input
+                  type="text"
+                  maxLength={16}
+                  placeholder="1234567890123456"
+                  value={newFormData.sayadNumber}
+                  onChange={e => setNewFormData({ ...newFormData, sayadNumber: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono tracking-widest text-left"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    نام بانک صادرکننده *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: بانک ملت"
+                    value={newFormData.bankName}
+                    onChange={e => setNewFormData({ ...newFormData, bankName: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    شعبه
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="کد یا نام شعبه"
+                    value={newFormData.branch}
+                    onChange={e => setNewFormData({ ...newFormData, branch: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    تاریخ صدور
+                  </label>
+                  <DatePicker
+                    value={newFormData.issueDate}
+                    onChange={(dateObj: any) => {
+                      setNewFormData({ ...newFormData, issueDate: extractDateString(dateObj) });
+                    }}
+                    calendar={persian}
+                    locale={persian_fa}
+                    calendarPosition="bottom-right"
+                    inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                    containerClassName="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    تاریخ سررسید *
+                  </label>
+                  <DatePicker
+                    value={newFormData.dueDate}
+                    onChange={(dateObj: any) => {
+                      setNewFormData({ ...newFormData, dueDate: extractDateString(dateObj) });
+                    }}
+                    calendar={persian}
+                    locale={persian_fa}
+                    calendarPosition="bottom-right"
+                    inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    containerClassName="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    طرف حساب
+                  </label>
+                  <select
+                    value={newFormData.partyType}
+                    onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '' })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  >
+                    <option value="customer">مشتری</option>
+                    <option value="personnel">پرسنل</option>
+                    <option value="other">متفرقه</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    نام طرف حساب *
+                  </label>
+                  {newFormData.partyType === 'customer' ? (
+                    <SearchableSelect
+                      value={String(newFormData.partyId || '')}
+                      onChange={(val) => {
+                        const c = safeCustomers.find(x => x.id === Number(val));
+                        setNewFormData({ ...newFormData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
+                      }}
+                      placeholder="انتخاب مشتری..."
+                      options={[{ value: '', label: 'انتخاب مشتری...' },
+                        ...(Array.isArray(safeCustomers) ? safeCustomers : []).map(c => ({ value: String(c.id), label: c.name }))]}
+                    />
+                  ) : newFormData.partyType === 'personnel' ? (
+                    <SearchableSelect
+                      value={String(newFormData.partyId || '')}
+                      onChange={(val) => {
+                        const p = safePersonnelList.find(x => x.id === Number(val));
+                        setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}` : '' });
+                      }}
+                      placeholder="انتخاب پرسنل..."
+                      options={[{ value: '', label: 'انتخاب پرسنل...' },
+                        ...(Array.isArray(safePersonnelList) ? safePersonnelList : []).map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` }))]}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      placeholder="نام شخص یا شرکت..."
+                      value={newFormData.partyName}
+                      onChange={e => setNewFormData({ ...newFormData, partyName: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  {`مبلغ چک (${curLbl}) *`}
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  placeholder="50000000"
+                  value={newFormData.amount || ''}
+                  onChange={e => setNewFormData({ ...newFormData, amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-black text-left"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  توضیحات و بابت
+                </label>
+                <input
+                  type="text"
+                  placeholder="بابت تسویه فاکتور فروش شماره..."
+                  value={newFormData.description}
+                  onChange={e => setNewFormData({ ...newFormData, description: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsNewModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 rounded-xl"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm disabled:opacity-50"
+                >
+                  {isSaving ? 'در حال ثبت...' : 'ثبت قطعی چک'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Status Workflow Modal */}
+      {statusModalCheque && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-1">
+              تغییر وضعیت چک شماره {statusModalCheque.chequeNumber}
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              مبلغ: {formatPersianPrice(statusModalCheque.amount)} {statusModalCheque.currency} • سررسید: {formatPersianDate(statusModalCheque.dueDate)}
+            </p>
+
+            <form onSubmit={handleUpdateStatusSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  وضعیت جدید چک *
+                </label>
+                <select
+                  value={targetStatus}
+                  onChange={e => setTargetStatus(e.target.value as ChequeStatus)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                >
+                  <option value="in_collection">خواباندن به حساب (در جریان وصول)</option>
+                  <option value="passed">وصول نهایی (پاس شده)</option>
+                  <option value="bounced">برگشت / واخواست چک</option>
+                  <option value="returned">عودت چک به صادرکننده</option>
+                  <option value="spent">خرج کردن / واگذاری به شخص دیگر</option>
+                  <option value="in_safe">بازگشت به صندوق</option>
+                </select>
+              </div>
+
+              {(targetStatus === 'in_collection' || targetStatus === 'passed') && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    حساب بانکی مقصد *
+                  </label>
+                  <select
+                    value={targetBankAccountId || ''}
+                    onChange={e => setTargetBankAccountId(Number(e.target.value) || null)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  >
+                    <option value="">انتخاب حساب بانکی...</option>
+                    {safeBankAccounts.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.title} ({b.bankName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  شرح و یادداشت تغییر وضعیت
+                </label>
+                <textarea
+                  rows={2}
+                  value={statusDescription}
+                  onChange={e => setStatusDescription(e.target.value)}
+                  placeholder="مثال: وصول و واریز به حساب بانک ملت..."
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalCheque(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 rounded-xl"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm disabled:opacity-50"
+                >
+                  {isSaving ? 'در حال ثبت...' : 'ثبت وضعیت و صدور سند'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {historyModalCheque && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                سجل و تاریخچه گردش چک {historyModalCheque.chequeNumber}
+              </h3>
+              <button
+                onClick={() => setHistoryModalCheque(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {(!historyModalCheque.statusHistory || !Array.isArray(historyModalCheque.statusHistory) || historyModalCheque.statusHistory.length === 0) ? (
+                <div className="text-center py-6 text-slate-400 text-xs">تاریخچه‌ای ثبت نشده است</div>
+              ) : (
+                (historyModalCheque.statusHistory || []).map((h, i) => (
+                  <div key={i} className="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-100 dark:border-slate-700/60 text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                        {statusLabels[h.status as ChequeStatus]?.label || h.status}
+                      </span>
+                      <span className="text-slate-400 font-mono text-[10px]">{formatPersianDate(h.date)}</span>
+                    </div>
+                    {h.description && <p className="text-slate-600 dark:text-slate-300">{h.description}</p>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

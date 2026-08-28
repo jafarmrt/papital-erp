@@ -1,0 +1,14 @@
+node_modules/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+dist/
+build/
+.pgdata/
+.pgsql/
+
+# Local runtime artifacts
+dev-server.log
+logs/
