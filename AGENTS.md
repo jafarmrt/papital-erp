@@ -200,5 +200,6 @@ This project has specific architectural constraints and conventions discovered d
 
 ## 32. GitHub Sync Policy (از درخواست کاربر — الزامی)
 - **Auto Commit & Push بعد از هر تغییر:** در پایان هر سشن که در آن کد/دokumentation تغییر کرده است، ایجنت MUST تغییرات را `git add` + `git commit` (پیام مختصر و توصیفی) و سپس `git push` به `origin/master` (`https://github.com/jafarmrt/papital-erp.git`) کند — بدون نیاز به تأیید مجدد کاربر (این section همان تأیید دائمی کاربر است).
+- **Pull در شروع سشن:** در ابتدای هر سشن، قبل از هر تغییری، ایجنت MUST یک بار `git pull --rebase` اجرا کند تا تغییرات کامیت‌شده از محیط‌های دیگر روی گیت‌هاب، قبل از شروع کار وارد کد محلی شود. اگر pull تداخل (conflict) داشت، قبل از هر کاری تداخل را با کاربر مطرح و رفع کند.
 - **Exclusions:** هرگز `.env`، داده‌های محلی (`/pgdata`، `/logs`) و فایل‌های زیپ خروجی (`papital-erp-source-*.zip`) را کامیت نکنید (`.gitignore` را رعایت کنید).
 - **Conflict Handling:** اگر push به‌دلیل تغییرات ریموت رد شد، ابتدا `git pull --rebase` و پس از رفع تداخل، دوباره push؛ هرگز force-push نکنید.
