@@ -299,7 +299,7 @@ export async function createApp(): Promise<express.Express> {
       await orm.execute(sql`SELECT 1`);
       res.json({
         status: 'ok',
-        version: '1.3.4',
+        version: '1.3.5',
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });

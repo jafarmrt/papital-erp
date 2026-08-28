@@ -6,6 +6,19 @@ import { AIUpdateLog } from './types';
  */
 export const v1Updates: AIUpdateLog[] = [
   {
+    version: 'v1.3.5',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'رفع نمایش نیامدن ردیف حقوق ثابت در فیش چاپی صدورکننده',
+    summary: 'endpoint جزئیات فیش (GET /piecework/payrolls/:id) فیلد totalFixedAmount را برنمی‌گرداند؛ در نتیجه در مودال فیشِ صدورکننده (و نسخه چاپی) ردیف «حقوق ثابت ماهانه» نمایش داده نمی‌شد — در حالی که در لیست و فیش پرسنل درست بود.',
+    author: 'AI Agent (V1.3.5 — Printed Payslip Fixed Row Fix)',
+    changes: [
+      'افزودن totalFixedAmount به خروجی GET /piecework/payrolls/:id — ردیف حقوق ثابت و پانویس مبنای محاسبه اکنون در فیش صدورکننده و نسخه چاپی نیز یکسان با سایر نماها نمایش داده می‌شود'
+    ],
+    fixes: [
+      'نیامدن ردیف کارکرد ثابت در فیش چاپی صدورکننده'
+    ]
+  },
+  {
     version: 'v1.3.4',
     date: '۶ شهریور ۱۴۰۵',
     title: 'ردیف توضیحی حقوق ثابت در لیست فیش‌های حقوقی',

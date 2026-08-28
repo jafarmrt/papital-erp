@@ -951,6 +951,8 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
       endDate: pieceworkPayrolls.endDate,
       title: pieceworkPayrolls.title,
       totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
+      // V1.3.5: بدون این فیلد، ردیف حقوق ثابت در فیش چاپی نمایش داده نمی‌شد
+      totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
