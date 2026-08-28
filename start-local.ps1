@@ -24,12 +24,12 @@ if (Test-PgPort) {
 } else {
     Write-Host "[1/2] Starting PostgreSQL (first start after reboot may take 1-3 minutes for crash recovery)..." -ForegroundColor Yellow
     # Own hidden console => Ctrl+C in this window can never kill the database.
-    # -w -t 240 : wait up to 4 minutes for startup/recovery to finish.
+    # NOTE: no -Wait here (pg_ctl does not reliably exit after start); we poll the TCP port instead.
     Start-Process -FilePath $pgCtl `
         -ArgumentList @('-D', "`"$root\.pgdata`"", '-l', "`"$root\.pgdata\server.log`"", '-o', '"-p 5433"', '-w', '-t', '240', 'start') `
-        -WindowStyle Hidden -Wait
+        -WindowStyle Hidden
     $tries = 0
-    while (-not (Test-PgPort) -and $tries -lt 30) {
+    while (-not (Test-PgPort) -and $tries -lt 150) {
         Start-Sleep -Seconds 2
         $tries++
     }
