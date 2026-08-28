@@ -16,3 +16,4 @@ logs/
 # Uploaded runtime media (user data - never in git)
 public/uploads/*
 !public/uploads/.gitkeep
+papital-erp-source-*.zip
