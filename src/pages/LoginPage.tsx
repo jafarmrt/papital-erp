@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAppFavicon } from '../hooks/useAppFavicon';
 import { fetchJson } from '../api';
 import { User } from '../types';
 import { Lock, User as UserIcon, Shield, AlertTriangle, ShieldAlert, Eye, EyeOff } from 'lucide-react';
@@ -32,6 +33,9 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
       });
     return () => controller.abort();
   }, []);
+
+  // فاوآیکون برنامه = همان لوگوی شرکت (پیش‌فرض: نشان داخلی)
+  useAppFavicon(companyLogo);
 
   // تایمر شمارش معکوس قفل حساب — هنگام رسیدن به صفر، فرم به‌طور خودکار باز می‌شود
   useEffect(() => {

@@ -12,3 +12,7 @@ build/
 # Local runtime artifacts
 dev-server.log
 logs/
+
+# Uploaded runtime media (user data - never in git)
+public/uploads/*
+!public/uploads/.gitkeep

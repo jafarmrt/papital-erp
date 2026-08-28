@@ -6,6 +6,7 @@ import { fetchJson } from '../../api';
 import { User } from '../../types';
 import { getMenuGroups, MenuVisibilityMap } from './menuConfig';
 import { useMenuVisibilityQuery } from '../../hooks/queries/useSettingsQueries';
+import { useAppFavicon } from '../../hooks/useAppFavicon';
 
 export interface SidebarProps {
   user: User;
@@ -38,6 +39,9 @@ export function Sidebar({
       })
       .catch(err => console.error('Error fetching settings for sidebar logo:', err));
   }, []);
+
+  // فاوآیکون برنامه = همان لوگوی شرکت (پیش‌فرض: نشان داخلی)
+  useAppFavicon(companyLogo);
 
   // V10-5.3: نقشه دید منو per-role — از endpoint اختصاصی
   const { data: menuVisibilityData } = useMenuVisibilityQuery();
