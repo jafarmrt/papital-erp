@@ -13,29 +13,6 @@ export interface SimpleUserOption {
   avatar_url?: string;
 }
 
-export const WORK_TEMPLATES = [
-  {
-    title: '💻 توسعه، برنامه نویسی و رفع خطاهای نرم‌افزار',
-    content: 'بررسی و رفع باگ‌های گزارش‌شده، بهینه‌سازی کدهای بخش انبار و تولید، و تست عملکرد سیستم.',
-    tags: ['برنامه‌نویسی', 'توسعه', 'رفع_خطا']
-  },
-  {
-    title: '📦 انبارگردانی، بسته‌بندی و تحویل کالا',
-    content: 'بررسی موجودی فیزیکی انبار، تطبیق با سیستم، بسته‌بندی سفارشات مشتریان و آماده‌سازی جهت ارسال.',
-    tags: ['انبارگردانی', 'بسته‌بندی', 'ارسال']
-  },
-  {
-    title: '🤝 جلسه هماهنگی تیم و پشتیبانی مشتریان',
-    content: 'شرکت در جلسه روزانه هماهنگی واحدها، پیگیری درخوایت‌های مشتریان و ثبت سفارشات جدید.',
-    tags: ['جلسه', 'پشتیبانی', 'مشتریان']
-  },
-  {
-    title: '⚙️ نظارت بر خط تولید و کنترل کیفیت محصولات',
-    content: 'کنترل مراحل تولید کاشی و سرامیک، ثبت کارکرد کوره‌ها و چاپ، و بررسی شاخص‌های کیفی.',
-    tags: ['تولید', 'کنترل_کیفیت', 'پایش']
-  }
-];
-
 export function getFormattedDateString(dateObj: any): string {
   return extractDateString(dateObj);
 }
@@ -292,13 +269,6 @@ export function useDailyLogs(user: User) {
     setIsModalOpen(true);
   };
 
-  const handleApplyTemplate = (tpl: typeof WORK_TEMPLATES[0]) => {
-    setFormTitle(tpl.title);
-    setFormContent(tpl.content);
-    setFormTags(tpl.tags);
-    toast.success('قالب فعالیت اعمال گردید');
-  };
-
   const handleAddTag = () => {
     const trimmed = tagInput.trim();
     if (trimmed && !formTags.includes(trimmed)) {
@@ -480,7 +450,6 @@ export function useDailyLogs(user: User) {
     isSubmittingReview,
     handleOpenCreateModal,
     handleOpenEditModal,
-    handleApplyTemplate,
     handleAddTag,
     handleRemoveTag,
     handleToggleMentionUser,

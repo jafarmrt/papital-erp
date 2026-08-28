@@ -240,7 +240,6 @@ export default function DailyLogsPage({ user }: DailyLogsPageProps) {
         user={user}
         systemUsers={dl.systemUsers}
         projects={dl.projects}
-        onApplyTemplate={dl.handleApplyTemplate}
         onAddTag={dl.handleAddTag}
         onRemoveTag={dl.handleRemoveTag}
         onToggleMentionUser={dl.handleToggleMentionUser}

@@ -1,10 +1,10 @@
 import React, { FormEvent } from 'react';
-import { Clock, X, Sparkles, Building2, Laptop, AtSign, Eye, Lock, Check } from 'lucide-react';
+import { Clock, X, Building2, Laptop, AtSign, Eye, Lock, Check } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { DailyWorkLog, User, ProductionProject } from '../../types';
-import { SimpleUserOption, WORK_TEMPLATES } from '../../hooks/useDailyLogs';
+import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
 
@@ -38,7 +38,6 @@ interface DailyLogModalProps {
   user: User;
   systemUsers: SimpleUserOption[];
   projects: ProductionProject[];
-  onApplyTemplate: (tpl: typeof WORK_TEMPLATES[0]) => void;
   onAddTag: () => void;
   onRemoveTag: (tag: string) => void;
   onToggleMentionUser: (userId: number) => void;
@@ -75,7 +74,6 @@ export function DailyLogModal({
   user,
   systemUsers,
   projects,
-  onApplyTemplate,
   onAddTag,
   onRemoveTag,
   onToggleMentionUser,
@@ -103,26 +101,6 @@ export function DailyLogModal({
         </div>
 
         <form onSubmit={onSaveLog} className="p-4 space-y-3.5 max-h-[82vh] overflow-y-auto custom-scrollbar">
-          {/* Quick Work Template Presets */}
-          <div className="bg-gradient-to-r from-blue-50/70 to-indigo-50/70 p-2.5 rounded-xl border border-blue-100 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-900">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>قالب‌های آماده جهت پر شدن سریع:</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {WORK_TEMPLATES.map((tpl, i) => (
-                <button
-                  type="button"
-                  key={i}
-                  onClick={() => onApplyTemplate(tpl)}
-                  className="text-[10px] font-semibold bg-white hover:bg-blue-600 hover:text-white text-slate-700 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs transition-all text-right cursor-pointer"
-                >
-                  {tpl.title.split(' ')[0]} {tpl.title.split(' ')[1]}...
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Row 1: Jalali Date Picker & Work Mode */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
