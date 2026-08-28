@@ -64,34 +64,42 @@ export async function createApp(): Promise<express.Express> {
   app.set('trust proxy', 1);
 
   // Use Helmet middleware for security headers (SEC-007)
-  app.use(helmet({
+  // V1.3.7: upgrade-insecure-requests / HSTS فقط روی اتصال HTTPS فعال می‌شوند —
+  // در دسترسی HTTP (مثل http://SERVER_IP:3000 قبل از تنظیم دامنه) این هدرها باعث
+  // ارتقای مرورگر به HTTPS و صفحه سفید می‌شدند.
+  const secureCspDirectives = {
+    defaultSrc: ["'self'"],
+    scriptSrc: [
+      "'self'",
+      // Support Vite dev server and dynamic inline scripts
+      ...(process.env.NODE_ENV !== 'production' ? ["'unsafe-inline'", "'unsafe-eval'"] : [])
+    ],
+    styleSrc: ["'self'", "'unsafe-inline'"],  // Tailwind / inline style tags
+    imgSrc: ["'self'", "data:", "blob:", "https:"],
+    connectSrc: [
+      "'self'",
+      "https:",
+      "wss:",
+      ...(process.env.EXTERNAL_API_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || [])
+    ],
+    fontSrc: ["'self'", "data:", "https:"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: [
+      "'self'",
+      "https://*.google.com",
+      "https://*.run.app",
+      "https://*.googleusercontent.com",
+      "https://*.aistudio.google.com"
+    ],
+  };
+
+  const helmetForHttps = helmet({
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          // Support Vite dev server and dynamic inline scripts
-          ...(process.env.NODE_ENV !== 'production' ? ["'unsafe-inline'", "'unsafe-eval'"] : [])
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'"],  // Tailwind / inline style tags
-        imgSrc: ["'self'", "data:", "blob:", "https:"],
-        connectSrc: [
-          "'self'",
-          "https:",
-          "wss:",
-          ...(process.env.EXTERNAL_API_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || [])
-        ],
-        fontSrc: ["'self'", "data:", "https:"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: [
-          "'self'",
-          "https://*.google.com",
-          "https://*.run.app",
-          "https://*.googleusercontent.com",
-          "https://*.aistudio.google.com"
-        ],
+        ...secureCspDirectives,
+        // فقط روی HTTPS ارتقای امنیتی اعمال شود
         upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
       },
     },
@@ -102,7 +110,24 @@ export async function createApp(): Promise<express.Express> {
       preload: true,
     },
     referrerPolicy: { policy: 'no-referrer' },
-  }));
+  });
+
+  const helmetForHttp = helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...secureCspDirectives,
+        upgradeInsecureRequests: null, // هرگز روی HTTP
+      },
+    },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    hsts: false, // HSTS فقط روی HTTPS معنا دارد
+    referrerPolicy: { policy: 'no-referrer' },
+  });
+
+  app.use((req, res, next) => {
+    const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    return (isSecure ? helmetForHttps : helmetForHttp)(req, res, next);
+  });
 
   // Ensure public/uploads directory exists
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
@@ -299,7 +324,7 @@ export async function createApp(): Promise<express.Express> {
       await orm.execute(sql`SELECT 1`);
       res.json({
         status: 'ok',
-        version: '1.3.6',
+        version: '1.3.7',
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });

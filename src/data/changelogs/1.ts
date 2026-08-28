@@ -6,6 +6,20 @@ import { AIUpdateLog } from './types';
  */
 export const v1Updates: AIUpdateLog[] = [
   {
+    version: 'v1.3.7',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'رفع صفحه سفید در دسترسی HTTP مستقیم به سرور (CSP)',
+    summary: 'هدر امنیتی upgrade-insecure-requests و HSTS که در production همیشه فعال بود، مرورگر را مجبور به ارتقای درخواست‌ها به HTTPS می‌کرد؛ در دسترسی مستقیم http://SERVER_IP:3000 (قبل از تنظیم دامنه) اسکریپت‌ها لود نمی‌شدند و صفحه سفید نمایش داده می‌شد. اکنون این هدرها فقط روی اتصال HTTPS اعمال می‌شوند.',
+    author: 'AI Agent (V1.3.7 — CSP HTTP/HTTPS Conditional Headers)',
+    changes: [
+      'helmet به دو نمونه شرطی تقسیم شد: HTTPS (با upgrade-insecure-requests و HSTS) و HTTP (بدون این هدرها) — تشخیص با req.secure یا X-Forwarded-Proto',
+      'بعد از تنظیم دامنه و SSL (setup-domain.sh) تمام هدرهای امنیتی HTTPS به‌صورت خودکار و کامل فعال می‌شوند'
+    ],
+    fixes: [
+      'صفحه سفید هنگام باز کردن http://SERVER_IP:3000 روی سرور مجازی'
+    ]
+  },
+  {
     version: 'v1.3.6',
     date: '۶ شهریور ۱۴۰۵',
     title: 'جعبه‌ابزار استقرار سرور مجازی لینوکسی (VPS) با دامنه و HTTPS',
