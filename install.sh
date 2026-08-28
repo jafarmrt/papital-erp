@@ -34,10 +34,23 @@ else
   SUDO=""
 fi
 
-# ---------- 1) Repository URL ----------
-if [ -z "$REPO_URL" ]; then
-  read -r -p "Git repository URL (e.g. https://github.com/user/papital-erp.git): " REPO_URL
-  [ -n "$REPO_URL" ] || die "Repository URL is required."
+# ---------- 1) Source mode: git clone OR current directory (uploaded zip) ----------
+# If the script is run from a directory that already contains package.json (e.g. extracted
+# from papital-erp-source-vX.zip), installation continues from the current directory
+# and no git clone is performed.
+LOCAL_MODE=0
+if [ -f "$(pwd)/package.json" ] && [ -f "$(pwd)/server.ts" ]; then
+  LOCAL_MODE=1
+  APP_DIR="$(pwd)"
+  log "Source mode: LOCAL (package.json found in $(pwd)) — skipping git clone."
+  if [ -n "$REPO_URL" ]; then warn "REPO_URL ignored in local mode."; fi
+fi
+
+if [ "$LOCAL_MODE" -eq 0 ]; then
+  if [ -z "$REPO_URL" ]; then
+    read -r -p "Git repository URL (e.g. https://github.com/user/papital-erp.git): " REPO_URL
+    [ -n "$REPO_URL" ] || die "Repository URL is required."
+  fi
 fi
 
 # ---------- 2) System dependencies ----------
@@ -71,7 +84,9 @@ success "System dependencies installed (node $(node -v), $(psql --version | head
 
 # ---------- 3) Clone / update source ----------
 log "[2/7] Fetching source code into $APP_DIR ..."
-if [ -d "$APP_DIR/.git" ]; then
+if [ "$LOCAL_MODE" -eq 1 ]; then
+  success "Using current directory as source root."
+elif [ -d "$APP_DIR/.git" ]; then
   cd "$APP_DIR"
   git pull --ff-only || warn "git pull failed — continuing with existing source."
 else

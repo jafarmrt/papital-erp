@@ -6,6 +6,19 @@ import { AIUpdateLog } from './types';
  */
 export const v1Updates: AIUpdateLog[] = [
   {
+    version: 'v1.3.6',
+    date: '۶ شهریور ۱۴۰۵',
+    title: 'جعبه‌ابزار استقرار سرور مجازی لینوکسی (VPS) با دامنه و HTTPS',
+    summary: 'اسکریپت setup-domain.sh برای تنظیم خودکار دامنه + گواهی Let\'s Encrypt (Nginx reverse proxy + certbot + ALLOWED_ORIGINS)، پشتیبانی install.sh از نصب از روی فایل زیپ سورس آپلودی بدون نیاز به گیت، و راهنمای کامل استقرار و نگهداری فارسی در deploy/DEPLOY_LINUX.md.',
+    author: 'AI Agent (V1.3.6 — Linux VPS Deployment Toolkit)',
+    changes: [
+      'اسکریپت جدید setup-domain.sh: چک DNS، نصب Nginx + Certbot، کانفیگ reverse proxy (با هدرها و client_max_body_size برای آپلودها)، باز کردن 80/443 در ufw، صدور گواهی Let\'s Encrypt با ریدایرکت خودکار HTTPS، به‌روزرسانی ALLOWED_ORIGINS و ری‌استارت سرویس',
+      'install.sh حالا حالت LOCAL دارد: اگر داخل پوشه حاصل از زیپ سورس (حاوی package.json) اجرا شود، بدون git clone مستقیماً نصب می‌کند — نصب از زیپ آپلودی بدون دسترسی گیت ممکن شد',
+      'راهنمای استقرار فارسی deploy/DEPLOY_LINUX.md: پیش‌نیازها، دو روش نصب (گیت/زیپ)، تنظیم دامنه و DNS (شامل نکته کلودفلر)، به‌روزرسانی با update.sh، عملیات systemd و چک‌لیست امنیتی پس از نصب'
+    ],
+    fixes: []
+  },
+  {
     version: 'v1.3.5',
     date: '۶ شهریور ۱۴۰۵',
     title: 'رفع نمایش نیامدن ردیف حقوق ثابت در فیش چاپی صدورکننده',
