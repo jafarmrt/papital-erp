@@ -11,6 +11,8 @@ interface PieceworkPayslipModalProps {
   onUpdateStatus: (id: number, status: 'draft' | 'approved' | 'paid') => void;
   onDeletePayroll: (id: number) => void;
   onReload?: () => void;
+  /** مشاهده صرفاً برای پرسنل (بدون دکمه‌های پرداخت/ابطال) */
+  readOnly?: boolean;
 }
 
 export function PieceworkPayslipModal({
@@ -18,7 +20,8 @@ export function PieceworkPayslipModal({
   onClose,
   onUpdateStatus,
   onDeletePayroll,
-  onReload
+  onReload,
+  readOnly = false
 }: PieceworkPayslipModalProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
@@ -36,7 +39,7 @@ export function PieceworkPayslipModal({
             <span className="font-bold text-sm">فیش حقوقی رسمی پرسنل ({viewingPayroll.payrollNumber})</span>
           </div>
           <div className="flex items-center gap-2">
-            {viewingPayroll.status !== 'paid' && (
+            {!readOnly && viewingPayroll.status !== 'paid' && (
               <button
                 onClick={() => {
                   // V10-4.4: پرداخت فقط از مودال خزانه‌ای
@@ -58,12 +61,14 @@ export function PieceworkPayslipModal({
               <Printer className="w-4 h-4" />
               <span>پرینت فیش</span>
             </button>
-            <button
-              onClick={() => onDeletePayroll(viewingPayroll.id)}
-              className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white rounded-xl text-xs font-bold cursor-pointer"
-            >
-              ابطال فیش
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => onDeletePayroll(viewingPayroll.id)}
+                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                ابطال فیش
+              </button>
+            )}
             <button onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded-full text-slate-300 cursor-pointer">
               <X className="w-5 h-5" />
             </button>

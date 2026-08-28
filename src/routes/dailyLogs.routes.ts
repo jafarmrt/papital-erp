@@ -264,7 +264,8 @@ router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHan
 }));
 
 // GET aggregated management summary report (Daily & Monthly performance of all staff)
-router.get('/daily-logs/summary-report', authorizePermission('daily_logs.view'), asyncHandler(async (req, res) => {
+// گارد دسترسی: فقط ادمین یا نقش دارای مجوز daily_logs.manage_all (قابل تخصیص از مدیریت نقش‌ها)
+router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_all'), asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
   const currentUserRole = req.user?.role;
 

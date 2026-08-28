@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User, ProductionProject } from '../types';
 import { toast } from 'react-hot-toast';
@@ -74,6 +74,9 @@ export function useDailyLogs(user: User) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedWorkMode, setSelectedWorkMode] = useState<string>('');
   const [selectedDateFilter, setSelectedDateFilter] = useState<any>(null);
+  // گارد stale-response برای درخواست‌های abort شده
+  const logsFetchSeq = useRef(0);
+  const summaryFetchSeq = useRef(0);
 
   // Management Aggregated Summary States
   const todayParts = getTodayJalaliDate().split('/');
@@ -137,6 +140,9 @@ export function useDailyLogs(user: User) {
   }, []);
 
   const loadLogsAndStats = (signal?: AbortSignal) => {
+    // گارد stale-response: فقط آخرین درخواست حق تغییر state دارد
+    // (رفع باگ: پس از پاک کردن فیلتر، لیست در حالت فیلتر قبلی گیر می‌کرد)
+    const seq = ++logsFetchSeq.current;
     setLoading(true);
     let url = `/daily-logs?filter_type=${activeTab}`;
     if (selectedWorkMode) url += `&work_mode=${selectedWorkMode}`;
@@ -151,21 +157,25 @@ export function useDailyLogs(user: User) {
       fetchJson('/daily-logs/stats', { signal })
     ])
       .then(([logsData, statsData]) => {
+        if (seq !== logsFetchSeq.current) return;
         if (Array.isArray(logsData)) {
           setLogs(logsData);
           setPage(1);
         }
         if (statsData) setStats(statsData);
+        setLoading(false);
       })
       .catch(err => {
         if (err?.name === 'AbortError') return;
+        if (seq !== logsFetchSeq.current) return;
         console.error('Error loading daily logs:', err);
         toast.error('خطا در دریافت لیست گزارش کارهای روزانه');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   };
 
   const loadSummaryReportData = (signal?: AbortSignal) => {
+    const seq = ++summaryFetchSeq.current;
     setSummaryLoading(true);
     let url = `/daily-logs/summary-report?report_type=${summaryMode}`;
     if (summaryMode === 'daily') {
@@ -181,14 +191,17 @@ export function useDailyLogs(user: User) {
 
     fetchJson(url, { signal })
       .then(data => {
+        if (seq !== summaryFetchSeq.current) return;
         if (data) setSummaryReportData(data);
+        setSummaryLoading(false);
       })
       .catch(err => {
         if (err?.name === 'AbortError') return;
+        if (seq !== summaryFetchSeq.current) return;
         console.error('Error loading summary report:', err);
         toast.error('خطا در دریافت گزارش تجمیعی مدیریت');
-      })
-      .finally(() => setSummaryLoading(false));
+        setSummaryLoading(false);
+      });
   };
 
   useEffect(() => {

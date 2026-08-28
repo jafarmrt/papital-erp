@@ -782,6 +782,7 @@ router.get('/piecework/payrolls', async (req, res) => {
       endDate: pieceworkPayrolls.endDate,
       title: pieceworkPayrolls.title,
       totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
+      totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
@@ -846,6 +847,57 @@ router.get('/piecework/payrolls', async (req, res) => {
   } catch (err: any) {
     logger.error({ message: 'Error fetching payrolls', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    throw err;
+  }
+});
+
+// GET /api/piecework/payrolls/mine - فیش‌های حقوقی کاربر جاری
+// برای پرسنلی که همزمان کاربر سیستم هستند: لینک personnel.userId → users.id
+router.get('/piecework/payrolls/mine', async (req, res) => {
+  try {
+    const uid = Number((req as any).user?.id);
+    if (!uid || isNaN(uid)) return res.json([]);
+
+    const linkedPersonnel = await orm.select({ id: personnel.id })
+      .from(personnel)
+      .where(and(eq(personnel.userId, uid), eq(personnel.isDeleted, 0)));
+
+    if (!linkedPersonnel.length) return res.json([]);
+
+    const pIds = linkedPersonnel.map(p => p.id);
+    const rows = await orm.select({
+      id: pieceworkPayrolls.id,
+      payrollNumber: pieceworkPayrolls.payrollNumber,
+      personnelId: pieceworkPayrolls.personnelId,
+      personnelName: personnel.fullName,
+      personnelCode: personnel.personnelCode,
+      jobTitle: personnel.jobTitle,
+      cardNumber: personnel.cardNumber,
+      shebaNumber: personnel.shebaNumber,
+      bankName: personnel.bankName,
+      startDate: pieceworkPayrolls.startDate,
+      endDate: pieceworkPayrolls.endDate,
+      title: pieceworkPayrolls.title,
+      totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
+      totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
+      totalBonuses: pieceworkPayrolls.totalBonuses,
+      totalDeductions: pieceworkPayrolls.totalDeductions,
+      netPayable: pieceworkPayrolls.netPayable,
+      status: pieceworkPayrolls.status,
+      paymentDate: pieceworkPayrolls.paymentDate,
+      paymentMethod: pieceworkPayrolls.paymentMethod,
+      paymentReference: pieceworkPayrolls.paymentReference,
+      notes: pieceworkPayrolls.notes,
+      createdAt: pieceworkPayrolls.createdAt
+    })
+    .from(pieceworkPayrolls)
+    .innerJoin(personnel, eq(pieceworkPayrolls.personnelId, personnel.id))
+    .where(and(eq(pieceworkPayrolls.isDeleted, 0), inArray(pieceworkPayrolls.personnelId, pIds)))
+    .orderBy(desc(pieceworkPayrolls.id));
+
+    res.json(rows);
+  } catch (err: any) {
+    logger.error({ message: 'Error fetching my payrolls', error: err });
     throw err;
   }
 });

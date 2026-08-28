@@ -29,6 +29,7 @@ const TransfersPage = lazy(() => import('../pages/TransfersPage'));
 const DailyLogsPage = lazy(() => import('../pages/DailyLogsPage'));
 const PersonnelPage = lazy(() => import('../pages/PersonnelPage'));
 const PieceworkPayrollPage = lazy(() => import('../pages/PieceworkPayrollPage'));
+const MyPayslipsPage = lazy(() => import('../pages/MyPayslipsPage'));
 const CRMPage = lazy(() => import('../pages/CRMPage'));
 const AccountingPage = lazy(() => import('../pages/AccountingPage'));
 const ApprovalInboxPage = lazy(() => import('../pages/ApprovalInboxPage'));
@@ -171,6 +172,12 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           <ProtectedRoute requiredPerm="piecework.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <PieceworkPayrollPage />
           </ProtectedRoute>
+        } />
+        <Route path="/my-payslips" element={
+          // فیش‌های حقوقی من: برای هر کاربر لاگین‌شده (پرسنلِ کاربر)
+          <Suspense fallback={<PageLoader />}>
+            <MyPayslipsPage />
+          </Suspense>
         } />
         <Route path="/accounting" element={
           <ProtectedRoute requiredPerm={['accounting.view', 'accounting.coa', 'accounting.vouchers', 'accounting.treasury', 'accounting.cheques', 'accounting.reports']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>

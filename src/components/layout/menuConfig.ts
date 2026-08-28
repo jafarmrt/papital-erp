@@ -17,6 +17,7 @@ import {
   Layers,
   AlertTriangle,
   CalendarCheck,
+  Wallet,
   Target,
   CheckSquare,
   ShoppingCart,
@@ -119,6 +120,8 @@ export function getMenuGroups(
         // V10-5.4: گزارش کار روزانه به گروه HR منتقل شد
         { name: 'گزارش کار روزانه', path: '/daily-logs', icon: CalendarCheck, visible: hasPerm('daily_logs.view') || hasPerm('daily_logs.create') },
         { name: 'حقوق و دستمزد', path: '/piecework', icon: Calculator, visible: hasPerm('piecework.view') },
+        // فیش‌های حقوقی من: برای تمام کاربران لاگین‌شده (پرسنلی که کاربر سیستم هستند)
+        { name: 'فیش‌های حقوقی من', path: '/my-payslips', icon: Wallet, visible: true },
       ]
     },
     {
