@@ -629,6 +629,39 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
   res.status(201).json(tx);
 }));
 
+// V1.5.0: انتقال بین‌بانکی/بین‌صندوقی
+const transferSchema = z.object({
+  body: z.object({
+    date: z.string().min(1),
+    amount: z.number().positive(),
+    currency: z.string().optional(),
+    fromBankAccountId: z.number().int().positive(),
+    toBankAccountId: z.number().int().positive(),
+    trackingNumber: z.string().optional(),
+    description: z.string().optional(),
+    createVoucher: z.boolean().optional(),
+  })
+});
+router.post('/accounting/treasury/transfer', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(transferSchema), asyncHandler(async (req: any, res) => {
+  const result = await AccountingService.createTreasuryTransfer({
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'CREATE',
+    entity: 'treasury_transfer',
+    entityId: `${result.payment.id}/${result.receipt.id}`,
+    description: `انتقال وجه ${req.body.amount.toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
+    details: { paymentId: result.payment.id, receiptId: result.receipt.id, voucherId: result.voucherId },
+    ipAddress: req.ip || '',
+  });
+  res.status(201).json(result);
+}));
+
 // V1.4.0: ابطال تراکنش خزانه با سند معکوس (DB-009)
 const voidTreasuryTxSchema = z.object({
   body: z.object({

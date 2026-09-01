@@ -925,6 +925,10 @@ export interface TreasuryTransaction {
   // V1.4.0: ابطال با سند معکوس
   reversalOfId?: number | null;
   reversal_of_id?: number | null;
+  // V1.5.0: هویت ثبت‌کننده
+  createdById?: number | null;
+  created_by_id?: number | null;
+  creatorName?: string;
   description?: string;
   status?: 'completed' | 'voided' | 'cancelled';
   createdAt?: string;

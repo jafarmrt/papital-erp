@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { 
   Building2, 
@@ -19,8 +19,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Layers,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Download
 } from 'lucide-react';
+import * as xlsx from 'xlsx';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { BankAccount, TreasuryTransaction, Customer, Personnel, Account } from '../../types';
@@ -36,15 +38,16 @@ interface BankAndTreasuryTabProps {
   customers: Customer[];
   personnelList: Personnel[];
   accounts?: Account[];
-  loading: boolean;
-  isSyncingBanks?: boolean;
-  onRefresh: () => void;
-  onSyncAndReconcileBanks?: () => Promise<void>;
+   loading: boolean;
+   isSyncingBanks?: boolean;
+   onRefresh: () => void;
+   onSyncAndReconcileBanks?: () => Promise<void>;
    onCreateBankAccount: (data: any) => Promise<void>;
    onUpdateBankAccount: (id: number, data: any) => Promise<void>;
    onDeleteBankAccount: (id: number) => Promise<void>;
    onCreateTreasuryTransaction: (data: any) => Promise<void>;
    onVoidTreasuryTransaction?: (id: number, reason: string) => Promise<void>;
+   onCreateTreasuryTransfer?: (data: any) => Promise<void>;
  }
 
 export function BankAndTreasuryTab({
@@ -62,6 +65,7 @@ export function BankAndTreasuryTab({
   onDeleteBankAccount,
   onCreateTreasuryTransaction,
   onVoidTreasuryTransaction,
+  onCreateTreasuryTransfer,
 }: BankAndTreasuryTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
@@ -75,6 +79,22 @@ export function BankAndTreasuryTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
   const [selectedMethodFilter, setSelectedMethodFilter] = useState<string>('all');
+  // V1.5.0: فیلتر تاریخ + حساب + صفحه‌بندی + انتقال بین‌بانکی
+  const [txPage, setTxPage] = useState(1);
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
+  const [txAccountFilter, setTxAccountFilter] = useState<string>('all');
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferFormData, setTransferFormData] = useState({
+    date: getTodayJalaliDate(),
+    amount: 0,
+    fromBankAccountId: null as number | null,
+    toBankAccountId: null as number | null,
+    trackingNumber: '',
+    description: '',
+  });
+  const [isSavingTransfer, setIsSavingTransfer] = useState(false);
+  const TX_PAGE_SIZE = 25;
 
   // Modals
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
@@ -264,14 +284,104 @@ export function BankAndTreasuryTab({
       (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchType = selectedTypeFilter === 'all' || t.type === selectedTypeFilter;
     const matchMethod = selectedMethodFilter === 'all' || t.method === selectedMethodFilter;
-    return matchSearch && matchType && matchMethod;
+    const matchDate = (!dateFromFilter || String(t.date || '') >= dateFromFilter) && (!dateToFilter || String(t.date || '').slice(0, 10) <= dateToFilter);
+    const matchAccount = txAccountFilter === 'all' || Number(t.bankAccountId) === Number(txAccountFilter);
+    return matchSearch && matchType && matchMethod && matchDate && matchAccount;
   });
+
+  // V1.5.0: صفحه‌بندی سمت کلاینت
+  const txTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TX_PAGE_SIZE));
+  const safeTxPage = Math.min(txPage, txTotalPages);
+  const paginatedTransactions = filteredTransactions.slice((safeTxPage - 1) * TX_PAGE_SIZE, safeTxPage * TX_PAGE_SIZE);
+
+  // V1.5.0: مانده تجمعی — فقط وقتی یک حساب مشخص فیلتر شده باشد (پیمایش صعودی، بدون ابطال‌شده‌ها)
+  const runningBalanceMap = useMemo<Map<number, number>>(() => {
+    const map = new Map<number, number>();
+    if (txAccountFilter === 'all') return map;
+    const accId = Number(txAccountFilter);
+    const asc = [...safeTransactions]
+      .filter(t => Number(t.bankAccountId) === accId && t.status !== 'voided')
+      .sort((a, b) => (a.date === b.date ? (a.id - b.id) : String(a.date).localeCompare(String(b.date))));
+    let bal = Number(safeBankAccounts.find(b => b.id === accId)?.initialBalance ?? 0) || 0;
+    for (const t of asc) {
+      bal = t.type === 'receipt' ? bal + (Number(t.amount) || 0) : bal - (Number(t.amount) || 0);
+      map.set(t.id, bal);
+    }
+    return map;
+  }, [txAccountFilter, safeTransactions, safeBankAccounts]);
 
   const methodLabels: Record<string, string> = {
     cash: 'وجه نقد / صندوق',
     bank_transfer: 'حواله / پایا / ساتنا',
     pos: 'دستگاه کارتخوان (POS)',
     cheque: 'چک صیادی',
+  };
+
+  // V1.5.0: خروجی اکسل تراکنش‌های فیلترشده
+  const handleExportTxExcel = () => {
+    try {
+      const rows = filteredTransactions.map((t, i) => ({
+        '#': i + 1,
+        'شماره رسید': t.transactionNumber,
+        'تاریخ': t.date,
+        'نوع': t.type === 'receipt' ? 'دریافت' : 'پرداخت',
+        'وضعیت': t.status === 'voided' ? 'ابطال‌شده' : 'ثبت‌شده',
+        'حساب': t.bankAccountTitle || '',
+        'طرف حساب': t.partyName,
+        'روش': methodLabels[t.method] || t.method,
+        'شماره پیگیری': t.trackingNumber || '',
+        'شرح': t.description || '',
+        'مبلغ': Number(t.amount) || 0,
+        'ارز': t.currency || 'IRR',
+        'سند حسابداری': t.voucherId ? `#${t.voucherId}` : '',
+        'ثبت‌کننده': (t as any).creatorName || '',
+      }));
+      const ws = xlsx.utils.json_to_sheet(rows);
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, ws, 'تراکنش‌های خزانه');
+      xlsx.writeFile(wb, `Treasury-Transactions-${getTodayJalaliDate().replace(/\//g, '-')}.xlsx`);
+      toast.success(`${rows.length} ردیف اکسل تهیه شد`);
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در تهیه اکسل');
+    }
+  };
+
+  // V1.5.0: ثبت انتقال بین‌بانکی
+  const handleTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onCreateTreasuryTransfer) return;
+    if (!transferFormData.fromBankAccountId || !transferFormData.toBankAccountId) {
+      toast.error('حساب مبدأ و مقصد الزامی است');
+      return;
+    }
+    if (transferFormData.fromBankAccountId === transferFormData.toBankAccountId) {
+      toast.error('حساب مبدأ و مقصد باید متفاوت باشند');
+      return;
+    }
+    if (!transferFormData.amount || transferFormData.amount <= 0) {
+      toast.error('مبلغ انتقال باید بزرگتر از صفر باشد');
+      return;
+    }
+    const fromAcc = safeBankAccounts.find(b => b.id === transferFormData.fromBankAccountId);
+    if (fromAcc && Number(fromAcc.currentBalance) < transferFormData.amount) {
+      toast.error(`مانده حساب مبدأ «${fromAcc.title}» کافی نیست`);
+      return;
+    }
+    const ok = await confirmAction({
+      title: 'انتقال بین‌بانکی',
+      message: `انتقال ${formatPersianPrice(transferFormData.amount)} از «${fromAcc?.title}» به «${safeBankAccounts.find(b => b.id === transferFormData.toBankAccountId)?.title}» با یک سند دوبل ثبت شود؟`
+    });
+    if (!ok) return;
+    setIsSavingTransfer(true);
+    try {
+      await onCreateTreasuryTransfer(transferFormData);
+      toast.success('انتقال بین‌بانکی با سند دوبل ثبت شد');
+      setIsTransferModalOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در ثبت انتقال');
+    } finally {
+      setIsSavingTransfer(false);
+    }
   };
 
   return (
@@ -314,6 +424,26 @@ export function BankAndTreasuryTab({
             <ArrowUpRight className="w-4 h-4" />
             <span>ثبت پرداخت وجه</span>
           </button>
+          {/* V1.5.0: انتقال بین‌بانکی */}
+          {onCreateTreasuryTransfer && (
+            <button
+              onClick={() => {
+                setTransferFormData({
+                  date: getTodayJalaliDate(),
+                  amount: 0,
+                  fromBankAccountId: safeBankAccounts[0]?.id || null,
+                  toBankAccountId: safeBankAccounts[1]?.id || null,
+                  trackingNumber: '',
+                  description: '',
+                });
+                setIsTransferModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition shadow-sm"
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              <span>انتقال بین‌بانکی</span>
+            </button>
+          )}
           <button
             onClick={openCreateBankModal}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition shadow-sm"
@@ -568,7 +698,6 @@ export function BankAndTreasuryTab({
               <option value="all">همه دریافت/پرداخت‌ها</option>
               <option value="receipt">فقط دریافت‌ها</option>
               <option value="payment">فقط پرداخت‌ها</option>
-              <option value="transfer">انتقال بین‌بانکی</option>
             </select>
 
             <select
@@ -582,6 +711,53 @@ export function BankAndTreasuryTab({
               <option value="cash">نقدی</option>
               <option value="cheque">چک</option>
             </select>
+
+            {/* V1.5.0: فیلتر حساب برای مانده تجمعی */}
+            <select
+              value={txAccountFilter}
+              onChange={e => { setTxAccountFilter(e.target.value); setTxPage(1); }}
+              className="px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white max-w-[180px]"
+            >
+              <option value="all">همه حساب‌ها</option>
+              {safeBankAccounts.map(b => (
+                <option key={b.id} value={b.id}>{b.title}</option>
+              ))}
+            </select>
+
+            {/* V1.5.0: فیلتر بازه تاریخ */}
+            <div className="flex items-center gap-1">
+              <DatePicker
+                value={dateFromFilter}
+                onChange={(d: any) => { setDateFromFilter(extractDateString(d)); setTxPage(1); }}
+                calendar={persian}
+                locale={persian_fa}
+                calendarPosition="bottom-right"
+                placeholder="از تاریخ"
+                inputClass="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
+                containerClassName="inline-block"
+              />
+              <span className="text-slate-400 text-[10px]">تا</span>
+              <DatePicker
+                value={dateToFilter}
+                onChange={(d: any) => { setDateToFilter(extractDateString(d)); setTxPage(1); }}
+                calendar={persian}
+                locale={persian_fa}
+                calendarPosition="bottom-left"
+                placeholder="تا تاریخ"
+                inputClass="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
+                containerClassName="inline-block"
+              />
+            </div>
+
+            {/* V1.5.0: خروجی اکسل تراکنش‌ها */}
+            <button
+              onClick={handleExportTxExcel}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors cursor-pointer shrink-0"
+              title="خروجی اکسل تراکنش‌های فیلترشده"
+            >
+              <Download size={14} />
+              اکسل
+            </button>
           </div>
         </div>
 
@@ -599,17 +775,21 @@ export function BankAndTreasuryTab({
                   <th className="py-3 px-3 w-36">روش و حساب مقصد</th>
                   <th className="py-3 px-4">شرح</th>
                   <th className="py-3 px-4 w-36 text-left">{`مبلغ (${formatCurrencyLabel(transactions[0]?.currency || appCurrency)})`}</th>
+                  {txAccountFilter !== 'all' && (
+                    <th className="py-3 px-3 w-32 text-left">مانده پس از تراکنش</th>
+                  )}
                   <th className="py-3 px-3 w-24 text-center">سند حسابداری</th>
+                  <th className="py-3 px-3 w-28 text-center">ثبت‌کننده</th>
                   <th className="py-3 px-3 w-20 text-center">عملیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
-                {filteredTransactions.length === 0 ? (
+                {paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-10 text-slate-400">تراکنشی ثبت نشده است</td>
+                    <td colSpan={txAccountFilter !== 'all' ? 12 : 11} className="text-center py-10 text-slate-400">تراکنشی ثبت نشده است</td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((tx, idx) => {
+                  paginatedTransactions.map((tx, idx) => {
                     const isVoided = tx.status === 'voided';
                     return (
                     <tr key={tx.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition ${isVoided ? 'opacity-50' : ''}`}>
@@ -648,7 +828,13 @@ export function BankAndTreasuryTab({
                         <span className={tx.type === 'receipt' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                           {tx.type === 'receipt' ? '+' : '-'} {formatPersianPrice(tx.amount)}
                         </span>
+                        {txAccountFilter !== 'all' && runningBalanceMap.has(tx.id) && (
+                          <div className="text-[10px] font-normal text-slate-400 mt-0.5" title="مانده تجمعی حساب">
+                            {formatPersianPrice(runningBalanceMap.get(tx.id)!)}
+                          </div>
+                        )}
                       </td>
+                      {txAccountFilter !== 'all' && <td className="py-3 px-3" />}
                       <td className="py-3 px-3 text-center">
                         {tx.voucherId ? (
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold">
@@ -657,6 +843,9 @@ export function BankAndTreasuryTab({
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
+                      </td>
+                      <td className="py-3 px-3 text-center text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                        {(tx as any).creatorName || '—'}
                       </td>
                       <td className="py-3 px-3 text-center">
                         {!isVoided && !tx.payrollId && (tx as any).reversalOfId == null && (
@@ -676,8 +865,140 @@ export function BankAndTreasuryTab({
               </tbody>
             </table>
           </div>
+
+          {/* V1.5.0: Pagination Bar */}
+          {filteredTransactions.length > TX_PAGE_SIZE && (
+            <div className="p-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-slate-500 dark:text-slate-400 font-bold">
+                نمایش {formatPersianNumber(paginatedTransactions.length)} از {formatPersianNumber(filteredTransactions.length)} تراکنش (صفحه {formatPersianNumber(safeTxPage)} از {formatPersianNumber(txTotalPages)})
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setTxPage(p => Math.max(1, p - 1))}
+                  disabled={safeTxPage === 1}
+                  className="px-2.5 py-1 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-40 text-xs font-bold cursor-pointer"
+                >
+                  قبلی
+                </button>
+                <span className="px-3 py-1 text-xs font-black text-slate-800 dark:text-white bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded">
+                  {formatPersianNumber(safeTxPage)} / {formatPersianNumber(txTotalPages)}
+                </span>
+                <button
+                  onClick={() => setTxPage(p => Math.min(txTotalPages, p + 1))}
+                  disabled={safeTxPage >= txTotalPages}
+                  className="px-2.5 py-1 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-40 text-xs font-bold cursor-pointer"
+                >
+                  بعدی
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* V1.5.0: Transfer Modal */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-1 flex items-center gap-2">
+              <ArrowRightLeft size={18} className="text-amber-600" />
+              انتقال بین‌بانکی / بین‌صندوقی
+            </h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4">
+              انتقال وجه با یک سند دوبل (بدهکار مقصد / بستانکار مبدأ) و دو ردیف خزانه مرتبط
+            </p>
+            <form onSubmit={handleTransferSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">از حساب (مبدأ) *</label>
+                <select
+                  value={transferFormData.fromBankAccountId || ''}
+                  onChange={e => setTransferFormData(p => ({ ...p, fromBankAccountId: Number(e.target.value) || null }))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                >
+                  <option value="">انتخاب مبدأ...</option>
+                  {safeBankAccounts.filter(b => b.id !== transferFormData.toBankAccountId).map(b => (
+                    <option key={b.id} value={b.id}>{b.title} — مانده: {formatPersianPrice(b.currentBalance)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">به حساب (مقصد) *</label>
+                <select
+                  value={transferFormData.toBankAccountId || ''}
+                  onChange={e => setTransferFormData(p => ({ ...p, toBankAccountId: Number(e.target.value) || null }))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                >
+                  <option value="">انتخاب مقصد...</option>
+                  {safeBankAccounts.filter(b => b.id !== transferFormData.fromBankAccountId).map(b => (
+                    <option key={b.id} value={b.id}>{b.title} — مانده: {formatPersianPrice(b.currentBalance)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">مبلغ *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={transferFormData.amount || ''}
+                    onChange={e => setTransferFormData(p => ({ ...p, amount: Number(e.target.value) || 0 }))}
+                    className="w-full px-3 py-2 text-xs font-mono text-left bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاریخ *</label>
+                  <DatePicker
+                    value={transferFormData.date}
+                    onChange={(d: any) => setTransferFormData(p => ({ ...p, date: extractDateString(d) }))}
+                    calendar={persian}
+                    locale={persian_fa}
+                    calendarPosition="bottom-right"
+                    inputClass="w-full px-3 py-2 text-xs text-center bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                    containerClassName="w-full"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">شماره پیگیری</label>
+                <input
+                  type="text"
+                  value={transferFormData.trackingNumber}
+                  onChange={e => setTransferFormData(p => ({ ...p, trackingNumber: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs font-mono bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  placeholder="اختیاری"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">توضیحات</label>
+                <input
+                  type="text"
+                  value={transferFormData.description}
+                  onChange={e => setTransferFormData(p => ({ ...p, description: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  placeholder="پیش‌فرض: انتقال وجه از ... به ..."
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingTransfer}
+                  className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded-xl disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingTransfer ? 'در حال ثبت...' : 'ثبت انتقال با سند دوبل'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* V1.4.0: Void Transaction Modal */}
       {voidTarget && (
@@ -1025,6 +1346,15 @@ export function BankAndTreasuryTab({
                     placeholder="1000000"
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono text-left font-bold"
                   />
+                  {/* V1.5.0: هشدار سرریز مانده هنگام ورود */}
+                  {txFormData.type === 'payment' && txFormData.bankAccountId && (() => {
+                    const acc = safeBankAccounts.find(b => b.id === txFormData.bankAccountId);
+                    return acc && txFormData.amount > Number(acc.currentBalance) ? (
+                      <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1">
+                        ⚠️ مبلغ بیشتر از مانده «{acc.title}» ({formatPersianPrice(acc.currentBalance)}) است — ثبت با خطا مواجه خواهد شد.
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
 
                 <div>

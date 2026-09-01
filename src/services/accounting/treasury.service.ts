@@ -94,6 +94,22 @@ export class TreasuryService {
     return TreasuryTransactionService.voidTreasuryTransaction(id, params);
   }
 
+  // V1.5.0: انتقال بین‌بانکی/بین‌صندوقی
+  static async createTreasuryTransfer(data: {
+    date: string;
+    amount: number;
+    currency?: string;
+    fromBankAccountId: number;
+    toBankAccountId: number;
+    trackingNumber?: string;
+    description?: string;
+    userId?: number;
+    username?: string;
+    createVoucher?: boolean;
+  }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
+    return TreasuryTransactionService.createTreasuryTransfer(data);
+  }
+
   // 3. Cheques & Sayad Lifecycle
   static async getCheques(params: {
     type?: 'received' | 'paid';

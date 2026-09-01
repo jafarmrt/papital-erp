@@ -1,22 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { 
-  CreditCard, 
-  Plus, 
-  Search, 
-  Filter, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  FileText, 
-  Trash2, 
-  Check, 
-  X, 
+import {
+  CreditCard,
+  Plus,
+  Search,
+  Filter,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  FileText,
+  Trash2,
+  Check,
+  X,
   Calendar,
-  History
+  History,
+  Download
 } from 'lucide-react';
+import * as xlsx from 'xlsx';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -25,6 +27,7 @@ import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import DateObject from "react-date-object";
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -219,6 +222,10 @@ export function ChequesTab({
     }
   };
 
+  // V1.5.0: فیلتر بازه سررسید
+  const [dueFromFilter, setDueFromFilter] = useState('');
+  const [dueToFilter, setDueToFilter] = useState('');
+
   const filteredCheques = safeCheques.filter(c => {
     const matchSearch = !searchQuery.trim() ||
       c.chequeNumber.includes(searchQuery.trim()) ||
@@ -227,8 +234,65 @@ export function ChequesTab({
       c.bankName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchType = selectedTypeFilter === 'all' || c.type === selectedTypeFilter;
     const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
-    return matchSearch && matchType && matchStatus;
+    const due = toEnglishDigits(String(c.dueDate || '')).slice(0, 10);
+    const matchDue = (!dueFromFilter || due >= dueFromFilter) && (!dueToFilter || due <= dueToFilter);
+    return matchSearch && matchType && matchStatus && matchDue;
   });
+
+  // V1.5.0: aging سررسید — روزهای باقی‌مانده تا سررسید (با تقویم جلالی)
+  const getDueDays = (dueDate: string): number | null => {
+    try {
+      const d1 = new DateObject(toEnglishDigits(String(dueDate || '')).replace(/-/g, '/'));
+      const d2 = new DateObject(getTodayJalaliDate().replace(/\//g, '-'));
+      if (isNaN(d1.toDate().getTime())) return null;
+      return Math.round((d1.toDate().getTime() - d2.toDate().getTime()) / 86400000);
+    } catch {
+      return null;
+    }
+  };
+
+  const dueAging = (c: Cheque): { label: string; cls: string } => {
+    const days = getDueDays(c.dueDate);
+    if (days === null) return { label: '—', cls: 'text-slate-400' };
+    const isOpen = !['passed', 'returned', 'spent'].includes(String(c.status));
+    if (days < 0) return { label: `${Math.abs(days)} روز گذشته`, cls: 'text-rose-700 bg-rose-50 border-rose-200' };
+    if (days === 0) return { label: 'سررسید امروز', cls: 'text-amber-700 bg-amber-50 border-amber-200' };
+    if (days <= 3 && isOpen) return { label: `${days} روز مانده`, cls: 'text-amber-700 bg-amber-50 border-amber-200' };
+    return { label: `${days} روز مانده`, cls: 'text-slate-600 bg-slate-50 border-slate-200' };
+  };
+
+  // V1.5.0: خروجی اکسل چک‌ها
+  const handleExportChequesExcel = () => {
+    try {
+      const rows = filteredCheques.map((c, i) => {
+        const days = getDueDays(c.dueDate);
+        return {
+          '#': i + 1,
+          'نوع': c.type === 'received' ? 'دریافتی' : 'پرداختی',
+          'شماره چک': c.chequeNumber,
+          'شماره صیادی': c.sayadNumber || '',
+          'بانک': c.bankName,
+          'شعبه': c.branch || '',
+          'طرف حساب': c.partyName,
+          'تاریخ صدور': c.issueDate,
+          'سررسید': c.dueDate,
+          'وضعیت': statusLabels[c.status as ChequeStatus]?.label || c.status,
+          'وضعیت سررسید': days === null ? '' : days < 0 ? `گذشته ${Math.abs(days)} روز` : `${days} روز مانده`,
+          'مبلغ': Number(c.amount) || 0,
+          'ارز': c.currency || 'IRR',
+          'حساب مقصد': c.bankAccountTitle || '',
+          'شرح': c.description || '',
+        };
+      });
+      const ws = xlsx.utils.json_to_sheet(rows);
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, ws, 'دفتر چک صیادی');
+      xlsx.writeFile(wb, `Cheques-${getTodayJalaliDate().replace(/\//g, '-')}.xlsx`);
+      toast.success(`${rows.length} ردیف اکسل تهیه شد`);
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در تهیه اکسل');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -310,6 +374,40 @@ export function ChequesTab({
             <option value="returned">عودت داده شده</option>
             <option value="spent">خرج شده</option>
           </select>
+
+          {/* V1.5.0: بازه سررسید + اکسل */}
+          <div className="flex items-center gap-1">
+            <DatePicker
+              value={dueFromFilter}
+              onChange={(d: any) => setDueFromFilter(d ? extractDateString(d) : '')}
+              calendar={persian}
+              locale={persian_fa}
+              calendarPosition="bottom-right"
+              placeholder="سررسید از"
+              inputClass="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
+              containerClassName="inline-block"
+            />
+            <span className="text-slate-400 text-[10px]">تا</span>
+            <DatePicker
+              value={dueToFilter}
+              onChange={(d: any) => setDueToFilter(d ? extractDateString(d) : '')}
+              calendar={persian}
+              locale={persian_fa}
+              calendarPosition="bottom-left"
+              placeholder="سررسید تا"
+              inputClass="px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-center w-24"
+              containerClassName="inline-block"
+            />
+          </div>
+
+          <button
+            onClick={handleExportChequesExcel}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="خروجی اکسل چک‌های فیلترشده"
+          >
+            <Download size={14} />
+            اکسل
+          </button>
         </div>
       </div>
 
@@ -373,8 +471,18 @@ export function ChequesTab({
                         {c.partyName}
                       </td>
 
-                      <td className="py-3 px-3 text-center font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        {formatPersianDate(c.dueDate)}
+                      <td className="py-3 px-3 text-center">
+                        <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          {formatPersianDate(c.dueDate)}
+                        </div>
+                        {(() => {
+                          const aging = dueAging(c);
+                          return (
+                            <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border mt-0.5 ${aging.cls}`}>
+                              {aging.label}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       <td className="py-3 px-4 text-left font-mono font-black text-slate-900 dark:text-white">

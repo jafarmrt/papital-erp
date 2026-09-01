@@ -453,6 +453,18 @@ export function useAccounting() {
     await loadAccounts();
   };
 
+  // V1.5.0: انتقال بین‌بانکی
+  const handleCreateTreasuryTransfer = async (data: any) => {
+    await fetchJson('/accounting/treasury/transfer', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    await loadBankAndTreasury();
+    await loadVouchers();
+    await loadStats();
+    await loadAccounts();
+  };
+
   // Cheques Operations
   const handleCreateCheque = async (data: any) => {
     await fetchJson('/accounting/cheques', {
@@ -577,6 +589,7 @@ export function useAccounting() {
     handleDeleteBankAccount,
     handleCreateTreasuryTransaction,
     handleVoidTreasuryTransaction,
+    handleCreateTreasuryTransfer,
     handleCreateCheque,
     handleUpdateChequeStatus,
     handleDeleteCheque,

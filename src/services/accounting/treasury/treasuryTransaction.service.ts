@@ -1,6 +1,6 @@
 import { orm } from '../../../db/drizzle.js';
-import { bankAccounts, treasuryTransactions } from '../../../db/schema.js';
-import { eq, desc, and, sql, gte, lte } from 'drizzle-orm';
+import { bankAccounts, treasuryTransactions, users } from '../../../db/schema.js';
+import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
@@ -62,12 +62,16 @@ export class TreasuryTransactionService {
       documentId: treasuryTransactions.documentId,
       payrollId: treasuryTransactions.payrollId,
       reversalOfId: treasuryTransactions.reversalOfId,
+      // V1.5.0: هویت ثبت‌کننده (یک موجودیت کاربر)
+      createdById: treasuryTransactions.createdById,
+      creatorName: users.fullName,
       description: treasuryTransactions.description,
       status: treasuryTransactions.status,
       createdAt: treasuryTransactions.createdAt,
     })
     .from(treasuryTransactions)
     .leftJoin(bankAccounts, eq(bankAccounts.id, treasuryTransactions.bankAccountId))
+    .leftJoin(users, eq(users.id, treasuryTransactions.createdById))
     .where(and(...conditions))
     .orderBy(desc(treasuryTransactions.date), desc(treasuryTransactions.id));
 
@@ -377,4 +381,171 @@ export class TreasuryTransactionService {
       };
     });
   }
+
+  /**
+   * V1.5.0: انتقال بین‌بانکی/بین‌صندوقی
+   * دو ردیف خزانه (پرداخت از مبدأ + دریافت در مقصد) + یک سند دوبل متوازن
+   * (بدهکار حساب مقصد / بستانکار حساب مبدأ) همه در یک تراکنش دیتابیس.
+   * هر دو حساب هم‌ارز باید باشند و مانده مبدأ منفی نمی‌شود.
+   */
+  static async createTreasuryTransfer(data: {
+    date: string;
+    amount: number;
+    currency?: string;
+    fromBankAccountId: number;
+    toBankAccountId: number;
+    trackingNumber?: string;
+    description?: string;
+    userId?: number;
+    username?: string;
+    createVoucher?: boolean;
+  }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
+    const amount = Number(data.amount) || 0;
+    if (amount <= 0) throw new ValidationError('مبلغ انتقال باید بزرگتر از صفر باشد');
+    if (data.fromBankAccountId === data.toBankAccountId) {
+      throw new ValidationError('حساب مبدأ و مقصد باید متفاوت باشند');
+    }
+
+    return await orm.transaction(async (txEngine) => {
+      // قفل هر دو حساب در ترتیب id صعودی (جلوگیری از deadlock در همان سطح سلسله‌مراتب)
+      const ids = [Number(data.fromBankAccountId), Number(data.toBankAccountId)].sort((a, b) => a - b);
+      const locked = await txEngine.select().from(bankAccounts)
+        .where(and(inArray(bankAccounts.id, ids), eq(bankAccounts.isDeleted, 0)))
+        .for('update')
+        .orderBy(asc(bankAccounts.id));
+      const from = locked.find(b => b.id === Number(data.fromBankAccountId));
+      const to = locked.find(b => b.id === Number(data.toBankAccountId));
+      if (!from) throw new NotFoundError('حساب مبدأ یافت نشد');
+      if (!to) throw new NotFoundError('حساب مقصد یافت نشد');
+
+      const currency = data.currency || from.currency || 'IRR';
+      if (from.currency && to.currency && from.currency !== to.currency) {
+        throw new ValidationError(`انتقال بین حساب‌های با ارز متفاوت مجاز نیست (${from.currency} → ${to.currency})`);
+      }
+      if (currency !== from.currency) {
+        throw new ValidationError(`ارز انتقال (${currency}) با ارز حساب مبدأ (${from.currency}) هم‌خوانی ندارد`);
+      }
+
+      // مانده‌ها با fin()
+      const fromNewBal = fin(Number(from.currentBalance) || 0).subtract(amount).round(4).toNumber();
+      if (fromNewBal < 0) {
+        throw new ValidationError(`مانده حساب مبدأ «${from.title}» کافی نیست (مانده فعلی: ${currentBalFa(from.currentBalance)})`);
+      }
+      const toNewBal = fin(Number(to.currentBalance) || 0).add(amount).round(4).toNumber();
+      await txEngine.update(bankAccounts).set({ currentBalance: fromNewBal }).where(eq(bankAccounts.id, from.id));
+      await txEngine.update(bankAccounts).set({ currentBalance: toNewBal }).where(eq(bankAccounts.id, to.id));
+
+      const payNum = await this.generateTransactionNumber('payment', txEngine);
+      const recNum = await this.generateTransactionNumber('receipt', txEngine);
+
+      // سند دوبل: بدهکار حساب مقصد / بستانکار حساب مبدأ
+      let voucherId: number | null = null;
+      if (data.createVoucher !== false) {
+        if (!from.accountId || !to.accountId) {
+          throw new ValidationError('برای انتقال بین‌بانکی، هر دو حساب باید در چارت حساب‌ها کدینگ شده باشند');
+        }
+        const descText = data.description?.trim() || `انتقال وجه از ${from.title} به ${to.title}`;
+        const v = await VoucherService.createJournalVoucher({
+          date: data.date,
+          voucherType: 'treasury',
+          description: descText,
+          referenceModule: 'treasury',
+          referenceNumber: payNum,
+          currency,
+          userId: data.userId,
+          username: data.username,
+          items: [
+            {
+              accountId: to.accountId,
+              detailedType: 'bank_account',
+              detailedId: to.id,
+              detailedName: to.title,
+              debit: amount,
+              credit: 0,
+              currency,
+              description: `واریز به مقصد بابت انتقال از ${from.title}`
+            },
+            {
+              accountId: from.accountId,
+              detailedType: 'bank_account',
+              detailedId: from.id,
+              detailedName: from.title,
+              debit: 0,
+              credit: amount,
+              currency,
+              description: `برداشت از مبدأ بابت انتقال به ${to.title}`
+            }
+          ]
+        }, txEngine);
+        voucherId = v.id;
+      }
+
+      const descBase = data.description?.trim() || `انتقال وجه از ${from.title} به ${to.title}`;
+
+      const [payTx] = await txEngine.insert(treasuryTransactions).values({
+        transactionNumber: payNum,
+        type: 'payment',
+        date: data.date.trim(),
+        method: 'bank_transfer',
+        amount,
+        currency,
+        exchangeRate: 1,
+        bankAccountId: from.id,
+        partyType: 'other',
+        partyId: null,
+        partyName: to.title,
+        trackingNumber: data.trackingNumber?.trim() || '',
+        voucherId,
+        description: `${descBase} — نیمه پرداخت (مبدأ)`,
+        status: 'completed',
+        createdById: data.userId || null,
+      }).returning();
+
+      const [recTx] = await txEngine.insert(treasuryTransactions).values({
+        transactionNumber: recNum,
+        type: 'receipt',
+        date: data.date.trim(),
+        method: 'bank_transfer',
+        amount,
+        currency,
+        exchangeRate: 1,
+        bankAccountId: to.id,
+        partyType: 'other',
+        partyId: null,
+        partyName: from.title,
+        trackingNumber: data.trackingNumber?.trim() || '',
+        voucherId,
+        description: `${descBase} — نیمه دریافت (مقصد)`,
+        status: 'completed',
+        createdById: data.userId || null,
+      }).returning();
+
+      // Outbox (همان تراکنش)
+      const transferEvent = domainEventBus.createEvent(
+        DomainEventType.TREASURY_TRANSACTION_APPROVED,
+        'Treasury',
+        String(recTx.id),
+        {
+          transactionId: recTx.id,
+          pairedTransactionId: payTx.id,
+          isTransfer: true,
+          amount,
+          currency,
+          fromAccountId: from.id,
+          fromAccountName: from.title,
+          toAccountId: to.id,
+          toAccountName: to.title
+        },
+        { userId: data.userId, userName: data.username }
+      );
+      await OutboxService.saveToOutbox(txEngine, transferEvent);
+
+      return { payment: payTx as any, receipt: recTx as any, voucherId };
+    });
+  }
+}
+
+// V1.5.0: helper کوچک نمایش مانده در پیام خطا
+function currentBalFa(val: any): string {
+  return (Number(val) || 0).toLocaleString('fa-IR');
 }

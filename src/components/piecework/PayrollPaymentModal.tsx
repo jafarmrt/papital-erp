@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, Landmark, BanknoteArrowUp } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate } from '../../utils';
+import { getTodayJalaliDate, extractDateString } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
+import DatePicker from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
 
 // V10-4.4: مودال واحد «ثبت پرداخت حقوق» — جایگزین toggle مستقیم paid
 // ثبت فقط با انتخاب حساب خزانه/بانک تا تراکنش مالی + سند تسویه اتمیک صادر شود.
@@ -148,12 +151,14 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پرداخت</label>
-                <input
-                  type="text"
+                <DatePicker
                   value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  dir="ltr"
-                  className="w-full border border-slate-300/80 rounded-xl px-2 py-2 text-xs font-mono text-left bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(d: any) => setPaymentDate(extractDateString(d))}
+                  calendar={persian}
+                  locale={persian_fa}
+                  calendarPosition="bottom-right"
+                  inputClass="w-full border border-slate-300/80 rounded-xl px-2 py-2 text-xs text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  containerClassName="w-full"
                 />
               </div>
             </div>
