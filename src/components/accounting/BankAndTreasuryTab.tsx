@@ -40,11 +40,12 @@ interface BankAndTreasuryTabProps {
   isSyncingBanks?: boolean;
   onRefresh: () => void;
   onSyncAndReconcileBanks?: () => Promise<void>;
-  onCreateBankAccount: (data: any) => Promise<void>;
-  onUpdateBankAccount: (id: number, data: any) => Promise<void>;
-  onDeleteBankAccount: (id: number) => Promise<void>;
-  onCreateTreasuryTransaction: (data: any) => Promise<void>;
-}
+   onCreateBankAccount: (data: any) => Promise<void>;
+   onUpdateBankAccount: (id: number, data: any) => Promise<void>;
+   onDeleteBankAccount: (id: number) => Promise<void>;
+   onCreateTreasuryTransaction: (data: any) => Promise<void>;
+   onVoidTreasuryTransaction?: (id: number, reason: string) => Promise<void>;
+ }
 
 export function BankAndTreasuryTab({
   bankAccounts,
@@ -60,6 +61,7 @@ export function BankAndTreasuryTab({
   onUpdateBankAccount,
   onDeleteBankAccount,
   onCreateTreasuryTransaction,
+  onVoidTreasuryTransaction,
 }: BankAndTreasuryTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
@@ -77,6 +79,34 @@ export function BankAndTreasuryTab({
   // Modals
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [editingBank, setEditingBank] = useState<BankAccount | null>(null);
+  // V1.4.0: ابطال تراکنش خزانه با سند معکوس
+  const [voidTarget, setVoidTarget] = useState<TreasuryTransaction | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [isVoiding, setIsVoiding] = useState(false);
+
+  const handleVoidSubmit = async () => {
+    if (!voidTarget || !onVoidTreasuryTransaction) return;
+    if (voidReason.trim().length < 3) {
+      toast.error('دلیل ابطال را وارد کنید (حداقل ۳ کاراکتر)');
+      return;
+    }
+    const ok = await confirmAction({
+      title: 'ابطال تراکنش خزانه',
+      message: `تراکنش «${voidTarget.transactionNumber}» به مبلغ ${formatPersianPrice(voidTarget.amount)} با ثبت تراکنش معکوس و سند معکوس ابطال می‌شود و مانده حساب اصلاح خواهد شد. ادامه می‌دهید؟`
+    });
+    if (!ok) return;
+    setIsVoiding(true);
+    try {
+      await onVoidTreasuryTransaction(voidTarget.id, voidReason.trim());
+      toast.success('تراکنش با سند معکوس ابطال شد');
+      setVoidTarget(null);
+      setVoidReason('');
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در ابطال تراکنش');
+    } finally {
+      setIsVoiding(false);
+    }
+  };
   const [bankFormData, setBankFormData] = useState({
     code: '',
     title: '',
@@ -570,19 +600,25 @@ export function BankAndTreasuryTab({
                   <th className="py-3 px-4">شرح</th>
                   <th className="py-3 px-4 w-36 text-left">{`مبلغ (${formatCurrencyLabel(transactions[0]?.currency || appCurrency)})`}</th>
                   <th className="py-3 px-3 w-24 text-center">سند حسابداری</th>
+                  <th className="py-3 px-3 w-20 text-center">عملیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-10 text-slate-400">تراکنشی ثبت نشده است</td>
+                    <td colSpan={10} className="text-center py-10 text-slate-400">تراکنشی ثبت نشده است</td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((tx, idx) => (
-                    <tr key={tx.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition">
+                  filteredTransactions.map((tx, idx) => {
+                    const isVoided = tx.status === 'voided';
+                    return (
+                    <tr key={tx.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition ${isVoided ? 'opacity-50' : ''}`}>
                       <td className="py-3 px-3 text-center text-slate-400 font-bold">{formatPersianNumber(idx + 1)}</td>
                       <td className="py-3 px-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                         {formatPersianNumber(tx.transactionNumber)}
+                        {isVoided && (
+                          <div className="text-[9px] font-bold text-slate-400 mt-0.5">ابطال‌شده</div>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-center font-mono text-slate-600 dark:text-slate-300">
                         {formatPersianDate(tx.date)}
@@ -622,14 +658,72 @@ export function BankAndTreasuryTab({
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
+                      <td className="py-3 px-3 text-center">
+                        {!isVoided && !tx.payrollId && (tx as any).reversalOfId == null && (
+                          <button
+                            onClick={() => { setVoidTarget(tx); setVoidReason(''); }}
+                            title="ابطال تراکنش با سند معکوس"
+                            className="px-2 py-1 text-[10px] font-bold border border-rose-200 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors cursor-pointer"
+                          >
+                            ابطال
+                          </button>
+                        )}
+                      </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {/* V1.4.0: Void Transaction Modal */}
+      {voidTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+            <h3 className="font-bold text-rose-700 dark:text-rose-300 text-base mb-1 flex items-center gap-2">
+              <AlertTriangle size={18} />
+              ابطال تراکنش خزانه
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-6">
+              تراکنش «<span className="font-mono font-bold">{voidTarget.transactionNumber}</span>» به مبلغ{' '}
+              <span className="font-bold">{formatPersianPrice(voidTarget.amount)}</span> ابطال می‌شود؛ یک تراکنش معکوس
+              با شماره سری جدید و سند معکوس حسابداری ثبت و مانده «{voidTarget.bankAccountTitle || '—'}» اصلاح خواهد شد.
+              رکورد اصلی حذف نمی‌شود و با وضعیت «ابطال‌شده» در تاریخچه می‌ماند.
+            </p>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              دلیل ابطال <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              rows={3}
+              placeholder="مثال: اشتباه در مبلغ — ثبت مجدد با مبلغ صحیح"
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-xs bg-slate-50 dark:bg-slate-700 focus:outline-none focus:border-rose-400 resize-none"
+              disabled={isVoiding}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => { setVoidTarget(null); setVoidReason(''); }}
+                disabled={isVoiding}
+                className="px-4 py-2 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
+              >
+                انصراف
+              </button>
+              <button
+                onClick={handleVoidSubmit}
+                disabled={isVoiding}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isVoiding ? 'در حال ابطال...' : 'ابطال با سند معکوس'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Define / Edit Bank Account Modal */}
       {isBankModalOpen && (

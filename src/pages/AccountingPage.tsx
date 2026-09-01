@@ -87,6 +87,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     handleUpdateBankAccount,
     handleDeleteBankAccount,
     handleCreateTreasuryTransaction,
+    handleVoidTreasuryTransaction,
     handleCreateCheque,
     handleUpdateChequeStatus,
     handleDeleteCheque,
@@ -271,6 +272,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onUpdateBankAccount={handleUpdateBankAccount}
               onDeleteBankAccount={handleDeleteBankAccount}
               onCreateTreasuryTransaction={handleCreateTreasuryTransaction}
+              onVoidTreasuryTransaction={handleVoidTreasuryTransaction}
             />
           )}
 

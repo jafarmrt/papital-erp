@@ -441,6 +441,18 @@ export function useAccounting() {
     await loadAccounts();
   };
 
+  // V1.4.0: ابطال تراکنش خزانه با سند معکوس
+  const handleVoidTreasuryTransaction = async (id: number, reason: string) => {
+    await fetchJson(`/accounting/treasury/${id}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+    await loadBankAndTreasury();
+    await loadVouchers();
+    await loadStats();
+    await loadAccounts();
+  };
+
   // Cheques Operations
   const handleCreateCheque = async (data: any) => {
     await fetchJson('/accounting/cheques', {
@@ -564,6 +576,7 @@ export function useAccounting() {
     handleUpdateBankAccount,
     handleDeleteBankAccount,
     handleCreateTreasuryTransaction,
+    handleVoidTreasuryTransaction,
     handleCreateCheque,
     handleUpdateChequeStatus,
     handleDeleteCheque,

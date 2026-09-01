@@ -85,6 +85,15 @@ export class TreasuryService {
     return TreasuryTransactionService.createTreasuryTransaction(data);
   }
 
+  // V1.4.0: ابطال تراکنش با سند معکوس (DB-009)
+  static async voidTreasuryTransaction(id: number, params: {
+    reason: string;
+    userId?: number;
+    username?: string;
+  }): Promise<TreasuryTransaction> {
+    return TreasuryTransactionService.voidTreasuryTransaction(id, params);
+  }
+
   // 3. Cheques & Sayad Lifecycle
   static async getCheques(params: {
     type?: 'received' | 'paid';
@@ -131,7 +140,7 @@ export class TreasuryService {
     return ChequeLifecycleService.updateChequeStatus(id, data);
   }
 
-  static async deleteCheque(id: number): Promise<{ success: boolean }> {
-    return ChequeLifecycleService.deleteCheque(id);
+  static async deleteCheque(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
+    return ChequeLifecycleService.deleteCheque(id, user);
   }
 }

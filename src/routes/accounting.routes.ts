@@ -5,6 +5,7 @@ import { AccountingService } from '../services/accounting.service.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { idempotency } from '../middleware/idempotency.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
 import { orm } from '../db/drizzle.js';
@@ -536,7 +537,20 @@ router.post('/accounting/bank-accounts', authorizePermission('accounting.treasur
 
 const updateBankHandler = asyncHandler(async (req: any, res: any) => {
   const id = Number(req.params.id);
+  // V1.4.0: snapshot قبل برای audit
+  const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
   const updated = await AccountingService.updateBankAccount(id, req.body);
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'bank_account',
+    entityId: String(id),
+    description: `ویرایش حساب بانکی/صندوق: ${updated.title}`,
+    details: { before, after: updated },
+    ipAddress: req.ip || '',
+  });
   res.json(updated);
 });
 router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), updateBankHandler);
@@ -544,7 +558,19 @@ router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.trea
 
 const deleteBankHandler = asyncHandler(async (req: any, res: any) => {
   const id = Number(req.params.id);
+  const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
   const result = await AccountingService.deleteBankAccount(id);
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'DELETE',
+    entity: 'bank_account',
+    entityId: String(id),
+    description: `حذف حساب بانکی/صندوق: ${before?.title || id}`,
+    details: { before },
+    ipAddress: req.ip || '',
+  });
   res.json(result);
 });
 router.delete('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), deleteBankHandler);
@@ -562,7 +588,28 @@ router.get('/accounting/treasury', authorizePermission('accounting.treasury', 'a
   res.json(list);
 }));
 
-router.post('/accounting/treasury', authorizePermission('accounting.treasury'), asyncHandler(async (req, res) => {
+// V1.4.0: اعتبارسنجی ورودی ثبت دریافت/پرداخت (قبلاً body خام بود)
+const createTreasuryTxSchema = z.object({
+  body: z.object({
+    type: z.enum(['receipt', 'payment']),
+    date: z.string().min(1),
+    method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque']),
+    amount: z.number().positive(),
+    currency: z.string().optional(),
+    exchangeRate: z.number().optional(),
+    bankAccountId: z.number().int().positive(),
+    partyType: z.enum(['customer', 'personnel', 'supplier', 'other']).optional(),
+    partyId: z.number().int().positive().nullable().optional(),
+    partyName: z.string().min(1),
+    trackingNumber: z.string().optional(),
+    documentId: z.number().int().positive().nullable().optional(),
+    description: z.string().optional(),
+    createVoucher: z.boolean().optional(),
+  })
+});
+
+// V1.4.0: Idempotency — retry همین درخواست هرگز دوبار وجه ثبت نمی‌کند
+router.post('/accounting/treasury', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(createTreasuryTxSchema), asyncHandler(async (req, res) => {
   const tx = await AccountingService.createTreasuryTransaction({
     ...req.body,
     userId: req.user?.id,
@@ -582,6 +629,33 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
   res.status(201).json(tx);
 }));
 
+// V1.4.0: ابطال تراکنش خزانه با سند معکوس (DB-009)
+const voidTreasuryTxSchema = z.object({
+  body: z.object({
+    reason: z.string().min(3, 'دلیل ابطال الزامی است'),
+  })
+});
+router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(paramsIdSchema), validate(voidTreasuryTxSchema), asyncHandler(async (req: any, res) => {
+  const id = Number(req.params.id);
+  const reversal = await AccountingService.voidTreasuryTransaction(id, {
+    reason: req.body.reason,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'treasury_transaction',
+    entityId: String(id),
+    description: `ابطال تراکنش شناسه ${id} با سند معکوس ${reversal.transactionNumber} — دلیل: ${req.body.reason}`,
+    details: { voidedTxId: id, reversalTxId: reversal.id, reason: req.body.reason },
+    ipAddress: req.ip || '',
+  });
+  res.json(reversal);
+}));
+
 // ==========================================
 // 5. CHEQUES (دفتر چک صیادی)
 // ==========================================
@@ -597,7 +671,30 @@ router.get('/accounting/cheques', authorizePermission('accounting.cheques', 'acc
   res.json(list);
 }));
 
-router.post('/accounting/cheques', authorizePermission('accounting.cheques'), asyncHandler(async (req, res) => {
+// V1.4.0: اعتبارسنجی ورودی ثبت چک (قبلاً body خام بود)
+const createChequeSchema = z.object({
+  body: z.object({
+    type: z.enum(['received', 'paid']),
+    chequeNumber: z.string().min(1),
+    sayadNumber: z.string().optional(),
+    bankName: z.string().min(1),
+    branch: z.string().optional(),
+    issueDate: z.string().min(1),
+    dueDate: z.string().min(1),
+    amount: z.number().positive(),
+    currency: z.string().optional(),
+    partyType: z.enum(['customer', 'personnel', 'supplier', 'other']).optional(),
+    partyId: z.number().int().positive().nullable().optional(),
+    partyName: z.string().min(1),
+    drawerName: z.string().optional(),
+    payeeName: z.string().optional(),
+    bankAccountId: z.number().int().positive().nullable().optional(),
+    description: z.string().optional(),
+    createVoucher: z.boolean().optional(),
+  })
+});
+
+router.post('/accounting/cheques', authorizePermission('accounting.cheques'), validate(createChequeSchema), asyncHandler(async (req, res) => {
   const chq = await AccountingService.createCheque({
     ...req.body,
     userId: req.user?.id,
@@ -620,7 +717,10 @@ router.post('/accounting/cheques', authorizePermission('accounting.cheques'), as
 const updateChequeStatusHandler = asyncHandler(async (req: any, res: any) => {
   const id = Number(req.params.id);
   const chq = await AccountingService.updateChequeStatus(id, {
-    ...req.body,
+    status: req.body.status,
+    actionDate: req.body.actionDate,
+    bankAccountId: req.body.bankAccountId,
+    notes: req.body.notes,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
   });
@@ -640,9 +740,24 @@ const updateChequeStatusHandler = asyncHandler(async (req: any, res: any) => {
 router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), validate(paramsIdSchema), updateChequeStatusHandler);
 router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), validate(paramsIdSchema), updateChequeStatusHandler);
 
-router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req: any, res) => {
   const id = Number(req.params.id);
-  const result = await AccountingService.deleteCheque(id);
+  const result = await AccountingService.deleteCheque(id, {
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  // V1.4.0: audit حذف چک (قبلاً وجود نداشت)
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'DELETE',
+    entity: 'cheque',
+    entityId: String(id),
+    description: `حذف چک شناسه ${id}`,
+    details: { chequeId: id },
+    ipAddress: req.ip || '',
+  });
   res.json(result);
 }));
 

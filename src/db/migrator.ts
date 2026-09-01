@@ -1811,6 +1811,14 @@ export const SCHEMA_ALTERATIONS: MigrationStep[] = [
       ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS payroll_id INTEGER REFERENCES piecework_payrolls(id);
       CREATE INDEX IF NOT EXISTS idx_tt_payroll ON treasury_transactions(payroll_id);
     `
+  },
+  {
+    id: 'alt_039_treasury_void_reversal',
+    name: 'V1.4.0 Phase1: treasury transaction void/reversal (reversal_of_id self-reference + index)',
+    sql: `
+      ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS reversal_of_id INTEGER REFERENCES treasury_transactions(id);
+      CREATE INDEX IF NOT EXISTS idx_tt_reversal ON treasury_transactions(reversal_of_id);
+    `
   }
 ];
 

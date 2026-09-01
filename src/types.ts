@@ -920,8 +920,13 @@ export interface TreasuryTransaction {
   cheque_id?: number | null;
   documentId?: number | null;
   document_id?: number | null;
+  payrollId?: number | null;
+  payroll_id?: number | null;
+  // V1.4.0: ابطال با سند معکوس
+  reversalOfId?: number | null;
+  reversal_of_id?: number | null;
   description?: string;
-  status?: 'completed' | 'cancelled';
+  status?: 'completed' | 'voided' | 'cancelled';
   createdAt?: string;
 }
 

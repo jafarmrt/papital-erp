@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { 
   CreditCard, 
@@ -104,6 +104,58 @@ export function ChequesTab({
     spent: { label: 'خرج شده / واگذار به غیر', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
   };
 
+  // V1.4.0: ماشین وضعیت چک — فقط انتقال‌های مجاز (هماهنگ با بک‌اند)
+  const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
+    received: ['in_treasury', 'in_collection', 'passed', 'bounced'],
+    in_treasury: ['in_collection', 'passed', 'bounced'],
+    in_safe: ['in_collection', 'passed', 'bounced'],
+    in_collection: ['passed', 'bounced'],
+    passed: [],
+    bounced: ['returned'],
+    returned: [],
+    spent: [],
+  };
+  const STATUS_OPTIONS: Record<string, { value: ChequeStatus; label: string }[]> = {
+    received: [
+      { value: 'in_treasury', label: 'نگهداری نزد صندوق' },
+      { value: 'in_collection', label: 'خواباندن به حساب (در جریان وصول)' },
+      { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'bounced', label: 'برگشت / واخواست چک' },
+    ],
+    in_treasury: [
+      { value: 'in_collection', label: 'ارسال به بانک (در جریان وصول)' },
+      { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'bounced', label: 'برگشت / واخواست چک' },
+    ],
+    in_safe: [
+      { value: 'in_collection', label: 'ارسال به بانک (در جریان وصول)' },
+      { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'bounced', label: 'برگشت / واخواست چک' },
+    ],
+    in_collection: [
+      { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'bounced', label: 'برگشت / واخواست چک' },
+    ],
+    bounced: [
+      { value: 'returned', label: 'عودت چک به صادرکننده (پایان پیگیری)' },
+    ],
+    passed: [],
+    returned: [],
+    spent: [],
+  };
+  const allowedStatusOptions: { value: ChequeStatus; label: string }[] = statusModalCheque
+    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || [])
+    : [];
+
+  // باز شدن مودال: وضعیت هدف به اولین گزینه مجاز ریست شود
+  useEffect(() => {
+    if (statusModalCheque) {
+      const opts = CHEQUE_TRANSITIONS[String(statusModalCheque.status)] || [];
+      setTargetStatus(opts[0] || ('passed' as ChequeStatus));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusModalCheque?.id]);
+
   const handleCreateCheque = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFormData.chequeNumber.trim() || !newFormData.bankName.trim() || !newFormData.dueDate.trim()) {
@@ -134,6 +186,11 @@ export function ChequesTab({
   const handleUpdateStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModalCheque) return;
+    // V1.4.0: گارد وضعیت پایانی — هیچ انتقالی از وضعیت‌های پایانی مجاز نیست
+    if (!allowedStatusOptions.some(o => o.value === targetStatus)) {
+      toast.error('وضعیت انتخابی برای این چک مجاز نیست');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -328,7 +385,7 @@ export function ChequesTab({
                         <button
                           onClick={() => {
                             setStatusModalCheque(c);
-                            setTargetStatus(c.status === 'received' ? 'in_collection' : 'passed');
+                            // وضعیت هدف توسط useEffect بر اساس اولین گزینه مجاز ریست می‌شود
                             setStatusDescription('');
                             setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
                           }}
@@ -603,18 +660,21 @@ export function ChequesTab({
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   وضعیت جدید چک *
                 </label>
-                <select
-                  value={targetStatus}
-                  onChange={e => setTargetStatus(e.target.value as ChequeStatus)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
-                >
-                  <option value="in_collection">خواباندن به حساب (در جریان وصول)</option>
-                  <option value="passed">وصول نهایی (پاس شده)</option>
-                  <option value="bounced">برگشت / واخواست چک</option>
-                  <option value="returned">عودت چک به صادرکننده</option>
-                  <option value="spent">خرج کردن / واگذاری به شخص دیگر</option>
-                  <option value="in_safe">بازگشت به صندوق</option>
-                </select>
+                {allowedStatusOptions.length === 0 ? (
+                  <div className="text-[11px] font-bold text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-700 rounded-xl p-3">
+                    این چک در وضعیت پایانی «{String(statusModalCheque.status)}» است و تغییر وضعیت بیشتری ندارد.
+                  </div>
+                ) : (
+                  <select
+                    value={targetStatus}
+                    onChange={e => setTargetStatus(e.target.value as ChequeStatus)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                  >
+                    {allowedStatusOptions.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {(targetStatus === 'in_collection' || targetStatus === 'passed') && (

@@ -53,13 +53,29 @@ function toJalaliToday(): string {
 export class PayrollPaymentService {
   static async registerPayrollPayment(input: RegisterPayrollPaymentInput): Promise<RegisterPayrollPaymentResult> {
     return await orm.transaction(async (tx) => {
-      // Lock order: bank account (10) → payroll/party (30)
+      // V1.4.0: ترتیب واقعی قفل مطابق سلسله‌مراتب — بانک (سطح ۱۰) اول، سپس فیش حقوقی
       validateLockOrder([
         { name: 'bank_account', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
         { name: 'piecework_payrolls', hierarchyLevel: LockHierarchyLevel.PARTIES }
       ]);
 
-      // 1. قفل انحصاری فیش — جلوگیری از پرداخت همزمان/دوبل
+      // 1. قفل انحصاری حساب خزانه (سطح ۱۰) — همیشه قبل از فیش
+      const [bank] = await tx
+        .select()
+        .from(bankAccounts)
+        .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)))
+        .for('update');
+      if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+      if (!bank.accountId) {
+        throw new ValidationError('برای این حساب بانکی/صندوق، حساب معین در چارت حساب‌ها تعریف نشده است؛ ابتدا آن را در بخش کدینگ متصل کنید.');
+      }
+
+      // V1.4.0: گارد هم‌ارزی — تسویه حقوق در این نسخه فقط با حساب ریالی
+      if (bank.currency && bank.currency !== 'IRR') {
+        throw new ValidationError(`تسویه حقوق فقط با حساب ریالی امکان‌پذیر است (حساب انتخاب‌شده «${bank.title}» ارز ${bank.currency} دارد).`);
+      }
+
+      // 2. قفل انحصاری فیش (سطح ۳۰) — جلوگیری از پرداخت همزمان/دوبل
       const [payroll] = await tx
         .select()
         .from(pieceworkPayrolls)
@@ -76,28 +92,21 @@ export class PayrollPaymentService {
         throw new ConflictError(`وضعیت فعلی فیش (${payroll.status}) اجازه ثبت پرداخت ندارد.`);
       }
 
-      // 2. پرسنل (طرف حساب)
+      // 3. پرسنل (طرف حساب) — خواندن ساده بدون قفل
       const [pers] = await tx
         .select({ id: personnel.id, fullName: personnel.fullName })
         .from(personnel)
         .where(eq(personnel.id, payroll.personnelId));
-
-      // 3. قفل حساب خزانه و اعمال گردش مانده
-      const [bank] = await tx
-        .select()
-        .from(bankAccounts)
-        .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)))
-        .for('update');
-      if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
-      if (!bank.accountId) {
-        throw new ValidationError('برای این حساب بانکی/صندوق، حساب معین در چارت حساب‌ها تعریف نشده است؛ ابتدا آن را در بخش کدینگ متصل کنید.');
-      }
 
       const netAmount = Number(input.amount ?? payroll.netPayable) || 0;
       if (netAmount <= 0) throw new ValidationError('مبلغ قابل پرداخت باید بزرگ‌تر از صفر باشد');
 
       const currentBal = Number(bank.currentBalance) || 0;
       const newBal = fin(currentBal).subtract(netAmount).round(4).toNumber();
+      // V1.4.0: سیاست مانده منفی ممنوع
+      if (newBal < 0) {
+        throw new ValidationError(`مانده حساب «${bank.title}» برای این پرداخت کافی نیست (مانده فعلی: ${currentBal.toLocaleString('fa-IR')})`);
+      }
       await tx.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, bank.id));
 
       // 4. شماره تراکنش اتمیک (PostgreSQL SEQUENCE — نه MAX/COUNT)

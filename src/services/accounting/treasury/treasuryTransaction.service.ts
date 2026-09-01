@@ -9,7 +9,8 @@ import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import type { TreasuryTransaction } from '../../../types.js';
-import { NotFoundError, ValidationError } from '../../../errors/customErrors.js';
+import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
+import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 
 export class TreasuryTransactionService {
   static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: any): Promise<string> {
@@ -59,6 +60,8 @@ export class TreasuryTransactionService {
       voucherId: treasuryTransactions.voucherId,
       chequeId: treasuryTransactions.chequeId,
       documentId: treasuryTransactions.documentId,
+      payrollId: treasuryTransactions.payrollId,
+      reversalOfId: treasuryTransactions.reversalOfId,
       description: treasuryTransactions.description,
       status: treasuryTransactions.status,
       createdAt: treasuryTransactions.createdAt,
@@ -111,8 +114,17 @@ export class TreasuryTransactionService {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
       ]);
-      const [bank] = await txEngine.select().from(bankAccounts).where(eq(bankAccounts.id, data.bankAccountId)).for('update');
+      // V1.4.0: قفل حساب با فیلتر isDeleted — ثبت وجه در حساب حذف‌شده ممنوع
+      const [bank] = await txEngine.select().from(bankAccounts)
+        .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
+        .for('update');
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+
+      // V1.4.0: گارد هم‌ارزی ارز — تراکنش باید هم‌ارز با حساب باشد تا مانده‌ها معنادار بمانند
+      const txCurrency = data.currency || bank.currency || 'IRR';
+      if (bank.currency && txCurrency !== bank.currency) {
+        throw new ValidationError(`ارز تراکنش (${txCurrency}) با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد. تراکنش هم‌ارز ثبت کنید.`);
+      }
 
       const txNum = await this.generateTransactionNumber(data.type, txEngine);
 
@@ -121,6 +133,10 @@ export class TreasuryTransactionService {
       const newBal = data.type === 'receipt'
         ? fin(currentBal).add(amount).round(4).toNumber()
         : fin(currentBal).subtract(amount).round(4).toNumber();
+      // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
+      if (newBal < 0) {
+        throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBal.toLocaleString('fa-IR')})`);
+      }
       await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, data.bankAccountId));
 
       let voucherId: number | null = null;
@@ -192,7 +208,7 @@ export class TreasuryTransactionService {
         date: data.date.trim(),
         method: data.method,
         amount,
-        currency: data.currency || bank.currency || 'IRR',
+        currency: txCurrency,
         exchangeRate: Number(data.exchangeRate) || 1,
         bankAccountId: data.bankAccountId,
         partyType: data.partyType || 'other',
@@ -215,7 +231,7 @@ export class TreasuryTransactionService {
           transactionId: tx.id,
           type: data.type === 'receipt' ? 'deposit' : 'withdrawal',
           amount,
-          currency: data.currency || bank.currency || 'IRR',
+          currency: txCurrency,
           accountId: bank.id,
           accountName: bank.title,
           description: data.description
@@ -230,6 +246,133 @@ export class TreasuryTransactionService {
         method: tx.method as TreasuryTransaction['method'],
         partyType: tx.partyType as TreasuryTransaction['partyType'],
         status: tx.status as TreasuryTransaction['status'],
+        bankAccountTitle: bank.title,
+      };
+    });
+  }
+
+  /**
+   * V1.4.0 (DB-009): ابطال تراکنش خزانه با سند معکوس
+   * - تراکنش اصلی هرگز hard-delete نمی‌شود؛ status='voided' می‌گیرد
+   * - یک تراکنش معکوس (receipt↔payment) با شماره سری جدید ساخته می‌شود که reversalOfId به اصل اشاره می‌کند
+   * - سند معکوس اتوماتیک در همان تراکنش دیتابیس ثبت می‌شود
+   * - مانده حساب بانکی با همان قواعد اصل اصلاح می‌شود
+   */
+  static async voidTreasuryTransaction(id: number, params: {
+    reason: string;
+    userId?: number;
+    username?: string;
+  }): Promise<TreasuryTransaction> {
+    const reason = (params.reason || '').trim();
+    if (!reason) throw new ValidationError('دلیل ابطال الزامی است');
+
+    return await orm.transaction(async (txEngine) => {
+      validateLockOrder([
+        { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
+        { name: 'treasuryTransaction', hierarchyLevel: LockHierarchyLevel.TREASURY_TRANSACTIONS },
+      ]);
+
+      // 1) قفل بانک (سطح ۱۰) سپس قفل تراکنش (سطح ۸۰) مطابق سلسله‌مراتب
+      const [original] = await txEngine.select().from(treasuryTransactions)
+        .where(and(eq(treasuryTransactions.id, id), eq(treasuryTransactions.isDeleted, 0)))
+        .for('update');
+      if (!original) throw new NotFoundError('تراکنش خزانه یافت نشد');
+      if (original.status === 'voided') {
+        throw new ConflictError('این تراکنش قبلاً ابطال شده است');
+      }
+
+      // تراکنش‌های متصل به پرداخت حقوق باید از مسیر خود حقوق مدیریت شوند (اتمیک بودن فیش)
+      if (original.payrollId) {
+        throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست');
+      }
+
+      const [bank] = await txEngine.select().from(bankAccounts)
+        .where(and(eq(bankAccounts.id, original.bankAccountId || 0), eq(bankAccounts.isDeleted, 0)))
+        .for('update');
+      if (!bank) throw new NotFoundError('حساب بانکی مرتبط با تراکنش یافت نشد');
+
+      // 2) اصلاح مانده: معکوس اثر اصل
+      const amount = Number(original.amount) || 0;
+      const currentBal = Number(bank.currentBalance) || 0;
+      const newBal = original.type === 'receipt'
+        ? fin(currentBal).subtract(amount).round(4).toNumber()
+        : fin(currentBal).add(amount).round(4).toNumber();
+      if (newBal < 0) {
+        throw new ValidationError(`ابطال ممکن نیست: مانده فعلی «${bank.title}» (${currentBal.toLocaleString('fa-IR')}) برای برگشت این وجه کافی نیست`);
+      }
+      await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, bank.id));
+
+      // 3) تراکنش معکوس با شماره سری جدید
+      const reversalType = original.type === 'receipt' ? 'payment' : 'receipt';
+      const reversalNum = await this.generateTransactionNumber(reversalType, txEngine);
+
+      // 4) سند معکوس اتوماتیک (اگر اصل سند دارد)
+      let reversalVoucherId: number | null = null;
+      if (original.voucherId) {
+        const rv = await VoucherService.reverseVoucher({
+          voucherId: original.voucherId,
+          reason: `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
+          userId: params.userId,
+          username: params.username,
+          externalTx: txEngine,
+        });
+        reversalVoucherId = rv?.id || null;
+      }
+
+      const [reversalTx] = await txEngine.insert(treasuryTransactions).values({
+        transactionNumber: reversalNum,
+        type: reversalType,
+        date: await businessTodayIsoDate(),
+        method: original.method,
+        amount,
+        currency: original.currency || bank.currency || 'IRR',
+        exchangeRate: original.exchangeRate || 1,
+        bankAccountId: original.bankAccountId,
+        partyType: original.partyType,
+        partyId: original.partyId,
+        partyName: original.partyName,
+        trackingNumber: original.trackingNumber || '',
+        voucherId: reversalVoucherId,
+        chequeId: original.chequeId || null,
+        documentId: original.documentId || null,
+        reversalOfId: original.id,
+        description: `ابطال تراکنش ${original.transactionNumber} — دلیل: ${reason}`,
+        status: 'completed',
+        createdById: params.userId || null,
+      }).returning();
+
+      // 5) نشان‌گذاری اصل به‌عنوان voided (soft — بدون حذف)
+      await txEngine.update(treasuryTransactions)
+        .set({ status: 'voided', updatedAt: sql`now()` })
+        .where(eq(treasuryTransactions.id, original.id));
+
+      // 6) Outbox event (same tx)
+      const voidEvent = domainEventBus.createEvent(
+        DomainEventType.TREASURY_TRANSACTION_APPROVED,
+        'Treasury',
+        String(reversalTx.id),
+        {
+          transactionId: reversalTx.id,
+          voidedTransactionId: original.id,
+          voidedTransactionNumber: original.transactionNumber,
+          type: reversalType === 'receipt' ? 'deposit' : 'withdrawal',
+          isReversal: true,
+          amount,
+          currency: original.currency || bank.currency || 'IRR',
+          accountId: bank.id,
+          accountName: bank.title,
+          reason
+        },
+        { userId: params.userId, userName: params.username }
+      );
+      await OutboxService.saveToOutbox(txEngine, voidEvent);
+
+      return {
+        ...reversalTx,
+        type: reversalTx.type as 'receipt' | 'payment',
+        method: reversalTx.method as TreasuryTransaction['method'],
+        partyType: reversalTx.partyType as TreasuryTransaction['partyType'],
+        status: reversalTx.status as TreasuryTransaction['status'],
         bankAccountTitle: bank.title,
       };
     });

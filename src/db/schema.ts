@@ -697,8 +697,10 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   documentId: integer('document_id').references(() => documents.id),
   // V10-4.4: لینک رسمی تراکنش خزانه به فیش حقوقی (پرداخت حقوق فقط از این مسیر)
   payrollId: integer('payroll_id').references(() => pieceworkPayrolls.id),
+  // V1.4.0: ابطال با سند معکوس (DB-009) — تراکنش معکوس به اصل اشاره می‌کند
+  reversalOfId: integer('reversal_of_id'),
   description: text('description').default(''),
-  status: text('status').default('completed'),
+  status: text('status').default('completed'), // 'completed' | 'voided'
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
