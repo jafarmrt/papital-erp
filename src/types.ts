@@ -929,6 +929,10 @@ export interface TreasuryTransaction {
   createdById?: number | null;
   created_by_id?: number | null;
   creatorName?: string;
+  // V1.6.0: آشتی‌سنجی بانکی
+  reconciled?: number;
+  reconciledAt?: string;
+  reconciledBatch?: string;
   description?: string;
   status?: 'completed' | 'voided' | 'cancelled';
   createdAt?: string;

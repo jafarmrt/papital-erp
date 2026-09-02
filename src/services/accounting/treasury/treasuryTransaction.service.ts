@@ -62,6 +62,10 @@ export class TreasuryTransactionService {
       documentId: treasuryTransactions.documentId,
       payrollId: treasuryTransactions.payrollId,
       reversalOfId: treasuryTransactions.reversalOfId,
+      // V1.6.0: وضعیت آشتی‌سنجی بانکی
+      reconciled: treasuryTransactions.reconciled,
+      reconciledAt: treasuryTransactions.reconciledAt,
+      reconciledBatch: treasuryTransactions.reconciledBatch,
       // V1.5.0: هویت ثبت‌کننده (یک موجودیت کاربر)
       createdById: treasuryTransactions.createdById,
       creatorName: users.fullName,
@@ -541,6 +545,42 @@ export class TreasuryTransactionService {
       await OutboxService.saveToOutbox(txEngine, transferEvent);
 
       return { payment: payTx as any, receipt: recTx as any, voucherId };
+    });
+  }
+
+  /**
+   * V1.6.0: آشتی‌سنجی بانکی — علامت‌گذاری گروهی تراکنش‌های تطبیق‌یافته با صورت‌حساب بانک
+   * (matching سمت کلاینت انجام می‌شود؛ این متد فقط ثبت وضعیت گروهی اتمیک است)
+   */
+  static async reconcileTransactions(params: {
+    bankAccountId: number;
+    txIds: number[];
+    batch: string;
+    reconciled: boolean;
+    userId?: number;
+    username?: string;
+  }): Promise<{ success: boolean; updated: number }> {
+    if (!params.txIds.length) return { success: true, updated: 0 };
+
+    return await orm.transaction(async (txEngine) => {
+      const rows = await txEngine.select().from(treasuryTransactions)
+        .where(and(
+          inArray(treasuryTransactions.id, params.txIds),
+          eq(treasuryTransactions.bankAccountId, params.bankAccountId),
+          eq(treasuryTransactions.isDeleted, 0)
+        ))
+        .for('update');
+
+      const nowIso = await businessTodayIsoDate();
+      for (const row of rows) {
+        await txEngine.update(treasuryTransactions).set({
+          reconciled: params.reconciled ? 1 : 0,
+          reconciledAt: params.reconciled ? nowIso : '',
+          reconciledBatch: params.reconciled ? (params.batch || '') : '',
+        }).where(eq(treasuryTransactions.id, row.id));
+      }
+
+      return { success: true, updated: rows.length };
     });
   }
 }

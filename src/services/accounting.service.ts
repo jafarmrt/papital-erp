@@ -75,6 +75,7 @@ export class AccountingService {
   static createTreasuryTransaction = TreasuryService.createTreasuryTransaction.bind(TreasuryService);
   static voidTreasuryTransaction = TreasuryService.voidTreasuryTransaction.bind(TreasuryService);
   static createTreasuryTransfer = TreasuryService.createTreasuryTransfer.bind(TreasuryService);
+  static reconcileTransactions = TreasuryService.reconcileTransactions.bind(TreasuryService);
 
   // ================= Cheques Management =================
   static getCheques = TreasuryService.getCheques.bind(TreasuryService);
@@ -87,6 +88,8 @@ export class AccountingService {
   static getDetailedAccountCard = AccountingReportService.getDetailedAccountCard.bind(AccountingReportService);
   static getJournalBook = AccountingReportService.getJournalBook.bind(AccountingReportService);
   static getFinancialRatios = AccountingReportService.getFinancialRatios.bind(AccountingReportService);
+  static getCashFlowReport = AccountingReportService.getCashFlowReport.bind(AccountingReportService);
+  static getChequeReconciliationReport = AccountingReportService.getChequeReconciliationReport.bind(AccountingReportService);
   static getIncomeStatement = AccountingReportService.getIncomeStatement.bind(AccountingReportService);
   static getBalanceSheet = AccountingReportService.getBalanceSheet.bind(AccountingReportService);
   static getMultiCurrencySummary = AccountingReportService.getMultiCurrencySummary.bind(AccountingReportService);

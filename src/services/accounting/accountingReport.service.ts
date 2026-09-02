@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
-import { accounts, journalVouchers, journalVoucherItems, cheques } from '../../db/schema.js';
-import { eq, asc, and, or, sql, like, gte, lte } from 'drizzle-orm';
+import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions } from '../../db/schema.js';
+import { eq, asc, and, or, sql, like, gte, lte, desc } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import type { TrialBalanceRow, FinancialSummaryStats, FinancialRatiosReport, CurrencyFinancialSummary } from '../../types.js';
@@ -940,5 +940,187 @@ export class AccountingReportService {
       netProfit: totalRevenues - totalCostOfSales - totalExpenses,
       totalVouchersCount: Number(vCount?.count) || 0,
     };
+  }
+
+  /**
+   * V1.6.0 — گزارش جریان نقدی خزانه
+   * بر مبنای تراکنش‌های واقعی خزانه (نه صرفاً اسناد): برای هر حساب
+   * مانده ابتدای دوره، جمع دریافت‌ها/پرداخت‌ها و مانده پایان دوره + روند ماهانه.
+   */
+  static async getCashFlowReport(params: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    period: { startDate: string; endDate: string };
+    rows: Array<{
+      accountId: number;
+      title: string;
+      type: string;
+      currency: string;
+      opening: number;
+      receipts: number;
+      payments: number;
+      closing: number;
+    }>;
+    months: Array<{ month: string; receipts: number; payments: number; net: number }>;
+    totals: { opening: number; receipts: number; payments: number; closing: number };
+  }> {
+    const banks = await orm.select().from(bankAccounts)
+      .where(and(eq(bankAccounts.isDeleted, 0), eq(bankAccounts.isActive, 1)))
+      .orderBy(asc(bankAccounts.id));
+
+    const txs = await orm.select({
+      bankAccountId: treasuryTransactions.bankAccountId,
+      type: treasuryTransactions.type,
+      amount: treasuryTransactions.amount,
+      date: treasuryTransactions.date,
+      status: treasuryTransactions.status,
+    })
+    .from(treasuryTransactions)
+    .where(eq(treasuryTransactions.isDeleted, 0))
+    .orderBy(asc(treasuryTransactions.date), asc(treasuryTransactions.id));
+
+    const start = params.startDate || '';
+    const end = params.endDate || '9999-12-31';
+
+    const rows = banks.map(b => {
+      let opening = Number(b.initialBalance) || 0;
+      let receipts = 0;
+      let payments = 0;
+      for (const t of txs) {
+        if (Number(t.bankAccountId) !== b.id || t.status === 'voided') continue;
+        const inPeriod = (!start || String(t.date).slice(0, 10) >= start) && (String(t.date).slice(0, 10) <= end);
+        const amt = Number(t.amount) || 0;
+        if (inPeriod) {
+          if (t.type === 'receipt') receipts += amt; else payments += amt;
+        } else if (!start || String(t.date).slice(0, 10) < start) {
+          opening += t.type === 'receipt' ? amt : -amt;
+        }
+      }
+      return {
+        accountId: b.id,
+        title: b.title,
+        type: b.type,
+        currency: b.currency || 'IRR',
+        opening: Math.round(opening * 10000) / 10000,
+        receipts: Math.round(receipts * 10000) / 10000,
+        payments: Math.round(payments * 10000) / 10000,
+        closing: Math.round((opening + receipts - payments) * 10000) / 10000,
+      };
+    });
+
+    // روند ماهانه بر مبنای همه حساب‌ها در بازه
+    const monthMap = new Map<string, { receipts: number; payments: number }>();
+    for (const t of txs) {
+      if (t.status === 'voided') continue;
+      const d = String(t.date).slice(0, 10);
+      if (start && d < start) continue;
+      if (d > end) continue;
+      const monthKey = d.slice(0, 7);
+      const agg = monthMap.get(monthKey) || { receipts: 0, payments: 0 };
+      if (t.type === 'receipt') agg.receipts += Number(t.amount) || 0;
+      else agg.payments += Number(t.amount) || 0;
+      monthMap.set(monthKey, agg);
+    }
+    const months = Array.from(monthMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([month, v]) => ({
+        month,
+        receipts: Math.round(v.receipts * 10000) / 10000,
+        payments: Math.round(v.payments * 10000) / 10000,
+        net: Math.round((v.receipts - v.payments) * 10000) / 10000,
+      }));
+
+    const totals = rows.reduce((acc, r) => ({
+      opening: acc.opening + r.opening,
+      receipts: acc.receipts + r.receipts,
+      payments: acc.payments + r.payments,
+      closing: acc.closing + r.closing,
+    }), { opening: 0, receipts: 0, payments: 0, closing: 0 });
+
+    return { period: { startDate: start, endDate: end }, rows, months, totals };
+  }
+
+  /**
+   * V1.6.0 — آشتی‌سنجی دفتر چک صیادی با دفاتر دوبل
+   * برای هر حساب اسناد (1101/1102/1103/3101): مانده دفتری از اسناد دوبل
+   * در برابر مانده موردانتظار محاسبه‌شده از جدول cheques.
+   */
+  static async getChequeReconciliationReport(): Promise<Array<{
+    code: string;
+    title: string;
+    ledgerBalance: number;
+    expectedBalance: number;
+    discrepancy: number;
+    counts: { ledger: number; cheques: number };
+  }>> {
+    // مانده دفتری هر کد از اقلام اسناد دوبل نهایی‌شده
+    const ledgerRows = await orm
+      .select({
+        code: accounts.code,
+        title: accounts.name,
+        debit: sql<number>`COALESCE(SUM(${journalVoucherItems.debit}), 0)`,
+        credit: sql<number>`COALESCE(SUM(${journalVoucherItems.credit}), 0)`,
+      })
+      .from(journalVoucherItems)
+      .innerJoin(accounts, eq(journalVoucherItems.accountId, accounts.id))
+      .innerJoin(journalVouchers, eq(journalVoucherItems.voucherId, journalVouchers.id))
+      .where(and(
+        eq(journalVouchers.isDeleted, 0),
+        sql`${journalVouchers.status} IN ('approved', 'permanent')`,
+        sql`${accounts.code} IN ('1101', '1102', '1103', '3101')`
+      ))
+      .groupBy(accounts.code, accounts.name);
+
+    const allCheques = await orm.select({
+      type: cheques.type,
+      status: cheques.status,
+      amount: cheques.amount,
+    }).from(cheques).where(eq(cheques.isDeleted, 0));
+
+    const statusToCode: Record<string, { code: string; type?: string }> = {
+      received: { code: '1101', type: 'received' },
+      in_treasury: { code: '1101', type: 'received' },
+      in_safe: { code: '1101', type: 'received' },
+      in_collection: { code: '1102', type: 'received' },
+      bounced: { code: '1103', type: 'received' },
+    };
+    // چک پرداختی صادره/در جریان → 3101 (تا زمان پاس شدن)
+    const expected: Record<string, number> = { '1101': 0, '1102': 0, '1103': 0, '3101': 0 };
+    const counts: Record<string, number> = { '1101': 0, '1102': 0, '1103': 0, '3101': 0 };
+    for (const c of allCheques) {
+      let codeKey: string | null = null;
+      if (c.type === 'received') {
+        codeKey = statusToCode[String(c.status)]?.code || null;
+      } else if (String(c.status) !== 'passed') {
+        codeKey = '3101';
+      }
+      if (codeKey) {
+        expected[codeKey] += Number(c.amount) || 0;
+        counts[codeKey] += 1;
+      }
+    }
+
+    const titles: Record<string, string> = {
+      '1101': 'اسناد دریافتنی نزد صندوق',
+      '1102': 'اسناد در جریان وصول',
+      '1103': 'اسناد واخواستی (برگشتی)',
+      '3101': 'اسناد پرداختنی تجاری',
+    };
+
+    const codes = ['1101', '1102', '1103', '3101'];
+    return codes.map(code => {
+      const lr = ledgerRows.find(l => l.code === code);
+      const ledgerBalance = Math.round(((Number(lr?.debit) || 0) - (Number(lr?.credit) || 0)) * 10000) / 10000;
+      const expectedBalance = Math.round((expected[code] || 0) * 10000) / 10000;
+      return {
+        code,
+        title: lr?.title || titles[code],
+        ledgerBalance,
+        expectedBalance,
+        discrepancy: Math.round((ledgerBalance - expectedBalance) * 10000) / 10000,
+        counts: { ledger: 0, cheques: counts[code] || 0 },
+      };
+    });
   }
 }

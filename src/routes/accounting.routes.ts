@@ -662,6 +662,54 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
   res.status(201).json(result);
 }));
 
+// V1.6.0: گزارش جریان نقدی خزانه
+router.get('/accounting/reports/cash-flow', authorizePermission('accounting.reports', 'accounting.treasury', 'accounting.view'), asyncHandler(async (req, res) => {
+  const report = await AccountingService.getCashFlowReport({
+    startDate: req.query.startDate as string,
+    endDate: req.query.endDate as string,
+  });
+  res.json(report);
+}));
+
+// V1.6.0: آشتی‌سنجی دفتر چک صیادی با دفاتر دوبل
+router.get('/accounting/reports/cheque-reconciliation', authorizePermission('accounting.reports', 'accounting.treasury', 'accounting.cheques', 'accounting.view'), asyncHandler(async (req, res) => {
+  const rows = await AccountingService.getChequeReconciliationReport();
+  res.json(rows);
+}));
+
+// V1.6.0: ثبت گروهی وضعیت آشتی‌سنجی بانکی
+const reconcileSchema = z.object({
+  body: z.object({
+    bankAccountId: z.number().int().positive(),
+    txIds: z.array(z.number().int().positive()).max(2000),
+    batch: z.string().optional().default(''),
+    reconciled: z.boolean(),
+  })
+});
+router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req: any, res) => {
+  const { bankAccountId, txIds, batch, reconciled } = req.body;
+  const result = await AccountingService.reconcileTransactions({
+    bankAccountId,
+    txIds,
+    batch: batch || `stmt-${Date.now()}`,
+    reconciled,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: reconciled ? 'UPDATE' : 'UPDATE',
+    entity: 'treasury_reconciliation',
+    entityId: String(bankAccountId),
+    description: `${reconciled ? 'آشتی‌سنجی' : 'لغو آشتی‌سنجی'} ${txIds.length} تراکنش حساب بانکی شناسه ${bankAccountId}`,
+    details: { bankAccountId, txIds, batch, reconciled },
+    ipAddress: req.ip || '',
+  });
+  res.json(result);
+}));
+
 // V1.4.0: ابطال تراکنش خزانه با سند معکوس (DB-009)
 const voidTreasuryTxSchema = z.object({
   body: z.object({

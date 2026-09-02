@@ -85,15 +85,6 @@ export class TreasuryService {
     return TreasuryTransactionService.createTreasuryTransaction(data);
   }
 
-  // V1.4.0: ابطال تراکنش با سند معکوس (DB-009)
-  static async voidTreasuryTransaction(id: number, params: {
-    reason: string;
-    userId?: number;
-    username?: string;
-  }): Promise<TreasuryTransaction> {
-    return TreasuryTransactionService.voidTreasuryTransaction(id, params);
-  }
-
   // V1.5.0: انتقال بین‌بانکی/بین‌صندوقی
   static async createTreasuryTransfer(data: {
     date: string;
@@ -108,6 +99,27 @@ export class TreasuryService {
     createVoucher?: boolean;
   }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
     return TreasuryTransactionService.createTreasuryTransfer(data);
+  }
+
+  // V1.4.0: ابطال تراکنش با سند معکوس (DB-009)
+  static async voidTreasuryTransaction(id: number, params: {
+    reason: string;
+    userId?: number;
+    username?: string;
+  }): Promise<TreasuryTransaction> {
+    return TreasuryTransactionService.voidTreasuryTransaction(id, params);
+  }
+
+  // V1.6.0: آشتی‌سنجی بانکی — ثبت گروهی وضعیت تطبیق
+  static async reconcileTransactions(params: {
+    bankAccountId: number;
+    txIds: number[];
+    batch: string;
+    reconciled: boolean;
+    userId?: number;
+    username?: string;
+  }): Promise<{ success: boolean; updated: number }> {
+    return TreasuryTransactionService.reconcileTransactions(params);
   }
 
   // 3. Cheques & Sayad Lifecycle

@@ -1819,6 +1819,16 @@ export const SCHEMA_ALTERATIONS: MigrationStep[] = [
       ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS reversal_of_id INTEGER REFERENCES treasury_transactions(id);
       CREATE INDEX IF NOT EXISTS idx_tt_reversal ON treasury_transactions(reversal_of_id);
     `
+  },
+  {
+    id: 'alt_040_treasury_bank_reconciliation',
+    name: 'V1.6.0 Phase3: bank statement reconciliation flags on treasury transactions',
+    sql: `
+      ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS reconciled INTEGER DEFAULT 0;
+      ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS reconciled_at TEXT DEFAULT '';
+      ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS reconciled_batch TEXT DEFAULT '';
+      CREATE INDEX IF NOT EXISTS idx_tt_reconciled ON treasury_transactions(reconciled);
+    `
   }
 ];
 

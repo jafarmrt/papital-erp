@@ -465,6 +465,29 @@ export function useAccounting() {
     await loadAccounts();
   };
 
+  // V1.6.0: ثبت گروهی آشتی‌سنجی بانکی
+  const handleReconcileTransactions = async (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => {
+    await fetchJson('/accounting/treasury/reconcile', {
+      method: 'POST',
+      body: JSON.stringify({ bankAccountId, txIds, batch, reconciled }),
+    });
+    await loadBankAndTreasury();
+  };
+
+  // V1.6.0: گزارش جریان نقدی
+  const loadCashFlowReport = useCallback(async (startDate?: string, endDate?: string) => {
+    const q = new URLSearchParams();
+    if (startDate) q.append('startDate', startDate);
+    if (endDate) q.append('endDate', endDate);
+    const res = await fetchJson(`/accounting/reports/cash-flow?${q.toString()}`);
+    return res;
+  }, []);
+
+  // V1.6.0: آشتی‌سنجی دفتر چک صیادی
+  const loadChequeReconciliation = useCallback(async () => {
+    return await fetchJson('/accounting/reports/cheque-reconciliation');
+  }, []);
+
   // Cheques Operations
   const handleCreateCheque = async (data: any) => {
     await fetchJson('/accounting/cheques', {
@@ -590,6 +613,9 @@ export function useAccounting() {
     handleCreateTreasuryTransaction,
     handleVoidTreasuryTransaction,
     handleCreateTreasuryTransfer,
+    handleReconcileTransactions,
+    loadCashFlowReport,
+    loadChequeReconciliation,
     handleCreateCheque,
     handleUpdateChequeStatus,
     handleDeleteCheque,

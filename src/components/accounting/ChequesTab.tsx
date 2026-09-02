@@ -16,7 +16,8 @@ import {
   X,
   Calendar,
   History,
-  Download
+  Download,
+  ShieldCheck
 } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
@@ -39,6 +40,7 @@ interface ChequesTabProps {
   onCreateCheque: (data: any) => Promise<void>;
   onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number) => Promise<void>;
   onDeleteCheque: (id: number) => Promise<void>;
+  onLoadChequeReconciliation?: () => Promise<any[]>;
 }
 
 export function ChequesTab({
@@ -51,6 +53,7 @@ export function ChequesTab({
   onCreateCheque,
   onUpdateStatus,
   onDeleteCheque,
+  onLoadChequeReconciliation,
 }: ChequesTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
@@ -225,6 +228,26 @@ export function ChequesTab({
   // V1.5.0: فیلتر بازه سررسید
   const [dueFromFilter, setDueFromFilter] = useState('');
   const [dueToFilter, setDueToFilter] = useState('');
+  // V1.6.0: آشتی‌سنجی دفتر چک
+  const [chqReconRows, setChqReconRows] = useState<any[]>([]);
+  const [isLoadingChqRecon, setIsLoadingChqRecon] = useState(false);
+
+  const handleLoadChequeReconciliation = async () => {
+    if (!onLoadChequeReconciliation) return;
+    setIsLoadingChqRecon(true);
+    try {
+      const rows = await onLoadChequeReconciliation();
+      setChqReconRows(Array.isArray(rows) ? rows : []);
+      if (Array.isArray(rows) && rows.length > 0) {
+        const clean = rows.filter(r => Math.abs(r.discrepancy) < 0.01).length;
+        toast.success(`آشتی‌سنجی انجام شد — ${clean} از ${rows.length} حساب بدون مغایرت`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در آشتی‌سنجی دفتر چک');
+    } finally {
+      setIsLoadingChqRecon(false);
+    }
+  };
 
   const filteredCheques = safeCheques.filter(c => {
     const matchSearch = !searchQuery.trim() ||
@@ -308,10 +331,21 @@ export function ChequesTab({
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setNewFormData({
-              type: 'received',
+        <div className="flex flex-wrap items-center gap-2">
+          {/* V1.6.0: آشتی‌سنجی دفتر چک با دفاتر دوبل */}
+          <button
+            onClick={() => void handleLoadChequeReconciliation()}
+            disabled={isLoadingChqRecon}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs font-bold rounded-xl transition border border-teal-200 dark:border-teal-800 disabled:opacity-50 cursor-pointer"
+          >
+            <ShieldCheck size={16} />
+            <span>{isLoadingChqRecon ? '...' : 'آشتی‌سنجی دفتر چک'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setNewFormData({
+                type: 'received',
               chequeNumber: '',
               sayadNumber: '',
               bankName: '',
@@ -335,7 +369,44 @@ export function ChequesTab({
           <Plus className="w-4 h-4" />
           <span>ثبت چک صیادی جدید</span>
         </button>
+        </div>
       </div>
+
+      {/* V1.6.0: Cheque Ledger Reconciliation Panel */}
+      {chqReconRows.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-teal-200 dark:border-teal-800 p-4 space-y-2">
+          <h4 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+            <ShieldCheck size={14} className="text-teal-600" />
+            آشتی‌سنجی دفتر چک با دفاتر دوبل
+          </h4>
+          <table className="w-full text-right border-collapse text-[11px]">
+            <thead className="bg-slate-50 dark:bg-slate-700/50">
+              <tr className="text-slate-500 dark:text-slate-400">
+                <th className="p-2">کد حساب</th>
+                <th className="p-2">عنوان</th>
+                <th className="p-2 text-left">مانده دفتری</th>
+                <th className="p-2 text-left">موردانتظار از دفتر چک</th>
+                <th className="p-2 text-left">مغایرت</th>
+                <th className="p-2 text-center">تعداد چک</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+              {chqReconRows.map(r => (
+                <tr key={r.code}>
+                  <td className="p-2 font-mono font-bold">{r.code}</td>
+                  <td className="p-2 font-bold">{r.title}</td>
+                  <td className="p-2 text-left font-mono">{formatPersianPrice(r.ledgerBalance)}</td>
+                  <td className="p-2 text-left font-mono">{formatPersianPrice(r.expectedBalance)}</td>
+                  <td className={`p-2 text-left font-mono font-black ${Math.abs(r.discrepancy) < 0.01 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
+                    {Math.abs(r.discrepancy) < 0.01 ? '✓ بدون مغایرت' : formatPersianPrice(r.discrepancy)}
+                  </td>
+                  <td className="p-2 text-center font-mono">{formatPersianNumber(r.counts.cheques)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">

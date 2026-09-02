@@ -701,6 +701,10 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   reversalOfId: integer('reversal_of_id'),
   description: text('description').default(''),
   status: text('status').default('completed'), // 'completed' | 'voided'
+  // V1.6.0: آشتی‌سنجی بانکی (صورت‌حساب بیرونی)
+  reconciled: integer('reconciled').default(0),
+  reconciledAt: text('reconciled_at').default(''),
+  reconciledBatch: text('reconciled_batch').default(''),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
