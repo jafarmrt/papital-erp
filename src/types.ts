@@ -642,6 +642,9 @@ export interface PieceworkPayroll {
   totalPieceworkAmount: number;
   // V10-4.4: سهم حقوق ثابت در فیش (monthly_fixed / mixed)
   totalFixedAmount?: number;
+  // V1.9.0: کسر از مساعده/وام پرسنلی (بستانکار حساب مساعده در سند تسویه)
+  advanceDeduction?: number;
+  advance_deduction?: number;
   totalBonuses: number;
   totalDeductions: number;
   netPayable: number;

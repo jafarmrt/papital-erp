@@ -1829,6 +1829,13 @@ export const SCHEMA_ALTERATIONS: MigrationStep[] = [
       ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS reconciled_batch TEXT DEFAULT '';
       CREATE INDEX IF NOT EXISTS idx_tt_reconciled ON treasury_transactions(reconciled);
     `
+  },
+  {
+    id: 'alt_041_payroll_advance_deduction',
+    name: 'V1.9.0: payroll advance deduction (offset against employee advance account)',
+    sql: `
+      ALTER TABLE piecework_payrolls ADD COLUMN IF NOT EXISTS advance_deduction NUMERIC(18, 4) DEFAULT 0;
+    `
   }
 ];
 

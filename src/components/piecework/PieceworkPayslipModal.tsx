@@ -186,9 +186,16 @@ export function PieceworkPayslipModal({
                 </div>
               )}
               <div className="flex justify-between font-bold text-red-700">
-                <span>کسورات و مساعده:</span>
+                <span>کسورات و سایر کسورات:</span>
                 <span className="font-mono">-{formatPersianPrice(viewingPayroll.totalDeductions || 0, appCurrency)}</span>
               </div>
+              {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
+              {(Number(viewingPayroll.advanceDeduction) || 0) > 0 && (
+                <div className="flex justify-between font-bold text-indigo-700">
+                  <span>کسر از مساعده و وام پرسنلی:</span>
+                  <span className="font-mono">-{formatPersianPrice(viewingPayroll.advanceDeduction, appCurrency)}</span>
+                </div>
+              )}
               <div className="pt-2 border-t border-slate-300 flex justify-between font-black text-sm text-slate-900">
                 <span>مبلغ خالص قابل پرداخت:</span>
                 <span className="font-mono text-blue-800">{formatPersianPrice(viewingPayroll.netPayable, appCurrency)}</span>

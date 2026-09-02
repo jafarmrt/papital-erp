@@ -26,6 +26,9 @@ export interface ConceptualAccountMappingConfig {
   chequePayableAccountCode: string;         // Default: '3101' (اسناد پرداختنی تجاری)
   // V1.8.0: مساعده و وام پرسنل (مطالبات از کارکنان — دارایی تا کسر از حقوق)
   employeeAdvanceAccountCode: string;       // Default: '1301' (مساعده و وام پرسنل)
+  // V1.9.0: تفکیک هزینه حقوق ثابت و سایر کسورات
+  fixedSalaryExpenseAccountCode: string;    // Default: '6003' (هزینه حقوق و دستمزد ثابت)
+  employeeDeductionsPayableAccountCode: string; // Default: '3202' (سایر کسورات پرداختنی — بیمه/مالیات سهم کارمند)
 }
 
 export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
@@ -47,6 +50,8 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   chequeProtestAccountCode: '1103',
   chequePayableAccountCode: '3101',
   employeeAdvanceAccountCode: '1301',
+  fixedSalaryExpenseAccountCode: '6003',
+  employeeDeductionsPayableAccountCode: '3202',
 };
 
 const SETTINGS_KEY = 'accounting_account_mappings';
@@ -255,5 +260,19 @@ export class AccountMappingService {
    */
   static async getEmployeeAdvanceAccount(tx?: any): Promise<Account | null> {
     return this.resolveAccount('employeeAdvanceAccountCode', tx);
+  }
+
+  /**
+   * V1.9.0: هزینه حقوق و دستمزد ثابت (بخش غیرپرکیسی فیش)
+   */
+  static async getFixedSalaryExpenseAccount(tx?: any): Promise<Account | null> {
+    return this.resolveAccount('fixedSalaryExpenseAccountCode', tx);
+  }
+
+  /**
+   * V1.9.0: سایر کسورات پرداختنی (بیمه/مالیات سهم کارمند)
+   */
+  static async getEmployeeDeductionsPayableAccount(tx?: any): Promise<Account | null> {
+    return this.resolveAccount('employeeDeductionsPayableAccountCode', tx);
   }
 }

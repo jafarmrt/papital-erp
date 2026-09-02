@@ -112,6 +112,7 @@ const generatePieceworkPayrollSchema = z.object({
     totalBonuses: z.union([z.number(), z.string()]).optional(),
     deductions: z.union([z.number(), z.string()]).optional(),
     totalDeductions: z.union([z.number(), z.string()]).optional(),
+    advanceDeduction: z.union([z.number(), z.string()]).optional(),
     notes: z.string().optional(),
   })
 });
@@ -783,6 +784,7 @@ router.get('/piecework/payrolls', async (req, res) => {
       title: pieceworkPayrolls.title,
       totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
       totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
+      advanceDeduction: pieceworkPayrolls.advanceDeduction,
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
@@ -880,6 +882,7 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
       title: pieceworkPayrolls.title,
       totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
       totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
+      advanceDeduction: pieceworkPayrolls.advanceDeduction,
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
@@ -953,6 +956,7 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
       totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
       // V1.3.5: بدون این فیلد، ردیف حقوق ثابت در فیش چاپی نمایش داده نمی‌شد
       totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
+      advanceDeduction: pieceworkPayrolls.advanceDeduction,
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
@@ -1025,7 +1029,7 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
 router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('personnel.manage', 'admin'), validate(generatePieceworkPayrollSchema), async (req, res) => {
   try {
     const currentUserId = req.user?.id;
-    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, notes } = req.body;
+    const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
 
     const pId = Number(personnelId);
     const [pInfo] = await orm.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0)));
@@ -1089,8 +1093,13 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
     const pieceworkTotal = eligibleLogs.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0);
     const totBonuses = Number(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0)) || 0;
     const totDeductions = Number(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0)) || 0;
-    // V10-4.4: net = کارکرد پرکیسی + سهم ثابت (در صورت وجود) + پاداش − کسورات
-    const net = pieceworkTotal + fixedPortion + totBonuses - totDeductions;
+    // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده (1301) در سند تسویه
+    const advanceDeduction = Math.max(0, Number(reqAdvanceDeduction) || 0);
+    // V10-4.4: net = کارکرد پرکیسی + سهم ثابت (در صورت وجود) + پاداش − کسورات − کسر مساعده
+    const net = pieceworkTotal + fixedPortion + totBonuses - totDeductions - advanceDeduction;
+    if (net < 0) {
+      return res.status(400).json({ error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' });
+    }
 
     // Generate unique payroll number
     const countRes = await orm.select({ count: sql<number>`count(*)` }).from(pieceworkPayrolls);
@@ -1110,6 +1119,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
       totalFixedAmount: fixedPortion,
       totalBonuses: totBonuses,
       totalDeductions: totDeductions,
+      advanceDeduction,
       netPayable: net,
       status: 'approved',
       notes: finalNotes,

@@ -82,6 +82,8 @@ export function usePiecework() {
   const [payrollTitle, setPayrollTitle] = useState<string>('');
   const [payrollBonuses, setPayrollBonuses] = useState<number>(0);
   const [payrollDeductions, setPayrollDeductions] = useState<number>(0);
+  // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده در سند تسویه
+  const [payrollAdvanceDeduction, setPayrollAdvanceDeduction] = useState<number>(0);
   const [payrollNotes, setPayrollNotes] = useState<string>('');
   const [isSavingPayroll, setIsSavingPayroll] = useState<boolean>(false);
 
@@ -489,6 +491,7 @@ export function usePiecework() {
         totalBonuses: payrollBonuses || 0,
         deductions: payrollDeductions || 0,
         totalDeductions: payrollDeductions || 0,
+        advanceDeduction: payrollAdvanceDeduction || 0,
         notes: payrollNotes || undefined
       };
 
@@ -686,6 +689,8 @@ export function usePiecework() {
     setPayrollNotes,
     payrollFixedIncluded,
     payrollFixedRemainingHint,
+    payrollAdvanceDeduction,
+    setPayrollAdvanceDeduction,
     viewingPayroll,
     setViewingPayroll,
     categoriesList,

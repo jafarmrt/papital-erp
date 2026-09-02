@@ -28,6 +28,9 @@ interface PieceworkPayrollModalProps {
   payrollPreviewLogs: PieceworkLog[];
   // V10-4.4: پرسنل حقوق ثابت/ترکیبی بدون کارکرد هم فیش می‌گیرد
   allowNoLogs?: boolean;
+  // V1.9.0: کسر از مساعده/وام پرسنلی
+  advanceDeduction?: number;
+  setAdvanceDeduction?: (val: number) => void;
   // V1.3.2: هشدار سهم باقی‌مانده حقوق ثابت ماه انتخابی
   fixedRemainingHint?: string | null;
   isSaving?: boolean;
@@ -53,6 +56,8 @@ export function PieceworkPayrollModal({
   payrollPreviewLogs,
   allowNoLogs = false,
   fixedRemainingHint = null,
+  advanceDeduction = 0,
+  setAdvanceDeduction,
   isSaving = false
 }: PieceworkPayrollModalProps) {
   const appCurrency = useAppCurrency();
@@ -154,7 +159,7 @@ export function PieceworkPayrollModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">{`کسورات / مساعده (${curLbl})`}</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">سایر کسورات (بیمه/مالیات...)</label>
               <input
                 type="number"
                 value={payrollDeductions}
@@ -162,6 +167,24 @@ export function PieceworkPayrollModal({
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
               />
             </div>
+          </div>
+
+          {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">کسر از مساعده/وام پرسنلی (اختیاری)</label>
+            <input
+              type="number"
+              min="0"
+              value={advanceDeduction || ''}
+              onChange={(e) => setAdvanceDeduction?.(Number(e.target.value) || 0)}
+              placeholder="مبلغی که از مساعده قبلی پرسنل کسر می‌شود"
+              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
+            />
+            {(advanceDeduction || 0) > 0 && (
+              <p className="text-[10px] text-indigo-700 dark:text-indigo-300 mt-1 font-bold leading-5">
+                در سند تسویه، این مبلغ از حساب «مساعده و وام پرسنل» بستانکار می‌شود (تسویه بدهی پرسنلی) و از وجه نقدی پرداختی کسر می‌گردد.
+              </p>
+            )}
           </div>
 
           <div>

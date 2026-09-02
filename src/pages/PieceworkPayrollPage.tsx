@@ -73,6 +73,8 @@ export function PieceworkPayrollPage() {
     setPayrollNotes,
     payrollFixedIncluded,
     payrollFixedRemainingHint,
+    payrollAdvanceDeduction,
+    setPayrollAdvanceDeduction,
     viewingPayroll,
     setViewingPayroll,
     categoriesList,
@@ -271,6 +273,8 @@ export function PieceworkPayrollPage() {
         payrollPreviewLogs={payrollPreviewLogs}
         allowNoLogs={payrollFixedIncluded}
         fixedRemainingHint={payrollFixedRemainingHint}
+        advanceDeduction={payrollAdvanceDeduction}
+        setAdvanceDeduction={setPayrollAdvanceDeduction}
         isSaving={isSavingPayroll}
       />
 

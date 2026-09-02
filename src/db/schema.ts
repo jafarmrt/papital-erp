@@ -504,6 +504,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   netPayable: numeric('net_payable', { precision: 18, scale: 4 }).$type<number>().notNull(),
   // V10-4.4: سهم حقوق ثابت در این فیش (برای salaryType = monthly_fixed / mixed)
   totalFixedAmount: numeric('total_fixed_amount', { precision: 18, scale: 4 }).$type<number>().default(0),
+  // V1.9.0: کسر از مساعده/وام پرسنل — در سند تسویه از حساب مساعده (1301) بستانکار می‌شود
+  advanceDeduction: numeric('advance_deduction', { precision: 18, scale: 4 }).$type<number>().default(0),
   status: text('status').default('draft'),
   paymentDate: text('payment_date').default(''),
   paymentMethod: text('payment_method').default(''),

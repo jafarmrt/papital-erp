@@ -112,14 +112,88 @@ export class PayrollPaymentService {
       // 4. شماره تراکنش اتمیک (PostgreSQL SEQUENCE — نه MAX/COUNT)
       const txNum = await TreasuryTransactionService.generateTransactionNumber('payment', tx);
 
-      // 5. voucher تسویه: بدهکار «حقوق پرداختنی» / بستانکار حساب بانکی
+      // 5. voucher تسویه — V1.9.0: تفکیک اجزا + کسر از مساعده
+      //    DR حقوق پرداختنی (ناخالص) / CR بانک (خالص نقدی) + CR مساعده (کسر) + CR سایر کسورات
       const payableAcc = await AccountMappingService.getWagesPayableAccount(tx);
       if (!payableAcc) {
         throw new NotFoundError('حساب مفهومی «حقوق و دستمزد پرداختنی» (3201) در چارت حساب‌ها یافت نشد');
       }
 
+      const advanceDeduction = Math.max(0, Number((payroll as any).advanceDeduction || 0));
+      const otherDeductions = Math.max(0, Number(payroll.totalDeductions) || 0);
+      const grossAmount = (Number(payroll.totalPieceworkAmount) || 0)
+        + (Number(payroll.totalFixedAmount) || 0)
+        + (Number(payroll.totalBonuses) || 0);
+
+      // سازگاری با رکوردهای قدیمی بدون اجزا: ناخالص = خالص + مساعده + سایر کسورات
+      const effectiveGross = grossAmount > 0 ? grossAmount : (netAmount + advanceDeduction + otherDeductions);
+
+      const advanceAcc = advanceDeduction > 0 ? await AccountMappingService.getEmployeeAdvanceAccount(tx) : null;
+      if (advanceDeduction > 0 && !advanceAcc) {
+        throw new NotFoundError('حساب مفهومی «مساعده و وام پرسنل» (1301) برای کسر مساعده یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
+      }
+      const deductionsAcc = otherDeductions > 0 ? await AccountMappingService.getEmployeeDeductionsPayableAccount(tx) : null;
+      if (otherDeductions > 0 && !deductionsAcc) {
+        throw new NotFoundError('حساب مفهومی «سایر کسورات پرداختنی» (3202) برای کسورات فیش یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
+      }
+
+      // توازن: DR ناخالص = CR (خالص + مساعده + سایر کسورات)
+      const payableDebit = effectiveGross;
+      const bankCredit = netAmount;
+      const miscCredit = payableDebit - bankCredit - advanceDeduction;
+      if (miscCredit < -0.01) {
+        throw new ValidationError('جمع کسر مساعده و سایر کسورات از ناخالص فیش بیشتر است — مقادیر فیش را بررسی کنید');
+      }
+
       const payDate = (input.paymentDate && input.paymentDate.trim()) || toJalaliToday();
       const descText = `تسویه ${input.method === 'cash' ? 'نقدی' : input.method === 'pos' ? 'کارتخوان' : 'بانکی'} حقوق ${pers?.fullName || ''} فیش ${payroll.payrollNumber}`;
+
+      const voucherItems: any[] = [
+        {
+          accountId: payableAcc.id,
+          detailedType: 'personnel',
+          detailedId: payroll.personnelId,
+          detailedName: pers?.fullName || 'پرسنل',
+          debit: payableDebit,
+          credit: 0,
+          currency: 'IRR',
+          description: `تسویه مطالبات ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber}`
+        },
+        {
+          accountId: bank.accountId,
+          detailedType: 'bank_account',
+          detailedId: bank.id,
+          detailedName: bank.title,
+          debit: 0,
+          credit: bankCredit,
+          currency: 'IRR',
+          description: `خروج وجه از ${bank.title} بابت پرداخت فیش ${payroll.payrollNumber}`
+        }
+      ];
+      if (advanceDeduction > 0 && advanceAcc) {
+        voucherItems.push({
+          accountId: advanceAcc.id,
+          detailedType: 'personnel',
+          detailedId: payroll.personnelId,
+          detailedName: pers?.fullName || 'پرسنل',
+          debit: 0,
+          credit: advanceDeduction,
+          currency: 'IRR',
+          description: `کسر مساعده/وام پرسنلی ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber}`
+        });
+      }
+      if (miscCredit > 0.01 && deductionsAcc) {
+        voucherItems.push({
+          accountId: deductionsAcc.id,
+          detailedType: 'personnel',
+          detailedId: payroll.personnelId,
+          detailedName: pers?.fullName || 'پرسنل',
+          debit: 0,
+          credit: miscCredit,
+          currency: 'IRR',
+          description: `سایر کسورات (بیمه/مساعده/مالیات سهم کارمند) بابت فیش ${payroll.payrollNumber}`
+        });
+      }
 
       const voucher = await VoucherService.createJournalVoucher({
         date: payDate,
@@ -131,28 +205,7 @@ export class PayrollPaymentService {
         currency: 'IRR',
         userId: input.userId,
         username: input.username,
-        items: [
-          {
-            accountId: payableAcc.id,
-            detailedType: 'personnel',
-            detailedId: payroll.personnelId,
-            detailedName: pers?.fullName || 'پرسنل',
-            debit: netAmount,
-            credit: 0,
-            currency: 'IRR',
-            description: `تسویه مطالبات ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber}`
-          },
-          {
-            accountId: bank.accountId,
-            detailedType: 'bank_account',
-            detailedId: bank.id,
-            detailedName: bank.title,
-            debit: 0,
-            credit: netAmount,
-            currency: 'IRR',
-            description: `خروج وجه از ${bank.title} بابت پرداخت فیش ${payroll.payrollNumber}`
-          }
-        ]
+        items: voucherItems
       }, tx);
 
       // 6. درج تراکنش خزانه با لینک رسمی به فیش

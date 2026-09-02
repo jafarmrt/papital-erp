@@ -698,18 +698,64 @@ export class VoucherSyncService {
     if (existing.length > 0) return VoucherService.getJournalVoucherById(existing[0].id, tx);
 
     const [pers] = await executor.select().from(personnel).where(eq(personnel.id, pay.personnelId));
-    
-    // Conceptual Account Resolution (Subphase 9.2: Direct Production Wages & Wages Payable)
+
+    // V1.9.0: تفکیک اجزای فیش در سند صدور —
+    //   DR «هزینه حقوق ثابت» (سهم حقوق ثابت + پاداش) و DR «دستمزد مستقیم تولید» (سهم پرکیسی/تولیدی)
+    //   / CR «حقوق و دستمزد پرداختنی» (ناخالص) — کسر مساعده و سایر کسورات در سند تسویه اعمال می‌شوند.
     const wageExpenseAcc = await AccountMappingService.getDirectProductionWagesAccount(tx);
     const payableAcc = await AccountMappingService.getWagesPayableAccount(tx);
+    const fixedSalaryExpenseAcc = await AccountMappingService.getFixedSalaryExpenseAccount(tx);
 
-    if (!wageExpenseAcc || !payableAcc) {
-      logger.warn({ message: 'Conceptual direct production wages or wages payable accounts not found for payroll auto voucher' });
+    if (!wageExpenseAcc || !payableAcc || !fixedSalaryExpenseAcc) {
+      logger.warn({ message: 'Conceptual payroll accounts not found for payroll auto voucher (wages payable / fixed salary expense / production wages)' });
       return null;
     }
 
-    const totalAmount = Number(pay.netPayable) || Number(pay.totalPieceworkAmount) || 0;
-    if (totalAmount <= 0) return null;
+    const pieceworkAmount = Number(pay.totalPieceworkAmount) || 0;
+    const bonuses = Number(pay.totalBonuses) || 0;
+    const fixedAmount = Number(pay.totalFixedAmount) || 0;
+    const grossAmount = pieceworkAmount + bonuses + fixedAmount;
+    if (grossAmount <= 0) return null;
+
+    const items: any[] = [];
+    // سهم دستمزد مستقیم تولید (کارکرد پرکیسی)
+    if (pieceworkAmount > 0) {
+      items.push({
+        accountId: wageExpenseAcc.id,
+        detailedType: 'personnel',
+        detailedId: pay.personnelId,
+        detailedName: pers?.fullName || 'پرسنل',
+        debit: pieceworkAmount,
+        credit: 0,
+        currency: 'IRR',
+        description: `هزینه دستمزد تولیدی پرکیسی فیش ${pay.payrollNumber}`
+      });
+    }
+    // سهم هزینه حقوق ثابت (+ پاداش/اضافه‌کار)
+    const fixedBucket = fixedAmount + bonuses;
+    if (fixedBucket > 0) {
+      items.push({
+        accountId: fixedSalaryExpenseAcc.id,
+        detailedType: 'personnel',
+        detailedId: pay.personnelId,
+        detailedName: pers?.fullName || 'پرسنل',
+        debit: fixedBucket,
+        credit: 0,
+        currency: 'IRR',
+        description: `هزینه حقوق و دستمزد ثابت فیش ${pay.payrollNumber}${bonuses > 0 ? ' (شامل پاداش/اضافه‌کار)' : ''}`
+      });
+    }
+    // بستانکاری حقوق پرداختنی (ناخالص)
+    items.push({
+      accountId: payableAcc.id,
+      detailedType: 'personnel',
+      detailedId: pay.personnelId,
+      detailedName: pers?.fullName || 'پرسنل',
+      debit: 0,
+      credit: grossAmount,
+      currency: 'IRR',
+      description: `بستانکاری حقوق و دستمزد ${pers?.fullName || ''} بابت دوره ${pay.startDate} تا ${pay.endDate}`
+    });
 
     return VoucherService.createJournalVoucher({
       date: pay.endDate || new Date().toISOString().split('T')[0],
@@ -721,28 +767,7 @@ export class VoucherSyncService {
       currency: 'IRR',
       userId,
       username,
-      items: [
-        {
-          accountId: wageExpenseAcc.id,
-          detailedType: 'personnel',
-          detailedId: pay.personnelId,
-          detailedName: pers?.fullName || 'پرسنل',
-          debit: totalAmount,
-          credit: 0,
-          currency: 'IRR',
-          description: `هزینه دستمزد تولیدی پرکیسی فیش ${pay.payrollNumber}`
-        },
-        {
-          accountId: payableAcc.id,
-          detailedType: 'personnel',
-          detailedId: pay.personnelId,
-          detailedName: pers?.fullName || 'پرسنل',
-          debit: 0,
-          credit: totalAmount,
-          currency: 'IRR',
-          description: `بستانکاری دستمزد پرکیسی ${pers?.fullName || ''} بابت دوره ${pay.startDate} تا ${pay.endDate}`
-        }
-      ]
+      items
     }, tx);
   }
 
