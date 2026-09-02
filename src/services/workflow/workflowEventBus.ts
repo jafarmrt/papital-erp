@@ -4,6 +4,8 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { DocumentService } from '../document.service.js';
+import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { BankAccountService } from '../accounting/treasury/bankAccount.service.js';
 
 export interface WorkflowTransitionEventPayload {
   instanceId: number;
@@ -140,6 +142,28 @@ export function registerWorkflowListeners() {
           logger.info(`[WorkflowEventBus AutoAction] Document #${payload.entityId} successfully finalized.`);
         } else {
           logger.info(`[WorkflowEventBus AutoAction] Skipping document finalization for non-numeric/mock entity ID: ${payload.entityId}`);
+        }
+      } else if (payload.entityType === 'item' && payload.toStateKey === 'approved') {
+        // V2.0.0: تأیید نهایی workflow تعریف کالا → صدور سند افتتاحیه موجودی اولیه
+        const itemId = Number(payload.entityId);
+        if (!isNaN(itemId) && itemId > 0) {
+          logger.info(`[WorkflowEventBus AutoAction] Issuing item opening voucher for approved item #${payload.entityId}...`);
+          await ItemOpeningService.issueItemOpeningVoucher(itemId, {
+            userId: payload.performedBy || undefined,
+            username: payload.performedByName || 'تایید خودکار گردش‌کار'
+          });
+          logger.info(`[WorkflowEventBus AutoAction] Item opening voucher for #${payload.entityId} issued.`);
+        }
+      } else if (payload.entityType === 'bank_account' && payload.toStateKey === 'approved') {
+        // V2.0.0: تأیید نهایی workflow حساب خزانه → صدور سند افتتاحیه موجودی اولیه
+        const bankId = Number(payload.entityId);
+        if (!isNaN(bankId) && bankId > 0) {
+          logger.info(`[WorkflowEventBus AutoAction] Issuing treasury opening voucher for approved bank account #${payload.entityId}...`);
+          await BankAccountService.issueTreasuryOpeningVoucher(bankId, {
+            userId: payload.performedBy || undefined,
+            username: payload.performedByName || 'تایید خودکار گردش‌کار'
+          });
+          logger.info(`[WorkflowEventBus AutoAction] Treasury opening voucher for #${payload.entityId} issued.`);
         }
       } else if (payload.autoActionKey) {
         logger.info(`[WorkflowEventBus AutoAction] Executing auto action '${payload.autoActionKey}' for ${payload.entityType}:${payload.entityId}`);

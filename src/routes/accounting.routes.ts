@@ -530,7 +530,11 @@ router.get('/accounting/banks/reconciliation-report', authorizePermission('accou
 router.get('/accounting/bank-accounts/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 
 const createBankHandler = asyncHandler(async (req: any, res: any) => {
-  const bank = await AccountingService.createBankAccount(req.body);
+  const bank = await AccountingService.createBankAccount({
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -551,7 +555,11 @@ const updateBankHandler = asyncHandler(async (req: any, res: any) => {
   const id = Number(req.params.id);
   // V1.4.0: snapshot قبل برای audit
   const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
-  const updated = await AccountingService.updateBankAccount(id, req.body);
+  const updated = await AccountingService.updateBankAccount(id, {
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',

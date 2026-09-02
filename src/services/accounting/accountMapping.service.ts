@@ -29,6 +29,8 @@ export interface ConceptualAccountMappingConfig {
   // V1.9.0: تفکیک هزینه حقوق ثابت و سایر کسورات
   fixedSalaryExpenseAccountCode: string;    // Default: '6003' (هزینه حقوق و دستمزد ثابت)
   employeeDeductionsPayableAccountCode: string; // Default: '3202' (سایر کسورات پرداختنی — بیمه/مالیات سهم کارمند)
+  // V2.0.0: طرف حساب اسناد افتتاحیه (موجودی اولیه خزانه/انبار)
+  openingCapitalAccountCode: string;        // Default: '4001' (سرمایه اولیه سهامداران/موسسین)
 }
 
 export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
@@ -52,6 +54,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   employeeAdvanceAccountCode: '1301',
   fixedSalaryExpenseAccountCode: '6003',
   employeeDeductionsPayableAccountCode: '3202',
+  openingCapitalAccountCode: '4001',
 };
 
 const SETTINGS_KEY = 'accounting_account_mappings';
@@ -274,5 +277,26 @@ export class AccountMappingService {
    */
   static async getEmployeeDeductionsPayableAccount(tx?: any): Promise<Account | null> {
     return this.resolveAccount('employeeDeductionsPayableAccountCode', tx);
+  }
+
+  /**
+   * V2.0.0: حساب سرمایه اولیه — طرف حساب اسناد افتتاحیه (موجودی اولیه خزانه/انبار)
+   */
+  static async getOpeningCapitalAccount(tx?: any): Promise<Account | null> {
+    return this.resolveAccount('openingCapitalAccountCode', tx);
+  }
+
+  /**
+   * V2.0.0: موجودی مواد اولیه (1401)
+   */
+  static async getInventoryRawMaterialsAccount(tx?: any): Promise<Account | null> {
+    return this.resolveAccount('inventoryRawMaterialsCode', tx);
+  }
+
+  /**
+   * V2.0.0: موجودی کالای تولیدشده (1403)
+   */
+  static async getInventoryFinishedGoodsAccount(tx?: any): Promise<Account | null> {
+    return this.resolveAccount('inventoryFinishedGoodsCode', tx);
   }
 }

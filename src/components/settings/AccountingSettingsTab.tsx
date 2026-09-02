@@ -32,6 +32,7 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'summaryProfitLossCode', label: 'خلاصه سود و زیان', description: 'بستن حساب‌های موقت در پایان سال مالی' },
   { key: 'retainedEarningsCode', label: 'سود (زیان) انباشته', description: 'انتقال نتیجه سال مالی' },
   { key: 'closingBalanceAccountCode', label: 'حساب ترازClosing', description: 'سند افتتاحیه/اختتامیه ترازنامه' },
+  { key: 'openingCapitalAccountCode', label: 'سرمایه اولیه (4001)', description: 'طرف حساب اسناد افتتاحیه موجودی اولیه خزانه و انبار' },
 ];
 
 export function AccountingSettingsTab({ currentUser }: { currentUser: any }) {

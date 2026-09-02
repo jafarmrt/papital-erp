@@ -2,7 +2,12 @@ import { orm } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
 import { eq, asc, and, or } from 'drizzle-orm';
 import type { BankAccount } from '../../../types.js';
-import { NotFoundError, BusinessLogicError } from '../../../errors/customErrors.js';
+import { NotFoundError, BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
+import { AccountMappingService } from '../accountMapping.service.js';
+import { VoucherService } from '../voucher.service.js';
+import { logger } from '../../../middleware/logger.js';
+import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
+import type { JournalVoucher } from '../../../types.js';
 
 export class BankAccountService {
   static async getBankAccounts(): Promise<BankAccount[]> {
@@ -56,6 +61,21 @@ export class BankAccountService {
     .from(treasuryTransactions)
     .where(eq(treasuryTransactions.isDeleted, 0));
 
+    // V2.0.0: حساب‌هایی که سند افتتاحیه دارند — مانده اولیه در دفتر ثبت شده و
+    // نباید در محاسبه ledgerBalance دوباره اضافه شود (جلوگیری از دوبرابرشماری)
+    const openingVoucherBanks = new Set<number>();
+    const openingVouchers = await orm.select({
+      referenceId: journalVouchers.referenceId,
+    })
+    .from(journalVouchers)
+    .where(and(
+      eq(journalVouchers.referenceModule, 'treasury_opening'),
+      eq(journalVouchers.isDeleted, 0)
+    ));
+    for (const ov of openingVouchers) {
+      if (ov.referenceId) openingVoucherBanks.add(Number(ov.referenceId));
+    }
+
     return rawList.map(b => {
       const initBal = Number(b.initialBalance) || 0;
 
@@ -90,7 +110,10 @@ export class BankAccountService {
       }
 
       const treasuryBalance = initBal + receipts - payments;
-      const ledgerBalance = initBal + totalDebit - totalCredit;
+      // V2.0.0: اگر سند افتتاحیه برای این حساب صادر شده، مانده اولیه داخل دفتر است
+      // و دیگر به ledgerBalance اضافه نمی‌شود (حساب‌های قدیمیِ بدون سند با فرمول قدیمی)
+      const hasOpeningVoucher = openingVoucherBanks.has(b.id);
+      const ledgerBalance = (hasOpeningVoucher ? 0 : initBal) + totalDebit - totalCredit;
       const discrepancy = Math.abs(ledgerBalance - treasuryBalance);
 
       let syncStatus: 'synced' | 'discrepant' | 'unlinked' = 'synced';
@@ -203,6 +226,8 @@ export class BankAccountService {
     currency?: string;
     accountId?: number | null;
     notes?: string;
+    userId?: number;
+    username?: string;
   }): Promise<BankAccount> {
     const initialBal = Number(data.initialBalance) || 0;
     const [inserted] = await orm.insert(bankAccounts).values({
@@ -222,10 +247,100 @@ export class BankAccountService {
       notes: data.notes?.trim() || '',
     }).returning();
 
+    // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
+    // ورکفلو شرطی: اگر تعریف workflow فعال برای «bank_account» باشد، سند پس از تأیید نهایی صادر می‌شود
+    if (initialBal !== 0) {
+      try {
+        const { WorkflowEngineService } = await import('../../workflow/workflowEngineService.js');
+        const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+          entityType: 'bank_account',
+          entityId: String(inserted.id),
+          userId: data.userId,
+          userName: data.username
+        });
+        if (!wfInstance) {
+          await this.issueTreasuryOpeningVoucher(inserted.id, {
+            userId: data.userId,
+            username: data.username,
+          });
+        }
+      } catch (err: any) {
+        logger.warn({ message: `Opening voucher for bank account ${inserted.id} deferred/failed`, error: err });
+      }
+    }
+
     return {
       ...inserted,
       type: inserted.type as BankAccount['type'],
     };
+  }
+
+  /**
+   * V2.0.0: سند افتتاحیه موجودی اولیه حساب خزانه — اتمیک و idempotent
+   * DR معین بانک (linked account) / CR سرمایه اولیه (4001)
+   */
+  static async issueTreasuryOpeningVoucher(bankId: number, params: {
+    userId?: number;
+    username?: string;
+    tx?: any;
+  } = {}): Promise<JournalVoucher | null> {
+    const executor = params.tx || orm;
+    const [bank] = await executor.select().from(bankAccounts).where(eq(bankAccounts.id, bankId));
+    if (!bank || bank.isDeleted === 1) return null;
+
+    const initialBal = Number(bank.initialBalance) || 0;
+    if (initialBal === 0 || !bank.accountId) return null; // بدون کدینگ یا بدون مانده — سند ندارد
+
+    // idempotency: سند افتتاحیه قبلی؟
+    const [existing] = await executor.select({ id: journalVouchers.id })
+      .from(journalVouchers)
+      .where(and(
+        eq(journalVouchers.referenceModule, 'treasury_opening'),
+        eq(journalVouchers.referenceId, bankId),
+        eq(journalVouchers.isDeleted, 0)
+      ));
+    if (existing) return VoucherService.getJournalVoucherById(existing.id, params.tx);
+
+    const capitalAcc = await AccountMappingService.getOpeningCapitalAccount(params.tx);
+    if (!capitalAcc) {
+      throw new ValidationError('حساب «سرمایه اولیه» (4001) برای سند افتتاحیه یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
+    }
+
+    const amount = Math.abs(initialBal);
+    const isDebitBank = initialBal > 0; // موجودی مثبت = بدهکار بانک
+
+    return VoucherService.createJournalVoucher({
+      date: await businessTodayJalaliDash(),
+      voucherType: 'opening',
+      description: `سند افتتاحیه موجودی اولیه ${bank.title} (${bank.type === 'bank' ? 'حساب بانکی' : 'صندوق'})`,
+      referenceModule: 'treasury_opening',
+      referenceId: bankId,
+      referenceNumber: bank.code,
+      currency: bank.currency || 'IRR',
+      userId: params.userId,
+      username: params.username,
+      items: [
+        {
+          accountId: bank.accountId,
+          detailedType: 'bank_account',
+          detailedId: bank.id,
+          detailedName: bank.title,
+          debit: isDebitBank ? amount : 0,
+          credit: isDebitBank ? 0 : amount,
+          currency: bank.currency || 'IRR',
+          description: `موجودی اولیه ${bank.title}`
+        },
+        {
+          accountId: capitalAcc.id,
+          detailedType: 'other',
+          detailedName: 'سرمایه اولیه',
+          debit: isDebitBank ? 0 : amount,
+          credit: isDebitBank ? amount : 0,
+          currency: bank.currency || 'IRR',
+          description: `ثبت موجودی اولیه ${bank.title} در سرمایه`
+        }
+      ]
+    }, params.tx);
   }
 
   static async updateBankAccount(id: number, data: Partial<{
@@ -237,9 +352,12 @@ export class BankAccountService {
     shebaNumber: string;
     cardNumber: string;
     branch: string;
+    initialBalance: number;
     accountId: number | null;
     isActive: number;
     notes: string;
+    userId?: number;
+    username?: string;
   }>): Promise<BankAccount> {
     const [existing] = await orm.select().from(bankAccounts).where(eq(bankAccounts.id, id));
     if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
@@ -257,6 +375,76 @@ export class BankAccountService {
       ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
       ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
     }).where(eq(bankAccounts.id, id)).returning();
+
+    // V2.0.0: تغییر موجودی اولیه → سند اصلاحی مابه‌التفاوت (فقط برای حساب‌های کدینگ‌شده)
+    if (data.initialBalance !== undefined) {
+      const newInitial = Number(data.initialBalance) || 0;
+      const oldInitial = Number(existing.initialBalance) || 0;
+      const delta = Math.round((newInitial - oldInitial) * 10000) / 10000;
+      // اصلاح currentBalance با دلتا
+      if (delta !== 0) {
+        const newCur = Math.round(((Number(updated.currentBalance) || 0) + delta) * 10000) / 10000;
+        await orm.update(bankAccounts).set({ currentBalance: newCur, initialBalance: newInitial }).where(eq(bankAccounts.id, id));
+      }
+      if (delta !== 0 && updated.accountId) {
+        try {
+          const [openingVoucher] = await orm.select({ id: journalVouchers.id })
+            .from(journalVouchers)
+            .where(and(
+              eq(journalVouchers.referenceModule, 'treasury_opening'),
+              eq(journalVouchers.referenceId, id),
+              eq(journalVouchers.isDeleted, 0)
+            ));
+          if (openingVoucher) {
+            // سند افتتاحیه قبلی موجود است → سند اصلاحی مابه‌التفاوت
+            const capitalAcc = await AccountMappingService.getOpeningCapitalAccount();
+            if (capitalAcc) {
+              const amount = Math.abs(delta);
+              await VoucherService.createJournalVoucher({
+                date: await businessTodayJalaliDash(),
+                voucherType: 'adjustment',
+                description: `اصلاح موجودی اولیه ${updated.title} (${delta > 0 ? '+' : ''}${delta})`,
+                referenceModule: 'treasury_opening',
+                referenceId: id,
+                referenceNumber: updated.code,
+                currency: updated.currency || 'IRR',
+                userId: data.userId,
+                username: data.username,
+                items: [
+                  {
+                    accountId: updated.accountId!,
+                    detailedType: 'bank_account',
+                    detailedId: id,
+                    detailedName: updated.title,
+                    debit: delta > 0 ? amount : 0,
+                    credit: delta > 0 ? 0 : amount,
+                    currency: updated.currency || 'IRR',
+                    description: `اصلاح موجودی اولیه ${updated.title}`
+                  },
+                  {
+                    accountId: capitalAcc.id,
+                    detailedType: 'other',
+                    detailedName: 'سرمایه اولیه',
+                    debit: delta > 0 ? 0 : amount,
+                    credit: delta > 0 ? amount : 0,
+                    currency: updated.currency || 'IRR',
+                    description: `اصلاح سهم سرمایه بابت موجودی اولیه ${updated.title}`
+                  }
+                ]
+              });
+            }
+          } else if (newInitial !== 0) {
+            // حساب قدیمی بدون سند افتتاحیه → اکنون سند افتتاحیه صادر کن
+            await this.issueTreasuryOpeningVoucher(id, {
+              userId: data.userId,
+              username: data.username,
+            });
+          }
+        } catch (err: any) {
+          logger.warn({ message: `Opening voucher adjustment for bank account ${id} failed`, error: err });
+        }
+      }
+    }
 
     return {
       ...updated,

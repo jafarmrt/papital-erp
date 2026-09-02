@@ -86,34 +86,76 @@ export function LedgerView({
                   </td>
                 </tr>
               ) : (
-                safeLedgerItems.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/70 dark:hover:bg-slate-750">
-                    <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono text-slate-400">
-                      {formatPersianNumber(idx + 1)}
-                    </td>
-                    <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono">
-                      {formatPersianDate(item.date)}
-                    </td>
-                    <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-600">
-                      #{item.voucherNumber}
-                    </td>
-                    <td className="py-2 px-4 border-l border-slate-200 dark:border-slate-700">
-                      {item.description}
-                    </td>
-                    <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 text-purple-600">
-                      {item.detailedName || '-'}
-                    </td>
-                    <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-emerald-600">
-                      {item.debit ? formatPersianPrice(item.debit) : '-'}
-                    </td>
-                    <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-rose-600">
-                      {item.credit ? formatPersianPrice(item.credit) : '-'}
-                    </td>
-                    <td className="py-2 px-3 text-left font-mono font-bold">
-                      {formatPersianPrice(item.runningBalance)}
-                    </td>
-                  </tr>
-                ))
+                <>
+                  {/* V2.0.0: ردیف مانده ابتدای دوره (وقتی بازه تعیین شده) */}
+                  {(ledgerReport as any)?.openingBalance !== undefined && (startDate || endDate) && (
+                    <tr className="bg-indigo-50/60 dark:bg-indigo-900/20 font-bold">
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 text-slate-400">—</td>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono">
+                        {startDate ? formatPersianDate(startDate) : '—'}
+                      </td>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700" />
+                      <td className="py-2 px-4 border-l border-slate-200 dark:border-slate-700 font-black text-indigo-800 dark:text-indigo-300">
+                        مانده ابتدای دوره
+                      </td>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700" />
+                      <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-black text-emerald-700 dark:text-emerald-300">
+                        {(ledgerReport as any).openingBalance > 0 ? formatPersianPrice((ledgerReport as any).openingBalance) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-black text-rose-700 dark:text-rose-300">
+                        {(ledgerReport as any).openingBalance < 0 ? formatPersianPrice(Math.abs((ledgerReport as any).openingBalance)) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-left font-mono font-black">
+                        {formatPersianPrice((ledgerReport as any).openingBalance)}
+                      </td>
+                    </tr>
+                  )}
+                  {safeLedgerItems.map((item, idx) => (
+                    <tr key={idx} className={`hover:bg-slate-50/70 dark:hover:bg-slate-750 ${(item as any).isOpening ? 'bg-indigo-50/40 dark:bg-indigo-900/20 font-bold' : ''}`}>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono text-slate-400">
+                        {(item as any).isOpening ? '—' : formatPersianNumber(idx)}
+                      </td>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono">
+                        {formatPersianDate(item.date)}
+                      </td>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-indigo-600">
+                        {item.voucherNumber ? `#${item.voucherNumber}` : '—'}
+                      </td>
+                      <td className="py-2 px-4 border-l border-slate-200 dark:border-slate-700">
+                        {item.description}
+                      </td>
+                      <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 text-purple-600">
+                        {item.detailedName || '-'}
+                      </td>
+                      <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-emerald-600">
+                        {item.debit ? formatPersianPrice(item.debit) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono font-bold text-rose-600">
+                        {item.credit ? formatPersianPrice(item.credit) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-left font-mono font-bold">
+                        {formatPersianPrice(item.runningBalance)}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* V2.0.0: ردیف جمع نهایی */}
+                  {safeLedgerItems.length > 0 && (ledgerReport as any)?.totalDebit !== undefined && (
+                    <tr className="bg-slate-100 dark:bg-slate-700/50 font-black text-slate-900 dark:text-white border-t-2 border-slate-400 dark:border-slate-500">
+                      <td colSpan={5} className="py-2.5 px-4 text-center border-l border-slate-200 dark:border-slate-700">
+                        جمع کل گردش
+                      </td>
+                      <td className="py-2.5 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono text-emerald-700 dark:text-emerald-300">
+                        {formatPersianPrice((ledgerReport as any).totalDebit)}
+                      </td>
+                      <td className="py-2.5 px-3 text-left border-l border-slate-200 dark:border-slate-700 font-mono text-rose-700 dark:text-rose-300">
+                        {formatPersianPrice((ledgerReport as any).totalCredit)}
+                      </td>
+                      <td className="py-2.5 px-3 text-left font-mono">
+                        {formatPersianPrice((ledgerReport as any).finalBalance)}
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>

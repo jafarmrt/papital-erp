@@ -15,6 +15,7 @@ import { WorkflowTaskService } from './workflowTaskService.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowEventPublisher } from './workflowEventPublisher.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
+import { logger } from '../../middleware/logger.js';
 
 export { WorkflowRuleEngine, WorkflowQuorumService };
 export type { 
@@ -98,4 +99,33 @@ export class WorkflowEngineService {
   static publishTransitionCompleted = WorkflowEventPublisher.publishTransitionCompleted;
   static publishWorkflowCompleted = WorkflowEventPublisher.publishWorkflowCompleted;
   static publishWorkflowRejected = WorkflowEventPublisher.publishWorkflowRejected;
+
+  /**
+   * V2.0.0: شروع شرطی workflow — اگر تعریف فعال/منتشرشده‌ای برای entityType وجود داشته باشد
+   * instance ساخته می‌شود؛ در غیر این صورت null (موجودیت بدون workflow مستقیم ادامه می‌دهد).
+   * الگوی استفاده: تعریف کالا، حساب خزانه و سایر موجودیت‌های آینده.
+   */
+  static async maybeStartWorkflow(params: {
+    entityType: string;
+    entityId: string | number;
+    userId?: number;
+    userName?: string;
+  }): Promise<any | null> {
+    try {
+      const defs = await WorkflowDefinitionService.getDefinitions({ isActive: true, entityType: params.entityType });
+      if (!defs || defs.length === 0) return null;
+      const def = defs[0];
+      return await WorkflowTransitionExecutor.startInstance({
+        workflowCode: def.workflowCode || def.code,
+        entityType: params.entityType,
+        entityId: String(params.entityId),
+        userId: params.userId,
+        userName: params.userName || 'سیستم'
+      });
+    } catch (err) {
+      // workflow هرگز نباید عملیات اصلی اصلی را مسدود کند
+      logger.warn({ message: `maybeStartWorkflow failed for ${params.entityType}#${params.entityId}`, error: err });
+      return null;
+    }
+  }
 }

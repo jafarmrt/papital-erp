@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions } from '../../db/schema.js';
-import { eq, asc, and, or, sql, like, gte, lte, desc } from 'drizzle-orm';
+import { eq, asc, and, or, sql, like, gte, lte, lt, desc } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import type { TrialBalanceRow, FinancialSummaryStats, FinancialRatiosReport, CurrencyFinancialSummary } from '../../types.js';
@@ -584,36 +584,39 @@ export class AccountingReportService {
       debit: number;
       credit: number;
       runningBalance: number;
+      isOpening?: boolean;
     }[];
+    openingBalance: number;
     totalDebit: number;
     totalCredit: number;
     finalBalance: number;
   }> {
-    const conditions = [
+    // V2.0.0: فیلترهای دوره — مانده ابتدای دوره جداگانه محاسبه می‌شود
+    const periodConditions = [
       eq(journalVouchers.isDeleted, 0),
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
     if (params.accountId) {
-      conditions.push(eq(journalVoucherItems.accountId, params.accountId));
+      periodConditions.push(eq(journalVoucherItems.accountId, params.accountId));
     }
     if (params.detailedType && params.detailedType !== 'all') {
-      conditions.push(eq(journalVoucherItems.detailedType, params.detailedType));
+      periodConditions.push(eq(journalVoucherItems.detailedType, params.detailedType));
     }
     if (params.detailedId) {
-      conditions.push(eq(journalVoucherItems.detailedId, params.detailedId));
+      periodConditions.push(eq(journalVoucherItems.detailedId, params.detailedId));
     }
     if (params.detailedName) {
-      conditions.push(like(journalVoucherItems.detailedName, `%${params.detailedName.trim()}%`));
+      periodConditions.push(like(journalVoucherItems.detailedName, `%${params.detailedName.trim()}%`));
     }
     if (params.startDate) {
-      conditions.push(gte(journalVouchers.date, params.startDate));
+      periodConditions.push(gte(journalVouchers.date, params.startDate));
     }
     if (params.endDate) {
-      conditions.push(lte(journalVouchers.date, params.endDate));
+      periodConditions.push(lte(journalVouchers.date, params.endDate));
     }
     if (params.currency && params.currency !== 'all') {
-      conditions.push(or(
+      periodConditions.push(or(
         eq(journalVoucherItems.currency, params.currency),
         eq(journalVouchers.currency, params.currency)
       ));
@@ -638,10 +641,44 @@ export class AccountingReportService {
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(and(...conditions))
+    .where(and(...periodConditions))
     .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
 
-    let runningBalance = 0;
+    // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
+    let openingBalance = 0;
+    if (params.startDate) {
+      const priorConditions = periodConditions.filter(c => c !== undefined);
+      // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
+      const priorConds: any[] = [
+        eq(journalVouchers.isDeleted, 0),
+        or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
+      ];
+      if (params.accountId) priorConds.push(eq(journalVoucherItems.accountId, params.accountId));
+      if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
+      if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
+      if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, `%${params.detailedName.trim()}%`));
+      if (params.currency && params.currency !== 'all') priorConds.push(or(
+        eq(journalVoucherItems.currency, params.currency),
+        eq(journalVouchers.currency, params.currency)
+      ));
+      if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
+
+      const priorRows = await orm.select({
+        debit: journalVoucherItems.debit,
+        credit: journalVoucherItems.credit,
+      })
+      .from(journalVoucherItems)
+      .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+      .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+      .where(and(...priorConds));
+
+      for (const r of priorRows) {
+        openingBalance += (Number(r.debit) || 0) - (Number(r.credit) || 0);
+      }
+    }
+    openingBalance = Math.round(openingBalance * 10000) / 10000;
+
+    let runningBalance = openingBalance;
     let totalDebit = 0;
     let totalCredit = 0;
 
@@ -669,8 +706,26 @@ export class AccountingReportService {
       };
     });
 
+    // V2.0.0: ردیف «مانده ابتدای دوره» به ابتدای لیست (وقتی بازه تعیین شده و مانده صفر نیست)
+    if (params.startDate && openingBalance !== 0) {
+      items.unshift({
+        voucherId: 0,
+        voucherNumber: 0,
+        date: params.startDate,
+        description: 'مانده ابتدای دوره',
+        accountName: '',
+        accountCode: '',
+        currency: params.currency && params.currency !== 'all' ? params.currency : 'IRR',
+        debit: openingBalance > 0 ? openingBalance : 0,
+        credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+        runningBalance: openingBalance,
+        isOpening: true,
+      } as any);
+    }
+
     return {
       items,
+      openingBalance,
       totalDebit,
       totalCredit,
       finalBalance: runningBalance,

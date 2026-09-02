@@ -72,7 +72,8 @@ export function useItemForm({
         type: item.type || 'product',
         unit: item.unit || 'عدد',
         current_stock: item.current_stock || 0,
-        initial_cost: (item as any).initial_cost || 0,
+        // V2.0.0: refill از weighted_average_cost (کلید واقعی) — قبلاً initial_cost همیشه خالی بود
+        initial_cost: Number((item as any).weighted_average_cost ?? (item as any).weightedAverageCost ?? (item as any).initial_cost) || 0,
         reorder_point: item.reorder_point || 0,
         thumbnail: item.thumbnail || '',
         color: item.color || '',
@@ -236,7 +237,11 @@ export function useItemForm({
         code: finalCode,
         current_stock: calculatedStock,
         stocks: form.stocks,
-        weight: form.weight ? parseFloat(form.weight) : undefined
+        weight: form.weight ? parseFloat(form.weight) : undefined,
+        // V2.0.0: کلید صحیح بک‌اند برای «بهای تمام‌شده اولیه (WAC/خرید)» —
+        // قبلاً initial_cost فرستاده می‌شد که توسط Zod حذف و WAC صفر ذخیره می‌شد
+        weighted_average_cost: Number(form.initial_cost) || 0,
+        initial_cost: Number(form.initial_cost) || 0
       };
 
       if (onSave) {

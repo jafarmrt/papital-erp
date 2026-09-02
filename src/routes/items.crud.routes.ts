@@ -12,6 +12,9 @@ import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
 import { MAX_PAGE_LIMIT } from '../lib/pagination.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { ItemsService } from '../services/items.service.js';
+import { ItemOpeningService } from '../services/inventory/itemOpening.service.js';
+import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
+import { logger } from '../middleware/logger.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 
 const router = Router();
@@ -23,6 +26,20 @@ export const itemCreateUpdateSchema = z.object({
       for (const k of Object.keys(copy)) {
         if (k.startsWith('stock_')) {
           delete copy[k];
+        }
+      }
+      // V2.0.0: alias — فرم کالا initial_cost می‌فرستد؛ به weighted_average_cost نگاشت شود
+      if (copy.initial_cost !== undefined && copy.weighted_average_cost === undefined) {
+        copy.weighted_average_cost = copy.initial_cost;
+      }
+      // V2.0.0: پشتیبانی از stocks به‌صورت شیء کلیددار (کلید = شناسه انبار) —
+      // به کلیدهای stock_<warehouseId> تبدیل می‌شود (همان قرارداد قبلی بک‌اند)
+      if (copy.stocks && typeof copy.stocks === 'object' && !Array.isArray(copy.stocks)) {
+        for (const [whKey, val] of Object.entries(copy.stocks)) {
+          const num = Number(val) || 0;
+          if (num !== 0) {
+            copy[`stock_${whKey}`] = num;
+          }
         }
       }
       return copy;
@@ -38,6 +55,7 @@ export const itemCreateUpdateSchema = z.object({
     thumbnail: z.string().optional(),
     reorder_point: z.union([z.string(), z.number()]).optional(),
     weighted_average_cost: z.union([z.string(), z.number()]).optional(),
+    initial_cost: z.union([z.string(), z.number()]).optional(),
     color: z.string().optional(),
     weight: z.union([z.string(), z.number()]).optional(),
     material: z.string().optional(),
@@ -258,6 +276,8 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
               itemId: inserted.id,
               type: 'in',
               quantity: qty,
+              // V2.0.0: قیمت واحد = WAC ثبت‌شده (قبلاً صفر بود و WAC/ارزش انبار خراب می‌شد)
+              unitPrice: Number(weighted_average_cost) || 0,
               date: await businessTodayIsoDate(),
               documentType: 'audit',
               documentRef: 'ثبت اولیه کالا',
@@ -274,6 +294,28 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
 
     const responseStock: any = {};
     for (const k of Object.keys(stockValues)) responseStock[`stock_${k}`] = stockValues[k];
+
+    // V2.0.0: سند افتتاحیه موجودی اولیه — ورکفلو شرطی
+    // اگر تعریف workflow فعال برای entityType «item» باشد، سند افتتاحیه بعد از تأیید نهایی صادر می‌شود
+    // در غیر این صورت فوری صادر می‌شود (رفتار مستقیم)
+    let openingVoucherId: number | null = null;
+    try {
+      const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+        entityType: 'item',
+        entityId: String(insertedId),
+        userId: req.user?.id,
+        userName: req.user?.fullName || req.user?.username
+      });
+      if (!wfInstance) {
+        const opening = await ItemOpeningService.issueItemOpeningVoucher(insertedId, {
+          userId: req.user?.id,
+          username: req.user?.fullName || req.user?.username
+        });
+        openingVoucherId = opening?.id || null;
+      }
+    } catch (openingErr: any) {
+      logger.warn({ message: `Item opening voucher for ${insertedId} failed/deferred`, error: openingErr });
+    }
 
     await logActivity({
       req,
@@ -301,7 +343,7 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
       }
     });
 
-    res.json({ id: insertedId, type, name, code, current_stock: computedStock, unit, category, image: imageUrl, thumbnail: thumbnailUrl, ...responseStock, reorder_point, weighted_average_cost, color, weight, material, size });
+    res.json({ id: insertedId, type, name, code, current_stock: computedStock, unit, category, image: imageUrl, thumbnail: thumbnailUrl, ...responseStock, reorder_point, weighted_average_cost, color, weight, material, size, opening_voucher_id: openingVoucherId });
   } catch (err: any) {
     if (err.code === '23505') {
       // V9-1.2: خطای یکتایی کد کالا (پنجره رقابتی بین بررسی و درج) — پیام راهنما برای دریافت کد جدید
@@ -346,7 +388,11 @@ router.put('/items/:id', authorize('admin', 'manager'), validate(itemUpdateSchem
     const updateData: any = {
       name, code, unit, category: category || '',
       reorderPoint: Number(reorder_point || 0),
-      weightedAverageCost: Number(weighted_average_cost || 0),
+      // V2.0.0: محافظت از WAC — فقط اگر مقدار جدید ارائه شده باشد به‌روزرسانی شود
+      // (قبلاً هر ویرایش فرم WAC موجود را صفر می‌کرد)
+      weightedAverageCost: weighted_average_cost !== undefined && weighted_average_cost !== ''
+        ? Number(weighted_average_cost) || 0
+        : Number(prevItem.weightedAverageCost || 0),
       color: color || null, weight: weight ? Number(weight) : null, material: material || null, size: size || null,
       version: nextVersion(prevItem.version)
     };
