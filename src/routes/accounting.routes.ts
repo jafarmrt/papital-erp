@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { AccountingService } from '../services/accounting.service.js';
+import { AccountMappingService } from '../services/accounting/accountMapping.service.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
@@ -121,12 +122,23 @@ router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'),
 // 2.1 ACCOUNT MAPPINGS (نگاشت مفهومی سرفصل‌های حسابداری)
 // ==========================================
 router.get('/accounting/mappings', authorizePermission('accounting.coa', 'accounting.view'), asyncHandler(async (req, res) => {
+  // V1.7.0: متادیتای کامل — مپینگ‌ها + غیرفعال‌ها + وضعیت کدینگ (برای دکمه همگام‌سازی شرطی)
   const mappings = await AccountingService.getAccountMappings();
-  res.json(mappings);
+  const meta = await AccountMappingService.getMappingsWithMeta();
+  res.json({
+    ...mappings,
+    disabled: meta.disabled,
+    accountsCount: meta.accountsCount,
+    chartHasAccounts: meta.chartHasAccounts,
+  });
 }));
 
-router.post('/accounting/mappings', authorizePermission('accounting.coa'), asyncHandler(async (req, res) => {
-  const updated = await AccountingService.saveAccountMappings(req.body);
+router.post('/accounting/mappings', authorizePermission('accounting.coa'), asyncHandler(async (req: any, res) => {
+  const { disabled, ...mappings } = req.body || {};
+  const updated = await AccountingService.saveAccountMappings(mappings || {});
+  if (Array.isArray(disabled)) {
+    await AccountMappingService.setDisabledMappings(disabled);
+  }
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'admin',
@@ -134,10 +146,10 @@ router.post('/accounting/mappings', authorizePermission('accounting.coa'), async
     action: 'UPDATE',
     entity: 'حسابداری:نگاشت_مفهومی_سرفصل‌ها',
     description: 'به‌روزرسانی تنظیمات نگاشت مفهومی حساب‌ها و سرفصل‌های پیش‌فرض',
-    details: { changes: req.body, result: updated },
+    details: { changes: req.body, result: updated, disabled: disabled || [] },
     ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
   });
-  res.json({ message: 'تنظیمات نگاشت سرفصل‌ها با موفقیت ذخیره شد', data: updated });
+  res.json({ message: 'تنظیمات نگاشت سرفصل‌ها با موفقیت ذخیره شد', data: updated, disabled: disabled || [] });
 }));
 
 // ==========================================

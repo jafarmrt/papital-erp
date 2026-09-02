@@ -2,6 +2,7 @@ import { orm } from '../../../db/drizzle.js';
 import { bankAccounts, cheques } from '../../../db/schema.js';
 import { eq, desc, asc, and, or, like, gte, lte } from 'drizzle-orm';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
+import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
@@ -161,13 +162,13 @@ export class ChequeLifecycleService {
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
-      let voucherId: number | null = null;
-      if (data.createVoucher !== false) {
-        const allAccs = await ChartOfAccountsService.getAllAccounts(txEngine);
-        const chequeReceivableAcc = allAccs.find(a => a.code === '1101');
-        const customerAcc = allAccs.find(a => a.code === '1201');
-        const chequePayableAcc = allAccs.find(a => a.code === '3101');
-        const supplierAcc = allAccs.find(a => a.code === '3001');
+        let voucherId: number | null = null;
+        if (data.createVoucher !== false) {
+          // V1.7.0: کدینگ از مپینگ قابل‌تنظیم (تنظیمات حسابداری) — نه هاردکد
+          const chequeReceivableAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
+          const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
+          const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
+          const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
 
         if (data.type === 'received') {
           if (!chequeReceivableAcc || !customerAcc) {
@@ -343,6 +344,7 @@ export class ChequeLifecycleService {
       const history = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
       const actDate = data.actionDate || await businessTodayJalaliDash();
 
+      // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       const allAccs = await ChartOfAccountsService.getAllAccounts(txEngine);
       const amount = Number(existing.amount) || 0;
 
@@ -359,7 +361,8 @@ export class ChequeLifecycleService {
         await txEngine.update(bankAccounts).set({ currentBalance: newBal.toNumber() }).where(eq(bankAccounts.id, bank.id));
 
         if (existing.type === 'received' && bank.accountId) {
-          const inCollectionAcc = allAccs.find(a => a.code === '1102') || allAccs.find(a => a.code === '1101');
+          const inCollectionAcc = (await AccountMappingService.getChequeInCollectionAccount(txEngine))
+            || (await AccountMappingService.getChequeReceivableAccount(txEngine));
           if (inCollectionAcc) {
             await VoucherService.createJournalVoucher({
               date: actDate,
@@ -392,7 +395,7 @@ export class ChequeLifecycleService {
             }, txEngine);
           }
         } else if (existing.type === 'paid' && bank.accountId) {
-          const payableChequeAcc = allAccs.find(a => a.code === '3101');
+          const payableChequeAcc = await AccountMappingService.getChequePayableAccount(txEngine);
           if (payableChequeAcc) {
             await VoucherService.createJournalVoucher({
               date: actDate,
@@ -426,8 +429,8 @@ export class ChequeLifecycleService {
           }
         }
       } else if (data.status === 'in_collection' && existing.type === 'received') {
-        const inTreasuryAcc = allAccs.find(a => a.code === '1101');
-        const inCollectionAcc = allAccs.find(a => a.code === '1102');
+        const inTreasuryAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
+        const inCollectionAcc = await AccountMappingService.getChequeInCollectionAccount(txEngine);
         if (inTreasuryAcc && inCollectionAcc) {
           await VoucherService.createJournalVoucher({
             date: actDate,
@@ -459,8 +462,10 @@ export class ChequeLifecycleService {
           }, txEngine);
         }
       } else if (data.status === 'bounced') {
-        const bouncedAcc = allAccs.find(a => a.code === '1103') || allAccs.find(a => a.code === '1201');
-        const inCollectionAcc = allAccs.find(a => a.code === '1102') || allAccs.find(a => a.code === '1101');
+        const bouncedAcc = (await AccountMappingService.getChequeProtestAccount(txEngine))
+          || (await AccountMappingService.getTradeReceivablesAccount(txEngine));
+        const inCollectionAcc = (await AccountMappingService.getChequeInCollectionAccount(txEngine))
+          || (await AccountMappingService.getChequeReceivableAccount(txEngine));
         if (bouncedAcc && inCollectionAcc && existing.type === 'received') {
           await VoucherService.createJournalVoucher({
             date: actDate,

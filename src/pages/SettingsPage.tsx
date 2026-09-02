@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, List, FolderTree, Building2, Tags, ShieldAlert, Activity, Layers, Copy, Check, ShoppingBag, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
+import { Settings, List, FolderTree, Building2, Tags, ShieldAlert, Activity, Layers, Copy, Check, ShoppingBag, RefreshCw, Zap, ShieldCheck, Landmark } from 'lucide-react';
 import { User } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
 import { cn } from '../utils';
@@ -16,6 +16,7 @@ import { TaskTitlesSettingsTab } from '../components/settings/TaskTitlesSettings
 import { SystemOperationsTab, ClearDataModal } from '../components/settings/SystemOperationsTab';
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
 import { NegativeStockPolicySettingsTab } from '../components/settings/NegativeStockPolicySettingsTab';
+import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
 
 interface SettingsPageProps {
   currentUser: User;
@@ -30,6 +31,7 @@ export default function SettingsPage({ currentUser }: SettingsPageProps) {
 
   const tabs = [
     { id: 'general', label: 'تنظیمات عمومی', icon: List },
+    { id: 'accounting', label: 'تنظیمات حسابداری', icon: Landmark },
     { id: 'inventory_integrity', label: 'سیاست کنترل موجودی منفی', icon: ShieldCheck },
     { id: 'categories', label: 'دسته‌بندی انبار', icon: FolderTree },
     { id: 'task_titles', label: 'عناوین و دسته‌بندی‌های کاری', icon: Layers },
@@ -103,6 +105,10 @@ export default function SettingsPage({ currentUser }: SettingsPageProps) {
             isSaving={s.isSaving}
             onSave={s.handleSaveSettings}
           />
+        )}
+
+        {s.activeTab === 'accounting' && (
+          <AccountingSettingsTab currentUser={currentUser} />
         )}
 
         {s.activeTab === 'inventory_integrity' && (

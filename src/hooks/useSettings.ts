@@ -70,7 +70,7 @@ export function useSettings() {
   const [clearMode, setClearMode] = useState<'transactions' | 'all'>('transactions');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce' | 'inventory_integrity'>(() => {
+  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce' | 'inventory_integrity'>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam === 'task_titles') return 'task_titles';

@@ -1,6 +1,7 @@
 import { orm } from '../../../db/drizzle.js';
 import { bankAccounts, treasuryTransactions, users } from '../../../db/schema.js';
 import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
+import { AccountMappingService } from '../accountMapping.service.js';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
@@ -153,21 +154,22 @@ export class TreasuryTransactionService {
           throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است');
         }
 
-        const allAccs = await ChartOfAccountsService.getAllAccounts(txEngine);
+        // V1.7.0: طرف حساب متقابل از مپینگ قابل‌تنظیم (تنظیمات حسابداری)
         let contraAccountId: number | null = null;
 
         if (data.partyType === 'customer') {
-          contraAccountId = allAccs.find(a => a.code === '1201')?.id || null;
+          contraAccountId = (await AccountMappingService.getTradeReceivablesAccount(txEngine))?.id || null;
         } else if (data.partyType === 'personnel') {
-          contraAccountId = allAccs.find(a => a.code === '3201')?.id || null;
+          contraAccountId = (await AccountMappingService.getWagesPayableAccount(txEngine))?.id || null;
         } else if (data.partyType === 'supplier') {
-          contraAccountId = allAccs.find(a => a.code === '3001')?.id || null;
+          contraAccountId = (await AccountMappingService.getTradePayablesAccount(txEngine))?.id || null;
         } else {
-          contraAccountId = allAccs.find(a => a.code === '1201' || a.code === '3001')?.id || null;
+          contraAccountId = (await AccountMappingService.getTradeReceivablesAccount(txEngine))?.id
+            || (await AccountMappingService.getTradePayablesAccount(txEngine))?.id || null;
         }
 
         if (!contraAccountId) {
-          throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد');
+          throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');
         }
 
         const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${data.partyName}`;
