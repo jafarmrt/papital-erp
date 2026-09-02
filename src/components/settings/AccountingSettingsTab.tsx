@@ -21,6 +21,7 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'chequeInCollectionAccountCode', label: 'اسناد در جریان وصول (1102)', description: 'ارسال چک به بانک برای وصول و کسر هنگام پاس/برگشت' },
   { key: 'chequeProtestAccountCode', label: 'اسناد واخواستی (1103)', description: 'برگشت چک دریافتی (واخواست)' },
   { key: 'chequePayableAccountCode', label: 'اسناد پرداختنی تجاری (3101)', description: 'صدور چک پرداختی و پاس شدن آن' },
+  { key: 'employeeAdvanceAccountCode', label: 'مساعده و وام پرسنل (1301)', description: 'پرداخت مساعده/وام به پرسنل (مطالبات از کارکنان) تا کسر از حقوق' },
   { key: 'salesRevenueAccountCode', label: 'درآمد فروش', description: 'سند خودکار فروش (فاکتور نهایی)' },
   { key: 'salesDiscountAccountCode', label: 'تخفیف فروش', description: 'سند خودکار تخفیفات فاکتور' },
   { key: 'salesVatPayableAccountCode', label: 'مالیات بر ارزش افزوده', description: 'بستانکاری VAT در سند فروش' },

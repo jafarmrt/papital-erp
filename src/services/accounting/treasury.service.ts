@@ -122,6 +122,20 @@ export class TreasuryService {
     return TreasuryTransactionService.reconcileTransactions(params);
   }
 
+  // V1.8.0: پیش‌نمایش سند دوبل (بدون ذخیره‌سازی)
+  static async previewTreasuryVoucher(data: {
+    type: 'receipt' | 'payment';
+    amount: number;
+    currency?: string;
+    bankAccountId: number;
+    partyType?: string;
+    purpose?: string;
+    partyId?: number | null;
+    partyName?: string;
+  }) {
+    return TreasuryTransactionService.previewTreasuryVoucher(data);
+  }
+
   // 3. Cheques & Sayad Lifecycle
   static async getCheques(params: {
     type?: 'received' | 'paid';

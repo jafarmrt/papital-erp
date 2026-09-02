@@ -76,6 +76,7 @@ export class AccountingService {
   static voidTreasuryTransaction = TreasuryService.voidTreasuryTransaction.bind(TreasuryService);
   static createTreasuryTransfer = TreasuryService.createTreasuryTransfer.bind(TreasuryService);
   static reconcileTransactions = TreasuryService.reconcileTransactions.bind(TreasuryService);
+  static previewTreasuryVoucher = TreasuryService.previewTreasuryVoucher.bind(TreasuryService);
 
   // ================= Cheques Management =================
   static getCheques = TreasuryService.getCheques.bind(TreasuryService);

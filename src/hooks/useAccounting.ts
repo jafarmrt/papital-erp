@@ -431,7 +431,7 @@ export function useAccounting() {
   };
 
   const handleCreateTreasuryTransaction = async (data: any) => {
-    await fetchJson('/accounting/treasury', {
+    const created = await fetchJson('/accounting/treasury', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -439,6 +439,7 @@ export function useAccounting() {
     await loadVouchers();
     await loadStats();
     await loadAccounts();
+    return created;
   };
 
   // V1.4.0: ابطال تراکنش خزانه با سند معکوس

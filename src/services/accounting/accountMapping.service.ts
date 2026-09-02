@@ -24,6 +24,8 @@ export interface ConceptualAccountMappingConfig {
   chequeInCollectionAccountCode: string;    // Default: '1102' (اسناد در جریان وصول)
   chequeProtestAccountCode: string;         // Default: '1103' (اسناد واخواستی/برگشتی)
   chequePayableAccountCode: string;         // Default: '3101' (اسناد پرداختنی تجاری)
+  // V1.8.0: مساعده و وام پرسنل (مطالبات از کارکنان — دارایی تا کسر از حقوق)
+  employeeAdvanceAccountCode: string;       // Default: '1301' (مساعده و وام پرسنل)
 }
 
 export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
@@ -44,6 +46,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   chequeInCollectionAccountCode: '1102',
   chequeProtestAccountCode: '1103',
   chequePayableAccountCode: '3101',
+  employeeAdvanceAccountCode: '1301',
 };
 
 const SETTINGS_KEY = 'accounting_account_mappings';
@@ -245,5 +248,12 @@ export class AccountMappingService {
 
   static async getChequePayableAccount(tx?: any): Promise<Account | null> {
     return this.resolveAccount('chequePayableAccountCode', tx);
+  }
+
+  /**
+   * V1.8.0: مساعده و وام پرسنل (مطالبات از کارکنان)
+   */
+  static async getEmployeeAdvanceAccount(tx?: any): Promise<Account | null> {
+    return this.resolveAccount('employeeAdvanceAccountCode', tx);
   }
 }

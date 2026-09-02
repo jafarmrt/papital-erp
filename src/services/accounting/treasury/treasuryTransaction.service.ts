@@ -1,5 +1,5 @@
 import { orm } from '../../../db/drizzle.js';
-import { bankAccounts, treasuryTransactions, users } from '../../../db/schema.js';
+import { bankAccounts, treasuryTransactions, users, accounts } from '../../../db/schema.js';
 import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
@@ -20,6 +20,126 @@ export class TreasuryTransactionService {
     const seqNum = Number(result.rows?.[0]?.num);
     const prefix = type === 'receipt' ? 'REC' : 'PAY';
     return `${prefix}-${String(seqNum).padStart(6, '0')}`;
+  }
+
+  /**
+   * V1.8.0: انتخاب طرف حساب متقابل — منطق مشترک بین ثبت و پیش‌نمایش سند
+   * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301)
+   */
+  static async resolveContraAccount(
+    partyType: string,
+    purpose: string | undefined,
+    tx?: any
+  ): Promise<{ account: any | null; fallbackGeneralId: number | null; conceptLabel: string }> {
+    let account: any | null = null;
+    let conceptLabel = '';
+
+    if (partyType === 'customer') {
+      account = await AccountMappingService.getTradeReceivablesAccount(tx);
+      conceptLabel = 'حساب‌های دریافتنی تجاری';
+    } else if (partyType === 'supplier') {
+      account = await AccountMappingService.getTradePayablesAccount(tx);
+      conceptLabel = 'حساب‌های پرداختنی تجاری';
+    } else if (partyType === 'personnel') {
+      if (purpose === 'advance') {
+        account = await AccountMappingService.getEmployeeAdvanceAccount(tx);
+        conceptLabel = 'مساعده و وام پرسنل';
+      } else {
+        account = await AccountMappingService.getWagesPayableAccount(tx);
+        conceptLabel = 'حقوق و دستمزد پرداختنی';
+      }
+    } else {
+      account = (await AccountMappingService.getTradeReceivablesAccount(tx))
+        || (await AccountMappingService.getTradePayablesAccount(tx));
+      conceptLabel = 'حساب‌های دریافتنی/پرداختنی';
+    }
+
+    // Fallback به معین عمومی (مثل 12 برای 1201) اگر تفصیلی یافت نشد
+    let fallbackGeneralId: number | null = null;
+    if (!account) {
+      const allAccs = await orm.select().from(accounts).where(eq(accounts.isDeleted, 0));
+      const code = purpose === 'advance' && partyType === 'personnel'
+        ? (await AccountMappingService.getMappings(tx)).employeeAdvanceAccountCode
+        : (partyType === 'customer' ? (await AccountMappingService.getMappings(tx)).tradeReceivablesAccountCode
+          : partyType === 'supplier' ? (await AccountMappingService.getMappings(tx)).tradePayablesAccountCode
+            : partyType === 'personnel' ? (await AccountMappingService.getMappings(tx)).wagesPayableAccountCode : '');
+      const generalCode = code.slice(0, 2);
+      const general = allAccs.find(a => a.code === generalCode);
+      fallbackGeneralId = general?.id || null;
+    }
+
+    return { account, fallbackGeneralId, conceptLabel };
+  }
+
+  /**
+   * V1.8.0: پیش‌نمایش سند دوبل ثبت دریافت/پرداخت — بدون هیچ ذخیره‌سازی
+   * برای پنل پیش‌نمایش زنده در فرم ثبت وجه + هشدارهای شفافیت
+   */
+  static async previewTreasuryVoucher(data: {
+    type: 'receipt' | 'payment';
+    amount: number;
+    currency?: string;
+    bankAccountId: number;
+    partyType?: string;
+    purpose?: string;
+    partyId?: number | null;
+    partyName?: string;
+  }): Promise<{
+    debit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
+    credit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
+    warnings: string[];
+    contraConceptLabel: string;
+  }> {
+    const amount = Number(data.amount) || 0;
+    const warnings: string[] = [];
+
+    const [bank] = await orm.select().from(bankAccounts)
+      .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)));
+    if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+
+    if (!bank.accountId) {
+      warnings.push('این حساب بانکی/صندوق به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، کدینگ معین را متصل کنید.');
+    }
+
+    if (bank.currency && (data.currency || bank.currency) !== bank.currency) {
+      warnings.push(`ارز تراکنش با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد`);
+    }
+
+    const contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose);
+    const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
+    if (!contraAccountId) {
+      warnings.push(`حساب معین «${contra.conceptLabel}» در چارت یافت نشد — سند صادر نخواهد شد (از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)`);
+    }
+
+    if (amount <= 0) {
+      warnings.push('مبلغ باید بزرگ‌تر از صفر باشد');
+    }
+
+    let debit: any = null;
+    let credit: any = null;
+    if (amount > 0 && bank.accountId && contraAccountId) {
+      const accById = new Map((await orm.select().from(accounts).where(eq(accounts.isDeleted, 0))).map(a => [a.id, a]));
+      const debitAcc = accById.get(data.type === 'receipt' ? bank.accountId : contraAccountId);
+      const creditAcc = accById.get(data.type === 'receipt' ? contraAccountId : bank.accountId);
+      const isReceipt = data.type === 'receipt';
+
+      debit = {
+        accountId: debitAcc?.id || 0,
+        accountCode: debitAcc?.code || '',
+        accountName: debitAcc?.name || '',
+        detailedName: isReceipt ? bank.title : (data.partyName || 'طرف حساب'),
+        amount,
+      };
+      credit = {
+        accountId: creditAcc?.id || 0,
+        accountCode: creditAcc?.code || '',
+        accountName: creditAcc?.name || '',
+        detailedName: isReceipt ? (data.partyName || 'طرف حساب') : bank.title,
+        amount,
+      };
+    }
+
+    return { debit, credit, warnings, contraConceptLabel: contra.conceptLabel };
   }
 
   static async getTreasuryTransactions(params: {
@@ -115,6 +235,8 @@ export class TreasuryTransactionService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
+    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده)
+    purpose?: string;
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
@@ -154,19 +276,9 @@ export class TreasuryTransactionService {
           throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است');
         }
 
-        // V1.7.0: طرف حساب متقابل از مپینگ قابل‌تنظیم (تنظیمات حسابداری)
-        let contraAccountId: number | null = null;
-
-        if (data.partyType === 'customer') {
-          contraAccountId = (await AccountMappingService.getTradeReceivablesAccount(txEngine))?.id || null;
-        } else if (data.partyType === 'personnel') {
-          contraAccountId = (await AccountMappingService.getWagesPayableAccount(txEngine))?.id || null;
-        } else if (data.partyType === 'supplier') {
-          contraAccountId = (await AccountMappingService.getTradePayablesAccount(txEngine))?.id || null;
-        } else {
-          contraAccountId = (await AccountMappingService.getTradeReceivablesAccount(txEngine))?.id
-            || (await AccountMappingService.getTradePayablesAccount(txEngine))?.id || null;
-        }
+        // V1.8.0: طرف حساب متقابل از منطق مشترک (مپینگ + purpose)
+        const contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose, txEngine);
+        const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
 
         if (!contraAccountId) {
           throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');

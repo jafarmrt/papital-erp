@@ -617,6 +617,8 @@ const createTreasuryTxSchema = z.object({
     documentId: z.number().int().positive().nullable().optional(),
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
+    // V1.8.0: انگیزه پرداخت به پرسنل
+    purpose: z.enum(['settlement', 'advance', 'other']).optional(),
   })
 });
 
@@ -639,6 +641,24 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
     ipAddress: req.ip || '',
   });
   res.status(201).json(tx);
+}));
+
+// V1.8.0: پیش‌نمایش سند دوبل ثبت دریافت/پرداخت — بدون ذخیره‌سازی
+const previewTreasurySchema = z.object({
+  body: z.object({
+    type: z.enum(['receipt', 'payment']),
+    amount: z.number(),
+    currency: z.string().optional(),
+    bankAccountId: z.number().int().positive(),
+    partyType: z.string().optional(),
+    purpose: z.string().optional(),
+    partyId: z.number().int().positive().nullable().optional(),
+    partyName: z.string().optional(),
+  })
+});
+router.post('/accounting/treasury/preview-voucher', authorizePermission('accounting.treasury'), validate(previewTreasurySchema), asyncHandler(async (req, res) => {
+  const preview = await AccountingService.previewTreasuryVoucher(req.body);
+  res.json(preview);
 }));
 
 // V1.5.0: انتقال بین‌بانکی/بین‌صندوقی

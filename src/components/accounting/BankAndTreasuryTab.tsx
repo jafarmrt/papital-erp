@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
+import { fetchJson } from '../../api';
 import { 
   Building2, 
   Wallet, 
@@ -31,6 +32,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { AccountSearchSelect } from './AccountSearchSelect';
+import { SearchableSelect } from '../SearchableSelect';
 
 interface BankAndTreasuryTabProps {
   bankAccounts: BankAccount[];
@@ -271,7 +273,46 @@ export function BankAndTreasuryTab({
     trackingNumber: '',
     description: '',
     createVoucher: true,
+    // V1.8.0: انگیزه پرداخت به پرسنل
+    purpose: 'settlement' as 'settlement' | 'advance' | 'other',
   });
+
+  // V1.8.0: پیش‌نمایش زنده سند دوبل
+  const [voucherPreview, setVoucherPreview] = useState<any>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  useEffect(() => {
+    if (!isTxModalOpen || !txFormData.bankAccountId || !txFormData.amount || txFormData.amount <= 0 || !txFormData.createVoucher) {
+      setVoucherPreview(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setIsPreviewLoading(true);
+      try {
+        const res = await fetchJson('/accounting/treasury/preview-voucher', {
+          method: 'POST',
+          signal: controller.signal,
+          body: JSON.stringify({
+            type: txFormData.type,
+            amount: txFormData.amount,
+            currency: txFormData.currency,
+            bankAccountId: txFormData.bankAccountId,
+            partyType: txFormData.partyType,
+            purpose: txFormData.purpose,
+            partyId: txFormData.partyId,
+            partyName: txFormData.partyName,
+          }),
+        });
+        setVoucherPreview(res);
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        setVoucherPreview(null);
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    }, 400);
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [isTxModalOpen, txFormData.type, txFormData.amount, txFormData.bankAccountId, txFormData.partyType, txFormData.purpose, txFormData.partyName, txFormData.createVoucher]);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -381,8 +422,12 @@ export function BankAndTreasuryTab({
 
     setIsSaving(true);
     try {
-      await onCreateTreasuryTransaction(txFormData);
-      toast.success('عملیات دریافت / پرداخت با موفقیت ثبت شد');
+      const created = await onCreateTreasuryTransaction(txFormData);
+      toast.success(
+        (created as any)?.voucherId
+          ? `تراکنش ثبت شد — سند دوبل #${formatPersianNumber((created as any).voucherId)} صادر گردید`
+          : 'تراکنش ثبت شد (بدون صدور سند)'
+      );
       setIsTxModalOpen(false);
     } catch (err) {
       toast.error(err.message || 'خطا در ثبت تراکنش خزانه‌داری');
@@ -1618,6 +1663,7 @@ export function BankAndTreasuryTab({
                     <option value="bank_transfer">حواله / پایا / ساتنا</option>
                     <option value="pos">کارتخوان (POS)</option>
                     <option value="cash">نقدی / صندوق</option>
+                    <option value="cheque">چک</option>
                   </select>
                 </div>
               </div>
@@ -1639,6 +1685,12 @@ export function BankAndTreasuryTab({
                     </option>
                   ))}
                 </select>
+                {/* V1.8.0: هشدار شفافیت — حساب بدون کدینگ سند صادر نمی‌کند */}
+                {txFormData.bankAccountId && !safeBankAccounts.find(b => b.id === txFormData.bankAccountId)?.accountId && (
+                  <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-1 leading-5">
+                    ⚠️ این حساب به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، «اتصال به حساب معین» را تکمیل کنید.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1648,16 +1700,17 @@ export function BankAndTreasuryTab({
                   </label>
                   <select
                     value={txFormData.partyType}
-                    onChange={e => setTxFormData({ 
-                      ...txFormData, 
+                    onChange={e => setTxFormData({
+                      ...txFormData,
                       partyType: e.target.value as any,
                       partyId: null,
-                      partyName: '' 
+                      partyName: ''
                     })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                   >
                     <option value="customer">مشتری</option>
                     <option value="personnel">پرسنل</option>
+                    <option value="supplier">تامین‌کننده</option>
                     <option value="other">متفرقه</option>
                   </select>
                 </div>
@@ -1667,38 +1720,34 @@ export function BankAndTreasuryTab({
                     نام طرف حساب *
                   </label>
                   {txFormData.partyType === 'customer' ? (
-                    <select
-                      value={txFormData.partyId || ''}
-                      onChange={e => {
-                        const c = safeCustomers.find(x => x.id === Number(e.target.value));
+                    <SearchableSelect
+                      options={safeCustomers.map(c => ({ value: String(c.id), label: c.name }))}
+                      value={txFormData.partyId ? String(txFormData.partyId) : ''}
+                      onChange={(val) => {
+                        const c = safeCustomers.find(x => String(x.id) === val);
                         setTxFormData({ ...txFormData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
                       }}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                    >
-                      <option value="">انتخاب مشتری...</option>
-                      {safeCustomers.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                      placeholder="جستجو و انتخاب مشتری..."
+                      maxResults={50}
+                      className="w-full"
+                    />
                   ) : txFormData.partyType === 'personnel' ? (
-                    <select
-                      value={txFormData.partyId || ''}
-                      onChange={e => {
-                        const p = safePersonnelList.find(x => x.id === Number(e.target.value));
-                        setTxFormData({ ...txFormData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}` : '' });
+                    <SearchableSelect
+                      options={safePersonnelList.map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}`.trim() }))}
+                      value={txFormData.partyId ? String(txFormData.partyId) : ''}
+                      onChange={(val) => {
+                        const p = safePersonnelList.find(x => String(x.id) === val);
+                        setTxFormData({ ...txFormData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}`.trim() : '' });
                       }}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                    >
-                      <option value="">انتخاب پرسنل...</option>
-                      {safePersonnelList.map(p => (
-                        <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
-                      ))}
-                    </select>
+                      placeholder="جستجو و انتخاب پرسنل..."
+                      maxResults={50}
+                      className="w-full"
+                    />
                   ) : (
                     <input
                       type="text"
                       required
-                      placeholder="نام شخص یا شرکت..."
+                      placeholder={txFormData.partyType === 'supplier' ? 'نام تامین‌کننده...' : 'نام شخص یا شرکت...'}
                       value={txFormData.partyName}
                       onChange={e => setTxFormData({ ...txFormData, partyName: e.target.value })}
                       className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
@@ -1706,6 +1755,24 @@ export function BankAndTreasuryTab({
                   )}
                 </div>
               </div>
+
+              {/* V1.8.0: نوع پرداخت به پرسنل — تعیین‌کننده طرف حساب سند */}
+              {txFormData.partyType === 'personnel' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    نوع پرداخت به پرسنل *
+                  </label>
+                  <select
+                    value={txFormData.purpose}
+                    onChange={e => setTxFormData({ ...txFormData, purpose: e.target.value as any })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                  >
+                    <option value="settlement">تسویه حقوق و دستمزد → بدهکار «حقوق پرداختنی»</option>
+                    <option value="advance">مساعده / وام → بدهکار «مساعده و وام پرسنل»</option>
+                    <option value="other">سایر</option>
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1771,6 +1838,54 @@ export function BankAndTreasuryTab({
                   صدور خودکار سند حسابداری دوبل برای این تراکنش
                 </label>
               </div>
+
+              {/* V1.8.0: پیش‌نمایش زنده سند دوبل — شفافیت کامل قبل از ثبت */}
+              {txFormData.createVoucher && txFormData.bankAccountId && txFormData.amount > 0 && (
+                <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/20 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-black text-indigo-800 dark:text-indigo-300 flex items-center gap-1">
+                      <ShieldCheck size={13} />
+                      پیش‌نمایش سند دوبل (همان چیزی که صادر می‌شود)
+                    </span>
+                    {isPreviewLoading && <span className="text-[10px] text-slate-400">در حال محاسبه...</span>}
+                  </div>
+                  {voucherPreview?.debit && voucherPreview?.credit ? (
+                    <table className="w-full text-[10px] border-collapse">
+                      <thead>
+                        <tr className="text-indigo-700 dark:text-indigo-300 border-b border-indigo-200 dark:border-indigo-800">
+                          <th className="py-1 text-right">شرح</th>
+                          <th className="py-1 text-right">حساب معین</th>
+                          <th className="py-1 text-left">بدهکار</th>
+                          <th className="py-1 text-left">بستانکار</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono">
+                        <tr className="border-b border-indigo-100 dark:border-indigo-900/50">
+                          <td className="py-1.5 font-sans font-bold text-slate-800 dark:text-slate-200">{voucherPreview.debit.detailedName}</td>
+                          <td className="py-1.5 text-slate-600 dark:text-slate-300">{voucherPreview.debit.accountCode} — {voucherPreview.debit.accountName}</td>
+                          <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{formatPersianPrice(voucherPreview.debit.amount)}</td>
+                          <td className="py-1.5 text-left text-slate-300">—</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 font-sans font-bold text-slate-800 dark:text-slate-200">{voucherPreview.credit.detailedName}</td>
+                          <td className="py-1.5 text-slate-600 dark:text-slate-300">{voucherPreview.credit.accountCode} — {voucherPreview.credit.accountName}</td>
+                          <td className="py-1.5 text-left text-slate-300">—</td>
+                          <td className="py-1.5 text-left font-bold text-slate-900 dark:text-white">{formatPersianPrice(voucherPreview.credit.amount)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  ) : !isPreviewLoading ? (
+                    <p className="text-[10px] font-bold text-slate-400">برای مشاهده پیش‌نمایش، مبلغ را وارد کنید.</p>
+                  ) : null}
+                  {voucherPreview?.warnings?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {voucherPreview.warnings.map((w: string, i: number) => (
+                        <p key={i} className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-5">⚠️ {w}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-3">
                 <button
