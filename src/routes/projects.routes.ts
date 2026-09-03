@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, desc, and, sql, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, transactions } from '../db/schema.js';
+import { productionProjects, projectStages, items, customers, transactions, warehouses } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -673,8 +673,17 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
         if (!targetItem) continue;
 
         const currentStocks = (targetItem.stocks as Record<string, number>) || {};
-        const mainStock = Number(currentStocks['main'] || 0);
-        currentStocks['main'] = roundFinancial(mainStock + qtyToAdd);
+        let targetLoc = entry.location ? String(entry.location).trim() : '';
+        if (!targetLoc) {
+          const [firstActiveWh] = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).limit(1);
+          if (!firstActiveWh) {
+            throw new Error('هیچ انبار فعالی در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
+          }
+          targetLoc = firstActiveWh.code;
+        }
+
+        const prevLocStock = Number(currentStocks[targetLoc] || 0);
+        currentStocks[targetLoc] = roundFinancial(prevLocStock + qtyToAdd);
 
         const newTotalStock = roundFinancial(
           Object.values(currentStocks).reduce((sum, val) => sum + (Number(val) || 0), 0)
@@ -696,7 +705,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
           documentRef: proj.projectCode,
           createdBy: typeof currentUser === 'string' ? currentUser : 'system',
           notes: entry.notes || `ورود حاصل از تکمیل پروژه ${proj.title} (${proj.projectCode})`,
-          location: 'main'
+          location: targetLoc
         });
 
         addedCount++;

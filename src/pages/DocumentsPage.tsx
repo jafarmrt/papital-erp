@@ -336,6 +336,10 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (warehouses.length === 0) {
+      toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > انبارها، حداقل یک انبار تعریف نمایید.');
+      return;
+    }
     if (docItems.length === 0) {
       toast.error('هیچ کالایی اضافه نشده است.');
       return;
@@ -740,17 +744,23 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                 <Building2 size={13} className="text-slate-500" />
                 <span>{actionType === 'in' ? 'انبار مقصد (ورود)' : 'انبار مبدا (خروج)'}</span>
               </label>
-              <select 
-                className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                value={location} 
-                onChange={e => setLocation(e.target.value)}
-              >
-                {warehouses.map(w => (
-                  <option key={w.code} value={w.code}>
-                    📦 {w.name}
-                  </option>
-                ))}
-              </select>
+              {warehouses.length > 0 ? (
+                <select 
+                  className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                  value={location} 
+                  onChange={e => setLocation(e.target.value)}
+                >
+                  {warehouses.map(w => (
+                    <option key={w.code} value={w.code}>
+                      📦 {w.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-xl font-medium">
+                  ⚠️ هیچ انباری تعریف نشده است (تنظیمات &gt; مدیریت انبارها)
+                </div>
+              )}
             </div>
 
             <div>

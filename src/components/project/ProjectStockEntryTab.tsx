@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Package, CheckCircle2, ArrowRight, RefreshCw, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, CheckCircle2, ArrowRight, RefreshCw, Layers, AlertCircle } from 'lucide-react';
 import { ProductionProject, ProjectProductItem } from '../../types';
 import { fetchJson } from '../../api';
+import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import toast from 'react-hot-toast';
 
 interface ProjectStockEntryTabProps {
@@ -11,7 +12,14 @@ interface ProjectStockEntryTabProps {
 
 export default function ProjectStockEntryTab({ project, onUpdate }: ProjectStockEntryTabProps) {
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [targetLocation, setTargetLocation] = useState<string>('safe');
+  const { data: warehouses = [] } = useWarehousesQuery();
+  const [targetLocation, setTargetLocation] = useState<string>('');
+
+  useEffect(() => {
+    if (!targetLocation && warehouses.length > 0) {
+      setTargetLocation(warehouses[0].code);
+    }
+  }, [warehouses, targetLocation]);
 
   const products: ProjectProductItem[] = Array.isArray(project.products) && project.products.length > 0
     ? project.products
@@ -94,14 +102,23 @@ export default function ProjectStockEntryTab({ project, onUpdate }: ProjectStock
 
         <div className="flex items-center gap-2">
           <label className="font-semibold text-amber-900">محل انبار:</label>
-          <select
-            value={targetLocation}
-            onChange={(e) => setTargetLocation(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-amber-950 text-xs"
-          >
-            <option value="safe">انبار گاوصندوق / اصلی (safe)</option>
-            <option value="shop">انبار فروشگاه (shop)</option>
-          </select>
+          {warehouses.length === 0 ? (
+            <span className="text-xs text-rose-700 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200">
+              هیچ انباری تعریف نشده است (از تنظیمات تعریف کنید)
+            </span>
+          ) : (
+            <select
+              value={targetLocation}
+              onChange={(e) => setTargetLocation(e.target.value)}
+              className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-amber-950 text-xs"
+            >
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.code}>
+                  {w.name} ({w.code})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 

@@ -66,14 +66,14 @@ export function PhysicalAuditSheetTab({
         if (list.length > 0) {
           setWarehouses(list);
         } else {
-          setWarehouses([{ id: 'main', name: 'انبار مرکزی', code: 'main' }]);
+          setWarehouses([]);
         }
       })
       .catch((err) => {
         if (err?.name === 'AbortError') return;
         console.error('Failed to load warehouses in audit sheet:', err);
         toast.error('خطا در دریافت لیست انبارها');
-        setWarehouses([{ id: 'main', name: 'انبار مرکزی', code: 'main' }]);
+        setWarehouses([]);
       });
 
     return () => controller.abort();

@@ -149,10 +149,6 @@ export class StockReconciliationService {
       .from(warehouses)
       .where(eq(warehouses.isActive, 1));
 
-    // Helper to check if a warehouse code is default / primary warehouse
-    const defaultWarehouseCode = activeWarehouses[0]?.code || 'WH-001';
-    const isDefaultAlias = (code: string) => ['main', 'WH-MAIN', 'انبار مرکزی', defaultWarehouseCode].includes(code);
-
     // Global Kardex per item
     const kardexAggregates = await orm.execute(sql`
       SELECT 
@@ -178,11 +174,11 @@ export class StockReconciliationService {
     const kardexLocAggregates = await orm.execute(sql`
       SELECT 
         item_id,
-        COALESCE(location, 'main') as loc,
+        COALESCE(location, '') as loc,
         COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE -quantity END), 0) as loc_balance
       FROM ${transactions}
       WHERE is_deleted = 0
-      GROUP BY item_id, COALESCE(location, 'main')
+      GROUP BY item_id, COALESCE(location, '')
     `);
 
     const kardexLocMap = new Map<string, number>(); // key: `${itemId}_${loc}` -> balance
@@ -234,11 +230,7 @@ export class StockReconciliationService {
 
       const itemKardexLocs: Record<string, number> = {};
       for (const w of activeWarehouses) {
-        let locBal = kardexLocMap.get(`${item.id}_${w.code}`);
-        if (locBal === undefined && isDefaultAlias(w.code)) {
-          locBal = kardexLocMap.get(`${item.id}_main`) ?? kardexLocMap.get(`${item.id}_WH-MAIN`) ?? kardexLocMap.get(`${item.id}_${defaultWarehouseCode}`) ?? 0;
-        }
-        locBal = locBal || 0;
+        const locBal = kardexLocMap.get(`${item.id}_${w.code}`) || 0;
         itemKardexLocs[w.code] = locBal;
         whLedgerTotals[w.code] = FinancialMath.add(whLedgerTotals[w.code] || 0, locBal);
       }
@@ -264,11 +256,7 @@ export class StockReconciliationService {
       // Per-location check
       let hasLocMismatch = false;
       for (const w of activeWarehouses) {
-        let storedLocVal = whBreakdown[w.code];
-        if (storedLocVal === undefined && isDefaultAlias(w.code)) {
-          storedLocVal = whBreakdown['main'] ?? whBreakdown['WH-MAIN'] ?? whBreakdown['انبار مرکزی'] ?? whBreakdown[defaultWarehouseCode];
-        }
-        const storedLoc = fin(storedLocVal).toNumber();
+        const storedLoc = fin(whBreakdown[w.code] || 0).toNumber();
         const ledgerLoc = fin(itemKardexLocs[w.code]).toNumber();
         if (Math.abs(storedLoc - ledgerLoc) > 0.0001) {
           hasLocMismatch = true;
@@ -414,7 +402,7 @@ export class StockReconciliationService {
         totalOut = FinancialMath.add(totalOut, qty);
       }
 
-      const loc = tx.location || 'main';
+      const loc = tx.location || '';
       if (!locationRunning[loc]) locationRunning[loc] = 0;
       if (tx.type === 'in') {
         locationRunning[loc] = FinancialMath.add(locationRunning[loc], qty);

@@ -206,14 +206,14 @@ export class DocumentService {
       if (Array.isArray(docLines)) {
         await tx.delete(documentItems).where(eq(documentItems.documentId, id));
 
-        const docLocation = location || 'main';
+        const docLocation = location ? String(location).trim() : '';
 
         for (const item of docLines) {
           const { itemId, quantity, unit_price, unitPrice, discount, location: itemLoc } = item;
           const price = unit_price ?? unitPrice ?? 0;
           const disc = discount || 0;
           const qty = Number(quantity);
-          const targetLoc = itemLoc || docLocation;
+          const targetLoc = itemLoc || docLocation || '';
 
           if (!Number.isFinite(qty) || qty <= 0) {
             throw new ValidationError(`مقدار/تعداد برای کالای با شناسه ${itemId} باید عددی بزرگ‌تر از صفر باشد.`);
@@ -401,7 +401,7 @@ export class DocumentService {
 
     const docType = rawDocType || rawType || 'invoice';
     const docStatus = status || 'final';
-    const docLocation = location || 'main';
+    const docLocation = location ? String(location).trim() : '';
 
     const finalBuyerName = buyerName || buyer_name || '';
     const finalBuyerCity = buyerCity || buyer_city || '';
@@ -465,10 +465,16 @@ export class DocumentService {
       const docId = insertedDoc.id;
 
       if (docType === 'audit') {
-        await tx.select({ code: warehouses.code }).from(warehouses);
+        const activeWhs = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1));
         for (const item of docLines) {
           const { itemId, system_stock, physical_stock, location: itemLoc } = item;
-          const targetLoc = itemLoc || docLocation;
+          let targetLoc = itemLoc || docLocation || '';
+          if (!targetLoc) {
+            if (activeWhs.length === 0) {
+              throw new ValidationError('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا در بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
+            }
+            targetLoc = activeWhs[0].code;
+          }
           const variance = Number(physical_stock) - Number(system_stock);
 
           await tx.insert(documentItems).values({
@@ -525,7 +531,7 @@ export class DocumentService {
           const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
           const disc = discount || 0;
           const qty = Number(quantity);
-          const targetLoc = itemLoc || docLocation;
+          const targetLoc = itemLoc || docLocation || '';
 
           if (docStatus === 'final') {
             await DocumentService.applyStockMovement(tx, {
@@ -591,8 +597,14 @@ export class DocumentService {
       }
 
       if (docStatus === 'final') {
+        const vatPercent = (body as any).vat_percent !== undefined ? (body as any).vat_percent : (body as any).vatPercent;
+        const vatAmount = (body as any).vat_amount !== undefined ? (body as any).vat_amount : (body as any).vatAmount;
         if (docType === 'invoice' || docType === 'proforma') {
-          await VoucherSyncService.syncSalesInvoiceVoucher(docId, { username: user }, tx);
+          await VoucherSyncService.syncSalesInvoiceVoucher(docId, {
+            username: user,
+            vatPercent: vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined,
+            vatAmount: vatAmount !== undefined && vatAmount !== null ? Number(vatAmount) : undefined,
+          }, tx);
         } else if (['receipt', 'production_receipt', 'purchase'].includes(docType)) {
           await VoucherSyncService.syncPurchaseInvoiceVoucher(docId, { username: user }, tx);
         } else if (['remittance', 'waste', 'return'].includes(docType)) {
@@ -864,6 +876,15 @@ export class DocumentService {
     const qty = Number(quantity);
     const priceNum = Number(price);
 
+    let finalTargetLoc = targetLoc ? String(targetLoc).trim() : '';
+    if (!finalTargetLoc) {
+      const [firstWh] = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).limit(1);
+      if (!firstWh) {
+        throw new ValidationError('هیچ انبار فعالی در سیستم تعریف نشده است. لطفاً ابتدا در بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
+      }
+      finalTargetLoc = firstWh.code;
+    }
+
     // V9-P0: گارد دفاعی — مقدار منفی/نامعتبر جهت in/out را برعکس می‌کند و WAC را خراب می‌کند
     if (!Number.isFinite(qty) || qty <= 0) {
       throw new ValidationError(
@@ -897,7 +918,7 @@ export class DocumentService {
     }
 
     const currentStocks = (itemData.stocks as Record<string, number>) || {};
-    const currentLocStock = Number(currentStocks[targetLoc] || 0);
+    const currentLocStock = Number(currentStocks[finalTargetLoc] || 0);
 
     if (inOut === 'out') {
       if (currentLocStock < qty) {
@@ -906,12 +927,12 @@ export class DocumentService {
         switch (policy) {
           case 'forbidden':
             throw new InsufficientStockError(
-              `موجودی کافی در انبار ${targetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
+              `موجودی کافی در انبار ${finalTargetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
             );
 
           case 'warning':
             logger.warn(
-              `[Stock Warning] Negative stock applied for item ${itemId} (${itemData.name}) at ${targetLoc}: ` +
+              `[Stock Warning] Negative stock applied for item ${itemId} (${itemData.name}) at ${finalTargetLoc}: ` +
               `current=${currentLocStock}, requested=${qty}`
             );
             // ادامه عملیات — کسر به مقدار منفی می‌رسد
@@ -924,7 +945,7 @@ export class DocumentService {
           default:
             // default = forbidden
             throw new InsufficientStockError(
-              `موجودی کافی در انبار ${targetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
+              `موجودی کافی در انبار ${finalTargetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
             );
         }
       }
@@ -942,14 +963,14 @@ export class DocumentService {
       documentRef: String(documentRef),
       createdBy: user,
       notes: '',
-      location: targetLoc,
+      location: finalTargetLoc,
       isDeleted: 0,
     });
 
     const updatedLocStock = inOut === 'in'
       ? fin(currentLocStock).add(qty).round(4).toNumber()
       : fin(currentLocStock).subtract(qty).round(4).toNumber();
-    currentStocks[targetLoc] = updatedLocStock;
+    currentStocks[finalTargetLoc] = updatedLocStock;
 
     // Single source of truth: total currentStock is strictly the sum of all location stocks
     const newTotalStock = Object.values(currentStocks)
@@ -1026,7 +1047,7 @@ export class DocumentService {
       const inOut = (targetType === 'receipt' || targetType === 'return') ? 'in' : 'out';
 
       for (const item of docLines) {
-        const targetLoc = item.location || 'main';
+        const targetLoc = item.location ? String(item.location).trim() : '';
         const qty = item.quantity;
         const price = item.unitPrice || 0;
 
@@ -1111,7 +1132,7 @@ export class DocumentService {
             documentRef: `REV-${orig.documentRef || doc.refNumber || id}`,
             createdBy: deletedByUser,
             notes: `تراکنش معکوس حذف سند ${doc.refNumber || id} (معکوس تراکنش #${orig.id})`,
-            location: orig.location || 'main',
+            location: orig.location || 'default',
             reversalOfId: orig.id,
             isDeleted: 0,
           });
@@ -1125,7 +1146,7 @@ export class DocumentService {
       if (doc.status === 'final') {
         for (const item of docLines) {
           const qty = item.quantity;
-          const targetLoc = item.location || 'main';
+          const targetLoc = item.location || 'default';
 
           const [itemData] = await tx.select({ stocks: items.stocks, currentStock: items.currentStock, weightedAverageCost: items.weightedAverageCost, version: items.version }).from(items).where(eq(items.id, item.itemId)).for('update');
           if (!itemData) continue;
@@ -1235,7 +1256,7 @@ export class DocumentService {
 
         const locationStocks: Record<string, number> = {};
         for (const t of txList) {
-          const loc = t.location || 'main';
+          const loc = t.location || 'default';
           const q = Number(t.quantity) || 0;
           const current = locationStocks[loc] || 0;
           locationStocks[loc] = roundFinancial(t.type === 'in' ? current + q : current - q);

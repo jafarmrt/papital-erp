@@ -575,4 +575,20 @@ export function safeExtractArray<T = unknown>(res: unknown): T[] {
   return [];
 }
 
+/**
+ * Standard multi-value parser supporting both English and Persian commas (, and ،)
+ */
+export function parseMultiValue(val?: string | null): string[] {
+  if (!val) return [];
+  return String(val).split(/[,،]\s*/).map(s => s.trim()).filter(Boolean);
+}
+
+/**
+ * Standard multi-value formatter joining non-empty items with Persian comma
+ */
+export function formatMultiValue(arr?: string[] | null): string {
+  if (!Array.isArray(arr)) return '';
+  return arr.filter(Boolean).join('، ');
+}
+
 

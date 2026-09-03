@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building2 } from 'lucide-react';
 import { Warehouse } from '../../hooks/useSettings';
 
 interface WarehousesTabProps {
@@ -28,31 +28,46 @@ export function WarehousesTab({
       </div>
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs">
-            <tr>
-              <th className="p-3 font-medium">نام انبار</th>
-              <th className="p-3 font-medium">کد سیستم</th>
-              <th className="p-3 font-medium text-center">عملیات</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-xs">
-            {warehouses.map((w) => (
-              <tr key={w.id} className="hover:bg-slate-50">
-                <td className="p-3 font-medium text-slate-800">{w.name}</td>
-                <td className="p-3 font-mono text-slate-500 text-left" dir="ltr">
-                  {w.code}
-                </td>
-                <td className="p-3 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => onOpenEditModal(w)}
-                      className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition-colors cursor-pointer"
-                      title="ویرایش"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    {w.code !== 'main' && (
+        {warehouses.length === 0 ? (
+          <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-xl my-4 mx-4">
+            <Building2 className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-700">هیچ انباری در سامانه تعریف نشده است</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              شما می‌توانید بر اساس نیاز کارگاه، فروشگاه یا شرکت خود، یک یا چند انبار (مثلاً انبار مواد اولیه، انبار مرکزی، گاوصندوق، ویترین و ...) تعریف کنید.
+            </p>
+            <button
+              onClick={onOpenCreateModal}
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus size={14} />
+              تعریف اولین انبار
+            </button>
+          </div>
+        ) : (
+          <table className="w-full text-sm text-right">
+            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs">
+              <tr>
+                <th className="p-3 font-medium">نام انبار</th>
+                <th className="p-3 font-medium">کد سیستم</th>
+                <th className="p-3 font-medium text-center">عملیات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {warehouses.map((w) => (
+                <tr key={w.id} className="hover:bg-slate-50">
+                  <td className="p-3 font-medium text-slate-800">{w.name}</td>
+                  <td className="p-3 font-mono text-slate-500 text-left" dir="ltr">
+                    {w.code}
+                  </td>
+                  <td className="p-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => onOpenEditModal(w)}
+                        className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        title="ویرایش"
+                      >
+                        <Edit2 size={14} />
+                      </button>
                       <button
                         onClick={() => onDeleteWarehouse(w.id)}
                         className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -60,13 +75,13 @@ export function WarehousesTab({
                       >
                         <Trash2 size={14} />
                       </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

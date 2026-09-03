@@ -1,18 +1,11 @@
 import React from 'react';
 import { Item, User } from '../../types';
 import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2 } from 'lucide-react';
-import { cn, formatPersianNumber, formatPersianPrice } from '../../utils';
+import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SafeImage } from '../SafeImage';
 
-export const parseMultiValue = (val?: string): string[] => {
-  if (!val) return [];
-  return val.split(/[,،]\s*/).map(s => s.trim()).filter(Boolean);
-};
-
-export const formatMultiValue = (arr: string[]): string => {
-  return arr.filter(Boolean).join('، ');
-};
+export { parseMultiValue, formatMultiValue };
 
 interface ItemsTableProps {
   sortedItems: Item[];
@@ -251,7 +244,7 @@ export function ItemsTable({
             })}
             {!loading && sortedItems.length === 0 && (
               <tr>
-                <td colSpan={11} className="p-12 text-center text-slate-400 font-medium">هیچ کالایی برای نمایش یافت نشد.</td>
+                <td colSpan={user.role === 'viewer' ? 10 : 11} className="p-12 text-center text-slate-400 font-medium">هیچ کالایی برای نمایش یافت نشد.</td>
               </tr>
             )}
           </tbody>

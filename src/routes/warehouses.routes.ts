@@ -33,11 +33,7 @@ const updateWarehouseValidation = z.object({
 
 router.get('/warehouses', async (req, res) => {
   try {
-    let data = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
-    if (data.length === 0) {
-      await orm.insert(warehouses).values([{ name: 'انبار اصلی', code: 'main', isActive: 1 }]);
-      data = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
-    }
+    const data = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
     res.json(data);
   } catch(err: any) { throw err; }
 });
@@ -68,10 +64,6 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
 
 router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), async (req, res) => {
   try {
-    const [wh] = await orm.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.id, Number(req.params.id))).limit(1);
-    if (wh && wh.code === 'main') {
-      return res.status(400).json({ error: 'امکان حذف انبار اصلی سیستم وجود ندارد' });
-    }
     await orm.update(warehouses).set({ isActive: 0 }).where(eq(warehouses.id, Number(req.params.id)));
     res.json({ success: true });
   } catch(err: any) { throw err; }

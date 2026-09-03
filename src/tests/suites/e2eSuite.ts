@@ -525,10 +525,12 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       error: err.message
     }));
   } finally {
-    try {
-      await cleanupAllTestFixtures();
-    } catch {
-      // Safe ignore
+    if (process.env.ERP_ALLOW_TEST_CLEANUP === '1') {
+      try {
+        await cleanupAllTestFixtures();
+      } catch {
+        // Safe ignore
+      }
     }
   }
 

@@ -114,13 +114,13 @@ export class NegativeStockPolicyService {
     }
 
     const totalStock = fin(item.currentStock).toNumber();
-    const loc = params.location || 'main';
+    const loc = params.location ? String(params.location).trim() : '';
     const locStocks = (item.stocks as Record<string, number>) || {};
-    const locStock = fin(locStocks[loc]).toNumber();
+    const locStock = loc ? fin(locStocks[loc]).toNumber() : totalStock;
 
     const projectedTotal = FinancialMath.subtract(totalStock, qty);
-    const projectedLoc = FinancialMath.subtract(locStock, qty);
-    const wouldBeNegative = projectedTotal < 0 || projectedLoc < 0;
+    const projectedLoc = loc ? FinancialMath.subtract(locStock, qty) : projectedTotal;
+    const wouldBeNegative = projectedTotal < 0 || (loc ? projectedLoc < 0 : false);
 
     if (wouldBeNegative && policy === 'forbidden') {
       return {
@@ -130,7 +130,9 @@ export class NegativeStockPolicyService {
         deductionQty: qty,
         projectedStock: projectedTotal,
         policy,
-        message: `سیاست انبار اجازه موجودی منفی را نمی‌دهد. موجودی انبار '${loc}' (${locStock}) برای کسر ${qty} واحد کافی نیست.`,
+        message: loc
+          ? `سیاست انبار اجازه موجودی منفی را نمی‌دهد. موجودی انبار '${loc}' (${locStock}) برای کسر ${qty} واحد کافی نیست.`
+          : `سیاست انبار اجازه موجودی منفی را نمی‌دهد. موجودی کل کالا (${totalStock}) برای کسر ${qty} واحد کافی نیست.`,
       };
     }
 

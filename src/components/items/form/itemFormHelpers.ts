@@ -2,7 +2,7 @@ import toast from 'react-hot-toast';
 import { fetchJson } from '../../../api';
 import { Item, Category } from '../../../types';
 import { compressTo300KB } from '../../../utils/imageCompression';
-import { toEnglishDigits } from '../../../utils';
+import { toEnglishDigits, parseMultiValue, formatMultiValue } from '../../../utils';
 import { ItemFormData } from './types';
 
 export function parseItemStocks(rawStocks: any): Record<string, number> {
@@ -20,14 +20,7 @@ export function parseItemStocks(rawStocks: any): Record<string, number> {
   return {};
 }
 
-export function parseMultiValue(val: string): string[] {
-  if (!val) return [];
-  return val.split(',').map(s => s.trim()).filter(Boolean);
-}
-
-export function formatMultiValue(arr: string[]): string {
-  return arr.join(', ');
-}
+export { parseMultiValue, formatMultiValue };
 
 // V10-2.1: اتصال به endpoint واحد اتمیک /items/next-code
 // GET (peek) = پیشنهاد بدون مصرف شمارنده؛ POST (reserve) = تخصیص اتمیک شماره سری

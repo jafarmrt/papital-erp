@@ -14,7 +14,7 @@
 |----|------|-----|--------------|-------|
 | TD-001 | Docs | تجمیع AGENTS/GEMINI/DEVELOPER(+GUIDE دارای انکودینگ خراب) در یک سند؛ حذف کپی‌ها بعد از تأثیرگذاری قواعد روی تمام ابزارها | AGENTS.md, GEMINI.md, DEVELOPER.md, DEVELOPER_GUIDE.md | scheduled:V10-7.1 |
 | TD-002 | Data Safety | اسکریپت `clean-install.sh` هنوز `DROP DATABASE/DROP USER` اختیاری دارد؛ تولید خودکار backup پیشنهادی قبل از migrationها بررسی شود | clean-install.sh:36+ | open |
-| TD-003 | Tests | دو سوییت e2e/integration همچنان cleanup را در finally صدا می‌زنند — اکنون gated داخل خود تابع است ولی برای شفافیت، گیت صریح هم داشته باشند | e2eSuite.ts:529, integrationSuite.ts:1234 | open |
+| TD-003 | Tests | دو سوییت e2e/integration همچنان cleanup را در finally صدا می‌زنند — اکنون gated داخل خود تابع است ولی برای شفافیت، گیت صریح هم داشته باشند | e2eSuite.ts:529, integrationSuite.ts:1234 | resolved (Phase 2) |
 | TD-004 | Deploy | جریان deployment فعلاً به PM2 متکی است؛ Dockerfile در CI کامنت است (قبولی عملیاتی در V8 مانده) | .github/workflows/ci.yml | open |
 
 ## 🟠 مهم
@@ -31,16 +31,16 @@
 | TD-017 | Payroll | status=paid قابل تنظیم مستقیم از UI بدون عبور خزانه؛ حقوق ثابت/ترکیبی پشتیبانی نمی‌شود؛ عنوان صفحه به «حقوق و دستمزد» تغییر کند | piecework.routes.ts:1026-1086 | resolved (V10-4.4): paid فقط با register-payment خزانه‌ای (ConflictError بر مسیر مستقیم)؛ salaryType/monthlySalary + totalFixedAmount؛ عنوان صفحه اصلاح شد |
 | TD-018 | RBAC | واژگان دوگانه items./products./warehouse.approve؛ ۱۴ permission بی‌استفاده؛ viewer دارای daily_logs.create؛ seed merge-only هرگز revoke نمی‌کند | seed.ts, pendingMaterials.routes.ts:197,282 | resolved (V10-5.1/5.2): واژگان unify شد (pending_materials.approve / piecework.payroll)؛ viewer fix؛ workflow.execute سید شد؛ documents.delete enforce؛ cleanup با env opt-in |
 | TD-019 | RBAC | کنترل دید منو per-role وجود ندارد (فقط مشتق permission)؛ menu_visibility JSON لازم است | menuConfig.ts:51-164 | resolved (V10-5.3): deny-list JSON در app_settings + ماتریس نقش×مسیر در RolesTab + ادغام در getMenuGroups/Sidebar |
-| TD-020 | Accounting | تکرار خارج از tx مسیر route-level `AccountingService.sync*Voucher` پس از ثبت سند (idempotent اما زائد) | documents.routes.ts:229-249,379-406 | open |
-| TD-021 | Accounting | الگوی دوردیفی در حذف ادمینی تراکنش تکی: insert reversal + applyStockMovement مجدد (کاردکس جفت حساب نمیشود unless scoped) | transactions.routes.ts:196-225 | open |
-| TD-022 | Woo | نگاشت currency سفارش به `'تومان'` خارج از واژگان ارزی استاندارد سیستم | woocommerce.routes.ts:282 | open |
+| TD-020 | Accounting | تکرار خارج از tx مسیر route-level `AccountingService.sync*Voucher` پس از ثبت سند (idempotent اما زائد) | documents.routes.ts:229-249,379-406 | resolved (Phase 2) |
+| TD-021 | Accounting | الگوی دوردیفی در حذف ادمینی تراکنش تکی: insert reversal + applyStockMovement مجدد (کاردکس جفت حساب نمیشود unless scoped) | transactions.routes.ts:196-225 | resolved (Phase 2) |
+| TD-022 | Woo | نگاشت currency سفارش به `'تومان'` خارج از واژگان ارزی استاندارد سیستم | woocommerce.routes.ts:282 | resolved (Phase 2) |
 
 ## 🟡 جزئی / نکات تمیزکاری
 
 | ID | حوزه | شرح | منبع | وضعیت |
 |----|------|-----|------|-------|
-| TD-030 | FE Minor | ItemsTable colSpan=11 برای viewers (ستون عملیات مخفی) | ItemsTable.tsx:254 | open |
-| TD-031 | FE Minor | دو نسخه واگرای parseMultiValue/formatMultiValue (Persian comma فقط در یکی) | ItemsTable.tsx:8-15 vs itemFormHelpers.ts:21-28 | open |
+| TD-030 | FE Minor | ItemsTable colSpan=11 برای viewers (ستون عملیات مخفی) | ItemsTable.tsx:254 | resolved (Phase 2) |
+| TD-031 | FE Minor | دو نسخه واگرای parseMultiValue/formatMultiValue (Persian comma فقط در یکی) | ItemsTable.tsx:8-15 vs itemFormHelpers.ts:21-28 | resolved (Phase 2) |
 | TD-032 | UX | password visibility toggle + lockout countdown پیاده شد — فقط تست دستی E2E روی دیوایس موبایل باقی است | LoginPage.tsx | open |
 | TD-033 | Backend Types | ~۳۸۰ نقطه `: any` پسمانده در routes/services (FE-007 معادل بک‌اند اجرا نشده) | global | open |
 | TD-034 | Dates | daily_work_logs/piecework_logs و crm activity_date همچنان Jalali-native (طراحی محصولی فعلی؛ برای گزارش بین‌ماژولی آینده باید normalize شوند مثل فاز ۱.۲) | schema.ts multiple | open |

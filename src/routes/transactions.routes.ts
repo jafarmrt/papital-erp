@@ -197,25 +197,10 @@ router.delete('/transactions/:id', authorize('admin'), validate(deleteTxSchema),
       const origUnitPrice = Number(original.unitPrice) || 0;
       const origTotalPrice = Number(original.totalPrice) || (origUnitPrice * qty);
 
-      // ۳. ایجاد reversal transaction
+      // ۳. اعمال حرکت انبار معکوس و ثبت تراکنش بازگشتی از طریق DocumentService.applyStockMovement
       const username = (req as any).user?.username || original.createdBy || 'admin';
       const bizNow = await businessNowIsoDateTime();
-      const [reversal] = await tx.insert(transactions).values({
-        itemId: original.itemId,
-        type: reversalType,
-        quantity: qty,
-        unitPrice: origUnitPrice,
-        totalPrice: origTotalPrice,
-        location: loc,
-        documentId: original.documentId,
-        date: bizNow,
-        notes: `Reversal of transaction ${txId}`,
-        reversalOfId: txId, // ← ستون جدید برای audit trail
-        createdBy: username,
-        isDeleted: 0,
-      }).returning();
 
-      // ۴. به‌روزرسانی موجودی و اعمال حرکت انبار معکوس
       await DocumentService.applyStockMovement(tx, {
         itemId: original.itemId,
         documentId: original.documentId || 0,
@@ -229,10 +214,26 @@ router.delete('/transactions/:id', authorize('admin'), validate(deleteTxSchema),
         targetLoc: loc,
       });
 
+      // اتصال reversalOfId به آخرین تراکنش درج‌شده برای حفظ audit trail
+      const [latestTx] = await tx.select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.itemId, original.itemId))
+        .orderBy(desc(transactions.id))
+        .limit(1);
+
+      if (latestTx?.id) {
+        await tx.update(transactions)
+          .set({ 
+            reversalOfId: txId,
+            notes: `Reversal of transaction ${txId}`
+          })
+          .where(eq(transactions.id, latestTx.id));
+      }
+
       const [itemData] = await tx.select({ name: items.name, code: items.code, currentStock: items.currentStock }).from(items).where(eq(items.id, itemId));
       auditDetail = {
         transactionId: txId,
-        reversalTransactionId: reversal?.id,
+        reversalTransactionId: latestTx?.id,
         itemId: itemId,
         itemName: itemData?.name || '',
         itemCode: itemData?.code || '',

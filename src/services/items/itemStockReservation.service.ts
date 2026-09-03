@@ -69,7 +69,10 @@ export class ItemStockReservationService {
   static async syncMissingWarehouseStocks(): Promise<void> {
     try {
       const activeWHs = await orm.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1));
-      const defaultWhCode = activeWHs[0]?.code || 'main';
+      if (activeWHs.length === 0) {
+        return;
+      }
+      const defaultWhCode = activeWHs[0].code;
 
       const itemsToFix = await orm.execute(sql`
         SELECT id, current_stock, stocks

@@ -292,39 +292,7 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
   const totalLines = (req.body.items || []).length;
   const totalQty = (req.body.items || []).reduce((acc: number, cur: any) => acc + (Number(cur.quantity || 0)), 0);
 
-  // Auto-create double entry accounting voucher for sales & purchase invoices if final
-  if (req.body.status === 'final') {
-    if (req.body.docType === 'invoice') {
-      try {
-        await AccountingService.syncSalesInvoiceVoucher(newDocId, {
-          vatPercent: req.body.vatPercent !== undefined && req.body.vatPercent !== null ? Number(req.body.vatPercent) : undefined,
-          vatAmount: req.body.vatAmount !== undefined && req.body.vatAmount !== null ? Number(req.body.vatAmount) : undefined,
-          userId: req.user?.id,
-          username: req.user?.fullName || req.user?.username,
-        });
-      } catch (voucherErr) {
-        logger.error({ message: 'Error auto-syncing sales invoice voucher on create', error: voucherErr });
-      }
-    } else if (['receipt', 'production_receipt', 'purchase'].includes(req.body.docType)) {
-      try {
-        await AccountingService.syncPurchaseInvoiceVoucher(newDocId, {
-          userId: req.user?.id,
-          username: req.user?.fullName || req.user?.username,
-        });
-      } catch (voucherErr) {
-        logger.error({ message: 'Error auto-syncing purchase receipt voucher on create', error: voucherErr });
-      }
-    } else if (['remittance', 'waste', 'return'].includes(req.body.docType)) {
-      try {
-        await AccountingService.syncWarehouseDocumentVoucher(newDocId, {
-          userId: req.user?.id,
-          username: req.user?.fullName || req.user?.username,
-        });
-      } catch (voucherErr) {
-        logger.error({ message: 'Error auto-syncing warehouse document voucher on create', error: voucherErr });
-      }
-    }
-  }
+  // V10-2.2 (TD-020): همگام‌سازی سند حسابداری به صورت اتمیک درون تراکنش DocumentService.createDocument انجام شده است
 
   await logActivity({
     req,
@@ -452,35 +420,7 @@ router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_k
 
   await DocumentService.finalizeDocument(docId, user);
 
-  // Auto-create / update double-entry voucher if this was a sales invoice or purchase receipt
-  if (beforeDoc.type === 'invoice') {
-    try {
-      await AccountingService.syncSalesInvoiceVoucher(docId, {
-        userId: req.user?.id,
-        username: req.user?.fullName || req.user?.username,
-      });
-    } catch (voucherErr) {
-      logger.error({ message: 'Error auto-syncing sales invoice voucher on finalize', error: voucherErr });
-    }
-  } else if (['receipt', 'production_receipt', 'purchase'].includes(beforeDoc.type)) {
-    try {
-      await AccountingService.syncPurchaseInvoiceVoucher(docId, {
-        userId: req.user?.id,
-        username: req.user?.fullName || req.user?.username,
-      });
-    } catch (voucherErr) {
-      logger.error({ message: 'Error auto-syncing purchase receipt voucher on finalize', error: voucherErr });
-    }
-  } else if (['remittance', 'waste', 'return'].includes(beforeDoc.type)) {
-    try {
-      await AccountingService.syncWarehouseDocumentVoucher(docId, {
-        userId: req.user?.id,
-        username: req.user?.fullName || req.user?.username,
-      });
-    } catch (voucherErr) {
-      logger.error({ message: 'Error auto-syncing warehouse document voucher on finalize', error: voucherErr });
-    }
-  }
+  // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود
   
   await logActivity({
     req,

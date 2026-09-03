@@ -94,15 +94,7 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
     logger.error('[Seeder] Error seeding categories:', err);
   }
 
-  // 3. Check & seed default warehouse
-  try {
-    const existingWHs = await orm.select({ count: sql<number>`count(*)` }).from(warehouses);
-    if (Number(existingWHs[0]?.count || 0) === 0) {
-      await orm.insert(warehouses).values([{ name: 'انبار اصلی', code: 'main', isActive: 1 }]);
-    }
-  } catch (err) {
-    logger.error('[Seeder] Error seeding default warehouse:', err);
-  }
+  // 3. System warehouses are user-managed (no hardcoded default warehouse)
 
   // 4. Check & seed system roles
   const defaultRoles = [

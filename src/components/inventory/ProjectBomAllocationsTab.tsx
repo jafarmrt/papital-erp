@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { fetchJson } from '../../api';
+import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { formatPersianDate, formatPersianNumber } from '../../utils';
 
 interface ProjectBomAllocationsTabProps {
@@ -39,7 +40,14 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const [selectedProjectId, setSelectedProjectId] = useState<number | ''>('');
   const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
   const [allocateQty, setAllocateQty] = useState<string>('1');
-  const [selectedLocation, setSelectedLocation] = useState('main');
+  const { data: warehousesList = [] } = useWarehousesQuery();
+  const [selectedLocation, setSelectedLocation] = useState('');
+
+  useEffect(() => {
+    if (!selectedLocation && warehousesList.length > 0) {
+      setSelectedLocation(warehousesList[0].code);
+    }
+  }, [warehousesList, selectedLocation]);
   const [allocateNotes, setAllocateNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -685,9 +693,15 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                     onChange={(e) => setSelectedLocation(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   >
-                    <option value="main">انبار مرکزی (main)</option>
-                    <option value="warehouse_b">انبار مواد اولیه (warehouse_b)</option>
-                    <option value="production">انبار خط تولید (production)</option>
+                    {warehousesList.length === 0 ? (
+                      <option value="">هیچ انباری یافت نشد</option>
+                    ) : (
+                      warehousesList.map((w) => (
+                        <option key={w.id} value={w.code}>
+                          {w.name} ({w.code})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>

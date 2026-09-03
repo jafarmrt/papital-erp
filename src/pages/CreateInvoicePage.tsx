@@ -313,6 +313,11 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
 
+    if (status === 'final' && warehouses.length === 0) {
+      toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const formattedDate = extractDateString(date) || new Date().toISOString().split('T')[0];
@@ -482,11 +487,17 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">محل خروج قلم کالا (انبار مبدا)</label>
-              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-bold text-slate-700" value={location} onChange={e => setLocation(e.target.value)}>
-                {warehouses.map(w => (
-                  <option key={w.code} value={w.code}>📦 {w.name}</option>
-                ))}
-              </select>
+              {warehouses.length > 0 ? (
+                <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-bold text-slate-700" value={location} onChange={e => setLocation(e.target.value)}>
+                  {warehouses.map(w => (
+                    <option key={w.code} value={w.code}>📦 {w.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded font-medium">
+                  ⚠️ هیچ انباری تعریف نشده است (تنظیمات &gt; انبارها)
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">شماره سند / رفرنس (اتومات)</label>

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, desc, like, and } from 'drizzle-orm';
-import { appSettings, items, customers, documents, documentItems, woocommerceOrderLogs } from '../db/schema.js';
+import { appSettings, items, customers, documents, documentItems, woocommerceOrderLogs, warehouses } from '../db/schema.js';
 import axios from 'axios';
 import https from 'https';
 import crypto from 'crypto';
@@ -216,6 +216,17 @@ async function processWooCommerceOrder(wcOrder: any) {
       }
     }
 
+    // V10-2.3 (TD-022): تعیین انبار پیش‌فرض فعال با fallback به 'main'
+    const [defLoc] = await tx.select().from(warehouses).where(eq(warehouses.isActive, 1)).limit(1);
+    const targetLoc = defLoc?.code || 'main';
+
+    // V10-2.3 (TD-022): نگاشت ارز سفارش ووکامرس به واژگان استاندارد سیستم (IRR / USD / EUR ...)
+    // در صورت ارسال تومان (IRT / TOMAN)، مبالغ برحسب ریال استاندارد (ضریب ۱۰) و ارز سند IRR ثبت می‌شود
+    const rawCurrency = String(wcOrder.currency || '').trim().toUpperCase();
+    const isToman = rawCurrency === 'IRT' || rawCurrency === 'TOMAN' || rawCurrency === 'تومان';
+    const currencyMultiplier = isToman ? 10 : 1;
+    const systemCurrency = isToman ? 'IRR' : (rawCurrency || 'IRR');
+
     // Match items by SKU
     const matchedDocItems: Array<{ itemId: number; quantity: number; unit_price: number; location: string }> = [];
     const unmappedSkus: string[] = [];
@@ -224,7 +235,8 @@ async function processWooCommerceOrder(wcOrder: any) {
     for (const item of lineItems) {
       const sku = (item.sku || '').trim();
       const qty = Number(item.quantity || 1);
-      const unitPrice = Number(item.price || (item.total ? Number(item.total) / qty : 0));
+      const rawPrice = Number(item.price || (item.total ? Number(item.total) / qty : 0));
+      const unitPrice = Math.round(rawPrice * currencyMultiplier);
       orderTotalNumeric += qty * unitPrice;
 
       if (sku) {
@@ -237,7 +249,7 @@ async function processWooCommerceOrder(wcOrder: any) {
             itemId: erpItems[0].id,
             quantity: qty,
             unit_price: unitPrice,
-            location: 'main'
+            location: targetLoc
           });
         } else {
           unmappedSkus.push(`${item.name} (SKU: ${sku})`);
@@ -292,9 +304,9 @@ async function processWooCommerceOrder(wcOrder: any) {
       buyer_city: buyerCity,
       buyer_address: buyerAddress,
       notes: notesText,
-      currency: wcOrder.currency === 'IRT' || wcOrder.currency === 'TOMAN' ? 'تومان' : 'IRR',
+      currency: systemCurrency,
       items: matchedDocItems,
-      location: 'main',
+      location: targetLoc,
       externalTx: tx
     });
 
