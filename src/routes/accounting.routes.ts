@@ -19,7 +19,7 @@ router.use(authenticateToken); // Protect all accounting routes
 // ==========================================
 // 1. STATS & OVERVIEW
 // ==========================================
-const getStatsHandler = asyncHandler(async (req: any, res: any) => {
+const getStatsHandler = asyncHandler(async (req, res) => {
   const stats = await AccountingService.getFinancialOverviewStats();
   res.json({ stats, ...stats });
 });
@@ -39,7 +39,7 @@ router.get('/accounting/accounts/tree', authorizePermission('accounting.coa', 'a
   res.json(tree);
 }));
 
-const seedAccountsHandler = asyncHandler(async (req: any, res: any) => {
+const seedAccountsHandler = asyncHandler(async (req, res) => {
   const result = await AccountingService.seedStandardAccounts();
   await logActivity({
     userId: req.user?.id,
@@ -133,7 +133,7 @@ router.get('/accounting/mappings', authorizePermission('accounting.coa', 'accoun
   });
 }));
 
-router.post('/accounting/mappings', authorizePermission('accounting.coa'), asyncHandler(async (req: any, res) => {
+router.post('/accounting/mappings', authorizePermission('accounting.coa'), asyncHandler(async (req, res) => {
   const { disabled, ...mappings } = req.body || {};
   const updated = await AccountingService.saveAccountMappings(mappings || {});
   if (Array.isArray(disabled)) {
@@ -453,7 +453,7 @@ router.post('/accounting/vouchers/auto/payroll/:id', authorizePermission('accoun
 // ==========================================
 // 4. BANK ACCOUNTS & TREASURY
 // ==========================================
-const getBanksHandler = asyncHandler(async (req: any, res: any) => {
+const getBanksHandler = asyncHandler(async (req, res) => {
   const list = await AccountingService.getBankAccounts();
   res.json(list);
 });
@@ -461,7 +461,7 @@ router.get('/accounting/banks', authorizePermission('accounting.treasury', 'acco
 router.get('/accounting/bank-accounts', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
 
 // Dynamic Bank & Ledger Synchronization and Reconciliation
-const syncBanksHandler = asyncHandler(async (req: any, res: any) => {
+const syncBanksHandler = asyncHandler(async (req, res) => {
   const report = await AccountingService.recalculateAndSyncBankBalances();
   await logActivity({
     userId: req.user?.id,
@@ -479,7 +479,7 @@ const syncBanksHandler = asyncHandler(async (req: any, res: any) => {
 router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
 router.post('/accounting/bank-accounts/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
 
-const reportBanksHandler = asyncHandler(async (req: any, res: any) => {
+const reportBanksHandler = asyncHandler(async (req, res) => {
   const banks = await AccountingService.getBankAccounts();
   let syncedCount = 0;
   let discrepantCount = 0;
@@ -529,7 +529,7 @@ const reportBanksHandler = asyncHandler(async (req: any, res: any) => {
 router.get('/accounting/banks/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 router.get('/accounting/bank-accounts/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 
-const createBankHandler = asyncHandler(async (req: any, res: any) => {
+const createBankHandler = asyncHandler(async (req, res) => {
   const bank = await AccountingService.createBankAccount({
     ...req.body,
     userId: req.user?.id,
@@ -551,7 +551,7 @@ const createBankHandler = asyncHandler(async (req: any, res: any) => {
 router.post('/accounting/banks', authorizePermission('accounting.treasury'), createBankHandler);
 router.post('/accounting/bank-accounts', authorizePermission('accounting.treasury'), createBankHandler);
 
-const updateBankHandler = asyncHandler(async (req: any, res: any) => {
+const updateBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // V1.4.0: snapshot قبل برای audit
   const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
@@ -576,7 +576,7 @@ const updateBankHandler = asyncHandler(async (req: any, res: any) => {
 router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), updateBankHandler);
 router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), updateBankHandler);
 
-const deleteBankHandler = asyncHandler(async (req: any, res: any) => {
+const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
   const result = await AccountingService.deleteBankAccount(id);
@@ -682,7 +682,7 @@ const transferSchema = z.object({
     createVoucher: z.boolean().optional(),
   })
 });
-router.post('/accounting/treasury/transfer', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(transferSchema), asyncHandler(async (req: any, res) => {
+router.post('/accounting/treasury/transfer', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(transferSchema), asyncHandler(async (req, res) => {
   const result = await AccountingService.createTreasuryTransfer({
     ...req.body,
     userId: req.user?.id,
@@ -726,7 +726,7 @@ const reconcileSchema = z.object({
     reconciled: z.boolean(),
   })
 });
-router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req: any, res) => {
+router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
   const { bankAccountId, txIds, batch, reconciled } = req.body;
   const result = await AccountingService.reconcileTransactions({
     bankAccountId,
@@ -756,7 +756,7 @@ const voidTreasuryTxSchema = z.object({
     reason: z.string().min(3, 'دلیل ابطال الزامی است'),
   })
 });
-router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(paramsIdSchema), validate(voidTreasuryTxSchema), asyncHandler(async (req: any, res) => {
+router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(paramsIdSchema), validate(voidTreasuryTxSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const reversal = await AccountingService.voidTreasuryTransaction(id, {
     reason: req.body.reason,
@@ -835,7 +835,7 @@ router.post('/accounting/cheques', authorizePermission('accounting.cheques'), va
   res.status(201).json(chq);
 }));
 
-const updateChequeStatusHandler = asyncHandler(async (req: any, res: any) => {
+const updateChequeStatusHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const chq = await AccountingService.updateChequeStatus(id, {
     status: req.body.status,
@@ -861,7 +861,7 @@ const updateChequeStatusHandler = asyncHandler(async (req: any, res: any) => {
 router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), validate(paramsIdSchema), updateChequeStatusHandler);
 router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), validate(paramsIdSchema), updateChequeStatusHandler);
 
-router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req: any, res) => {
+router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const result = await AccountingService.deleteCheque(id, {
     userId: req.user?.id,
@@ -896,7 +896,7 @@ router.get('/accounting/reports/trial-balance', authorizePermission('accounting.
   res.json({ report: data, ...data });
 }));
 
-const accountCardReportHandler = asyncHandler(async (req: any, res: any) => {
+const accountCardReportHandler = asyncHandler(async (req, res) => {
   const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency } = req.query;
   const data = await AccountingService.getDetailedAccountCard({
     accountId: accountId ? Number(accountId) : undefined,

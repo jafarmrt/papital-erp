@@ -413,7 +413,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     if (
       secondAcquire.action === 'RETURN_CACHED' &&
       secondAcquire.statusCode === 200 &&
-      secondAcquire.responseBody?.orderId === 9988
+      (secondAcquire.responseBody as { orderId?: number } | undefined)?.orderId === 9988
     ) {
       results.push(makeTestCase({
         id: 'int_woocommerce_webhook_idempotency',

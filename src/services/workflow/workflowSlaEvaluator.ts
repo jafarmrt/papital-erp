@@ -6,6 +6,31 @@ import {
 } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 
+export interface OverdueInstance {
+  instanceId: number;
+  entityType: string;
+  entityId: string;
+  stateTitle: string;
+  stateColor: string;
+  hoursInState: number;
+  slaHours: number;
+  excessHours: number;
+  startedByName?: string | null;
+}
+
+export interface StateSlaReportItem {
+  stateId: number;
+  stateTitle: string;
+  stateColor: string;
+  slaHours: number;
+  transitionCount: number;
+  avgHours: number;
+  maxHours: number;
+  violationsCount: number;
+  violationRate: number;
+  isBottleneck: boolean;
+}
+
 export class WorkflowSlaEvaluator {
   /**
    * SLA Analytics & Process Bottleneck Analysis
@@ -21,7 +46,7 @@ export class WorkflowSlaEvaluator {
     const now = new Date().getTime();
 
     // 1. Analyze Overdue / Stuck Instances
-    const overdueInstances: any[] = [];
+    const overdueInstances: OverdueInstance[] = [];
     let totalSlaViolations = 0;
     let totalTransitionsChecked = 0;
 
@@ -89,7 +114,7 @@ export class WorkflowSlaEvaluator {
     }
 
     // Calculate historical durations from logs
-    const instanceLogsMap: Record<number, any[]> = {};
+    const instanceLogsMap: Record<number, (typeof workflowHistoryLogs.$inferSelect)[]> = {};
     for (const log of historyLogs) {
       if (!instanceLogsMap[log.instanceId]) instanceLogsMap[log.instanceId] = [];
       instanceLogsMap[log.instanceId].push(log);
@@ -151,13 +176,13 @@ export class WorkflowSlaEvaluator {
 
   static async evaluateSlaStatus(instanceId: number) {
     const analytics = await this.getSlaAnalytics();
-    const match = analytics.overdueInstances.find((i: any) => i.instanceId === instanceId);
+    const match = analytics.overdueInstances.find(i => i.instanceId === instanceId);
     return match || null;
   }
 
   static async getBottleneckAnalytics() {
     const analytics = await this.getSlaAnalytics();
-    return analytics.stateSlaReport.filter((s: any) => s.isBottleneck);
+    return analytics.stateSlaReport.filter(s => s.isBottleneck);
   }
 
   static async getSlaComplianceStats() {

@@ -7,7 +7,10 @@ import {
   type RunningKardexEntry,
   type RunningKardexResponse
 } from './stockReconciliation.service.js';
-import { KardexWacRecalculatorService } from './kardexWacRecalculator.service.js';
+import {
+  KardexWacRecalculatorService,
+  type KardexRebuildOptions
+} from './kardexWacRecalculator.service.js';
 import { InventoryStockRepairService } from './inventoryStockRepair.service.js';
 import {
   NegativeStockPolicyService,
@@ -34,7 +37,8 @@ export type {
   NegativeStockViolationItem,
   BomAllocationItemInput,
   BomReceiptAllocationInput,
-  ProjectBomAllocationRecord
+  ProjectBomAllocationRecord,
+  KardexRebuildOptions
 };
 
 export class InventoryIntegrityService {
@@ -59,14 +63,21 @@ export class InventoryIntegrityService {
   /**
    * Rebuilds stock and WAC for a single item from its sequential transaction ledger
    */
-  static async rebuildItemFromLedger(itemId: number, optsOrUserId?: any, username?: string) {
+  static async rebuildItemFromLedger(
+    itemId: number,
+    optsOrUserId?: number | KardexRebuildOptions,
+    username?: string
+  ) {
     return KardexWacRecalculatorService.rebuildItemFromLedger(itemId, optsOrUserId, username);
   }
 
   /**
    * Rebuilds stock and WAC for ALL items from their transaction ledgers
    */
-  static async rebuildAllFromLedger(optsOrUserId?: any, username?: string) {
+  static async rebuildAllFromLedger(
+    optsOrUserId?: number | KardexRebuildOptions,
+    username?: string
+  ) {
     return KardexWacRecalculatorService.rebuildAllFromLedger(optsOrUserId, username);
   }
 

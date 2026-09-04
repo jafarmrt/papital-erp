@@ -8,8 +8,8 @@ export interface AcquireKeyOptions {
   scope?: string;
   requestMethod?: string;
   requestPath?: string;
-  requestPayload?: any;
-  requestBody?: any;
+  requestPayload?: unknown;
+  requestBody?: unknown;
   userId?: number;
   ttlSeconds?: number;
   lockTimeoutSeconds?: number;
@@ -17,7 +17,7 @@ export interface AcquireKeyOptions {
 
 export type AcquireResult =
   | { state: 'acquired'; action: 'PROCESS_NEW' }
-  | { state: 'cached'; action: 'RETURN_CACHED'; responseStatus: number; statusCode: number; responseBody: any }
+  | { state: 'cached'; action: 'RETURN_CACHED'; responseStatus: number; statusCode: number; responseBody: unknown }
   | { state: 'in_flight'; action: 'IN_PROGRESS'; lockedUntil: string };
 
 export class IdempotencyService {
@@ -76,8 +76,9 @@ export class IdempotencyService {
       }
 
       return { state: 'acquired', action: 'PROCESS_NEW' };
-    } catch (error: any) {
-      if (error.code === '23505' || error.message?.includes('unique constraint') || error.message?.includes('duplicate key')) {
+    } catch (error: unknown) {
+      const errObj = error as { code?: string; message?: string } | undefined;
+      if (errObj?.code === '23505' || errObj?.message?.includes('unique constraint') || errObj?.message?.includes('duplicate key')) {
         const existing = await orm
           .select()
           .from(idempotencyKeys)
@@ -99,7 +100,12 @@ export class IdempotencyService {
     return this.acquireKey(options.key, options);
   }
 
-  private static async handleExistingKey(record: any, cleanKey: string, newLockedUntil: string, nowIso: string): Promise<AcquireResult> {
+  private static async handleExistingKey(
+    record: typeof idempotencyKeys.$inferSelect,
+    cleanKey: string,
+    newLockedUntil: string,
+    nowIso: string
+  ): Promise<AcquireResult> {
     if (record.status === 'completed') {
       logger.info(`[Idempotency] Returning cached response for key: ${record.key}`);
       const status = record.responseStatus ?? 200;
@@ -120,7 +126,7 @@ export class IdempotencyService {
       // instant from its wall-clock parts — otherwise servers off UTC (e.g.
       // UTC+3:30) treat every live lock as expired and OCC re-acquires it,
       // defeating IN_PROGRESS deduplication.
-      const rawLock = record.lockedUntil;
+      const rawLock = record.lockedUntil as unknown;
       const lockDate = rawLock instanceof Date ? rawLock : new Date(String(rawLock));
       const lockExpiry = Number.isNaN(lockDate.getTime())
         ? 0
@@ -141,7 +147,7 @@ export class IdempotencyService {
         return {
           state: 'in_flight',
           action: 'IN_PROGRESS',
-          lockedUntil: record.lockedUntil
+          lockedUntil: record.lockedUntil || newLockedUntil
         };
       }
 
@@ -154,7 +160,12 @@ export class IdempotencyService {
     return this.reacquireWithOcc(record, cleanKey, newLockedUntil, nowIso);
   }
 
-  private static async reacquireWithOcc(record: any, cleanKey: string, newLockedUntil: string, nowIso: string): Promise<AcquireResult> {
+  private static async reacquireWithOcc(
+    record: typeof idempotencyKeys.$inferSelect,
+    cleanKey: string,
+    newLockedUntil: string,
+    nowIso: string
+  ): Promise<AcquireResult> {
     const lockedUntilCond = record.lockedUntil !== null && record.lockedUntil !== undefined
       ? eq(idempotencyKeys.lockedUntil, record.lockedUntil)
       : isNull(idempotencyKeys.lockedUntil);
@@ -216,7 +227,7 @@ export class IdempotencyService {
   /**
    * Saves the completed response against the idempotency key.
    */
-  static async saveResponse(key: string, responseStatus: number, responseBody: any): Promise<void> {
+  static async saveResponse(key: string, responseStatus: number, responseBody: unknown): Promise<void> {
     if (!key || typeof key !== 'string' || key.trim() === '') return;
     const cleanKey = key.trim();
 
@@ -226,7 +237,7 @@ export class IdempotencyService {
         .set({
           status: 'completed',
           responseStatus,
-          responseBody: responseBody || {},
+          responseBody: (responseBody as Record<string, unknown>) || {},
           completedAt: new Date().toISOString()
         })
         .where(eq(idempotencyKeys.key, cleanKey));
@@ -239,7 +250,7 @@ export class IdempotencyService {
   /**
    * Universal complete helper
    */
-  static async complete(options: { key: string; scope?: string; statusCode?: number; responseStatus?: number; responseBody: any }): Promise<void> {
+  static async complete(options: { key: string; scope?: string; statusCode?: number; responseStatus?: number; responseBody: unknown }): Promise<void> {
     const status = options.statusCode ?? options.responseStatus ?? 200;
     return this.saveResponse(options.key, status, options.responseBody);
   }
@@ -247,9 +258,13 @@ export class IdempotencyService {
   /**
    * Marks an idempotency key as failed.
    */
-  static async markFailed(key: string, error?: any): Promise<void> {
+  static async markFailed(key: string, error?: unknown): Promise<void> {
     if (!key || typeof key !== 'string' || key.trim() === '') return;
     const cleanKey = key.trim();
+
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : (typeof error === 'object' && error !== null && 'message' in error ? String((error as { message: unknown }).message) : 'Operation failed');
 
     try {
       await orm
@@ -257,7 +272,7 @@ export class IdempotencyService {
         .set({
           status: 'failed',
           responseStatus: 500,
-          responseBody: { error: error?.message || 'Operation failed' },
+          responseBody: { error: errorMessage },
           completedAt: new Date().toISOString()
         })
         .where(eq(idempotencyKeys.key, cleanKey));
@@ -269,7 +284,7 @@ export class IdempotencyService {
   /**
    * Universal fail helper
    */
-  static async fail(options: { key: string; error?: any }): Promise<void> {
+  static async fail(options: { key: string; error?: unknown }): Promise<void> {
     return this.markFailed(options.key, options.error);
   }
 

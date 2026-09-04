@@ -236,10 +236,11 @@ export class FiscalYearService {
     }
 
     const createdVouchers: JournalVoucher[] = [];
+    type VoucherItemInput = Parameters<typeof VoucherService.createJournalVoucher>[0]['items'][number];
 
     // VOUCHER 1: بستن حساب‌های موقت به خلاصه سود و زیان
     if (preview.temporaryAccounts.length > 0) {
-      const v1Items: any[] = [];
+      const v1Items: VoucherItemInput[] = [];
       let debitSum = 0;
       let creditSum = 0;
 
@@ -306,7 +307,7 @@ export class FiscalYearService {
     // VOUCHER 2: انتقال سود/زیان سال از خلاصه به سود انباشته
     const profit = preview.netProfit;
     if (profit !== 0) {
-      const v2Items: any[] = [];
+      const v2Items: VoucherItemInput[] = [];
       if (profit > 0) {
         v2Items.push({
           accountId: summaryProfitAcc.id,
@@ -363,7 +364,7 @@ export class FiscalYearService {
       endDate: data.closingDate
     });
 
-    const v3Items: any[] = [];
+    const v3Items: VoucherItemInput[] = [];
     let closingDebitSum = 0;
     let closingCreditSum = 0;
 

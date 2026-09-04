@@ -28,7 +28,7 @@ export class WorkflowApprovalRules {
     userName?: string;
     userRole?: string;
     comment?: string;
-    snapshotData?: Record<string, any>;
+    snapshotData?: Record<string, unknown>;
   }) {
     return await WorkflowTransitionExecutor.executeTransition(params);
   }
@@ -96,7 +96,7 @@ export class WorkflowApprovalRules {
       const instance = item.instance;
 
       let isAssigned = false;
-      let delegationInfo: any = null;
+      let delegationInfo: Record<string, unknown> | null = null;
 
       const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
       const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
@@ -188,7 +188,7 @@ export class WorkflowApprovalRules {
     userPermissions?: string[];
     action: 'approve' | 'reject';
     comment?: string;
-    snapshotData?: Record<string, any>;
+    snapshotData?: Record<string, unknown>;
   }) {
     return await orm.transaction(async (tx) => {
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
@@ -214,7 +214,7 @@ export class WorkflowApprovalRules {
       const isAdmin = userRole === 'admin' || userPerms.includes('workflow.admin') || userPerms.includes('admin');
 
       let isAuthorized = false;
-      let delegationLogDetails: any = null;
+      let delegationLogDetails: Record<string, unknown> | null = null;
 
       const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
       const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
@@ -249,7 +249,8 @@ export class WorkflowApprovalRules {
                 sql`${workflowDelegations.endDate} >= ${nowIso}`
               ));
 
-            const workflowCode = (instance.snapshotDsl as any)?.code || '';
+            const snapshot = instance.snapshotDsl as { code?: string } | null;
+            const workflowCode = snapshot?.code || '';
             const validDelegation = activeDelegations.find(del => {
               const scope = (del.scope || 'ALL').trim();
               return scope === 'ALL' || scope === '*' || (workflowCode && scope.toLowerCase() === workflowCode.toLowerCase());
@@ -443,16 +444,19 @@ export class WorkflowApprovalRules {
     .leftJoin(sql`users fu`, sql`fu.id = ${workflowDelegations.fromUserId}`)
     .leftJoin(sql`users tu`, sql`tu.id = ${workflowDelegations.toUserId}`);
 
+    const conditions = [];
     if (!isAdmin) {
-      query = query.where(
+      conditions.push(
         or(
           eq(workflowDelegations.fromUserId, params.userId),
           eq(workflowDelegations.toUserId, params.userId)
         )!
-      ) as any;
+      );
     }
 
-    const rows = await query.orderBy(desc(workflowDelegations.createdAt));
+    const rows = await query
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(workflowDelegations.createdAt));
     const nowIso = new Date().toISOString();
 
     return rows.map(r => {

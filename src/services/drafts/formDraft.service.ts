@@ -9,7 +9,7 @@ export interface SaveDraftInput {
   sessionId?: string;
   entityType: 'invoice' | 'voucher' | 'document' | 'project' | 'cheque' | 'treasury' | string;
   draftKey?: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
   summary?: string;
   expiresInDays?: number;
 }
@@ -263,8 +263,9 @@ export class FormDraftService {
           )
         );
       return res;
-    } catch (e: any) {
-      logger.error('Error cleaning up expired drafts:', e);
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      logger.error('Error cleaning up expired drafts:', errMsg);
     }
   }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { desc, sql, eq, and, or, ilike } from 'drizzle-orm';
+import { desc, sql, eq, and, or, ilike, SQL } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import {
   appSettings, changelogs, transactions, documentItems, documents, items,
@@ -87,7 +87,7 @@ router.get('/system/schema-check', authorize('admin'), async (req, res) => {
       ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
     });
     res.json(report);
-  } catch(e: any) {
+  } catch (e) {
     throw e;
   }
 });
@@ -106,7 +106,7 @@ router.get('/system/run-seed', authorize('admin'), async (req, res) => {
       ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
     });
     res.json({ message: 'Migration and seed executed successfully', migration: migrationRes, seed: seedRes });
-  } catch(e: any) {
+  } catch (e) {
     logger.error({ message: 'Migration and seed error', error: e });
     throw e;
   }
@@ -117,7 +117,7 @@ router.get('/settings', async (req, res) => {
   try {
     const settings = await orm.select().from(appSettings);
     res.json(settings);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -133,7 +133,7 @@ router.get('/menu-visibility', async (req, res) => {
     } catch {
       return res.json({});
     }
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -192,7 +192,7 @@ router.post('/settings', authorize('admin', 'manager'), validate(settingsSchema)
     });
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -210,7 +210,7 @@ router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => 
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
 
-    const conditions: any[] = [];
+    const conditions: SQL[] = [];
 
     if (userFilter) {
       conditions.push(eq(activityLogs.username, userFilter));
@@ -263,7 +263,7 @@ router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => 
       limit,
       totalPages: Math.ceil(Number(count) / limit)
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -289,7 +289,7 @@ router.get('/activity-logs/filters', authorize('admin', 'manager'), async (req, 
       actions: distinctActions.map(a => a.action).filter(Boolean),
       entities: distinctEntities.map(e => e.entity).filter(Boolean)
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -299,7 +299,7 @@ router.get('/changelogs', async (req, res) => {
   try {
     const logs = await orm.select().from(changelogs).orderBy(desc(changelogs.id));
     res.json(logs);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -391,7 +391,7 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
       isSetup: false,
       message: 'کلیه اطلاعات، حساب‌های کاربری و داده‌های سیستم با موفقیت پاکسازی شدند و سامانه به وضعیت راه‌اندازی اولیه بازنشانی گردید.'
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error clearing system data', error: err });
     throw err;
   }
@@ -409,7 +409,7 @@ router.get('/system/health', async (req, res) => {
     const dbStart = Date.now();
     await orm.execute(sql`SELECT 1`);
     dbStatus.latencyMs = Date.now() - dbStart;
-  } catch (e: any) {
+  } catch (e) {
     dbStatus.status = 'error';
     dbStatus.message = `خطا در اتصال به پایگاه‌داده: ${e.message}`;
   }
@@ -425,7 +425,7 @@ router.get('/system/health', async (req, res) => {
     const testFile = path.join(uploadsDir, `.test-write-${Date.now()}`);
     fs.writeFileSync(testFile, 'write-test');
     fs.unlinkSync(testFile);
-  } catch (e: any) {
+  } catch (e) {
     storageStatus.status = 'error';
     storageStatus.writable = false;
     storageStatus.message = `خطای دسترسی نوشتن به پوشه تصاویر: ${e.message}`;
@@ -577,7 +577,7 @@ router.get('/system/reconciliation-check', authorize('admin'), async (req, res) 
       checks,
       timestamp: new Date().toISOString()
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -628,7 +628,7 @@ router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) =
     }
 
     return res.status(400).json({ error: 'عملیات درخواستی نامعتبر است' });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -680,7 +680,7 @@ router.get('/system/tests/run', authorize('admin'), async (req, res) => {
     });
 
     return res.json(report);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -705,7 +705,7 @@ router.post('/system/clean-test-data', authorize('admin'), async (req, res) => {
       success: true,
       message: 'تمامی اسناد، کالاها و لاگ‌های آزمایشی و تست‌های استرس با موفقیت پاکسازی شدند.'
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -721,7 +721,16 @@ router.get('/global-search', async (req, res) => {
     const searchTerm = `%${q}%`;
 
     // 1. Products & Raw Materials
-    let matchingItems: any[] = [];
+    let matchingItems: Array<{
+      id: number;
+      name: string;
+      code: string;
+      type: string;
+      category: string | null;
+      unit: string | null;
+      currentStock: number;
+      thumbnail: string | null;
+    }> = [];
     try {
       matchingItems = await orm.select({
         id: items.id,
@@ -752,7 +761,13 @@ router.get('/global-search', async (req, res) => {
     }
 
     // 2. Customers
-    let matchingCustomers: any[] = [];
+    let matchingCustomers: Array<{
+      id: number;
+      name: string;
+      city: string | null;
+      province: string | null;
+      address: string | null;
+    }> = [];
     try {
       matchingCustomers = await orm.select({
         id: customers.id,
@@ -779,7 +794,13 @@ router.get('/global-search', async (req, res) => {
     }
 
     // 3. Documents & Invoices
-    let matchingDocuments: any[] = [];
+    let matchingDocuments: Array<{
+      id: number;
+      ref_number: string;
+      buyer_name: string | null;
+      type: string;
+      date: string;
+    }> = [];
     try {
       matchingDocuments = await orm.select({
         id: documents.id,
@@ -805,7 +826,13 @@ router.get('/global-search', async (req, res) => {
     }
 
     // 4. Projects
-    let matchingProjects: any[] = [];
+    let matchingProjects: Array<{
+      id: number;
+      project_code: string;
+      title: string;
+      status: string;
+      customer_name: string | null;
+    }> = [];
     try {
       matchingProjects = await orm.select({
         id: productionProjects.id,
@@ -836,7 +863,7 @@ router.get('/global-search', async (req, res) => {
       documents: matchingDocuments,
       projects: matchingProjects
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Global search error', error: err });
     throw err;
   }
@@ -923,7 +950,7 @@ router.get('/export-backup', authorize('admin'), async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="erp-backup-${new Date().toISOString().split('T')[0]}.json"`);
     res.json(backupData);
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -992,7 +1019,7 @@ router.get('/system/health/diagnostics', authorize('admin', 'manager'), async (r
         activeInstances: activeWorkflows
       }
     });
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -1025,7 +1052,7 @@ router.post('/system/reconciliation/auto-repair', authorize('admin'), async (req
       reprocessedOutboxEvents: reprocessedCount,
       voucherSync: voucherSyncRes
     });
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -1047,7 +1074,7 @@ router.get('/system/release-gate/status', authorize('admin'), async (req, res) =
     });
 
     res.json(report);
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });

@@ -211,7 +211,7 @@ router.get('/users/my-permissions', async (req, res) => {
       permissions: Array.isArray(roleRecord.permissions) ? roleRecord.permissions : [],
       isAdmin: false
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -229,7 +229,7 @@ router.get('/users/profile', async (req, res) => {
       full_name: u.fullName,
       avatar_url: u.avatarUrl || ''
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -243,7 +243,7 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
     if (!u) return res.status(404).json({ error: 'کاربر یافت نشد' });
 
     const { full_name, avatar, current_password, new_password } = req.body;
-    const updateData: any = {};
+    const updateData: Partial<typeof users.$inferInsert> = {};
 
     if (full_name !== undefined) {
       updateData.fullName = (full_name || '').trim();
@@ -304,7 +304,7 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
         avatar_url: updatedUser.avatarUrl || ''
       }
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -319,7 +319,7 @@ router.get('/roles', async (req, res) => {
   try {
     const allRoles = await orm.select().from(roles).orderBy(roles.id);
     res.json(allRoles);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -362,7 +362,7 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
     });
 
     res.json(newRole);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -383,7 +383,7 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
 
-    const updateData: any = {
+    const updateData: Partial<typeof roles.$inferInsert> = {
       name: name || targetRole.name,
       description: description !== undefined ? description : targetRole.description,
       permissions: newPermissions
@@ -409,7 +409,7 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     });
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -447,7 +447,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
     });
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -500,7 +500,7 @@ router.get('/users/list-simple', async (req, res) => {
       avatar_url: u.avatarUrl || ''
     }));
     res.json(mapped);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -528,7 +528,7 @@ router.get('/users', async (req, res) => {
       avatarUrl: u.avatarUrl || ''
     }));
     res.json(mapped);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -559,7 +559,7 @@ router.get('/users/:id', validate(paramsIdSchema), async (req, res) => {
       avatar_url: u.avatarUrl || '',
       avatarUrl: u.avatarUrl || ''
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -597,8 +597,9 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     });
 
     res.json({ id: info.id, username: tUsername, full_name, role });
-  } catch (err: any) {
-    if (err.message.includes('unique constraint') || err.message.includes('UNIQUE')) {
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes('unique constraint') || errMsg.includes('UNIQUE')) {
       res.status(400).json({ error: 'نام کاربری تکراری است' });
     } else {
       throw err;
@@ -616,7 +617,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       return res.status(404).json({ error: 'کاربر یافت نشد' });
     }
 
-    const updateData: any = { fullName: full_name, role };
+    const updateData: Partial<typeof users.$inferInsert> = { fullName: full_name, role };
     const passwordChanged = Boolean(password && password.trim());
     const roleChanged = Boolean(role && role !== prevUser.role);
 
@@ -656,7 +657,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     });
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -720,7 +721,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
     });
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });

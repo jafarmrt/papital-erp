@@ -32,14 +32,14 @@ export interface CreateWorkflowDefinitionInput {
   title: string;
   entityType: WorkflowEntityType;
   description?: string;
-  dslJson?: Record<string, any>;
+  dslJson?: Record<string, unknown>;
 }
 
 export interface UpdateWorkflowDefinitionInput {
   title?: string;
   description?: string;
   isActive?: number;
-  dslJson?: Record<string, any>;
+  dslJson?: Record<string, unknown>;
 }
 
 export interface WorkflowDefinitionDTO {
@@ -50,7 +50,7 @@ export interface WorkflowDefinitionDTO {
   description: string;
   version: number;
   isActive: number;
-  dslJson: Record<string, any>;
+  dslJson: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -89,7 +89,7 @@ export interface WorkflowVersionDTO {
   version: number;
   title: string;
   description: string;
-  dslJson: Record<string, any>;
+  dslJson: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -152,7 +152,7 @@ export type RuleOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | '
 export interface WorkflowConditionRule {
   field: string;
   operator: RuleOperator;
-  value: any;
+  value: unknown;
 }
 
 export interface WorkflowRuleGroup {
@@ -162,7 +162,7 @@ export interface WorkflowRuleGroup {
 
 export interface RuleEvaluationResult {
   passed: boolean;
-  failedRules: { field: string; operator: string; expected: any; actual: any }[];
+  failedRules: { field: string; operator: string; expected: unknown; actual: unknown }[];
   evaluationDetails: string;
 }
 
@@ -171,14 +171,14 @@ export interface IWorkflowDslParser {
    * Dynamically constructs the entity context server-side from PostgreSQL DB & validated models.
    * Invariant: Never trust client-provided snapshotData for financial or security evaluation.
    */
-  buildEntityContext(entityType: string, entityId: string): Promise<Record<string, any>>;
+  buildEntityContext(entityType: string, entityId: string): Promise<Record<string, unknown>>;
 
   /**
    * Evaluates DSL condition rules against server-constructed context.
    */
   evaluateConditions(
     conditions: WorkflowRuleGroup | WorkflowConditionRule[],
-    context: Record<string, any>
+    context: Record<string, unknown>
   ): RuleEvaluationResult;
 }
 
@@ -191,7 +191,7 @@ export interface StartInstanceInput {
   entityType: string;
   entityId: string;
   userId: number;
-  initialContext?: Record<string, any>;
+  initialContext?: Record<string, unknown>;
 }
 
 export interface ExecuteTransitionInput {
@@ -201,7 +201,7 @@ export interface ExecuteTransitionInput {
   userRole: string;
   userPermissions?: string[];
   comment?: string;
-  payloadData?: Record<string, any>;
+  payloadData?: Record<string, unknown>;
 }
 
 export interface TransitionExecutionResult {

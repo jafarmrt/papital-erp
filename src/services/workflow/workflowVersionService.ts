@@ -24,7 +24,7 @@ export class WorkflowVersionService {
       version: v.version,
       title: v.title,
       description: v.description || '',
-      dslJson: v.dslJson as Record<string, any> || {},
+      dslJson: (v.dslJson as Record<string, unknown>) || {},
       createdAt: v.createdAt || ''
     }));
   }
@@ -50,7 +50,7 @@ export class WorkflowVersionService {
       version: versionEntry.version,
       title: versionEntry.title,
       description: versionEntry.description || '',
-      dslJson: versionEntry.dslJson as Record<string, any> || {},
+      dslJson: (versionEntry.dslJson as Record<string, unknown>) || {},
       createdAt: versionEntry.createdAt || ''
     };
   }
@@ -70,8 +70,8 @@ export class WorkflowVersionService {
     const states = await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, definitionId));
     const transitions = await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, definitionId));
 
-    const fullDsl: Record<string, any> = {
-      ...(def.dslJson as Record<string, any> || {}),
+    const fullDsl: Record<string, unknown> = {
+      ...((def.dslJson as Record<string, unknown>) || {}),
       definitionId: def.id,
       code: def.code,
       title: title || def.title,
@@ -105,7 +105,7 @@ export class WorkflowVersionService {
       version: published.version,
       title: published.title,
       description: published.description || '',
-      dslJson: published.dslJson as Record<string, any> || {},
+      dslJson: (published.dslJson as Record<string, unknown>) || {},
       createdAt: published.createdAt || ''
     };
   }
@@ -171,7 +171,7 @@ export class WorkflowVersionService {
       }
     }
 
-    const restoredDsl: Record<string, any> = {
+    const restoredDsl: Record<string, unknown> = {
       ...dsl,
       version: newVersion,
       restoredFromVersion: targetVersion,

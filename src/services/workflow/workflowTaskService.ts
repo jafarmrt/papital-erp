@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowInstances, 
   workflowPendingApprovals, 
@@ -14,7 +14,7 @@ export class WorkflowTaskService {
   /**
    * Automatically mark overdue tasks as expired
    */
-  static async markExpiredTasks(txExecutor: any = orm) {
+  static async markExpiredTasks(txExecutor: DbExecutor = orm) {
     const nowIso = new Date().toISOString();
     const expiredTasks = await txExecutor.select()
       .from(workflowTasks)
@@ -27,7 +27,7 @@ export class WorkflowTaskService {
     if (expiredTasks.length > 0) {
       await txExecutor.update(workflowTasks)
         .set({ status: 'expired' })
-        .where(inArray(workflowTasks.id, expiredTasks.map((t: any) => t.id)));
+        .where(inArray(workflowTasks.id, expiredTasks.map(t => t.id)));
     }
     return expiredTasks.length;
   }
@@ -76,7 +76,7 @@ export class WorkflowTaskService {
       const instance = item.instance;
 
       let isAssigned = false;
-      let delegationInfo: any = null;
+      let delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null = null;
 
       const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
       const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
@@ -168,7 +168,7 @@ export class WorkflowTaskService {
     userPermissions?: string[];
     action: 'approve' | 'reject';
     comment?: string;
-    snapshotData?: Record<string, any>;
+    snapshotData?: Record<string, unknown>;
   }) {
     return await orm.transaction(async (tx) => {
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
@@ -202,7 +202,7 @@ export class WorkflowTaskService {
       const isAdmin = userRole === 'admin' || userPerms.includes('workflow.admin') || userPerms.includes('admin');
 
       let isAuthorized = false;
-      let delegationLogDetails: any = null;
+      let delegationLogDetails: Record<string, unknown> | null = null;
 
       const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
       const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
@@ -234,7 +234,8 @@ export class WorkflowTaskService {
                 sql`${workflowDelegations.endDate} >= ${nowIso}`
               ));
 
-            const workflowCode = (instance.snapshotDsl as any)?.code || '';
+            const snapshot = instance.snapshotDsl as { code?: string } | null;
+            const workflowCode = snapshot?.code || '';
             const validDelegation = activeDelegations.find(del => {
               const scope = (del.scope || 'ALL').trim();
               return scope === 'ALL' || scope === '*' || (workflowCode && scope.toLowerCase() === workflowCode.toLowerCase());

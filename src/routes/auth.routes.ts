@@ -31,8 +31,9 @@ export async function checkAccountLockout(username: string): Promise<{ isLocked:
       }
     }
     return { isLocked: false };
-  } catch (err: any) {
-    logger.error(`[Account Lockout Check Error] ${err.message}`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(`[Account Lockout Check Error] ${errMsg}`);
     return { isLocked: false };
   }
 }
@@ -66,8 +67,9 @@ export async function recordFailedAttempt(username: string): Promise<{ locked: b
 
     const remaining = Math.max(0, LOCKOUT_THRESHOLD - newFailedCount);
     return { locked: false, remainingAttempts: remaining };
-  } catch (err: any) {
-    logger.error(`[Record Failed Attempt Error] ${err.message}`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(`[Record Failed Attempt Error] ${errMsg}`);
     return { locked: false, remainingAttempts: 0 };
   }
 }
@@ -85,8 +87,9 @@ export async function resetFailedAttempts(userIdOrUsername: number | string): Pr
         lockedUntil: null 
       }).where(eq(users.username, String(userIdOrUsername).trim()));
     }
-  } catch (err: any) {
-    logger.error(`[Reset Failed Attempts Error] ${err.message}`);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.error(`[Reset Failed Attempts Error] ${errMsg}`);
   }
 }
 
@@ -106,7 +109,7 @@ router.get('/check-setup', asyncHandler(async (req, res) => {
       .from(users)
       .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
     count = Number(result[0]?.count || 0);
-  } catch (dbErr: any) {
+  } catch (dbErr) {
     // If table doesn't exist yet, run seed to create tables and retry
     const { runSeed } = await import('../db/seed.js');
     await runSeed();
@@ -189,8 +192,8 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 
   // 2. PostgreSQL advisory lock (79234) to prevent race conditions (SEC-012)
   const { sql } = await import('drizzle-orm');
-  const lockResult: any = await orm.execute(sql`SELECT pg_try_advisory_lock(79234) AS acquired`);
-  const rows = lockResult?.rows || (Array.isArray(lockResult) ? lockResult : []);
+  const lockResult = (await orm.execute(sql`SELECT pg_try_advisory_lock(79234) AS acquired`)) as unknown as { rows?: Array<{ acquired?: boolean | string }> } | Array<{ acquired?: boolean | string }>;
+  const rows = (lockResult as { rows?: Array<{ acquired?: boolean | string }> })?.rows || (Array.isArray(lockResult) ? lockResult : []);
   const isAcquired = Boolean(rows[0]?.acquired === true || rows[0]?.acquired === 't');
 
   if (!isAcquired) {
@@ -268,8 +271,9 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     // 4. Always release the advisory lock
     try {
       await orm.execute(sql`SELECT pg_advisory_unlock(79234)`);
-    } catch (unlockErr: any) {
-      logger.warn(`[Setup] Error releasing advisory lock 79234: ${unlockErr?.message || unlockErr}`);
+    } catch (unlockErr) {
+      const errMsg = unlockErr instanceof Error ? unlockErr.message : String(unlockErr);
+      logger.warn(`[Setup] Error releasing advisory lock 79234: ${errMsg}`);
     }
   }
 }));
@@ -362,7 +366,7 @@ router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
 }));
 
 // Logout endpoint - Clears the HttpOnly auth cookie
-const logoutHandler = asyncHandler(async (req: any, res: any) => {
+const logoutHandler = asyncHandler(async (req, res) => {
   const user = req.user;
   if (user) {
     await logActivity({
@@ -386,7 +390,7 @@ router.post('/logout', logoutHandler);
 router.post('/auth/logout', logoutHandler);
 
 // Check current session endpoint
-const meHandler = asyncHandler(async (req: any, res: any) => {
+const meHandler = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) {
     throw new UnauthorizedError('کاربر احراز هویت نشده است');
@@ -409,7 +413,7 @@ const meHandler = asyncHandler(async (req: any, res: any) => {
       must_reset_password: Boolean(user.mustResetPassword)
     },
     token,
-    csrfToken: req.user?.csrfToken || req.csrfToken || ''
+    csrfToken: req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken || ''
   });
 });
 

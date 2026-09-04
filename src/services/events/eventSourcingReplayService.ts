@@ -3,8 +3,9 @@ import { outboxEvents, deadLetterEvents, activityLogs, documents, items, custome
 import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { domainEventBus } from './domainEventBus.js';
-import { BaseDomainEvent } from './domainEvents.js';
+import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
+import { RuleExpression } from '../ruleEngine.service.js';
 
 export interface TimelineEventItem {
   id: string | number;
@@ -16,9 +17,9 @@ export interface TimelineEventItem {
   title: string;
   description: string;
   status: string;
-  payload: any;
-  metadata: any;
-  changes?: any;
+  payload: unknown;
+  metadata: unknown;
+  changes?: unknown;
 }
 
 export class EventSourcingReplayService {
@@ -194,8 +195,9 @@ export class EventSourcingReplayService {
         default:
           return [];
       }
-    } catch (err: any) {
-      logger.error(`[Event Sourcing Search Aggregates Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Event Sourcing Search Aggregates Error] ${errMsg}`);
       return [];
     }
   }
@@ -224,13 +226,15 @@ export class EventSourcingReplayService {
         .orderBy(desc(outboxEvents.occurredAt));
 
       for (const ev of outboxList) {
+        const meta = (ev.metadata && typeof ev.metadata === 'object') ? (ev.metadata as Record<string, unknown>) : {};
+        const actorName = String(meta.userName || meta.userFullName || 'سیستم');
         timeline.push({
           id: `outbox-${ev.id}`,
           eventId: ev.eventId,
           eventType: ev.eventType,
           occurredAt: ev.occurredAt || new Date().toISOString(),
           source: 'outbox',
-          actor: (ev.metadata as any)?.userName || (ev.metadata as any)?.userFullName || 'سیستم',
+          actor: actorName,
           title: this.getPersianEventTitle(ev.eventType),
           description: this.getPersianEventSummary(ev.eventType, ev.payload),
           status: ev.status,
@@ -283,6 +287,7 @@ export class EventSourcingReplayService {
         .limit(30);
 
       for (const al of auditLogs) {
+        const details = (al.details && typeof al.details === 'object') ? (al.details as Record<string, unknown>) : {};
         timeline.push({
           id: `audit-${al.id}`,
           eventId: `audit-log-${al.id}`,
@@ -295,7 +300,7 @@ export class EventSourcingReplayService {
           status: 'logged',
           payload: al.details || {},
           metadata: { ip: al.ipAddress, entity: al.entity, entityId: al.entityId },
-          changes: (al.details as any)?.changes || (al.details as any)?.before || (al.details as any)?.after
+          changes: details.changes || details.before || details.after
         });
       }
 
@@ -303,8 +308,9 @@ export class EventSourcingReplayService {
       timeline.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 
       return timeline;
-    } catch (err: any) {
-      logger.error(`[Event Sourcing Timeline Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Event Sourcing Timeline Error] ${errMsg}`);
       return [];
     }
   }
@@ -317,7 +323,7 @@ export class EventSourcingReplayService {
     eventType: string;
     aggregateType: string;
     aggregateId: string;
-    payload: any;
+    payload: unknown;
     dryRun?: boolean;
     userId?: number;
     userName?: string;
@@ -329,8 +335,8 @@ export class EventSourcingReplayService {
 
     const syntheticEvent: BaseDomainEvent = {
       eventId,
-      eventType: params.eventType as any,
-      aggregateType: params.aggregateType as any,
+      eventType: params.eventType,
+      aggregateType: params.aggregateType as AggregateType,
       aggregateId: params.aggregateId,
       payload: params.payload || {},
       metadata: {
@@ -349,7 +355,7 @@ export class EventSourcingReplayService {
     const rules = await EventActionEngineService.getRules({ eventType: params.eventType, isActive: true });
 
     for (const rule of rules) {
-      const isMatched = EventActionEngineService.evaluateConditions(rule.conditionsJson as any, syntheticEvent);
+      const isMatched = EventActionEngineService.evaluateConditions(rule.conditionsJson as RuleExpression, syntheticEvent);
       simulationResults.push({
         ruleId: rule.id,
         ruleName: rule.name,
@@ -412,20 +418,21 @@ export class EventSourcingReplayService {
     return titles[eventType] || `رویداد دامنه‌ای: ${eventType}`;
   }
 
-  private static getPersianEventSummary(eventType: string, payload: any): string {
+  private static getPersianEventSummary(eventType: string, payload: unknown): string {
     if (!payload || typeof payload !== 'object') return 'اطلاعات رویداد ثبت گردید.';
+    const p = payload as Record<string, unknown>;
 
     if (eventType.startsWith('document.')) {
-      return `فاکتور/سند ${payload.docNumber || ''} به مبلغ ${Number(payload.totalAmount || 0).toLocaleString('fa-IR')} ${payload.currency || 'ریال'} (${payload.customerName || 'عمومی'})`;
+      return `فاکتور/سند ${p.docNumber || ''} به مبلغ ${Number(p.totalAmount || 0).toLocaleString('fa-IR')} ${p.currency || 'ریال'} (${p.customerName || 'عمومی'})`;
     }
     if (eventType.startsWith('inventory.')) {
-      return `گردش کالا ${payload.itemName || payload.itemCode || ''} به مقدار ${payload.quantity || ''} ${payload.unit || ''} (موجودی فعلی: ${payload.newStock || ''})`;
+      return `گردش کالا ${p.itemName || p.itemCode || ''} به مقدار ${p.quantity || ''} ${p.unit || ''} (موجودی فعلی: ${p.newStock || ''})`;
     }
     if (eventType.startsWith('treasury.')) {
-      return `تراکنش ${payload.type === 'pay' ? 'پرداخت' : 'دریافت'} به مبلغ ${Number(payload.amount || 0).toLocaleString('fa-IR')} ${payload.currency || 'ریال'} طرف‌حساب: ${payload.partyName || ''}`;
+      return `تراکنش ${p.type === 'pay' ? 'پرداخت' : 'دریافت'} به مبلغ ${Number(p.amount || 0).toLocaleString('fa-IR')} ${p.currency || 'ریال'} طرف‌حساب: ${p.partyName || ''}`;
     }
     if (eventType.startsWith('workflow.')) {
-      return `گذار فرآیند از حالت [${payload.fromStateName || ''}] به [${payload.toStateName || ''}] توسط ${payload.actorName || ''}`;
+      return `گذار فرآیند از حالت [${p.fromStateName || ''}] به [${p.toStateName || ''}] توسط ${p.actorName || ''}`;
     }
 
     return JSON.stringify(payload).substring(0, 100);

@@ -148,7 +148,7 @@ export class ProjectBomAllocationService {
         // If no existing transaction specified, create receiving-allocation transaction log
         if (!resolvedTxId) {
           const txDate = await businessTodayIsoDate();
-          const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as any).lastPurchasePrice) || 0;
+          const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
           const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
           const [newTx] = await txEngine
             .insert(transactions)
@@ -223,7 +223,7 @@ export class ProjectBomAllocationService {
           unit: allocRecord.unit || 'عدد',
           sourceTransactionId: allocRecord.sourceTransactionId,
           sourceLocation: allocRecord.sourceLocation || 'main',
-          status: allocRecord.status as any,
+          status: (allocRecord.status || 'allocated') as ProjectBomAllocationRecord['status'],
           userId: allocRecord.userId,
           username: allocRecord.username || '',
           notes: allocRecord.notes || '',
@@ -338,7 +338,7 @@ export class ProjectBomAllocationService {
 
         // Create transaction log
         const txDate = await businessTodayIsoDate();
-        const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as any).lastPurchasePrice) || 0;
+        const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
         const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
         const [txRecord] = await txEngine
           .insert(transactions)
@@ -410,7 +410,7 @@ export class ProjectBomAllocationService {
           unit: allocRecord.unit || 'عدد',
           sourceTransactionId: allocRecord.sourceTransactionId,
           sourceLocation: allocRecord.sourceLocation || 'main',
-          status: allocRecord.status as any,
+          status: (allocRecord.status || 'allocated') as ProjectBomAllocationRecord['status'],
           userId: allocRecord.userId,
           username: allocRecord.username || '',
           notes: allocRecord.notes || '',
@@ -543,7 +543,7 @@ export class ProjectBomAllocationService {
           .where(eq(items.id, item.id));
 
         // 2. Insert transaction log of type 'in'
-        const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as any).lastPurchasePrice) || 0;
+        const itemUnitPrice = Number(item.weightedAverageCost) || 0;
         const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
         await txEngine.insert(transactions).values({
           itemId: item.id,
@@ -614,7 +614,7 @@ export class ProjectBomAllocationService {
       unit: alloc.unit || 'عدد',
       sourceTransactionId: alloc.sourceTransactionId,
       sourceLocation: alloc.sourceLocation || 'main',
-      status: alloc.status as any,
+      status: (alloc.status || 'allocated') as ProjectBomAllocationRecord['status'],
       userId: alloc.userId,
       username: alloc.username || '',
       notes: alloc.notes || '',
@@ -677,7 +677,7 @@ export class ProjectBomAllocationService {
       unit: alloc.unit || 'عدد',
       sourceTransactionId: alloc.sourceTransactionId,
       sourceLocation: alloc.sourceLocation || 'main',
-      status: alloc.status as any,
+      status: (alloc.status || 'allocated') as ProjectBomAllocationRecord['status'],
       userId: alloc.userId,
       username: alloc.username || '',
       notes: alloc.notes || '',

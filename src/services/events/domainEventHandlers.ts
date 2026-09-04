@@ -32,8 +32,9 @@ export function registerDomainEventHandlers(): void {
   domainEventBus.subscribeAll(async (event: BaseDomainEvent) => {
     try {
       await EventActionEngineService.processEvent(event);
-    } catch (err: any) {
-      logger.error(`[EventActionEngine Dispatch Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[EventActionEngine Dispatch Error] ${errMsg}`);
     }
   });
 
@@ -43,8 +44,9 @@ export function registerDomainEventHandlers(): void {
   domainEventBus.subscribeAll(async (event: BaseDomainEvent) => {
     try {
       await WebhookSubscriptionService.dispatchDomainEventToSubscribers(event);
-    } catch (err: any) {
-      logger.error(`[WebhookSubscription Dispatch Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[WebhookSubscription Dispatch Error] ${errMsg}`);
     }
   });
 
@@ -91,8 +93,9 @@ export function registerDomainEventHandlers(): void {
           metadata: event.metadata
         }
       });
-    } catch (err: any) {
-      logger.error(`[Audit Domain Event] Failed to write audit log: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Audit Domain Event] Failed to write audit log: ${errMsg}`);
     }
   });
 
@@ -125,8 +128,9 @@ export function registerDomainEventHandlers(): void {
           { correlationId: event.eventId }
         );
       }
-    } catch (err: any) {
-      logger.error(`[Inventory Reorder Check] Error checking reorderPoint: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Inventory Reorder Check] Error checking reorderPoint: ${errMsg}`);
     }
   });
 
@@ -136,8 +140,9 @@ export function registerDomainEventHandlers(): void {
   domainEventBus.subscribe<PurchaseEventPayload>(DomainEventType.PURCHASE_APPROVED, async (event) => {
     try {
       logger.info(`[Purchase Handler] Purchase #${event.payload.refNumber} approved. Total items: ${event.payload.itemCount}`);
-    } catch (err: any) {
-      logger.error(`[Purchase Handler] Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Purchase Handler] Error: ${errMsg}`);
     }
   });
 
@@ -147,8 +152,9 @@ export function registerDomainEventHandlers(): void {
   domainEventBus.subscribe<InvoiceEventPayload>(DomainEventType.INVOICE_APPROVED, async (event) => {
     try {
       logger.info(`[Invoice Handler] Sales invoice #${event.payload.refNumber} approved for buyer: ${event.payload.buyerName}`);
-    } catch (err: any) {
-      logger.error(`[Invoice Handler] Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Invoice Handler] Error: ${errMsg}`);
     }
   });
 }

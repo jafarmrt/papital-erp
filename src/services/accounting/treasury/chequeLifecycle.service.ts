@@ -123,8 +123,8 @@ export class ChequeLifecycleService {
       payee_name: c.payeeName || '',
       bank_account_id: c.bankAccountId,
       voucher_id: c.voucherId,
-      statusHistory: (c.statusHistory as any) || [],
-      status_history: (c.statusHistory as any) || [],
+      statusHistory: (c.statusHistory as unknown as Cheque['statusHistory']) || [],
+      status_history: (c.statusHistory as unknown as Cheque['statusHistory']) || [],
     }));
   }
 
@@ -302,8 +302,8 @@ export class ChequeLifecycleService {
         chequeCurrency = preCheck?.currency || 'IRR';
       }
 
-      let bankRecord: any = null;
-      let existing: any = null;
+      let bankRecord: typeof bankAccounts.$inferSelect | null = null;
+      let existing: typeof cheques.$inferSelect | null = null;
 
       if (data.status === 'passed') {
         if (!targetBankId) throw new ValidationError('برای وصول چک، تعیین حساب بانکی واریز یا برداشت الزامی است');

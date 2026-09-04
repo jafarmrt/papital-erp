@@ -63,7 +63,7 @@ export interface DomainEventMetadata {
 
 export type AggregateType = 'Document' | 'Item' | 'Workflow' | 'Treasury' | 'Project' | 'Customer' | 'Voucher' | 'WooCommerce';
 
-export interface BaseDomainEvent<T = any> {
+export interface BaseDomainEvent<T = unknown> {
   eventId: string;
   eventType: DomainEventType | string;
   aggregateType: AggregateType;
@@ -175,36 +175,39 @@ export interface InventoryReorderAlertPayload {
 // Helper Factory & Validation for Domain Event Contract (Subphase 8.1)
 // -------------------------------------------------------------
 
-export function validateDomainEvent(event: any): { valid: boolean; errors: string[] } {
+export function validateDomainEvent(event: unknown): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   if (!event || typeof event !== 'object') {
     return { valid: false, errors: ['رویداد غیرمعتبر یا خالی است (Event is empty or null)'] };
   }
 
-  if (!event.eventId || typeof event.eventId !== 'string') {
+  const rec = event as Record<string, unknown>;
+
+  if (!rec.eventId || typeof rec.eventId !== 'string') {
     errors.push('شناسه رویداد (eventId) الزامی و باید رشته باشد.');
   }
 
-  if (!event.eventType || typeof event.eventType !== 'string') {
+  if (!rec.eventType || typeof rec.eventType !== 'string') {
     errors.push('نوع رویداد (eventType) الزامی و باید رشته باشد.');
   }
 
-  if (!event.aggregateType || typeof event.aggregateType !== 'string') {
+  if (!rec.aggregateType || typeof rec.aggregateType !== 'string') {
     errors.push('نوع موجودیت (aggregateType) الزامی و باید رشته باشد.');
   }
 
-  if (event.aggregateId === undefined || event.aggregateId === null || typeof String(event.aggregateId) !== 'string') {
+  if (rec.aggregateId === undefined || rec.aggregateId === null || typeof String(rec.aggregateId) !== 'string') {
     errors.push('شناسه موجودیت (aggregateId) الزامی است.');
   }
 
-  if (!event.occurredAt || typeof event.occurredAt !== 'string' || isNaN(Date.parse(event.occurredAt))) {
+  if (!rec.occurredAt || typeof rec.occurredAt !== 'string' || isNaN(Date.parse(rec.occurredAt))) {
     errors.push('زمان وقوع رویداد (occurredAt) باید فرمت ایزو معتبر داشته باشد.');
   }
 
-  if (!event.metadata || typeof event.metadata !== 'object') {
+  const metadata = rec.metadata as Record<string, unknown> | undefined;
+  if (!metadata || typeof metadata !== 'object') {
     errors.push('متاداده رویداد (metadata) الزامی است.');
-  } else if (!event.metadata.timestamp || typeof event.metadata.timestamp !== 'string') {
+  } else if (!metadata.timestamp || typeof metadata.timestamp !== 'string') {
     errors.push('برچسب زمانی در متاداده (metadata.timestamp) الزامی است.');
   }
 
@@ -214,7 +217,7 @@ export function validateDomainEvent(event: any): { valid: boolean; errors: strin
   };
 }
 
-export function createDomainEvent<T = any>(params: {
+export function createDomainEvent<T = unknown>(params: {
   eventType: DomainEventType | string;
   aggregateType: BaseDomainEvent['aggregateType'];
   aggregateId: string | number;

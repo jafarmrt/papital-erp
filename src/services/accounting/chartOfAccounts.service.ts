@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts } from '../../db/schema.js';
 import { eq, asc } from 'drizzle-orm';
 import { STANDARD_CHART_OF_ACCOUNTS } from '../../data/standardChartOfAccounts.js';
@@ -127,7 +127,7 @@ export class ChartOfAccountsService {
   /**
    * Get all active accounts ordered by code
    */
-  static async getAllAccounts(tx?: any): Promise<Account[]> {
+  static async getAllAccounts(tx?: DbExecutor): Promise<Account[]> {
     const executor = tx || orm;
     const raw = await executor.select().from(accounts)
       .where(eq(accounts.isDeleted, 0))
@@ -240,7 +240,7 @@ export class ChartOfAccountsService {
       throw new Error('حساب مورد نظر یافت نشد.');
     }
 
-    const updateData: any = {};
+    const updateData: Partial<typeof accounts.$inferInsert> = {};
     if (data.name !== undefined) updateData.name = data.name.trim();
     if (data.level !== undefined) updateData.level = data.level;
     if (data.parentId !== undefined) updateData.parentId = data.parentId;

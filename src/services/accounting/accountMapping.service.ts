@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { appSettings, accounts } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
@@ -64,7 +64,7 @@ export class AccountMappingService {
   /**
    * Get all conceptual account mapping configurations
    */
-  static async getMappings(tx?: any): Promise<ConceptualAccountMappingConfig> {
+  static async getMappings(tx?: DbExecutor): Promise<ConceptualAccountMappingConfig> {
     try {
       const executor = tx || orm;
       const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, SETTINGS_KEY));
@@ -100,7 +100,7 @@ export class AccountMappingService {
    * Resolve a conceptual account to its concrete database Account entity
    * V1.7.0: مفاهیم «غیرفعال‌شده» همیشه به کدینگ پیش‌فرض برمی‌گردند (bypass سفارشی‌سازی)
    */
-  static async resolveAccount(concept: keyof ConceptualAccountMappingConfig, tx?: any): Promise<Account | null> {
+  static async resolveAccount(concept: keyof ConceptualAccountMappingConfig, tx?: DbExecutor): Promise<Account | null> {
     const mappings = await this.getMappings(tx);
     const disabled = await this.getDisabledMappings(tx);
     const targetCode = disabled.includes(String(concept))
@@ -122,7 +122,7 @@ export class AccountMappingService {
   /**
    * V1.7.0: لیست مفاهیم غیرفعال (سفارشی‌سازی خاموش → کدینگ پیش‌فرض)
    */
-  static async getDisabledMappings(tx?: any): Promise<string[]> {
+  static async getDisabledMappings(tx?: DbExecutor): Promise<string[]> {
     try {
       const executor = tx || orm;
       const [setting] = await executor.select().from(appSettings).where(eq(appSettings.key, DISABLED_KEY));
@@ -136,7 +136,7 @@ export class AccountMappingService {
     return [];
   }
 
-  static async setDisabledMappings(list: string[], tx?: any): Promise<string[]> {
+  static async setDisabledMappings(list: string[], tx?: DbExecutor): Promise<string[]> {
     const executor = tx || orm;
     const clean = (Array.isArray(list) ? list : []).map(String);
     await executor.insert(appSettings).values({
@@ -152,7 +152,7 @@ export class AccountMappingService {
   /**
    * V1.7.0: متادیتای کامل برای تب «تنظیمات حسابداری»
    */
-  static async getMappingsWithMeta(tx?: any): Promise<{
+  static async getMappingsWithMeta(tx?: DbExecutor): Promise<{
     mappings: ConceptualAccountMappingConfig;
     disabled: string[];
     accountsCount: number;
@@ -172,131 +172,131 @@ export class AccountMappingService {
   /**
    * Resolve Direct Production Wages Account (هزینه دستمزد مستقیم تولید)
    */
-  static async getDirectProductionWagesAccount(tx?: any): Promise<Account | null> {
+  static async getDirectProductionWagesAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('directProductionWagesAccountCode', tx);
   }
 
   /**
    * Resolve Wages Payable Account (حقوق و دستمزد پرداختنی پرسنل)
    */
-  static async getWagesPayableAccount(tx?: any): Promise<Account | null> {
+  static async getWagesPayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('wagesPayableAccountCode', tx);
   }
 
   /**
    * Resolve Trade Receivables Account (حساب‌های دریافتنی تجاری / بدهکاران)
    */
-  static async getTradeReceivablesAccount(tx?: any): Promise<Account | null> {
+  static async getTradeReceivablesAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('tradeReceivablesAccountCode', tx);
   }
 
   /**
    * Resolve Trade Payables Account (حساب‌های پرداختنی تجاری / بستانکاران)
    */
-  static async getTradePayablesAccount(tx?: any): Promise<Account | null> {
+  static async getTradePayablesAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('tradePayablesAccountCode', tx);
   }
 
   /**
    * Resolve Sales Revenue Account (درآمد فروش)
    */
-  static async getSalesRevenueAccount(tx?: any): Promise<Account | null> {
+  static async getSalesRevenueAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('salesRevenueAccountCode', tx);
   }
 
   /**
    * Resolve Sales Discount Account (تخفیفات اعطایی)
    */
-  static async getSalesDiscountAccount(tx?: any): Promise<Account | null> {
+  static async getSalesDiscountAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('salesDiscountAccountCode', tx);
   }
 
   /**
    * Resolve VAT Payable Account (مالیات بر ارزش افزوده)
    */
-  static async getSalesVatPayableAccount(tx?: any): Promise<Account | null> {
+  static async getSalesVatPayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('salesVatPayableAccountCode', tx);
   }
 
   /**
    * Resolve Summary Profit & Loss Account (خلاصه سود و زیان سال جاری)
    */
-  static async getSummaryProfitLossAccount(tx?: any): Promise<Account | null> {
+  static async getSummaryProfitLossAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('summaryProfitLossCode', tx);
   }
 
   /**
    * Resolve Retained Earnings Account (سود و زیان انباشته)
    */
-  static async getRetainedEarningsAccount(tx?: any): Promise<Account | null> {
+  static async getRetainedEarningsAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('retainedEarningsCode', tx);
   }
 
   /**
    * Resolve Closing/Opening Balance Sheet Clearing Account
    */
-  static async getClosingBalanceAccount(tx?: any): Promise<Account | null> {
+  static async getClosingBalanceAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('closingBalanceAccountCode', tx);
   }
 
   /**
    * V1.7.0: مفاهیم چرخه چک صیادی
    */
-  static async getChequeReceivableAccount(tx?: any): Promise<Account | null> {
+  static async getChequeReceivableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('chequeReceivableAccountCode', tx);
   }
 
-  static async getChequeInCollectionAccount(tx?: any): Promise<Account | null> {
+  static async getChequeInCollectionAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('chequeInCollectionAccountCode', tx);
   }
 
-  static async getChequeProtestAccount(tx?: any): Promise<Account | null> {
+  static async getChequeProtestAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('chequeProtestAccountCode', tx);
   }
 
-  static async getChequePayableAccount(tx?: any): Promise<Account | null> {
+  static async getChequePayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('chequePayableAccountCode', tx);
   }
 
   /**
    * V1.8.0: مساعده و وام پرسنل (مطالبات از کارکنان)
    */
-  static async getEmployeeAdvanceAccount(tx?: any): Promise<Account | null> {
+  static async getEmployeeAdvanceAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('employeeAdvanceAccountCode', tx);
   }
 
   /**
    * V1.9.0: هزینه حقوق و دستمزد ثابت (بخش غیرپرکیسی فیش)
    */
-  static async getFixedSalaryExpenseAccount(tx?: any): Promise<Account | null> {
+  static async getFixedSalaryExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('fixedSalaryExpenseAccountCode', tx);
   }
 
   /**
    * V1.9.0: سایر کسورات پرداختنی (بیمه/مالیات سهم کارمند)
    */
-  static async getEmployeeDeductionsPayableAccount(tx?: any): Promise<Account | null> {
+  static async getEmployeeDeductionsPayableAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('employeeDeductionsPayableAccountCode', tx);
   }
 
   /**
    * V2.0.0: حساب سرمایه اولیه — طرف حساب اسناد افتتاحیه (موجودی اولیه خزانه/انبار)
    */
-  static async getOpeningCapitalAccount(tx?: any): Promise<Account | null> {
+  static async getOpeningCapitalAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('openingCapitalAccountCode', tx);
   }
 
   /**
    * V2.0.0: موجودی مواد اولیه (1401)
    */
-  static async getInventoryRawMaterialsAccount(tx?: any): Promise<Account | null> {
+  static async getInventoryRawMaterialsAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('inventoryRawMaterialsCode', tx);
   }
 
   /**
    * V2.0.0: موجودی کالای تولیدشده (1403)
    */
-  static async getInventoryFinishedGoodsAccount(tx?: any): Promise<Account | null> {
+  static async getInventoryFinishedGoodsAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('inventoryFinishedGoodsCode', tx);
   }
 }

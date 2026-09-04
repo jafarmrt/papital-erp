@@ -1,5 +1,5 @@
 import { eq, and, desc, ilike } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses, transactions, itemCodeCounters } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
@@ -8,7 +8,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { ValidationError } from '../../errors/customErrors.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
-type DbLike = any;
+type DbLike = DbExecutor;
 
 export interface NextItemCodeInput {
   type?: string;
@@ -105,7 +105,7 @@ export class ItemCatalogService {
     return maxNum;
   }
 
-  private static assembleCode(type: 'product' | 'raw_material', ctx: any, serialNum: number): string {
+  private static assembleCode(type: 'product' | 'raw_material', ctx: { pad: number; base?: string; prefix?: string }, serialNum: number): string {
     const serial = String(serialNum).padStart(ctx.pad, '0');
     if (type === 'product') {
       return `${ctx.base}${serial}`;
@@ -320,7 +320,7 @@ export class ItemCatalogService {
 
     const exportRows = fetchedItems.map(it => {
       const itemPriceObj = priceMap.get(it.id);
-      const row: Record<string, any> = {
+      const row: Record<string, unknown> = {
         'کد کالا': it.code,
         'نام محصول': it.name,
         'نوع کالا': it.type === 'product' ? 'محصول نهایی' : 'ماده اولیه',
@@ -329,7 +329,7 @@ export class ItemCatalogService {
         'موجودی کل': Number(it.currentStock || 0),
       };
 
-      const st = (it.stocks as Record<string, any>) || {};
+      const st = (it.stocks as Record<string, unknown>) || {};
       for (const w of whs) {
         row[`موجودی انبار ${w.name}`] = Number(st[w.code] || 0);
       }
@@ -368,7 +368,11 @@ export class ItemCatalogService {
   /**
    * Processes Excel bulk import rows for items, stock logs, and pricing levels.
    */
-  static async processUnifiedImport(rows: any[], typeFilter: string | undefined, req: any) {
+  static async processUnifiedImport(
+    rows: Array<Record<string, unknown>>,
+    typeFilter: string | undefined,
+    req: { user?: { id?: number; username?: string; full_name?: string } }
+  ) {
     const whs = await orm.select().from(warehouses);
     const strategies = await ItemPricingService.getPricingStrategies();
 
@@ -433,7 +437,7 @@ export class ItemCatalogService {
           hasCustomStockInRow = true;
         }
 
-        let matchedItem: any = null;
+        let matchedItem: typeof items.$inferSelect | null = null;
         if (code) {
           const [byCode] = await tx.select().from(items)
             .where(and(eq(items.code, code), eq(items.isDeleted, 0)))

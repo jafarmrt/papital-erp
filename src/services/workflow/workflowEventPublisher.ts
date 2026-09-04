@@ -1,8 +1,34 @@
 import { workflowEventBus } from './workflowEventBus.js';
 import { domainEventBus } from '../events/domainEventBus.js';
-import { DomainEventType } from '../events/domainEvents.js';
+import { DomainEventType, AggregateType } from '../events/domainEvents.js';
 import { WorkflowEventPayload } from './contracts/workflowDomainContracts.js';
 import { logger } from '../../middleware/logger.js';
+
+function toAggregateType(entityType?: string): AggregateType {
+  const normalized = (entityType || '').toLowerCase();
+  switch (normalized) {
+    case 'document':
+    case 'invoice':
+    case 'proforma':
+      return 'Document';
+    case 'item':
+      return 'Item';
+    case 'treasury':
+    case 'cheque':
+    case 'bank_account':
+      return 'Treasury';
+    case 'project':
+      return 'Project';
+    case 'customer':
+      return 'Customer';
+    case 'voucher':
+      return 'Voucher';
+    case 'woocommerce':
+      return 'WooCommerce';
+    default:
+      return 'Workflow';
+  }
+}
 
 export class WorkflowEventPublisher {
   /**
@@ -16,14 +42,15 @@ export class WorkflowEventPublisher {
       // 2. Central Domain Event Bus dispatch
       const event = domainEventBus.createEvent(
         DomainEventType.WORKFLOW_TRANSITIONED,
-        (payload.entityType as any) || 'workflow_instance',
+        toAggregateType(payload.entityType),
         String(payload.entityId || payload.instanceId),
         payload,
         { userId: payload.performedBy, username: payload.performedByName }
       );
       await domainEventBus.publish(event);
-    } catch (err: any) {
-      logger.warn(`[WorkflowEventPublisher] Failed to publish transition event: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.warn(`[WorkflowEventPublisher] Failed to publish transition event: ${errMsg}`);
     }
   }
 
@@ -36,14 +63,15 @@ export class WorkflowEventPublisher {
 
       const event = domainEventBus.createEvent(
         'WORKFLOW_COMPLETED',
-        (payload.entityType as any) || 'workflow_instance',
+        toAggregateType(payload.entityType),
         String(payload.entityId || payload.instanceId),
         payload,
         { userId: payload.performedBy, username: payload.performedByName }
       );
       await domainEventBus.publish(event);
-    } catch (err: any) {
-      logger.warn(`[WorkflowEventPublisher] Failed to publish workflow completed event: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.warn(`[WorkflowEventPublisher] Failed to publish workflow completed event: ${errMsg}`);
     }
   }
 
@@ -56,14 +84,15 @@ export class WorkflowEventPublisher {
 
       const event = domainEventBus.createEvent(
         'WORKFLOW_REJECTED',
-        (payload.entityType as any) || 'workflow_instance',
+        toAggregateType(payload.entityType),
         String(payload.entityId || payload.instanceId),
         payload,
         { userId: payload.performedBy, username: payload.performedByName }
       );
       await domainEventBus.publish(event);
-    } catch (err: any) {
-      logger.warn(`[WorkflowEventPublisher] Failed to publish workflow rejected event: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.warn(`[WorkflowEventPublisher] Failed to publish workflow rejected event: ${errMsg}`);
     }
   }
 }

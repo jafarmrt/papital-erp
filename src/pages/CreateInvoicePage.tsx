@@ -175,7 +175,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   };
 
   const loadCustomers = (signal?: AbortSignal) => {
-    fetchJson('/customers', { signal }).then(res => {
+    fetchJson('/customers?limit=1000', { signal }).then(res => {
       const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
       setCustomersList(list);
     }).catch(err => {
@@ -206,15 +206,29 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   }, []);
 
   useEffect(() => {
-    if (buyerName && customersList.length > 0 && !selectedCustomerId) {
-      const match = customersList.find(c => c.name.trim().toLowerCase() === buyerName.trim().toLowerCase());
+    if (buyerName && customersList.length > 0) {
+      const match = customersList.find(c => c.name.trim().toLowerCase() === buyerName.trim().toLowerCase() || String(c.id) === String(selectedCustomerId));
       if (match) {
-        setSelectedCustomerId(match.id.toString());
+        if (!selectedCustomerId) {
+          setSelectedCustomerId(match.id.toString());
+        }
+        if (!buyerCity) {
+          const locParts = [match.province, match.city].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean);
+          const uniqueLoc = locParts.filter((v, i, a) => a.indexOf(v) === i).join(' - ');
+          setBuyerCity(uniqueLoc || match.city || match.province || '');
+        }
+        if (!buyerPhone) {
+          const phoneVal = match.phone || (match.contacts && match.contacts[0]?.phone) || '';
+          setBuyerPhone(phoneVal);
+        }
+        if (!buyerAddress) {
+          setBuyerAddress(match.address || '');
+        }
       }
     } else if (!buyerName && selectedCustomerId) {
       setSelectedCustomerId('');
     }
-  }, [buyerName, customersList, selectedCustomerId]);
+  }, [buyerName, customersList, selectedCustomerId, buyerCity, buyerPhone, buyerAddress]);
 
   useEffect(() => {
     if (locationState.state) {
@@ -222,7 +236,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (s.buyerName) setBuyerName(s.buyerName);
       if (s.buyerPhone) setBuyerPhone(s.buyerPhone);
       if (s.buyerAddress) setBuyerAddress(s.buyerAddress);
-      if (s.buyerCity) setBuyerCity(s.buyerCity);
+      const loc = [s.buyerProvince || s.province, s.buyerCity || s.city].filter(Boolean).map((x: any) => String(x).trim()).filter(Boolean);
+      const uniqueLoc = loc.filter((v, i, a) => a.indexOf(v) === i).join(' - ');
+      if (uniqueLoc) setBuyerCity(uniqueLoc);
+      else if (s.buyerCity) setBuyerCity(s.buyerCity);
       if (s.notes) setNotes(s.notes);
       if (s.crmLeadId) setCrmLeadId(s.crmLeadId);
       if (s.type) { setDocType(s.type); setStatus('proforma'); }
@@ -240,9 +257,18 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     }
     const customer = rawC || customersList.find(c => String(c.id) === String(val));
     if (customer) {
-      setBuyerName(customer.name);
-      setBuyerCity(customer.city || '');
-      setBuyerPhone(customer.phone || '');
+      setBuyerName(customer.name || '');
+      
+      const locParts = [customer.province, customer.city].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean);
+      const uniqueLoc = locParts.filter((v, i, a) => a.indexOf(v) === i).join(' - ');
+      setBuyerCity(uniqueLoc || customer.city || customer.province || '');
+
+      let phoneVal = customer.phone || '';
+      if (!phoneVal && Array.isArray(customer.contacts) && customer.contacts.length > 0) {
+        const primary = customer.contacts.find((c: any) => c.isPrimary) || customer.contacts[0];
+        phoneVal = primary?.phone || '';
+      }
+      setBuyerPhone(phoneVal);
       setBuyerAddress(customer.address || '');
     }
   };
@@ -529,11 +555,15 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <label className="text-sm font-bold text-blue-900 shrink-0 min-w-[170px]">انتخاب خریدار از لیست طرفین حساب:*</label>
                 <SearchableSelect 
                   className="w-full"
-                  fetchUrl="/customers"
-                  mapResultToOption={(c: any) => ({
-                    value: c.id.toString(),
-                    label: `👤 ${c.name} ${c.phone ? `(${c.phone})` : ''} ${c.city ? `- ${c.city}` : ''}`
-                  })}
+                  fetchUrl="/customers?limit=1000"
+                  mapResultToOption={(c: any) => {
+                    const loc = [c.province, c.city].filter(Boolean).map((s: any) => String(s).trim()).filter((v: string, i: number, a: string[]) => Boolean(v) && a.indexOf(v) === i).join(' - ');
+                    return {
+                      value: c.id.toString(),
+                      label: `👤 ${c.name} ${c.phone ? `(${c.phone})` : ''} ${loc ? `- ${loc}` : ''}`,
+                      _raw: c
+                    };
+                  }}
                   value={selectedCustomerId}
                   onChange={handleCustomerSelect}
                   placeholder="-- جهت انتخاب خریدار، کلیک کرده یا نام/تلفن وی را تایپ کنید --"
@@ -545,7 +575,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   type="text" 
                   value={buyerName} 
                   readOnly 
-                  placeholder="از لیست طرفین حساب انتخاب کنید" 
+                  placeholder={selectedCustomerId ? (buyerName || 'بدون نام') : 'از لیست طرفین حساب انتخاب کنید'} 
                   className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
                 />
               </div>
@@ -555,7 +585,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   type="text" 
                   value={buyerCity} 
                   readOnly 
-                  placeholder="خودکار از پرونده" 
+                  placeholder={selectedCustomerId ? (buyerCity ? '' : 'در پرونده ثبت نشده است') : 'از پرونده خریدار فراخوانی می‌شود'} 
                   className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
                 />
               </div>
@@ -565,7 +595,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   type="text" 
                   value={buyerPhone} 
                   readOnly 
-                  placeholder="خودکار از پرونده" 
+                  placeholder={selectedCustomerId ? (buyerPhone ? '' : 'در پرونده ثبت نشده است') : 'از پرونده خریدار فراخوانی می‌شود'} 
                   className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
                   dir="ltr" 
                 />
@@ -576,7 +606,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   type="text" 
                   value={buyerAddress} 
                   readOnly 
-                  placeholder="خودکار از پرونده" 
+                  placeholder={selectedCustomerId ? (buyerAddress ? '' : 'در پرونده مشتری نشانی ثبت نشده است') : 'از پرونده خریدار فراخوانی می‌شود'} 
                   className="w-full border rounded text-sm px-3 py-1.5 bg-slate-100/90 text-slate-800 font-bold cursor-not-allowed border-slate-200 shadow-2xs" 
                 />
               </div>

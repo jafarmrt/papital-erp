@@ -8,7 +8,7 @@ export interface ActionHandlerDefinition {
   handlerName: string;
   eventType: DomainEventType | string;
   description: string;
-  handlerFn: (event: BaseDomainEvent) => Promise<any>;
+  handlerFn: (event: BaseDomainEvent) => Promise<unknown>;
 }
 
 export interface ActionHandlerExecutionStats {
@@ -46,7 +46,7 @@ export class ActionHandlerService {
     }
 
     // Subscribe to domain event bus
-    domainEventBus.subscribe(def.eventType as any, async (event: BaseDomainEvent) => {
+    domainEventBus.subscribe(def.eventType, async (event: BaseDomainEvent) => {
       await this.executeHandler(def, event);
     });
 
@@ -59,7 +59,7 @@ export class ActionHandlerService {
   static async executeHandler(def: ActionHandlerDefinition, event: BaseDomainEvent): Promise<{
     status: 'success' | 'skipped' | 'failed';
     alreadyExecuted?: boolean;
-    result?: any;
+    result?: unknown;
     error?: string;
     durationMs: number;
   }> {
@@ -128,10 +128,11 @@ export class ActionHandlerService {
         result,
         durationMs: Date.now() - startTime
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.stats.failureCount++;
       const durationMs = Date.now() - startTime;
-      logger.error(`[ActionHandler Error] Handler '${def.handlerName}' failed on event '${event.eventId}': ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[ActionHandler Error] Handler '${def.handlerName}' failed on event '${event.eventId}': ${errMsg}`);
 
       await logActivity({
         userId: event.metadata?.userId || 0,
@@ -139,12 +140,12 @@ export class ActionHandlerService {
         action: 'UPDATE',
         entity: `اکشن_هندلر:${def.handlerName}`,
         entityId: String(event.aggregateId),
-        description: `خطا در اجرای اکشن‌هندلر [${def.handlerName}] برای رویداد [${event.eventType}]: ${err.message}`,
+        description: `خطا در اجرای اکشن‌هندلر [${def.handlerName}] برای رویداد [${event.eventType}]: ${errMsg}`,
         details: {
           handlerName: def.handlerName,
           eventType: event.eventType,
           eventId: event.eventId,
-          error: err.message,
+          error: errMsg,
           durationMs
         }
       });
@@ -186,8 +187,9 @@ export class ActionHandlerService {
       eventType: DomainEventType.STOCK_ISSUED,
       description: 'همگام‌سازی و اعمال تحویل کالا به انبار در خروج کالا متعاقب ورکفلو',
       handlerFn: async (event) => {
+        const payload = (event.payload || {}) as Record<string, unknown>;
         logger.info(`[ActionHandler:InventorySync] Processing stock issued event ${event.eventId}`);
-        return { inventoryUpdated: true, itemId: event.payload?.itemId, qty: event.payload?.quantity };
+        return { inventoryUpdated: true, itemId: payload.itemId, qty: payload.quantity };
       }
     });
 
@@ -197,8 +199,9 @@ export class ActionHandlerService {
       eventType: DomainEventType.INVOICE_APPROVED,
       description: 'صدور خودکار سند حسابداری تعهدی متعاقب تایید فاکتور فروش',
       handlerFn: async (event) => {
-        logger.info(`[ActionHandler:AccountingSync] Generating journal voucher for approved invoice ${event.payload?.refNumber}`);
-        return { voucherGenerated: true, refNumber: event.payload?.refNumber, amount: event.payload?.totalAmount };
+        const payload = (event.payload || {}) as Record<string, unknown>;
+        logger.info(`[ActionHandler:AccountingSync] Generating journal voucher for approved invoice ${payload.refNumber}`);
+        return { voucherGenerated: true, refNumber: payload.refNumber, amount: payload.totalAmount };
       }
     });
 
@@ -208,8 +211,9 @@ export class ActionHandlerService {
       eventType: DomainEventType.INVENTORY_REORDER_ALERT,
       description: 'ارسال هشدار افت موجودی به مسئولین انبار و مدیریت تامین',
       handlerFn: async (event) => {
-        logger.info(`[ActionHandler:ReorderAlert] Alerting for item ${event.payload?.itemCode} in ${event.payload?.warehouseLocation}`);
-        return { alertSent: true, itemCode: event.payload?.itemCode, stock: event.payload?.currentStock };
+        const payload = (event.payload || {}) as Record<string, unknown>;
+        logger.info(`[ActionHandler:ReorderAlert] Alerting for item ${payload.itemCode} in ${payload.warehouseLocation}`);
+        return { alertSent: true, itemCode: payload.itemCode, stock: payload.currentStock };
       }
     });
   }

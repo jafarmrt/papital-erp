@@ -5,7 +5,7 @@ import {
   type ReservedItemsFullReport,
   type ReservedStockInfo
 } from './items/itemStockReservation.service.js';
-import { ItemPricingService } from './items/itemPricing.service.js';
+import { ItemPricingService, type PriceItemRecord } from './items/itemPricing.service.js';
 import { ItemCatalogService } from './items/itemCatalog.service.js';
 import { withLongQueryTimeout } from '../db/drizzle.js';
 
@@ -13,7 +13,8 @@ export type {
   ReservedItemDetail,
   ItemReservedReportSummary,
   ReservedItemsFullReport,
-  ReservedStockInfo
+  ReservedStockInfo,
+  PriceItemRecord
 };
 
 export class ItemsService {
@@ -33,7 +34,7 @@ export class ItemsService {
     return ItemPricingService.getPricingStrategies();
   }
 
-  static filterActivePrices(allPricesList: any[], activeStrategies?: string[]) {
+  static filterActivePrices(allPricesList: PriceItemRecord[], activeStrategies?: string[]): PriceItemRecord[] {
     return ItemPricingService.filterActivePrices(allPricesList, activeStrategies);
   }
 
@@ -45,7 +46,11 @@ export class ItemsService {
     return ItemCatalogService.processUnifiedExport(typeFilter);
   }
 
-  static async processUnifiedImport(rows: any[], typeFilter: string | undefined, req: any) {
+  static async processUnifiedImport(
+    rows: Array<Record<string, unknown>>,
+    typeFilter: string | undefined,
+    req: { user?: { id?: number; username?: string; full_name?: string } }
+  ) {
     return withLongQueryTimeout(async () => {
       return ItemCatalogService.processUnifiedImport(rows, typeFilter, req);
     });

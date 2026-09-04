@@ -1,8 +1,8 @@
-import { orm, pool } from '../../db/drizzle.js';
+import { orm, pool, type DbExecutor } from '../../db/drizzle.js';
 import { outboxEvents } from '../../db/schema.js';
-import { eq, and, or, lte, sql, desc } from 'drizzle-orm';
+import { eq, and, or, lte, sql, desc, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
-import { BaseDomainEvent } from './domainEvents.js';
+import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { domainEventBus } from './domainEventBus.js';
 import { DeadLetterQueueService } from './deadLetterQueueService.js';
 import { observeOutboxProcessing } from '../../middleware/metrics.js';
@@ -25,7 +25,7 @@ export class OutboxService {
   /**
    * Alias for saveToOutbox for backwards compatibility
    */
-  static async recordEvent<T = any>(tx: any, event: BaseDomainEvent<T>): Promise<void> {
+  static async recordEvent<T = unknown>(tx: DbExecutor, event: BaseDomainEvent<T>): Promise<void> {
     return this.saveToOutbox(tx, event);
   }
 
@@ -40,8 +40,8 @@ export class OutboxService {
    * Saves a domain event inside an existing Drizzle transaction.
    * This guarantees transactional atomicity between business mutations and outbox persistence.
    */
-  static async saveToOutbox<T = any>(
-    tx: any,
+  static async saveToOutbox<T = unknown>(
+    tx: DbExecutor,
     event: BaseDomainEvent<T>
   ): Promise<void> {
     try {
@@ -62,8 +62,9 @@ export class OutboxService {
       });
 
       logger.info(`[Transactional Outbox] Enqueued event ${event.eventType} for ${event.aggregateType}#${event.aggregateId} [EventID: ${event.eventId}]`);
-    } catch (err: any) {
-      logger.error(`[Transactional Outbox Save Error] Failed to persist outbox event ${event.eventId}: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Transactional Outbox Save Error] Failed to persist outbox event ${event.eventId}: ${errMsg}`);
       throw err; // Re-throw to abort business transaction if outbox persistence fails
     }
   }
@@ -144,11 +145,11 @@ export class OutboxService {
             // 2. Reconstitute BaseDomainEvent structure
           const domainEvent: BaseDomainEvent = {
             eventId: rawEvent.eventId,
-            eventType: rawEvent.eventType as any,
-            aggregateType: rawEvent.aggregateType as any,
+            eventType: rawEvent.eventType,
+            aggregateType: rawEvent.aggregateType as AggregateType,
             aggregateId: rawEvent.aggregateId,
             payload: rawEvent.payload || {},
-            metadata: (rawEvent.metadata as any) || { timestamp: rawEvent.occurredAt || nowIso },
+            metadata: ((rawEvent.metadata as Record<string, unknown>) || { timestamp: rawEvent.occurredAt || nowIso }) as unknown as BaseDomainEvent['metadata'],
             occurredAt: rawEvent.occurredAt || nowIso
           };
 
@@ -169,10 +170,12 @@ export class OutboxService {
 
           succeeded++;
           logger.info(`[Transactional Outbox] Successfully dispatched outbox event #${rawEvent.id} (${rawEvent.eventType})`);
-        } catch (err: any) {
+        } catch (err: unknown) {
           failed++;
           const newRetryCount = currentRetry + 1;
           const isFinalFailure = newRetryCount >= this.MAX_RETRIES;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const errStack = err instanceof Error ? err.stack || '' : '';
           
           // Exponential backoff: 5s, 10s, 20s, 40s, 80s (max 300s)
           const backoffSeconds = Math.min(300, Math.pow(2, newRetryCount) * 5);
@@ -184,7 +187,7 @@ export class OutboxService {
               status: isFinalFailure ? 'failed' : 'pending',
               retryCount: newRetryCount,
               nextRetryAt: isFinalFailure ? null : nextRetryDate,
-              lastError: err?.message || 'خطای نامشخص در پردازش رویداد',
+              lastError: errMsg || 'خطای نامشخص در پردازش رویداد',
               processedAt: isFinalFailure ? new Date().toISOString() : null,
               lockedAt: null,
               lockedBy: null
@@ -200,17 +203,21 @@ export class OutboxService {
               source: 'outbox',
               payload: rawEvent.payload,
               metadata: rawEvent.metadata,
-              failureReason: `اتمام سقف تلاش‌ها (${this.MAX_RETRIES} تلاش): ${err?.message || 'خطای پردازش'}`,
-              errorStack: err?.stack || '',
+              failureReason: `اتمام سقف تلاش‌ها (${this.MAX_RETRIES} تلاش): ${errMsg || 'خطای پردازش'}`,
+              errorStack: errStack,
               retryCount: newRetryCount
-            }).catch(dlqErr => logger.error(`[DLQ Auto Move Error] ${dlqErr.message}`));
+            }).catch(dlqErr => {
+              const dlqErrMsg = dlqErr instanceof Error ? dlqErr.message : String(dlqErr);
+              logger.error(`[DLQ Auto Move Error] ${dlqErrMsg}`);
+            });
           }
 
-          logger.error(`[Transactional Outbox] Failed to dispatch event #${rawEvent.id} (Attempt ${newRetryCount}/${this.MAX_RETRIES}): ${err.message}`);
+          logger.error(`[Transactional Outbox] Failed to dispatch event #${rawEvent.id} (Attempt ${newRetryCount}/${this.MAX_RETRIES}): ${errMsg}`);
         }
       }
-    } catch (globalErr: any) {
-      logger.error(`[Transactional Outbox Batch Error] ${globalErr.message}`);
+    } catch (globalErr: unknown) {
+      const globalErrMsg = globalErr instanceof Error ? globalErr.message : String(globalErr);
+      logger.error(`[Transactional Outbox Batch Error] ${globalErrMsg}`);
     } finally {
       if (processed > 0) {
         observeOutboxProcessing((Date.now() - batchStart) / 1000);
@@ -241,8 +248,9 @@ export class OutboxService {
       this.workerIntervalId = setInterval(async () => {
         try {
           await OutboxService.processPendingBatch();
-        } catch (err: any) {
-          logger.error(`[Transactional Outbox Worker Error] ${err.message}`);
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[Transactional Outbox Worker Error] ${errMsg}`);
         }
       }, intervalMs);
 
@@ -250,8 +258,9 @@ export class OutboxService {
       this.recoveryIntervalId = setInterval(async () => {
         try {
           await OutboxService.recoverStuckEvents();
-        } catch (err: any) {
-          logger.error(`[Transactional Outbox Recovery Error] ${err.message}`);
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[Transactional Outbox Recovery Error] ${errMsg}`);
         }
       }, 60000);
     }, initialJitter);
@@ -350,8 +359,9 @@ export class OutboxService {
 
       logger.info(`[Outbox Recovery] Successfully recovered ${recoveredCount} stuck outbox event(s)`);
       return recoveredCount;
-    } catch (err: any) {
-      logger.error(`[Outbox Recovery Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Outbox Recovery Error] ${errMsg}`);
       return 0;
     }
   }
@@ -399,8 +409,9 @@ export class OutboxService {
         failed: statusMap.failed || 0,
         workerRunning: this.isWorkerRunning
       };
-    } catch (err: any) {
-      logger.error(`[Transactional Outbox Stats Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Transactional Outbox Stats Error] ${errMsg}`);
       return {
         total: 0,
         pending: 0,
@@ -416,7 +427,7 @@ export class OutboxService {
    * Query outbox events with pagination and filters.
    */
   static async getOutboxEvents(filters: OutboxQueryFilters = {}): Promise<{
-    events: any[];
+    events: (typeof outboxEvents.$inferSelect)[];
     total: number;
     page: number;
     limit: number;
@@ -426,7 +437,7 @@ export class OutboxService {
 
     let query = orm.select().from(outboxEvents);
 
-    const conditions: any[] = [];
+    const conditions: (SQL | undefined)[] = [];
     if (filters.status && filters.status !== 'ALL') {
       conditions.push(eq(outboxEvents.status, filters.status));
     }

@@ -1,4 +1,4 @@
-import { orm } from '../../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { bankAccounts, treasuryTransactions, users, accounts } from '../../../db/schema.js';
 import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
@@ -9,12 +9,12 @@ import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
 import { fin } from '../../../lib/financialDecimal.js';
-import type { TreasuryTransaction } from '../../../types.js';
+import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 
 export class TreasuryTransactionService {
-  static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: any): Promise<string> {
+  static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: DbExecutor): Promise<string> {
     const executor = tx || orm;
     const result = await executor.execute(sql`SELECT nextval('treasury_tx_number_seq') AS num`);
     const seqNum = Number(result.rows?.[0]?.num);
@@ -29,9 +29,9 @@ export class TreasuryTransactionService {
   static async resolveContraAccount(
     partyType: string,
     purpose: string | undefined,
-    tx?: any
-  ): Promise<{ account: any | null; fallbackGeneralId: number | null; conceptLabel: string }> {
-    let account: any | null = null;
+    tx?: DbExecutor
+  ): Promise<{ account: Account | null; fallbackGeneralId: number | null; conceptLabel: string }> {
+    let account: Account | null = null;
     let conceptLabel = '';
 
     if (partyType === 'customer') {
@@ -115,8 +115,8 @@ export class TreasuryTransactionService {
       warnings.push('مبلغ باید بزرگ‌تر از صفر باشد');
     }
 
-    let debit: any = null;
-    let credit: any = null;
+    let debit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null = null;
+    let credit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null = null;
     if (amount > 0 && bank.accountId && contraAccountId) {
       const accById = new Map((await orm.select().from(accounts).where(eq(accounts.isDeleted, 0))).map(a => [a.id, a]));
       const debitAcc = accById.get(data.type === 'receipt' ? bank.accountId : contraAccountId);
@@ -658,7 +658,7 @@ export class TreasuryTransactionService {
       );
       await OutboxService.saveToOutbox(txEngine, transferEvent);
 
-      return { payment: payTx as any, receipt: recTx as any, voucherId };
+      return { payment: payTx as unknown as TreasuryTransaction, receipt: recTx as unknown as TreasuryTransaction, voucherId };
     });
   }
 
@@ -700,6 +700,6 @@ export class TreasuryTransactionService {
 }
 
 // V1.5.0: helper کوچک نمایش مانده در پیام خطا
-function currentBalFa(val: any): string {
+function currentBalFa(val: unknown): string {
   return (Number(val) || 0).toLocaleString('fa-IR');
 }

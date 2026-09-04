@@ -11,13 +11,13 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { BaseDomainEvent, DomainEventType } from './domainEvents.js';
 import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
-import { RuleEngineService } from '../ruleEngine.service.js';
+import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
 
 export interface RuleCondition {
   field: string; // e.g. 'payload.totalAmount', 'payload.newStock', 'metadata.userRole', 'aggregateType'
   operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'contains' | 'exists';
-  value: any;
+  value: unknown;
 }
 
 export type ActionType = 'webhook' | 'in_app_notification' | 'workflow_trigger' | 'sms_simulation' | 'audit_log';
@@ -63,9 +63,9 @@ export interface CreateRuleInput {
   name: string;
   description?: string;
   eventType: string;
-  conditionsJson: any;
+  conditionsJson: unknown;
   actionType: ActionType;
-  actionConfigJson: WebhookActionConfig | InAppNotificationConfig | WorkflowTriggerConfig | SmsSimulationConfig | AuditLogActionConfig | any;
+  actionConfigJson: WebhookActionConfig | InAppNotificationConfig | WorkflowTriggerConfig | SmsSimulationConfig | AuditLogActionConfig | Record<string, unknown>;
   isActive?: number;
 }
 
@@ -73,11 +73,11 @@ export class EventActionEngineService {
   /**
    * Alias method for backwards compatibility
    */
-  public static evaluateRuleConditions(ruleConditionsJson: any, payload: any): boolean {
+  public static evaluateRuleConditions(ruleConditionsJson: unknown, payload: unknown): boolean {
     if (!ruleConditionsJson || (Array.isArray(ruleConditionsJson) && ruleConditionsJson.length === 0)) {
       return true;
     }
-    const dummyEvent: any = { payload };
+    const dummyEvent = { payload } as unknown as BaseDomainEvent;
     return this.evaluateConditions(ruleConditionsJson, dummyEvent);
   }
 
@@ -91,18 +91,18 @@ export class EventActionEngineService {
   /**
    * Helper to resolve nested dot-notated property paths using RuleEngineService
    */
-  public static resolveField(path: string, obj: any): any {
+  public static resolveField(path: string, obj: unknown): unknown {
     return RuleEngineService.resolvePath(path, obj);
   }
 
   /**
    * Evaluates conditions (single, flat array, or nested group) against an incoming domain event
    */
-  public static evaluateConditions(conditions: any, event: BaseDomainEvent): boolean {
+  public static evaluateConditions(conditions: unknown, event: BaseDomainEvent): boolean {
     if (!conditions || (Array.isArray(conditions) && conditions.length === 0)) {
       return true; // No conditions means always match
     }
-    return RuleEngineService.evaluate(conditions, event);
+    return RuleEngineService.evaluate(conditions as RuleExpression, event);
   }
 
   /**
@@ -124,20 +124,20 @@ export class EventActionEngineService {
   public static async executeAction(
     rule: typeof eventActionRules.$inferSelect,
     event: BaseDomainEvent
-  ): Promise<{ status: 'success' | 'failed' | 'skipped'; result: any; errorMessage?: string; durationMs: number }> {
+  ): Promise<{ status: 'success' | 'failed' | 'skipped'; result: unknown; errorMessage?: string; durationMs: number }> {
     const startTime = Date.now();
     const actionType = rule.actionType as ActionType;
-    const config = rule.actionConfigJson as any || {};
+    const config = (rule.actionConfigJson as Record<string, unknown>) || {};
 
     try {
-      let resultData: any = {};
+      let resultData: unknown = {};
 
       switch (actionType) {
         // -------------------------------------------------------------
         // 1. Webhook Execution
         // -------------------------------------------------------------
         case 'webhook': {
-          const webhookConfig = config as WebhookActionConfig;
+          const webhookConfig = config as unknown as WebhookActionConfig;
           if (!webhookConfig.url) {
             throw new Error('آدرس وب‌هوک (URL) تعیین نشده است.');
           }
@@ -193,7 +193,7 @@ export class EventActionEngineService {
 
             clearTimeout(timeoutId);
 
-            let resBody: any = null;
+            let resBody: unknown = null;
             try {
               resBody = await response.json();
             } catch {
@@ -216,8 +216,9 @@ export class EventActionEngineService {
                 durationMs: Date.now() - startTime
               };
             }
-          } catch (fetchErr: any) {
+          } catch (fetchErr: unknown) {
             clearTimeout(timeoutId);
+            const fetchError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
             if (
               targetUrl.includes('webhook-echo') ||
               targetUrl.includes('httpbin.org') ||
@@ -236,7 +237,7 @@ export class EventActionEngineService {
               };
               break;
             }
-            throw new Error(`خطای ارتباط با سرور وب‌هوک: ${fetchErr.name === 'AbortError' ? 'Timeout (پایان مهلت زمانی)' : fetchErr.message}`);
+            throw new Error(`خطای ارتباط با سرور وب‌هوک: ${fetchError.name === 'AbortError' ? 'Timeout (پایان مهلت زمانی)' : fetchError.message}`);
           }
           break;
         }
@@ -245,7 +246,7 @@ export class EventActionEngineService {
         // 2. In-App Notification Generation
         // -------------------------------------------------------------
         case 'in_app_notification': {
-          const notifConfig = config as InAppNotificationConfig;
+          const notifConfig = config as unknown as InAppNotificationConfig;
           const title = this.interpolateTemplate(notifConfig.titleTemplate || 'اعلان رویداد سازمانی', event);
           const message = this.interpolateTemplate(notifConfig.messageTemplate || '', event);
           const link = notifConfig.linkTemplate ? this.interpolateTemplate(notifConfig.linkTemplate, event) : '';
@@ -293,7 +294,7 @@ export class EventActionEngineService {
         // 3. Workflow Trigger
         // -------------------------------------------------------------
         case 'workflow_trigger': {
-          const wfConfig = config as WorkflowTriggerConfig;
+          const wfConfig = config as unknown as WorkflowTriggerConfig;
           const entityId = this.resolveField(wfConfig.entityIdField, event) || event.aggregateId;
           const comment = wfConfig.commentTemplate ? this.interpolateTemplate(wfConfig.commentTemplate, event) : `تحریک خودکار بر پایه رویداد ${event.eventType}`;
 
@@ -312,7 +313,7 @@ export class EventActionEngineService {
         // 4. SMS Simulation
         // -------------------------------------------------------------
         case 'sms_simulation': {
-          const smsConfig = config as SmsSimulationConfig;
+          const smsConfig = config as unknown as SmsSimulationConfig;
           const recipientPhone = this.interpolateTemplate(smsConfig.recipientPhoneTemplate || '', event);
           const message = this.interpolateTemplate(smsConfig.messageTemplate || '', event);
           const senderLine = smsConfig.senderLine || '983000xxxx';
@@ -333,7 +334,7 @@ export class EventActionEngineService {
         // 5. Audit Log Entry
         // -------------------------------------------------------------
         case 'audit_log': {
-          const auditConfig = config as AuditLogActionConfig;
+          const auditConfig = config as unknown as AuditLogActionConfig;
           const description = this.interpolateTemplate(auditConfig.descriptionTemplate || '', event);
 
           await logActivity({
@@ -364,12 +365,13 @@ export class EventActionEngineService {
         result: resultData,
         durationMs: Date.now() - startTime
       };
-    } catch (err: any) {
-      logger.error(`[EventActionEngine Action Error] Failed to execute rule "${rule.name}" (${rule.id}): ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error(`[EventActionEngine Action Error] Failed to execute rule "${rule.name}" (${rule.id}): ${error.message}`);
       return {
         status: 'failed',
         result: {},
-        errorMessage: err.message || 'خطای ناشناخته در اجرای اقدام',
+        errorMessage: error.message || 'خطای ناشناخته در اجرای اقدام',
         durationMs: Date.now() - startTime
       };
     }
@@ -435,8 +437,9 @@ export class EventActionEngineService {
           });
         })
       );
-    } catch (err: any) {
-      logger.error(`[EventActionEngine Process Error] Error processing event ${event.eventType}: ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error(`[EventActionEngine Process Error] Error processing event ${event.eventType}: ${error.message}`);
     }
   }
 
@@ -462,8 +465,9 @@ export class EventActionEngineService {
         set: { value: generated }
       });
       return generated;
-    } catch (err: any) {
-      logger.warn(`[EventActionEngine] Error retrieving webhook secret token from appSettings: ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.warn(`[EventActionEngine] Error retrieving webhook secret token from appSettings: ${error.message}`);
       return process.env.ERP_WEBHOOK_SECRET_TOKEN || 'fallback_dynamic_webhook_secret';
     }
   }
@@ -480,9 +484,9 @@ export class EventActionEngineService {
         // Migrate any existing webhook rules targeting httpbin.org or hardcoded legacy secrets
         const webhookRules = await orm.select().from(eventActionRules).where(eq(eventActionRules.actionType, 'webhook'));
         for (const rule of webhookRules) {
-          const cfg = (rule.actionConfigJson as any) || {};
+          const cfg = (rule.actionConfigJson as Record<string, unknown>) || {};
           let updated = false;
-          if (cfg.url && (cfg.url.includes('httpbin.org') || cfg.url.includes('example.com'))) {
+          if (typeof cfg.url === 'string' && (cfg.url.includes('httpbin.org') || cfg.url.includes('example.com'))) {
             cfg.url = 'http://127.0.0.1:3000/api/events/webhook-echo';
             updated = true;
           }
@@ -584,8 +588,9 @@ export class EventActionEngineService {
       }
 
       logger.info(`[EventActionEngine] Seeded ${defaultRules.length} default event action rules.`);
-    } catch (err: any) {
-      logger.error(`[EventActionEngine Seed Error] ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error(`[EventActionEngine Seed Error] ${error.message}`);
     }
   }
 
@@ -643,7 +648,7 @@ export class EventActionEngineService {
    * Update rule
    */
   public static async updateRule(id: number, data: Partial<CreateRuleInput>) {
-    const updatePayload: any = {
+    const updatePayload: Record<string, unknown> = {
       updatedAt: new Date().toISOString()
     };
 
@@ -693,7 +698,7 @@ export class EventActionEngineService {
   /**
    * Test execute rule with simulated event
    */
-  public static async testRule(ruleId: number, customEvent?: any) {
+  public static async testRule(ruleId: number, customEvent?: BaseDomainEvent) {
     const rule = await this.getRuleById(ruleId);
     if (!rule) throw new Error('قانون مورد نظر یافت نشد.');
 

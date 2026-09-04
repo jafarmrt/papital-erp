@@ -140,7 +140,7 @@ router.get('/personnel/export', async (req, res) => {
     }));
 
     res.json({ rows: exportRows, total: exportRows.length });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error exporting personnel', error: err });
     throw err;
   }
@@ -289,10 +289,10 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager'), async (req,
           }
           createdCount++;
         }
-      } catch (rowErr: any) {
+      } catch (rowErr) {
         errors.push({
           row: rowIndex,
-          message: rowErr.message || 'خطا در ثبت ردیف'
+          message: rowErr instanceof Error ? rowErr.message : (typeof rowErr === 'string' ? rowErr : 'خطا در ثبت ردیف')
         });
       }
     }
@@ -312,7 +312,7 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager'), async (req,
       totalProcessed: rows.length,
       errors
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error bulk importing personnel', error: err });
     throw err;
   }
@@ -385,7 +385,7 @@ router.get('/personnel', async (req, res) => {
     }
 
     res.json(filtered);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching personnel', error: err });
     throw err;
   }
@@ -441,7 +441,7 @@ router.get('/personnel/:id', validate(paramsIdSchema), async (req, res) => {
     }
 
     res.json(record);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -543,7 +543,7 @@ router.post('/personnel', authorize('admin', 'manager'), validate(createPersonne
     });
 
     res.status(201).json(inserted);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error creating personnel', error: err });
     throw err;
   }
@@ -661,7 +661,7 @@ router.put('/personnel/:id', authorize('admin', 'manager'), validate(updatePerso
     });
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت ویرایش شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error updating personnel', error: err });
     throw err;
   }
@@ -699,7 +699,7 @@ router.delete('/personnel/:id', authorize('admin', 'manager'), validate(paramsId
     });
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });

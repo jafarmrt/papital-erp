@@ -90,7 +90,7 @@ router.get('/transfers', authenticateToken, async (req: Request, res: Response) 
       ...Array.from(transferProductsMap.keys())
     ]);
 
-    const resultList: any[] = [];
+    const resultList: Array<Record<string, unknown>> = [];
     for (const code of Array.from(allTransferCodes)) {
       const saved = savedMap.get(code);
       const linkedProds = transferProductsMap.get(code) || [];
@@ -110,10 +110,10 @@ router.get('/transfers', authenticateToken, async (req: Request, res: Response) 
     }
 
     // Sort transfer codes naturally (e.g. 001, 002, 003...)
-    resultList.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+    resultList.sort((a, b) => (a.code as string).localeCompare(b.code as string, undefined, { numeric: true, sensitivity: 'base' }));
 
     res.json({ data: resultList });
-  } catch (error: any) {
+  } catch (error) {
     logger.error({ message: 'Error fetching transfers', error });
     throw error;
   }
@@ -143,7 +143,7 @@ router.get('/transfers/:code', authenticateToken, validate(deleteTransferSchema)
         products: linkedProds
       }
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error({ message: 'Error fetching transfer details', error });
     throw error;
   }
@@ -182,7 +182,7 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
     const existing = await orm.select().from(transfers).where(eq(transfers.code, cleanCode)).limit(1);
 
     const now = new Date().toISOString();
-    let savedRecord: any = null;
+    let savedRecord: typeof transfers.$inferSelect | null = null;
 
     if (existing.length > 0) {
       const [updated] = await orm.update(transfers)
@@ -230,7 +230,7 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
       message: 'اطلاعات و تصویر ترنسفر با موفقیت ذخیره گردید.',
       data: savedRecord
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error({ message: 'Error saving transfer', error });
     throw error;
   }
@@ -248,7 +248,7 @@ router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager
     await orm.delete(transfers).where(eq(transfers.code, code));
 
     res.json({ message: `اطلاعات و تصویر ترنسفر کد ${code} با موفقیت پاک شد.` });
-  } catch (error: any) {
+  } catch (error) {
     logger.error({ message: 'Error deleting transfer', error });
     throw error;
   }

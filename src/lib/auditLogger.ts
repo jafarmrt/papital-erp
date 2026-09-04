@@ -2,6 +2,7 @@ import { orm } from '../db/drizzle.js';
 import { activityLogs } from '../db/schema.js';
 import { logger } from '../middleware/logger.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
+import type { Request } from 'express';
 
 // Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
 const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpassword|currentpassword|old_password|oldpassword|confirmpassword|confirm_password|token|access_token|accesstoken|refresh_token|refreshtoken|auth_token|authtoken|secret|jwt|apikey|api_key|authorization|cookie|card_number|credit_card|cvv|ssn)$/i;
@@ -10,17 +11,17 @@ const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpa
  * Recursively sanitizes any sensitive credentials (passwords, tokens, secrets) from objects or arrays.
  * Replaces sensitive values with '[PROTECTED]' or boolean flags.
  */
-export function sanitizeSensitiveData(obj: any, depth = 0, seen = new WeakSet()): any {
+export function sanitizeSensitiveData<T = unknown>(obj: T, depth = 0, seen = new WeakSet()): T {
   if (obj === null || obj === undefined) return obj;
-  if (depth > 6) return '[MAX_DEPTH_REACHED]';
+  if (depth > 6) return '[MAX_DEPTH_REACHED]' as unknown as T;
 
   if (typeof obj === 'string') {
     // If string contains JWT-like token (eyJh...) mask it
     if (/^Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/i.test(obj.trim())) {
-      return 'Bearer [PROTECTED_JWT]';
+      return 'Bearer [PROTECTED_JWT]' as unknown as T;
     }
     if (/^eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/i.test(obj.trim())) {
-      return '[PROTECTED_JWT]';
+      return '[PROTECTED_JWT]' as unknown as T;
     }
     return obj;
   }
@@ -30,17 +31,17 @@ export function sanitizeSensitiveData(obj: any, depth = 0, seen = new WeakSet())
   }
 
   // Prevent circular references
-  if (seen.has(obj)) {
-    return '[CIRCULAR]';
+  if (seen.has(obj as object)) {
+    return '[CIRCULAR]' as unknown as T;
   }
-  seen.add(obj);
+  seen.add(obj as object);
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeSensitiveData(item, depth + 1, seen));
+    return obj.map(item => sanitizeSensitiveData(item, depth + 1, seen)) as unknown as T;
   }
 
-  const sanitized: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
     if (SENSITIVE_KEY_REGEX.test(key)) {
       sanitized[key] = '[PROTECTED]';
     } else if (typeof value === 'object' && value !== null) {
@@ -50,33 +51,34 @@ export function sanitizeSensitiveData(obj: any, depth = 0, seen = new WeakSet())
     }
   }
 
-  return sanitized;
+  return sanitized as T;
 }
 
 /**
  * Safely extracts client IP address from express request, honoring proxies.
  */
-export function extractClientIp(req: any): string {
+export function extractClientIp(req?: Request | { headers?: Record<string, unknown>; socket?: { remoteAddress?: string }; ip?: string } | null): string {
   if (!req) return '';
-  const forwarded = req.headers?.['x-forwarded-for'];
+  const headers = req.headers as Record<string, string | string[] | undefined> | undefined;
+  const forwarded = headers?.['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.trim()) {
     return forwarded.split(',')[0].trim();
   }
   if (Array.isArray(forwarded) && forwarded.length > 0) {
     return String(forwarded[0]).trim();
   }
-  return req.headers?.['x-real-ip'] || req.socket?.remoteAddress || req.ip || '';
+  return (headers?.['x-real-ip'] as string) || req.socket?.remoteAddress || req.ip || '';
 }
 
 /**
  * Calculates field-by-field differences between previous and updated objects for audit snapshots.
  */
 export function computeAuditDiff(
-  before: Record<string, any> = {},
-  after: Record<string, any> = {},
+  before: Record<string, unknown> = {},
+  after: Record<string, unknown> = {},
   ignoreFields: string[] = ['updatedAt', 'updated_at', 'password']
-): { hasChanges: boolean; diff: Record<string, { before: any; after: any }> } {
-  const diff: Record<string, { before: any; after: any }> = {};
+): { hasChanges: boolean; diff: Record<string, { before: unknown; after: unknown }> } {
+  const diff: Record<string, { before: unknown; after: unknown }> = {};
   const allKeys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
 
   for (const key of allKeys) {
@@ -112,13 +114,13 @@ export interface AuditLogParams {
   entityId?: string | number;
   description: string;
   details?: {
-    before?: any;
-    after?: any;
-    changes?: Record<string, { before: any; after: any }> | any;
-    [key: string]: any;
-  } | any;
+    before?: unknown;
+    after?: unknown;
+    changes?: Record<string, { before: unknown; after: unknown }> | unknown;
+    [key: string]: unknown;
+  } | unknown;
   ipAddress?: string;
-  req?: any; // If express req is passed, IP & User are auto-extracted if missing
+  req?: Request | any; // If express req is passed, IP & User are auto-extracted if missing
 }
 
 /**
@@ -127,9 +129,10 @@ export interface AuditLogParams {
 export async function logActivity(params: AuditLogParams) {
   try {
     const ipAddress = params.ipAddress || (params.req ? extractClientIp(params.req) : '');
-    const userId = params.userId ?? params.req?.user?.id;
-    const username = params.username || params.req?.user?.username || 'سیستم';
-    const userFullName = params.userFullName || params.req?.user?.full_name || '';
+    const reqUser = params.req?.user as { id?: number; username?: string; full_name?: string } | undefined;
+    const userId = params.userId ?? reqUser?.id;
+    const username = params.username || reqUser?.username || 'سیستم';
+    const userFullName = params.userFullName || reqUser?.full_name || '';
 
     // Guarantee full sanitization on all recorded metadata
     const sanitizedDetails = sanitizeSensitiveData(params.details || {});

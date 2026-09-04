@@ -1,5 +1,5 @@
 import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
-import { orm } from '../db/drizzle.js';
+import { orm, type DbExecutor } from '../db/drizzle.js';
 import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers } from '../db/schema.js';
 import { roundFinancial, getTodayJalaliDate } from '../utils.js';
 import { resolveJalaliFiscalYear, businessNowIsoDateTime } from '../lib/businessClock.js';
@@ -16,7 +16,7 @@ import { NegativeStockPolicyService } from './inventory/negativeStockPolicy.serv
 import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 
-type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
+type DbClient = DbExecutor;
 
 export interface GetDocumentsFilter {
   type?: string;
@@ -66,6 +66,10 @@ export interface CreateDocumentInput {
   currency?: string;
   skipVoucherSync?: boolean;
   externalTx?: DbClient;
+  vat_percent?: number;
+  vatPercent?: number;
+  vat_amount?: number;
+  vatAmount?: number;
 }
 
 export interface UpdateDocumentInput {
@@ -597,8 +601,8 @@ export class DocumentService {
       }
 
       if (docStatus === 'final') {
-        const vatPercent = (body as any).vat_percent !== undefined ? (body as any).vat_percent : (body as any).vatPercent;
-        const vatAmount = (body as any).vat_amount !== undefined ? (body as any).vat_amount : (body as any).vatAmount;
+        const vatPercent = body.vat_percent !== undefined ? body.vat_percent : body.vatPercent;
+        const vatAmount = body.vat_amount !== undefined ? body.vat_amount : body.vatAmount;
         if (docType === 'invoice' || docType === 'proforma') {
           await VoucherSyncService.syncSalesInvoiceVoucher(docId, {
             username: user,

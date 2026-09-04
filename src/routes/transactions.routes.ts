@@ -148,7 +148,7 @@ router.get('/transactions', async (req, res) => {
       limit,
       totalPages: Math.ceil(total / limit)
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -169,7 +169,7 @@ router.delete('/transactions/:id', authorize('admin'), validate(deleteTxSchema),
       return res.status(400).json({ error: 'این تراکنش به یک سند متصل است و امکان حذف مستقیم آن وجود ندارد. لطفاً سند مربوطه را حذف یا ویرایش نمایید.' });
     }
 
-    let auditDetail: any = null;
+    let auditDetail: Record<string, unknown> | null = null;
 
     await orm.transaction(async (tx) => {
       // ۱. خواندن تراکنش اصلی
@@ -198,7 +198,7 @@ router.delete('/transactions/:id', authorize('admin'), validate(deleteTxSchema),
       const origTotalPrice = Number(original.totalPrice) || (origUnitPrice * qty);
 
       // ۳. اعمال حرکت انبار معکوس و ثبت تراکنش بازگشتی از طریق DocumentService.applyStockMovement
-      const username = (req as any).user?.username || original.createdBy || 'admin';
+      const username = req.user?.username || original.createdBy || 'admin';
       const bizNow = await businessNowIsoDateTime();
 
       await DocumentService.applyStockMovement(tx, {
@@ -250,14 +250,14 @@ router.delete('/transactions/:id', authorize('admin'), validate(deleteTxSchema),
         req,
         action: 'DELETE',
         entity: 'موجودی انبار',
-        entityId: auditDetail.itemId,
+        entityId: Number(auditDetail.itemId),
         description: `ابطال و حذف نرم تراکنش انبارداری #${txId} و ایجاد تراکنش برگشتی #${auditDetail.reversalTransactionId} برای کالای "${auditDetail.itemName}"`,
         details: auditDetail
       });
     }
 
     res.json({ success: true, reversalId: auditDetail?.reversalTransactionId });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });

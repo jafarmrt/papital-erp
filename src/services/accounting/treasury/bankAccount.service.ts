@@ -1,4 +1,4 @@
-import { orm } from '../../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
 import { eq, asc, and, or } from 'drizzle-orm';
 import type { BankAccount } from '../../../types.js';
@@ -162,7 +162,7 @@ export class BankAccountService {
     totalCashAndBankLedger: number;
     totalCashAndBankTreasury: number;
     totalDiscrepancy: number;
-    accounts: any[];
+    accounts: BankAccount[];
   }> {
     const banks = await this.getBankAccounts();
     let syncedCount = 0;
@@ -264,7 +264,7 @@ export class BankAccountService {
             username: data.username,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.warn({ message: `Opening voucher for bank account ${inserted.id} deferred/failed`, error: err });
       }
     }
@@ -282,7 +282,7 @@ export class BankAccountService {
   static async issueTreasuryOpeningVoucher(bankId: number, params: {
     userId?: number;
     username?: string;
-    tx?: any;
+    tx?: DbExecutor;
   } = {}): Promise<JournalVoucher | null> {
     const executor = params.tx || orm;
     const [bank] = await executor.select().from(bankAccounts).where(eq(bankAccounts.id, bankId));
@@ -440,8 +440,8 @@ export class BankAccountService {
               username: data.username,
             });
           }
-        } catch (err: any) {
-          logger.warn({ message: `Opening voucher adjustment for bank account ${id} failed`, error: err });
+        } catch (err: unknown) {
+          logger.warn({ message: `Opening voucher adjustment for bank account ${id} failed`, error: err instanceof Error ? err.message : String(err) });
         }
       }
     }

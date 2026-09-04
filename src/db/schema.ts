@@ -292,6 +292,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   username: text('username').notNull(),
   userFullName: text('user_full_name').default(''),
   date: text('date').notNull(),
+  dateIso: text('date_iso').default(''),
   startTime: text('start_time').default('08:00'),
   endTime: text('end_time').default('17:00'),
   workHours: numeric('work_hours', { precision: 18, scale: 4 }).$type<number>().default(8),
@@ -311,6 +312,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
 }, (table) => ({
   idx_dwl_user: index('idx_dwl_user').on(table.userId),
   idx_dwl_date: index('idx_dwl_date').on(table.date),
+  idx_dwl_date_iso: index('idx_dwl_date_iso').on(table.dateIso),
   idx_dwl_vis: index('idx_dwl_vis').on(table.visibility),
   idx_dwl_deleted: index('idx_dwl_deleted').on(table.isDeleted),
 }));
@@ -376,7 +378,9 @@ export const crmActivities = pgTable('crm_activities', {
   assignedPersonnelId: integer('assigned_personnel_id').references(() => personnel.id),
   mentions: jsonb('mentions').default([]),
   activityDate: text('activity_date').default(''),
+  activityDateIso: text('activity_date_iso').default(''),
   nextFollowUpDate: text('next_followup_date').default(''),
+  nextFollowUpDateIso: text('next_followup_date_iso').default(''),
   nextFollowUpTask: text('next_followup_task').default(''),
   isFollowUpCompleted: integer('is_followup_completed').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
@@ -385,6 +389,8 @@ export const crmActivities = pgTable('crm_activities', {
   idx_crm_act_lead: index('idx_crm_act_lead').on(table.leadId),
   idx_crm_act_cust: index('idx_crm_act_cust').on(table.customerId),
   idx_crm_act_date: index('idx_crm_act_date').on(table.activityDate),
+  idx_crm_act_date_iso: index('idx_crm_act_date_iso').on(table.activityDateIso),
+  idx_crm_act_next_iso: index('idx_crm_act_next_iso').on(table.nextFollowUpDateIso),
   idx_crm_act_deleted: index('idx_crm_act_deleted').on(table.isDeleted),
 }));
 
@@ -454,6 +460,24 @@ export const pieceworkTasks = pgTable('piecework_tasks', {
   idx_ptask_deleted: index('idx_ptask_deleted').on(table.isDeleted),
 }));
 
+export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
+  id: serial('id').primaryKey(),
+  taskId: integer('task_id').notNull().references(() => pieceworkTasks.id),
+  taskCode: text('task_code').default(''),
+  taskTitle: text('task_title').default(''),
+  oldRate: numeric('old_rate', { precision: 18, scale: 4 }).$type<number>().default(0),
+  newRate: numeric('new_rate', { precision: 18, scale: 4 }).$type<number>().notNull(),
+  changeType: text('change_type').default('rate_change'), // 'create', 'rate_change', 'excel_import', 'title_change', 'archived', 'restored'
+  reason: text('reason').default(''),
+  changedByUserId: integer('changed_by_user_id').references(() => users.id),
+  changedByUsername: text('changed_by_username').default(''),
+  effectiveDate: text('effective_date').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  idx_ptrh_task: index('idx_ptrh_task').on(table.taskId),
+  idx_ptrh_created: index('idx_ptrh_created').on(table.createdAt),
+}));
+
 export const pieceworkPersonnelRates = pgTable('piecework_personnel_rates', {
   id: serial('id').primaryKey(),
   personnelId: integer('personnel_id').notNull().references(() => personnel.id),
@@ -472,6 +496,7 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   taskId: integer('task_id').notNull().references(() => pieceworkTasks.id),
   projectId: integer('project_id').references(() => productionProjects.id),
   date: text('date').notNull(),
+  dateIso: text('date_iso').default(''),
   quantity: numeric('quantity', { precision: 18, scale: 4 }).$type<number>().notNull(),
   unitRate: numeric('unit_rate', { precision: 18, scale: 4 }).$type<number>().notNull(),
   totalAmount: numeric('total_amount', { precision: 18, scale: 4 }).$type<number>().notNull(),
@@ -487,6 +512,7 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   idx_plog_task: index('idx_plog_task').on(table.taskId),
   idx_plog_project: index('idx_plog_project').on(table.projectId),
   idx_plog_date: index('idx_plog_date').on(table.date),
+  idx_plog_date_iso: index('idx_plog_date_iso').on(table.dateIso),
   idx_plog_payroll: index('idx_plog_payroll').on(table.payrollId),
   idx_plog_deleted: index('idx_plog_deleted').on(table.isDeleted),
 }));

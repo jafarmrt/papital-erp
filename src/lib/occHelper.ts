@@ -101,16 +101,19 @@ export async function withOccRetry<T>(
   while (attempt <= totalAttempts) {
     try {
       return await operation(attempt);
-    } catch (err: any) {
-      if (err instanceof OptimisticLockError || err?.name === 'OptimisticLockError') {
+    } catch (err: unknown) {
+      const errObj = (err && typeof err === 'object') ? (err as Record<string, unknown>) : null;
+      const isOcc = err instanceof OptimisticLockError || errObj?.name === 'OptimisticLockError';
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (isOcc) {
         if (attempt >= totalAttempts) {
-          logger.error(`[OCC Retry] Exceeded max retries (${maxRetries}) for OCC operation: ${err.message}`);
+          logger.error(`[OCC Retry] Exceeded max retries (${maxRetries}) for OCC operation: ${errorMsg}`);
           throw err;
         }
 
         const jitter = Math.random() * 0.5 + 0.75; // 0.75 - 1.25
         const delay = Math.min(baseDelayMs * Math.pow(2, attempt) * jitter, maxDelayMs);
-        logger.info(`[OCC Retry] Retrying operation attempt ${attempt}/${maxRetries} after ${Math.round(delay)}ms due to: ${err.message}`);
+        logger.info(`[OCC Retry] Retrying operation attempt ${attempt}/${maxRetries} after ${Math.round(delay)}ms due to: ${errorMsg}`);
         attempt++;
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {

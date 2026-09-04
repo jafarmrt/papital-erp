@@ -84,16 +84,19 @@ export class WorkflowDelegationService {
     .leftJoin(sql`users fu`, sql`fu.id = ${workflowDelegations.fromUserId}`)
     .leftJoin(sql`users tu`, sql`tu.id = ${workflowDelegations.toUserId}`);
 
+    const conditions = [];
     if (!isAdmin) {
-      query = query.where(
+      conditions.push(
         or(
           eq(workflowDelegations.fromUserId, params.userId),
           eq(workflowDelegations.toUserId, params.userId)
         )!
-      ) as any;
+      );
     }
 
-    const rows = await query.orderBy(desc(workflowDelegations.createdAt));
+    const rows = await query
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(workflowDelegations.createdAt));
     const nowIso = new Date().toISOString();
 
     return rows.map(r => {

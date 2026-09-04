@@ -1,5 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { WorkflowRuleEngine } from '../../services/workflow/workflowEngineService.js';
+import { RuleExpression } from '../../services/ruleEngine.service.js';
 import { normalizeError } from '../../errors/customErrors.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import crypto from 'crypto';
@@ -187,7 +188,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   // Test 6: Nested Expression Evaluation & Dot Notation Path Resolution (Subphase 7.1)
   const t6Start = Date.now();
   try {
-    const nestedExpression = {
+    const nestedExpression: RuleExpression = {
       logic: 'AND',
       conditions: [
         { field: 'payload.amount', operator: 'gte', value: 10000000 },

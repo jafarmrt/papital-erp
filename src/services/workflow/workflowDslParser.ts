@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle';
+import { orm, DbExecutor } from '../../db/drizzle';
 import { 
   documents, 
   documentItems, 
@@ -11,12 +11,12 @@ import {
 } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../../middleware/logger';
-import { RuleEngineService, RuleExpression, EvaluationTraceResult } from '../ruleEngine.service.js';
+import { RuleEngineService, RuleExpression, EvaluationTraceResult, EvaluationTraceItem } from '../ruleEngine.service.js';
 
 export interface WorkflowConditionRule {
   field: string;
   operator: string;
-  value: any;
+  value: unknown;
 }
 
 export interface WorkflowRuleGroup {
@@ -29,21 +29,21 @@ export interface WorkflowRuleGroup {
 export interface RuleEvaluationResult {
   rule: WorkflowConditionRule;
   passed: boolean;
-  actualValue: any;
+  actualValue: unknown;
 }
 
 export class WorkflowRuleEngine {
   /**
    * Validate syntax of condition rules array or group using central RuleEngineService
    */
-  static validateRuleSyntax(ruleGroup: WorkflowRuleGroup | WorkflowConditionRule[] | any): { valid: boolean; error?: string } {
+  static validateRuleSyntax(ruleGroup: RuleExpression): { valid: boolean; error?: string } {
     return RuleEngineService.validateExpression(ruleGroup);
   }
 
   /**
    * Evaluate conditions and return detailed breakdown for each rule
    */
-  static evaluateRuleBreakdown(rulesInput: WorkflowRuleGroup | WorkflowConditionRule[] | any, context: Record<string, any>): {
+  static evaluateRuleBreakdown(rulesInput: RuleExpression, context: Record<string, unknown>): {
     passed: boolean;
     matchType: 'AND' | 'OR';
     breakdown: RuleEvaluationResult[];
@@ -53,7 +53,8 @@ export class WorkflowRuleEngine {
 
     let matchType: 'AND' | 'OR' = 'AND';
     if (rulesInput && !Array.isArray(rulesInput) && typeof rulesInput === 'object') {
-      const m = (rulesInput.matchType || rulesInput.logic || 'AND').toString().toUpperCase();
+      const groupInput = rulesInput as WorkflowRuleGroup;
+      const m = (groupInput.matchType || groupInput.logic || 'AND').toString().toUpperCase();
       matchType = m === 'OR' ? 'OR' : 'AND';
     }
 
@@ -61,7 +62,7 @@ export class WorkflowRuleEngine {
     
     // Extract flat breakdown items from trace
     if (trace.traceTree) {
-      const extractRules = (node: any) => {
+      const extractRules = (node: EvaluationTraceItem | undefined) => {
         if (!node) return;
         if (node.type === 'rule') {
           breakdown.push({
@@ -92,7 +93,7 @@ export class WorkflowRuleEngine {
   /**
    * Evaluate JSON condition rules against entity context data
    */
-  static evaluateConditions(rulesInput: WorkflowRuleGroup | WorkflowConditionRule[] | any, context: Record<string, any>): boolean {
+  static evaluateConditions(rulesInput: RuleExpression, context: Record<string, unknown>): boolean {
     return RuleEngineService.evaluate(rulesInput, context);
   }
 }
@@ -100,8 +101,8 @@ export class WorkflowRuleEngine {
 /**
  * Fetch context data for an entity to evaluate JSON conditions
  */
-export async function getEntityContext(entityType: string, entityId: string, txExecutor: any = orm): Promise<Record<string, any>> {
-  const context: Record<string, any> = { entityType, entityId };
+export async function getEntityContext(entityType: string, entityId: string, txExecutor: DbExecutor = orm): Promise<Record<string, unknown>> {
+  const context: Record<string, unknown> = { entityType, entityId };
   try {
     const numericId = Number(entityId) || 0;
     if (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma') {
@@ -114,7 +115,7 @@ export async function getEntityContext(entityType: string, entityId: string, txE
       }
       if (doc) {
         const itemsList = await txExecutor.select().from(documentItems).where(eq(documentItems.documentId, doc.id));
-        const totalAmount = itemsList.reduce((acc: number, item: any) => acc + (Number(item.quantity || 0) * Number(item.unitPrice || 0) - Number(item.discount || 0)), 0);
+        const totalAmount = itemsList.reduce((acc: number, item: typeof documentItems.$inferSelect) => acc + (Number(item.quantity || 0) * Number(item.unitPrice || 0) - Number(item.discount || 0)), 0);
         context.amount = totalAmount || Number(doc.totalAmount) || 0;
         context.finalAmount = totalAmount || Number(doc.totalAmount) || 0;
         context.totalAmount = totalAmount || Number(doc.totalAmount) || 0;
@@ -148,32 +149,35 @@ export async function getEntityContext(entityType: string, entityId: string, txE
         context.unit = mat.unit;
         context.category = mat.category || '';
         context.status = mat.status;
-        context.title = mat.title || '';
+        context.title = mat.name || '';
       }
     } else if (entityType === 'item') {
       const [item] = await txExecutor.select().from(items).where(eq(items.id, numericId));
       if (item) {
+        const itemRecord = item as unknown as Record<string, unknown>;
         context.code = item.code;
         context.name = item.name;
         context.category = item.category;
         context.currentStock = Number(item.currentStock) || 0;
-        context.purchasePrice = Number(item.purchasePrice) || 0;
-        context.salesPrice = Number(item.salesPrice) || 0;
+        context.purchasePrice = Number(itemRecord.purchasePrice) || Number(item.weightedAverageCost) || 0;
+        context.salesPrice = Number(itemRecord.salesPrice) || 0;
       }
     } else if (entityType === 'customer') {
       const [cust] = await txExecutor.select().from(customers).where(eq(customers.id, numericId));
       if (cust) {
-        context.code = cust.code;
+        const custRecord = cust as unknown as Record<string, unknown>;
+        context.code = String(custRecord.code || cust.id);
         context.name = cust.name;
-        context.type = cust.type;
-        context.balance = Number(cust.balance) || 0;
+        context.type = cust.partyType;
+        context.balance = Number(custRecord.balance) || 0;
       }
     } else if (entityType === 'crm_lead') {
       const [lead] = await txExecutor.select().from(crmLeads).where(eq(crmLeads.id, numericId));
       if (lead) {
         context.title = lead.title;
         context.status = lead.status;
-        context.value = Number(lead.value) || 0;
+        context.value = Number(lead.estimatedValue) || 0;
+        context.estimatedValue = Number(lead.estimatedValue) || 0;
         context.source = lead.source || '';
       }
     } else if (entityType === 'journal_voucher') {
@@ -186,8 +190,9 @@ export async function getEntityContext(entityType: string, entityId: string, txE
         context.amount = Number(jv.totalDebit) || 0;
       }
     }
-  } catch (err: any) {
-    logger.warn(`[WorkflowDslParser] Entity context error for ${entityType} #${entityId}: ${err.message}`);
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    logger.warn(`[WorkflowDslParser] Entity context error for ${entityType} #${entityId}: ${errMsg}`);
   }
   return context;
 }

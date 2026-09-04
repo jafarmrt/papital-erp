@@ -30,7 +30,7 @@ router.get('/stats', async (req, res) => {
       recentTx: Number(recentTx),
       activeUsers: Number(userCount)
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'STATS ENDPOINT ERROR', error: err });
     throw err;
   }
@@ -225,7 +225,7 @@ router.get('/dashboard-bi-stats', async (req, res) => {
     dashboardCache.timestamp = now;
 
     res.json(result);
-  } catch(err: any) {
+  } catch (err) {
     logger.error({ message: 'BI-STATS ENDPOINT ERROR', error: err });
     throw err;
   }

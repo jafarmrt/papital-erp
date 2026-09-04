@@ -104,6 +104,93 @@ export function normalizePersianDate(str: string | null | undefined): string {
 }
 
 /**
+ * تبدیل رشته تاریخ جلالی (مثلاً '1403/05/12') یا رشته‌های مختلف به تاریخ استاندارد میلادی ISO (YYYY-MM-DD).
+ * از الگوریتم دقیق تقویم جلالی برای تبدیل قطعی استفاده می‌کند.
+ */
+export function jalaliToIsoDate(str: string | null | undefined): string {
+  if (!str || typeof str === 'object') return '';
+  try {
+    const s = toEnglishDigits(String(str)).trim();
+    if (!s) return '';
+
+    // اگر از قبل میلادی استاندارد است (مثلاً 2026-08-28 یا 2026/08/28)
+    const gMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (gMatch && parseInt(gMatch[1], 10) >= 1900 && parseInt(gMatch[1], 10) <= 2200) {
+      const gy = gMatch[1];
+      const gm = gMatch[2].padStart(2, '0');
+      const gd = gMatch[3].padStart(2, '0');
+      return `${gy}-${gm}-${gd}`;
+    }
+
+    // الگوی تاریخ جلالی (13xx یا 14xx یا 15xx)
+    const jMatch = s.match(/^(1[345]\d{2})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (!jMatch) return '';
+
+    const jy = parseInt(jMatch[1], 10);
+    const jm = parseInt(jMatch[2], 10);
+    const jd = parseInt(jMatch[3], 10);
+
+    // الگوریتم تبدیل جلالی به میلادی
+    let gy = jy + 621;
+    let leapJ = -14;
+    let jp = -61;
+    let jumpL = 0;
+    const breaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
+
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const jmBreak = breaks[i];
+      jumpL = jmBreak - jp;
+      if (jy < jmBreak) break;
+      leapJ = leapJ + Math.floor(jumpL / 33) * 8 + Math.floor((jumpL % 33) / 4);
+      jp = jmBreak;
+    }
+
+    let n = jy - jp;
+    leapJ = leapJ + Math.floor(n / 33) * 8 + Math.floor(((n % 33) + 3) / 4);
+    if ((jumpL % 33) === 4 && (jumpL - n) === 4) leapJ += 1;
+
+    const leapG = Math.floor(gy / 4) - Math.floor(((Math.floor(gy / 100) + 1) * 3) / 4) - 150;
+    const march = 20 + leapJ - leapG;
+    if ((jumpL - n) < 6) n = n - jumpL + Math.floor((jumpL + 4) / 33) * 33;
+
+    // محاسبه Julian Day Number
+    const g2d = (gY: number, gM: number, gD: number) => {
+      let d = Math.floor(((gY + Math.floor((gM - 8) / 6) + 100100) * 1461) / 4)
+        + Math.floor((153 * ((gM + 9) % 12) + 2) / 5)
+        + gD - 34840408;
+      d = d - Math.floor((Math.floor((gY + 100100 + Math.floor((gM - 8) / 6)) / 100) * 3) / 4) + 752;
+      return d;
+    };
+
+    const jdn = g2d(gy, 3, march) + (jm - 1) * 31 - Math.floor(jm / 7) * (jm - 7) + jd - 1;
+
+    // تبدیل JDN به تقویم میلادی
+    let j = 4 * jdn + 139361631;
+    j = j + Math.floor((Math.floor((4 * jdn + 183187720) / 146097) * 3) / 4) * 4 - 3908;
+    const iVal = Math.floor((j % 1461) / 4) * 5 + 308;
+    const gdOut = Math.floor((iVal % 153) / 5) + 1;
+    const gmOut = (Math.floor(iVal / 153) % 12) + 1;
+    const gyOut = Math.floor(j / 1461) - 100100 + Math.floor((8 - gmOut) / 6);
+
+    return `${gyOut}-${String(gmOut).padStart(2, '0')}-${String(gdOut).padStart(2, '0')}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * دریافت تاریخ ایزو از هر ورودی تاریخ (جلالی، میلادی، Date یا شیء).
+ */
+export function toIsoDateString(val: any): string {
+  if (!val) return '';
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return val.toISOString().slice(0, 10);
+  }
+  const extracted = extractDateString(val);
+  return jalaliToIsoDate(extracted) || extracted;
+}
+
+/**
  * V10-1.3 — ساعت توافقی واحد (کلاینت)
  * ====================================
  * منطقه زمانی نمایش از تنظیمات سامانه (`display_timezone`) خوانده و به‌صورت

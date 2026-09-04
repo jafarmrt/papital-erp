@@ -1,9 +1,9 @@
 import { orm } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions } from '../../db/schema.js';
-import { eq, asc, and, or, sql, like, gte, lte, lt, desc } from 'drizzle-orm';
+import { eq, asc, and, or, sql, like, gte, lte, lt, desc, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
-import type { TrialBalanceRow, FinancialSummaryStats, FinancialRatiosReport, CurrencyFinancialSummary } from '../../types.js';
+import type { TrialBalanceRow, FinancialSummaryStats, FinancialRatiosReport, CurrencyFinancialSummary, Account } from '../../types.js';
 
 export class AccountingReportService {
   /**
@@ -157,7 +157,7 @@ export class AccountingReportService {
     }
 
     // Build standard account rows
-    const buildRow = (acc: any): TrialBalanceRow => {
+    const buildRow = (acc: Account): TrialBalanceRow => {
       const initD = aggInitialDebit.get(acc.id) || 0;
       const initC = aggInitialCredit.get(acc.id) || 0;
       const perD = aggPeriodDebit.get(acc.id) || 0;
@@ -574,7 +574,7 @@ export class AccountingReportService {
       voucherId: number;
       voucherNumber: number;
       date: string;
-      description: string;
+      description?: string | null;
       accountName: string;
       accountCode: string;
       detailedName?: string;
@@ -649,7 +649,7 @@ export class AccountingReportService {
     if (params.startDate) {
       const priorConditions = periodConditions.filter(c => c !== undefined);
       // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
-      const priorConds: any[] = [
+      const priorConds: (SQL | undefined)[] = [
         eq(journalVouchers.isDeleted, 0),
         or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
       ];
@@ -670,7 +670,7 @@ export class AccountingReportService {
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-      .where(and(...priorConds));
+      .where(and(...priorConds.filter((c): c is SQL => c !== undefined)));
 
       for (const r of priorRows) {
         openingBalance += (Number(r.debit) || 0) - (Number(r.credit) || 0);
@@ -682,7 +682,24 @@ export class AccountingReportService {
     let totalDebit = 0;
     let totalCredit = 0;
 
-    const items = rawRows.map(r => {
+    interface LedgerOutputRow {
+      voucherId: number;
+      voucherNumber: number;
+      date: string;
+      description?: string | null;
+      accountName: string;
+      accountCode: string;
+      detailedName?: string;
+      detailedType?: string;
+      detailedId?: number | null;
+      currency?: string;
+      debit: number;
+      credit: number;
+      runningBalance: number;
+      isOpening?: boolean;
+    }
+
+    const items: LedgerOutputRow[] = rawRows.map(r => {
       const d = Number(r.debit) || 0;
       const c = Number(r.credit) || 0;
       totalDebit += d;
@@ -720,7 +737,7 @@ export class AccountingReportService {
         credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
         runningBalance: openingBalance,
         isOpening: true,
-      } as any);
+      });
     }
 
     return {

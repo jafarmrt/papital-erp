@@ -32,7 +32,7 @@ export interface RegisterPayrollPaymentInput {
 }
 
 export interface RegisterPayrollPaymentResult {
-  payroll: any;
+  payroll: typeof pieceworkPayrolls.$inferSelect;
   transactionNumber: string;
   transactionId: number;
   voucherId: number | null;
@@ -119,7 +119,7 @@ export class PayrollPaymentService {
         throw new NotFoundError('حساب مفهومی «حقوق و دستمزد پرداختنی» (3201) در چارت حساب‌ها یافت نشد');
       }
 
-      const advanceDeduction = Math.max(0, Number((payroll as any).advanceDeduction || 0));
+      const advanceDeduction = Math.max(0, Number(payroll.advanceDeduction || 0));
       const otherDeductions = Math.max(0, Number(payroll.totalDeductions) || 0);
       const grossAmount = (Number(payroll.totalPieceworkAmount) || 0)
         + (Number(payroll.totalFixedAmount) || 0)
@@ -148,7 +148,16 @@ export class PayrollPaymentService {
       const payDate = (input.paymentDate && input.paymentDate.trim()) || toJalaliToday();
       const descText = `تسویه ${input.method === 'cash' ? 'نقدی' : input.method === 'pos' ? 'کارتخوان' : 'بانکی'} حقوق ${pers?.fullName || ''} فیش ${payroll.payrollNumber}`;
 
-      const voucherItems: any[] = [
+      const voucherItems: {
+        accountId: number;
+        detailedType?: string;
+        detailedId?: number;
+        detailedName?: string;
+        debit: number;
+        credit: number;
+        currency?: string;
+        description?: string;
+      }[] = [
         {
           accountId: payableAcc.id,
           detailedType: 'personnel',

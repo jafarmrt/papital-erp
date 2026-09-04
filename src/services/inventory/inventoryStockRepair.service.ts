@@ -77,7 +77,7 @@ export class InventoryStockRepairService {
         .set({ stocks: updatedStocks })
         .where(eq(items.id, params.itemId));
 
-      const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as any).lastPurchasePrice) || 0;
+      const itemUnitPrice = Number(item.weightedAverageCost) || 0;
       const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
 
       // 1. Transaction log out from source

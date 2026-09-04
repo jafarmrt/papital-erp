@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, desc, like, and } from 'drizzle-orm';
 import { appSettings, items, customers, documents, documentItems, woocommerceOrderLogs, warehouses } from '../db/schema.js';
@@ -47,7 +47,15 @@ const httpsAgent = new https.Agent({
 /**
  * Helper to make robust WooCommerce API calls
  */
-async function makeWcRequest(method: 'GET' | 'POST' | 'PUT', urlPath: string, storeUrl: string, key: string, secret: string, data?: any, params: any = {}) {
+async function makeWcRequest(
+  method: 'GET' | 'POST' | 'PUT',
+  urlPath: string,
+  storeUrl: string,
+  key: string,
+  secret: string,
+  data?: unknown,
+  params: Record<string, unknown> = {}
+) {
   let formattedUrl = storeUrl.trim();
   if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
     formattedUrl = 'https://' + formattedUrl;
@@ -84,10 +92,10 @@ async function makeWcRequest(method: 'GET' | 'POST' | 'PUT', urlPath: string, st
       maxRedirects: 5
     });
     return response.data;
-  } catch (error: any) {
-    if (error.response) {
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
       const status = error.response.status;
-      const errorData = error.response.data;
+      const errorData = error.response.data as { message?: string } | undefined;
       const wcMsg = errorData?.message || '';
 
       if (status === 401 || status === 403) {
@@ -104,20 +112,56 @@ async function makeWcRequest(method: 'GET' | 'POST' | 'PUT', urlPath: string, st
       } else {
         throw new Error(`خطای سایت وردپرس (${status}): ${wcMsg || JSON.stringify(errorData) || 'پاسخ نامشخص از سرور'}`);
       }
-    } else if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+    } else if (axios.isAxiosError(error) && (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN')) {
       throw new Error(`آدرس دامنه یافت نشد (${formattedUrl}). از صحت آدرس ورودی مطمئن شوید.`);
-    } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+    } else if (axios.isAxiosError(error) && (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT')) {
       throw new Error(`زمان ارتباط با سرور وردپرس به پایان رسید یا اتصال رد شد. ممکن است هاست یا فایروال سرور درخواست را بلاک کرده باشد.`);
     } else {
-      throw new Error(`خطا در برقراری ارتباط با وردپرس: ${error.message || 'خطای شبکه'}`);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`خطا در برقراری ارتباط با وردپرس: ${errMsg || 'خطای شبکه'}`);
     }
   }
+}
+
+interface WcOrderPayload {
+  id?: string | number;
+  number?: string | number;
+  total?: string | number;
+  currency?: string;
+  line_items?: Array<{
+    id?: number;
+    name?: string;
+    sku?: string;
+    quantity?: number;
+    price?: number | string;
+    total?: number | string;
+    [key: string]: unknown;
+  }>;
+  billing?: {
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    city?: string;
+    address_1?: string;
+    address_2?: string;
+    [key: string]: unknown;
+  };
+  shipping?: {
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    city?: string;
+    address_1?: string;
+    address_2?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
 }
 
 /**
  * Helper to process a WooCommerce Order JSON into an ERP Invoice & deduct stock atomically and idempotently.
  */
-async function processWooCommerceOrder(wcOrder: any) {
+async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
   const wcOrderId = String(wcOrder.id || wcOrder.number || '').trim();
   if (!wcOrderId) {
     throw new Error('داده‌های سفارش ووکامرس حاوی شماره سفارش معتبر نیست.');
@@ -363,7 +407,7 @@ async function processWooCommerceOrder(wcOrder: any) {
 // ==========================================
 // UNAUTHENTICATED WEBHOOK ENDPOINT (GET/POST/HEAD)
 // ==========================================
-const handleWebhookPingOrPayload = async (req: any, res: any) => {
+const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
   try {
     // 1. If method is GET or HEAD (WooCommerce or browser verification)
     if (req.method === 'GET' || req.method === 'HEAD') {
@@ -387,7 +431,7 @@ const handleWebhookPingOrPayload = async (req: any, res: any) => {
         });
       }
 
-      const rawBuffer = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+      const rawBuffer = (req as { rawBody?: Buffer }).rawBody || Buffer.from(JSON.stringify(req.body || {}));
       const hmac = crypto.createHmac('sha256', webhookSecret);
       hmac.update(rawBuffer);
       const computedSignature = hmac.digest('base64');
@@ -454,7 +498,7 @@ const handleWebhookPingOrPayload = async (req: any, res: any) => {
         message: `سفارش ووکامرس #${payload.id} در وضعیت «${wcStatus}» قرار دارد و نیازی به صدور فاکتور در این مرحله نیست.`
       });
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error({ message: 'WooCommerce Webhook error', error });
     // Return 200 with success: false to prevent WooCommerce from retrying continuously, but include error message
     res.status(200).json({ success: false, error: error.message || 'خطا در پردازش وب‌هوک ووکامرس' });
@@ -478,7 +522,7 @@ router.get('/order-logs', authorize('admin', 'manager', 'woocommerce.view'), asy
       .limit(100);
 
     res.json(logs);
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -497,7 +541,7 @@ router.get('/synced-orders', authorize('admin', 'manager', 'woocommerce.view'), 
       .limit(50);
 
     res.json(docs);
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -526,7 +570,7 @@ router.post('/sync-order-by-id', authorize('admin', 'manager', 'woocommerce.mana
     const result = await processWooCommerceOrder(wcOrder);
 
     res.json(result);
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -574,7 +618,7 @@ router.post('/sync-item', authorize('admin', 'manager', 'woocommerce.manage'), v
 
     res.json({ success: true, message: `موجودی کالا (SKU: ${sku}) با موفقیت به ${currentStock} عدد در ووکامرس به‌روزرسانی شد.` });
 
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -621,9 +665,10 @@ router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manag
           });
           updatedCount++;
         }
-      } catch (err: any) {
+      } catch (err) {
         failedCount++;
-        errors.push(`خطا در SKU (${sku}): ${err.message}`);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        errors.push(`خطا در SKU (${sku}): ${errMsg}`);
       }
     }
 
@@ -635,7 +680,7 @@ router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manag
       errors,
       message: `همگام‌سازی دسته‌ای موجودی کل کالاها انجام شد. ${updatedCount} کالا در ووکامرس به‌روزرسانی شدند.`
     });
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });
@@ -652,7 +697,7 @@ router.post('/test-connection', authorize('admin', 'manager', 'woocommerce.manag
     } else {
       res.json({ success: true, message: 'اتصال برقرار شد، اما پاسخ دریافتی فرمت استاندارد ووکامرس را ندارد.' });
     }
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 });

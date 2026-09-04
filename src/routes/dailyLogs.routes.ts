@@ -5,6 +5,7 @@ import { dailyWorkLogs, notifications, users, roles } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { jalaliToIsoDate } from '../utils.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -80,10 +81,12 @@ function calculateWorkHours(startTime: string, endTime: string): number {
   }
 }
 
-function formatDailyLog(l: any) {
+function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<string, unknown>)) {
   const mentionsArr = Array.isArray(l.mentions) ? l.mentions : [];
   const allowedArr = Array.isArray(l.allowedUsers) ? l.allowedUsers : [];
   const tagsArr = Array.isArray(l.tags) ? l.tags : [];
+  const rawDate = String(l.date || '');
+  const computedDateIso = String(l.dateIso || jalaliToIsoDate(rawDate) || rawDate.slice(0, 10));
 
   return {
     ...l,
@@ -94,6 +97,8 @@ function formatDailyLog(l: any) {
     user_full_name: l.userFullName || l.username,
     userFullName: l.userFullName || l.username,
     date: l.date,
+    date_iso: computedDateIso,
+    dateIso: computedDateIso,
     start_time: l.startTime,
     startTime: l.startTime,
     end_time: l.endTime,
@@ -197,7 +202,14 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
   let result = filtered;
 
   if (date) {
-    result = result.filter(l => l.date === String(date));
+    const targetDate = String(date).trim();
+    const targetDateIso = jalaliToIsoDate(targetDate) || targetDate;
+    result = result.filter(l => 
+      l.date === targetDate || 
+      l.dateIso === targetDate || 
+      l.dateIso === targetDateIso ||
+      l.date === targetDateIso
+    );
   }
 
   if (user_id) {
@@ -297,10 +309,24 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
 
   if (report_type === 'daily' && date) {
     const targetDate = String(date).trim();
-    filtered = filtered.filter(l => l.date === targetDate || (l.createdAt && l.createdAt.startsWith(targetDate)));
+    const targetDateIso = jalaliToIsoDate(targetDate) || targetDate;
+    filtered = filtered.filter(l => 
+      l.date === targetDate || 
+      l.dateIso === targetDate || 
+      l.dateIso === targetDateIso || 
+      (l.createdAt && l.createdAt.startsWith(targetDate)) ||
+      (l.createdAt && l.createdAt.startsWith(targetDateIso))
+    );
   } else if (report_type === 'monthly' && year_month) {
     const prefix = String(year_month).trim();
-    filtered = filtered.filter(l => l.date.startsWith(prefix) || (l.createdAt && l.createdAt.startsWith(prefix)));
+    const prefixIso = jalaliToIsoDate(prefix.includes('-') || prefix.includes('/') ? `${prefix}/01` : '')?.slice(0, 7) || '';
+    filtered = filtered.filter(l => 
+      l.date.startsWith(prefix) || 
+      (l.dateIso && l.dateIso.startsWith(prefix)) ||
+      (prefixIso && l.dateIso && l.dateIso.startsWith(prefixIso)) ||
+      (l.createdAt && l.createdAt.startsWith(prefix)) ||
+      (prefixIso && l.createdAt && l.createdAt.startsWith(prefixIso))
+    );
   }
 
   // Grouping by user
@@ -315,7 +341,7 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
     onsiteCount: number;
     remoteCount: number;
     datesSet: Set<string>;
-    logs: any[];
+    logs: Array<Record<string, unknown>>;
   }> = {};
 
   // Initialize map with all users (or filtered user)
@@ -439,13 +465,17 @@ router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(cr
   const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : [];
   const tagsList = Array.isArray(tags) ? tags : [];
 
+  const rawDate = date || new Date().toISOString().slice(0, 10);
+  const computedDateIso = jalaliToIsoDate(rawDate) || rawDate.slice(0, 10);
+
   const [newLog] = await orm
     .insert(dailyWorkLogs)
     .values({
       userId,
       username,
       userFullName,
-      date: date || new Date().toISOString().slice(0, 10),
+      date: rawDate,
+      dateIso: computedDateIso,
       startTime,
       endTime,
       workHours: computedHours,
@@ -534,10 +564,14 @@ router.put('/daily-logs/:id', authorizePermission('daily_logs.create'), validate
   const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : existing.allowedUsers;
   const tagsList = Array.isArray(tags) ? tags : existing.tags;
 
+  const updatedDate = date || existing.date;
+  const updatedDateIso = date ? (jalaliToIsoDate(date) || date.slice(0, 10)) : (existing.dateIso || jalaliToIsoDate(existing.date) || existing.date.slice(0, 10));
+
   await orm
     .update(dailyWorkLogs)
     .set({
-      date: date || existing.date,
+      date: updatedDate,
+      dateIso: updatedDateIso,
       startTime,
       endTime,
       workHours: computedHours,

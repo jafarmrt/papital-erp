@@ -12,13 +12,13 @@ router.use(authenticateToken);
 
 export const unifiedImportSchema = z.object({
   body: z.object({
-    rows: z.array(z.record(z.string(), z.any())).min(1, 'لیست ردیف‌های فایل اکسل خالی است'),
+    rows: z.array(z.record(z.string(), z.unknown())).min(1, 'لیست ردیف‌های فایل اکسل خالی است'),
     typeFilter: z.string().optional()
   })
 });
 
 // GET /items/unified-export
-router.get('/items/unified-export', authorize('admin', 'manager', 'products.view'), async (req: any, res) => {
+router.get('/items/unified-export', authorize('admin', 'manager', 'products.view'), async (req, res) => {
   try {
     const typeFilter = req.query.type as string;
     const result = await ItemsService.processUnifiedExport(typeFilter);
@@ -32,14 +32,14 @@ router.get('/items/unified-export', authorize('admin', 'manager', 'products.view
       ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
     });
     res.json(result);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error exporting items', error: err });
     throw err;
   }
 });
 
 // POST /items/unified-import
-router.post('/items/unified-import', authorize('admin', 'manager', 'products.create', 'products.edit'), validate(unifiedImportSchema), async (req: any, res) => {
+router.post('/items/unified-import', authorize('admin', 'manager', 'products.create', 'products.edit'), validate(unifiedImportSchema), async (req, res) => {
   try {
     const { rows, typeFilter } = req.body;
     const result = await ItemsService.processUnifiedImport(rows, typeFilter, req);
@@ -53,7 +53,7 @@ router.post('/items/unified-import', authorize('admin', 'manager', 'products.cre
       ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
     });
     res.json(result);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error in unified import', error: err });
     throw err;
   }

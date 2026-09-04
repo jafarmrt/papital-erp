@@ -48,13 +48,13 @@ router.get('/items/prices/all', async (req, res) => {
     const activeStrategies = await ItemsService.getPricingStrategies();
     const activePrices = ItemsService.filterActivePrices(prices, activeStrategies);
 
-    const grouped: Record<number, any[]> = {};
+    const grouped: Record<number, Array<typeof itemPrices.$inferSelect>> = {};
     for (const p of activePrices) {
       if (!grouped[p.itemId]) grouped[p.itemId] = [];
       grouped[p.itemId].push(p);
     }
     res.json(grouped);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -66,7 +66,7 @@ router.get('/items/:id/prices', validate(paramsIdSchema), async (req, res) => {
     const activeStrategies = await ItemsService.getPricingStrategies();
     const activePrices = ItemsService.filterActivePrices(prices, activeStrategies);
     res.json(activePrices);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -76,7 +76,7 @@ router.get('/items/:id/prices/history', validate(paramsIdSchema), async (req, re
   try {
     const prices = await orm.select().from(itemPrices).where(eq(itemPrices.itemId, Number(req.params.id))).orderBy(desc(itemPrices.id));
     res.json(prices);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -138,7 +138,7 @@ router.post('/items/:id/prices', authorize('admin', 'manager'), validate(itemPri
     });
 
     res.json({ id: inserted.id, itemId, title: cleanTitle, price: Number(price), currency });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -179,7 +179,7 @@ router.delete('/items/:id/prices/:priceId', authorize('admin', 'manager'), valid
     }
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -189,10 +189,10 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager'), validat
   try {
     const { updates } = req.body;
     const nowIso = new Date().toISOString();
-    const auditChanges: any[] = [];
+    const auditChanges: Array<Record<string, unknown>> = [];
 
     await orm.transaction(async (tx) => {
-      const itemIds = Array.from(new Set(updates.map((u: any) => Number(u.itemId)).filter((id: any) => Boolean(id) && !isNaN(id)))) as number[];
+      const itemIds = Array.from(new Set(updates.map((u: { itemId: unknown }) => Number(u.itemId)).filter((id: number) => Boolean(id) && !isNaN(id)))) as number[];
       if (itemIds.length === 0) return;
 
       const validItems = await tx.select({ id: items.id, name: items.name, code: items.code })
@@ -304,7 +304,7 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager'), validat
     }
 
     res.json({ success: true, count: updates.length });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error in batch price update', error: err });
     throw err;
   }

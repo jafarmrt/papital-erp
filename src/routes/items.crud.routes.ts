@@ -20,9 +20,9 @@ import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 const router = Router();
 
 export const itemCreateUpdateSchema = z.object({
-  body: z.preprocess((val: any) => {
+  body: z.preprocess((val: unknown) => {
     if (val && typeof val === 'object') {
-      const copy = { ...val };
+      const copy = { ...(val as Record<string, unknown>) };
       for (const k of Object.keys(copy)) {
         if (k.startsWith('stock_')) {
           delete copy[k];
@@ -109,7 +109,7 @@ router.get('/items/reorder-alerts', async (req, res) => {
       const wac = Number(it.weightedAverageCost || 0);
       const deficit = Math.max(0, reorderPt - curStock);
 
-      const obj: any = {
+      const obj: Record<string, unknown> = {
         ...it,
         current_stock: curStock,
         reorder_point: reorderPt,
@@ -119,7 +119,7 @@ router.get('/items/reorder-alerts', async (req, res) => {
         is_zero_stock: curStock <= 0
       };
 
-      const st = it.stocks as Record<string, any>;
+      const st = it.stocks as Record<string, unknown> | null;
       if (st) {
         for (const k of Object.keys(st)) {
           obj[`stock_${k}`] = Number(st[k] || 0);
@@ -129,7 +129,7 @@ router.get('/items/reorder-alerts', async (req, res) => {
     });
 
     res.json(mapped);
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -181,7 +181,7 @@ router.get('/items', async (req, res) => {
       const reservedStock = Number(resInfo.totalReserved || 0);
       const availableStock = Math.max(0, curStock - reservedStock);
 
-      const obj: any = {
+      const obj: Record<string, unknown> = {
         ...it,
         current_stock: curStock,
         reorder_point: it.reorderPoint,
@@ -190,7 +190,7 @@ router.get('/items', async (req, res) => {
         available_stock: availableStock,
         reservations: resInfo.reservations
       };
-      const st = it.stocks as Record<string, any>;
+      const st = it.stocks as Record<string, unknown> | null;
       if (st) {
         for (const k of Object.keys(st)) {
           obj[`stock_${k}`] = Number(st[k]);
@@ -216,7 +216,7 @@ router.get('/items', async (req, res) => {
       limit,
       totalPages: limit > 0 ? Math.ceil(total / limit) : 1
     });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });
@@ -292,7 +292,7 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
       return inserted.id;
     });
 
-    const responseStock: any = {};
+    const responseStock: Record<string, number> = {};
     for (const k of Object.keys(stockValues)) responseStock[`stock_${k}`] = stockValues[k];
 
     // V2.0.0: سند افتتاحیه موجودی اولیه — ورکفلو شرطی
@@ -313,7 +313,7 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
         });
         openingVoucherId = opening?.id || null;
       }
-    } catch (openingErr: any) {
+    } catch (openingErr) {
       logger.warn({ message: `Item opening voucher for ${insertedId} failed/deferred`, error: openingErr });
     }
 
@@ -344,8 +344,8 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
     });
 
     res.json({ id: insertedId, type, name, code, current_stock: computedStock, unit, category, image: imageUrl, thumbnail: thumbnailUrl, ...responseStock, reorder_point, weighted_average_cost, color, weight, material, size, opening_voucher_id: openingVoucherId });
-  } catch (err: any) {
-    if (err.code === '23505') {
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
       // V9-1.2: خطای یکتایی کد کالا (پنجره رقابتی بین بررسی و درج) — پیام راهنما برای دریافت کد جدید
       return res.status(400).json({ error: 'کد کالا هم‌اکنون توسط کاربر دیگری ثبت شد. لطفاً کد جدیدی از دکمه «کد پیشنهادی» دریافت کرده و مجدداً ذخیره کنید.' });
     }
@@ -385,7 +385,7 @@ router.put('/items/:id', authorize('admin', 'manager'), validate(itemUpdateSchem
     const imageUrl = image ? await uploadBase64ToStorage(image, 'image') : undefined;
     const thumbnailUrl = thumbnail ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : undefined;
 
-    const updateData: any = {
+    const updateData: Partial<typeof items.$inferInsert> = {
       name, code, unit, category: category || '',
       reorderPoint: Number(reorder_point || 0),
       // V2.0.0: محافظت از WAC — فقط اگر مقدار جدید ارائه شده باشد به‌روزرسانی شود
@@ -441,18 +441,19 @@ router.put('/items/:id', authorize('admin', 'manager'), validate(itemUpdateSchem
     });
 
     res.json({ success: true });
-  } catch (err: any) {
-    if (err.name === 'OptimisticLockError') {
+  } catch (err) {
+    const errorObj = err as { name?: string; code?: string; expectedVersion?: number; currentVersion?: number } | null;
+    if (errorObj?.name === 'OptimisticLockError') {
       return res.status(409).json({
         error: 'تداخل همزمانی: کالا توسط کاربر دیگری ویرایش شده است. لطفاً صفحه را بازخوانی کنید.',
         code: 'OCC_CONFLICT',
         details: {
-          expectedVersion: err.expectedVersion,
-          currentVersion: err.currentVersion
+          expectedVersion: errorObj.expectedVersion,
+          currentVersion: errorObj.currentVersion
         }
       });
     }
-    if (err.code === '23505') {
+    if (errorObj?.code === '23505') {
       return res.status(400).json({ error: 'کد کالا تکراری است.' });
     }
     throw err;
@@ -513,7 +514,7 @@ router.delete('/items/:id', authorize('admin'), validate(paramsIdSchema), async 
     });
 
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     throw err;
   }
 });

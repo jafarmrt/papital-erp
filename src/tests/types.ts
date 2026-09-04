@@ -93,7 +93,8 @@ export type CriticalScenarioId =
   | 'v10_payroll_paid_treasury_only'
   | 'v10_menu_visibility_deny_list'
   | 'v10_cleanup_refusal_without_flag'
-  | 'v10_date_normalization_idempotence';
+  | 'v10_date_normalization_idempotence'
+  | 'v10_iso_date_standardization';
 
 
 export interface TestCaseResult {

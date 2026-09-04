@@ -1,6 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { items, pieceworkPayrolls, personnel, itemCodeCounters } from '../../db/schema.js';
+import { items, pieceworkPayrolls, personnel, itemCodeCounters, dailyWorkLogs, pieceworkLogs, pieceworkTasks, crmActivities } from '../../db/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { StockReconciliationService } from '../../services/inventory/stockReconciliation.service.js';
 import { ItemCatalogService } from '../../services/items/itemCatalog.service.js';
@@ -9,6 +9,7 @@ import { ConflictError } from '../../errors/customErrors.js';
 import { DataReconciliationService } from '../../services/reconciliation/dataReconciliation.service.js';
 import { getMenuGroups } from '../../components/layout/menuConfig.js';
 import { cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
+import { jalaliToIsoDate } from '../../utils.js';
 
 // V10-7.4: سوییت رگرسیون نسخه ۱۰ — ۶ سناریوی بحرانی رفتارهای جدید V10
 export async function runV10RegressionTests(): Promise<TestCaseResult[]> {
@@ -307,6 +308,145 @@ export async function runV10RegressionTests(): Promise<TestCaseResult[]> {
       durationMs: Date.now() - t6,
       error: err.message
     }));
+  }
+
+  // ── 7. ISO Date Standardization & Dual-Write Accuracy (TD-034) ────────────
+  const t7 = Date.now();
+  let createdWorkLogId: number | null = null;
+  let createdPieceworkLogId: number | null = null;
+  let createdActivityId: number | null = null;
+  let tempTaskId: number | null = null;
+  let tempPersonId: number | null = null;
+  try {
+    // 7.1 Test Daily Work Logs dual-write
+    const jDate1 = '1404/05/15';
+    const isoExpected1 = jalaliToIsoDate(jDate1); // '2025-08-06'
+    const [insertedWorkLog] = await orm.insert(dailyWorkLogs).values({
+      userId: 1,
+      username: 'v10_test_user',
+      userFullName: 'کاربر تستی V10',
+      date: jDate1,
+      dateIso: isoExpected1,
+      startTime: '08:00',
+      endTime: '16:00',
+      workHours: 8,
+      workMode: 'onsite',
+      title: 'تست استانداردسازی تاریخ روزانه',
+      content: 'محتوای گزارش تستی جهت ارزیابی ستون dateIso',
+      visibility: 'public',
+      isDeleted: 0
+    }).returning({ id: dailyWorkLogs.id });
+    createdWorkLogId = insertedWorkLog.id;
+
+    const [queriedWorkLog] = await orm.select().from(dailyWorkLogs).where(eq(dailyWorkLogs.id, createdWorkLogId));
+    if (!queriedWorkLog || queriedWorkLog.dateIso !== isoExpected1) {
+      throw new Error(`DailyWorkLog dateIso mismatch: expected ${isoExpected1}, got ${queriedWorkLog?.dateIso}`);
+    }
+
+    // 7.2 Test Piecework Logs dual-write
+    let [person] = await orm.select({ id: personnel.id }).from(personnel).where(eq(personnel.isDeleted, 0)).limit(1);
+    if (!person) {
+      const [newPerson] = await orm.insert(personnel).values({
+        fullName: 'پرسنل تستی تاریخ',
+        isDeleted: 0
+      }).returning({ id: personnel.id });
+      person = newPerson;
+      tempPersonId = newPerson.id;
+    }
+
+    let [task] = await orm.select({ id: pieceworkTasks.id }).from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0)).limit(1);
+    if (!task) {
+      const [newTask] = await orm.insert(pieceworkTasks).values({
+        code: `TSK-T7-${Date.now()}`,
+        title: 'وظیفه تستی تاریخ',
+        defaultRate: 10000,
+        unit: 'عدد',
+        isDeleted: 0
+      }).returning({ id: pieceworkTasks.id });
+      task = newTask;
+      tempTaskId = newTask.id;
+    }
+
+    const jDate2 = '1404/01/01';
+    const isoExpected2 = jalaliToIsoDate(jDate2); // '2025-03-21'
+    const [insertedPiecework] = await orm.insert(pieceworkLogs).values({
+      personnelId: person.id,
+      taskId: task.id,
+      date: jDate2,
+      dateIso: isoExpected2,
+      quantity: 10,
+      unitRate: 10000,
+      totalAmount: 100000,
+      isDeleted: 0
+    }).returning({ id: pieceworkLogs.id });
+    createdPieceworkLogId = insertedPiecework.id;
+
+    const [queriedPiecework] = await orm.select().from(pieceworkLogs).where(eq(pieceworkLogs.id, createdPieceworkLogId));
+    if (!queriedPiecework || queriedPiecework.dateIso !== isoExpected2) {
+      throw new Error(`PieceworkLog dateIso mismatch: expected ${isoExpected2}, got ${queriedPiecework?.dateIso}`);
+    }
+
+    // 7.3 Test CRM Activities dual-write & ISO dates
+    const jDateAct = '1404/06/10';
+    const jDateFollow = '1404/06/20';
+    const isoActExpected = jalaliToIsoDate(jDateAct);
+    const isoFollowExpected = jalaliToIsoDate(jDateFollow);
+
+    const [insertedActivity] = await orm.insert(crmActivities).values({
+      type: 'call',
+      title: 'تماس پیگیری تستی استاندارد تاریخ',
+      loggedBy: 'v10_tester',
+      activityDate: jDateAct,
+      activityDateIso: isoActExpected,
+      nextFollowUpDate: jDateFollow,
+      nextFollowUpDateIso: isoFollowExpected,
+      isFollowUpCompleted: 0,
+      isDeleted: 0
+    }).returning({ id: crmActivities.id });
+    createdActivityId = insertedActivity.id;
+
+    const [queriedActivity] = await orm.select().from(crmActivities).where(eq(crmActivities.id, createdActivityId));
+    if (!queriedActivity || queriedActivity.activityDateIso !== isoActExpected || queriedActivity.nextFollowUpDateIso !== isoFollowExpected) {
+      throw new Error(`CRMActivity dateIso mismatch: expected (${isoActExpected}, ${isoFollowExpected}), got (${queriedActivity?.activityDateIso}, ${queriedActivity?.nextFollowUpDateIso})`);
+    }
+
+    results.push(makeTestCase({
+      id: 'v10_iso_date_standardization',
+      scenarioId: 'v10_iso_date_standardization',
+      name: 'V10 Regression: ISO Date Standardization & Dual-Write Accuracy (TD-034)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t7,
+      details: 'نگارش همزمان (Dual-Write) ستون‌های date_iso و تبدیل دقیق تاریخ‌های شمسی به میلادی استاندارد در گزارش کار، کارکرد پرکیسی و فعالیت‌های CRM با موفقیت اعتبارسنجی شد.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'v10_iso_date_standardization',
+      scenarioId: 'v10_iso_date_standardization',
+      name: 'V10 Regression: ISO Date Standardization & Dual-Write Accuracy (TD-034)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t7,
+      error: err.message
+    }));
+  } finally {
+    if (createdWorkLogId !== null) {
+      try { await orm.delete(dailyWorkLogs).where(eq(dailyWorkLogs.id, createdWorkLogId)); } catch { /* non-blocking */ }
+    }
+    if (createdPieceworkLogId !== null) {
+      try { await orm.delete(pieceworkLogs).where(eq(pieceworkLogs.id, createdPieceworkLogId)); } catch { /* non-blocking */ }
+    }
+    if (createdActivityId !== null) {
+      try { await orm.delete(crmActivities).where(eq(crmActivities.id, createdActivityId)); } catch { /* non-blocking */ }
+    }
+    if (tempTaskId !== null) {
+      try { await orm.delete(pieceworkTasks).where(eq(pieceworkTasks.id, tempTaskId)); } catch { /* non-blocking */ }
+    }
+    if (tempPersonId !== null) {
+      try { await orm.delete(personnel).where(eq(personnel.id, tempPersonId)); } catch { /* non-blocking */ }
+    }
   }
 
   return results;

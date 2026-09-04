@@ -35,7 +35,7 @@ router.get('/warehouses', async (req, res) => {
   try {
     const data = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
     res.json(data);
-  } catch(err: any) { throw err; }
+  } catch (err) { throw err; }
 });
 
 router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), async (req, res) => {
@@ -48,7 +48,7 @@ router.post('/warehouses', authorize('admin'), validate(createWarehouseValidatio
 
     const [info] = await orm.insert(warehouses).values({ name, code: cleanCode, isActive: 1 }).returning({ id: warehouses.id });
     res.json({ id: info.id, name, code: cleanCode, is_active: 1 });
-  } catch(err: any) { 
+  } catch (err) { 
     logger.error({ message: 'POST /warehouses ERROR', error: err });
     throw err; 
   }
@@ -59,14 +59,14 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
     const { name } = req.body;
     await orm.update(warehouses).set({ name }).where(eq(warehouses.id, Number(req.params.id)));
     res.json({ success: true });
-  } catch(err: any) { throw err; }
+  } catch (err) { throw err; }
 });
 
 router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), async (req, res) => {
   try {
     await orm.update(warehouses).set({ isActive: 0 }).where(eq(warehouses.id, Number(req.params.id)));
     res.json({ success: true });
-  } catch(err: any) { throw err; }
+  } catch (err) { throw err; }
 });
 
 export default router;

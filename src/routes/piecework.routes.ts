@@ -2,11 +2,11 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { orm } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, users, taskCategories, productionProjects, journalVouchers } from '../db/schema.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, users, taskCategories, productionProjects, journalVouchers } from '../db/schema.js';
 import { eq, and, desc, like, or, sql, inArray } from 'drizzle-orm';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
-import { normalizePersianDate, parseQuantityOrTime } from '../utils.js';
+import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
 import { VoucherSyncService } from '../services/accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
 import { ConflictError } from '../errors/customErrors.js';
@@ -149,20 +149,58 @@ const registerPayrollPaymentSchema = z.object({
 // 1. Piecework Tasks (عناوین کاری پرکیسی)
 // ==========================================
 
-// GET /api/piecework/tasks - List all tasks
+// Helper to record rate change history
+async function recordTaskRateHistory(data: {
+  taskId: number;
+  taskCode?: string;
+  taskTitle?: string;
+  oldRate?: number;
+  newRate: number;
+  changeType: 'create' | 'rate_change' | 'excel_import' | 'title_change' | 'archived' | 'restored';
+  reason?: string;
+  userId?: number;
+  username?: string;
+}) {
+  try {
+    const today = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    await orm.insert(pieceworkTaskRateHistory).values({
+      taskId: data.taskId,
+      taskCode: data.taskCode || '',
+      taskTitle: data.taskTitle || '',
+      oldRate: Number(data.oldRate || 0),
+      newRate: Number(data.newRate || 0),
+      changeType: data.changeType,
+      reason: data.reason || '',
+      changedByUserId: data.userId || null,
+      changedByUsername: data.username || 'سیستم',
+      effectiveDate: today,
+    });
+  } catch (err) {
+    logger.warn({ message: 'Failed to record piecework rate history', error: err });
+  }
+}
+
+// GET /api/piecework/tasks - List tasks (active, archived, or all)
 router.get('/piecework/tasks', async (req, res) => {
   try {
-    const { category, search } = req.query;
+    const { category, search, status = 'active' } = req.query;
     
+    let whereClause = eq(pieceworkTasks.isDeleted, 0);
+    if (status === 'archived') {
+      whereClause = eq(pieceworkTasks.isDeleted, 1);
+    } else if (status === 'all') {
+      whereClause = sql`1=1` as any;
+    }
+
     let query = orm.select()
       .from(pieceworkTasks)
-      .where(eq(pieceworkTasks.isDeleted, 0))
+      .where(whereClause)
       .orderBy(pieceworkTasks.category, pieceworkTasks.id);
 
     const tasks = await query;
 
     let filtered = tasks;
-    if (category && String(category) !== 'ALL') {
+    if (category && String(category) !== 'ALL' && String(category) !== 'all') {
       filtered = filtered.filter(t => t.category === String(category));
     }
 
@@ -176,9 +214,38 @@ router.get('/piecework/tasks', async (req, res) => {
     }
 
     res.json(filtered);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching piecework tasks', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    throw err;
+  }
+});
+
+// GET /api/piecework/tasks-history - Get global rate change history
+router.get('/piecework/tasks-history', async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 200, 500);
+    const history = await orm.select()
+      .from(pieceworkTaskRateHistory)
+      .orderBy(desc(pieceworkTaskRateHistory.id))
+      .limit(limit);
+    res.json(history);
+  } catch (err) {
+    logger.error({ message: 'Error fetching global piecework task rate history', error: err });
+    throw err;
+  }
+});
+
+// GET /api/piecework/tasks/:id/history - Get rate change history for specific task
+router.get('/piecework/tasks/:id/history', validate(paramsIdSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const history = await orm.select()
+      .from(pieceworkTaskRateHistory)
+      .where(eq(pieceworkTaskRateHistory.taskId, id))
+      .orderBy(desc(pieceworkTaskRateHistory.id));
+    res.json(history);
+  } catch (err) {
+    logger.error({ message: 'Error fetching piecework task rate history', error: err });
     throw err;
   }
 });
@@ -206,6 +273,18 @@ router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate
       isDeleted: 0
     }).returning();
 
+    await recordTaskRateHistory({
+      taskId: newTask.id,
+      taskCode: newTask.code,
+      taskTitle: newTask.title,
+      oldRate: 0,
+      newRate: Number(newTask.defaultRate) || 0,
+      changeType: 'create',
+      reason: 'تعریف اولیه عنوان کاری',
+      userId: req.user?.id,
+      username: req.user?.username
+    });
+
     await logActivity({
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
@@ -216,9 +295,186 @@ router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate
     });
 
     res.status(201).json(newTask);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error creating piecework task', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    throw err;
+  }
+});
+
+// POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
+router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admin'), async (req, res) => {
+  try {
+    const { rows, mode = 'upsert' } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'لیست ردیف‌های واردات اکسل خالی است' });
+    }
+
+    if (mode === 'replace') {
+      await orm.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.isDeleted, 0));
+    }
+
+    const existingTasks = await orm.select().from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0));
+    const taskByCode = new Map(existingTasks.map(t => [t.code?.trim().toLowerCase(), t]));
+    const taskByTitle = new Map(existingTasks.map(t => [t.title?.trim().toLowerCase(), t]));
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    const addedCategories = new Set<string>();
+
+    let maxSeq = existingTasks.reduce((max, t) => {
+      const m = t.code?.match(/PW-(\d+)/i);
+      if (m) {
+        const num = parseInt(m[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const title = String(row.title || row['عنوان'] || row['عنوان کار'] || row['عنوان کاری'] || '').trim();
+      if (!title) continue;
+
+      let code = String(row.code || row['کد'] || row['کد کار'] || row['کد کاری'] || '').trim();
+      const category = String(row.category || row['دسته'] || row['دسته‌بندی'] || row['گروه'] || 'سایر').trim();
+      const defaultRate = Number(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'] || 0) || 0;
+      const unit = String(row.unit || row['واحد'] || row['واحد سنجش'] || 'عدد').trim();
+      const description = String(row.description || row['توضیحات'] || '').trim();
+
+      if (category && category !== 'سایر') {
+        addedCategories.add(category);
+      }
+
+      if (!code) {
+        maxSeq++;
+        code = `PW-${String(maxSeq).padStart(3, '0')}`;
+      }
+
+      const existing = (code && taskByCode.get(code.toLowerCase())) || taskByTitle.get(title.toLowerCase());
+
+      if (existing && mode !== 'append') {
+        const oldRate = Number(existing.defaultRate) || 0;
+        await orm.update(pieceworkTasks).set({
+          title,
+          category,
+          defaultRate,
+          unit,
+          description: description || existing.description,
+          isActive: 1,
+          isDeleted: 0
+        }).where(eq(pieceworkTasks.id, existing.id));
+        updatedCount++;
+
+        if (oldRate !== defaultRate || existing.title !== title) {
+          await recordTaskRateHistory({
+            taskId: existing.id,
+            taskCode: existing.code,
+            taskTitle: title,
+            oldRate,
+            newRate: defaultRate,
+            changeType: 'excel_import',
+            reason: oldRate !== defaultRate ? `تغییر نرخ پایه از اکسل (${oldRate.toLocaleString()} -> ${defaultRate.toLocaleString()})` : 'به‌روزرسانی عنوان از اکسل',
+            userId: req.user?.id,
+            username: req.user?.username
+          });
+        }
+      } else {
+        const [inserted] = await orm.insert(pieceworkTasks).values({
+          code,
+          title,
+          category,
+          defaultRate,
+          unit,
+          description,
+          isActive: 1,
+          isDeleted: 0
+        }).returning();
+        createdCount++;
+        if (code) taskByCode.set(code.toLowerCase(), inserted);
+        taskByTitle.set(title.toLowerCase(), inserted);
+
+        await recordTaskRateHistory({
+          taskId: inserted.id,
+          taskCode: inserted.code,
+          taskTitle: inserted.title,
+          oldRate: 0,
+          newRate: Number(inserted.defaultRate) || 0,
+          changeType: 'excel_import',
+          reason: 'ورود از فایل اکسل',
+          userId: req.user?.id,
+          username: req.user?.username
+        });
+      }
+    }
+
+    // Auto-create missing task categories
+    for (const catName of addedCategories) {
+      try {
+        await orm.insert(taskCategories).values({
+          name: catName,
+          description: 'دسته‌بندی کاری ایجادشده از طریق واردات اکسل'
+        }).onConflictDoNothing();
+      } catch (_) {}
+    }
+
+    await logActivity({
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم',
+      action: 'IMPORT',
+      entity: 'عناوین پرکیسی',
+      description: `واردات اکسل عناوین کاری پرکیسی (${createdCount} عنوان جدید، ${updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
+    });
+
+    res.json({
+      status: 'ok',
+      message: `عملیات واردات با موفقیت انجام شد: ${createdCount} عنوان جدید ایجاد و ${updatedCount} عنوان به‌روزرسانی شدند.`,
+      createdCount,
+      updatedCount,
+      totalProcessed: createdCount + updatedCount
+    });
+  } catch (err) {
+    logger.error({ message: 'Error importing piecework tasks from excel', error: err });
+    throw err;
+  }
+});
+
+// POST /api/piecework/tasks/clear-defaults or clear-all
+router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorize('personnel.manage', 'admin'), async (req, res) => {
+  try {
+    const deleted = await orm.update(pieceworkTasks)
+      .set({ isDeleted: 1 })
+      .where(eq(pieceworkTasks.isDeleted, 0))
+      .returning({ id: pieceworkTasks.id, title: pieceworkTasks.title, code: pieceworkTasks.code, defaultRate: pieceworkTasks.defaultRate });
+
+    for (const d of deleted) {
+      await recordTaskRateHistory({
+        taskId: d.id,
+        taskCode: d.code,
+        taskTitle: d.title,
+        oldRate: Number(d.defaultRate) || 0,
+        newRate: Number(d.defaultRate) || 0,
+        changeType: 'archived',
+        reason: 'پاکسازی کلی عناوین کاری',
+        userId: req.user?.id,
+        username: req.user?.username
+      });
+    }
+
+    await logActivity({
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم',
+      action: 'DELETE',
+      entity: 'عناوین پرکیسی',
+      description: `پاکسازی کلی عناوین کاری پرکیسی (${deleted.length} مورد حذف شدند)`
+    });
+
+    res.json({
+      status: 'ok',
+      message: `تمام عناوین کاری (${deleted.length} مورد) با موفقیت حذف شدند.`,
+      count: deleted.length
+    });
+  } catch (err) {
+    logger.error({ message: 'Error clearing all piecework tasks', error: err });
     throw err;
   }
 });
@@ -234,14 +490,44 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
       return res.status(404).json({ error: 'عنوان کاری یافت نشد' });
     }
 
+    const oldRate = Number(existing.defaultRate) || 0;
+    const newRate = defaultRate !== undefined ? Number(defaultRate) : oldRate;
+    const newTitle = title !== undefined ? String(title).trim() : existing.title;
+
     await orm.update(pieceworkTasks).set({
-      title: title !== undefined ? String(title).trim() : existing.title,
+      title: newTitle,
       category: category !== undefined ? String(category).trim() : existing.category,
-      defaultRate: defaultRate !== undefined ? Number(defaultRate) : existing.defaultRate,
+      defaultRate: newRate,
       unit: unit !== undefined ? String(unit).trim() : existing.unit,
       description: description !== undefined ? String(description).trim() : existing.description,
       isActive: isActive !== undefined ? (isActive ? 1 : 0) : existing.isActive
     }).where(eq(pieceworkTasks.id, id));
+
+    if (oldRate !== newRate) {
+      await recordTaskRateHistory({
+        taskId: id,
+        taskCode: existing.code,
+        taskTitle: newTitle,
+        oldRate,
+        newRate,
+        changeType: 'rate_change',
+        reason: req.body.reason || `تغییر نرخ پایه از ${oldRate.toLocaleString()} به ${newRate.toLocaleString()}`,
+        userId: req.user?.id,
+        username: req.user?.username
+      });
+    } else if (existing.title !== newTitle) {
+      await recordTaskRateHistory({
+        taskId: id,
+        taskCode: existing.code,
+        taskTitle: newTitle,
+        oldRate,
+        newRate,
+        changeType: 'title_change',
+        reason: `تغییر عنوان از «${existing.title}» به «${newTitle}»`,
+        userId: req.user?.id,
+        username: req.user?.username
+      });
+    }
 
     await logActivity({
       userId: req.user?.id,
@@ -253,9 +539,8 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت به‌روزرسانی شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error updating piecework task', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -271,6 +556,18 @@ router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), va
 
     await orm.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.id, id));
 
+    await recordTaskRateHistory({
+      taskId: id,
+      taskCode: existing.code,
+      taskTitle: existing.title,
+      oldRate: Number(existing.defaultRate) || 0,
+      newRate: Number(existing.defaultRate) || 0,
+      changeType: 'archived',
+      reason: 'حذف/بایگانی عنوان کاری',
+      userId: req.user?.id,
+      username: req.user?.username
+    });
+
     await logActivity({
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
@@ -281,9 +578,47 @@ router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), va
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری حذف شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error deleting piecework task', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    throw err;
+  }
+});
+
+// POST /api/piecework/tasks/:id/restore - Restore an archived/deleted task
+router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [existing] = await orm.select().from(pieceworkTasks).where(eq(pieceworkTasks.id, id));
+    if (!existing) {
+      return res.status(404).json({ error: 'عنوان کاری یافت نشد' });
+    }
+
+    await orm.update(pieceworkTasks).set({ isDeleted: 0, isActive: 1 }).where(eq(pieceworkTasks.id, id));
+
+    await recordTaskRateHistory({
+      taskId: id,
+      taskCode: existing.code,
+      taskTitle: existing.title,
+      oldRate: Number(existing.defaultRate) || 0,
+      newRate: Number(existing.defaultRate) || 0,
+      changeType: 'restored',
+      reason: 'بازیابی عنوان کاری از بایگانی',
+      userId: req.user?.id,
+      username: req.user?.username
+    });
+
+    await logActivity({
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم',
+      action: 'UPDATE',
+      entity: 'عنوان پرکیسی',
+      entityId: id,
+      description: `بازیابی عنوان کاری پرکیسی «${existing.title}» از بایگانی`
+    });
+
+    res.json({ status: 'ok', message: 'عنوان کاری با موفقیت بازیابی شد' });
+  } catch (err) {
+    logger.error({ message: 'Error restoring piecework task', error: err });
     throw err;
   }
 });
@@ -295,14 +630,14 @@ router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), va
 // GET /api/piecework/categories
 router.get('/piecework/categories', async (req, res) => {
   try {
-    let dbCats: any[] = [];
+    let dbCats: Array<typeof taskCategories.$inferSelect> = [];
     try {
       dbCats = await orm.select().from(taskCategories).where(eq(taskCategories.isDeleted, 0));
     } catch (e) {
       logger.warn({ message: 'taskCategories table query error, falling back to empty list', error: e });
     }
 
-    let tasks: any[] = [];
+    let tasks: Array<{ cat: string | null }> = [];
     try {
       tasks = await orm.select({ cat: pieceworkTasks.category }).from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0));
     } catch (e) {
@@ -326,7 +661,7 @@ router.get('/piecework/categories', async (req, res) => {
     });
 
     res.json(resultList);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching task categories', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -359,7 +694,7 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
     });
 
     res.status(201).json(inserted);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error creating task category', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -390,7 +725,7 @@ router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', '
     }
 
     res.json({ status: 'ok', name: newName });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error updating task category', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -405,7 +740,7 @@ router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin'
       await orm.update(taskCategories).set({ isDeleted: 1 }).where(eq(taskCategories.id, Number(id)));
     }
     res.json({ status: 'ok' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error deleting task category', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -425,7 +760,7 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
       .where(and(eq(pieceworkPersonnelRates.personnelId, personnelId), eq(pieceworkPersonnelRates.isDeleted, 0)));
     
     res.json(rates);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching custom rates', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -459,7 +794,7 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('perso
     }
 
     res.json({ status: 'ok', message: 'نرخ اختصاصی ثبت شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error setting custom rate', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -489,6 +824,7 @@ router.get('/piecework/logs', async (req, res) => {
       projectCode: productionProjects.projectCode,
       projectTitle: productionProjects.title,
       date: pieceworkLogs.date,
+      dateIso: pieceworkLogs.dateIso,
       quantity: pieceworkLogs.quantity,
       unitRate: pieceworkLogs.unitRate,
       totalAmount: pieceworkLogs.totalAmount,
@@ -517,13 +853,17 @@ router.get('/piecework/logs', async (req, res) => {
     }
 
     if (startDate && String(startDate).trim()) {
-      const s = normalizePersianDate(String(startDate));
-      rows = rows.filter(r => normalizePersianDate(r.date) >= s);
+      const sRaw = String(startDate).trim();
+      const sPersian = normalizePersianDate(sRaw);
+      const sIso = jalaliToIsoDate(sRaw) || sRaw;
+      rows = rows.filter(r => (r.dateIso && r.dateIso >= sIso) || normalizePersianDate(r.date) >= sPersian);
     }
 
     if (endDate && String(endDate).trim()) {
-      const e = normalizePersianDate(String(endDate));
-      rows = rows.filter(r => normalizePersianDate(r.date) <= e);
+      const eRaw = String(endDate).trim();
+      const ePersian = normalizePersianDate(eRaw);
+      const eIso = jalaliToIsoDate(eRaw) || eRaw;
+      rows = rows.filter(r => (r.dateIso && r.dateIso <= eIso) || normalizePersianDate(r.date) <= ePersian);
     }
 
     if (status && String(status) !== 'ALL') {
@@ -531,7 +871,7 @@ router.get('/piecework/logs', async (req, res) => {
     }
 
     res.json(rows);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching piecework logs', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -582,12 +922,15 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
 
       const qty = parseQuantityOrTime(quantity);
       const totalAmt = qty * finalRate;
+      const normDate = normalizePersianDate(String(date));
+      const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
 
       const [inserted] = await orm.insert(pieceworkLogs).values({
         personnelId: Number(personnelId),
         taskId: Number(taskId),
         projectId: projectId ? Number(projectId) : null,
-        date: normalizePersianDate(String(date)),
+        date: normDate,
+        dateIso: isoDate,
         quantity: qty,
         unitRate: finalRate,
         totalAmount: totalAmt,
@@ -610,7 +953,7 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     });
 
     res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error logging piecework', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -665,12 +1008,15 @@ router.post('/piecework/logs/batch', authorize('personnel.manage', 'daily_logs.c
 
       const qty = parseQuantityOrTime(quantity);
       const totalAmt = qty * finalRate;
+      const normDate = normalizePersianDate(String(date));
+      const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
 
       const [inserted] = await orm.insert(pieceworkLogs).values({
         personnelId: Number(personnelId),
         taskId: Number(taskId),
         projectId: projectId ? Number(projectId) : null,
-        date: normalizePersianDate(String(date)),
+        date: normDate,
+        dateIso: isoDate,
         quantity: qty,
         unitRate: finalRate,
         totalAmount: totalAmt,
@@ -693,7 +1039,7 @@ router.post('/piecework/logs/batch', authorize('personnel.manage', 'daily_logs.c
     });
 
     res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error logging piecework batch', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -716,12 +1062,15 @@ router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), valida
     }
 
     const newDate = date !== undefined ? String(date).trim() : existing.date;
+    const normDate = normalizePersianDate(newDate);
+    const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : existing.dateIso);
     const newQty = quantity !== undefined ? parseQuantityOrTime(quantity) : existing.quantity;
     const newRate = unitRate !== undefined ? Number(unitRate) : existing.unitRate;
     const newTotal = newQty * newRate;
 
     await orm.update(pieceworkLogs).set({
-      date: newDate,
+      date: normDate,
+      dateIso: isoDate,
       quantity: newQty,
       unitRate: newRate,
       totalAmount: newTotal,
@@ -730,7 +1079,7 @@ router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), valida
     }).where(eq(pieceworkLogs.id, id));
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error updating piecework log', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -753,7 +1102,7 @@ router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), val
     await orm.update(pieceworkLogs).set({ isDeleted: 1 }).where(eq(pieceworkLogs.id, id));
 
     res.json({ status: 'ok', message: 'کارکرد حذف شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error deleting piecework log', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -811,7 +1160,13 @@ router.get('/piecework/payrolls', async (req, res) => {
 
     // Attach linked journal voucher info
     const payrollIds = rows.map(r => r.id);
-    let linkedVouchers: any[] = [];
+    let linkedVouchers: Array<{
+      id: number;
+      voucherNumber: number;
+      referenceId: number | null;
+      status: string;
+      date: string;
+    }> = [];
     if (payrollIds.length > 0) {
       linkedVouchers = await orm.select({
         id: journalVouchers.id,
@@ -827,7 +1182,7 @@ router.get('/piecework/payrolls', async (req, res) => {
       ));
     }
 
-    const voucherMap = new Map<number, any>();
+    const voucherMap = new Map<number, (typeof linkedVouchers)[number]>();
     for (const v of linkedVouchers) {
       if (v.referenceId) {
         voucherMap.set(Number(v.referenceId), v);
@@ -846,7 +1201,7 @@ router.get('/piecework/payrolls', async (req, res) => {
     });
 
     res.json(enhancedRows);
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching payrolls', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -906,6 +1261,7 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
         id: pieceworkLogs.id,
         payrollId: pieceworkLogs.payrollId,
         date: pieceworkLogs.date,
+        dateIso: pieceworkLogs.dateIso,
         taskId: pieceworkLogs.taskId,
         taskTitle: pieceworkTasks.title,
         taskCode: pieceworkTasks.code,
@@ -928,7 +1284,7 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
     }
 
     res.json(rows.map(r => ({ ...r, items: itemsByPayroll.get(r.id) || [] })));
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching my payrolls', error: err });
     throw err;
   }
@@ -979,6 +1335,7 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
     const items = await orm.select({
       id: pieceworkLogs.id,
       date: pieceworkLogs.date,
+      dateIso: pieceworkLogs.dateIso,
       taskId: pieceworkLogs.taskId,
       taskTitle: pieceworkTasks.title,
       taskCode: pieceworkTasks.code,
@@ -1018,7 +1375,7 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
       voucherStatus: linkedVoucher ? linkedVoucher.status : null,
       isVoucherSynced: !!linkedVoucher
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error fetching payroll detail', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -1136,7 +1493,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
     }
 
     // Automated Double-Entry Accounting Journal Voucher Creation (Subphase 11.1)
-    let autoVoucher: any = null;
+    let autoVoucher: { id: number; voucherNumber: number } | null = null;
     try {
       autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
         newPayroll.id,
@@ -1162,7 +1519,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
       voucherNumber: autoVoucher ? autoVoucher.voucherNumber : null,
       isVoucherSynced: !!autoVoucher
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error generating payroll', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -1187,7 +1544,7 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
       return res.status(404).json({ error: 'فیش حقوقی یافت نشد' });
     }
 
-    const updates: any = {};
+    const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
     if (status) updates.status = String(status);
     if (paymentDate !== undefined) updates.paymentDate = String(paymentDate).trim();
     if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
@@ -1204,7 +1561,7 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
     }
 
     // Trigger or verify journal voucher when approved or paid (Subphase 11.1)
-    let autoVoucher: any = null;
+    let autoVoucher: { id: number; voucherNumber: number } | null = null;
     if (status === 'approved' || status === 'paid') {
       try {
         autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
@@ -1232,7 +1589,7 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
       voucherId: autoVoucher ? autoVoucher.id : null,
       voucherNumber: autoVoucher ? autoVoucher.voucherNumber : null
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error updating payroll status', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
@@ -1276,7 +1633,7 @@ router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.man
       message: `پرداخت فیش ${result.payroll.payrollNumber} ثبت شد؛ تراکنش خزانه ${result.transactionNumber} و سند تسویه صادر گردید.`,
       ...result
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error registering payroll payment', error: err });
     throw err;
   }
@@ -1306,7 +1663,7 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
       message: `سند حسابداری شماره ${voucher.voucherNumber} برای فیش حقوقی ${pay.payrollNumber} ثبت یا همگام گردید.`,
       voucher
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error syncing payroll voucher', error: err });
     throw err;
   }
@@ -1338,7 +1695,7 @@ router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'),
     });
 
     res.json({ status: 'ok', message: 'فیش حقوقی با موفقیت باطل شد' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error({ message: 'Error deleting payroll', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;

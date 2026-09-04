@@ -2,6 +2,7 @@ import { BankAccountService } from './treasury/bankAccount.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
 import { ChequeLifecycleService } from './treasury/chequeLifecycle.service.js';
 import type { BankAccount, TreasuryTransaction, Cheque, ChequeStatus } from '../../types.js';
+import type { DbExecutor } from '../../db/drizzle.js';
 
 export class TreasuryService {
   // 1. Bank Accounts & Cash Funds
@@ -60,7 +61,7 @@ export class TreasuryService {
     return TreasuryTransactionService.getTreasuryTransactions(params);
   }
 
-  static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: any): Promise<string> {
+  static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: DbExecutor): Promise<string> {
     return TreasuryTransactionService.generateTransactionNumber(type, tx);
   }
 

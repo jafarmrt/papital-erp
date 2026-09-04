@@ -61,16 +61,18 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
       });
     }
 
-    realPool.on('connect', (client: any) => {
-      client.query(`SET statement_timeout = ${statementTimeoutMs}`).catch((err: any) => {
-        logger.warn({ message: `Failed to set statement_timeout: ${err.message}` });
+    realPool.on('connect', (client: pkg.PoolClient) => {
+      client.query(`SET statement_timeout = ${statementTimeoutMs}`).catch((err: unknown) => {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        logger.warn({ message: `Failed to set statement_timeout: ${errorMsg}` });
       });
-      client.query(`SET idle_in_transaction_session_timeout = ${idleInTxTimeoutMs}`).catch((err: any) => {
-        logger.warn({ message: `Failed to set idle_in_transaction_session_timeout: ${err.message}` });
+      client.query(`SET idle_in_transaction_session_timeout = ${idleInTxTimeoutMs}`).catch((err: unknown) => {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        logger.warn({ message: `Failed to set idle_in_transaction_session_timeout: ${errorMsg}` });
       });
 
-      client.on('error', (err: any) => {
-        const msg = err?.message || String(err);
+      client.on('error', (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
         if (
           msg.includes('terminating connection') ||
           msg.includes('Connection terminated') ||
@@ -88,8 +90,8 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
       });
     });
 
-    realPool.on('error', (err: any) => {
-      const msg = err?.message || String(err);
+    realPool.on('error', (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
       if (
         msg.includes('Connection terminated unexpectedly') ||
         msg.includes('terminating connection') ||
@@ -105,8 +107,9 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
       }
       logger.error({ message: 'Unexpected error on PostgreSQL pool client', error: err });
     });
-  } catch (err: any) {
-    logger.warn({ message: `Failed to initialize real PostgreSQL pool: ${err.message}. Using in-memory mock.` });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.warn({ message: `Failed to initialize real PostgreSQL pool: ${errorMsg}. Using in-memory mock.` });
     useMock = true;
   }
 } else {
@@ -117,8 +120,8 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
 const pool: pkg.Pool = new Proxy({} as pkg.Pool, {
   get: (_target, prop: string | symbol) => {
     const active = (!useMock && realPool) ? realPool : mockPool;
-    const val = (active as any)[prop];
-    return typeof val === 'function' ? val.bind(active) : val;
+    const val = (active as unknown as Record<string | symbol, unknown>)[prop];
+    return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(active) : val;
   }
 });
 
@@ -126,7 +129,7 @@ const pool: pkg.Pool = new Proxy({} as pkg.Pool, {
  * Helper to run long-running database operations with an extended statement_timeout.
  */
 export async function withLongQueryTimeout<T>(
-  fn: (client?: any) => Promise<T>,
+  fn: (client: pkg.PoolClient) => Promise<T>,
   timeoutMs: number = 300000
 ): Promise<T> {
   const client = await pool.connect();
@@ -140,5 +143,9 @@ export async function withLongQueryTimeout<T>(
 }
 
 const orm = drizzle(pool, { schema });
+
+export type AppDatabase = typeof orm;
+export type DbTransaction = Parameters<Parameters<typeof orm.transaction>[0]>[0];
+export type DbExecutor = AppDatabase | DbTransaction;
 
 export { pool, orm };

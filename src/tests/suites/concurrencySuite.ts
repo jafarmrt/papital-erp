@@ -382,8 +382,9 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       throw new Error(`Subsequent acquire expected RETURN_CACHED, got ${duplicateAcquire.action}`);
     }
 
-    if (duplicateAcquire.responseBody?.docId !== 8888) {
-      throw new Error(`Cached response mismatch: expected docId 8888, got ${duplicateAcquire.responseBody?.docId}`);
+    const cachedBody = duplicateAcquire.responseBody as { docId?: number } | undefined;
+    if (cachedBody?.docId !== 8888) {
+      throw new Error(`Cached response mismatch: expected docId 8888, got ${cachedBody?.docId}`);
     }
 
     // Step E: Test OCC Re-acquire after Lock Timeout

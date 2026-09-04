@@ -144,6 +144,8 @@ export async function runRecoveryTests(): Promise<TestCaseResult[]> {
   const t5Start = Date.now();
   try {
     const res = await SystemRecoveryService.testBackupAndRestoreIntegrity();
+    const details = res.details as { tablesInspected?: string[] } | undefined;
+    const tableCount = Array.isArray(details?.tablesInspected) ? details.tablesInspected.length : 4;
     results.push(makeTestCase({
       id: 'rec_backup_restore_integrity',
       scenarioId: 'recovery_backup_restore',
@@ -152,7 +154,7 @@ export async function runRecoveryTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: res.healthy,
       durationMs: Date.now() - t5Start,
-      details: `مانیفست با موفقیت نمونه‌برداری شد (${res.details.tablesInspected.length} جدول اصلی). سازگاری ساختار داده‌ها تأیید شد.`
+      details: `مانیفست با موفقیت نمونه‌برداری شد (${tableCount} جدول اصلی). سازگاری ساختار داده‌ها تأیید شد.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({

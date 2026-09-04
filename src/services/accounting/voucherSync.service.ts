@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   documents, 
   documentItems, 
@@ -27,7 +27,7 @@ export class VoucherSyncService {
     vatAmount?: number;
     userId?: number;
     username?: string;
-  }, tx?: any): Promise<JournalVoucher | null> {
+  }, tx?: DbExecutor): Promise<JournalVoucher | null> {
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || (doc.type !== 'invoice' && doc.type !== 'proforma') || doc.status !== 'final') {
@@ -187,7 +187,7 @@ export class VoucherSyncService {
   static async syncPurchaseInvoiceVoucher(docId: number, options?: {
     userId?: number;
     username?: string;
-  }, tx?: any): Promise<JournalVoucher | null> {
+  }, tx?: DbExecutor): Promise<JournalVoucher | null> {
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || !['receipt', 'production_receipt', 'purchase'].includes(doc.type) || doc.status !== 'final') {
@@ -387,7 +387,7 @@ export class VoucherSyncService {
   static async syncWarehouseDocumentVoucher(docId: number, options?: {
     userId?: number;
     username?: string;
-  }, tx?: any): Promise<JournalVoucher | null> {
+  }, tx?: DbExecutor): Promise<JournalVoucher | null> {
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || doc.status !== 'final') {
@@ -657,7 +657,7 @@ export class VoucherSyncService {
   /**
    * Auto-generate double-entry voucher when a document is finalized
    */
-  static async autoCreateVoucherForInvoice(documentId: number, userId?: number, username?: string, tx?: any): Promise<JournalVoucher | null> {
+  static async autoCreateVoucherForInvoice(documentId: number, userId?: number, username?: string, tx?: DbExecutor): Promise<JournalVoucher | null> {
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, documentId));
     if (!doc || doc.isDeleted === 1 || doc.status !== 'final') return null;
@@ -684,7 +684,7 @@ export class VoucherSyncService {
   /**
    * Auto-generate double-entry voucher when piecework payroll is approved/paid
    */
-  static async autoCreateVoucherForPayroll(payrollId: number, userId?: number, username?: string, tx?: any): Promise<JournalVoucher | null> {
+  static async autoCreateVoucherForPayroll(payrollId: number, userId?: number, username?: string, tx?: DbExecutor): Promise<JournalVoucher | null> {
     const executor = tx || orm;
     const [pay] = await executor.select().from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollId));
     if (!pay || pay.isDeleted === 1) return null;
@@ -717,7 +717,16 @@ export class VoucherSyncService {
     const grossAmount = pieceworkAmount + bonuses + fixedAmount;
     if (grossAmount <= 0) return null;
 
-    const items: any[] = [];
+    const items: Array<{
+      accountId: number;
+      detailedType: 'personnel';
+      detailedId: number;
+      detailedName: string;
+      debit: number;
+      credit: number;
+      currency: string;
+      description: string;
+    }> = [];
     // سهم دستمزد مستقیم تولید (کارکرد پرکیسی)
     if (pieceworkAmount > 0) {
       items.push({
@@ -774,7 +783,7 @@ export class VoucherSyncService {
   /**
    * Sync all final sales & purchase invoices to update double-entry vouchers
    */
-  static async syncAllInvoiceVouchers(tx?: any): Promise<number> {
+  static async syncAllInvoiceVouchers(tx?: DbExecutor): Promise<number> {
     try {
       const executor = tx || orm;
       const finalDocs = await executor.select({ id: documents.id, type: documents.type })
@@ -801,8 +810,8 @@ export class VoucherSyncService {
         }
       }
       return syncedCount;
-    } catch (err) {
-      logger.error({ message: 'Error syncing all invoice vouchers', error: err });
+    } catch (err: unknown) {
+      logger.error({ message: 'Error syncing all invoice vouchers', error: err instanceof Error ? err.message : String(err) });
       return 0;
     }
   }

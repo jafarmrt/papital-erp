@@ -9,7 +9,7 @@ export interface RecoveryCheckResult {
   service: string;
   healthy: boolean;
   recoveryMode: string;
-  details: any;
+  details: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -20,7 +20,7 @@ export interface BackupExportData {
     tablesCount: number;
     totalRecords: number;
   };
-  tables: Record<string, any[]>;
+  tables: Record<string, Record<string, unknown>[]>;
 }
 
 export class SystemRecoveryService {
@@ -45,13 +45,14 @@ export class SystemRecoveryService {
         },
         timestamp: new Date().toISOString()
       };
-    } catch (err: any) {
-      logger.error(`[Recovery] Database recovery check failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Recovery] Database recovery check failed: ${errMsg}`);
       return {
         service: 'PostgreSQL Database Connection Pool',
         healthy: false,
         recoveryMode: 'Automatic Pool Reconnect / KeepAlive',
-        details: { error: err.message },
+        details: { error: errMsg },
         timestamp: new Date().toISOString()
       };
     }
@@ -83,12 +84,13 @@ export class SystemRecoveryService {
         },
         timestamp: new Date().toISOString()
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       return {
         service: 'Transactional Outbox Background Worker',
         healthy: false,
         recoveryMode: 'Idempotent Worker Restart & Interval Recovery',
-        details: { error: err.message },
+        details: { error: errMsg },
         timestamp: new Date().toISOString()
       };
     }
@@ -140,12 +142,13 @@ export class SystemRecoveryService {
         },
         timestamp: new Date().toISOString()
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       return {
         service: 'Outbox Stuck Event Auto-Recovery',
         healthy: false,
         recoveryMode: 'Automatic Reset of Abandoned Processing Locks',
-        details: { error: err.message },
+        details: { error: errMsg },
         timestamp: new Date().toISOString()
       };
     }
@@ -215,12 +218,13 @@ export class SystemRecoveryService {
         },
         timestamp: new Date().toISOString()
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       return {
         service: 'Webhook & Outbox Retry / DLQ Quarantine Recovery',
         healthy: false,
         recoveryMode: 'Exponential Backoff -> Quarantine -> Replay/Dismiss',
-        details: { error: err.message },
+        details: { error: errMsg },
         timestamp: new Date().toISOString()
       };
     }
@@ -250,12 +254,13 @@ export class SystemRecoveryService {
         },
         timestamp: new Date().toISOString()
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       return {
         service: 'Database Migration Pipeline & Self-Healing',
         healthy: false,
         recoveryMode: 'Idempotent DDL / IF NOT EXISTS Migration Recovery',
-        details: { error: err.message },
+        details: { error: errMsg },
         timestamp: new Date().toISOString()
       };
     }
@@ -267,7 +272,7 @@ export class SystemRecoveryService {
   static async testBackupAndRestoreIntegrity(): Promise<RecoveryCheckResult> {
     try {
       const tablesToInspect = ['app_settings', 'roles', 'categories', 'warehouses'];
-      const snapshot: Record<string, any[]> = {};
+      const snapshot: Record<string, Record<string, unknown>[]> = {};
       let totalRecords = 0;
 
       for (const table of tablesToInspect) {
@@ -299,12 +304,13 @@ export class SystemRecoveryService {
         },
         timestamp: new Date().toISOString()
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       return {
         service: 'Data Backup Manifest & Cold-Start Restore Integrity',
         healthy: false,
         recoveryMode: 'Full Relational Snapshot Export & Audit Verification',
-        details: { error: err.message },
+        details: { error: errMsg },
         timestamp: new Date().toISOString()
       };
     }

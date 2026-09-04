@@ -108,7 +108,8 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v10_payroll_paid_treasury_only: 'V10 Regression: Payroll paid-state Reachable Only Via Treasury',
   v10_menu_visibility_deny_list: 'V10 Regression: menu_visibility Deny-List & Admin Bypass',
   v10_cleanup_refusal_without_flag: 'V10 Regression: Test-Cleanup Refusal Without Safety Flag (Silent No-Op)',
-  v10_date_normalization_idempotence: 'V10 Regression: Date-Normalization Idempotence (re-run Integrity Scan healthy)'
+  v10_date_normalization_idempotence: 'V10 Regression: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
+  v10_iso_date_standardization: 'V10 Regression: ISO Date Standardization & Dual-Write Accuracy (TD-034)'
 };
 
 

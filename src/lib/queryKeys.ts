@@ -14,7 +14,7 @@ export const QUERY_KEYS = {
   // Inventory Items & Catalog
   items: {
     all: ['items'] as const,
-    list: (params?: Record<string, any>) => ['items', 'list', params ?? {}] as const,
+    list: (params?: Record<string, unknown> | object) => ['items', 'list', params ?? {}] as const,
     detail: (id: number) => ['items', 'detail', id] as const,
   },
 
@@ -75,8 +75,8 @@ export const QUERY_KEYS = {
     all: ['accounting'] as const,
     summary: () => ['accounting', 'summary'] as const,
     accounts: () => ['accounting', 'accounts'] as const,
-    vouchers: (filters?: any) => ['accounting', 'vouchers', filters ?? {}] as const,
-    cheques: (filters?: any) => ['accounting', 'cheques', filters ?? {}] as const,
+    vouchers: (filters?: Record<string, unknown> | object) => ['accounting', 'vouchers', filters ?? {}] as const,
+    cheques: (filters?: Record<string, unknown> | object) => ['accounting', 'cheques', filters ?? {}] as const,
     treasury: () => ['accounting', 'treasury'] as const,
   },
 
@@ -84,8 +84,8 @@ export const QUERY_KEYS = {
   crm: {
     all: ['crm'] as const,
     stats: () => ['crm', 'stats'] as const,
-    leads: (filters?: any) => ['crm', 'leads', filters ?? {}] as const,
-    activities: (filters?: any) => ['crm', 'activities', filters ?? {}] as const,
+    leads: (filters?: Record<string, unknown> | object) => ['crm', 'leads', filters ?? {}] as const,
+    activities: (filters?: Record<string, unknown> | object) => ['crm', 'activities', filters ?? {}] as const,
   },
 
   // Personnel & Payroll
@@ -98,35 +98,35 @@ export const QUERY_KEYS = {
   piecework: {
     all: ['piecework'] as const,
     tasks: () => ['piecework', 'tasks'] as const,
-    logs: (filters?: any) => ['piecework', 'logs', filters ?? {}] as const,
+    logs: (filters?: Record<string, unknown> | object) => ['piecework', 'logs', filters ?? {}] as const,
     payrolls: () => ['piecework', 'payrolls'] as const,
   },
 
   // Daily Logs
   dailyLogs: {
     all: ['daily-logs'] as const,
-    list: (filters?: any) => ['daily-logs', 'list', filters ?? {}] as const,
+    list: (filters?: Record<string, unknown> | object) => ['daily-logs', 'list', filters ?? {}] as const,
     stats: () => ['daily-logs', 'stats'] as const,
   },
 
   // Workflow Engine
   workflow: {
     all: ['workflow'] as const,
-    inbox: (params?: any) => ['workflow', 'inbox', params ?? {}] as const,
+    inbox: (params?: Record<string, unknown> | object) => ['workflow', 'inbox', params ?? {}] as const,
     instance: (entityType: string, entityId: string | number) => ['workflow', 'instance', entityType, String(entityId)] as const,
   },
 
   // V9 Phase 5.1 — Documents & Invoices
   documents: {
     all: ['documents'] as const,
-    list: (filters?: any) => ['documents', 'list', filters ?? {}] as const,
+    list: (filters?: Record<string, unknown> | object) => ['documents', 'list', filters ?? {}] as const,
     detail: (id: number) => ['documents', 'detail', id] as const,
   },
 
   // V9 Phase 5.1 — Activity / Audit Logs
   activityLogs: {
     all: ['activity-logs'] as const,
-    list: (filters?: any) => ['activity-logs', 'list', filters ?? {}] as const,
+    list: (filters?: Record<string, unknown> | object) => ['activity-logs', 'list', filters ?? {}] as const,
     filters: () => ['activity-logs', 'filter-options'] as const,
   },
 
@@ -148,7 +148,7 @@ export const QUERY_KEYS = {
   // V9 Phase 5.1 — Warehouse Transactions (Kardex)
   transactions: {
     all: ['transactions'] as const,
-    list: (filters?: any) => ['transactions', 'list', filters ?? {}] as const,
+    list: (filters?: Record<string, unknown> | object) => ['transactions', 'list', filters ?? {}] as const,
   },
 
   // V9 Phase 5.1 — Item Pricing

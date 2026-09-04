@@ -12,6 +12,8 @@ import { PieceworkLogModal } from '../components/piecework/PieceworkLogModal';
 import { PieceworkTaskModal } from '../components/piecework/PieceworkTaskModal';
 import { PieceworkPayrollModal } from '../components/piecework/PieceworkPayrollModal';
 import { PieceworkPayslipModal } from '../components/piecework/PieceworkPayslipModal';
+import { PieceworkExcelModal } from '../components/piecework/PieceworkExcelModal';
+import { PieceworkRateHistoryModal } from '../components/piecework/PieceworkRateHistoryModal';
 
 export function PieceworkPayrollPage() {
   const {
@@ -38,6 +40,8 @@ export function PieceworkPayrollPage() {
     setTaskCategoryFilter,
     taskSearchQuery,
     setTaskSearchQuery,
+    taskStatusFilter,
+    handleTaskStatusFilterChange,
     isLogModalOpen,
     setIsLogModalOpen,
     selectedPersonnelForLog,
@@ -52,6 +56,10 @@ export function PieceworkPayrollPage() {
     setEditingLog,
     isTaskModalOpen,
     setIsTaskModalOpen,
+    isExcelModalOpen,
+    setIsExcelModalOpen,
+    isHistoryModalOpen,
+    selectedTaskForHistory,
     editingTask,
     taskFormData,
     setTaskFormData,
@@ -94,6 +102,12 @@ export function PieceworkPayrollPage() {
     handleSaveTask,
     isSavingTask,
     handleDeleteTask,
+    handleRestoreTask,
+    handleOpenTaskHistoryModal,
+    handleOpenGlobalHistoryModal,
+    handleCloseHistoryModal,
+    handleExportTasksExcel,
+    handleDownloadTemplate,
     handleSelectPersonnelForRates,
     handleSaveCustomRate,
     handleOpenPayrollModal,
@@ -178,9 +192,16 @@ export function PieceworkPayrollPage() {
           onCategoryFilterChange={setTaskCategoryFilter}
           searchQuery={taskSearchQuery}
           onSearchChange={setTaskSearchQuery}
+          taskStatusFilter={taskStatusFilter}
+          onTaskStatusFilterChange={handleTaskStatusFilterChange}
           onOpenAddTaskModal={handleOpenAddTaskModal}
           onEditTask={handleOpenEditTaskModal}
           onDeleteTask={handleDeleteTask}
+          onRestoreTask={handleRestoreTask}
+          onOpenTaskHistory={handleOpenTaskHistoryModal}
+          onOpenGlobalHistory={handleOpenGlobalHistoryModal}
+          onOpenExcelModal={() => setIsExcelModalOpen(true)}
+          onDownloadTemplate={handleDownloadTemplate}
         />
       )}
 
@@ -285,6 +306,22 @@ export function PieceworkPayrollPage() {
         onUpdateStatus={handleUpdatePayrollStatus}
         onDeletePayroll={handleDeletePayroll}
         onReload={loadData}
+      />
+
+      {/* MODAL 5: PIECEWORK TASKS EXCEL IMPORT & EXPORT */}
+      <PieceworkExcelModal
+        isOpen={isExcelModalOpen}
+        onClose={() => setIsExcelModalOpen(false)}
+        tasksList={tasksList}
+        onSuccess={loadData}
+      />
+
+      {/* MODAL 6: TASK RATE HISTORY & AUDIT LOGS */}
+      <PieceworkRateHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={handleCloseHistoryModal}
+        selectedTask={selectedTaskForHistory}
+        onTaskRestored={loadData}
       />
     </div>
   );

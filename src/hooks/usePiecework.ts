@@ -10,6 +10,10 @@ import {
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
 import { parseQuantityOrTime, formatPersianPrice } from '../utils';
+import {
+  exportPieceworkTasksToExcel,
+  downloadPieceworkTemplate
+} from '../components/piecework/pieceworkExcelUtils';
 
 export interface BatchLogRow {
   taskId: number | '';
@@ -47,6 +51,7 @@ export function usePiecework() {
   // Filters for Tasks
   const [taskCategoryFilter, setTaskCategoryFilter] = useState<string>('all');
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>('');
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'active' | 'archived' | 'all'>('active');
 
   // Modal 1: Create / Edit Work Logs
   const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
@@ -61,6 +66,9 @@ export function usePiecework() {
 
   // Modal 2: Create / Edit Task
   const [isTaskModalOpen, setIsTaskModalOpen] = useState<boolean>(false);
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState<boolean>(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
+  const [selectedTaskForHistory, setSelectedTaskForHistory] = useState<PieceworkTask | null>(null);
   const [editingTask, setEditingTask] = useState<PieceworkTask | null>(null);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
   const [taskFormData, setTaskFormData] = useState<TaskFormData>({
@@ -91,12 +99,12 @@ export function usePiecework() {
   const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
 
   // Initial Data Fetch
-  const loadData = async (signal?: AbortSignal) => {
+  const loadData = async (signal?: AbortSignal, status: 'active' | 'archived' | 'all' = taskStatusFilter) => {
     setLoading(true);
     try {
       const [pRes, tRes, lRes, payRes, projRes] = await Promise.all([
         fetchJson('/personnel', { signal }),
-        fetchJson('/piecework/tasks', { signal }),
+        fetchJson(`/piecework/tasks?status=${status}`, { signal }),
         fetchJson('/piecework/logs', { signal }),
         fetchJson('/piecework/payrolls', { signal }),
         fetchJson('/projects', { signal }).catch((err) => {
@@ -118,6 +126,17 @@ export function usePiecework() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTaskStatusFilterChange = (status: 'active' | 'archived' | 'all') => {
+    setTaskStatusFilter(status);
+    fetchJson<PieceworkTask[]>(`/piecework/tasks?status=${status}`)
+      .then((res) => {
+        setTasksList(Array.isArray(res) ? res : []);
+      })
+      .catch((err) => {
+        hotToast.error('خطا در دریافت عناوین کاری: ' + (err?.message || ''));
+      });
   };
 
   useEffect(() => {
@@ -342,14 +361,69 @@ export function usePiecework() {
   };
 
   const handleDeleteTask = async (task: PieceworkTask) => {
-    if (await confirmAction({ title: 'حذف عنوان کاری', message: `آیا از حذف عنوان کاری «${task.title}» اطمینان دارید؟` })) {
+    if (await confirmAction({
+      title: 'حذف و بایگانی عنوان کاری',
+      message: `آیا از حذف و بایگانی عنوان کاری «${task.title}» اطمینان دارید؟\nتمام سوابق، نرخ‌های قدیمی و فیش‌های پیشین مربوط به این عنوان در تاریخچه سامانه محفوظ می‌مانند.`
+    })) {
       try {
         await fetchJson(`/piecework/tasks/${task.id}`, { method: 'DELETE' });
-        hotToast.success('عنوان کاری حذف شد');
+        hotToast.success('عنوان کاری به بایگانی منتقل شد و سوابق آن ذخیره گردید');
         loadData();
-      } catch (err) {
-        hotToast.error(err.message || 'خطا در حذف عنوان کاری');
+      } catch (err: any) {
+        hotToast.error(err?.message || 'خطا در حذف عنوان کاری');
       }
+    }
+  };
+
+  const handleRestoreTask = async (task: PieceworkTask) => {
+    if (await confirmAction({
+      title: 'بازیابی عنوان کاری',
+      message: `آیا مایل به بازیابی عنوان کاری «${task.title}» به لیست فعال هستید؟`
+    })) {
+      try {
+        await fetchJson(`/piecework/tasks/${task.id}/restore`, { method: 'POST' });
+        hotToast.success('عنوان کاری با موفقیت بازیابی شد');
+        loadData();
+      } catch (err: any) {
+        hotToast.error(err?.message || 'خطا در بازیابی عنوان کاری');
+      }
+    }
+  };
+
+  const handleOpenTaskHistoryModal = (task: PieceworkTask) => {
+    setSelectedTaskForHistory(task);
+    setIsHistoryModalOpen(true);
+  };
+
+  const handleOpenGlobalHistoryModal = () => {
+    setSelectedTaskForHistory(null);
+    setIsHistoryModalOpen(true);
+  };
+
+  const handleCloseHistoryModal = () => {
+    setIsHistoryModalOpen(false);
+    setSelectedTaskForHistory(null);
+  };
+
+  const handleExportTasksExcel = () => {
+    try {
+      if (tasksList.length === 0) {
+        hotToast.error('هیچ عنوانی برای خروجی اکسل وجود ندارد.');
+        return;
+      }
+      exportPieceworkTasksToExcel(tasksList);
+      hotToast.success('فایل اکسل عناوین کاری دانلود شد.');
+    } catch (err: any) {
+      hotToast.error('خطا در صدور فایل اکسل: ' + (err?.message || ''));
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      downloadPieceworkTemplate();
+      hotToast.success('فایل قالب نمونه اکسل دانلود شد.');
+    } catch (err: any) {
+      hotToast.error('خطا در دانلود قالب اکسل: ' + (err?.message || ''));
     }
   };
 
@@ -649,6 +723,9 @@ export function usePiecework() {
     setTaskCategoryFilter,
     taskSearchQuery,
     setTaskSearchQuery,
+    taskStatusFilter,
+    setTaskStatusFilter,
+    handleTaskStatusFilterChange,
     isLogModalOpen,
     setIsLogModalOpen,
     selectedPersonnelForLog,
@@ -663,10 +740,22 @@ export function usePiecework() {
     setEditingLog,
     isTaskModalOpen,
     setIsTaskModalOpen,
+    isExcelModalOpen,
+    setIsExcelModalOpen,
+    isHistoryModalOpen,
+    setIsHistoryModalOpen,
+    selectedTaskForHistory,
+    setSelectedTaskForHistory,
     editingTask,
     setEditingTask,
     taskFormData,
     setTaskFormData,
+    handleOpenTaskHistoryModal,
+    handleOpenGlobalHistoryModal,
+    handleCloseHistoryModal,
+    handleRestoreTask,
+    handleExportTasksExcel,
+    handleDownloadTemplate,
     selectedPersonnelForRates,
     setSelectedPersonnelForRates,
     customRatesMap,

@@ -3,7 +3,7 @@ import { deadLetterEvents, outboxEvents } from '../../db/schema.js';
 import { eq, and, sql, desc, count } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { domainEventBus } from './domainEventBus.js';
-import { BaseDomainEvent } from './domainEvents.js';
+import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 
 export interface DLQQueryFilters {
   status?: string;
@@ -23,7 +23,7 @@ export class DeadLetterQueueService {
     return res.data;
   }
 
-  static async replayItem(id: number, adjustedPayload?: any) {
+  static async replayItem(id: number, adjustedPayload?: unknown) {
     return this.replayEvent(id, adjustedPayload);
   }
 
@@ -40,8 +40,8 @@ export class DeadLetterQueueService {
     aggregateType: string;
     aggregateId: string;
     source?: 'outbox' | 'action_engine' | 'webhook' | 'manual';
-    payload?: any;
-    metadata?: any;
+    payload?: unknown;
+    metadata?: unknown;
     failureReason: string;
     errorStack?: string;
     retryCount?: number;
@@ -97,8 +97,9 @@ export class DeadLetterQueueService {
 
       logger.warn(`[DLQ] Quarantined event #${inserted.id} (Original ID: ${params.originalEventId}) into Dead Letter Queue: ${params.failureReason}`);
       return inserted;
-    } catch (err: any) {
-      logger.error(`[DLQ Move Error] Failed to quarantine event ${params.originalEventId}: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[DLQ Move Error] Failed to quarantine event ${params.originalEventId}: ${errMsg}`);
       throw err;
     }
   }
@@ -148,8 +149,9 @@ export class DeadLetterQueueService {
         byEventType,
         bySource
       };
-    } catch (err: any) {
-      logger.error(`[DLQ Stats Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[DLQ Stats Error] ${errMsg}`);
       return { total: 0, quarantined: 0, replayed: 0, dismissed: 0, byEventType: {}, bySource: {} };
     }
   }
@@ -203,8 +205,9 @@ export class DeadLetterQueueService {
         limit,
         offset
       };
-    } catch (err: any) {
-      logger.error(`[DLQ Get Events Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[DLQ Get Events Error] ${errMsg}`);
       return { data: [], total: 0, limit: 50, offset: 0 };
     }
   }
@@ -225,7 +228,7 @@ export class DeadLetterQueueService {
   /**
    * Edit and fix the payload of a quarantined DLQ event before replay.
    */
-  static async editPayload(id: number, newPayload: any, userId?: number) {
+  static async editPayload(id: number, newPayload: unknown, userId?: number) {
     const record = await this.getById(id);
     if (!record) {
       throw new Error(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
@@ -253,7 +256,7 @@ export class DeadLetterQueueService {
   /**
    * Replay/Reprocess a single DLQ item.
    */
-  static async replayEvent(id: number, updatedPayload?: any, userId?: number): Promise<{ success: boolean; message: string; event: any }> {
+  static async replayEvent(id: number, updatedPayload?: unknown, userId?: number): Promise<{ success: boolean; message: string; event: typeof deadLetterEvents.$inferSelect }> {
     const record = await this.getById(id);
     if (!record) {
       throw new Error(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
@@ -266,16 +269,16 @@ export class DeadLetterQueueService {
       // 1. Construct DomainEvent
       const domainEvent: BaseDomainEvent = {
         eventId: record.originalEventId,
-        eventType: record.eventType as any,
-        aggregateType: record.aggregateType as any,
+        eventType: record.eventType,
+        aggregateType: record.aggregateType as AggregateType,
         aggregateId: record.aggregateId,
         payload: payload || {},
         metadata: {
-          ...(record.metadata as any || {}),
+          ...((record.metadata as Record<string, unknown>) || {}),
           replayedAt: nowIso,
           replayedBy: userId || 'admin',
           isReplay: true
-        },
+        } as unknown as BaseDomainEvent['metadata'],
         occurredAt: record.quarantinedAt || nowIso
       };
 
@@ -309,20 +312,22 @@ export class DeadLetterQueueService {
 
       logger.info(`[DLQ] Successfully replayed DLQ event #${id} (${record.eventType})`);
       return { success: true, message: 'رویداد با موفقیت بازپخش و در گذرگاه پردازش شد.', event: updatedDlq };
-    } catch (err: any) {
-      logger.error(`[DLQ Replay Error] Failed to replay event #${id}: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const errStack = err instanceof Error ? err.stack || '' : '';
+      logger.error(`[DLQ Replay Error] Failed to replay event #${id}: ${errMsg}`);
       
       // Update failure log
       await orm
         .update(deadLetterEvents)
         .set({
-          failureReason: `شکست در بازپخش: ${err.message}`,
-          errorStack: err.stack || '',
+          failureReason: `شکست در بازپخش: ${errMsg}`,
+          errorStack: errStack,
           retryCount: (record.retryCount || 0) + 1
         })
         .where(eq(deadLetterEvents.id, id));
 
-      throw new Error(`خطا در بازپخش رویداد: ${err.message}`);
+      throw new Error(`خطا در بازپخش رویداد: ${errMsg}`);
     }
   }
 
@@ -338,9 +343,10 @@ export class DeadLetterQueueService {
       try {
         await this.replayEvent(id, undefined, userId);
         succeeded++;
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         failed++;
-        errors.push(`شناسه ${id}: ${err.message}`);
+        errors.push(`شناسه ${id}: ${errMsg}`);
       }
     }
 

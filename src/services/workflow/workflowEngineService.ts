@@ -16,6 +16,7 @@ import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowEventPublisher } from './workflowEventPublisher.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
 import { logger } from '../../middleware/logger.js';
+import { workflowInstances } from '../../db/schema.js';
 
 export { WorkflowRuleEngine, WorkflowQuorumService };
 export type { 
@@ -110,19 +111,19 @@ export class WorkflowEngineService {
     entityId: string | number;
     userId?: number;
     userName?: string;
-  }): Promise<any | null> {
+  }): Promise<typeof workflowInstances.$inferSelect | null> {
     try {
       const defs = await WorkflowDefinitionService.getDefinitions({ isActive: true, entityType: params.entityType });
       if (!defs || defs.length === 0) return null;
       const def = defs[0];
       return await WorkflowTransitionExecutor.startInstance({
-        workflowCode: def.workflowCode || def.code,
+        workflowCode: def.code,
         entityType: params.entityType,
         entityId: String(params.entityId),
         userId: params.userId,
         userName: params.userName || 'سیستم'
       });
-    } catch (err) {
+    } catch (err: unknown) {
       // workflow هرگز نباید عملیات اصلی اصلی را مسدود کند
       logger.warn({ message: `maybeStartWorkflow failed for ${params.entityType}#${params.entityId}`, error: err });
       return null;

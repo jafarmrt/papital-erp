@@ -162,11 +162,11 @@ export class StockReconciliationService {
     `);
 
     const kardexMap = new Map<number, { totalIn: number; totalOut: number; kardexBalance: number }>();
-    for (const r of kardexAggregates.rows) {
+    for (const r of kardexAggregates.rows as Record<string, unknown>[]) {
       kardexMap.set(Number(r.item_id), {
-        totalIn: fin(r.total_in as any).toNumber(),
-        totalOut: fin(r.total_out as any).toNumber(),
-        kardexBalance: fin(r.kardex_balance as any).toNumber(),
+        totalIn: fin(Number(r.total_in) || 0).toNumber(),
+        totalOut: fin(Number(r.total_out) || 0).toNumber(),
+        kardexBalance: fin(Number(r.kardex_balance) || 0).toNumber(),
       });
     }
 
@@ -182,8 +182,8 @@ export class StockReconciliationService {
     `);
 
     const kardexLocMap = new Map<string, number>(); // key: `${itemId}_${loc}` -> balance
-    for (const r of kardexLocAggregates.rows) {
-      kardexLocMap.set(`${Number(r.item_id)}_${r.loc}`, fin(r.loc_balance as any).toNumber());
+    for (const r of kardexLocAggregates.rows as Record<string, unknown>[]) {
+      kardexLocMap.set(`${Number(r.item_id)}_${String(r.loc || '')}`, fin(Number(r.loc_balance) || 0).toNumber());
     }
 
     // Warehouse totals trackers

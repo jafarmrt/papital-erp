@@ -1,3 +1,5 @@
+import type React from 'react';
+
 export interface Item {
   id: number;
   type: 'product' | 'raw_material';
@@ -453,6 +455,8 @@ export interface DailyWorkLog {
   user_full_name?: string;
   userFullName?: string;
   date: string;
+  date_iso?: string;
+  dateIso?: string;
   start_time: string;
   startTime?: string;
   end_time: string;
@@ -534,13 +538,22 @@ export interface CRMActivity {
   description?: string;
   result?: string;
   loggedBy?: string;
+  activity_date?: string;
   activityDate?: string;
+  activity_date_iso?: string;
+  activityDateIso?: string;
+  next_followup_date?: string;
   nextFollowUpDate?: string;
+  next_followup_date_iso?: string;
+  nextFollowUpDateIso?: string;
+  next_followup_task?: string;
   nextFollowUpTask?: string;
   assignedTo?: string;
   // V10-4.1: لینک رسمی مسئول تسک به پرسنل
   assignedPersonnelId?: number | null;
+  is_followup_completed?: number;
   isFollowUpCompleted: number;
+  created_at?: string;
   createdAt?: string;
 }
 
@@ -591,7 +604,25 @@ export interface PieceworkTask {
   description?: string;
   isActive?: number;
   createdAt?: string;
+  updatedAt?: string;
   isDeleted?: number;
+  previousRate?: number;
+  rateChangesCount?: number;
+}
+
+export interface PieceworkTaskRateHistory {
+  id: number;
+  taskId: number;
+  taskCode?: string;
+  taskTitle?: string;
+  oldRate: number;
+  newRate: number;
+  changeType: 'create' | 'rate_change' | 'excel_import' | 'title_change' | 'archived' | 'restored';
+  reason?: string;
+  changedByUserId?: number | null;
+  changedByUsername?: string;
+  effectiveDate: string;
+  createdAt?: string;
 }
 
 export interface PieceworkPersonnelRate {
@@ -616,6 +647,8 @@ export interface PieceworkLog {
   projectTitle?: string;
   unit?: string;
   date: string;
+  date_iso?: string;
+  dateIso?: string;
   quantity: number;
   unitRate: number;
   totalAmount: number;
@@ -780,6 +813,8 @@ export interface JournalVoucher {
   created_by_username?: string;
   approvedById?: number;
   approved_by_id?: number;
+  isDeleted?: number;
+  is_deleted?: number;
   createdAt?: string;
   created_at?: string;
   items?: JournalVoucherItem[];
@@ -1200,7 +1235,7 @@ export interface FairTradePrinciple {
   number: number;
   title: string;
   description: string;
-  icon?: any;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
   tag: string;
 }
 
@@ -1211,7 +1246,7 @@ export interface CalendarEventItem {
   subtitle?: string;
   type: 'crm_followup' | 'crm_close' | 'daily_log' | 'event';
   color?: string;
-  raw?: any;
+  raw?: unknown;
 }
 
 export interface DashboardShortcutItem {
@@ -1225,3 +1260,5 @@ export interface DashboardShortcutItem {
   badge?: string;
   colorTheme: string;
 }
+
+export type { DbTransaction, DbExecutor, AppDatabase } from './db/drizzle.js';

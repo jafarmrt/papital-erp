@@ -14,11 +14,70 @@ import {
   WorkflowDefinitionDTO 
 } from './contracts/workflowDomainContracts.js';
 
+export type WorkflowDefinitionWithStats = (typeof workflowDefinitions.$inferSelect) & {
+  stateCount: number;
+  transitionCount: number;
+  activeInstancesCount: number;
+};
+
+export interface WorkflowDefinitionDetails {
+  definition: typeof workflowDefinitions.$inferSelect;
+  states: (typeof workflowStates.$inferSelect)[];
+  transitions: (typeof workflowTransitions.$inferSelect)[];
+}
+
+export interface SaveWorkflowDefinitionPayload {
+  id?: number;
+  code: string;
+  title: string;
+  entityType: string;
+  description?: string;
+  version?: number;
+  isActive?: number;
+  states?: Array<{
+    id?: number | string;
+    code?: string;
+    key?: string;
+    stateKey?: string;
+    title: string;
+    stateType?: string;
+    stepOrder?: number;
+    slaHours?: number;
+    color?: string;
+    positionX?: number;
+    positionY?: number;
+    x?: number;
+    y?: number;
+    [key: string]: unknown;
+  }>;
+  transitions?: Array<{
+    id?: number | string;
+    from?: string | number;
+    to?: string | number;
+    fromStateId?: number | string;
+    toStateId?: number | string;
+    fromStateKey?: string;
+    toStateKey?: string;
+    actionKey: string;
+    key?: string;
+    title?: string;
+    requiredRole?: string;
+    requiredPermission?: string;
+    ruleConditionsJson?: unknown;
+    approvalRuleType?: string;
+    parallelApprovalRule?: string;
+    kValue?: number;
+    autoActionKey?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
 export class WorkflowDefinitionService {
   /**
    * List workflow definitions with optional filters
    */
-  static async getDefinitions(filter?: { isActive?: boolean; entityType?: string }): Promise<any[]> {
+  static async getDefinitions(filter?: { isActive?: boolean; entityType?: string }): Promise<WorkflowDefinitionWithStats[]> {
     await this.seedDefaultWorkflows();
 
     const conditions = [];
@@ -34,7 +93,7 @@ export class WorkflowDefinitionService {
       ? await orm.select().from(workflowDefinitions).where(and(...conditions))
       : await orm.select().from(workflowDefinitions);
 
-    const results = [];
+    const results: WorkflowDefinitionWithStats[] = [];
     for (const def of defs) {
       const [statesRes] = await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));
       const [transRes] = await orm.select({ count: sql<number>`count(*)` }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, def.id));
@@ -54,7 +113,7 @@ export class WorkflowDefinitionService {
   /**
    * Get workflow definition by numeric ID with states & transitions
    */
-  static async getDefinitionById(id: number): Promise<any | null> {
+  static async getDefinitionById(id: number): Promise<WorkflowDefinitionDetails | null> {
     const [def] = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
     if (!def) return null;
 
@@ -133,7 +192,7 @@ export class WorkflowDefinitionService {
   /**
    * Save definition with states & transitions DSL structure
    */
-  static async saveWorkflowDefinition(payload: any) {
+  static async saveWorkflowDefinition(payload: SaveWorkflowDefinitionPayload) {
     let defId = payload.id;
     if (!defId) {
       const created = await this.createDefinition({
@@ -152,15 +211,20 @@ export class WorkflowDefinitionService {
       });
     }
 
+    const finalDefId = defId;
+    if (!finalDefId) {
+      throw new Error('Failed to obtain workflow definition ID');
+    }
+
     if (payload.states && Array.isArray(payload.states)) {
-      await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
-      await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+      await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, finalDefId));
+      await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, finalDefId));
 
       const stateIdMap = new Map<number | string, number>();
 
       for (const st of payload.states) {
         const [insertedSt] = await orm.insert(workflowStates).values({
-          workflowDefinitionId: defId,
+          workflowDefinitionId: finalDefId,
           stateKey: st.stateKey || st.key || 'state',
           title: st.title || 'وضعیت',
           stateType: st.stateType || 'normal',
@@ -171,7 +235,7 @@ export class WorkflowDefinitionService {
           positionY: Number(st.positionY) || Number(st.y) || 100
         }).returning();
 
-        if (st.id) {
+        if (st.id !== undefined) {
           stateIdMap.set(st.id, insertedSt.id);
           stateIdMap.set(Number(st.id), insertedSt.id);
           stateIdMap.set(String(st.id), insertedSt.id);
@@ -182,12 +246,15 @@ export class WorkflowDefinitionService {
 
       if (payload.transitions && Array.isArray(payload.transitions)) {
         for (const tr of payload.transitions) {
-          const fromId = stateIdMap.get(tr.fromStateId) || stateIdMap.get(tr.fromStateKey) || stateIdMap.get(tr.from);
-          const toId = stateIdMap.get(tr.toStateId) || stateIdMap.get(tr.toStateKey) || stateIdMap.get(tr.to);
+          const fromKey = tr.fromStateId ?? tr.fromStateKey ?? tr.from;
+          const toKey = tr.toStateId ?? tr.toStateKey ?? tr.to;
+
+          const fromId = fromKey !== undefined ? stateIdMap.get(fromKey) : undefined;
+          const toId = toKey !== undefined ? stateIdMap.get(toKey) : undefined;
 
           if (fromId && toId) {
             await orm.insert(workflowTransitions).values({
-              workflowDefinitionId: defId,
+              workflowDefinitionId: finalDefId,
               fromStateId: fromId,
               toStateId: toId,
               actionKey: tr.actionKey || tr.key || 'action',
@@ -257,7 +324,7 @@ export class WorkflowDefinitionService {
     actionKey: string;
     title: string;
     requiredRole?: string;
-    ruleConditionsJson?: any;
+    ruleConditionsJson?: unknown;
     approvalRuleType?: string;
     kValue?: number;
   }) {
@@ -408,8 +475,9 @@ export class WorkflowDefinitionService {
         });
         logger.info('[WorkflowDefinitionService] Seeded default DOC_APPROVAL_WORKFLOW successfully.');
       }
-    } catch (err: any) {
-      logger.warn(`[WorkflowDefinitionService] Seed default workflows warning: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.warn(`[WorkflowDefinitionService] Seed default workflows warning: ${errMsg}`);
     }
   }
 }

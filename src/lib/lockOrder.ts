@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
+import type { PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { logger } from '../middleware/logger.js';
+import type { DbTransaction } from '../db/drizzle.js';
 
 /**
  * System-wide Global Lock Ordering & Deadlock Prevention Policy
@@ -118,7 +120,7 @@ export function sortIdsForLocking(ids: (number | string)[]): number[] {
  */
 export function validateLockOrder(resources: LockableResource[]): void;
 export function validateLockOrder(currentLevel: LockHierarchyLevel, requestedLevel: LockHierarchyLevel): boolean;
-export function validateLockOrder(arg1: any, arg2?: any): boolean | void {
+export function validateLockOrder(arg1: LockableResource[] | LockHierarchyLevel | number, arg2?: LockHierarchyLevel | number): boolean | void {
   if (Array.isArray(arg1)) {
     const resources = arg1;
     for (let i = 0; i < resources.length - 1; i++) {
@@ -153,14 +155,14 @@ export function validateLockOrder(arg1: any, arg2?: any): boolean | void {
  * Helper wrapper for ordering and acquiring row-level locks across multiple resources in tx.
  */
 export async function withOrderedLocks<T>(
-  tx: any,
-  resources: Array<{ table: any; id: number; level: number; name: string }>,
+  tx: DbTransaction,
+  resources: Array<{ table: PgTableWithColumns<any>; id: number; level: number; name: string }>,
   fn: () => Promise<T>
 ): Promise<T> {
   validateLockOrder(resources.map(r => ({ name: r.name, hierarchyLevel: r.level })));
   const sorted = [...resources].sort((a, b) => a.level - b.level);
   for (const r of sorted) {
-    await tx.select().from(r.table).where(eq(r.table.id, r.id)).for('update');
+    await (tx as any).select().from(r.table).where(eq((r.table as any).id, r.id)).for('update');
   }
   return fn();
 }

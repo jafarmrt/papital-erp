@@ -279,6 +279,7 @@ export const CORE_TABLE_DDLS: MigrationStep[] = [
       username TEXT NOT NULL,
       user_full_name TEXT DEFAULT '',
       date TEXT NOT NULL,
+      date_iso TEXT DEFAULT '',
       start_time TEXT DEFAULT '08:00',
       end_time TEXT DEFAULT '17:00',
       work_hours NUMERIC(18, 4) DEFAULT 8,
@@ -356,7 +357,9 @@ export const CORE_TABLE_DDLS: MigrationStep[] = [
       assigned_to TEXT DEFAULT '',
       mentions JSONB DEFAULT '[]'::jsonb,
       activity_date TEXT DEFAULT '',
+      activity_date_iso TEXT DEFAULT '',
       next_followup_date TEXT DEFAULT '',
+      next_followup_date_iso TEXT DEFAULT '',
       next_followup_task TEXT DEFAULT '',
       is_followup_completed INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW(),
@@ -447,6 +450,7 @@ export const CORE_TABLE_DDLS: MigrationStep[] = [
       task_id INTEGER NOT NULL REFERENCES piecework_tasks(id),
       project_id INTEGER REFERENCES production_projects(id),
       date TEXT NOT NULL,
+      date_iso TEXT DEFAULT '',
       quantity NUMERIC(18, 4) NOT NULL,
       unit_rate NUMERIC(18, 4) NOT NULL,
       total_amount NUMERIC(18, 4) NOT NULL,
@@ -1020,6 +1024,24 @@ export const CORE_TABLE_DDLS: MigrationStep[] = [
       consumed_at TIMESTAMP,
       released_at TIMESTAMP,
       is_deleted INTEGER DEFAULT 0
+    )`
+  },
+  {
+    id: '056_piecework_task_rate_history',
+    name: 'Create piecework_task_rate_history table',
+    sql: `CREATE TABLE IF NOT EXISTS piecework_task_rate_history (
+      id SERIAL PRIMARY KEY,
+      task_id INTEGER NOT NULL REFERENCES piecework_tasks(id),
+      task_code TEXT DEFAULT '',
+      task_title TEXT DEFAULT '',
+      old_rate NUMERIC(18, 4) DEFAULT 0,
+      new_rate NUMERIC(18, 4) NOT NULL,
+      change_type TEXT DEFAULT 'rate_change',
+      reason TEXT DEFAULT '',
+      changed_by_user_id INTEGER REFERENCES users(id),
+      changed_by_username TEXT DEFAULT '',
+      effective_date TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
     )`
   }
 ];
@@ -1836,6 +1858,88 @@ export const SCHEMA_ALTERATIONS: MigrationStep[] = [
     sql: `
       ALTER TABLE piecework_payrolls ADD COLUMN IF NOT EXISTS advance_deduction NUMERIC(18, 4) DEFAULT 0;
     `
+  },
+  {
+    id: 'alt_042_standard_date_iso_columns',
+    name: 'V10 Phase 7.1: add standard date_iso columns and backfill historical records for daily_work_logs, piecework_logs, and crm_activities',
+    sql: `
+      -- 1. Add date_iso columns
+      ALTER TABLE daily_work_logs ADD COLUMN IF NOT EXISTS date_iso TEXT DEFAULT '';
+      ALTER TABLE piecework_logs ADD COLUMN IF NOT EXISTS date_iso TEXT DEFAULT '';
+      ALTER TABLE crm_activities ADD COLUMN IF NOT EXISTS activity_date_iso TEXT DEFAULT '';
+      ALTER TABLE crm_activities ADD COLUMN IF NOT EXISTS next_followup_date_iso TEXT DEFAULT '';
+
+      -- 2. Backfill daily_work_logs: Jalali -> ISO (YYYY-MM-DD), Gregorian/ISO normalized
+      UPDATE daily_work_logs
+      SET date_iso = (v10_jalali_to_gregorian_ts(
+        make_timestamp(
+          SUBSTRING(date, 1, 4)::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(date,6), '-', '/'), '/', 1), 2, '0')::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(date,6), '-', '/'), '/', 2), 2, '0')::int,
+          0, 0, 0
+        )
+      ))::date::text
+      WHERE (date_iso IS NULL OR date_iso = '')
+        AND date ~ '^1[345][0-9]{2}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      UPDATE daily_work_logs
+      SET date_iso = SUBSTRING(REPLACE(REPLACE(date, '/', '-'), 'T', ' '), 1, 10)
+      WHERE (date_iso IS NULL OR date_iso = '')
+        AND date ~ '^[0-9]{4}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      -- 3. Backfill piecework_logs: Jalali -> ISO (YYYY-MM-DD), Gregorian/ISO normalized
+      UPDATE piecework_logs
+      SET date_iso = (v10_jalali_to_gregorian_ts(
+        make_timestamp(
+          SUBSTRING(date, 1, 4)::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(date,6), '-', '/'), '/', 1), 2, '0')::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(date,6), '-', '/'), '/', 2), 2, '0')::int,
+          0, 0, 0
+        )
+      ))::date::text
+      WHERE (date_iso IS NULL OR date_iso = '')
+        AND date ~ '^1[345][0-9]{2}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      UPDATE piecework_logs
+      SET date_iso = SUBSTRING(REPLACE(REPLACE(date, '/', '-'), 'T', ' '), 1, 10)
+      WHERE (date_iso IS NULL OR date_iso = '')
+        AND date ~ '^[0-9]{4}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      -- 4. Backfill crm_activities: activity_date & next_followup_date
+      UPDATE crm_activities
+      SET activity_date_iso = (v10_jalali_to_gregorian_ts(
+        make_timestamp(
+          SUBSTRING(activity_date, 1, 4)::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(activity_date,6), '-', '/'), '/', 1), 2, '0')::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(activity_date,6), '-', '/'), '/', 2), 2, '0')::int,
+          0, 0, 0
+        )
+      ))::date::text
+      WHERE (activity_date_iso IS NULL OR activity_date_iso = '')
+        AND activity_date ~ '^1[345][0-9]{2}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      UPDATE crm_activities
+      SET activity_date_iso = SUBSTRING(REPLACE(REPLACE(activity_date, '/', '-'), 'T', ' '), 1, 10)
+      WHERE (activity_date_iso IS NULL OR activity_date_iso = '')
+        AND activity_date ~ '^[0-9]{4}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      UPDATE crm_activities
+      SET next_followup_date_iso = (v10_jalali_to_gregorian_ts(
+        make_timestamp(
+          SUBSTRING(next_followup_date, 1, 4)::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(next_followup_date,6), '-', '/'), '/', 1), 2, '0')::int,
+          LPAD(SPLIT_PART(REPLACE(SUBSTRING(next_followup_date,6), '-', '/'), '/', 2), 2, '0')::int,
+          0, 0, 0
+        )
+      ))::date::text
+      WHERE (next_followup_date_iso IS NULL OR next_followup_date_iso = '')
+        AND next_followup_date ~ '^1[345][0-9]{2}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+
+      UPDATE crm_activities
+      SET next_followup_date_iso = SUBSTRING(REPLACE(REPLACE(next_followup_date, '/', '-'), 'T', ' '), 1, 10)
+      WHERE (next_followup_date_iso IS NULL OR next_followup_date_iso = '')
+        AND next_followup_date ~ '^[0-9]{4}[/-][0-9]{1,2}[/-][0-9]{1,2}';
+    `
   }
 ];
 
@@ -1935,7 +2039,13 @@ export const CORE_INDEXES: MigrationStep[] = [
   { id: 'idx_090_tx_item_active_date', name: 'Transaction Item Active Date Descending Index (item_id, is_deleted, date DESC)', sql: 'CREATE INDEX IF NOT EXISTS tx_item_active_date ON transactions(item_id, is_deleted, date DESC)' },
   { id: 'idx_091_tx_drop_redundant_item_id', name: 'Drop redundant single column item_id index on transactions', sql: 'DROP INDEX IF EXISTS tx_item_id' },
   { id: 'idx_092_analyze_transactions', name: 'Update PostgreSQL optimizer statistics for transactions table', sql: 'ANALYZE transactions' },
-  { id: 'idx_093_outbox_status_locked', name: 'Outbox status and locked_at index', sql: 'CREATE INDEX IF NOT EXISTS idx_outbox_status_locked ON outbox_events(status, locked_at)' }
+  { id: 'idx_093_outbox_status_locked', name: 'Outbox status and locked_at index', sql: 'CREATE INDEX IF NOT EXISTS idx_outbox_status_locked ON outbox_events(status, locked_at)' },
+  { id: 'idx_094_ptrh_task', name: 'Piecework task rate history task index', sql: 'CREATE INDEX IF NOT EXISTS idx_ptrh_task ON piecework_task_rate_history(task_id)' },
+  { id: 'idx_095_ptrh_created', name: 'Piecework task rate history created index', sql: 'CREATE INDEX IF NOT EXISTS idx_ptrh_created ON piecework_task_rate_history(created_at)' },
+  { id: 'idx_096_dwl_date_iso', name: 'Daily work logs ISO date index', sql: 'CREATE INDEX IF NOT EXISTS idx_dwl_date_iso ON daily_work_logs(date_iso)' },
+  { id: 'idx_097_plog_date_iso', name: 'Piecework logs ISO date index', sql: 'CREATE INDEX IF NOT EXISTS idx_plog_date_iso ON piecework_logs(date_iso)' },
+  { id: 'idx_098_crm_act_date_iso', name: 'CRM activities ISO date index', sql: 'CREATE INDEX IF NOT EXISTS idx_crm_act_date_iso ON crm_activities(activity_date_iso)' },
+  { id: 'idx_099_crm_act_next_iso', name: 'CRM activities ISO next followup date index', sql: 'CREATE INDEX IF NOT EXISTS idx_crm_act_next_iso ON crm_activities(next_followup_date_iso)' }
 ];
 
 /**
@@ -2078,7 +2188,7 @@ export async function validateDbSchema(): Promise<{ valid: boolean; tablesCount:
     'items', 'documents', 'document_items', 'transactions', 'item_prices', 'activity_logs',
     'transfers', 'production_projects', 'project_stages', 'daily_work_logs', 'notifications',
     'crm_leads', 'crm_activities', 'personnel', 'task_categories', 'piecework_tasks',
-    'piecework_personnel_rates', 'piecework_logs', 'piecework_payrolls', 'pending_materials',
+    'piecework_task_rate_history', 'piecework_personnel_rates', 'piecework_logs', 'piecework_payrolls', 'pending_materials',
     'accounts', 'journal_vouchers', 'journal_voucher_items', 'bank_accounts', 'cheques',
     'treasury_transactions', 'accounting_settings', 'workflow_definitions', 'workflow_states',
     'workflow_transitions', 'workflow_instances', 'workflow_pending_approvals', 'workflow_history_logs',

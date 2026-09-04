@@ -79,8 +79,9 @@ export class WebhookSubscriptionService {
         failedDeliveries: totalDeliveries - successfulDeliveries,
         successRate
       };
-    } catch (err: any) {
-      logger.error(`[Webhook Stats Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Webhook Stats Error] ${errMsg}`);
       return {
         totalSubscriptions: 0,
         activeSubscriptions: 0,
@@ -101,8 +102,9 @@ export class WebhookSubscriptionService {
         .select()
         .from(webhookSubscriptions)
         .orderBy(desc(webhookSubscriptions.id));
-    } catch (err: any) {
-      logger.error(`[Webhook Get Subscriptions Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Webhook Get Subscriptions Error] ${errMsg}`);
       return [];
     }
   }
@@ -175,7 +177,7 @@ export class WebhookSubscriptionService {
       throw new Error(`اشتراک وب‌هوک با شناسه ${id} یافت نشد.`);
     }
 
-    const updateFields: any = {
+    const updateFields: Partial<typeof webhookSubscriptions.$inferInsert> = {
       updatedAt: new Date().toISOString()
     };
 
@@ -253,11 +255,13 @@ export class WebhookSubscriptionService {
 
         // Asynchronously deliver webhook
         this.deliverToSubscriber(sub, event).catch(err => {
-          logger.error(`[Webhook Dispatcher Error] Failed delivery to #${sub.id}: ${err.message}`);
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[Webhook Dispatcher Error] Failed delivery to #${sub.id}: ${errMsg}`);
         });
       }
-    } catch (err: any) {
-      logger.error(`[Webhook Dispatcher Global Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Webhook Dispatcher Global Error] ${errMsg}`);
     }
   }
 
@@ -326,13 +330,14 @@ export class WebhookSubscriptionService {
         status = 'failed';
         errorMessage = `HTTP Status: ${statusCode}`;
       }
-    } catch (fetchErr: any) {
-      if (fetchErr.name === 'AbortError') {
+    } catch (fetchErr: unknown) {
+      const errObj = fetchErr as { name?: string; message?: string };
+      if (errObj.name === 'AbortError') {
         status = 'timeout';
         errorMessage = `Timeout after ${sub.timeoutMs || 5000}ms`;
       } else {
         status = 'failed';
-        errorMessage = fetchErr.message || 'خطا در برقراری ارتباط با وب‌هوک مقصد';
+        errorMessage = errObj.message || 'خطا در برقراری ارتباط با وب‌هوک مقصد';
       }
     } finally {
       clearTimeout(timeout);
@@ -452,15 +457,16 @@ export class WebhookSubscriptionService {
           ? `پاسخ دریافت شد (${response.status} OK) در ${durationMs} میلی‌ثانیه`
           : `خطای کد پاسخ سرور مقصد: ${response.status}`
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const durationMs = Date.now() - startTime;
+      const errObj = err as { name?: string; message?: string };
       return {
         success: false,
         statusCode: 0,
         durationMs,
         signature,
         responseBody: '',
-        message: err.name === 'AbortError' ? 'مهلت ارسال درخواست به پایان رسید (Timeout 6s)' : err.message
+        message: errObj.name === 'AbortError' ? 'مهلت ارسال درخواست به پایان رسید (Timeout 6s)' : (errObj.message || String(err))
       };
     } finally {
       clearTimeout(timeout);
@@ -498,8 +504,9 @@ export class WebhookSubscriptionService {
         limit,
         offset
       };
-    } catch (err: any) {
-      logger.error(`[Webhook Deliveries Get Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Webhook Deliveries Get Error] ${errMsg}`);
       return { data: [], total: 0, limit: 50, offset: 0 };
     }
   }
@@ -538,8 +545,9 @@ export class WebhookSubscriptionService {
       }
 
       logger.info(`[Webhook Subscriptions] Seeded ${defaults.length} default webhook subscriptions.`);
-    } catch (err: any) {
-      logger.error(`[Webhook Seed Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Webhook Seed Error] ${errMsg}`);
     }
   }
 }

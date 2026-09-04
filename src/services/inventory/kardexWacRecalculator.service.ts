@@ -9,11 +9,21 @@ import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
 
+export interface KardexRebuildOptions {
+  userId?: number;
+  user?: string;
+  fixWAC?: boolean;
+}
+
 export class KardexWacRecalculatorService {
   /**
    * Rebuilds stock and WAC for a single item from its sequential transaction ledger (Kardex).
    */
-  static async rebuildItemFromLedger(itemId: number, optsOrUserId?: any, username?: string): Promise<{
+  static async rebuildItemFromLedger(
+    itemId: number,
+    optsOrUserId?: number | KardexRebuildOptions,
+    username?: string
+  ): Promise<{
     itemId: number;
     oldStock: number;
     newStock: number;
@@ -177,7 +187,10 @@ export class KardexWacRecalculatorService {
   /**
    * Rebuilds stock and WAC for ALL items from their transaction ledgers.
    */
-  static async rebuildAllFromLedger(optsOrUserId?: any, username?: string): Promise<{
+  static async rebuildAllFromLedger(
+    optsOrUserId?: number | KardexRebuildOptions,
+    username?: string
+  ): Promise<{
     rebuiltCount: number;
     totalItemsChecked: number;
     discrepanciesFixed: number;

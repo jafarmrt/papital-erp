@@ -226,7 +226,7 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
             const [itemData] = await orm.select().from(items).where(eq(items.id, Number(docLine.itemId)));
             if (!itemData) continue;
 
-            const resIdx = reservedList.findIndex((r: any) =>
+            const resIdx = reservedList.findIndex((r: { itemId?: unknown; itemCode?: unknown; itemName?: unknown }) =>
               (r.itemId && itemData.id && Number(r.itemId) === Number(itemData.id)) ||
               (r.itemCode && itemData.code && String(r.itemCode).trim().toLowerCase() === String(itemData.code).trim().toLowerCase()) ||
               (r.itemName && itemData.name && String(r.itemName).trim().toLowerCase() === String(itemData.name).trim().toLowerCase())
@@ -288,9 +288,9 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
     });
   }
 
-  const hasDiscounts = (req.body.items || []).some((i: any) => Number(i.discount || 0) > 0);
+  const hasDiscounts = (req.body.items || []).some((i: { discount?: unknown }) => Number(i.discount || 0) > 0);
   const totalLines = (req.body.items || []).length;
-  const totalQty = (req.body.items || []).reduce((acc: number, cur: any) => acc + (Number(cur.quantity || 0)), 0);
+  const totalQty = (req.body.items || []).reduce((acc: number, cur: { quantity?: unknown }) => acc + (Number(cur.quantity || 0)), 0);
 
   // V10-2.2 (TD-020): همگام‌سازی سند حسابداری به صورت اتمیک درون تراکنش DocumentService.createDocument انجام شده است
 
@@ -325,11 +325,12 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
       workflowCode: 'DOC_APPROVAL_WORKFLOW',
       entityType: 'document',
       entityId: String(newDocId),
-      userId: (req as any).user?.id,
-      userName: (req as any).user?.fullName || (req as any).user?.username || 'فروشنده'
+      userId: req.user?.id,
+      userName: req.user?.fullName || req.user?.username || 'فروشنده'
     });
-  } catch (wfErr: any) {
-    logger.warn(`[DocumentRoute] Workflow auto-start for doc ${newDocId}: ${wfErr.message}`);
+  } catch (wfErr) {
+    const errMsg = wfErr instanceof Error ? wfErr.message : String(wfErr);
+    logger.warn(`[DocumentRoute] Workflow auto-start for doc ${newDocId}: ${errMsg}`);
   }
 
   res.json({ success: true, docId: newDocId });
@@ -365,7 +366,7 @@ router.get('/documents/by-ref/:ref', validate(paramsRefSchema), asyncHandler(asy
   const ref = req.params.ref;
   const docsResult = await DocumentService.getDocuments(type);
   const docList = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
-  const docSummary = docList.find((d: any) => d.ref_number === ref);
+  const docSummary = docList.find((d: { ref_number?: string; id?: number }) => d.ref_number === ref);
   if (!docSummary) {
     throw new NotFoundError('سند یافت نشد');
   }
@@ -535,8 +536,8 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
         buyerName: beforeDoc.buyer_name,
         buyerPhone: beforeDoc.buyer_phone,
         notes: beforeDoc.notes,
-        items: (beforeDoc.items || []).map((i: any) => ({
-          itemId: i.itemId || i.item_id,
+        items: (beforeDoc.items || []).map((i) => ({
+          itemId: i.item_id,
           name: i.name,
           code: i.code,
           quantity: i.quantity,

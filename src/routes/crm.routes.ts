@@ -6,7 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { parsePagination } from '../lib/pagination.js';
-import { getTodayJalaliDate } from '../utils.js';
+import { getTodayJalaliDate, jalaliToIsoDate } from '../utils.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -113,7 +113,7 @@ async function resolveAssignee(input: { name?: string | null; personnelId?: numb
   return { name: '', id: null };
 }
 
-function formatLead(l: any) {
+function formatLead(l: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>) | null | undefined) {
   if (!l) return null;
   return {
     ...l,
@@ -151,10 +151,10 @@ function formatLead(l: any) {
   };
 }
 
-function formatActivity(act: any) {
+function formatActivity(act: (Partial<typeof crmActivities.$inferSelect> & Record<string, unknown>) | null | undefined) {
   if (!act) return null;
-  const leadTitle = act.leadTitle || (act.lead ? act.lead.title : '');
-  const customerName = act.customerName || act.leadCustomerName || (act.customer ? act.customer.name : '');
+  const leadTitle = act.leadTitle || (act.lead && typeof act.lead === 'object' && 'title' in act.lead ? (act.lead as { title: string }).title : '');
+  const customerName = act.customerName || act.leadCustomerName || (act.customer && typeof act.customer === 'object' && 'name' in act.customer ? (act.customer as { name: string }).name : '');
   return {
     ...act,
     id: act.id,
@@ -179,8 +179,12 @@ function formatActivity(act: any) {
     mentions: Array.isArray(act.mentions) ? act.mentions : [],
     activity_date: act.activityDate || '',
     activityDate: act.activityDate || '',
+    activity_date_iso: act.activityDateIso || jalaliToIsoDate(act.activityDate) || '',
+    activityDateIso: act.activityDateIso || jalaliToIsoDate(act.activityDate) || '',
     next_followup_date: act.nextFollowUpDate || '',
     nextFollowUpDate: act.nextFollowUpDate || '',
+    next_followup_date_iso: act.nextFollowUpDateIso || jalaliToIsoDate(act.nextFollowUpDate) || '',
+    nextFollowUpDateIso: act.nextFollowUpDateIso || jalaliToIsoDate(act.nextFollowUpDate) || '',
     next_followup_task: act.nextFollowUpTask || '',
     nextFollowUpTask: act.nextFollowUpTask || '',
     is_followup_completed: act.isFollowUpCompleted || 0,
@@ -213,6 +217,7 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
   .where(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.stage, 'won')));
 
   // Followups due today or overdue
+  const todayIso = new Date().toISOString().slice(0, 10);
   const pendingFollowups = await orm.select({
     count: sql<number>`count(*)`
   })
@@ -221,7 +226,10 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
     eq(crmActivities.isDeleted, 0),
     eq(crmActivities.isFollowUpCompleted, 0),
     sql`length(COALESCE(${crmActivities.nextFollowUpDate}, '')) > 0`,
-    sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <= ${todayJalali}::text`
+    sql`(
+      (${crmActivities.nextFollowUpDateIso} IS NOT NULL AND ${crmActivities.nextFollowUpDateIso} <= ${todayIso}::text) OR
+      (COALESCE(${crmActivities.nextFollowUpDate}, '') <= ${todayJalali}::text)
+    )`
   ));
 
   // Stage counts
@@ -240,7 +248,7 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
     wonLeadsCount: Number(wonLeads?.count || 0),
     wonTotalValue: Number(wonLeads?.totalValue || 0),
     pendingFollowupsCount: Number(pendingFollowups[0]?.count || 0),
-    stageCounts: stageCounts.reduce((acc: any, row: any) => {
+    stageCounts: stageCounts.reduce((acc: Record<string, { count: number; value: number }>, row: { stage: string | null; count: number | string; totalValue: number | string }) => {
       if (row.stage) {
         acc[row.stage] = { count: Number(row.count), value: Number(row.totalValue) };
       }
@@ -370,7 +378,7 @@ interface CrmAuditContext {
 
 async function logCustomerSyncDiff(
   customerId: number,
-  changes: Array<{ field: string; before: any; after: any }>,
+  changes: Array<{ field: string; before: unknown; after: unknown }>,
   auditCtx?: CrmAuditContext
 ): Promise<void> {
   if (!changes.length) return;
@@ -420,12 +428,12 @@ async function syncCustomerFromCRMLead(
     const [cust] = await orm.select().from(customers).where(and(eq(customers.id, existingCustomerId), eq(customers.isDeleted, 0)));
     if (cust) {
       // V10-4.3: هیچ overwrite بی‌سروصدایی بدون گزارش اختلاف قبل-بعد انجام نشود
-      const pendingChanges: Array<{ field: string; before: any; after: any }> = [];
+      const pendingChanges: Array<{ field: string; before: unknown; after: unknown }> = [];
       const queueChange = (field: 'phone' | 'contactName' | 'name', afterVal: string | null) => {
-        const beforeVal = (cust as any)[field] ?? null;
+        const beforeVal = (cust as Record<string, unknown>)[field] ?? null;
         if ((afterVal ?? '') !== '' && String(beforeVal ?? '') !== String(afterVal)) {
           pendingChanges.push({ field, before: beforeVal, after: afterVal });
-          (cust as any)[field] = afterVal;
+          (cust as Record<string, unknown>)[field] = afterVal;
         }
       };
 
@@ -437,7 +445,7 @@ async function syncCustomerFromCRMLead(
       }
 
       if (pendingChanges.length > 0) {
-        const updates: Record<string, any> = {};
+        const updates: Record<string, unknown> = {};
         for (const ch of pendingChanges) updates[ch.field] = ch.after;
         await orm.update(customers).set(updates).where(eq(customers.id, existingCustomerId));
         await logCustomerSyncDiff(existingCustomerId, pendingChanges, auditCtx);
@@ -450,12 +458,12 @@ async function syncCustomerFromCRMLead(
   if (cPhone) {
     const [foundByPhone] = await orm.select().from(customers).where(and(eq(customers.phone, cPhone), eq(customers.isDeleted, 0)));
     if (foundByPhone) {
-      const pendingChanges: Array<{ field: string; before: any; after: any }> = [];
+      const pendingChanges: Array<{ field: string; before: unknown; after: unknown }> = [];
       const queueChange = (field: 'contactName' | 'name', afterVal: string | null) => {
-        const beforeVal = (foundByPhone as any)[field] ?? null;
+        const beforeVal = (foundByPhone as Record<string, unknown>)[field] ?? null;
         if ((afterVal ?? '') !== '' && String(beforeVal ?? '') !== String(afterVal)) {
           pendingChanges.push({ field, before: beforeVal, after: afterVal });
-          (foundByPhone as any)[field] = afterVal;
+          (foundByPhone as Record<string, unknown>)[field] = afterVal;
         }
       };
 
@@ -466,7 +474,7 @@ async function syncCustomerFromCRMLead(
         queueChange('contactName', cName);
       }
       if (Object.keys(pendingChanges).length > 0) {
-        const updates: Record<string, any> = {};
+        const updates: Record<string, unknown> = {};
         for (const ch of pendingChanges) updates[ch.field] = ch.after;
         await orm.update(customers).set(updates).where(eq(customers.id, foundByPhone.id));
         await logCustomerSyncDiff(foundByPhone.id, pendingChanges, auditCtx);
@@ -478,12 +486,12 @@ async function syncCustomerFromCRMLead(
   if (primaryCustomerName) {
     const [foundByName] = await orm.select().from(customers).where(and(eq(customers.name, primaryCustomerName), eq(customers.isDeleted, 0)));
     if (foundByName) {
-      const pendingChanges: Array<{ field: string; before: any; after: any }> = [];
+      const pendingChanges: Array<{ field: string; before: unknown; after: unknown }> = [];
       const queueChange = (field: 'phone' | 'contactName', afterVal: string | null) => {
-        const beforeVal = (foundByName as any)[field] ?? null;
+        const beforeVal = (foundByName as Record<string, unknown>)[field] ?? null;
         if ((afterVal ?? '') !== '' && String(beforeVal ?? '') !== String(afterVal)) {
           pendingChanges.push({ field, before: beforeVal, after: afterVal });
-          (foundByName as any)[field] = afterVal;
+          (foundByName as Record<string, unknown>)[field] = afterVal;
         }
       };
 
@@ -491,7 +499,7 @@ async function syncCustomerFromCRMLead(
       if (contactPersonName && !foundByName.contactName) queueChange('contactName', contactPersonName);
 
       if (pendingChanges.length > 0) {
-        const updates: Record<string, any> = {};
+        const updates: Record<string, unknown> = {};
         for (const ch of pendingChanges) updates[ch.field] = ch.after;
         await orm.update(customers).set(updates).where(eq(customers.id, foundByName.id));
         await logCustomerSyncDiff(foundByName.id, pendingChanges, auditCtx);
@@ -514,7 +522,7 @@ async function syncCustomerFromCRMLead(
   return newCust ? newCust.id : null;
 }
 
-async function notifyWarehouseOnWonLead(lead: any, authorName: string, senderId?: number) {
+async function notifyWarehouseOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>), authorName: string, senderId?: number) {
   try {
     const targetUsers = await orm.select({ id: users.id, role: users.role }).from(users).where(
       or(
@@ -868,12 +876,14 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
 
   if (fromDate && typeof fromDate === 'string' && fromDate.trim()) {
     const f = fromDate.trim();
-    conditions.push(sql`(${crmActivities.activityDate} >= ${f}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
+    const fIso = jalaliToIsoDate(f) || f;
+    conditions.push(sql`(${crmActivities.activityDateIso} >= ${fIso}::text OR ${crmActivities.activityDate} >= ${f}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
   }
 
   if (toDate && typeof toDate === 'string' && toDate.trim()) {
     const t = toDate.trim();
-    conditions.push(sql`(${crmActivities.activityDate} <= ${t}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
+    const tIso = jalaliToIsoDate(t) || t;
+    conditions.push(sql`(${crmActivities.activityDateIso} <= ${tIso}::text OR ${crmActivities.activityDate} <= ${t}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
   }
 
   const activities = await orm.select({
@@ -889,7 +899,9 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     assignedPersonnelId: crmActivities.assignedPersonnelId,
     mentions: crmActivities.mentions,
     activityDate: crmActivities.activityDate,
+    activityDateIso: crmActivities.activityDateIso,
     nextFollowUpDate: crmActivities.nextFollowUpDate,
+    nextFollowUpDateIso: crmActivities.nextFollowUpDateIso,
     nextFollowUpTask: crmActivities.nextFollowUpTask,
     isFollowUpCompleted: crmActivities.isFollowUpCompleted,
     createdAt: crmActivities.createdAt,
@@ -928,6 +940,9 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
   const nowIso = new Date().toISOString();
   const todayStr = activityDate || nowIso.split('T')[0];
+  const actDateIso = jalaliToIsoDate(todayStr) || (todayStr.includes('-') ? todayStr.slice(0, 10) : nowIso.slice(0, 10));
+  const nextFollowIso = nextFollowUpDate ? (jalaliToIsoDate(nextFollowUpDate) || (nextFollowUpDate.includes('-') ? nextFollowUpDate.slice(0, 10) : null)) : null;
+
   // V10-4.1: مسئول تسک از پرسنل (id) + snapshot نام
   const taskAssignee = await resolveAssignee({
     name: assignedTo || authorName,
@@ -947,7 +962,9 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     assignedPersonnelId: taskAssignee.id,
     mentions: mentionsList,
     activityDate: todayStr,
+    activityDateIso: actDateIso,
     nextFollowUpDate: nextFollowUpDate || '',
+    nextFollowUpDateIso: nextFollowIso,
     nextFollowUpTask: nextFollowUpTask || '',
     isFollowUpCompleted: 0,
     createdAt: nowIso,
@@ -1065,7 +1082,7 @@ router.put('/crm/activities/:id/toggle-followup', authorizePermission('crm.manag
   }
 
   const newCompleted = act.isFollowUpCompleted === 1 ? 0 : 1;
-  const updateData: any = { isFollowUpCompleted: newCompleted };
+  const updateData: Partial<typeof crmActivities.$inferInsert> = { isFollowUpCompleted: newCompleted };
 
   if (result && typeof result === 'string' && result.trim()) {
     updateData.result = result.trim();

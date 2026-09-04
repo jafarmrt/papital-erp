@@ -28,17 +28,25 @@ function sanitizeCustomerText(value: unknown): unknown {
     .replace(/javascript:/gi, '');
 }
 
-function sanitizeCustomerPayload<T extends Record<string, any>>(body: T): T {
+interface ContactPerson {
+  id?: string;
+  name?: string;
+  role?: string;
+  phone?: string;
+  isPrimary?: boolean;
+}
+
+function sanitizeCustomerPayload<T extends Record<string, unknown>>(body: T): T {
   const fields = ['name', 'contactName', 'address', 'notes', 'city', 'province', 'country', 'phone'];
-  const sanitized: Record<string, any> = { ...body };
+  const sanitized: Record<string, unknown> = { ...body };
   for (const f of fields) {
     if (typeof sanitized[f] === 'string') sanitized[f] = sanitizeCustomerText(sanitized[f]);
   }
   if (Array.isArray(sanitized.contacts)) {
-    sanitized.contacts = sanitized.contacts.map((c: any) => ({
+    sanitized.contacts = (sanitized.contacts as ContactPerson[]).map((c) => ({
       ...c,
-      name: sanitizeCustomerText(c?.name),
-      role: sanitizeCustomerText(c?.role),
+      name: sanitizeCustomerText(c?.name) as string | undefined,
+      role: sanitizeCustomerText(c?.role) as string | undefined,
     }));
   }
   return sanitized as T;
@@ -157,14 +165,14 @@ router.post('/customers', authorize('admin', 'manager', 'sales_manager'), valida
   const bankInfo = req.body.bankInfo || req.body.bank_info || {};
 
   // Auto-derive contactName and phone from contacts if available
-  const activeContacts = (contacts || []).filter((c: any) => c.name?.trim() || c.phone?.trim());
+  const activeContacts = ((contacts || []) as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
   if (activeContacts.length > 0) {
-    const primary = activeContacts.find((c: any) => c.isPrimary) || activeContacts[0];
+    const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
     if (!contactName) {
       contactName = primary.role ? `${primary.name} (${primary.role})` : primary.name;
     }
     if (!phone) {
-      const allPhones = activeContacts.map((c: any) => c.phone).filter(Boolean);
+      const allPhones = activeContacts.map((c) => c.phone).filter(Boolean);
       phone = Array.from(new Set(allPhones)).join(', ');
     }
   }
@@ -250,14 +258,14 @@ router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager'), val
     });
   }
 
-  const activeContacts = (contacts || []).filter((c: any) => c.name?.trim() || c.phone?.trim());
+  const activeContacts = ((contacts || []) as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
   if (activeContacts.length > 0) {
-    const primary = activeContacts.find((c: any) => c.isPrimary) || activeContacts[0];
+    const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
     if (!contactName) {
       contactName = primary.role ? `${primary.name} (${primary.role})` : primary.name;
     }
     if (!phone) {
-      const allPhones = activeContacts.map((c: any) => c.phone).filter(Boolean);
+      const allPhones = activeContacts.map((c) => c.phone).filter(Boolean);
       phone = Array.from(new Set(allPhones)).join(', ');
     }
   }
@@ -276,7 +284,7 @@ router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager'), val
     }
   }
 
-  const updatedData: any = {
+  const updatedData: Partial<typeof customers.$inferInsert> = {
     name,
     contactName,
     country,

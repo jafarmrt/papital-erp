@@ -31,8 +31,8 @@ const updateCategoryValidation = z.object({
   })
 });
 
-const formatCategory = (cat: any) => {
-  let prefix = cat.prefix || '';
+const formatCategory = (cat: Partial<typeof categories.$inferSelect> & Record<string, unknown>) => {
+  let prefix = (cat.prefix as string) || '';
   if (cat.type === 'product') {
     prefix = prefix.replace(/-+$/g, '');
   }

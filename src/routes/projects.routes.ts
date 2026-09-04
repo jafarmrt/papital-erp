@@ -77,17 +77,20 @@ const updateProjectSchema = z.object({
 });
 
 const addProjectToInventorySchema = z.object({
-  body: z.preprocess((val: any) => {
-    if (val && typeof val === 'object' && !val.itemsToAdd && (val.itemId || val.item_id)) {
-      return {
-        itemsToAdd: [{
-          itemId: val.itemId || val.item_id,
-          quantity: val.quantity,
-          location: val.location,
-          notes: val.description || val.notes
-        }],
-        markCompleted: Boolean(val.markCompleted)
-      };
+  body: z.preprocess((val: unknown) => {
+    if (val && typeof val === 'object') {
+      const v = val as Record<string, unknown>;
+      if (!v.itemsToAdd && (v.itemId || v.item_id)) {
+        return {
+          itemsToAdd: [{
+            itemId: v.itemId || v.item_id,
+            quantity: v.quantity,
+            location: v.location,
+            notes: v.description || v.notes
+          }],
+          markCompleted: Boolean(v.markCompleted)
+        };
+      }
     }
     return val;
   }, z.object({

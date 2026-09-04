@@ -12,7 +12,7 @@ const saveDraftSchema = z.object({
   body: z.object({
     entityType: z.string().min(1, 'نوع موجودیت (entityType) الزامی است'),
     draftKey: z.string().optional().default('default'),
-    payload: z.record(z.string(), z.any()),
+    payload: z.record(z.string(), z.unknown()),
     summary: z.string().optional().default(''),
     expiresInDays: z.number().optional().default(30)
   })
@@ -25,7 +25,7 @@ const entityTypeParamSchema = z.object({
 });
 
 // Save or update a server-backed draft
-router.post('/drafts', validate(saveDraftSchema), async (req: any, res: any) => {
+router.post('/drafts', validate(saveDraftSchema), async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const username = req.user?.username || '';
@@ -43,14 +43,15 @@ router.post('/drafts', validate(saveDraftSchema), async (req: any, res: any) => 
     });
 
     res.status(200).json(result);
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error saving form draft:', error);
-    res.status(400).json({ error: error.message || 'خطا در ذخیره پیش‌نویس سرور' });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    res.status(400).json({ error: errMsg || 'خطا در ذخیره پیش‌نویس سرور' });
   }
 });
 
 // Get a specific draft by entityType and draftKey
-router.get('/drafts/:entityType', validate(entityTypeParamSchema), async (req: any, res: any) => {
+router.get('/drafts/:entityType', validate(entityTypeParamSchema), async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const sessionId = (req.headers['x-session-id'] as string) || '';
@@ -59,14 +60,14 @@ router.get('/drafts/:entityType', validate(entityTypeParamSchema), async (req: a
 
     const draft = await FormDraftService.getDraft(entityType, draftKey, userId, sessionId);
     res.json({ draft });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error fetching form draft:', error);
     throw error;
   }
 });
 
 // List all drafts for current user
-router.get('/drafts', async (req: any, res: any) => {
+router.get('/drafts', async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const sessionId = (req.headers['x-session-id'] as string) || '';
@@ -74,14 +75,14 @@ router.get('/drafts', async (req: any, res: any) => {
 
     const drafts = await FormDraftService.listUserDrafts(userId, sessionId, entityType);
     res.json({ drafts, data: drafts });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error listing form drafts:', error);
     throw error;
   }
 });
 
 // Discard / Delete a draft by entityType and draftKey
-router.delete('/drafts/:entityType', validate(entityTypeParamSchema), async (req: any, res: any) => {
+router.delete('/drafts/:entityType', validate(entityTypeParamSchema), async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const sessionId = (req.headers['x-session-id'] as string) || '';
@@ -90,14 +91,14 @@ router.delete('/drafts/:entityType', validate(entityTypeParamSchema), async (req
 
     const result = await FormDraftService.deleteDraft(entityType, draftKey, userId, sessionId);
     res.json(result);
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error deleting form draft:', error);
     throw error;
   }
 });
 
 // Discard a draft by ID
-router.delete('/drafts/id/:id', validate(paramsIdSchema), async (req: any, res: any) => {
+router.delete('/drafts/id/:id', validate(paramsIdSchema), async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const draftId = parseInt(req.params.id, 10);
@@ -107,7 +108,7 @@ router.delete('/drafts/id/:id', validate(paramsIdSchema), async (req: any, res: 
 
     const result = await FormDraftService.deleteDraftById(draftId, userId);
     res.json(result);
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error deleting form draft by ID:', error);
     throw error;
   }

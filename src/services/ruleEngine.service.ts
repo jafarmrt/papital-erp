@@ -15,7 +15,7 @@ export interface SingleRuleCondition {
     | 'exists' | 'not_exists'
     | 'regex' | 'regexp'
     | string;
-  value?: any;
+  value?: unknown;
 }
 
 export interface RuleGroup {
@@ -31,8 +31,8 @@ export interface EvaluationTraceItem {
   type: 'rule' | 'group';
   field?: string;
   operator?: string;
-  expectedValue?: any;
-  actualValue?: any;
+  expectedValue?: unknown;
+  actualValue?: unknown;
   logic?: 'AND' | 'OR' | 'NOT';
   passed: boolean;
   reason?: string;
@@ -51,8 +51,8 @@ export class RuleEngineService {
    * Resolve nested property paths using dot notation and array index notation.
    * Examples: 'payload.totalAmount', 'items[0].unitPrice', 'document.items.0.price'
    */
-  public static resolvePath(path: string, context: any): any {
-    if (!path || context === null || context === undefined) return undefined;
+  public static resolvePath(path: string, context: unknown): unknown {
+    if (!path || context === null || context === undefined || typeof context !== 'object') return undefined;
 
     // Normalize path by replacing brackets like [0] with .0
     const cleanPath = path
@@ -62,13 +62,13 @@ export class RuleEngineService {
       .replace(/\[(\d+)\]/g, '.$1');
 
     const segments = cleanPath.split('.').filter(Boolean);
-    let current = context;
+    let current: unknown = context;
 
     for (const seg of segments) {
-      if (current === null || current === undefined) {
+      if (current === null || current === undefined || typeof current !== 'object') {
         return undefined;
       }
-      current = current[seg];
+      current = (current as Record<string, unknown>)[seg];
     }
 
     return current;
@@ -77,7 +77,7 @@ export class RuleEngineService {
   /**
    * Evaluate a single rule condition against resolved context value
    */
-  public static evaluateSingleRule(rule: SingleRuleCondition, context: any): { passed: boolean; actualValue: any; reason: string } {
+  public static evaluateSingleRule(rule: SingleRuleCondition, context: unknown): { passed: boolean; actualValue: unknown; reason: string } {
     const actualValue = this.resolvePath(rule.field, context);
     const targetValue = rule.value;
     const op = String(rule.operator || '=').toLowerCase().trim();
@@ -185,9 +185,10 @@ export class RuleEngineService {
           const re = new RegExp(String(targetValue), 'i');
           passed = re.test(String(actualValue ?? ''));
           reason = passed ? `مقدار با الگوی عبارت باقاعده تطابق دارد` : `مقدار با الگوی عبارت باقاعده تطابق ندارد`;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
           passed = false;
-          reason = `خطای الگوی عبارت باقاعده: ${err.message}`;
+          reason = `خطای الگوی عبارت باقاعده: ${errMsg}`;
         }
         break;
 
@@ -204,7 +205,7 @@ export class RuleEngineService {
   /**
    * Main evaluation entry point - returns boolean
    */
-  public static evaluate(expression: RuleExpression, context: any): boolean {
+  public static evaluate(expression: RuleExpression, context: unknown): boolean {
     const trace = this.evaluateWithTrace(expression, context);
     return trace.passed;
   }
@@ -212,7 +213,7 @@ export class RuleEngineService {
   /**
    * Evaluates expression and produces detailed evaluation trace tree & log
    */
-  public static evaluateWithTrace(expression: RuleExpression, context: any): EvaluationTraceResult {
+  public static evaluateWithTrace(expression: RuleExpression, context: unknown): EvaluationTraceResult {
     const startTime = Date.now();
 
     if (!expression) {
@@ -247,7 +248,7 @@ export class RuleEngineService {
    */
   private static evaluateExpressionNode(
     node: RuleExpression, 
-    context: any, 
+    context: unknown, 
     flatTraceList: { path: string; passed: boolean; details: string }[],
     parentPath: string
   ): EvaluationTraceItem {
@@ -257,18 +258,18 @@ export class RuleEngineService {
     }
 
     // 2. Check if Single Rule or Group
-    const objNode = node as any;
+    const objNode = node as Record<string, unknown>;
     const isSingleRule = typeof objNode.field === 'string' && objNode.operator !== undefined;
 
     if (isSingleRule) {
-      const singleRule = objNode as SingleRuleCondition;
+      const singleRule = node as SingleRuleCondition;
       const res = this.evaluateSingleRule(singleRule, context);
       const currentPath = parentPath ? `${parentPath}.${singleRule.field}` : singleRule.field;
 
       flatTraceList.push({
         path: currentPath,
         passed: res.passed,
-        details: `${singleRule.field} ${singleRule.operator} ${singleRule.value ?? ''} => (واقعی: ${res.actualValue ?? 'null'}) [${res.reason}]`
+        details: `${singleRule.field} ${singleRule.operator} ${String(singleRule.value ?? '')} => (واقعی: ${String(res.actualValue ?? 'null')}) [${res.reason}]`
       });
 
       return {
@@ -282,7 +283,7 @@ export class RuleEngineService {
       };
     } else {
       // 3. Group evaluation
-      return this.evaluateGroupNode(objNode as RuleGroup, context, flatTraceList, parentPath);
+      return this.evaluateGroupNode(node as RuleGroup, context, flatTraceList, parentPath);
     }
   }
 
@@ -291,7 +292,7 @@ export class RuleEngineService {
    */
   private static evaluateGroupNode(
     group: RuleGroup, 
-    context: any, 
+    context: unknown, 
     flatTraceList: { path: string; passed: boolean; details: string }[],
     parentPath: string
   ): EvaluationTraceItem {
@@ -365,7 +366,7 @@ export class RuleEngineService {
       'regex', 'regexp'
     ];
 
-    const validateNode = (node: any, path: string): string | null => {
+    const validateNode = (node: unknown, path: string): string | null => {
       if (!node) return null;
 
       if (Array.isArray(node)) {
@@ -380,20 +381,21 @@ export class RuleEngineService {
         return `عنصر غیرمجاز در مسیر ${path}`;
       }
 
-      const isSingle = typeof node.field === 'string' && node.operator !== undefined;
+      const nodeObj = node as Record<string, unknown>;
+      const isSingle = typeof nodeObj.field === 'string' && nodeObj.operator !== undefined;
 
       if (isSingle) {
-        if (!node.field || typeof node.field !== 'string') {
+        if (!nodeObj.field || typeof nodeObj.field !== 'string') {
           return `نام فیلد در مسیر ${path} نامعتبر است`;
         }
-        const op = String(node.operator || '').toLowerCase().trim();
+        const op = String(nodeObj.operator || '').toLowerCase().trim();
         if (!validOperators.includes(op)) {
-          return `عملگر '${node.operator}' در مسیر ${path} پشتیبانی نمی‌شود`;
+          return `عملگر '${String(nodeObj.operator)}' در مسیر ${path} پشتیبانی نمی‌شود`;
         }
         return null;
       } else {
         // Validate group
-        const children = node.conditions || node.rules;
+        const children = nodeObj.conditions || nodeObj.rules;
         if (children && !Array.isArray(children)) {
           return `مجموعه زیرشرایط در گروه ${path} باید به صورت آرایه باشد`;
         }

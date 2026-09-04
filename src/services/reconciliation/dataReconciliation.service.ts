@@ -17,7 +17,7 @@ export interface ReconciliationAnomaly {
   description: string;
   autoFixable: boolean;
   fixAction?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ReconciliationReport {
@@ -241,16 +241,18 @@ export class DataReconciliationService {
           await KardexWacRecalculatorService.rebuildItemFromLedger(Number(anomaly.entityId), { user: 'سیستم تطبیق داده' });
           details.push(`موجودی و کاردکس کالا #${anomaly.entityId} با موفقیت بازسازی شد.`);
           repairedCount++;
-        } catch (err: any) {
-          logger.error(`[Reconciliation Repair Error] ${err.message}`);
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[Reconciliation Repair Error] ${errMsg}`);
         }
       } else if (anomaly.category === 'orphan_stock_transactions' && anomaly.entityId) {
         try {
           await pool.query('UPDATE transactions SET is_deleted = 1 WHERE id = $1', [anomaly.entityId]);
           details.push(`تراکنش معلق #${anomaly.entityId} حذف منطقی شد.`);
           repairedCount++;
-        } catch (err: any) {
-          logger.error(`[Reconciliation Repair Error] ${err.message}`);
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[Reconciliation Repair Error] ${errMsg}`);
         }
       }
     }

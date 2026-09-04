@@ -3,15 +3,25 @@ import { sql, eq } from 'drizzle-orm';
 import { DataReconciliationService } from './reconciliation/dataReconciliation.service.js';
 import { SystemRecoveryService } from './recovery/systemRecovery.service.js';
 
+interface DynamicTestRunnerModule {
+  Phase21TestRunner: {
+    runAllTests: () => Promise<{
+      overallStatus: string;
+      totalTests: number;
+      totalDurationMs: number;
+    }>;
+  };
+}
+
 /**
  * TST-001: The test runner must NEVER be part of the production bundle.
  * The specifier is computed at runtime so static bundlers (esbuild) cannot
  * trace and inline the src/tests tree into dist/server.cjs. In production
  * this import is unreachable (endpoint gating + runner env assertion).
  */
-async function loadTestRunner(): Promise<any> {
+async function loadTestRunner(): Promise<DynamicTestRunnerModule> {
   const spec = ['..', 'tests', 'testRunner.js'].join('/');
-  return await import(/* @vite-ignore */ spec);
+  return await import(/* @vite-ignore */ spec) as DynamicTestRunnerModule;
 }
 
 export interface ReleaseGateCriteria {
@@ -20,7 +30,7 @@ export interface ReleaseGateCriteria {
   title: string;
   status: 'passed' | 'failed';
   evidence: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 export interface ReleaseGateReport {

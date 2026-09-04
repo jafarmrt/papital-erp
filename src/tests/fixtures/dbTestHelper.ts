@@ -139,18 +139,23 @@ function isCleanupPermitted(): boolean {
 
 /** Synthetic-only document condition (ref prefixes used exclusively by suites) */
 const TEST_DOC_COND = sql`(
-  ref_number ILIKE 'DOC\\_%' OR ref_number ILIKE 'DOC-%' OR ref_number ILIKE 'STRESS-%' OR ref_number ILIKE 'IDEM-%'
-  OR ref_number ILIKE 'ROLLBACK-%' OR ref_number ILIKE 'DOC_RACE%' OR ref_number ILIKE 'PURCHASE-E2E-%'
-  OR ref_number ILIKE 'INV-E2E-%' OR ref_number ILIKE 'WOO-ORDER-%' OR ref_number ILIKE 'E2E-%'
-  OR ref_number ILIKE 'TEST-%' OR ref_number ILIKE 'V9-%' OR ref_number ILIKE 'V9\\_%' OR ref_number ILIKE 'DIAG-%'
-  OR notes ILIKE '%آزمایشی%' OR notes ILIKE '%E2E%' OR buyer_name ILIKE '%آزمایشی%' OR buyer_name ILIKE '%استرس%'
+  ref_number ILIKE 'CP-FIN-%' OR ref_number ILIKE 'DOC\\_%' OR ref_number ILIKE 'DOC-%'
+  OR ref_number ILIKE 'STRESS-%' OR ref_number ILIKE 'IDEM-%' OR ref_number ILIKE 'ROLLBACK-%'
+  OR ref_number ILIKE 'DOC_RACE%' OR ref_number ILIKE 'PURCHASE-E2E-%' OR ref_number ILIKE 'INV-E2E-%'
+  OR ref_number ILIKE 'WOO-ORDER-%' OR ref_number ILIKE 'E2E-%' OR ref_number ILIKE 'TEST-%'
+  OR ref_number ILIKE 'V9-%' OR ref_number ILIKE 'V9\\_%' OR ref_number ILIKE 'DIAG-%'
+  OR notes ILIKE '%آزمایشی%' OR notes ILIKE '%E2E%' OR notes ILIKE '%تست%'
+  OR buyer_name ILIKE '%آزمایشی%' OR buyer_name ILIKE '%استرس%' OR buyer_name ILIKE '%مسابقه نهاییسازی%'
+  OR buyer_name ILIKE '%مشتری سازمانی تست%'
 )`;
 
 /** Synthetic-only item condition */
 const TEST_ITEM_COND = sql`(
   code ILIKE 'ITEM\\_%' OR code ILIKE 'STRESS-%' OR code ILIKE 'SILVER-%' OR code ILIKE 'NECKLACE-%'
   OR code ILIKE 'WOO-%' OR code ILIKE 'DIAG\\_%' OR code ILIKE 'V9\\_%' OR code ILIKE 'V9-%'
+  OR code ILIKE '1405-N-101-%' OR code ILIKE 'V10-CANARY-%'
   OR name ILIKE '%آزمایشی%' OR name ILIKE '%استرس%' OR name ILIKE '%فاز ۱۴%' OR name ILIKE '%فاز 14%'
+  OR name ILIKE '%تستی%'
 )`;
 
 export async function cleanupAllTestFixtures(): Promise<void> {
@@ -182,16 +187,16 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   try {
     await orm.execute(sql`DELETE FROM piecework_logs WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%') OR created_by_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR personnel_id IN (SELECT id FROM personnel WHERE full_name ILIKE '%آزمایشی%') OR notes ILIKE '%آزمایشی%'`);
     await orm.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%'`);
-    // Personnel: only synthetic names (real workshop staff names like طلاساز/استادکار are NEVER matched)
-    await orm.execute(sql`DELETE FROM personnel WHERE full_name ILIKE '%آزمایشی%' OR full_name ILIKE '%فاز ۱۴%' OR full_name ILIKE '%فاز 14%'`);
+    // Personnel: only synthetic names (real workshop staff names like طلاساز/استادکار/جعفر/ناهید are NEVER matched)
+    await orm.execute(sql`DELETE FROM personnel WHERE full_name ILIKE '%آزمایشی%' OR full_name ILIKE '%فاز ۱۴%' OR full_name ILIKE '%فاز 14%' OR full_name ILIKE 'پرسنل تستی%'`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning piecework fixtures: ${err.message}`);
   }
 
   // 3. Clear project dependencies & production projects (scoped)
   try {
-    await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR title ILIKE '%آزمایشی%' OR content ILIKE '%آزمایشی%'`);
-    await orm.execute(sql`DELETE FROM project_bom_allocations WHERE project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%') OR created_by_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%')`);
+    await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR title ILIKE '%آزمایشی%' OR title ILIKE '%تست%' OR content ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`);
     await orm.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`);
     await orm.execute(sql`DELETE FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%'`);
   } catch (err: any) {
@@ -200,8 +205,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 4. Clear CRM scoped
   try {
-    await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR company ILIKE '%آزمایشی%')`);
-    await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR company ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR title ILIKE '%تست%' OR company ILIKE '%آزمایشی%')`);
+    await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR title ILIKE '%تست%' OR company ILIKE '%آزمایشی%'`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning CRM fixtures: ${err.message}`);
   }
@@ -210,16 +215,22 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   // Synthetic-voucher condition (aliased as "v"): includes reversals of synthetic originals,
   // but NEVER a legit manual reversal referencing a real voucher.
   const TEST_VOUCHER_COND = sql`(
-      v.description ILIKE '%آزمایشی%' OR v.description ILIKE '%E2E%'
+      v.description ILIKE '%آزمایشی%' OR v.description ILIKE '%E2E%' OR v.description ILIKE '%تست%'
+      OR v.description ILIKE '%مسابقه نهاییسازی%' OR v.description ILIKE '%آزمون تغییرناپذیری%'
+      OR v.description ILIKE '%سند ابطال و برگشت جهت بازثبت%' OR v.description ILIKE '%سند بازثبت‌شده (Repost)%'
+      OR v.description ILIKE '%سند اولیه جهت تست برگشت%' OR v.description ILIKE '%سند آزمایشی متوازن%'
       OR v.reference_number ILIKE 'WOO-ORDER-%' OR v.reference_number ILIKE 'PURCHASE-E2E-%'
       OR v.reference_number ILIKE 'INV-E2E-%' OR v.reference_number ILIKE 'PAY-%' OR v.reference_number ILIKE 'V9-%'
+      OR v.reference_number ILIKE 'CP-FIN-%' OR v.reference_number ILIKE 'VOID-REPOST-%'
+      OR v.reference_number ILIKE 'REPOST-%' OR v.reference_number ILIKE 'REV-V%' OR v.reference_number ILIKE 'TEST-%'
       OR (v.reference_module = 'invoice' AND v.reference_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}))
       OR (v.reference_module = 'payroll' AND v.reference_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE '%آزمایشی%'))
       OR (v.voucher_type = 'adjustment' AND v.reference_id IN (
         SELECT o.id FROM journal_vouchers o
-        WHERE o.description ILIKE '%آزمایشی%' OR o.description ILIKE '%E2E%'
+        WHERE o.description ILIKE '%آزمایشی%' OR o.description ILIKE '%E2E%' OR o.description ILIKE '%تست%'
           OR o.reference_number ILIKE 'WOO-ORDER-%' OR o.reference_number ILIKE 'PURCHASE-E2E-%'
           OR o.reference_number ILIKE 'INV-E2E-%' OR o.reference_number ILIKE 'PAY-%' OR o.reference_number ILIKE 'V9-%'
+          OR o.reference_number ILIKE 'CP-FIN-%' OR o.reference_number ILIKE 'REV-V%'
           OR (o.reference_module = 'invoice' AND o.reference_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}))
       ))
     )`;
@@ -252,7 +263,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 7. Clear synthetic customers only
   try {
-    await orm.execute(sql`DELETE FROM customers WHERE name ILIKE '%آزمایشی%' OR name ILIKE '%طرف حساب آزمایشی%' OR notes ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM customers WHERE name ILIKE '%آزمایشی%' OR name ILIKE '%طرف حساب آزمایشی%' OR name ILIKE 'مشتری سازمانی تست%' OR name ILIKE '%تست برگشت حسابداری%' OR notes ILIKE '%آزمایشی%'`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning customer fixtures: ${err.message}`);
   }

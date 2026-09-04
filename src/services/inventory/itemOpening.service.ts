@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, DbExecutor } from '../../db/drizzle.js';
 import { items, journalVouchers, transactions } from '../../db/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { AccountMappingService } from '../accounting/accountMapping.service.js';
@@ -13,7 +13,7 @@ import type { JournalVoucher } from '../../types.js';
  * + اصلاح unitPrice تراکنش‌های «ثبت اولیه کالا» (قبلاً صفر ثبت می‌شد و WAC را خراب می‌کرد)
  */
 export class ItemOpeningService {
-  static async issueItemOpeningVoucher(itemId: number, params: { userId?: number; username?: string; tx?: any } = {}): Promise<JournalVoucher | null> {
+  static async issueItemOpeningVoucher(itemId: number, params: { userId?: number; username?: string; tx?: DbExecutor } = {}): Promise<JournalVoucher | null> {
     const executor = params.tx || orm;
     const [item] = await executor.select().from(items).where(eq(items.id, itemId));
     if (!item || item.isDeleted === 1) return null;
@@ -46,7 +46,7 @@ export class ItemOpeningService {
       await executor.update(transactions)
         .set({ unitPrice: wac })
         .where(and(eq(transactions.itemId, itemId), eq(transactions.documentType, 'audit')));
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.warn({ message: `Could not update audit tx unit price for item ${itemId}`, error: err });
     }
 

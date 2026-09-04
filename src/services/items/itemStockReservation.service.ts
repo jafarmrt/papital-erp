@@ -62,6 +62,31 @@ export interface ReservedStockInfo {
   }>;
 }
 
+interface InventoryControlItem {
+  itemCode?: string;
+  code?: string;
+  convertedReservedQty?: number;
+  convertedQty?: number;
+  reservedQty?: number;
+  warehouseStockQty?: number;
+  stockQty?: number;
+  itemId?: number | string;
+  unitPrice?: number;
+  itemName?: string;
+  name?: string;
+  category?: string;
+  convertedUnit?: string;
+  warehouseUnit?: string;
+  unit?: string;
+}
+
+interface InventoryControlData {
+  isFinalized?: boolean;
+  isReserved?: boolean;
+  reservedItems?: InventoryControlItem[];
+  purchaseList?: InventoryControlItem[];
+}
+
 export class ItemStockReservationService {
   /**
    * Auto-sync function to fix any existing items where current_stock > 0 but warehouse stocks sum to 0
@@ -208,7 +233,7 @@ export class ItemStockReservationService {
       }
 
       for (const proj of activeProjs) {
-        const invControl = proj.inventoryControl as any;
+        const invControl = proj.inventoryControl as InventoryControlData | null;
         if (!invControl) continue;
 
         if (invControl.isFinalized || invControl.isReserved || (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0)) {

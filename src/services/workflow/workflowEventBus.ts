@@ -22,7 +22,7 @@ export interface WorkflowTransitionEventPayload {
   performedBy?: number;
   performedByName?: string;
   comment?: string;
-  snapshotData?: Record<string, any>;
+  snapshotData?: Record<string, unknown>;
 }
 
 class WorkflowEventBusEmitter extends EventEmitter {}
@@ -51,8 +51,9 @@ export function registerWorkflowListeners() {
           changes: { instanceId: payload.instanceId, entityId: payload.entityId }
         }
       });
-    } catch (err: any) {
-      logger.error(`[WorkflowEventBus Audit] Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[WorkflowEventBus Audit] Error: ${errMsg}`);
     }
   });
 
@@ -115,8 +116,9 @@ export function registerWorkflowListeners() {
           { userId: payload.performedBy, userName: payload.performedByName }
         );
       }
-    } catch (err: any) {
-      logger.error(`[WorkflowEventBus Domain Bridge Error] ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[WorkflowEventBus Domain Bridge Error] ${errMsg}`);
     }
   });
 
@@ -124,8 +126,9 @@ export function registerWorkflowListeners() {
   workflowEventBus.on('TRANSITION_COMPLETED', async (payload: WorkflowTransitionEventPayload) => {
     try {
       logger.info(`[WorkflowEventBus Notification] Transition completed for entity ${payload.entityType}:${payload.entityId} -> ${payload.toStateKey}`);
-    } catch (err: any) {
-      logger.error(`[WorkflowEventBus Notification] Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[WorkflowEventBus Notification] Error: ${errMsg}`);
     }
   });
 
@@ -168,8 +171,9 @@ export function registerWorkflowListeners() {
       } else if (payload.autoActionKey) {
         logger.info(`[WorkflowEventBus AutoAction] Executing auto action '${payload.autoActionKey}' for ${payload.entityType}:${payload.entityId}`);
       }
-    } catch (err: any) {
-      logger.error(`[WorkflowEventBus AutoAction] Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[WorkflowEventBus AutoAction] Error: ${errMsg}`);
     }
   });
 }

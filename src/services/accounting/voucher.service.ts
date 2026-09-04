@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-orm';
 import type { JournalVoucher, JournalVoucherItem } from '../../types.js';
@@ -8,7 +8,7 @@ import { getTodayJalaliDate } from '../../utils.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError } from '../../errors/customErrors.js';
 
 export class VoucherService {
-  static async getNextVoucherNumber(tx?: any): Promise<number> {
+  static async getNextVoucherNumber(tx?: DbExecutor): Promise<number> {
     const executor = tx || orm;
     const result = await executor.execute(sql`SELECT nextval('journal_voucher_number_seq') AS num`);
     return Number(result.rows?.[0]?.num);
@@ -18,7 +18,7 @@ export class VoucherService {
    * Check whether the fiscal year corresponding to the voucher date is closed.
    * If closed, operations modifying or creating vouchers are prohibited.
    */
-  static async checkFiscalPeriodOpen(date: string, tx?: any): Promise<void> {
+  static async checkFiscalPeriodOpen(date: string, tx?: DbExecutor): Promise<void> {
     if (!date) return;
     const executor = tx || orm;
     // V10-1.2: year extraction unified on the Jalali fiscal key (business clock rule),
@@ -46,7 +46,7 @@ export class VoucherService {
   /**
    * Helper to check if a specific date or fiscal period is closed.
    */
-  static async isPeriodClosed(date: string, tx?: any): Promise<boolean> {
+  static async isPeriodClosed(date: string, tx?: DbExecutor): Promise<boolean> {
     if (!date) return false;
     try {
       await this.checkFiscalPeriodOpen(date, tx);
@@ -172,7 +172,7 @@ export class VoucherService {
     return { data, total, page, limit };
   }
 
-  static async getJournalVoucherById(id: number, tx?: any): Promise<JournalVoucher> {
+  static async getJournalVoucherById(id: number, tx?: DbExecutor): Promise<JournalVoucher> {
     const executor = tx || orm;
     const [v] = await executor.select().from(journalVouchers)
       .where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0)));
@@ -252,7 +252,7 @@ export class VoucherService {
       exchangeRate?: number;
       description?: string;
     }[];
-  }, externalTx?: any): Promise<JournalVoucher> {
+  }, externalTx?: DbExecutor): Promise<JournalVoucher> {
     if (!data.items || data.items.length < 2) {
       throw new ValidationError('سند دوبل حسابداری باید حداقل شامل دو ردیف (بدهکار و بستانکار) باشد');
     }
@@ -275,7 +275,7 @@ export class VoucherService {
       throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
     }
 
-    const executeWork = async (tx: any) => {
+    const executeWork = async (tx: DbExecutor) => {
       // Check if fiscal year is closed
       if (data.voucherType !== 'closing') {
         await this.checkFiscalPeriodOpen(data.date, tx);
@@ -344,8 +344,8 @@ export class VoucherService {
       exchangeRate?: number;
       description?: string;
     }[];
-  }, externalTx?: any): Promise<JournalVoucher> {
-    const executeWork = async (tx: any) => {
+  }, externalTx?: DbExecutor): Promise<JournalVoucher> {
+    const executeWork = async (tx: DbExecutor) => {
       const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.isDeleted === 1) throw new NotFoundError('سند حذف شده است');
@@ -449,7 +449,7 @@ export class VoucherService {
       reason?: string;
       userId?: number;
       username?: string;
-      externalTx?: any;
+      externalTx?: DbExecutor;
     },
     legacyOptions?: { date?: string; reason?: string; userId?: number; username?: string }
   ): Promise<JournalVoucher> {
@@ -465,7 +465,7 @@ export class VoucherService {
 
     const reversalDate = params.date?.trim() || original.date;
 
-    const execute = async (tx: any): Promise<number> => {
+    const execute = async (tx: DbExecutor): Promise<number> => {
       await this.checkFiscalPeriodOpen(reversalDate, tx);
 
       const nextNumber = await this.getNextVoucherNumber(tx);
@@ -547,19 +547,39 @@ export class VoucherService {
     legacyOptions?: {
       date?: string;
       reason: string;
-      newItems: any[];
+      newItems: Array<{
+        accountId: number;
+        detailedType?: string;
+        detailedId?: number | null;
+        detailedName?: string;
+        debit: number;
+        credit: number;
+        currency?: string;
+        exchangeRate?: number;
+        description?: string;
+      }>;
       newDescription?: string;
       userId?: number;
       username?: string;
     }
   ): Promise<{ reversalVoucher: JournalVoucher; correctedVoucher: JournalVoucher; message: string }> {
     const params = (typeof paramsOrId === 'number'
-      ? { voucherId: paramsOrId, ...(legacyOptions as any) }
+      ? { voucherId: paramsOrId, ...legacyOptions }
       : paramsOrId) as {
         voucherId: number;
         date?: string;
         reason: string;
-        newItems: any[];
+        newItems: Array<{
+          accountId: number;
+          detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
+          detailedId?: number | null;
+          detailedName?: string;
+          debit: number;
+          credit: number;
+          currency?: string;
+          exchangeRate?: number;
+          description?: string;
+        }>;
         newDescription?: string;
         userId?: number;
         username?: string;
@@ -728,7 +748,7 @@ export class VoucherService {
     const result = await orm.transaction(async (tx) => {
       const original = await this.getJournalVoucherById(params.voucherId, tx);
       if (!original) throw new Error('سند مبدا جهت بازثبت یافت نشد');
-      if ((original as any).isDeleted === 1) throw new Error('سند مبدا حذف شده است');
+      if (original.isDeleted === 1 || original.is_deleted === 1) throw new Error('سند مبدا حذف شده است');
 
       await this.checkFiscalPeriodOpen(original.date, tx);
       await this.checkFiscalPeriodOpen(repostDate, tx);

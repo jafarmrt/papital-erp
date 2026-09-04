@@ -42,11 +42,11 @@
 | TD-030 | FE Minor | ItemsTable colSpan=11 برای viewers (ستون عملیات مخفی) | ItemsTable.tsx:254 | resolved (Phase 2) |
 | TD-031 | FE Minor | دو نسخه واگرای parseMultiValue/formatMultiValue (Persian comma فقط در یکی) | ItemsTable.tsx:8-15 vs itemFormHelpers.ts:21-28 | resolved (Phase 2) |
 | TD-032 | UX | password visibility toggle + lockout countdown پیاده شد — فقط تست دستی E2E روی دیوایس موبایل باقی است | LoginPage.tsx | open |
-| TD-033 | Backend Types | ~۳۸۰ نقطه `: any` پسمانده در routes/services (FE-007 معادل بک‌اند اجرا نشده) | global | open |
-| TD-034 | Dates | daily_work_logs/piecework_logs و crm activity_date همچنان Jalali-native (طراحی محصولی فعلی؛ برای گزارش بین‌ماژولی آینده باید normalize شوند مثل فاز ۱.۲) | schema.ts multiple | open |
+| TD-033 | Backend Types | ~۳۸۰ نقطه `: any` در سرویس‌های رویداد، ورکفلو، ریکاوری، اکشن‌ها، تست‌ها و روت‌های اکسپرس پاکسازی و با تایپ‌های مستحکم جایگزین شد؛ بیلد و تایپ‌اسکریپت کاملاً سبز | services, routes, events, workflow | resolved (v2.8.4) |
+| TD-034 | Dates | استانداردسازی کامل تاریخ‌های میلادی ISO و نگارش همزمان (Dual-Write) در daily_work_logs, piecework_logs و crm_activities به همراه ایندکس‌ها و مایگریشن بک‌فیل | schema.ts multiple, migrator.ts | resolved (v2.8.5) |
 | TD-035 | Migrator | fallback سال مالی '2026' در backfill قدیمی migrator طی remap فاز ۱.۲ عملاً مهار شد؛ برای نصب‌های تازه مقدار اولیه seed review شود | migrator.ts(legacy backfill) | resolved-by-V10-1.2 |
-| TD-036 | DB Hygiene | داده‌های آزمایشی باقی‌مانده از اجراهای قبلی تستِ درون‌برنامه‌ای در دیتابیس زنده (اسناد E2E/V9 با آرتیکل حسابداری، کاربران pen_admin/testuser_/sec009_/v9_، آیتم‌های SILVER-/NECKLACE-، پرش شماره اسناد). نیاز به پاکسازی یک‌باره‌ی scoped (فقط پیشوندهای تستی، بدون DELETE کامل جداول workflow/outbox) با تأیید صریح کاربر — پرش شماره‌های گذشته قابل بازگشت نیست | live DB (papital_erp)؛ گیت پاکساز: dbTestHelper.ts:156 | open |
-| TD-037 | Test Runner UI | کامپوننت SystemTestRunner.tsx پس از v1.1.1 بدون اتصال است (تب اجرای تست حذف شد). راه‌حل آینده: اتصال مجدد تب به اجرای آزمون روی دیتابیس تست جداگانه (TEST_DATABASE_URL + پروسه فرزند run-tests.ts) تا اجرای درون‌برنامه‌ای هم ایمن شود | SystemTestRunner.tsx (unused) | open |
+| TD-036 | DB Hygiene | پاکسازی کامل داده‌های آزمایشی و تسویه‌نشده با اسکریپت `scripts/cleanup-test-data.ts`، حذف تمام اسناد، کاربران، آیتم‌ها، فیش‌ها و لاگ‌های تستی و همگام‌سازی سکوئنس‌ها و شمارنده‌های پایگاه‌داده به همراه اسکن سلامت ۱۲ گانه | scripts/cleanup-test-data.ts, dbTestHelper.ts | resolved (v2.8.6) |
+| TD-037 | Test Runner UI | حذف کامل کامپوننت بلااستفاده و کد مرده SystemTestRunner.tsx از فرانت‌اند، کاهش حجم باندل کلاینت و شفاف‌سازی مسیر رسمی اجرای آزمون‌ها (فقط CLI استاندارد `npm run test`) | SystemTestRunner.tsx (deleted) | resolved (v2.8.7) |
 
 ---
 

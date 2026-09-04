@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, DbExecutor } from '../../db/drizzle.js';
 import { appSettings, items, transactions } from '../../db/schema.js';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
@@ -35,7 +35,7 @@ export class NegativeStockPolicyService {
    * Retrieves the configured negative stock policy.
    * Default is 'forbidden' to protect ERP data integrity.
    */
-  static async getPolicy(externalTx?: any): Promise<NegativeStockPolicyType> {
+  static async getPolicy(externalTx?: DbExecutor): Promise<NegativeStockPolicyType> {
     const db = externalTx || orm;
     try {
       const [setting] = await db
@@ -55,7 +55,7 @@ export class NegativeStockPolicyService {
   /**
    * Updates the negative stock policy in app settings.
    */
-  static async setPolicy(policy: NegativeStockPolicyType, externalTx?: any): Promise<void> {
+  static async setPolicy(policy: NegativeStockPolicyType, externalTx?: DbExecutor): Promise<void> {
     const db = externalTx || orm;
     const [existing] = await db
       .select()
@@ -83,7 +83,7 @@ export class NegativeStockPolicyService {
       location?: string;
       requestedQty: number;
     },
-    externalTx?: any
+    externalTx?: DbExecutor
   ): Promise<NegativeStockCheckResult> {
     const db = externalTx || orm;
     const policy = await this.getPolicy(externalTx);

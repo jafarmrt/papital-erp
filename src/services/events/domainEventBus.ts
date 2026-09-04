@@ -8,7 +8,7 @@ import {
   validateDomainEvent
 } from './domainEvents.js';
 
-type DomainEventHandler<T = any> = (event: BaseDomainEvent<T>) => Promise<void> | void;
+type DomainEventHandler<T = unknown> = (event: BaseDomainEvent<T>) => Promise<void> | void;
 
 class DomainEventBusEmitter extends EventEmitter {
   private recentEvents: BaseDomainEvent[] = [];
@@ -42,7 +42,7 @@ class DomainEventBusEmitter extends EventEmitter {
   /**
    * Publish a domain event to all registered in-memory subscribers
    */
-  async publish<T = any>(event: BaseDomainEvent<T>): Promise<void> {
+  async publish<T = unknown>(event: BaseDomainEvent<T>): Promise<void> {
     try {
       // 0. Validate contract
       const validation = validateDomainEvent(event);
@@ -64,15 +64,16 @@ class DomainEventBusEmitter extends EventEmitter {
 
       // 3. Emit wildcard / all events
       this.emit('*', event);
-    } catch (err: any) {
-      logger.error(`[DomainEventBus Publish Error] Failed to dispatch event ${event.eventType}: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[DomainEventBus Publish Error] Failed to dispatch event ${event.eventType}: ${errMsg}`);
     }
   }
 
   /**
    * Helper to construct and immediately publish a domain event
    */
-  async publishEvent<T = any>(
+  async publishEvent<T = unknown>(
     eventType: DomainEventType | string,
     aggregateType: BaseDomainEvent['aggregateType'],
     aggregateId: string,
@@ -87,14 +88,16 @@ class DomainEventBusEmitter extends EventEmitter {
   /**
    * Strongly typed subscription
    */
-  subscribe<T = any>(eventType: DomainEventType | string, handler: DomainEventHandler<T>): void {
+  subscribe<T = unknown>(eventType: DomainEventType | string, handler: DomainEventHandler<T>): void {
     this.on(eventType, async (event: BaseDomainEvent<T>) => {
       try {
         await handler(event);
-      } catch (err: any) {
-        logger.error(`[DomainEventBus Handler Error] Error in handler for ${eventType}: ${err.message}`, {
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const errStack = err instanceof Error ? err.stack : undefined;
+        logger.error(`[DomainEventBus Handler Error] Error in handler for ${eventType}: ${errMsg}`, {
           eventId: event.eventId,
-          error: err.stack
+          error: errStack
         });
       }
     });
@@ -107,8 +110,9 @@ class DomainEventBusEmitter extends EventEmitter {
     this.on('*', async (event: BaseDomainEvent) => {
       try {
         await handler(event);
-      } catch (err: any) {
-        logger.error(`[DomainEventBus All Handler Error] Error in wildcard handler: ${err.message}`);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.error(`[DomainEventBus All Handler Error] Error in wildcard handler: ${errMsg}`);
       }
     });
   }
