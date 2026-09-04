@@ -224,6 +224,7 @@ export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUp
           project={project}
           purchaseList={purchaseList}
           isFinalized={isFinalized}
+          warehouseItems={warehouseItems}
           handleAddManualPurchaseRow={handleAddManualPurchaseRow}
           handlePrintPurchaseListWithCheck={handlePrintPurchaseListWithCheck}
           handleUpdateManualPurchaseItem={handleUpdateManualPurchaseItem}

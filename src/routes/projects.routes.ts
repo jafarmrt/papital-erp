@@ -77,14 +77,28 @@ const updateProjectSchema = z.object({
 });
 
 const addProjectToInventorySchema = z.object({
-  body: z.object({
+  body: z.preprocess((val: any) => {
+    if (val && typeof val === 'object' && !val.itemsToAdd && (val.itemId || val.item_id)) {
+      return {
+        itemsToAdd: [{
+          itemId: val.itemId || val.item_id,
+          quantity: val.quantity,
+          location: val.location,
+          notes: val.description || val.notes
+        }],
+        markCompleted: Boolean(val.markCompleted)
+      };
+    }
+    return val;
+  }, z.object({
     itemsToAdd: z.array(z.object({
       itemId: z.union([z.number(), z.string()]),
       quantity: z.union([z.number(), z.string()]),
+      location: z.string().optional(),
       notes: z.string().optional()
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
     markCompleted: z.boolean().optional()
-  }),
+  })),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
   })
@@ -729,7 +743,11 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}`
     });
 
-    res.json({ message: 'محصولات با موفقیت به موجودی انبار افزوده شدند', addedCount: result.addedCount });
+    res.json({
+      success: true,
+      message: 'محصولات با موفقیت به موجودی انبار افزوده شدند',
+      addedCount: result.addedCount
+    });
   } catch (err) {
     throw err;
   }

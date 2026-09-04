@@ -70,10 +70,10 @@ export default function InventoryRebuildModal({
             </div>
             <div>
               <h3 className="font-bold text-slate-800 text-lg">
-                تطبیق ۳ جانبه و بازسازی هوشمند موجودی (Ledger Rebuild)
+                همگام‌سازی و بازسازی موجودی از روی کاردکس
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                تجدید محاسبه اتمیک موجودی انبارها و قیمت میانگین موزون بر مبنای دفتر رویدادهای کاردکس
+                محاسبه مجدد مانده کالاها در انبارها و میانگین بهای خرید بر مبنای اسناد و فاکتورها
               </p>
             </div>
           </div>
@@ -121,7 +121,7 @@ export default function InventoryRebuildModal({
                   </div>
                 </div>
                 <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
-                  <div className="text-[11px] text-blue-700">میانگین موزون اصلاح‌شده</div>
+                  <div className="text-[11px] text-blue-700">بهای میانگین اصلاح‌شده</div>
                   <div className="text-base font-bold text-blue-900 font-mono mt-1">
                     {formatPersianNumber(resultData.wacRepairedCount || 0)}
                   </div>
@@ -167,12 +167,10 @@ export default function InventoryRebuildModal({
               <div className="bg-blue-50/70 border border-blue-200 p-4 rounded-xl text-xs space-y-2 text-blue-900">
                 <div className="flex items-center gap-2 font-bold text-blue-800">
                   <ShieldCheck size={16} />
-                  <span>مکانیزم تطبیق سه‌جانبه (Three-Way Ledger Sourcing)</span>
+                  <span>نحوه عملکرد بازسازی موجودی</span>
                 </div>
                 <p className="leading-relaxed text-slate-600">
-                  این فرآیند کلیه اسناد ورود، خروج، انتقالات و انبارگردانی‌های تاریخچه را به صورت توالی زمانی پردازش کرده و مقادیر ستون‌های 
-                  <span className="font-mono font-bold text-blue-800 mx-1">current_stock</span> و ساختار 
-                  <span className="font-mono font-bold text-blue-800 mx-1">stocks (JSONB)</span> را با قطعیت ۱۰۰٪ بازسازی و همگام می‌سازد.
+                  این فرآیند کلیه اسناد ورود، خروج، حواله‌های انتقال و انبارگردانی‌ها را به ترتیب تاریخ پردازش کرده و موجودی کل کالا و موجودی هر انبار را بر مبنای کاردکس واقعی اسناد به‌روزرسانی و همگام می‌سازد.
                 </p>
               </div>
 
@@ -242,11 +240,11 @@ export default function InventoryRebuildModal({
                     className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
                   />
                   <span className="font-bold text-slate-800">
-                    تجدید محاسبه و اصلاح میانگین موزون قیمت (WAC) از اسناد خرید و رسیدهای انبار
+                    محاسبه مجدد میانگین بهای خرید از روی فاکتورها و رسیدهای انبار
                   </span>
                 </label>
                 <p className="text-[11px] text-slate-500 mr-6">
-                  قیمت تمام‌شده میانگین موزون را بر اساس مبالغ ریالی ثبت‌شده در زنجیره رسیدها بازسازی می‌کند.
+                  میانگین بهای خرید کالا را بر اساس مبالغ ریالی ثبت‌شده در فاکتورهای خرید بازسازی می‌کند.
                 </p>
               </div>
             </>

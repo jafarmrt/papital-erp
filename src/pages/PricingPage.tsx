@@ -305,7 +305,7 @@ export default function PricingPage({ user }: { user: User }) {
           'نوع کالا': item.type === 'product' ? 'محصول نهایی' : 'ماده اولیه',
           'موجودی کل': item.current_stock || 0,
           'واحد شمارش': item.unit || 'عدد',
-          'قیمت میانگین خرید (WAC)': item.weighted_average_cost || 0,
+          'میانگین بهای خرید': item.weighted_average_cost || 0,
         };
 
         let rowCurrency = 'IRR';

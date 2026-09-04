@@ -359,7 +359,7 @@ export default function ReorderAlertsPage({ user }: { user: User }) {
                   <th className="p-3.5 text-center">موجودی فعلی</th>
                   <th className="p-3.5 text-center">نقطه سفارش (آستانه)</th>
                   <th className="p-3.5 text-center">میزان کسری تامین</th>
-                  <th className="p-3.5 text-center">قیمت تمام‌شده (WAC)</th>
+                  <th className="p-3.5 text-center">میانگین بهای خرید</th>
                   <th className="p-3.5 text-center">برآورد هزینه کسری</th>
                   <th className="p-3.5 text-center print:hidden">عملیات تامین</th>
                 </tr>

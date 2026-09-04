@@ -314,14 +314,14 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
         'نام کالا': i.itemName,
         'دسته‌بندی': i.category,
         'واحد': i.unit,
-        'موجودی اسمی (Current Stock)': i.currentStock,
-        'مجموع انبارهای تفکیکی (JSONB)': i.warehouseStocksSum,
-        'موجودی کاردکس (Ledger)': i.ledgerStock,
+        'موجودی کل کالا': i.currentStock,
+        'مجموع موجودی انبارها': i.warehouseStocksSum,
+        'مانده کاردکس': i.ledgerStock,
         'مغایرت مقداری': i.variance,
         'وضعیت تطبیق': i.isSynchronized ? 'منطبق' : i.discrepancyType,
         'تعداد تراکنش‌ها': i.transactionCount,
-        'میانگین موزون ذخیره‌شده (WAC)': i.storedWac,
-        'میانگین موزون بازسازی‌شده': i.recalculatedWac
+        'میانگین بهای خرید': i.storedWac,
+        'میانگین بهای بازسازی‌شده': i.recalculatedWac
       }));
 
       const ws = xlsx.utils.json_to_sheet(rows);
@@ -364,10 +364,10 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                مرکز یکپارچگی انبار و انبارگردانی (Inventory Integrity & Kardex)
+                مدیریت انبارگردانی و انطباق موجودی
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                تطبیق ۳ جانبه موجودی، کاردکس لحظه‌ای، ثبت انبارگردانی فیزیکی و انتقال بین انبارها
+                تطبیق موجودی، کاردکس لحظه‌ای، ثبت انبارگردانی دوره‌ای و انتقال بین انبارها
               </p>
             </div>
           </div>
@@ -379,9 +379,10 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
                 setShowRebuildModal(true);
               }}
               className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+              title="محاسبه مجدد مانده کالاها از روی کاردکس اسناد"
             >
               <RotateCcw size={15} />
-              <span>تطبیق و بازسازی هوشمند انبار</span>
+              <span>بازسازی موجودی از روی کاردکس</span>
             </button>
 
             <button
@@ -405,7 +406,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             }`}
           >
             <ShieldCheck size={16} />
-            <span>ماتریس سلامت و تطبیق ۳ جانبه کاردکس</span>
+            <span>بررسی سلامت و تطبیق موجودی</span>
             {integrityReport?.summary?.discrepancyItems > 0 && (
               <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
                 {integrityReport.summary.discrepancyItems}
@@ -422,7 +423,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             }`}
           >
             <ClipboardCheck size={16} />
-            <span>ثبت انبارگردانی فیزیکی دوره</span>
+            <span>شمارش و ثبت انبارگردانی</span>
           </button>
 
           <button
@@ -434,7 +435,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             }`}
           >
             <Layers size={16} />
-            <span>سوابق اسناد انبارگردانی</span>
+            <span>سوابق دوره‌ها</span>
           </button>
 
           <button
@@ -446,7 +447,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             }`}
           >
             <ArrowLeftRight size={16} />
-            <span>سوابق حواله‌های انتقال بین انبارها</span>
+            <span>حواله‌های انتقال</span>
           </button>
 
           <button
@@ -458,7 +459,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
             }`}
           >
             <Boxes size={16} />
-            <span>تخصیص مواد اولیه BOM و ردگیری منبع</span>
+            <span>تخصیص مواد به پروژه‌ها</span>
           </button>
         </div>
       </div>

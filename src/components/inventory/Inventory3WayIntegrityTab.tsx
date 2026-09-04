@@ -105,7 +105,7 @@ export function Inventory3WayIntegrityTab({
             </span>
             <span className="text-xs text-slate-500">قلم کالا</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">اختلاف اسمی با کاردکس یا JSONB</p>
+          <p className="text-[11px] text-slate-400 mt-1">اختلاف موجودی کالا با گردش فاکتورها یا انبارها</p>
         </div>
 
         {/* Negative Stocks Alert */}
@@ -133,7 +133,7 @@ export function Inventory3WayIntegrityTab({
             <div className="text-lg font-black text-slate-900 font-mono truncate">
               {formatPersianPrice(integrityReport?.summary?.totalInventoryValuationStored || 0)}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">{`${curLbl} (مبتنی بر WAC)`}</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">{`${curLbl} (بر مبنای میانگین بهای خرید)`}</div>
           </div>
         </div>
       </div>
@@ -143,7 +143,7 @@ export function Inventory3WayIntegrityTab({
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 font-bold text-slate-200">
             <Warehouse size={18} className="text-blue-400" />
-            <span className="text-sm">توزیع موجودی در انبارها و انطباق کاردکس</span>
+            <span className="text-sm">توزیع موجودی در انبارها و انطباق با کاردکس</span>
           </div>
           <span className="text-slate-400 text-xs">
             تعداد انبارهای فعال: {integrityReport?.warehouses?.length || 0}
@@ -156,7 +156,7 @@ export function Inventory3WayIntegrityTab({
             return (
               <div key={wh.code} className="bg-slate-800/90 border border-slate-700/60 p-3 rounded-xl text-xs space-y-1.5">
                 <div className="flex justify-between items-center text-slate-200 font-bold">
-                  <span>{wh.name} ({wh.code})</span>
+                  <span>{wh.name}</span>
                   {isBalanced ? (
                     <span className="text-emerald-400 text-[10px] bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">
                       ✓ همگام
@@ -168,11 +168,11 @@ export function Inventory3WayIntegrityTab({
                   )}
                 </div>
                 <div className="flex justify-between items-center text-slate-400 text-[11px]">
-                  <span>ثبت جاری:</span>
+                  <span>موجودی در انبار:</span>
                   <span className="font-mono text-slate-200 font-bold">{formatPersianNumber(wh.totalStockJsonb)}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-400 text-[11px]">
-                  <span>کاردکس:</span>
+                  <span>گردش کاردکس:</span>
                   <span className="font-mono text-slate-200">{formatPersianNumber(wh.totalStockLedger)}</span>
                 </div>
               </div>
@@ -202,19 +202,28 @@ export function Inventory3WayIntegrityTab({
               type="checkbox"
               checked={integrityDiscrepancyOnly}
               onChange={(e) => setIntegrityDiscrepancyOnly(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
             />
-            <span>فقط نمایش موارد دارای مغایرت و عدم انطباق</span>
+            <span>فقط نمایش اقلام دارای مغایرت</span>
           </label>
         </div>
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => onOpenRebuildModal()}
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+            title="همگام‌سازی و بازسازی کاتالوگ بر مبنای کاردکس"
+          >
+            <RotateCcw size={15} />
+            <span>بازسازی موجودی از کاردکس</span>
+          </button>
+
+          <button
             onClick={onExportExcel}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
           >
             <Download size={15} />
-            <span>خروجی اکسل گزارش سلامت</span>
+            <span>خروجی اکسل</span>
           </button>
 
           <button
@@ -222,7 +231,7 @@ export function Inventory3WayIntegrityTab({
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
           >
             <RefreshCw size={15} className={integrityLoading ? "animate-spin" : ""} />
-            <span>به‌روزرسانی جدول</span>
+            <span>به‌روزرسانی</span>
           </button>
         </div>
       </div>
@@ -238,18 +247,18 @@ export function Inventory3WayIntegrityTab({
                 <th className="py-3 px-4">نام کالا و دسته‌بندی</th>
                 <th className="py-3 px-3 text-center">واحد</th>
                 <th className="py-3 px-3 text-center bg-blue-50/60 text-blue-900 border-x border-blue-100">
-                  موجودی اسمی (Current)
+                  موجودی کل کالا
                 </th>
                 <th className="py-3 px-3 text-center bg-indigo-50/60 text-indigo-900 border-x border-indigo-100">
-                  تفکیک انبارها (JSONB)
+                  مجموع موجودی انبارها
                 </th>
                 <th className="py-3 px-3 text-center bg-amber-50/60 text-amber-900 border-x border-amber-100">
-                  موجودی کاردکس (Ledger)
+                  مانده گردش کاردکس
                 </th>
                 <th className="py-3 px-3 text-center">مغایرت مقداری</th>
-                <th className="py-3 px-3 text-center">میانگین موزون (WAC)</th>
+                <th className="py-3 px-3 text-center">میانگین بهای خرید</th>
                 <th className="py-3 px-3 text-center">وضعیت انطباق</th>
-                <th className="py-3 px-3 text-center">عملیات اصلاحی</th>
+                <th className="py-3 px-3 text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -257,13 +266,23 @@ export function Inventory3WayIntegrityTab({
                 <tr>
                   <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
                     <RefreshCw className="animate-spin inline-block mr-2" size={16} />
-                    در حال ممیزی و محاسبات تطبیقی ۳ جانبه انبار و کاردکس...
+                    در حال ممیزی و محاسبات تطبیقی انبار و کاردکس...
                   </td>
                 </tr>
               ) : filteredIntegrityItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
-                    هیچ کالایی با فیلترهای انتخابی یافت نشد.
+                  <td colSpan={11} className="py-12 text-center">
+                    {integrityDiscrepancyOnly && (integrityReport?.summary?.discrepancyItems || 0) === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2 text-emerald-700">
+                        <CheckCircle2 size={36} className="text-emerald-600" />
+                        <span className="font-bold text-sm">تمام موجودی‌ها کاملاً تراز و منطبق هستند</span>
+                        <p className="text-xs text-slate-500 max-w-md">
+                          هیچ‌گونه مغایرتی بین موجودی کل کالاها، مجموع انبارها و کاردکس فاکتورها وجود ندارد.
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 font-medium">هیچ کالایی با فیلترهای انتخابی یافت نشد.</span>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -291,7 +310,7 @@ export function Inventory3WayIntegrityTab({
                         {formatPersianNumber(item.currentStock)}
                       </td>
 
-                      {/* JSONB Sum */}
+                      {/* Warehouse Sum */}
                       <td className="py-3 px-3 text-center font-mono font-bold bg-indigo-50/30 border-x border-indigo-100 text-indigo-900">
                         {formatPersianNumber(item.warehouseStocksSum)}
                       </td>
@@ -328,12 +347,17 @@ export function Inventory3WayIntegrityTab({
                         {item.isSynchronized ? (
                           <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
                             <CheckCircle2 size={13} />
-                            <span>کامل منطبق</span>
+                            <span>منطبق</span>
+                          </span>
+                        ) : item.variance < 0 ? (
+                          <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 text-[11px] font-bold px-2 py-0.5 rounded-full" title={item.discrepancyType}>
+                            <AlertTriangle size={13} />
+                            <span>کسری در انبار</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full" title={item.discrepancyType}>
-                            <XCircle size={13} />
-                            <span>دارای عدم انطباق</span>
+                            <AlertTriangle size={13} />
+                            <span>مازاد در انبار</span>
                           </span>
                         )}
                       </td>

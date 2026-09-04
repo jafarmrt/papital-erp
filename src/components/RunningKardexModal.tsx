@@ -99,7 +99,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'انبار / موقعیت': e.location,
         'مانده در این انبار': e.runningLocationStock,
         'مانده کل موجودی': e.runningGlobalStock ?? e.runningBalance,
-        'بهای میانگین موزون (WAC)': e.runningWac,
+        'میانگین بهای خرید': e.runningWac,
         'ارزش کل مانده': e.runningTotalValue,
         'شماره سند/عطف': e.documentRef,
         'نوع سند': e.documentType,
@@ -129,7 +129,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
             </div>
             <div>
               <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                کاردکس لحظه‌ای و گردش کالا (Running Kardex Ledger)
+                کاردکس و ریز گردش کالا
                 {data?.item && (
                   <span className="text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full font-bold">
                     {data.item.code}
@@ -137,7 +137,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                 )}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                ردیابی جریان مقداری و ریالی، مانده متوالی بعد از هر تراکنش و بهای تمام‌شده میانگین موزون (WAC)
+                ردیابی جریان مقداری و ریالی، مانده متوالی بعد از هر تراکنش و میانگین بهای خرید
               </p>
             </div>
           </div>
@@ -223,7 +223,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                 {/* Valuation */}
                 <div className="bg-amber-50/70 border border-amber-200 p-4 rounded-xl space-y-1 text-xs">
                   <div className="flex justify-between items-center text-amber-900">
-                    <span>میانگین موزون (WAC):</span>
+                    <span>میانگین بهای خرید:</span>
                     <strong className="text-amber-950 font-mono">{formatPersianPrice(data.item?.weightedAverageCost, appCurrency)}</strong>
                   </div>
                   <div className="flex justify-between items-center text-slate-500">
@@ -318,7 +318,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                       <th className="p-3 text-center">مانده انبار</th>
                       <th className="p-3 text-center">مانده کل لحظه‌ای</th>
                       <th className="p-3 text-center">قیمت واحد</th>
-                      <th className="p-3 text-center">WAC لحظه‌ای</th>
+                      <th className="p-3 text-center">میانگین بهای خرید</th>
                       <th className="p-3">شماره سند / عطف</th>
                       <th className="p-3">توضیحات و کاربر</th>
                     </tr>
@@ -390,7 +390,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         {/* Modal Footer */}
         <div className="p-4 border-t bg-slate-50 flex items-center justify-between">
           <div className="text-xs text-slate-500">
-            سیستم تطبیق لحظه‌ای زنجیره کاردکس کالا - ERP Enterprise Core
+            ردگیری دقیق زنجیره تراکنش‌ها و اسناد کاردکس کالا
           </div>
           <button
             onClick={onClose}

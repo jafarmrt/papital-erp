@@ -355,7 +355,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-700 font-bold">
                 <th className="py-3 px-3 text-center">شناسه</th>
                 <th className="py-3 px-3">کد و عنوان پروژه</th>
-                <th className="py-3 px-4">ماده اولیه (BOM Item)</th>
+                <th className="py-3 px-4">ماده اولیه مصرفی</th>
                 <th className="py-3 px-3 text-center">مقدار و واحد</th>
                 <th className="py-3 px-3 text-center">انبار مبداء</th>
                 <th className="py-3 px-3 text-center">شناسه سند کاردکس</th>
@@ -447,7 +447,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
                         <button
                           onClick={() => setSelectedAllocForTrace(alloc)}
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                          title="مشاهده شناسنامه ردگیری منبع (Traceability)"
+                          title="مشاهده شناسنامه ردگیری منبع"
                         >
                           <FileText size={15} />
                         </button>
@@ -487,7 +487,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-slate-800 font-black">
                 <FileText className="text-blue-600" size={20} />
-                <span>شناسنامه ردگیری تخصیص مواد (BOM Traceability)</span>
+                <span>شناسنامه ردگیری تخصیص مواد به پروژه</span>
               </div>
               <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-bold">
                 #{selectedAllocForTrace.id}
@@ -513,7 +513,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
               <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl space-y-2">
                 <div className="text-slate-700 font-bold flex items-center gap-1.5">
                   <Warehouse size={14} className="text-slate-500" />
-                  <span>ردگیری سند کاردکس مبداء (Source Inventory Transaction):</span>
+                  <span>ردگیری سند کاردکس مبداء:</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-slate-600 pt-1">
                   <div>
@@ -656,7 +656,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
               {/* Raw Material Select */}
               <div>
-                <label className="block text-slate-700 font-bold mb-1">ماده اولیه / قطعه (Raw Material):</label>
+                <label className="block text-slate-700 font-bold mb-1">ماده اولیه / قطعه مصرفی:</label>
                 <select
                   value={selectedItemId}
                   onChange={(e) => setSelectedItemId(Number(e.target.value))}

@@ -152,7 +152,7 @@ export default function GalleryPage({ user }: { user: User }) {
                     موجودی: {formatPersianNumber(stock)} {item.unit || ''}
                   </span>
                   <span className="text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-md truncate" title="میانگین موزون بهای تمام‌شده">
-                    WAC: {formatPersianPrice(wacVal, itemCurrency)}
+                    میانگین خرید: {formatPersianPrice(wacVal, itemCurrency)}
                   </span>
                 </div>
               </div>

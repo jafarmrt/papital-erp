@@ -22,17 +22,27 @@ interface ProjectDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: () => void;
+  onEditProject?: (project: ProductionProject) => void;
+  initialTab?: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock';
 }
 
 export default function ProjectDetailModal({
   projectId,
   isOpen,
   onClose,
-  onUpdate
+  onUpdate,
+  onEditProject,
+  initialTab = 'overview'
 }: ProjectDetailModalProps) {
   const [project, setProject] = useState<ProductionProject | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab && isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
 
   // Backend metadata state
   const [itemsList, setItemsList] = useState<Item[]>([]);
@@ -212,12 +222,25 @@ export default function ProjectDetailModal({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onEditProject && project && (
+              <button
+                type="button"
+                onClick={() => onEditProject(project)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
+                title="ویرایش مشخصات اصلی پروژه"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>ویرایش پروژه</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}

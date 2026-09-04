@@ -70,7 +70,7 @@ export function ItemsTable({
                 نقطه سفارش {sortConfig?.key === 'reorder_point' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
               </th>
               <th className="p-3 text-center cursor-pointer hover:bg-slate-200/80 transition-colors" onClick={() => requestSort('weighted_average_cost')}>
-                ارزش خرید متحرک (WAC) {sortConfig?.key === 'weighted_average_cost' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                میانگین بهای خرید {sortConfig?.key === 'weighted_average_cost' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
               </th>
               <th className="p-3 text-center cursor-pointer hover:bg-slate-200/80 transition-colors" onClick={() => requestSort('current_stock')}>
                 وضعیت موجودی {sortConfig?.key === 'current_stock' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}

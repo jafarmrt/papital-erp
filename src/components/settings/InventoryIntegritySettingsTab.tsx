@@ -54,9 +54,9 @@ export function InventoryIntegritySettingsTab() {
         'نام کالا': i.itemName,
         'دسته‌بندی': i.category || '-',
         'واحد': i.unit,
-        'موجودی کل (Current Stock)': i.globalCurrentStock ?? i.currentStock,
+        'موجودی کل کالا': i.globalCurrentStock ?? i.currentStock,
         'موجودی انبار تفکیکی': i.locationStock ?? i.warehouseStocksSum,
-        'موجودی کاردکس (Ledger)': i.kardexStock ?? i.ledgerStock,
+        'مانده گردش کاردکس': i.kardexStock ?? i.ledgerStock,
         'موجودی اسناد': i.documentsStock ?? '-',
         'وضعیت سلامت': i.isHealthy || i.isSynchronized ? 'سالم و منطبق' : 'دارای مغایرت',
         'مغایرت‌ها': Array.isArray(i.discrepancies) ? i.discrepancies.join(' | ') : (i.discrepancyType || '-')

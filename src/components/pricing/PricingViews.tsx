@@ -61,7 +61,7 @@ export function PricingGridView(props: PricingViewsShared) {
 
             {/* Weighted Average Cost info */}
             <div className="px-4 py-2 bg-slate-100/60 border-b flex justify-between items-center text-[11px]">
-               <span className="text-slate-500">قیمت تمام‌شده خرید (WAC):</span>
+               <span className="text-slate-500">میانگین بهای خرید:</span>
                <span className="font-bold font-mono text-slate-700">
                  {(item as any).weighted_average_cost ? formatPersianPrice((item as any).weighted_average_cost, appCurrency) : 'تعریف‌نشده'}
                </span>
@@ -165,7 +165,7 @@ export function PricingTableView(props: PricingViewsShared) {
             <th className="p-3">کد کالا</th>
             <th className="p-3">نام کالا</th>
             <th className="p-3">دسته</th>
-            <th className="p-3">قیمت خرید (WAC)</th>
+            <th className="p-3">میانگین بهای خرید</th>
             {strategies.map(st => (
               <th key={st} className="p-3">{formatStrategyDisplayTitle(st)}</th>
             ))}

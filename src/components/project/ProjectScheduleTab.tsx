@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Calendar, Clock, Plus, Trash2, Check, RefreshCw, 
   Wrench, Layers, Tag, DollarSign, Calculator, HelpCircle,
-  Sparkles, Search, UserCheck, X, FileSpreadsheet, Shield
+  Sparkles, Search, UserCheck, X, FileSpreadsheet, Shield,
+  CheckCircle2, Coins, TrendingUp, Briefcase, ChevronDown, ChevronUp
 } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -43,6 +44,12 @@ export default function ProjectScheduleTab({
     taskIdx: number;
   } | null>(null);
   const [personnelSearch, setPersonnelSearch] = useState<string>('');
+
+  // State for Piecework Logs integration
+  const [recordedLogs, setRecordedLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [loggingTaskId, setLoggingTaskId] = useState<string | null>(null);
+  const [batchLoggingStageId, setBatchLoggingStageId] = useState<number | null>(null);
 
   // Load latest presets and personnel if missing
   useEffect(() => {
@@ -353,6 +360,155 @@ export default function ProjectScheduleTab({
     setPersonnelSearch('');
   };
 
+  // Fetch piecework logs recorded for this project
+  const fetchProjectPieceworkLogs = async () => {
+    if (!project.id) return;
+    setLoadingLogs(true);
+    try {
+      const res = await fetchJson<any[]>(`/piecework/logs?projectId=${project.id}`);
+      const list = Array.isArray(res) ? res : ((res as any)?.data || []);
+      setRecordedLogs(list);
+    } catch (err) {
+      console.error('Failed to load project piecework logs:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjectPieceworkLogs();
+  }, [project.id]);
+
+  // Log single task to Piecework Logs
+  const handleLogSingleTaskToPiecework = async (
+    stageId: number,
+    productId: string,
+    taskIdx: number,
+    task: TaskAssignmentItem
+  ) => {
+    if (!task.assignedPersonnelId) {
+      toast.error('لطفاً ابتدا پرسنل مجری را برای این وظیفه تعیین کنید.');
+      return;
+    }
+    if (!task.taskId) {
+      toast.error('لطفاً یک عنوان کارمزدی معتبر از لیست انتخاب کنید.');
+      return;
+    }
+    if (!task.quantity || task.quantity <= 0) {
+      toast.error('تعداد کارکرد باید بزرگتر از صفر باشد.');
+      return;
+    }
+
+    const taskKey = task.id || `${stageId}-${productId}-${taskIdx}`;
+    setLoggingTaskId(taskKey);
+
+    try {
+      const payload = {
+        items: [
+          {
+            personnelId: task.assignedPersonnelId,
+            taskId: task.taskId,
+            projectId: project.id,
+            date: task.startDate || new Date().toLocaleDateString('fa-IR'),
+            quantity: Number(task.quantity),
+            unitRate: Number(task.defaultRate) || 0,
+            notes: `کارکرد پروژه ${project.project_code || project.title} - ${task.taskTitle}`
+          }
+        ]
+      };
+
+      const res = await fetchJson<{ status: string; insertedCount?: number }>('/piecework/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res?.status === 'ok' || (res as any)?.insertedCount) {
+        toast.success(`کارکرد «${task.taskTitle}» برای ${task.assignedPersonnelName || 'پرسنل'} در ماژول کارمزدی ثبت شد.`);
+
+        // Mark task as logged
+        updateProductSchedule(stageId, productId, prev => {
+          const tasks = [...(prev.tasks || [])];
+          if (tasks[taskIdx]) {
+            tasks[taskIdx] = { ...tasks[taskIdx], isLoggedToPiecework: true };
+          }
+          return { ...prev, tasks };
+        });
+
+        fetchProjectPieceworkLogs();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'خطا در ثبت کارکرد کارمزدی');
+    } finally {
+      setLoggingTaskId(null);
+    }
+  };
+
+  // Batch log all unlogged tasks in a stage
+  const handleBatchLogStageTasks = async (stageId: number, stageTitle: string) => {
+    const stageSchedules = schedulesMap[stageId] || {};
+    const itemsToLog: any[] = [];
+    const targetsToUpdate: { productId: string; taskIdx: number }[] = [];
+
+    Object.entries(stageSchedules).forEach(([prodId, pSched]) => {
+      const schedule = pSched as ProductStageSchedule;
+      (schedule?.tasks || []).forEach((t, idx) => {
+        if (t.assignedPersonnelId && t.taskId && Number(t.quantity) > 0 && !t.isLoggedToPiecework) {
+          itemsToLog.push({
+            personnelId: t.assignedPersonnelId,
+            taskId: t.taskId,
+            projectId: project.id,
+            date: t.startDate || new Date().toLocaleDateString('fa-IR'),
+            quantity: Number(t.quantity),
+            unitRate: Number(t.defaultRate) || 0,
+            notes: `کارکرد مرحله «${stageTitle}» پروژه ${project.project_code || project.title} - ${t.taskTitle}`
+          });
+          targetsToUpdate.push({ productId: prodId, taskIdx: idx });
+        }
+      });
+    });
+
+    if (itemsToLog.length === 0) {
+      toast.error('هیچ وظیفه ثبت‌نشده‌ای با پرسنل و عنوان کارمزدی معتبر در این مرحله یافت نشد.');
+      return;
+    }
+
+    setBatchLoggingStageId(stageId);
+    try {
+      const res = await fetchJson<{ status: string; insertedCount?: number }>('/piecework/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToLog })
+      });
+
+      if (res?.status === 'ok' || (res as any)?.insertedCount) {
+        toast.success(`تعداد ${itemsToLog.length} رکورد کارکرد برای مرحله «${stageTitle}» با موفقیت ثبت شد.`);
+
+        // Mark all these tasks as logged
+        setSchedulesMap(prev => {
+          const next = { ...prev };
+          const stg = { ...(next[stageId] || {}) };
+          targetsToUpdate.forEach(({ productId, taskIdx }) => {
+            if (stg[productId]?.tasks?.[taskIdx]) {
+              stg[productId] = {
+                ...stg[productId],
+                tasks: stg[productId].tasks!.map((tk, i) => i === taskIdx ? { ...tk, isLoggedToPiecework: true } : tk)
+              };
+            }
+          });
+          next[stageId] = stg;
+          return next;
+        });
+
+        fetchProjectPieceworkLogs();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'خطا در ثبت گروهی کارکردها');
+    } finally {
+      setBatchLoggingStageId(null);
+    }
+  };
+
   // Calculate total personnel costs across all stages and products
   let totalLaborBudget = 0;
   const personnelBudgetMap: Record<string, number> = {};
@@ -460,6 +616,22 @@ export default function ProjectScheduleTab({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Batch Register Piecework Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleBatchLogStageTasks(stg.id, stg.title)}
+                    disabled={batchLoggingStageId === stg.id}
+                    className="px-2.5 py-1 text-[11px] font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                    title="ثبت یکباره تمامی وظایف پرسنل‌دار این مرحله به عنوان کارکرد کارمزدی"
+                  >
+                    {batchLoggingStageId === stg.id ? (
+                      <RefreshCw className="w-3 h-3 text-emerald-600 animate-spin" />
+                    ) : (
+                      <Coins className="w-3 h-3 text-emerald-600" />
+                    )}
+                    <span>ثبت گروهی کارکرد مرحله</span>
+                  </button>
+
                   {/* Preset Template Apply Button */}
                   <button
                     type="button"
@@ -629,9 +801,34 @@ export default function ProjectScheduleTab({
                                     <span className="text-[10px] text-slate-500 shrink-0">{task.unit || 'عدد'}</span>
                                   </div>
 
-                                  {/* Estimated Cost */}
-                                  <div className="sm:col-span-2 text-left font-mono font-bold text-emerald-700 text-xs">
-                                    {formatPersianPrice(task.estimatedCost || 0, appCurrency)}
+                                  {/* Estimated Cost & Piecework Action */}
+                                  <div className="sm:col-span-2 flex items-center justify-between gap-1">
+                                    <span className="font-mono font-bold text-emerald-700 text-xs">
+                                      {formatPersianPrice(task.estimatedCost || 0, appCurrency)}
+                                    </span>
+                                    
+                                    {/* Action to log to piecework */}
+                                    {task.isLoggedToPiecework ? (
+                                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold flex items-center gap-0.5" title="در کارکرد کارمزدی ثبت شده است">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                        <span>ثبت‌شده</span>
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        disabled={!task.assignedPersonnelId || !task.taskId || loggingTaskId === (task.id || `${stg.id}-${p.id}-${tIdx}`)}
+                                        onClick={() => handleLogSingleTaskToPiecework(stg.id, p.id, tIdx, task)}
+                                        className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 disabled:opacity-30 rounded text-[10px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer"
+                                        title={task.assignedPersonnelId ? "ثبت این قلم در کارتابل کارمزد پرسنل" : "ابتدا پرسنل را انتخاب کنید"}
+                                      >
+                                        {loggingTaskId === (task.id || `${stg.id}-${p.id}-${tIdx}`) ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin text-amber-700" />
+                                        ) : (
+                                          <Coins className="w-3 h-3 text-amber-700" />
+                                        )}
+                                        <span>ثبت کارمزد</span>
+                                      </button>
+                                    )}
                                   </div>
 
                                   {/* Delete */}
@@ -662,6 +859,119 @@ export default function ProjectScheduleTab({
             </div>
           );
         })}
+      </div>
+
+      {/* Recorded Piecework Logs Summary & Audit Panel */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-700 flex items-center justify-center font-bold">
+              <Briefcase className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
+                کارمزدهای قطعی ثبت‌شده برای این پروژه در ماژول حقوق و دستمزد
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[11px] font-mono font-bold">
+                  {recordedLogs.length} رکورد
+                </span>
+              </h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                مقایسه برآورد اولیه بودجه با کارکردهای واقعی تایید و ثبت‌شده در سیستم
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={fetchProjectPieceworkLogs}
+            disabled={loadingLogs}
+            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            title="به‌روزرسانی کارمزدها"
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingLogs ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {/* Real-time Summary Badges */}
+        {(() => {
+          const totalActualRecordedCost = recordedLogs.reduce((sum, log) => {
+            const qty = Number(log.quantity || 0);
+            const rate = Number(log.unitRate || log.unit_rate || 0);
+            return sum + (qty * rate);
+          }, 0);
+
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-slate-500 block text-[11px]">کل برآورد بودجه دستمزد:</span>
+                <span className="font-bold font-mono text-slate-800 text-sm mt-0.5 block">
+                  {formatPersianPrice(totalLaborBudget, appCurrency)}
+                </span>
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
+                <span className="text-emerald-700 block text-[11px]">مجموع کارمزدهای قطعی ثبت‌شده:</span>
+                <span className="font-bold font-mono text-emerald-900 text-sm mt-0.5 block">
+                  {formatPersianPrice(totalActualRecordedCost, appCurrency)}
+                </span>
+              </div>
+
+              <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200">
+                <span className="text-amber-800 block text-[11px]">انحراف از برآورد اولیه:</span>
+                <span className={`font-bold font-mono text-sm mt-0.5 block ${totalActualRecordedCost > totalLaborBudget ? 'text-rose-600' : 'text-slate-700'}`}>
+                  {formatPersianPrice(Math.abs(totalActualRecordedCost - totalLaborBudget), appCurrency)}
+                  <span className="text-[10px] font-sans mr-1">
+                    {totalActualRecordedCost > totalLaborBudget ? '(مازاد بر بودجه)' : '(باقی‌مانده تا سقف بودجه)'}
+                  </span>
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Logged Rows Mini Table */}
+        {recordedLogs.length > 0 ? (
+          <div className="overflow-x-auto border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
+            <table className="w-full text-right text-[11px]">
+              <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0">
+                <tr>
+                  <th className="p-2">تاریخ</th>
+                  <th className="p-2">نام پرسنل</th>
+                  <th className="p-2">عنوان وظیفه کارمزدی</th>
+                  <th className="p-2 text-center">تعداد</th>
+                  <th className="p-2 text-center">نرخ واحد</th>
+                  <th className="p-2 text-center">مبلغ کل</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {recordedLogs.map((log: any, lIdx: number) => {
+                  const qty = Number(log.quantity || 0);
+                  const rate = Number(log.unitRate || log.unit_rate || 0);
+                  return (
+                    <tr key={log.id || lIdx} className="hover:bg-slate-50">
+                      <td className="p-2 font-mono text-slate-500">{log.date || '---'}</td>
+                      <td className="p-2 font-bold text-slate-800">
+                        {log.personnelName || log.personnel_name || `پرسنل #${log.personnelId || log.personnel_id}`}
+                      </td>
+                      <td className="p-2 text-slate-700">
+                        {log.taskTitle || log.task_title || log.taskCode || log.notes || 'کارکرد کارمزدی'}
+                      </td>
+                      <td className="p-2 text-center font-mono font-bold text-slate-800">{qty}</td>
+                      <td className="p-2 text-center font-mono text-slate-600">{formatPersianPrice(rate, appCurrency)}</td>
+                      <td className="p-2 text-center font-mono font-bold text-emerald-700">
+                        {formatPersianPrice(qty * rate, appCurrency)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+            هنوز رکوردی در ماژول کارمزد برای این پروژه ثبت نشده است. می‌توانید از دکمه‌های «ثبت کارمزد» یا «ثبت گروهی کارکرد مرحله» برای ثبت فوری کارکردها استفاده کنید.
+          </div>
+        )}
       </div>
 
       {/* RICH PERSONNEL SELECTION MODAL */}

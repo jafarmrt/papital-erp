@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  ShoppingCart, Plus, Printer, CheckCircle2, Trash2 
+  ShoppingCart, Plus, Printer, CheckCircle2, Trash2, FilePlus, ExternalLink, CheckSquare
 } from 'lucide-react';
-import { ProductionProject, PurchaseListItem } from '../../types';
+import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 
 interface ManualPurchaseListProps {
   project: ProductionProject;
   purchaseList: PurchaseListItem[];
   isFinalized: boolean;
+  warehouseItems?: Item[];
   handleAddManualPurchaseRow: () => void;
   handlePrintPurchaseListWithCheck: () => void;
   handleUpdateManualPurchaseItem: (id: string, field: keyof PurchaseListItem, value: any) => void;
@@ -20,12 +22,30 @@ export function ManualPurchaseList({
   project,
   purchaseList,
   isFinalized,
+  warehouseItems = [],
   handleAddManualPurchaseRow,
   handlePrintPurchaseListWithCheck,
   handleUpdateManualPurchaseItem,
   handleRemoveManualPurchaseItem,
   handleUpdateProcurementStatus
 }: ManualPurchaseListProps) {
+  const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
+  const [lastCreatedOrderDoc, setLastCreatedOrderDoc] = useState<any>(null);
+
+  // Count items that have actual shortfalls
+  const shortfallCount = purchaseList.filter(i => 
+    (i.convertedToPurchaseQty !== undefined && i.convertedToPurchaseQty > 0) || 
+    (i.toPurchaseQty !== undefined && i.toPurchaseQty > 0)
+  ).length;
+
+  const handleOrderCreatedSuccess = (createdDoc: any, orderedItemIds: string[]) => {
+    setLastCreatedOrderDoc(createdDoc);
+    // Update procurement status of ordered items to 'in_progress'
+    orderedItemIds.forEach(id => {
+      handleUpdateProcurementStatus(id, 'in_progress');
+    });
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs animate-fadeIn font-farsi text-xs">
       {/* Header Bar */}
@@ -40,7 +60,19 @@ export function ManualPurchaseList({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {shortfallCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsCreateOrderModalOpen(true)}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+              title="ثبت سند پیش‌نویس سفارش خرید یا پیش‌فاکتور برای کسری‌های این پروژه"
+            >
+              <FilePlus className="w-4 h-4 text-emerald-100" />
+              صدور سفارش خرید ({shortfallCount} کسری)
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleAddManualPurchaseRow}
@@ -59,6 +91,33 @@ export function ManualPurchaseList({
           </button>
         </div>
       </div>
+
+      {/* Purchase Order Notification Banner if created in session */}
+      {lastCreatedOrderDoc && (
+        <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3.5 flex items-center justify-between gap-3 text-emerald-950 print:hidden animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <span className="font-bold text-xs">سند سفارش خرید برای کسری‌ها صادر شد: </span>
+              <span className="font-mono font-bold bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300 text-emerald-900">
+                شماره سند: {lastCreatedOrderDoc.ref_number || lastCreatedOrderDoc.refNumber || '---'}
+              </span>
+              <span className="text-[11px] text-emerald-800 mr-2">
+                وضعیت اقلام سفارش‌داده‌شده به «در حال سفارش/خرید» ارتقا یافت.
+              </span>
+            </div>
+          </div>
+          <a
+            href="/invoices"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg flex items-center gap-1 transition-colors shrink-0 shadow-2xs"
+          >
+            <span>مشاهده در فاکتورها</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      )}
 
       {/* Reserved Items in Warehouse Section */}
       {((project.inventory_control?.reservedItems && project.inventory_control.reservedItems.length > 0) || isFinalized) && (
@@ -327,6 +386,16 @@ export function ManualPurchaseList({
         <div>امضاء و تایید سرپرست تولید: ....................</div>
         <div>تاريخ: ....................</div>
       </div>
+
+      {/* Create Purchase Order Modal */}
+      <CreatePurchaseOrderModal
+        isOpen={isCreateOrderModalOpen}
+        onClose={() => setIsCreateOrderModalOpen(false)}
+        project={project}
+        purchaseList={purchaseList}
+        warehouseItems={warehouseItems}
+        onOrderCreated={handleOrderCreatedSuccess}
+      />
     </div>
   );
 }

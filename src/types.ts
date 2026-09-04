@@ -380,6 +380,8 @@ export interface TaskAssignmentItem {
   startDate?: string;
   endDate?: string;
   status?: string;
+  pieceworkLogId?: number;
+  isLoggedToPiecework?: boolean;
 }
 
 export interface ProductStageSchedule {

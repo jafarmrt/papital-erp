@@ -168,7 +168,7 @@ export default function InventoryStatusPage() {
                 </h3>
               </div>
               <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs text-slate-400">
-                <span className="flex items-center gap-1">میانگین موزون (WAC)</span>
+                <span className="flex items-center gap-1">میانگین بهای خرید</span>
                 <span className="text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full text-[10px]">ارزش زنده</span>
               </div>
             </div>

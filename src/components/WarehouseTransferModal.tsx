@@ -147,10 +147,10 @@ export default function WarehouseTransferModal({
             </div>
             <div>
               <h3 className="font-bold text-slate-800 text-lg">
-                ثبت حواله انتقال داخلی بین انبارها (Stock Relocation)
+                ثبت حواله انتقال بین انبارها
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                جابجایی اتمیک و لحظه‌ای کالا با ثبت خودکار کاردکس خروج از مبدا و ورود به مقصد
+                جابجایی موجودی کالا همراه با ثبت خودکار در کاردکس انبار مبداء و مقصد
               </p>
             </div>
           </div>
