@@ -314,17 +314,24 @@ export class WebhookSubscriptionService {
       await assertSafeExternalUrl(sub.targetUrl, { allowLocalEcho: true });
 
       // In development or preview, targetUrl might be local or mock endpoint
+      // V3.0.7 (TD-057): redirect: 'manual' — دنبال‌کردن خودکار redirect می‌توانست
+      // پس از تأیید URL عمومی، درخواست را به مقصد خصوصی (مثلاً 169.254.169.254)
+      // بفرستد و گارد SSRF را دور بزند.
       const response = await fetch(sub.targetUrl, {
         method: 'POST',
         headers,
         body: payloadString,
-        signal: controller.signal
+        signal: controller.signal,
+        redirect: 'manual'
       });
 
       statusCode = response.status;
       responseText = (await response.text()).substring(0, 500);
 
-      if (response.ok) {
+      if (response.status >= 300 && response.status < 400) {
+        status = 'failed';
+        errorMessage = `Redirect responses are not followed (SSRF protection) — HTTP ${statusCode}`;
+      } else if (response.ok) {
         status = 'success';
       } else {
         status = 'failed';

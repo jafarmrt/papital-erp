@@ -690,6 +690,17 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
 // 6. Webhook Subscriptions & Deliveries Pipeline
 // =========================================================================
 
+// V3.0.7 (TD-057): secret امضای وب‌هوک فقط برای مدیر برگردانده می‌شود؛ سایر
+// کاربران دارای events.view مقدار ماسک‌شده می‌بینند. (فرانت‌اند مدیریتی که
+// secret را ویرایش/ping می‌کند در عمل مختص ادمین است.)
+const MASKED_SECRET = '********';
+
+function maskSubscriptionSecret<T extends { secretKey?: string }>(sub: T, isAdmin: boolean): T {
+  if (isAdmin || !sub.secretKey) return sub;
+  const s = sub.secretKey;
+  return { ...sub, secretKey: s.length > 8 ? `${'*'.repeat(Math.max(s.length - 4, 4))}${s.slice(-4)}` : MASKED_SECRET };
+}
+
 router.get('/webhooks/stats', authorizePermission('events.view'), async (req, res) => {
   try {
     const stats = await WebhookSubscriptionService.getStats();
@@ -705,9 +716,11 @@ router.get('/webhooks/stats', authorizePermission('events.view'), async (req, re
 router.get('/webhooks', authorizePermission('events.view'), async (req, res) => {
   try {
     const subs = await WebhookSubscriptionService.getSubscriptions();
+    const isAdmin = req.user?.role === 'admin';
     res.json({
       success: true,
-      data: subs
+      // V3.0.7 (TD-057): secret امضای وب‌هوک هرگز به کاربران غیرمدیر داده نمی‌شود
+      data: (Array.isArray(subs) ? subs : []).map(s => maskSubscriptionSecret(s, isAdmin))
     });
   } catch (error) {
     throw error;
@@ -725,7 +738,7 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
 
     res.json({
       success: true,
-      data: sub
+      data: maskSubscriptionSecret(sub, req.user?.role === 'admin')
     });
   } catch (error) {
     throw error;
@@ -748,7 +761,9 @@ router.post('/webhooks', authorizePermission('events.manage'), async (req, res) 
         name,
         targetUrl,
         eventPatterns,
-        secretKey: secretKey || 'sec_' + Math.random().toString(36).substring(2, 12),
+        // V3.0.7 (TD-057): default ضعیف Math.random حذف شد — سرویس در نبود کلید
+        // خودش secret امن CSPRNG (generateSecretKey) تولید می‌کند.
+        secretKey: secretKey?.trim() || undefined,
         customHeaders: customHeaders || {},
         retryLimit: retryLimit || 3,
         timeoutMs: timeoutSeconds ? timeoutSeconds * 1000 : 10000

@@ -111,13 +111,11 @@ router.get('/check-setup', asyncHandler(async (req, res) => {
       .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
     count = Number(result[0]?.count || 0);
   } catch (dbErr) {
-    // If table doesn't exist yet, run seed to create tables and retry
-    const { runSeed } = await import('../db/seed.js');
-    await runSeed();
-    const result = await orm.select({ count: sql<number>`count(*)` })
-      .from(users)
-      .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
-    count = Number(result[0]?.count || 0);
+    // V3.0.7 (TD-065): مسیر عمومی هرگز seed اجرا نمی‌کند — قبلاً خطای DB از یک
+    // endpoint بدون احراز هویت به نوشتن در دیتابیس تبدیل می‌شد. خطا گزارش و
+    // به‌عنوان «راه‌اندازی نشده» پاسخ داده می‌شود؛ seed فقط از startup/مسیر مدیریتی.
+    logger.error(`[check-setup] Database error: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
+    count = 0;
   }
   
   let companyName = '';
@@ -142,10 +140,9 @@ router.get('/public-settings', asyncHandler(async (req, res) => {
   let settings: { key: string; value: string }[] = [];
   try {
     settings = await orm.select().from(appSettings).where(inArray(appSettings.key, ['company_name', 'company_logo', 'currency']));
-  } catch {
-    const { runSeed } = await import('../db/seed.js');
-    await runSeed();
-    settings = await orm.select().from(appSettings).where(inArray(appSettings.key, ['company_name', 'company_logo', 'currency']));
+  } catch (dbErr) {
+    // V3.0.7 (TD-065): اجرای seed از مسیر عمومی ممنوع (fail-safe به مقادیر پیش‌فرض)
+    logger.error(`[public-settings] Database error: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
   }
   const rawName = settings.find(s => s.key === 'company_name')?.value || '';
   const name = (rawName === 'سامانه انبارداری' || rawName === 'سامانه انبار پاپیتال') ? 'سامانه جامع ERP پاپیتال' : (rawName || 'سامانه جامع ERP پاپیتال');
@@ -163,7 +160,7 @@ router.get('/public-settings', asyncHandler(async (req, res) => {
 const setupSchema = z.object({
   body: z.object({
     username: z.string().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
-    password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد'),
+    password: z.string().min(8, 'رمز عبور باید حداقل ۸ کاراکتر باشد'),
     fullName: z.string().min(1, 'نام و نام خانوادگی الزامی است'),
     companyName: z.string().optional().default(''),
     warehouseName: z.string().optional().default('انبار مرکزی'),

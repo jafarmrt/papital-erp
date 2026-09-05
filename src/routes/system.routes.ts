@@ -96,7 +96,10 @@ router.get('/system/schema-check', authorize('admin'), async (req, res) => {
   }
 });
 
-router.get('/system/run-seed', authorize('admin'), async (req, res) => {
+// V3.0.7 (TD-056): عملیات state-changing فقط با POST — نسخه GET با کوکی
+// SameSite=None از سایت دیگر (مثلاً <img src>) قابل trigger بود و csrfProtection
+// روی GET اعمال نمی‌شد. اکنون گارد CSRF استاندارد روی این مسیرها فعال است.
+router.post('/system/run-seed', authorize('admin'), async (req, res) => {
   try {
     const migrationRes = await runMigrations();
     const seedRes = await runSeed();
@@ -428,7 +431,8 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
 import fs from 'fs';
 import path from 'path';
 
-router.get('/system/health', async (req, res) => {
+// V3.0.7 (TD-065): اطلاعات زیرساخت (مسیر uploads، حافظه، پروتکل) فقط برای ادمین
+router.get('/system/health', authorize('admin'), async (req, res) => {
   const startTime = Date.now();
   let dbStatus = { status: 'ok', latencyMs: 0, message: 'پایگاه‌داده PostgreSQL متصل و آماده است' };
   
@@ -684,7 +688,9 @@ async function assertTestEndpointsEnabled(): Promise<void> {
 }
 
 // Phase 21 Test Suite Runner API
-router.get('/system/tests/run', authorize('admin'), async (req, res) => {
+// V3.0.7 (TD-056): از GET به POST — اجرای تست داده می‌نویسد و نباید از تگ‌های
+// cross-site (img/script) با کوکی ادمین قابل فراخوانی باشد.
+router.post('/system/tests/run', authorize('admin'), async (req, res) => {
   try {
     await assertTestEndpointsEnabled();
     // TST-001: computed specifiers keep src/tests out of the production bundle

@@ -24,6 +24,20 @@ DUMP_FILE="$BACKUP_DIR/erp_${BACKUP_KIND}_${TIMESTAMP}.dump"
 pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$DUMP_FILE"
 gzip "$DUMP_FILE"
 
+# 1b. V3.0.7 (TD-058 precursor): آپلودهای دیسکی (لوگو/تصاویر کالا) بخشی از داده
+# قابل بازیابی هستند و خارج از pg_dump باقی می‌مانند — آرشیو tar جداگانه ساخته می‌شود.
+UPLOADS_DIR="${UPLOADS_DIR:-$(pwd)/public/uploads}"
+if [ -d "$UPLOADS_DIR" ] && [ -n "$(ls -A "$UPLOADS_DIR" 2>/dev/null)" ]; then
+  UPLOADS_ARCHIVE="$BACKUP_DIR/erp_${BACKUP_KIND}_${TIMESTAMP}_uploads.tar.gz"
+  tar -czf "$UPLOADS_ARCHIVE" -C "$(dirname "$UPLOADS_DIR")" "$(basename "$UPLOADS_DIR")"
+  gunzip -t "$UPLOADS_ARCHIVE" || { echo "[$(date)] Uploads archive verification FAILED for $UPLOADS_ARCHIVE"; exit 1; }
+  if [ -n "${S3_BACKUP_BUCKET:-}" ]; then
+    aws s3 cp "$UPLOADS_ARCHIVE" "s3://$S3_BACKUP_BUCKET/$(date +%Y/%m/%d)/" \
+      || echo "[$(date)] WARNING: uploads offsite upload failed (archive still valid locally)"
+  fi
+  echo "[$(date)] Uploads archive created: $UPLOADS_ARCHIVE ($(du -h "$UPLOADS_ARCHIVE" | cut -f1))"
+fi
+
 # 2. Verify backup integrity
 gunzip -t "$DUMP_FILE.gz" || { echo "[$(date)] Backup verification FAILED for $DUMP_FILE.gz — keeping file for inspection"; exit 1; }
 
@@ -35,6 +49,7 @@ fi
 
 # 4. Cleanup old backups of this kind
 find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*.dump.gz" -mtime +"$RETENTION_DAYS" -delete
+find "$BACKUP_DIR" -name "erp_${BACKUP_KIND}_*_uploads.tar.gz" -mtime +"$RETENTION_DAYS" -delete
 
 # 5. Log
 echo "[$(date)] ${BACKUP_KIND} backup completed: $DUMP_FILE.gz ($(du -h "$DUMP_FILE.gz" | cut -f1), retention ${RETENTION_DAYS}d)"

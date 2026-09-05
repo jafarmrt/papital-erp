@@ -423,8 +423,11 @@ export function useCRMData(user: any) {
     setSelectedLeadDrawer(lead);
     try {
       const res = await fetchJson(`/crm/leads/${lead.id}`);
-      if (res && res.activities) {
+      // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
+      if (Array.isArray(res?.activities)) {
         setDrawerActivities(res.activities);
+      } else if (res?.activities && typeof res.activities === 'object') {
+        setDrawerActivities([]);
       }
     } catch (err) {
       console.error('Error fetching lead drawer detail:', err);

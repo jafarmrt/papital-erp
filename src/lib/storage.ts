@@ -5,7 +5,9 @@ import path from 'path';
 // Max allowed image size in bytes (3 MB)
 const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024;
 // Allowed MIME formats
-const ALLOWED_MIME_TYPES = new Set(['jpeg', 'jpg', 'png', 'webp', 'gif', 'svg+xml']);
+// V3.0.7 (TD-065): SVG از allowlist حذف شد — SVG می‌تواند حاوی اسکریپت باشد و
+// فایل‌های با پیشوند logo عمومی و بدون احراز هویت سرو می‌شوند (وکتور XSS).
+const ALLOWED_MIME_TYPES = new Set(['jpeg', 'jpg', 'png', 'webp', 'gif']);
 
 export const uploadBase64ToStorage = async (base64String: string, type: 'image' | 'thumbnail' = 'image', namePrefix?: string): Promise<string> => {
   if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:image')) {
@@ -26,10 +28,10 @@ export const uploadBase64ToStorage = async (base64String: string, type: 'image' 
 
   const mimeSubtype = matches[1].toLowerCase();
   if (!ALLOWED_MIME_TYPES.has(mimeSubtype) && mimeSubtype !== 'jpeg') {
-    throw new Error('فرمت تصویر نامعتبر است. پسوندهای مجاز: JPG, PNG, WEBP, GIF, SVG');
+    throw new Error('فرمت تصویر نامعتبر است. پسوندهای مجاز: JPG, PNG, WEBP, GIF');
   }
 
-  const ext = mimeSubtype === 'jpeg' ? 'jpg' : mimeSubtype === 'svg+xml' ? 'svg' : mimeSubtype;
+  const ext = mimeSubtype === 'jpeg' ? 'jpg' : mimeSubtype;
   const data = matches[2];
   const buffer = Buffer.from(data, 'base64');
 

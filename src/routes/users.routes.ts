@@ -20,7 +20,7 @@ const updateProfileSchema = z.object({
     full_name: z.string().optional(),
     avatar: z.string().optional(),
     current_password: z.string().optional(),
-    new_password: z.string().min(4, 'کلمه عبور جدید باید حداقل ۴ کاراکتر باشد').optional().or(z.literal(''))
+    new_password: z.string().min(8, 'کلمه عبور جدید باید حداقل ۸ کاراکتر باشد').optional().or(z.literal(''))
   })
 });
 

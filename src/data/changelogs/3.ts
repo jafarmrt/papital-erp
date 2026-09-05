@@ -6,6 +6,40 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.0.7',
+    date: '۱۵ شهریور ۱۴۰۵',
+    title: 'فاز ۲ ممیزی Forensic — سخت‌سازی قابلیت اطمینان: قیود یکپارچگی مالی، WAC مسیر تولید، امنیت وب‌هوک/CSRF و ایمن‌سازی پاکسازی تستی',
+    summary: 'اجرای فاز ۲ نقشه راه تثبیت: مهاجرت ایدم‌پوتنت قیود یکپارچگی (UNIQUE شرطی شماره عطف + ۵ کلید خارجی مالی با اعتبارسنجی داده و Skip مشروط)، بازمحاسبه WAC در ورود محصول تولیدی به انبار، رفع خواندن خارج از تراکنش در صدور سند معکوس، انبار برگشت حذف سند از روی ledger واقعی، بستن حفره CSRF-GET، حذف secret هاردکد و default ضعیف وب‌هوک، بستن redirect-following در SSRF Guard، حذف SVG از آپلودها، حذف اجرای seed از مسیرهای عمومی، حداقل طول رمز ۸ کاراکتر، ماسک‌سازی secret اشتراک‌های وب‌هوک، گاردهای Array Safety در CRM و افزودن آرشیو uploads به backup.',
+    author: 'AI Agent (Forensic Audit Phase 2 — Reliability Hardening)',
+    changes: [
+      'drizzle/0001_integrity_constraints.sql: مهاجرت مشروط و idempotent — ایندکس UNIQUE (type, ref_number) اسناد فعال و کلیدهای خارجی transactions.item_id، document_items.item_id/document_id، journal_voucher_items.voucher_id/account_id؛ هر قید فقط در صورت پاک بودن داده اعمال و در غیر این صورت WARNING می‌دهد',
+      'projects.routes.ts: ورود محصول تولیدی به انبار اکنون WAC را با FinancialMath.calculateWAC بازمحاسبه می‌کند (پارامتر اختیاری unitPrice با فال‌بک WAC جاری)، version کالا OCC-محور bump می‌شود و تاریخ تراکنش از Business Clock است (TD-054/TD-062)',
+      'voucherSync.service.ts: فال‌بک تاریخ ووچر حقوق پرکیسی از ساعت توافقی کسب‌وکار (TD-062)',
+      'voucher.service.ts: خواندن سند اصلی در reverseVoucher به داخل تراکنش اجرایی منتقل شد تا سند معکوس هرگز از snapshot منقضی ساخته نشود (TD-061)',
+      'document.service.ts: انبار برگشت موجودی هنگام حذف سند از روی location تراکنش‌های اصلی ledger تعیین می‌شود نه کلید ثابت default (TD-061)',
+      'system.routes.ts: مسیرهای state-changing /system/run-seed و /system/tests/run از GET به POST تبدیل شدند تا از گارد CSRF عبور نکنند (TD-056)؛ /system/health فقط برای ادمین',
+      'eventActionEngineService.ts: حذف secret هاردکد fallback — بدون secret واقعی، صدور توکن fail-closed شکست می‌خورد (TD-057)',
+      'events.routes.ts: حذف default ضعیف Math.random در ساخت اشتراک (سرویس CSPRNG دارد) و ماسک‌سازی secretKey اشتراک‌ها برای کاربران غیرمدیر (TD-057)',
+      'webhookSubscriptionService.ts و eventActionEngineService.ts: dispatch وب‌هوک‌ها با redirect: manual — پاسخ‌های 3xx دنبال نمی‌شوند (بستن دورزدن SSRF) (TD-057)',
+      'woocommerce.routes.ts: مسیر test-connection اکنون از assertSafeExternalUrl عبور می‌کند (TD-057)',
+      'storage.ts: حذف SVG از فرمت‌های مجاز آپلود (وکتور XSS فایل‌های عمومی لوگو) (TD-065)',
+      'auth.routes.ts: حذف اجرای runSeed از مسیرهای عمومی check-setup و public-settings (TD-065) و حداقل طول رمز ۸ کاراکتر در setup',
+      'users.routes.ts: حداقل طول رمز جدید ۸ کاراکتر (TD-065)',
+      'dbTestHelper.ts: سخت‌سازی الگوهای پاکسازی تستی — الگوی وسیع %تست% به prefix-only محدود و الگوهای واژه‌ای گزارش روزانه/CRM حذف شدند تا داده واقعی حذف نشود (TD-064)',
+      'CustomersPage.tsx، useCRMData.ts، CustomerDossierDrawer.tsx: گاردهای Array.isArray مطابق قاعده Array Safety (TD-066)',
+      'scripts/backup.sh: آرشیو جداگانه tar.gz برای public/uploads با راستی‌آزمایی gunzip -t و آپلود آف‌سایت اختیاری (پیش‌نیاز TD-058)',
+      'dbTestHelper.ts: اصلاح ترتیب حذف — تراکنش‌های خزانه‌ای ارجاع‌دهنده به فیش حقوقی/ووچرهای تستی قبل از والد حذف می‌شوند تا با FKهای schema کامل تداخل نکنند'
+    ],
+    fixes: [
+      'رفع امکان ثبت دو سند فعال با شماره عطف تکراری و ورود ردیف یتیم مالی (قیدهای سطح DB)',
+      'رفع ارزش‌گذاری نادرست محصول تولیدی در WAC و تاریخ نادرست تراکنش‌های آن',
+      'رفع ریسک ساخت سند معکوس از داده منقضی و واگرایی stocks.jsonb انبارها در حذف سند',
+      'رفع قابل‌trigger بودن seed/تست‌ها از سایت دیگر با کوکی ادمین (CSRF-GET)',
+      'رفع پذیرش توکن جعلی وب‌هوک با secret ثابت قابل حدس در خطای DB',
+      'رفع ریسک حذف داده واقعی توسط پاکسازی تستی با واژه «تست»'
+    ]
+  },
+  {
     version: 'v3.0.6',
     date: '۱۵ شهریور ۱۴۰۵',
     title: 'فاز ۱ ممیزی جنایی V3 — تثبیت بحرانی یکپارچگی داده، مالی و امنیت (رفع ۱۰ یافته P0/P1 ممیزی Forensic)',

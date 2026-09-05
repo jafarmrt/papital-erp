@@ -14,6 +14,7 @@ import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
+import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
 
 const router = Router();
 
@@ -689,6 +690,10 @@ router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manag
 router.post('/test-connection', authorize('admin', 'manager', 'woocommerce.manage'), validate(testConnectionSchema), async (req, res) => {
   try {
     const { url, consumerKey, consumerSecret } = req.body;
+
+    // V3.0.7 (TD-057): مسیر test-connection یک URL کاربر-محور را fetch می‌کند و
+    // باید از گارد SSRF عبور کند (قبلاً بدون گارد بود). echo محلی مجاز نیست.
+    await assertSafeExternalUrl(url, { allowLocalEcho: false });
 
     const data = await makeWcRequest('GET', 'products', url, consumerKey, consumerSecret, null, { per_page: 1, _t: Date.now() });
 

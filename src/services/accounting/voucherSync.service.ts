@@ -767,7 +767,8 @@ export class VoucherSyncService {
     });
 
     return VoucherService.createJournalVoucher({
-      date: pay.endDate || new Date().toISOString().split('T')[0],
+      // V3.0.7 (TD-062): فال‌بک تاریخ از ساعت توافقی کسب‌وکار (نه UTC خام)
+      date: pay.endDate || await businessTodayIsoDate(),
       voucherType: 'payroll',
       description: `ثبت هزینه و محاسبه حقوق و کارمزد پرکیسی ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
       referenceModule: 'payroll',

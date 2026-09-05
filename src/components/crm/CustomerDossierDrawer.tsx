@@ -66,9 +66,9 @@ export function CustomerDossierDrawer({
     setLoadingDocs(true);
     fetchJson(`/documents?search=${encodeURIComponent(customer.name)}&limit=50`, { signal: controller.signal })
       .then((res) => {
-        if (res && res.data) setDocuments(res.data);
-        else if (Array.isArray(res)) setDocuments(res);
-        else setDocuments([]);
+        // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
+        const docs = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+        setDocuments(docs);
       })
       .catch((err) => {
         if (err?.name === 'AbortError') return;

@@ -138,13 +138,15 @@ function isCleanupPermitted(): boolean {
 }
 
 /** Synthetic-only document condition (ref prefixes used exclusively by suites) */
+// V3.0.7 (TD-064): الگوی وسیع '%تست%' به prefix-only محدود شد تا سند واقعی که
+// صرفاً واژه «تست» را در توضیحات دارد حذف نشود (سندهای تستی معمولاً با «تست» شروع می‌شوند)
 const TEST_DOC_COND = sql`(
   ref_number ILIKE 'CP-FIN-%' OR ref_number ILIKE 'DOC\\_%' OR ref_number ILIKE 'DOC-%'
   OR ref_number ILIKE 'STRESS-%' OR ref_number ILIKE 'IDEM-%' OR ref_number ILIKE 'ROLLBACK-%'
   OR ref_number ILIKE 'DOC_RACE%' OR ref_number ILIKE 'PURCHASE-E2E-%' OR ref_number ILIKE 'INV-E2E-%'
   OR ref_number ILIKE 'WOO-ORDER-%' OR ref_number ILIKE 'E2E-%' OR ref_number ILIKE 'TEST-%'
   OR ref_number ILIKE 'V9-%' OR ref_number ILIKE 'V9\\_%' OR ref_number ILIKE 'DIAG-%'
-  OR notes ILIKE '%آزمایشی%' OR notes ILIKE '%E2E%' OR notes ILIKE '%تست%'
+  OR notes ILIKE 'تست%' OR notes ILIKE '%آزمایشی%' OR notes ILIKE '%E2E%'
   OR buyer_name ILIKE '%آزمایشی%' OR buyer_name ILIKE '%استرس%' OR buyer_name ILIKE '%مسابقه نهاییسازی%'
   OR buyer_name ILIKE '%مشتری سازمانی تست%'
 )`;
@@ -185,6 +187,9 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 2. Clear piecework artifacts BEFORE their parents (payroll/log scoped to synthetic refs)
   try {
+    // V3.0.7: تراکنش‌های خزانه‌ای ارجاع‌دهنده به فیش‌های تستی باید «قبل از» والد حذف شوند
+    // (FK treasury_transactions.payroll_id در DBهایی که از db:pushschema کامل گرفته‌اند)
+    await orm.execute(sql`DELETE FROM treasury_transactions WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%')`);
     await orm.execute(sql`DELETE FROM piecework_logs WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%') OR created_by_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR personnel_id IN (SELECT id FROM personnel WHERE full_name ILIKE '%آزمایشی%') OR notes ILIKE '%آزمایشی%'`);
     await orm.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%'`);
     // Personnel: only synthetic names (real workshop staff names like طلاساز/استادکار/جعفر/ناهید are NEVER matched)
@@ -195,7 +200,9 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 3. Clear project dependencies & production projects (scoped)
   try {
-    await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR title ILIKE '%آزمایشی%' OR title ILIKE '%تست%' OR content ILIKE '%آزمایشی%'`);
+    // V3.0.7 (TD-064): شرط user-scoped کافی است؛ الگوهای واژه‌ای روی title/content
+    // گزارش واقعی روزانه حاوی واژه «تست» را نیز حذف می‌کردند.
+    await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%')`);
     await orm.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`);
     await orm.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`);
     await orm.execute(sql`DELETE FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%'`);
@@ -204,9 +211,11 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   }
 
   // 4. Clear CRM scoped
+  // V3.0.7 (TD-064): الگوی وسیع '%تست%' روی عنوان سرنخ حذف شد؛ سرنخ‌های تستی
+  // با پیشوند Lead_ یا واژه آزمایشی/شرکت آزمایشی پوشش داده می‌شوند.
   try {
-    await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR title ILIKE '%تست%' OR company ILIKE '%آزمایشی%')`);
-    await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR title ILIKE '%تست%' OR company ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR company ILIKE '%آزمایشی%')`);
+    await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR company ILIKE '%آزمایشی%'`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning CRM fixtures: ${err.message}`);
   }
@@ -236,6 +245,9 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     )`;
   try {
     await orm.execute(sql`DELETE FROM journal_voucher_items WHERE voucher_id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND})`);
+    // V3.0.7: تراکنش‌های خزانه‌ای ارجاع‌دهنده به ووچرهای تستی قبل از والد حذف شوند
+    // (FK treasury_transactions.voucher_id در DBهای مشتق از schema کامل)
+    await orm.execute(sql`DELETE FROM treasury_transactions WHERE voucher_id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND})`);
     await orm.execute(sql`DELETE FROM journal_vouchers WHERE id IN (SELECT v.id FROM journal_vouchers v WHERE ${TEST_VOUCHER_COND})`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning voucher fixtures: ${err.message}`);

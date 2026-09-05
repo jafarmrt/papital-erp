@@ -188,10 +188,16 @@ export class EventActionEngineService {
               method,
               headers,
               body: JSON.stringify(bodyPayload),
-              signal: controller.signal
+              signal: controller.signal,
+              // V3.0.7 (TD-057): جلوگیری از دورزدن SSRF Guard با redirect
+              redirect: 'manual'
             });
 
             clearTimeout(timeoutId);
+
+            if (response.status >= 300 && response.status < 400) {
+              throw new Error(`Redirect responses are not followed (SSRF protection) — HTTP ${response.status}`);
+            }
 
             let resBody: unknown = null;
             try {
@@ -467,8 +473,11 @@ export class EventActionEngineService {
       return generated;
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
-      logger.warn(`[EventActionEngine] Error retrieving webhook secret token from appSettings: ${error.message}`);
-      return process.env.ERP_WEBHOOK_SECRET_TOKEN || 'fallback_dynamic_webhook_secret';
+      // V3.0.7 (TD-057): دیگر secret هاردکد fallback نمی‌شود — یک secret ثابت و
+      // قابل حدس عملاً تأیید جعلی وب‌هوک‌ها را ممکن می‌کرد. بدون secret واقعی
+      // صدور توکن باید شکست بخورد (fail-closed).
+      logger.error(`[EventActionEngine] Cannot resolve webhook secret token (DB error: ${error.message}). Set ERP_WEBHOOK_SECRET_TOKEN or fix appSettings access.`);
+      throw new Error('Webhook secret token unavailable — webhook authentication is fail-closed. Configure ERP_WEBHOOK_SECRET_TOKEN or repair appSettings.');
     }
   }
 

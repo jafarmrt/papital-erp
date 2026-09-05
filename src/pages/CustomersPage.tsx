@@ -58,8 +58,9 @@ export default function CustomersPage({ user }: { user: User }) {
   useEffect(() => {
     const controller = new AbortController();
     fetchJson('/crm/leads', { signal: controller.signal }).then((res) => {
-      if (Array.isArray(res)) setCrmLeads(res);
-      else if (res && res.data) setCrmLeads(res.data);
+      // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
+      const leads = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      setCrmLeads(leads);
     }).catch(err => {
       if (err?.name === 'AbortError') return;
       console.error('Failed to load CRM leads:', err);
@@ -67,8 +68,8 @@ export default function CustomersPage({ user }: { user: User }) {
     });
 
     fetchJson('/crm/activities', { signal: controller.signal }).then((res) => {
-      if (Array.isArray(res)) setCrmActivities(res);
-      else if (res && res.data) setCrmActivities(res.data);
+      const acts = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      setCrmActivities(acts);
     }).catch(err => {
       if (err?.name === 'AbortError') return;
       console.error('Failed to load CRM activities:', err);

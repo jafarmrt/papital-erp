@@ -460,15 +460,18 @@ export class VoucherService {
       ? { voucherId: paramsOrId, ...legacyOptions }
       : paramsOrId;
 
-    const original = await this.getJournalVoucherById(params.voucherId);
-    if (!original) throw new Error('سند مبدا یافت نشد');
-    if (!original.items || original.items.length === 0) {
-      throw new Error('سند مبدا فاقد ردیف‌های مالی برای برگشت است');
-    }
-
-    const reversalDate = params.date?.trim() || original.date;
-
     const execute = async (tx: DbExecutor): Promise<number> => {
+      // V3.0.7 (TD-061): سند اصلی باید «داخل تراکنش اجرایی» خوانده شود؛
+      // خواندن قبلی با اتصال orm خارج از externalTx می‌توانست snapshot منقضی
+      // (ویرایش همزمان سند) را مبنای سند معکوس قرار دهد.
+      const original = await this.getJournalVoucherById(params.voucherId, tx);
+      if (!original) throw new Error('سند مبدا یافت نشد');
+      if (!original.items || original.items.length === 0) {
+        throw new Error('سند مبدا فاقد ردیف‌های مالی برای برگشت است');
+      }
+
+      const reversalDate = params.date?.trim() || original.date;
+
       await this.checkFiscalPeriodOpen(reversalDate, tx);
 
       const nextNumber = await this.getNextVoucherNumber(tx);

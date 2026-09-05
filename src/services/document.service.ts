@@ -1279,7 +1279,12 @@ export class DocumentService {
       if (doc.status === 'final') {
         for (const item of docLines) {
           const qty = item.quantity;
-          const targetLoc = item.location || 'default';
+          // V3.0.7 (TD-061): انبار برگشت = انبار واقعی حرکت اصلی از روی ledger
+          // (transactions ثبت‌شده همان سند)؛ قبلاً بدون تطبیق، کلید 'default'
+          // استفاده می‌شد و stocks.jsonb انبارها از کاردکس فاصله می‌گرفت.
+          const origTxForItem = originalTxs.find(t => t.itemId === item.itemId && (t.location || '') === (item.location || ''))
+            || originalTxs.find(t => t.itemId === item.itemId);
+          const targetLoc = (origTxForItem?.location || item.location || '').trim() || 'default';
 
           const [itemData] = await tx.select({ stocks: items.stocks, currentStock: items.currentStock, weightedAverageCost: items.weightedAverageCost, version: items.version }).from(items).where(eq(items.id, item.itemId)).for('update');
           if (!itemData) continue;

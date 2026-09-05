@@ -9,6 +9,9 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { roundFinancial } from '../utils.js';
 import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource } from '../lib/lockOrder.js';
+import { businessNowIsoDateTime } from '../lib/businessClock.js';
+import { FinancialMath } from '../utils/financialMath.js';
+import { nextVersion } from '../lib/occHelper.js';
 import { inArray } from 'drizzle-orm';
 
 const router = Router();
@@ -80,13 +83,14 @@ const addProjectToInventorySchema = z.object({
   body: z.preprocess((val: unknown) => {
     if (val && typeof val === 'object') {
       const v = val as Record<string, unknown>;
-      if (!v.itemsToAdd && (v.itemId || v.item_id)) {
+        if (!v.itemsToAdd && (v.itemId || v.item_id)) {
         return {
           itemsToAdd: [{
             itemId: v.itemId || v.item_id,
             quantity: v.quantity,
             location: v.location,
-            notes: v.description || v.notes
+            notes: v.description || v.notes,
+            unitPrice: v.unitPrice || v.unit_price
           }],
           markCompleted: Boolean(v.markCompleted)
         };
@@ -98,7 +102,8 @@ const addProjectToInventorySchema = z.object({
       itemId: z.union([z.number(), z.string()]),
       quantity: z.union([z.number(), z.string()]),
       location: z.string().optional(),
-      notes: z.string().optional()
+      notes: z.string().optional(),
+      unitPrice: z.union([z.number(), z.string()]).optional()
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
     markCompleted: z.boolean().optional()
   })),
@@ -684,7 +689,9 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
           code: items.code,
           unit: items.unit,
           stocks: items.stocks,
-          currentStock: items.currentStock
+          currentStock: items.currentStock,
+          weightedAverageCost: items.weightedAverageCost,
+          version: items.version
         }).from(items).where(eq(items.id, targetItemId)).for('update');
 
         if (!targetItem) continue;
@@ -706,10 +713,21 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
           Object.values(currentStocks).reduce((sum, val) => sum + (Number(val) || 0), 0)
         );
 
-        // Update item stock atomically
+        // V3.0.7 (TD-054): WAC روی رویداد 'in' طبق قاعده WAC سامانه بازمحاسبه می‌شود؛
+        // مبنای قیمت: unitPrice اختیاری ورودی و در نبود آن WAC فعلی کالا
+        // (ارزش‌گذاری محافظه‌کارانه محصول تولیدی به قیمت تمام‌شده جاری).
+        const oldTotalStock = Number(targetItem.currentStock || 0);
+        const oldWac = Number(targetItem.weightedAverageCost || 0);
+        const costBasis = Number(entry.unitPrice);
+        const unitPrice = !isNaN(costBasis) && costBasis > 0 ? costBasis : oldWac;
+        const newWac = FinancialMath.calculateWAC(oldTotalStock, oldWac, qtyToAdd, unitPrice).toNumber();
+
+        // Update item stock + WAC atomically (Read-Calculate-Update, DB-00x pattern)
         await tx.update(items).set({
           stocks: currentStocks,
-          currentStock: newTotalStock
+          currentStock: newTotalStock,
+          weightedAverageCost: newWac,
+          version: nextVersion(targetItem.version)
         }).where(eq(items.id, targetItemId));
 
         // Log transaction
@@ -717,7 +735,10 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
           itemId: targetItemId,
           type: 'in',
           quantity: qtyToAdd,
-          date: new Date().toISOString(),
+          unitPrice,
+          totalPrice: roundFinancial(qtyToAdd * unitPrice),
+          // V3.0.7 (TD-062): تاریخ تراکنش از ساعت توافقی کسب‌وکار (نه UTC خام)
+          date: await businessNowIsoDateTime(),
           documentType: 'پروژه تولید',
           documentRef: proj.projectCode,
           createdBy: typeof currentUser === 'string' ? currentUser : 'system',
