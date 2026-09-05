@@ -16,7 +16,25 @@ going forward.
 
 ---
 
-## Version 3.0.0 (Master Release)
+## Version 3.x Series
+
+### v3.0.4 — Version Drift Resolution & Build SSOT (TD-043)
+- **Version Single Source of Truth (SSOT):** Centralized version resolution in `src/lib/version.ts` dynamically deriving build metadata and package version.
+- **Probe & Health Endpoint Harmonization:** Updated `/health` and `/api/health` to return synchronized `version` and `buildInfo` payload.
+- **Manifest & Backup Alignment:** Unified backup export metadata, Release Gate reports, Recovery verification manifests, and Kubernetes deployment YAML.
+- **Automated Version Guard:** Added automated unit test assertion (Test 11 in `unitSuite.ts`) to prevent future version drift regressions.
+
+### v3.0.3 — Performance, Memory Caching & Maintenance (TD-039..TD-042)
+- **Frontend Code Splitting:** Dynamic `import('xlsx')` and React.lazy Suspense across Excel export/import and reconciliation components.
+- **In-Memory TTL Caching:** Lightweight memory cache for RBAC role permissions lookup and system settings with automatic mutation invalidation.
+- **Data Archival & Maintenance:** Purge utilities for old outbox events (`purgeProcessedEvents`) and audit trail records (`purgeOldAuditLogs`).
+- **Test Scripts Separation:** Split `test:unit` and `test:full` execution scripts in package.json.
+
+### v3.0.2 — Drizzle Migration Unification (TD-038)
+- **Migration Pipeline Unification:** Consolidated all schema definitions into `drizzle/0000_v3_baseline.sql` and adopted standard Drizzle ORM migrator runner.
+
+### v3.0.1 — Repository Architecture & Harmonization
+- **Harmonization:** Standardized test suite naming, cleaned up development artifacts, and synchronized project documentation.
 
 ### v3.0.0 — Comprehensive UI/UX Overhaul & Financial Automation Milestone
 - **Phase 1 (Flexible Multi-Step Invoice Settlements):** Full settlement modal supporting Cash, POS/Bank, Sayad Cheques, and Bank Transfers with automatic double-entry voucher generation and status tracking.

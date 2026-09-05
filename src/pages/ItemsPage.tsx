@@ -1,15 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Item, User } from '../types';
 import { Search, Plus, FileSpreadsheet, CheckSquare, Package, Box, AlertTriangle, Layers, Tag } from 'lucide-react';
 import { useSearch } from '../SearchContext';
 import { cn, formatPersianNumber } from '../utils';
 import ConfirmModal from '../components/ConfirmModal';
-import UnifiedExcelModal from '../components/UnifiedExcelModal';
 import ImagePreviewModal from '../components/items/ImagePreviewModal';
 import ImportErrorsModal from '../components/items/ImportErrorsModal';
 import ItemsTable from '../components/items/ItemsTable';
 import ItemFormModal from '../components/items/ItemFormModal';
+
+const UnifiedExcelModal = lazy(() => import('../components/UnifiedExcelModal'));
 import {
   useItemsQuery,
   useCategoriesQuery,
@@ -317,13 +318,17 @@ export default function ItemsPage({ user }: { user: User }) {
         onSuccessRefresh={loadItems}
       />
 
-      <UnifiedExcelModal
-        isOpen={showExcelModal}
-        onClose={() => setShowExcelModal(false)}
-        onSuccess={loadItems}
-        typeFilter={type}
-        title={`مدیریت اکسل ${entityLabel} و قیمت‌گذاری‌ها`}
-      />
+      {showExcelModal && (
+        <Suspense fallback={null}>
+          <UnifiedExcelModal
+            isOpen={showExcelModal}
+            onClose={() => setShowExcelModal(false)}
+            onSuccess={loadItems}
+            typeFilter={type}
+            title={`مدیریت اکسل ${entityLabel} و قیمت‌گذاری‌ها`}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

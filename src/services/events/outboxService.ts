@@ -1,6 +1,6 @@
 import { orm, pool, type DbExecutor } from '../../db/drizzle.js';
 import { outboxEvents } from '../../db/schema.js';
-import { eq, and, or, lte, sql, desc, type SQL } from 'drizzle-orm';
+import { eq, and, or, lte, lt, sql, desc, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { domainEventBus } from './domainEventBus.js';
@@ -506,5 +506,25 @@ export class OutboxService {
       .where(eq(outboxEvents.status, 'failed'));
 
     return 1;
+  }
+
+  /**
+   * پاکسازی/بایگانی رویدادهای پردازش‌شده قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۳۰ روز)
+   */
+  static async purgeProcessedEvents(olderThanDays: number = 30): Promise<number> {
+    try {
+      const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+      const result = await orm
+        .delete(outboxEvents)
+        .where(and(
+          eq(outboxEvents.status, 'processed'),
+          lt(outboxEvents.processedAt, cutoffDate)
+        ));
+
+      return (result as any)?.rowCount || 0;
+    } catch (err) {
+      logger.error({ message: 'Error purging old processed outbox events', error: err });
+      return 0;
+    }
   }
 }

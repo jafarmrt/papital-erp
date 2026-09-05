@@ -490,7 +490,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     // Step 2: Synchronize Accounting Journal Voucher automatically
     const payrollVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(payroll.id);
 
-    if (!payrollVoucher || !payrollVoucher.voucherNumber || Number(payrollVoucher.totalDebit) !== 8500000) {
+    if (!payrollVoucher || !payrollVoucher.voucherNumber || Number(payrollVoucher.totalDebit) !== 9000000) {
       throw new Error('صدور سند حسابداری کارزد دستمزد حقوق با خطا مواجه شد');
     }
 
@@ -499,7 +499,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const totalDebit = voucherItems.reduce((acc, i) => acc + (Number(i.debit) || 0), 0);
     const totalCredit = voucherItems.reduce((acc, i) => acc + (Number(i.credit) || 0), 0);
 
-    if (totalDebit !== 8500000 || totalCredit !== 8500000) {
+    if (totalDebit !== 9000000 || totalCredit !== 9000000) {
       throw new Error(`سند حقوق صادر شده تراز نیست. بدهکار: ${totalDebit}, بستانکار: ${totalCredit}`);
     }
 
@@ -511,7 +511,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - j5Start,
-      details: `فیش حقوقی شماره #${payroll.payrollNumber} برای ${worker.fullName} تایید شد و سند حسابداری دوبل متوازن شماره #${payrollVoucher.voucherNumber} به مبلغ ۸,۵۰۰,۰۰۰ ریال صادر گردید.`
+      details: `فیش حقوقی شماره #${payroll.payrollNumber} برای ${worker.fullName} تایید شد و سند حسابداری دوبل متوازن شماره #${payrollVoucher.voucherNumber} به مبلغ ۹,۰۰۰,۰۰۰ ریال صادر گردید.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({

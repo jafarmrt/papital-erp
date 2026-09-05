@@ -10,6 +10,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
+import { invalidateRoleCache } from '../lib/memoryCache.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -361,6 +362,8 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
       }
     });
 
+    invalidateRoleCache(slugCode);
+
     res.json(newRole);
   } catch (err) {
     throw err;
@@ -390,6 +393,7 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     };
 
     await orm.update(roles).set(updateData).where(eq(roles.id, roleId));
+    invalidateRoleCache(targetRole.code);
 
     await logActivity({
       req,
@@ -433,6 +437,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
     }
 
     await orm.delete(roles).where(eq(roles.id, roleId));
+    invalidateRoleCache(targetRole.code);
 
     await logActivity({
       req,

@@ -151,7 +151,7 @@ async function runTests() {
   xlsx.utils.book_append_sheet(wb, ws, 'Mellat-Statement');
   const buf = xlsx.write(wb, { type: 'array', bookType: 'xlsx' });
 
-  const parsedMellat = parseBankStatementBuffer(buf);
+  const parsedMellat = await parseBankStatementBuffer(buf);
   if (parsedMellat.rows.length !== 2) {
     throw new Error(`تعداد سطر استخراج‌شده باید ۲ باشد، دریافت شد: ${parsedMellat.rows.length}`);
   }

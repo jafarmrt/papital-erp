@@ -1,6 +1,6 @@
 # AI Agent Instructions (AGENTS.md)
 
-> **Documentation Map (V10-7.1, updated at v2.8.7):** این فایل مرجع یگانه قواعد معماری و حاکمیت است. `GEMINI.md` فقط یک stub ارجاعی است؛ `DEVELOPER.md` و `DEVELOPER_GUIDE.md` حذف شده‌اند (تاریخچه در Git)؛ پوشه `docs/` نیز پس از انتشار v1.1.0 حذف شد (blueprintها در Git history). نقشه: قواعد و وضعیت نقشه راه: همین فایل (§۳۱) • دفتر بدهی: `TECH_DEBT.md` • آرشیو چنجلاگ و sign-off انتشار: `CHANGELOG.md` • راهنمای نصب/اجرا/عملیات (شامل Runbook): `README.md` • نصاب: `install.sh` / `update.sh`.
+> **Documentation Map (Version 3.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. `GEMINI.md` یک stub ارجاعی است. نقشه راه فعال: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • آرشیو چنجلاگ و سابقه تغییرات: `CHANGELOG.md` و `src/data/changelogs/` • راهنمای نصب و اجرا: `README.md` • نصاب: `install.sh` / `update.sh`.
 
 This project has specific architectural constraints and conventions discovered during development. Any AI Agent working on this codebase MUST strictly adhere to these guidelines to ensure system stability and consistency:
 
@@ -88,8 +88,8 @@ This project has specific architectural constraints and conventions discovered d
 - **Three-Way Sync:** Keep global `current_stock`, warehouse location JSONB `stocks`, and Kardex ledger (`stock_movements`) fully aligned and auditable.
 
 ## 13. Scalable Changelog Architecture
-- **Version Partitioning:** Changelogs are split by major version in `src/data/changelogs/` (`v1.ts` through `v7.ts`) and aggregated in `src/data/appInfoAndChangelog.ts`.
-- **Mandatory Registration:** Every release must increment `"version"` in `package.json` and append a new `AIUpdateLog` entry to the active version file (e.g. `src/data/changelogs/v7.ts` for version 7.x releases). Never append 7.x releases to `v6.ts`.
+- **Version Partitioning:** Changelogs are split by major version in `src/data/changelogs/` (`0.ts`, `1.ts`, `2.ts`, `3.ts`) and aggregated in `src/data/appInfoAndChangelog.ts`.
+- **Mandatory Registration:** Every release must reflect `"version"` in `package.json` and append a new `AIUpdateLog` entry to the active version file (e.g. `src/data/changelogs/3.ts` for version 3.x releases). Never append 3.x releases to `2.ts`.
 
 ## 14. Workflow Engine, Visual Canvas & SLA Analytics Architecture
 1. **JSON Rule Engine & Pre-conditions (`ruleConditionsJson`):** Evaluate context variables (e.g. invoice total amount, branch, priority) using operator rules (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`) before rendering available transition buttons or executing transitions.
@@ -147,13 +147,12 @@ This project has specific architectural constraints and conventions discovered d
 - **Legal General Journal Book (`journal-book`):** Endpoints and UI must render double-entry journal vouchers sequentially sorted by voucher date and voucher number, displaying running balance, accounts, detailed mappings, and verified debit/credit equilibrium.
 - **Drill-Down Capabilities:** All trial balance rows must support instant drill-down navigation to detailed ledger cards (`ledger`) for comprehensive ledger auditing.
 
-## 26. Version 8 Master Execution Blueprint Compliance & Subphase Approval Rules
-- **Blueprint Verification (`/docs/V8_MASTER_BLUEPRINT.md`):** Before beginning any phase or subphase of Version 8.6.0 (Stability & Production-Stable Roadmap aiming for v8.7.0), the AI Agent MUST inspect `/docs/V8_MASTER_BLUEPRINT.md` to verify the execution plan, DAG dependencies, and phase goals. The agent MUST strictly adhere to the 10-phase roadmap without adding unsolicited features.
-- **Subphase Execution & Mandatory Stop:** At the end of every subphase (e.g. Subphase 0.1, Subphase 1.1, etc.), the AI Agent MUST:
+## 26. Master Execution Roadmap & Subphase Approval Rules
+- **Roadmap Verification (`V3_MASTER_ROADMAP.md`):** Before beginning any phase or subphase, the AI Agent MUST inspect `V3_MASTER_ROADMAP.md` to verify the execution plan, acceptance criteria, and goals. The agent MUST strictly adhere to the roadmap without adding unsolicited features.
+- **Subphase Execution & Verification:** At the end of every subphase:
   1. Complete the subphase tasks self-containedly.
   2. Run `lint_applet` and `compile_applet` to verify zero build or lint errors.
-  3. **STOP execution immediately** and provide a detailed report of completed changes and debt/status to the user.
-  4. Wait for explicit user confirmation before proceeding to the next subphase.
+  3. Provide a clear, concise report of completed changes and status to the user.
 
 ## 27. Phase 2 Database Stability, Concurrency & OCC Rules
 - **PostgreSQL Atomic Sequences (DB-001, DB-003, DB-011):** Never calculate sequential IDs using `SELECT COUNT(*)` or `MAX(val) + 1`. Always use PostgreSQL Sequences (`voucher_number_seq`, `treasury_tx_number_seq`) or dedicated counter tables with atomic UPSERT/increments (`document_counters`).

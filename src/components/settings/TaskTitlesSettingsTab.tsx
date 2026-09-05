@@ -253,8 +253,8 @@ export function TaskTitlesSettingsTab() {
               className="px-3 py-1.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/50"
             >
               <option value="ALL">همه دسته‌بندی‌ها</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.name}>{c.name}</option>
+              {categories.map((c, idx) => (
+                <option key={`task-cat-flt-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
               ))}
             </select>
 
@@ -412,8 +412,8 @@ export function TaskTitlesSettingsTab() {
                     onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                    {categories.map((c, idx) => (
+                      <option key={`task-cat-form-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
                     ))}
                   </select>
                 </div>

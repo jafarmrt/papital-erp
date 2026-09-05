@@ -20,7 +20,7 @@ const maxPoolSize = parseInt(process.env.DB_POOL_MAX || '20', 10);
 const idleTimeoutMillis = parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10);
 const connectionTimeoutMillis = parseInt(process.env.DB_CONN_TIMEOUT || '5000', 10);
 const statementTimeoutMs = parseInt(process.env.DB_STATEMENT_TIMEOUT || '60000', 10);
-const idleInTxTimeoutMs = parseInt(process.env.DB_IDLE_IN_TX_TIMEOUT || '30000', 10);
+const idleInTxTimeoutMs = parseInt(process.env.DB_IDLE_IN_TX_TIMEOUT || '60000', 10);
 
 const isSsl = rawDbUrl.includes('sslmode=require') || 
               rawDbUrl.includes('neon.tech') || 

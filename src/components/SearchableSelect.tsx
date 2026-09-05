@@ -231,9 +231,9 @@ export function SearchableSelect({
               -- {placeholder} --
             </li>
             {displayOptions.length > 0 ? (
-              displayOptions.map(opt => (
+              displayOptions.map((opt, index) => (
                 <li
-                  key={opt.value}
+                  key={`${opt.value ?? ''}-${index}`}
                   className={cn(
                     "px-3 py-2 cursor-pointer transition-colors leading-relaxed",
                     opt.disabled ? "opacity-50 cursor-not-allowed bg-slate-50" : "hover:bg-blue-50 text-slate-700",

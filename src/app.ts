@@ -38,6 +38,7 @@ import draftsRoutes from './routes/drafts.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection } from './middleware/auth.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
+import { BUILD_INFO } from './lib/version.js';
 
 let isStartupComplete = false;
 
@@ -324,7 +325,8 @@ export async function createApp(): Promise<express.Express> {
       await orm.execute(sql`SELECT 1`);
       res.json({
         status: 'ok',
-        version: '2.8.7',
+        version: BUILD_INFO.version,
+        buildInfo: BUILD_INFO,
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });

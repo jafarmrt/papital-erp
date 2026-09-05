@@ -14,16 +14,16 @@ import { createTestItem } from '../fixtures/factories.js';
 const doneNoop = undefined;
 
 /**
- * V9 Phase 6 — Regression Suite
- * پوشش تستی فیکس‌های بحرانی نسخه ۹:
- *  ۱. مسدودسازی دور زدن نهایی‌سازی سند با PUT (V9-001)
- *  ۲. اعتبارسنجی اقلام منفی/صفر در گردش انبار (V9-002)
- *  ۳. برگشت سند حسابداری هنگام حذف سند نهایی + تراکنش‌های معکوس DB-009 (V9-006)
- *  ۴. نگاه غیرمخرب next-ref (عدم سوختن شماره سند) (V9-008)
- *  ۵. صفحه‌بندی NaN-safe با سقف (V9-012)
- *  ۶. اعتبارسنجی زنده نشست: tokenVersion و soft-delete کاربر (V9-014)
+ * Document Integrity & Financial Reversal Suite
+ * آزمون‌های یکپارچگی اسناد و برگشت‌های مالی:
+ *  ۱. مسدودسازی دور زدن نهایی‌سازی سند با PUT (SEC-DOC-001)
+ *  ۲. اعتبارسنجی اقلام منفی/صفر در گردش انبار (INV-VAL-002)
+ *  ۳. برگشت سند حسابداری هنگام حذف سند نهایی + تراکنش‌های معکوس DB-009
+ *  ۴. نگاه غیرمخرب next-ref (عدم سوختن شماره سند)
+ *  ۵. صفحه‌بندی NaN-safe با سقف مجاز
+ *  ۶. اعتبارسنجی زنده نشست: tokenVersion و soft-delete کاربر
  */
-export async function runV9RegressionTests(): Promise<TestCaseResult[]> {
+export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
   // ------------------------------------------------------------------

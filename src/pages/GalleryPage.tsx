@@ -123,8 +123,8 @@ export default function GalleryPage({ user }: { user: User }) {
           >
             <option value="">همه دسته‌بندی‌ها</option>
             {categories.filter(c => c.type === tab).length === 0 && <option disabled>دسته بندی یافت نشد</option>}
-            {categories.filter(c => c.type === tab).map(c => (
-              <option key={c.id} value={c.name}>{c.name}</option>
+            {categories.filter(c => c.type === tab).map((c, idx) => (
+              <option key={`cat-gal-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
             ))}
           </select>
         </div>
@@ -132,13 +132,13 @@ export default function GalleryPage({ user }: { user: User }) {
 
       <div className="flex-1 overflow-auto p-4 md:p-6 bg-slate-100">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-          {paginatedItems.map(item => {
+          {paginatedItems.map((item, idx) => {
             const stock = Number(item.current_stock || 0);
             const wacVal = Number(item.weighted_average_cost ?? (item as any).weightedAverageCost ?? 0);
             const itemCurrency = (item as any).currency as string | undefined;
             const stockBadgeCls = stock > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200';
             return (
-            <div key={item.id} className="bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col hover:shadow-md transition-shadow group relative">
+            <div key={`gal-card-${item.id || idx}-${idx}`} className="bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col hover:shadow-md transition-shadow group relative">
               <button onClick={() => setLightboxImage(item.image || item.thumbnail || null)} className="aspect-square w-full bg-slate-50 flex items-center justify-center p-2 relative overflow-hidden cursor-zoom-in">
                 <SafeImage src={item.image || item.thumbnail} alt={item.name} className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform" fallbackIcon={<ImageIcon size={28} />} />
               </button>

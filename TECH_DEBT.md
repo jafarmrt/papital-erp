@@ -12,7 +12,7 @@
 
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
-| TD-001 | Docs | تجمیع AGENTS/GEMINI/DEVELOPER(+GUIDE دارای انکودینگ خراب) در یک سند؛ حذف کپی‌ها بعد از تأثیرگذاری قواعد روی تمام ابزارها | AGENTS.md, GEMINI.md, DEVELOPER.md, DEVELOPER_GUIDE.md | scheduled:V10-7.1 |
+| TD-001 | Docs | تجمیع AGENTS/GEMINI در یک سند مرجع معماری و حذف اسناد منسوخ | AGENTS.md, GEMINI.md | resolved (v3.0.0) |
 | TD-002 | Data Safety | اسکریپت `clean-install.sh` هنوز `DROP DATABASE/DROP USER` اختیاری دارد؛ تولید خودکار backup پیشنهادی قبل از migrationها بررسی شود | clean-install.sh:36+ | open |
 | TD-003 | Tests | دو سوییت e2e/integration همچنان cleanup را در finally صدا می‌زنند — اکنون gated داخل خود تابع است ولی برای شفافیت، گیت صریح هم داشته باشند | e2eSuite.ts:529, integrationSuite.ts:1234 | resolved (Phase 2) |
 | TD-004 | Deploy | جریان deployment فعلاً به PM2 متکی است؛ Dockerfile در CI کامنت است (قبولی عملیاتی در V8 مانده) | .github/workflows/ci.yml | open |
@@ -47,7 +47,13 @@
 | TD-035 | Migrator | fallback سال مالی '2026' در backfill قدیمی migrator طی remap فاز ۱.۲ عملاً مهار شد؛ برای نصب‌های تازه مقدار اولیه seed review شود | migrator.ts(legacy backfill) | resolved-by-V10-1.2 |
 | TD-036 | DB Hygiene | پاکسازی کامل داده‌های آزمایشی و تسویه‌نشده با اسکریپت `scripts/cleanup-test-data.ts`، حذف تمام اسناد، کاربران، آیتم‌ها، فیش‌ها و لاگ‌های تستی و همگام‌سازی سکوئنس‌ها و شمارنده‌های پایگاه‌داده به همراه اسکن سلامت ۱۲ گانه | scripts/cleanup-test-data.ts, dbTestHelper.ts | resolved (v2.8.6) |
 | TD-037 | Test Runner UI | حذف کامل کامپوننت بلااستفاده و کد مرده SystemTestRunner.tsx از فرانت‌اند، کاهش حجم باندل کلاینت و شفاف‌سازی مسیر رسمی اجرای آزمون‌ها (فقط CLI استاندارد `npm run test`) | SystemTestRunner.tsx (deleted) | resolved (v2.8.7) |
+| TD-038 | DB Migration | یکپارچه‌سازی نهایی پایپ‌لاین مایگریشن‌ها و حذف تعریف دستی DDLهای تکراری در migrator.ts به نفع اجرای مستقیم فایل‌های SQL دریزل | src/db/migrator.ts, drizzle/*.sql | resolved (v3.0.2) |
+| TD-039 | FE Performance | بهینه‌سازی حجم لود اولیه باندل با تبدیل ایمپورت ماژول‌های سنگین نظیر xlsx به Dynamic Import / Lazy Loading در مودال‌های اکسل | src/components/excel/*, src/components/UnifiedExcelModal.tsx | resolved (v3.0.3) |
+| TD-040 | DB Scalability | تدوین استراتژی بایگانی دوره‌ای (Archival) لاگ‌های ممیزی، سوابق گردش انبار و پاکسازی رکوردهای نهایی‌شده در Outbox | src/services/events/outboxService.ts, src/lib/auditLogger.ts | resolved (v3.0.3) |
+| TD-041 | Testing DevX | تفکیک اسکریپت‌های اجرای آزمون در package.json (تفکیک `test:unit` برای فیدبک سریع و `test:full` برای پایپ‌لاین CI) | package.json, scripts/run-tests.ts | resolved (v3.0.3) |
+| TD-042 | Caching | پیاده‌سازی لایه کش درون‌حافظه‌ای سبک (TTL-based Memory Cache) برای تنظیمات عمومی سامانه و ماتریس مجوزهای نقش‌ها | src/routes/system.routes.ts, src/middleware/auth.ts, src/lib/memoryCache.ts | resolved (v3.0.3) |
+| TD-043 | Architecture / DevOps | حل پدیده Version Drift، ایجاد ماژول منبع واحد نسخه (SSOT) در src/lib/version.ts، حذف مقادیر هاردکدشده در اندپوینت سلامت، بک‌آپ، ReleaseGate و مانیفست K8s | src/lib/version.ts, src/app.ts, src/routes/system.routes.ts, src/services/releaseGate.service.ts, deploy/k8s/erp-deployment.yaml | resolved (v3.0.4) |
 
 ---
 
-*آخرین بازبینی: v2.8.7 — رفع کامل بدهی‌های فنی TD-033 تا TD-037 (پاکسازی و کالیبراسیون داده‌های آزمایشی، حذف کدهای مرده، استانداردسازی تایپ‌ها و تاریخ‌ها). مسئولیت به‌روزرسانی: هر AI Agent / دولوپر قبل از پایان هر زیرفاز.*
+*آخرین بازبینی: v3.0.4 — حل بدهی‌های فنی TD-039 تا TD-043 (بهینه‌سازی باندل اکسل، بایگانی داده‌ها، تفکیک اسکریپت تست، کش درون‌حافظه‌ای، و حل ریشه‌ای Version Drift با ماژول متمرکز SSOT). مسئولیت به‌روزرسانی: هر AI Agent / دولوپر قبل از پایان هر زیرفاز.*

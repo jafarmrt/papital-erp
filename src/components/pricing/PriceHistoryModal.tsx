@@ -129,13 +129,13 @@ export function PriceHistoryModal({
               هیچ سابقه قیمتی برای این کالا ثبت نشده است.
             </div>
           ) : (
-            filteredHistory.map((h: any) => {
+            filteredHistory.map((h: any, idx: number) => {
               const isDeleted = h.is_deleted === 1 || h.isDeleted === 1;
               const isActive = !isDeleted && activeIdsByCanonical.has(h.id);
               const displayTitle = formatStrategyDisplayTitle(h.title);
 
               return (
-                <div key={h.id} className={cn(
+                <div key={`ph-item-${h.id || idx}-${idx}`} className={cn(
                   "p-3 rounded-xl border flex justify-between items-center text-xs transition-colors",
                   isActive ? "bg-emerald-50/40 border-emerald-200" : isDeleted ? "bg-rose-50/30 border-rose-100 opacity-75" : "bg-slate-50 border-slate-200/80 hover:bg-slate-100/60"
                 )}>

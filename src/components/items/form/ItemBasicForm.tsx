@@ -80,8 +80,8 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
           >
             {categories
               .filter(c => c.type === form.type)
-              .map(c => (
-                <option key={c.id} value={c.name}>
+              .map((c, idx) => (
+                <option key={`cat-item-${c.id || idx}-${idx}`} value={c.name}>
                   {c.name}
                 </option>
               ))}

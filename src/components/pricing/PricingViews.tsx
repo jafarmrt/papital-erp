@@ -30,11 +30,11 @@ export function PricingGridView(props: PricingViewsShared) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {items.map(item => {
+      {items.map((item, idx) => {
         const isEdited = localEdits[item.id] !== undefined;
 
         return (
-          <div key={item.id} className="bg-white border rounded-2xl shadow-xs overflow-hidden flex flex-col justify-between hover:border-blue-300 transition-all">
+          <div key={`pv-card-${item.id || idx}-${idx}`} className="bg-white border rounded-2xl shadow-xs overflow-hidden flex flex-col justify-between hover:border-blue-300 transition-all">
             <div className="p-4 border-b bg-slate-50/50 flex justify-between items-start gap-2">
               <div className="overflow-hidden">
                 <div className="flex items-center gap-2">
@@ -173,11 +173,11 @@ export function PricingTableView(props: PricingViewsShared) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {items.map(item => {
+          {items.map((item, idx) => {
             const isEdited = localEdits[item.id] !== undefined;
 
             return (
-              <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+              <tr key={`pv-row-${item.id || idx}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                 <td className="p-3 font-mono text-slate-600 dir-ltr text-right">{item.code}</td>
                 <td className="p-3 font-bold text-slate-800">{item.name}</td>
                 <td className="p-3 text-slate-500">{item.category || '-'}</td>

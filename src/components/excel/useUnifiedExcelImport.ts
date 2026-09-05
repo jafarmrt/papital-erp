@@ -1,5 +1,4 @@
 import React, { useState, useRef, useMemo } from 'react';
-import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { formatPersianNumber } from '../../utils';
@@ -96,8 +95,9 @@ export function useUnifiedExcelImport({
       setExistingItems(loadedItems);
 
       const reader = new FileReader();
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
         try {
+          const xlsx = await import('xlsx');
           const bstr = evt.target?.result;
           const wb = xlsx.read(bstr, { type: 'binary' });
           const ws = wb.Sheets[wb.SheetNames[0]];

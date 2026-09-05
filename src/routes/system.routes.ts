@@ -25,6 +25,8 @@ import { logActivity } from '../lib/auditLogger.js';
 import { isTestEndpointsEnabled, getTestEndpointsSource } from '../lib/runtimeFlags.js';
 import { runSeed } from '../db/seed.js';
 import { runMigrations, validateDbSchema } from '../db/migrator.js';
+import { appSettingsCache, invalidateSettingsCache } from '../lib/memoryCache.js';
+import { BUILD_INFO } from '../lib/version.js';
 
 const router = Router();
 
@@ -58,6 +60,8 @@ router.get('/system/env', authorize('admin'), async (req, res) => {
   });
   const effectiveTestEndpoints = await isTestEndpointsEnabled();
   res.json({
+    version: BUILD_INFO.version,
+    buildInfo: BUILD_INFO,
     db: process.env.DATABASE_URL ? 'set' : 'not set',
     nodeEnv: process.env.NODE_ENV || 'development',
     nodeVersion: process.version,
@@ -115,7 +119,9 @@ router.get('/system/run-seed', authorize('admin'), async (req, res) => {
 // App Settings
 router.get('/settings', async (req, res) => {
   try {
-    const settings = await orm.select().from(appSettings);
+    const settings = await appSettingsCache.getOrSet('all_settings', async () => {
+      return orm.select().from(appSettings);
+    }, 60_000);
     res.json(settings);
   } catch (err) {
     throw err;
@@ -125,14 +131,17 @@ router.get('/settings', async (req, res) => {
 // V10-5.3: نقشه دید منو per-role — خواندنی برای همه کاربران احراز هویت‌شده (سایدبار)
 router.get('/menu-visibility', async (req, res) => {
   try {
-    const [row] = await orm.select().from(appSettings).where(eq(appSettings.key, 'menu_visibility'));
-    if (!row?.value) return res.json({});
-    try {
-      const parsed = JSON.parse(row.value);
-      return res.json(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {});
-    } catch {
-      return res.json({});
-    }
+    const result = await appSettingsCache.getOrSet('menu_visibility', async () => {
+      const [row] = await orm.select().from(appSettings).where(eq(appSettings.key, 'menu_visibility'));
+      if (!row?.value) return {};
+      try {
+        const parsed = JSON.parse(row.value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }, 60_000);
+    return res.json(result);
   } catch (err) {
     throw err;
   }
@@ -173,6 +182,9 @@ router.post('/settings', authorize('admin', 'manager'), validate(settingsSchema)
           .onConflictDoUpdate({ target: appSettings.key, set: { value: val } });
       }
     });
+
+    // ابطال کش تنظیمات سیستم
+    invalidateSettingsCache();
 
     // V10-1.1: ابطال کش منطقه زمانی پس از ذخیره تنظیمات
     const { invalidateTimezoneCache } = await import('../lib/businessClock.js');
@@ -914,7 +926,8 @@ router.get('/export-backup', authorize('admin'), async (req, res) => {
 
     const backupData = {
       exportedAt: new Date().toISOString(),
-      version: '5.5.3',
+      version: BUILD_INFO.version,
+      buildInfo: BUILD_INFO,
       data: {
         users: allUsers,
         personnel: allPersonnel,

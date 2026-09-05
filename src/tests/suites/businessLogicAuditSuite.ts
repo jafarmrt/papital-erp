@@ -11,8 +11,17 @@ import { getMenuGroups } from '../../components/layout/menuConfig.js';
 import { cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { jalaliToIsoDate } from '../../utils.js';
 
-// V10-7.4: سوییت رگرسیون نسخه ۱۰ — ۶ سناریوی بحرانی رفتارهای جدید V10
-export async function runV10RegressionTests(): Promise<TestCaseResult[]> {
+/**
+ * Business Logic & System Invariants Audit Suite
+ * آزمون‌های ممیزی رفتارهای کلیدی و قواعد سیستم:
+ *  ۱. ساختار کاردکس کالا
+ *  ۲. شماره‌گذاری اتمیک کد کالا تحت همروندی
+ *  ۳. محدودیت تسویه فیش حقوقی منحصراً از خزانه‌داری
+ *  ۴. ماتریس دسترسی به منوها (menu_visibility)
+ *  ۵. پاکسازی امن داده‌های آزمایشی
+ *  ۶. اعتبارسنجی و تبدیل تاریخ‌ها به ISO
+ */
+export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
   // ── 1. Kardex Envelope Contract: {item, summary, entries} ────────────────

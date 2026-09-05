@@ -1,4 +1,3 @@
-import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 
@@ -11,6 +10,7 @@ export async function exportCompleteExcel(typeFilter: string): Promise<void> {
     return;
   }
 
+  const xlsx = await import('xlsx');
   const ws = xlsx.utils.json_to_sheet(data.rows);
   const wb = xlsx.utils.book_new();
   const sheetName = typeFilter === 'product'
@@ -59,6 +59,7 @@ export async function downloadExcelTemplate(): Promise<void> {
   });
   sampleRow['واحد ارز'] = 'IRR';
 
+  const xlsx = await import('xlsx');
   const ws = xlsx.utils.json_to_sheet([sampleRow]);
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, 'الگوی_ورود_کالا_و_قیمت');

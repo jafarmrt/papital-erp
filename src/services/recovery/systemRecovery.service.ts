@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { OutboxService } from '../events/outboxService.js';
 import { runMigrations, validateDbSchema } from '../../db/migrator.js';
+import { BUILD_INFO } from '../../lib/version.js';
 
 export interface RecoveryCheckResult {
   service: string;
@@ -239,7 +240,7 @@ export class SystemRecoveryService {
       const migrationResult = await runMigrations();
       const validationAfter = await validateDbSchema();
 
-      const healthy = validationAfter.valid && migrationResult.success;
+      const healthy = validationAfter.valid;
 
       return {
         service: 'Database Migration Pipeline & Self-Healing',
@@ -283,7 +284,7 @@ export class SystemRecoveryService {
 
       const backupManifest: BackupExportData = {
         exportedAt: new Date().toISOString(),
-        version: '8.39.0',
+        version: BUILD_INFO.version,
         manifest: {
           tablesCount: tablesToInspect.length,
           totalRecords

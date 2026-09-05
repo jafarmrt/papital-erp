@@ -3,6 +3,7 @@ import { WorkflowRuleEngine } from '../../services/workflow/workflowEngineServic
 import { RuleExpression } from '../../services/ruleEngine.service.js';
 import { normalizeError } from '../../errors/customErrors.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { BUILD_INFO, APP_VERSION } from '../../lib/version.js';
 import crypto from 'crypto';
 
 export async function runUnitTests(): Promise<TestCaseResult[]> {
@@ -502,6 +503,42 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       executionType: 'simulation_logic',
       passed: false,
       durationMs: Date.now() - t10Start,
+      error: err.message
+    }));
+  }
+
+  // Test 11: Version Single Source of Truth & Build Info Invariant (TD-043)
+  const t11Start = Date.now();
+  try {
+    if (!BUILD_INFO.version || typeof BUILD_INFO.version !== 'string') {
+      throw new Error('مقدار BUILD_INFO.version معتبر نیست');
+    }
+
+    if (!/^\d+\.\d+\.\d+/.test(BUILD_INFO.version)) {
+      throw new Error(`فرمت نسخه مطابق با استاندارد SemVer نیست: ${BUILD_INFO.version}`);
+    }
+
+    if (BUILD_INFO.version !== APP_VERSION) {
+      throw new Error(`واگرایی میان BUILD_INFO.version (${BUILD_INFO.version}) و APP_VERSION (${APP_VERSION})`);
+    }
+
+    results.push(makeTestCase({
+      id: 'unit_version_ssot_invariant',
+      name: 'صحت منبع واحد شماره نسخه (Version SSOT) و متادیتای بیلد سامانه',
+      layer: 'unit',
+      executionType: 'simulation_logic',
+      passed: true,
+      durationMs: Date.now() - t11Start,
+      details: `نسخه یکپارچه سامانه (${BUILD_INFO.version}) با استانداردهای SemVer، ماژول متمرکز و مانیفست بیلد با موفقیت تأیید شد.`
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_version_ssot_invariant',
+      name: 'صحت منبع واحد شماره نسخه (Version SSOT) و متادیتای بیلد سامانه',
+      layer: 'unit',
+      executionType: 'simulation_logic',
+      passed: false,
+      durationMs: Date.now() - t11Start,
       error: err.message
     }));
   }

@@ -322,8 +322,8 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
             >
               <option value="all">همه دسته‌بندی‌ها</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.name}>{c.name}</option>
+              {categories.map((c, idx) => (
+                <option key={`cat-pm-flt-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
               ))}
             </select>
 
@@ -578,8 +578,8 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                     onChange={(e) => setApproveForm({ ...approveForm, category: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   >
-                    {categories.map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                    {categories.map((c, idx) => (
+                      <option key={`cat-pm-modal-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
                     ))}
                   </select>
                 </div>

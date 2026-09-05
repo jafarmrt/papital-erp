@@ -2,6 +2,7 @@ import { pool, orm } from '../db/drizzle.js';
 import { sql, eq } from 'drizzle-orm';
 import { DataReconciliationService } from './reconciliation/dataReconciliation.service.js';
 import { SystemRecoveryService } from './recovery/systemRecovery.service.js';
+import { BUILD_INFO } from '../lib/version.js';
 
 interface DynamicTestRunnerModule {
   Phase21TestRunner: {
@@ -163,7 +164,7 @@ export class ReleaseGateService {
 
     return {
       timestamp: new Date().toISOString(),
-      version: '8.40.0',
+      version: BUILD_INFO.version,
       overallStatus,
       passedCriteria: passedCount,
       totalCriteria: totalCount,

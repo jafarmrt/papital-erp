@@ -83,7 +83,7 @@ export function BankReconciliationModal({
     setIsProcessingFile(true);
     try {
       const buffer = await file.arrayBuffer();
-      const { rows, detectedBank } = parseBankStatementBuffer(buffer);
+      const { rows, detectedBank } = await parseBankStatementBuffer(buffer);
 
       if (!rows || rows.length === 0) {
         toast.error('هیچ ردیف معتبری دارای مبلغ در فایل اکسل یافت نشد.');

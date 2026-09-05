@@ -125,7 +125,7 @@ export async function runRecoveryTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: res.healthy,
       durationMs: Date.now() - t4Start,
-      details: `مایگریشن ایدم‌پوتنت اجرا شد (${res.details.appliedSteps} گام). وضعیت سلامت اسکیما: ${res.details.schemaValid ? 'معتبر و کامل' : 'دارای نقص'}.`
+      details: `مایگریشن ایدم‌پوتنت اجرا شد (${res.details?.appliedSteps ?? 0} گام). وضعیت سلامت اسکیما: ${res.details?.schemaValid ? 'معتبر و کامل' : 'دارای نقص'}.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({

@@ -2,6 +2,7 @@ import { orm } from '../db/drizzle.js';
 import { activityLogs } from '../db/schema.js';
 import { logger } from '../middleware/logger.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
+import { sql, lt } from 'drizzle-orm';
 import type { Request } from 'express';
 
 // Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
@@ -153,3 +154,18 @@ export async function logActivity(params: AuditLogParams) {
     logger.error({ message: 'Error recording hardened activity log', error: err });
   }
 }
+
+/**
+ * پاکسازی/بایگانی لاگ‌های ممیزی قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۹۰ روز)
+ */
+export async function purgeOldAuditLogs(retentionDays: number = 90): Promise<number> {
+  try {
+    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const result = await orm.delete(activityLogs).where(lt(activityLogs.timestamp, cutoffDate));
+    return (result as any)?.rowCount || 0;
+  } catch (err) {
+    logger.error({ message: 'Error purging old activity logs', error: err });
+    return 0;
+  }
+}
+

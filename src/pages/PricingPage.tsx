@@ -664,8 +664,8 @@ export default function PricingPage({ user }: { user: User }) {
             className="w-40 py-1.5 px-2.5 rounded-xl border text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50 hover:bg-white"
           >
             <option value="">همه دسته‌بندی‌ها</option>
-            {categories.filter(c => c.type === tab).map(c => (
-              <option key={c.id} value={c.name}>{c.name}</option>
+            {categories.filter(c => c.type === tab).map((c, idx) => (
+              <option key={`cat-pricing-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
             ))}
           </select>
 

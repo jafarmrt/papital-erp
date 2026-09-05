@@ -13,8 +13,8 @@ import { runE2eTests } from './suites/e2eSuite.js';
 import { runRecoveryTests } from './suites/recoverySuite.js';
 import { runPenetrationTests } from './suites/penetrationSuite.js';
 import { runCriticalPathTests } from './suites/criticalPathSuite.js';
-import { runV9RegressionTests } from './suites/v9RegressionSuite.js';
-import { runV10RegressionTests } from './suites/v10RegressionSuite.js';
+import { runDocumentIntegrityTests } from './suites/documentIntegritySuite.js';
+import { runBusinessLogicAuditTests } from './suites/businessLogicAuditSuite.js';
 
 const LAYER_LABELS: Record<TestLayer, string> = {
   unit: 'تست‌های واحد (Unit Tests)',
@@ -97,19 +97,19 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   finalize_race_single_deduction: 'Critical Path: Concurrent Finalize Single Stock Deduction (DB-002)',
   cheque_invalid_transition: 'Critical Path: Cheque Invalid State Transition Rejection',
   idempotent_duplicate_request: 'Critical Path: Idempotent Duplicate Request Replay (DB-010)',
-  v9_finalization_bypass_blocked: 'V9 Regression: PUT Document Finalization Bypass Blocked (V9-001)',
-  v9_negative_item_validation: 'V9 Regression: Negative/Zero Item Quantity & Price Validation (V9-002)',
-  v9_document_delete_accounting_reversal: 'V9 Regression: Accounting Voucher Reversal on Document Deletion (V9-006)',
-  v9_peek_next_ref_non_destructive: 'V9 Regression: Non-Destructive next-ref Peek (V9-008)',
-  v9_pagination_nan_safe: 'V9 Regression: NaN-Safe Pagination Caps (V9-012)',
-  v9_auth_live_session_validation: 'V9 Regression: Live Session Validation tokenVersion & Soft-Delete (V9-014)',
-  v10_kardex_envelope_contract: 'V10 Regression: Kardex Envelope Contract {item, summary, entries}',
-  v10_next_code_concurrent_unique: 'V10 Regression: Atomic next-code Uniqueness Under Concurrency (8 parallel)',
-  v10_payroll_paid_treasury_only: 'V10 Regression: Payroll paid-state Reachable Only Via Treasury',
-  v10_menu_visibility_deny_list: 'V10 Regression: menu_visibility Deny-List & Admin Bypass',
-  v10_cleanup_refusal_without_flag: 'V10 Regression: Test-Cleanup Refusal Without Safety Flag (Silent No-Op)',
-  v10_date_normalization_idempotence: 'V10 Regression: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
-  v10_iso_date_standardization: 'V10 Regression: ISO Date Standardization & Dual-Write Accuracy (TD-034)'
+  v9_finalization_bypass_blocked: 'Doc Integrity: PUT Document Finalization Bypass Blocked',
+  v9_negative_item_validation: 'Doc Integrity: Negative/Zero Item Quantity & Price Validation',
+  v9_document_delete_accounting_reversal: 'Doc Integrity: Accounting Voucher Reversal on Document Deletion',
+  v9_peek_next_ref_non_destructive: 'Doc Integrity: Non-Destructive next-ref Peek',
+  v9_pagination_nan_safe: 'Doc Integrity: NaN-Safe Pagination Caps',
+  v9_auth_live_session_validation: 'Security: Live Session Validation tokenVersion & Soft-Delete',
+  v10_kardex_envelope_contract: 'Business Logic: Kardex Envelope Contract {item, summary, entries}',
+  v10_next_code_concurrent_unique: 'Business Logic: Atomic next-code Uniqueness Under Concurrency (8 parallel)',
+  v10_payroll_paid_treasury_only: 'Business Logic: Payroll paid-state Reachable Only Via Treasury',
+  v10_menu_visibility_deny_list: 'Business Logic: menu_visibility Deny-List & Admin Bypass',
+  v10_cleanup_refusal_without_flag: 'Data Safety: Test-Cleanup Refusal Without Safety Flag (Silent No-Op)',
+  v10_date_normalization_idempotence: 'Data Safety: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
+  v10_iso_date_standardization: 'Data Safety: ISO Date Standardization & Dual-Write Accuracy'
 };
 
 
@@ -187,13 +187,13 @@ export class Phase21TestRunner {
       if (!layerFilter || layerFilter === 'critical_path') {
         allCases = allCases.concat(await runCriticalPathTests());
       }
-      // V9 Phase 6 — رگرسیون فیکس‌های نسخه ۹
+      // آزمون‌های یکپارچگی اسناد و برگشت‌های مالی
       if (!layerFilter || layerFilter === 'regression') {
-        allCases = allCases.concat(await runV9RegressionTests());
+        allCases = allCases.concat(await runDocumentIntegrityTests());
       }
-      // V10-7.4 — رگرسیون سناریوهای بحرانی نسخه ۱۰
+      // آزمون‌های ممیزی منطق کسب‌وکار و رفتارهای سیستمی
       if (!layerFilter || layerFilter === 'regression') {
-        allCases = allCases.concat(await runV10RegressionTests());
+        allCases = allCases.concat(await runBusinessLogicAuditTests());
       }
       if (!layerFilter || layerFilter === 'penetration') {
         allCases = allCases.concat(await runPenetrationTests());

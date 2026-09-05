@@ -640,8 +640,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   defaultValue=""
                 >
                   <option value="">-- ورود دستی قیمت --</option>
-                  {itemPrices.filter(p => Number(p.price) > 0).map(p => (
-                    <option key={p.id} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {p.currency}</option>
+                  {itemPrices.filter(p => Number(p.price) > 0).map((p, pIdx) => (
+                    <option key={`price-opt-${p.id || pIdx}-${pIdx}`} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {p.currency}</option>
                   ))}
                 </select>
               </div>
@@ -796,8 +796,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 </tr>
               </thead>
               <tbody className="divide-y text-sm">
-                {proformas.map((p) => (
-                  <tr key={p.id} className={cn("hover:bg-slate-50", editingDocId === p.id && "bg-amber-50/60 font-bold")}>
+                {proformas.map((p, pIdx) => (
+                  <tr key={`proforma-${p.id || pIdx}-${pIdx}`} className={cn("hover:bg-slate-50", editingDocId === p.id && "bg-amber-50/60 font-bold")}>
                     <td className="p-3 font-mono font-bold">{p.ref_number}</td>
                     <td className="p-3 font-mono">{formatPersianDate(p.date)}</td>
                     <td className="p-3">{p.buyer_name || '-'}</td>

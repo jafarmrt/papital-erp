@@ -87,7 +87,7 @@ export function ItemsTable({
               const isUnderReorder = item.current_stock <= rPoint && rPoint > 0;
 
               return (
-                <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
+                <tr key={`item-row-${item.id || idx}-${idx}`} className="hover:bg-blue-50/30 transition-colors group">
                   <td className="p-3 text-center">
                     {item.thumbnail ? (
                       <SafeImage

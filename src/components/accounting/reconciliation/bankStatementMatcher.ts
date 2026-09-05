@@ -1,4 +1,3 @@
-import * as xlsx from 'xlsx';
 import { toEnglishDigits } from '../../../utils';
 
 export interface StatementRow {
@@ -82,7 +81,8 @@ export function calculateDateDiffDays(dateStr1: string, dateStr2: string): numbe
 /**
  * تشخیص هوشمند نام ستون‌های صورت‌حساب در اکسل بانک‌های ایرانی
  */
-export function parseBankStatementBuffer(buffer: ArrayBuffer): { rows: StatementRow[]; detectedBank?: string } {
+export async function parseBankStatementBuffer(buffer: ArrayBuffer): Promise<{ rows: StatementRow[]; detectedBank?: string }> {
+  const xlsx = await import('xlsx');
   const wb = xlsx.read(buffer, { type: 'array' });
   const firstSheetName = wb.SheetNames[0];
   const ws = wb.Sheets[firstSheetName];
