@@ -8,9 +8,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main, master, staging]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
   test:

@@ -514,10 +514,13 @@ export class OutboxService {
   static async purgeProcessedEvents(olderThanDays: number = 30): Promise<number> {
     try {
       const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+      // V3.0.6 (BUG-04): worker رویدادهای موفق را با وضعیت 'completed' علامت می‌زند
+      // (outboxService.ts:163) — پاکسازی قبلی 'processed' را جست‌وجو می‌کرد که هرگز
+      // وجود ندارد و جدول outbox برای همیشه رشد می‌کرد.
       const result = await orm
         .delete(outboxEvents)
         .where(and(
-          eq(outboxEvents.status, 'processed'),
+          eq(outboxEvents.status, 'completed'),
           lt(outboxEvents.processedAt, cutoffDate)
         ));
 

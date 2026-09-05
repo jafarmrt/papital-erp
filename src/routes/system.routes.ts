@@ -117,12 +117,28 @@ router.get('/system/run-seed', authorize('admin'), async (req, res) => {
 });
 
 // App Settings
+// V3.0.6 (SEC): مقادیر حساس (secret/token/password) فقط برای ادمین برگردانده می‌شود؛
+// سایر کاربران احراز هویت‌شده مقدار ماسک‌شده دریافت می‌کنند تا از افشای
+// wc_consumer_secret / wc_webhook_secret / erp_webhook_secret_token جلوگیری شود.
+const SENSITIVE_SETTING_PATTERN = /secret|token|password|api_key|consumer_secret/i;
+const MASKED_SETTING_VALUE = '********';
+
 router.get('/settings', async (req, res) => {
   try {
     const settings = await appSettingsCache.getOrSet('all_settings', async () => {
       return orm.select().from(appSettings);
     }, 60_000);
-    res.json(settings);
+    const safeSettings = Array.isArray(settings) ? settings : [];
+    const isAdmin = req.user?.role === 'admin';
+    if (isAdmin) {
+      res.json(safeSettings);
+      return;
+    }
+    res.json(safeSettings.map((s: { key: string; value: string }) =>
+      SENSITIVE_SETTING_PATTERN.test(s.key)
+        ? { ...s, value: MASKED_SETTING_VALUE }
+        : s
+    ));
   } catch (err) {
     throw err;
   }

@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken } from '../middleware/auth.js';
+import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
@@ -266,7 +267,8 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
-    res.json({ success: true, user: { ...userWithoutPassword, full_name: user.fullName || user.username }, token });
+    // V3.0.6 (BUG-08): تحویل توکن فقط از طریق کوکی HttpOnly
+    res.json({ success: true, user: { ...userWithoutPassword, full_name: user.fullName || user.username } });
   } finally {
     // 4. Always release the advisory lock
     try {
@@ -343,7 +345,8 @@ router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
           mustResetPassword: Boolean(user.mustResetPassword),
           must_reset_password: Boolean(user.mustResetPassword)
         }, 
-        token,
+        // V3.0.6 (BUG-08): JWT دیگر در بدنه پاسخ برگردانده نمی‌شود؛ کانال تحویل
+        // توکن انحصاراً کوکی HttpOnly است (قاعده امنیتی AGENTS §5).
         csrfToken
       });
     } else {
@@ -368,6 +371,30 @@ router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
 // Logout endpoint - Clears the HttpOnly auth cookie
 const logoutHandler = asyncHandler(async (req, res) => {
   const user = req.user;
+
+  // V3.0.6 (BUG-08): ابطال واقعی توکن هنگام خروج — مسیر logout عمومی است و
+  // authenticateToken روی آن اجرا نمی‌شود، بنابراین توکن را مستقیم از کوکی
+  // راستی‌آزمایی و tokenVersion کاربر افزایش می‌دهیم تا توکن سرقت‌شده/کپی‌شده
+  // حتی تا پایان اعتبار ۲۴ ساعته خود نیز پذیرفته نشود.
+  try {
+    const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
+    if (rawToken) {
+      const payload = jwt.verify(rawToken, getJwtSecret()) as { id?: number };
+      const targetUserId = user?.id || payload?.id;
+      if (targetUserId) {
+        const [row] = await orm.select({ tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, targetUserId)).limit(1);
+        if (row) {
+          await orm.update(users)
+            .set({ tokenVersion: (row.tokenVersion || 0) + 1 })
+            .where(eq(users.id, targetUserId));
+        }
+      }
+    }
+  } catch (err) {
+    // توکن نامعتبر/منقضی است — پاک‌سازی کوکی کافی است
+    logger.debug(`[Logout] Token revocation skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   if (user) {
     await logActivity({
       userId: user.id,
@@ -401,7 +428,8 @@ const meHandler = asyncHandler(async (req, res) => {
     throw new UnauthorizedError('حساب کاربری یافت نشد یا حذف شده است');
   }
 
-  const token = generateToken({ id: user.id, username: user.username, role: user.role, csrfToken: req.user?.csrfToken, tokenVersion: user.tokenVersion || 0 });
+  // V3.0.6 (BUG-08): توکن بازتولیدشده دیگر در بدنه پاسخ برگردانده نمی‌شود
+  // (قبلاً هرگز به‌صورت کوکی هم ست نمی‌شد و صرفاً افشای توکن بود).
   const { password: _, ...userWithoutPassword } = user;
   res.json({
     authenticated: true,
@@ -412,7 +440,6 @@ const meHandler = asyncHandler(async (req, res) => {
       mustResetPassword: Boolean(user.mustResetPassword),
       must_reset_password: Boolean(user.mustResetPassword)
     },
-    token,
     csrfToken: req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken || ''
   });
 });

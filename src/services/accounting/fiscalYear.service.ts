@@ -1,14 +1,20 @@
 import { orm } from '../../db/drizzle.js';
+import { journalVouchers } from '../../db/schema.js';
+import { inArray, sql, and, eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
 import { AccountingReportService } from './accountingReport.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
+import { ConflictError } from '../../errors/customErrors.js';
 import type { 
   FiscalYearClosingPreview, 
   FiscalYearClosingResult, 
   FiscalClosingAccountRow, 
   JournalVoucher 
 } from '../../types.js';
+
+// V3.0.6 (BUG-03): کلید قفل Advisory برای سریال‌سازی همزمانی بستن سال مالی
+const FISCAL_CLOSING_LOCK_NAMESPACE = 918273;
 
 export class FiscalYearService {
   /**
@@ -235,10 +241,49 @@ export class FiscalYearService {
       });
     }
 
+    // V3.0.6 (BUG-03): گارد Double-Close — اگر هر یک از اسناد بستن/افتتاحیه این سال
+    // قبلاً صادر شده باشد، عملیات با خطای Conflict متوقف می‌شود (idempotent execution).
+    const closingRefNumbers = [
+      `CLOSE-TEMP-${data.year}`,
+      `CLOSE-PROFIT-${data.year}`,
+      `CLOSING-${data.year}`,
+      `OPENING-${Number(data.year) + 1}`
+    ];
+    const existingClosing = await orm
+      .select({ id: journalVouchers.id, referenceNumber: journalVouchers.referenceNumber })
+      .from(journalVouchers)
+      .where(and(
+        inArray(journalVouchers.referenceNumber, closingRefNumbers),
+        eq(journalVouchers.isDeleted, 0)
+      ));
+    if (existingClosing.length > 0) {
+      throw new ConflictError(
+        `سال مالی ${data.year} قبلاً بسته شده است (سند شماره ${existingClosing.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
+        'FISCAL_YEAR_ALREADY_CLOSED'
+      );
+    }
+
     const createdVouchers: JournalVoucher[] = [];
     type VoucherItemInput = Parameters<typeof VoucherService.createJournalVoucher>[0]['items'][number];
 
-    // VOUCHER 1: بستن حساب‌های موقت به خلاصه سود و زیان
+    // V3.0.6 (BUG-03): کل فرایند بستن سال اکنون در «یک تراکنش اتمیک» اجرا می‌شود؛
+    // قفل Advisory تراکنشی از اجرای همزمان دو بستن‌سال جلوگیری می‌کند و
+    // خطای وسط کار (مثلاً در سند ۳ یا ۴) کل عملیات را Rollback می‌کند.
+    // توجه: getTrialBalance روی اتصال جداگانه می‌خواند و فقط مانده‌های قبل از
+    // بستن را می‌بیند — دقیقاً همان رفتار قبلی (وضعیت Committed قبل از شروع).
+    await orm.transaction(async (tx) => {
+      const lockRes = await tx.execute(
+        sql`SELECT pg_try_advisory_xact_lock(${FISCAL_CLOSING_LOCK_NAMESPACE}, ${Number(data.year)}) AS acquired`
+      );
+      const lockRows = (lockRes as unknown as { rows?: Array<{ acquired?: boolean }> }).rows || [];
+      if (!lockRows[0]?.acquired) {
+        throw new ConflictError(
+          `عملیات بستن سال مالی ${data.year} هم‌اکنون توسط دیگری در حال اجراست. لطفاً بعداً تلاش کنید.`,
+          'FISCAL_CLOSING_LOCKED'
+        );
+      }
+
+      // VOUCHER 1: بستن حساب‌های موقت به خلاصه سود و زیان
     if (preview.temporaryAccounts.length > 0) {
       const v1Items: VoucherItemInput[] = [];
       let debitSum = 0;
@@ -299,7 +344,7 @@ export class FiscalYearService {
           userId: data.userId,
           username: data.username,
           items: v1Items
-        });
+        }, tx);
         createdVouchers.push(v1);
       }
     }
@@ -354,7 +399,7 @@ export class FiscalYearService {
         userId: data.userId,
         username: data.username,
         items: v2Items
-      });
+      }, tx);
       createdVouchers.push(v2);
     }
 
@@ -428,7 +473,7 @@ export class FiscalYearService {
         userId: data.userId,
         username: data.username,
         items: v3Items
-      });
+      }, tx);
       createdVouchers.push(v3);
     }
 
@@ -453,9 +498,10 @@ export class FiscalYearService {
         userId: data.userId,
         username: data.username,
         items: v4Items
-      });
+      }, tx);
       createdVouchers.push(v4);
     }
+    }); // پایان تراکنش اتمیک بستن سال
 
     return {
       success: true,

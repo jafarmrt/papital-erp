@@ -109,10 +109,20 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    // V3.0.6 (BUG-10): در Production هرگز به mockPool حافظه‌ای سقوط نمی‌کنیم —
+    // نوشتن داده مالی در RAM یعنی از بین رفتن کامل آن با اولین restart.
+    if (process.env.NODE_ENV === 'production') {
+      logger.error({ message: `FATAL: Failed to initialize PostgreSQL pool in production: ${errorMsg}` });
+      throw new Error(`Database initialization failed in production: ${errorMsg}`);
+    }
     logger.warn({ message: `Failed to initialize real PostgreSQL pool: ${errorMsg}. Using in-memory mock.` });
     useMock = true;
   }
 } else {
+  if (process.env.NODE_ENV === 'production') {
+    logger.error({ message: 'FATAL: DATABASE_URL is missing or placeholder in production. Refusing in-memory mock fallback.' });
+    throw new Error('DATABASE_URL must be configured in production — in-memory mock fallback is disabled.');
+  }
   logger.info({ message: 'ℹ️ Placeholder or unconfigured DATABASE_URL. Running in-memory demo database mode.' });
   useMock = true;
 }

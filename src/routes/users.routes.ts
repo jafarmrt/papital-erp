@@ -272,6 +272,9 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
       const salt = bcrypt.genSaltSync(10);
       updateData.password = bcrypt.hashSync(new_password, salt);
       updateData.mustResetPassword = 0;
+      // V3.0.6 (BUG-08): با تغییر کلمه عبور، تمام sessionهای قبلی (توکن‌های صادرشده)
+      // باطل می‌شوند تا توکن‌های سرقت‌شده پس از تغییر رمز نیز بی‌اعتبار باشند.
+      updateData.tokenVersion = (u.tokenVersion || 0) + 1;
       passwordChanged = true;
     }
 

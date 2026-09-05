@@ -8,6 +8,7 @@ import { eq, sql, and, ilike } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { KardexWacRecalculatorService } from '../inventory/kardexWacRecalculator.service.js';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
+import { logActivity } from '../../lib/auditLogger.js';
 
 export interface ReconciliationAnomaly {
   category: string;
@@ -247,7 +248,38 @@ export class DataReconciliationService {
         }
       } else if (anomaly.category === 'orphan_stock_transactions' && anomaly.entityId) {
         try {
-          await pool.query('UPDATE transactions SET is_deleted = 1 WHERE id = $1', [anomaly.entityId]);
+          // V3.0.6 (DB-009): حذف منطقی تراکنش یتیم — دیگر raw SQL مستقیم روی pool نیست؛
+          // داخل تراکنش با گارد OCC (رکورد هنوز موجود و حذف‌نشده) و ثبت Audit Log.
+          // توجه: چون item مالک این تراکنش وجود ندارد، درج Reversal Transaction
+          // خودش یک تراکنش یتیم جدید می‌سازد؛ بنابراین بازسازی موجودی معنا ندارد
+          // و فقط soft-delete تراکنش (بدون هیچ دست‌کاری موجودی) انجام می‌شود.
+          await orm.transaction(async (tx) => {
+            const [stillThere] = await tx
+              .select({ id: transactions.id, isDeleted: transactions.isDeleted, type: transactions.type })
+              .from(transactions)
+              .where(and(
+                eq(transactions.id, Number(anomaly.entityId)),
+                eq(transactions.isDeleted, 0)
+              ))
+              .for('update');
+            if (!stillThere) {
+              details.push(`تراکنش #${anomaly.entityId} قبلاً حذف شده بود — بدون تغییر.`);
+              return;
+            }
+            await tx
+              .update(transactions)
+              .set({ isDeleted: 1 })
+              .where(eq(transactions.id, Number(anomaly.entityId)));
+            await logActivity({
+              userId: undefined,
+              username: 'سیستم تطبیق داده',
+              action: 'RECONCILIATION_EXECUTE',
+              entity: 'تراکنش انبار یتیم',
+              entityId: anomaly.entityId,
+              description: `حذف منطقی تراکنش یتیم #${anomaly.entityId} (به کالای ناموجود اشاره می‌کرد) توسط موتور تطبیق داده`,
+              details: { before: { isDeleted: 0 }, after: { isDeleted: 1 } }
+            });
+          });
           details.push(`تراکنش معلق #${anomaly.entityId} حذف منطقی شد.`);
           repairedCount++;
         } catch (err: unknown) {

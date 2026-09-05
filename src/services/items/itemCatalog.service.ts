@@ -5,6 +5,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError } from '../../errors/customErrors.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
@@ -489,7 +490,8 @@ export class ItemCatalogService {
         }
 
         let targetItemId: number;
-        const todayStr = new Date().toISOString().split('T')[0];
+        // V3.0.6 (Business Clock): تاریخ تراکنش‌های کاردکس از ساعت توافقی سامانه
+        const todayStr = await businessTodayIsoDate();
         const currentUser = req.user?.username || 'مدیر سیستم';
 
         if (matchedItem) {
@@ -537,6 +539,24 @@ export class ItemCatalogService {
                   createdBy: currentUser,
                   isDeleted: 0
                 });
+              } else if (diff < 0) {
+                // V3.0.6 (BUG-02): کاهش موجودی نیز باید در کاردکس ثبت شود؛ در غیر این
+                // صورت Rebuild رویداد-محور (Event Sourcing) موجودی واردشده از اکسل را
+                // به مقدار قدیمی برمی‌گرداند و Three-Way Sync می‌شکند.
+                await tx.insert(transactions).values({
+                  itemId: targetItemId,
+                  type: 'out',
+                  quantity: Math.abs(diff),
+                  unitPrice: itemWac,
+                  totalPrice: fin(itemWac).multiply(Math.abs(diff)).round(4).toNumber(),
+                  date: todayStr,
+                  documentType: 'audit',
+                  documentRef: 'درون‌ریزی اکسل',
+                  location: whCode,
+                  notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)',
+                  createdBy: currentUser,
+                  isDeleted: 0
+                });
               }
             }
           } else {
@@ -553,6 +573,22 @@ export class ItemCatalogService {
                 documentRef: 'درون‌ریزی اکسل',
                 location: 'main',
                 notes: 'افزایش موجودی از اکسل',
+                createdBy: currentUser,
+                isDeleted: 0
+              });
+            } else if (diff < 0) {
+              // V3.0.6 (BUG-02): ثبت کاهش موجودی در کاردکس
+              await tx.insert(transactions).values({
+                itemId: targetItemId,
+                type: 'out',
+                quantity: Math.abs(diff),
+                unitPrice: itemWac,
+                totalPrice: fin(itemWac).multiply(Math.abs(diff)).round(4).toNumber(),
+                date: todayStr,
+                documentType: 'audit',
+                documentRef: 'درون‌ریزی اکسل',
+                location: 'main',
+                notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)',
                 createdBy: currentUser,
                 isDeleted: 0
               });

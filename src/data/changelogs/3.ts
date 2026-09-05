@@ -6,6 +6,34 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.0.6',
+    date: '۱۵ شهریور ۱۴۰۵',
+    title: 'فاز ۱ ممیزی جنایی V3 — تثبیت بحرانی یکپارچگی داده، مالی و امنیت (رفع ۱۰ یافته P0/P1 ممیزی Forensic)',
+    summary: 'اجرای کامل فاز ۱ نقشه راه تثبیت بر اساس ممیزی جنایی مبتنی بر شواهد: حذف تنها SQL خام جهشی از تراکنش در موتور تطبیق داده (DB-009)، ثبت کاهش‌های موجودی اکسل در کاردکس، اتمیک‌سازی و Idempotent شدن بستن سال مالی با قفل Advisory، رفع پاکسازی مرده Outbox، ماسک‌سازی تنظیمات حساس، ابطال واقعی توکن در خروج/تغییر رمز، حذف JWT از بدنه پاسخ‌ها، Fail-fast در Production بدون DATABASE_URL، همگام‌سازی کلید شمارنده دستی با سال جلالی، فعال‌سازی CI روی برنچ master و اصلاح تست Regression همیشه-سبز.',
+    author: 'AI Agent (Forensic Audit & Critical Stabilization)',
+    changes: [
+      'system.routes.ts: اندپوینت GET /settings مقادیر حساس (wc_consumer_secret، wc_webhook_secret، erp_webhook_secret_token و هر کلید حاوی secret/token/password) را برای کاربران غیرمدیر ماسک می‌کند',
+      'dataReconciliation.service.ts: حذف منطقی تراکنش‌های یتیم از raw SQL مستقیم روی pool به تراکنش ORM با گارد OCC و ثبت Audit Log (انطباق با DB-009)',
+      'itemCatalog.service.ts: کاهش موجودی در درون‌ریزی اکسل اکنون ردیف out در کاردکس ثبت می‌کند و Three-Way Sync با Rebuild رویداد-محور حفظ می‌شود؛ تاریخ تراکنش‌ها از Business Clock توافقی',
+      'fiscalYear.service.ts: بستن سال مالی در یک تراکنش اتمیک با قفل pg_try_advisory_xact_lock و گارد بستن مجدد (ConflictError) — اسناد ۱ تا ۴ با externalTx در همان تراکنش',
+      'outboxService.ts: purgeProcessedEvents وضعیت صحیح completed را پاکسازی می‌کند (قبلاً processed را جست‌وجو می‌کرد و عملاً مرده بود)',
+      'auth.routes.ts: خروج (logout) توکن را با افزایش tokenVersion واقعاً باطل می‌کند و JWT از بدنه پاسخ login/setup/me حذف شد (کانال انحصاری کوکی HttpOnly)',
+      'users.routes.ts: تغییر کلمه عبور شخصی تمام sessionهای قبلی را با افزایش tokenVersion باطل می‌کند',
+      'drizzle.ts: در Production با DATABASE_URL ناموجود/placeholder فرایند Fail-fast می‌شود و هرگز به mockPool حافظه‌ای سقوط نمی‌کند',
+      'document.service.ts: کلید شمارنده شماره عطف دستی از سال میلادی به سال جلالی (resolveJalaliFiscalYear) همگام شد تا با شماره‌گذاری خودکار هم‌ردیف باشد',
+      'ci.yml: تریگر CI به برنچ‌های master و pull_request به master گسترش یافت (قبلاً CI هرگز روی برنچ فعال اجرا نمی‌شد)',
+      'regressionSuite.ts: شاخه شکست تست Regression Sanity اکنون واقعاً passed:false گزارش می‌کند (حذف False Confidence)',
+      'version.ts: به‌روزرسانی نسخه پیش‌فرض fallback به 3.0.6'
+    ],
+    fixes: [
+      'رفع ریسک واگرایی کاردکس با موجودی واقعی پس از درون‌ریزی اکسل کاهنده (BUG-02)',
+      'رفع امکان بستن نصفه سال مالی و انتقال دوباره سود به سود انباشته (BUG-03)',
+      'رفع افشای کلیدهای WooCommerce و Webhook به تمام کاربران احراز هویت‌شده (BUG-05)',
+      'رفع بقای توکن سرقت‌شده تا ۲۴ ساعت پس از خروج یا تغییر رمز (BUG-08)',
+      'رفع ریسک از بین رفتن کامل داده مالی در Production با پیکربندی نادرست دیتابیس (BUG-10)'
+    ]
+  },
+  {
     version: 'v3.0.5',
     date: '۱۵ شهریور ۱۴۰۵',
     title: 'همگام‌سازی ۱۰۰٪ مایگریشن مبدا (0000_v3_baseline.sql) با اسکیمای Drizzle، رفع خطاهای رزرو کیورد و تریگرهای تکراری',

@@ -25,15 +25,17 @@ export async function runRegressionTests(): Promise<TestCaseResult[]> {
         details: `تعداد ${categoryCount} دسته‌بندی اصلی در دیتابیس موجود بوده و تنظیم خودکار واحد سنجش (جفت برای گوشواره) تأیید گردید.`
       }));
     } else {
+      // V3.0.6 (FC-2): شاخه «شکست» قبلاً نیز passed:true ثبت می‌کرد و تست عملاً
+      // هرگز fail نمی‌شد (False Confidence). اکنون انحراف از baseline واقعاً گزارش می‌شود.
       results.push(makeTestCase({
         id: 'reg_categories_default_units',
         scenarioId: 'regression_sanity',
         name: 'ارزیابی ۲۲ دسته‌بندی استاندارد سیستم و واحد سنجش خودکار (Regression Sanity)',
         layer: 'regression',
         executionType: 'real_database',
-        passed: true,
+        passed: false,
         durationMs: Date.now() - t1Start,
-        details: `تعداد ${categoryCount} دسته‌بندی دریافت شد و واحد سنجش ${defaultUnit || 'جفت'} تایید شد.`
+        error: `Baseline دسته‌بندی‌ها مغایر است — تعداد دسته‌بندی‌ها: ${categoryCount} (انتظار: >= 22)، واحد پیش‌فرض گوشواره: ${defaultUnit || 'null'} (انتظار: جفت)`
       }));
     }
   } catch (err: any) {
