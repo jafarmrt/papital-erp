@@ -1,9 +1,18 @@
 import { orm } from '../../db/drizzle.js';
-import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions } from '../../db/schema.js';
+import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions, customers, personnel } from '../../db/schema.js';
 import { eq, asc, and, or, sql, like, gte, lte, lt, desc, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
-import type { TrialBalanceRow, FinancialSummaryStats, FinancialRatiosReport, CurrencyFinancialSummary, Account } from '../../types.js';
+import type { 
+  TrialBalanceRow, 
+  FinancialSummaryStats, 
+  FinancialRatiosReport, 
+  CurrencyFinancialSummary, 
+  Account,
+  DetailedPartyLedgerResult,
+  DetailedPartyLedgerItem,
+  PartyOption
+} from '../../types.js';
 
 export class AccountingReportService {
   /**
@@ -746,6 +755,348 @@ export class AccountingReportService {
       totalDebit,
       totalCredit,
       finalBalance: runningBalance,
+    };
+  }
+
+  /**
+   * Fast list of parties (customers, suppliers, personnel) for instant lookup
+   */
+  static async getPartiesList(params?: { search?: string; type?: string }): Promise<PartyOption[]> {
+    const search = params?.search ? params.search.trim().toLowerCase() : '';
+    const typeFilter = params?.type || 'all';
+
+    const result: PartyOption[] = [];
+
+    // 1. Customers and Suppliers
+    if (typeFilter === 'all' || typeFilter === 'customer' || typeFilter === 'supplier') {
+      const custRows = await orm.select({
+        id: customers.id,
+        name: customers.name,
+        partyType: customers.partyType,
+        phone: customers.phone,
+        city: customers.city,
+      })
+      .from(customers)
+      .where(eq(customers.isDeleted, 0));
+
+      for (const c of custRows) {
+        const pType = c.partyType || 'customer';
+        if (typeFilter === 'supplier' && pType !== 'supplier' && pType !== 'both') continue;
+        if (typeFilter === 'customer' && pType === 'supplier') continue;
+
+        if (search) {
+          const matchName = c.name?.toLowerCase().includes(search);
+          const matchPhone = c.phone?.toLowerCase().includes(search);
+          const matchCity = c.city?.toLowerCase().includes(search);
+          if (!matchName && !matchPhone && !matchCity) continue;
+        }
+
+        result.push({
+          id: c.id,
+          name: c.name,
+          partyType: (pType === 'both' ? (typeFilter === 'supplier' ? 'supplier' : 'customer') : pType) as any,
+          phone: c.phone || undefined,
+          city: c.city || undefined,
+        });
+      }
+    }
+
+    // 2. Personnel
+    if (typeFilter === 'all' || typeFilter === 'personnel') {
+      const persRows = await orm.select({
+        id: personnel.id,
+        fullName: personnel.fullName,
+        personnelCode: personnel.personnelCode,
+        phone: personnel.phone,
+        jobTitle: personnel.jobTitle,
+      })
+      .from(personnel)
+      .where(eq(personnel.isDeleted, 0));
+
+      for (const p of persRows) {
+        if (search) {
+          const matchName = p.fullName?.toLowerCase().includes(search);
+          const matchCode = p.personnelCode?.toLowerCase().includes(search);
+          const matchPhone = p.phone?.toLowerCase().includes(search);
+          if (!matchName && !matchCode && !matchPhone) continue;
+        }
+
+        result.push({
+          id: p.id,
+          name: p.fullName,
+          partyType: 'personnel',
+          phone: p.phone || undefined,
+          code: p.personnelCode || undefined,
+          city: p.jobTitle || undefined,
+        });
+      }
+    }
+
+    // Sort alphabetically by Persian name
+    return result.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+  }
+
+  /**
+   * Floating Detailed Party Ledger (صورت‌حساب جامع و ریزگردش تفصیلی اشخاص و طرف‌حساب‌ها)
+   * استخراج سریع تمامی آرتیکل‌های مالی مرتبط با شخص (مشتری، تامین‌کننده، پرسنل) در تمام معین‌ها
+   */
+  static async getDetailedPartyLedger(params: {
+    partyId?: number;
+    partyType?: 'customer' | 'supplier' | 'personnel' | 'other' | 'all' | string;
+    partyName?: string;
+    startDate?: string;
+    endDate?: string;
+    currency?: string;
+    includeDrafts?: boolean;
+  }): Promise<DetailedPartyLedgerResult> {
+    let partyInfo: {
+      id?: number;
+      name: string;
+      partyType: string;
+      phone?: string;
+      code?: string;
+      city?: string;
+    } | null = null;
+
+    // Resolve party details from database
+    if (params.partyId) {
+      if (params.partyType === 'personnel') {
+        const [p] = await orm.select().from(personnel).where(and(eq(personnel.id, params.partyId), eq(personnel.isDeleted, 0)));
+        if (p) {
+          partyInfo = {
+            id: p.id,
+            name: p.fullName,
+            partyType: 'personnel',
+            phone: p.phone || undefined,
+            code: p.personnelCode || undefined,
+            city: p.jobTitle || undefined,
+          };
+        }
+      } else {
+        const [c] = await orm.select().from(customers).where(and(eq(customers.id, params.partyId), eq(customers.isDeleted, 0)));
+        if (c) {
+          partyInfo = {
+            id: c.id,
+            name: c.name,
+            partyType: c.partyType || 'customer',
+            phone: c.phone || undefined,
+            city: c.city || undefined,
+          };
+        }
+      }
+    }
+
+    if (!partyInfo && params.partyName) {
+      const pName = params.partyName.trim();
+      const [c] = await orm.select().from(customers).where(and(eq(customers.name, pName), eq(customers.isDeleted, 0)));
+      if (c) {
+        partyInfo = {
+          id: c.id,
+          name: c.name,
+          partyType: c.partyType || 'customer',
+          phone: c.phone || undefined,
+          city: c.city || undefined,
+        };
+      } else {
+        const [p] = await orm.select().from(personnel).where(and(eq(personnel.fullName, pName), eq(personnel.isDeleted, 0)));
+        if (p) {
+          partyInfo = {
+            id: p.id,
+            name: p.fullName,
+            partyType: 'personnel',
+            phone: p.phone || undefined,
+            code: p.personnelCode || undefined,
+            city: p.jobTitle || undefined,
+          };
+        } else {
+          partyInfo = {
+            id: params.partyId,
+            name: pName,
+            partyType: (params.partyType && params.partyType !== 'all') ? params.partyType : 'طرف‌حساب',
+          };
+        }
+      }
+    }
+
+    const effectivePartyName = partyInfo?.name || params.partyName?.trim() || '';
+    const effectivePartyId = partyInfo?.id || params.partyId;
+
+    // Conditions for party matching in voucher items
+    // An item matches if:
+    // 1) detailedId = effectivePartyId
+    // OR 2) detailedName = effectivePartyName
+    const partyMatchConditions: SQL[] = [];
+    if (effectivePartyId && effectivePartyName) {
+      partyMatchConditions.push(
+        or(
+          eq(journalVoucherItems.detailedId, effectivePartyId),
+          eq(journalVoucherItems.detailedName, effectivePartyName),
+          like(journalVoucherItems.detailedName, `%${effectivePartyName}%`)
+        )!
+      );
+    } else if (effectivePartyId) {
+      partyMatchConditions.push(eq(journalVoucherItems.detailedId, effectivePartyId));
+    } else if (effectivePartyName) {
+      partyMatchConditions.push(
+        or(
+          eq(journalVoucherItems.detailedName, effectivePartyName),
+          like(journalVoucherItems.detailedName, `%${effectivePartyName}%`)
+        )!
+      );
+    }
+
+    // Base conditions for valid vouchers
+    const voucherStatusCondition = params.includeDrafts
+      ? or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'), eq(journalVouchers.status, 'draft'))
+      : or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'));
+
+    const baseConditions: (SQL | undefined)[] = [
+      eq(journalVouchers.isDeleted, 0),
+      voucherStatusCondition,
+      ...partyMatchConditions
+    ];
+
+    if (params.currency && params.currency !== 'all') {
+      baseConditions.push(
+        or(
+          eq(journalVoucherItems.currency, params.currency),
+          eq(journalVouchers.currency, params.currency)
+        )
+      );
+    }
+
+    // 1. Calculate opening balance (prior to startDate)
+    let openingBalance = 0;
+    if (params.startDate) {
+      const priorConditions = [
+        ...baseConditions,
+        lt(journalVouchers.date, params.startDate)
+      ].filter((c): c is SQL => c !== undefined);
+
+      const priorRows = await orm.select({
+        debit: journalVoucherItems.debit,
+        credit: journalVoucherItems.credit,
+      })
+      .from(journalVoucherItems)
+      .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+      .where(and(...priorConditions));
+
+      for (const r of priorRows) {
+        openingBalance += (Number(r.debit) || 0) - (Number(r.credit) || 0);
+      }
+    }
+    openingBalance = Math.round(openingBalance * 10000) / 10000;
+
+    const openingBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب' =
+      openingBalance > 0 ? 'بدهکار' : openingBalance < 0 ? 'بستانکار' : 'بی‌حساب';
+
+    // 2. Query period items
+    const periodConditions = [
+      ...baseConditions,
+      params.startDate ? gte(journalVouchers.date, params.startDate) : undefined,
+      params.endDate ? lte(journalVouchers.date, params.endDate) : undefined,
+    ].filter((c): c is SQL => c !== undefined);
+
+    const rawRows = await orm.select({
+      voucherId: journalVouchers.id,
+      voucherNumber: journalVouchers.voucherNumber,
+      manualVoucherNumber: journalVouchers.manualVoucherNumber,
+      voucherCurrency: journalVouchers.currency,
+      itemCurrency: journalVoucherItems.currency,
+      date: journalVouchers.date,
+      itemDescription: journalVoucherItems.description,
+      voucherDescription: journalVouchers.description,
+      accountName: accounts.name,
+      accountCode: accounts.code,
+      detailedName: journalVoucherItems.detailedName,
+      detailedType: journalVoucherItems.detailedType,
+      debit: journalVoucherItems.debit,
+      credit: journalVoucherItems.credit,
+      rowOrder: journalVoucherItems.rowOrder,
+    })
+    .from(journalVoucherItems)
+    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+    .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
+    .where(and(...periodConditions))
+    .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
+
+    let runningBalance = openingBalance;
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    const items: DetailedPartyLedgerItem[] = [];
+
+    // Add opening balance row if there is a start date and opening balance is non-zero
+    if (params.startDate && openingBalance !== 0) {
+      items.push({
+        rowNumber: 0,
+        voucherId: 0,
+        voucherNumber: 0,
+        date: params.startDate,
+        description: 'مانده ابتدای دوره (انتقال از قبل)',
+        accountCode: '—',
+        accountName: 'مانده دفتری',
+        currency: params.currency && params.currency !== 'all' ? params.currency : 'IRR',
+        debit: openingBalance > 0 ? openingBalance : 0,
+        credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+        runningBalance: openingBalance,
+        balanceType: openingBalanceType,
+        isOpening: true,
+      });
+    }
+
+    rawRows.forEach((r, idx) => {
+      const d = Number(r.debit) || 0;
+      const c = Number(r.credit) || 0;
+      totalDebit += d;
+      totalCredit += c;
+      runningBalance += (d - c);
+      runningBalance = Math.round(runningBalance * 10000) / 10000;
+
+      const balanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب' =
+        runningBalance > 0 ? 'بدهکار' : runningBalance < 0 ? 'بستانکار' : 'بی‌حساب';
+
+      items.push({
+        rowNumber: idx + 1,
+        voucherId: r.voucherId,
+        voucherNumber: r.voucherNumber,
+        manualVoucherNumber: r.manualVoucherNumber || undefined,
+        date: r.date,
+        description: r.itemDescription || r.voucherDescription || 'ثبت سند حسابداری',
+        accountCode: r.accountCode,
+        accountName: r.accountName,
+        detailedName: r.detailedName || undefined,
+        detailedType: r.detailedType || undefined,
+        currency: r.itemCurrency || r.voucherCurrency || 'IRR',
+        debit: d,
+        credit: c,
+        runningBalance,
+        balanceType,
+      });
+    });
+
+    const finalBalance = Math.round(runningBalance * 10000) / 10000;
+    const finalBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب' =
+      finalBalance > 0 ? 'بدهکار' : finalBalance < 0 ? 'بستانکار' : 'بی‌حساب';
+
+    let netStatusText = 'حساب تسویه و بی‌حساب است';
+    const curLabel = (params.currency && params.currency !== 'all') ? params.currency : 'ریال';
+    if (finalBalance > 0) {
+      netStatusText = `وضعیت حساب: ${Math.abs(finalBalance).toLocaleString('fa-IR')} ${curLabel} بدهکار است (طلب شرکت از طرف‌حساب)`;
+    } else if (finalBalance < 0) {
+      netStatusText = `وضعیت حساب: ${Math.abs(finalBalance).toLocaleString('fa-IR')} ${curLabel} بستانکار است (بدهی شرکت به طرف‌حساب)`;
+    }
+
+    return {
+      party: partyInfo,
+      openingBalance,
+      openingBalanceType,
+      totalDebit: Math.round(totalDebit * 10000) / 10000,
+      totalCredit: Math.round(totalCredit * 10000) / 10000,
+      finalBalance,
+      finalBalanceType,
+      netStatusText,
+      items,
     };
   }
 

@@ -404,6 +404,15 @@ router.get('/documents/audit-items', asyncHandler(async (req, res) => {
   res.json(formatted);
 }));
 
+router.get('/documents/:id/settlement-status', asyncHandler(async (req, res) => {
+  const docId = Number(req.params.id);
+  if (isNaN(docId) || docId <= 0) {
+    throw new ValidationError('شناسه سند نامعتبر است');
+  }
+  const status = await DocumentService.getInvoiceSettlementStatus(docId);
+  res.json(status);
+}));
+
 router.get('/documents/:id', validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
   const rawId = req.params.id;
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);

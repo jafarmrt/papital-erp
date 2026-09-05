@@ -9,12 +9,28 @@ going forward.
 | Channel | File | Version series |
 |---|---|---|
 | Client-bundled update center | `src/data/changelogs/0.ts` | baseline `v1.0.0` entry |
-| Client-bundled update center (active) | `src/data/changelogs/1.ts` | every new `1.x.y` release |
-| Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history |
+| Client-bundled update center | `src/data/changelogs/1.ts` | `1.x.y` release series |
+| Client-bundled update center | `src/data/changelogs/2.ts` | `2.x.y` release series |
+| Client-bundled update center (active) | `src/data/changelogs/3.ts` | current `3.x.y` release series |
+| Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
+
+---
+
+## Version 3.0.0 (Master Release)
+
+### v3.0.0 — Comprehensive UI/UX Overhaul & Financial Automation Milestone
+- **Phase 1 (Flexible Multi-Step Invoice Settlements):** Full settlement modal supporting Cash, POS/Bank, Sayad Cheques, and Bank Transfers with automatic double-entry voucher generation and status tracking.
+- **Phase 2 (3-Stage Accounting Voucher Lifecycle & Voiding):** Clear draft/audited/final voucher states, reversal vouchers for voiding, and correction vouchers with audit logs.
+- **Phase 3 (Floating Detailed Party Ledger):** Comprehensive customer/vendor/personnel ledger with running balances, debt/credit indicators, and clean printing/export formats.
+- **Phase 4 (Line & Cash Discounts):** Segregated line-item discounts and prompt cash payment discounts automatically mapped to designated discount accounts.
+- **Phase 5 (Smart Financial Health Inspector):** Automated audit engine checking 6 critical areas (equilibrium, abnormal balances, inventory-to-ledger reconciliation, missing vouchers, overdue cheques, and bank bindings) with one-click automated sync.
+- **Phase 6 (Global UI Simplification & Decluttering):** Universal adoption of the clean `ActionMenu` pattern across all system tables (invoices, items, vouchers, treasury, cheques, personnel, users) and complete Persian translation of technical/Latin terms.
+
+---
 
 Rules:
 - Every functional/UI/security change adds an `AIUpdateLog` entry to the active
-  version file (`1.ts`) with a unique semver bump; duplicates are never allowed.
+  version file (`2.ts`) with a unique semver bump; duplicates are never allowed.
 - The old per-major-version files (`v1.ts … v9.ts`, ~700 KB of static data) were
   removed from the client bundle on purpose; consult Git for their content.
 
@@ -82,3 +98,20 @@ graceful shutdown) and atomic tracked migrations.
 | 7 — Release Eng. | Docs consolidated into AGENTS.md (single source), new README with Linux install/update scripts (`install.sh`, `update.sh`, systemd), V10 regression suite (6 critical scenarios) |
 
 **Sign-off:** All 15 critical-scenario suites + V10 regression suite green; lint and production build clean; `package.json`, `/health` and `src/data/changelogs/1.ts` version strings aligned at **v1.1.0**.
+
+---
+
+## v2.8.7 — تکامل و پاکسازی بدهی‌های فنی (سری 2.x پایدار)
+
+**Date:** 1405/06/15 • **Series:** 2.x • **Milestone:** رفع جامع بدهی‌های فنی باز (TD-033 تا TD-037) و بهبود استحکام معماری
+
+| حوزه | دستاوردها و اقدامات انجام‌شده |
+|---|---|
+| **TD-033 (Backend Types)** | جایگزینی بیش از ۳۸۰ نقطه `: any` در سرویس‌های رویدادها، ورکفلو، ریکاوری، اکشن‌ها و روت‌های اکسپرس با تایپ‌های صریح و بدون خطای تایپ‌اسکریپت |
+| **TD-034 (Dates & Calendars)** | استانداردسازی کامل تاریخ‌های میلادی ISO و ثبت همزمان (Dual-Write) در جداول `daily_work_logs`, `piecework_logs`, `crm_activities` به همراه مایگریشن بک‌فیل و ایندکس‌ها |
+| **TD-035 (Migrator)** | رفع وابستگی و اصلاح سال مالی در backfill قدیمی مایگریتر |
+| **TD-036 (DB Hygiene)** | توسعه اسکریپت تراکنشی `scripts/cleanup-test-data.ts` (`npm run db:cleanup-test`)، پاکسازی کامل داده‌های آزمایشی و تسویه‌نشده، کالیبراسیون توالی‌های PostgreSQL و اسکن ۱۰۰٪ سالم مغایرت‌گیری ۱۲ گانه |
+| **TD-037 (Dead Code Elimination)** | حذف کامل کامپوننت بلااستفاده `src/components/SystemTestRunner.tsx` (۳۰۰ خط کد مرده)، کاهش حجم باندل نهایی فرانت‌اند و تثبیت مسیر رسمی آزمون‌ها از طریق CLI استاندارد `npm run test` |
+
+**Sign-off:** تمامی بدهی‌های فنی رده مهم و بحرانی حل شده؛ بیلد و linter کاملاً سبز (`tsc --noEmit` + `vite build`)؛ هماهنگی نسخه‌ها در `package.json`, `src/app.ts (/health)`, `src/data/changelogs/2.ts` روی **v2.8.7**.
+

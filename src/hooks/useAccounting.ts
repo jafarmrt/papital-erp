@@ -392,13 +392,19 @@ export function useAccounting() {
     return res;
   };
 
-  const handleSetVoucherStatus = async (voucherId: number, status: 'draft' | 'approved' | 'permanent') => {
+  const handleSetVoucherStatus = async (voucherId: number, status: 'draft' | 'approved' | 'permanent', reason?: string) => {
     const res = await fetchJson(`/accounting/vouchers/${voucherId}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, reason }),
     });
-    toast.success('وضعیت سند با موفقیت به‌روزرسانی شد');
+    const statusFarsi = {
+      draft: 'پیش‌نویس (یادداشت اولیه)',
+      approved: 'تایید شده (حسابرسی‌شده)',
+      permanent: 'دائم و قطعی (قفل دفاتر)'
+    }[status] || status;
+    toast.success(`وضعیت سند با موفقیت به «${statusFarsi}» تغییر یافت`);
     await loadVouchers();
+    await loadStats();
     return res;
   };
 

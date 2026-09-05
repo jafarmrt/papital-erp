@@ -1109,6 +1109,53 @@ export interface AccountLedgerReport {
   closingBalanceType: 'debit' | 'credit' | 'zero';
 }
 
+export interface DetailedPartyLedgerItem {
+  rowNumber: number;
+  voucherId: number;
+  voucherNumber: number;
+  manualVoucherNumber?: string;
+  date: string;
+  description: string;
+  accountCode: string;
+  accountName: string;
+  detailedName?: string;
+  detailedType?: string;
+  currency: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  balanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب';
+  isOpening?: boolean;
+}
+
+export interface DetailedPartyLedgerResult {
+  party: {
+    id?: number;
+    name: string;
+    partyType: string;
+    phone?: string;
+    code?: string;
+    city?: string;
+  } | null;
+  openingBalance: number;
+  openingBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب';
+  totalDebit: number;
+  totalCredit: number;
+  finalBalance: number;
+  finalBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب';
+  netStatusText: string;
+  items: DetailedPartyLedgerItem[];
+}
+
+export interface PartyOption {
+  id: number;
+  name: string;
+  partyType: 'customer' | 'supplier' | 'personnel' | 'other';
+  phone?: string;
+  code?: string;
+  city?: string;
+}
+
 export interface FinancialSummaryStats {
   totalCashAndBank: number;
   totalReceivables: number;
@@ -1259,6 +1306,63 @@ export interface DashboardShortcutItem {
   permission?: string;
   badge?: string;
   colorTheme: string;
+}
+
+// ==========================================
+// V3 PHASE 5: SMART FINANCIAL HEALTH INSPECTOR
+// ==========================================
+export type HealthCheckStatus = 'healthy' | 'warning' | 'error';
+
+export interface HealthCheckIssueItem {
+  id: number | string;
+  code?: string;
+  title: string;
+  subtitle?: string;
+  amount?: number;
+  date?: string;
+  discrepancy?: number;
+  details?: string;
+  linkType?: 'voucher' | 'document' | 'cheque' | 'account' | 'bank_account' | 'item';
+  linkId?: number | string;
+}
+
+export interface HealthCheckTestResult {
+  id: string;
+  category: 'vouchers' | 'accounts' | 'inventory' | 'documents' | 'treasury' | 'system';
+  title: string;
+  description: string;
+  status: HealthCheckStatus;
+  scoreImpact: number;
+  count: number;
+  message: string;
+  quickFixHint?: string;
+  quickFixAction?: 'sync_vouchers' | 'recalculate_banks' | 'open_vouchers' | 'open_treasury' | 'open_documents';
+  items?: HealthCheckIssueItem[];
+  metrics?: Record<string, number | string | boolean>;
+}
+
+export interface FinancialHealthReport {
+  overallScore: number;
+  healthGrade: string;
+  healthStatus: HealthCheckStatus;
+  scannedAt: string;
+  scannedAtJalali: string;
+  scanDurationMs: number;
+  scannedStats: {
+    totalVouchers: number;
+    totalVoucherItems: number;
+    totalAccounts: number;
+    totalDocuments: number;
+    totalCheques: number;
+    totalItems: number;
+  };
+  summary: {
+    healthyTestsCount: number;
+    warningTestsCount: number;
+    errorTestsCount: number;
+    totalIssuesCount: number;
+  };
+  tests: HealthCheckTestResult[];
 }
 
 export type { DbTransaction, DbExecutor, AppDatabase } from './db/drizzle.js';

@@ -17,11 +17,14 @@ import {
   Calendar,
   History,
   Download,
-  ShieldCheck
+  ShieldCheck,
+  Copy,
+  Edit3
 } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
+import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { Cheque, ChequeType, ChequeStatus, BankAccount, Customer, Personnel } from '../../types';
 import toast from 'react-hot-toast';
@@ -575,21 +578,59 @@ export function ChequesTab({
                       </td>
 
                       <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => setHistoryModalCheque(c)}
                             title="تاریخچه وضعیت چک"
-                            className="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+                            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
                           >
                             <History className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(c)}
-                            title="حذف چک"
-                            className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <ActionMenu
+                            items={[
+                              {
+                                label: 'تغییر وضعیت چک',
+                                icon: Edit3,
+                                onClick: () => {
+                                  setStatusModalCheque(c);
+                                  setStatusDescription('');
+                                  setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
+                                },
+                              },
+                              {
+                                label: 'تاریخچه گردش وضعیت',
+                                icon: History,
+                                onClick: () => setHistoryModalCheque(c),
+                              },
+                              ...(c.sayadNumber
+                                ? [
+                                    {
+                                      label: 'کپی شناسه صیاد',
+                                      icon: Copy,
+                                      onClick: () => {
+                                        navigator.clipboard.writeText(c.sayadNumber);
+                                        toast.success('شناسه صیاد کپی شد');
+                                      },
+                                    },
+                                  ]
+                                : []),
+                              {
+                                label: 'کپی شماره چک',
+                                icon: Copy,
+                                onClick: () => {
+                                  navigator.clipboard.writeText(c.chequeNumber);
+                                  toast.success('شماره چک کپی شد');
+                                },
+                              },
+                              {
+                                label: 'حذف چک',
+                                icon: Trash2,
+                                variant: 'danger',
+                                onClick: () => handleDelete(c),
+                              },
+                            ]}
+                            align="left"
+                          />
                         </div>
                       </td>
                     </tr>

@@ -4,6 +4,7 @@ import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2 } 
 import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SafeImage } from '../SafeImage';
+import { ActionMenu } from '../ActionMenu';
 
 export { parseMultiValue, formatMultiValue };
 
@@ -208,34 +209,36 @@ export function ItemsTable({
 
                   <td className="p-3 text-slate-600 font-medium">{item.unit}</td>
                   
-                  {/* Soft Delete Control */}
+                  {/* Soft Delete & Operations Control */}
                   {user.role !== 'viewer' && (
                     <td className="p-3 text-center">
                       <div className="flex justify-center items-center gap-1.5">
-                        {onSyncItem && (
-                          <button
-                            onClick={() => onSyncItem(item.id)}
-                            disabled={syncingItemId === item.id || !item.code}
-                            title={!item.code ? 'کالا فاقد کد (SKU) است' : 'همگام‌سازی با ووکامرس'}
-                            className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50 font-bold px-2 py-1 rounded-lg flex items-center justify-center text-[11px] transition-colors cursor-pointer"
-                          >
-                            <Cloud size={14} className={syncingItemId === item.id ? "animate-pulse" : ""} />
-                          </button>
-                        )}
                         <button
                           onClick={() => onEditItem(item)}
-                          className="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold px-2.5 py-1 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                          className="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold px-2.5 py-1 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                          title="ویرایش قلم کالا"
                         >
                           <Edit2 size={12} />
                           ویرایش
                         </button>
-                        <button
-                          onClick={() => onArchiveItem(item.id)}
-                          className="bg-red-50 text-red-600 hover:bg-red-100 font-bold px-2.5 py-1 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                        >
-                          <Archive size={12} />
-                          آرشیو
-                        </button>
+                        <ActionMenu
+                          align="left"
+                          title="عملیات کالا"
+                          items={[
+                            ...(onSyncItem ? [{
+                              label: syncingItemId === item.id ? 'در حال همگام‌سازی...' : 'همگام‌سازی ووکامرس',
+                              icon: Cloud,
+                              onClick: () => onSyncItem(item.id),
+                              disabled: syncingItemId === item.id || !item.code,
+                            }] : []),
+                            {
+                              label: 'آرشیو کالا',
+                              icon: Archive,
+                              onClick: () => onArchiveItem(item.id),
+                              variant: 'danger' as const,
+                            }
+                          ]}
+                        />
                       </div>
                     </td>
                   )}

@@ -352,7 +352,7 @@ export class VoucherService {
 
       // Strict Invariant: Permanent / Posted finalized financial documents cannot be directly edited.
       if (existing.status === 'permanent') {
-        throw new BusinessLogicError('اسناد دائم و قطعی‌شده به دلیل رعایت الزامات تغییرناپذیری دفتر کل قابل ویرایش مستقیم نیستند. لطفاً از گزینه‌های استاندارد «صدور سند معکوس (Reversal)»، «سند اصلاحی (Correction)» یا «بازثبت (Repost)» استفاده فرمایید.');
+        throw new BusinessLogicError('اسناد دائم و قطعی‌شده به دلیل رعایت الزامات تغییرناپذیری دفتر کل قابل ویرایش مستقیم نیستند. لطفاً از گزینه‌های استاندارد «صدور سند برگشتی (ابطال سند)» یا «صدور سند اصلاحی» استفاده فرمایید.');
       }
 
       if (data.date) {
@@ -428,7 +428,10 @@ export class VoucherService {
       const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.status === 'permanent') {
-        throw new BusinessLogicError('اسناد دائم و قطعی‌شده حسابداری قابل حذف مستقیم نیستند. برای بی‌اثر کردن سند، از گزینه «صدور سند معکوس» استفاده نمایید.');
+        throw new BusinessLogicError('اسناد دائم و قطعی‌شده حسابداری قابل حذف مستقیم نیستند. برای بی‌اثر کردن سند، از گزینه «صدور سند برگشتی (ابطال سند)» استفاده نمایید.');
+      }
+      if (existing.status === 'approved') {
+        throw new BusinessLogicError('اسناد تاییدشده حسابداری به دلیل اثرگذاری در دفاتر و گزارش‌ها قابل حذف مستقیم نیستند. برای حذف، ابتدا سند را به وضعیت «پیش‌نویس» برگردانید یا در صورت نیاز از «صدور سند برگشتی (ابطال سند)» استفاده نمایید.');
       }
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
@@ -922,14 +925,20 @@ export class VoucherService {
       const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
       if (existing.status === 'permanent' && status !== 'permanent') {
-        throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از سند معکوس استفاده کنید.');
+        throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
       }
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
+      if (status === 'permanent') {
+        if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > 0.01) {
+          throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
+        }
+      }
+
       await tx.update(journalVouchers).set({
         status,
-        ...(status === 'approved' || status === 'permanent' ? { approvedById: userId || null } : {})
+        approvedById: status === 'draft' ? null : (userId || existing.approvedById || null)
       }).where(eq(journalVouchers.id, id));
     });
 

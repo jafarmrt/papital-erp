@@ -242,6 +242,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onCorrectVoucher={handleCorrectVoucher}
               onFinalizeVoucher={handleFinalizeVoucher}
               onApproveVoucher={(id) => handleSetVoucherStatus(id, 'approved')}
+              onSetVoucherStatus={handleSetVoucherStatus}
               onBatchFinalizeVouchers={handleBatchFinalizeVouchers}
             />
           )}

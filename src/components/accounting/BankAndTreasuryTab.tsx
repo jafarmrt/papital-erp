@@ -33,6 +33,8 @@ import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { AccountSearchSelect } from './AccountSearchSelect';
 import { SearchableSelect } from '../SearchableSelect';
+import { BankReconciliationModal } from './reconciliation/BankReconciliationModal';
+import { ActionMenu, ActionMenuItem } from '../ActionMenu';
 
 interface BankAndTreasuryTabProps {
   bankAccounts: BankAccount[];
@@ -103,11 +105,9 @@ export function BankAndTreasuryTab({
   });
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
   const TX_PAGE_SIZE = 25;
-  // V1.6.0: آشتی‌سنجی بانکی + جریان نقدی
+  // V3 Phase 4: مغایرت‌گیری و تطبیق صورت‌حساب بانک + جریان نقدی
   const [isReconcileModalOpen, setIsReconcileModalOpen] = useState(false);
   const [reconcileAccountId, setReconcileAccountId] = useState<string>('');
-  const [reconcileRows, setReconcileRows] = useState<any[]>([]);
-  const [isCommittingReconcile, setIsCommittingReconcile] = useState(false);
   const [isCashFlowModalOpen, setIsCashFlowModalOpen] = useState(false);
   const [cashFlowFrom, setCashFlowFrom] = useState('');
   const [cashFlowTo, setCashFlowTo] = useState('');
@@ -143,91 +143,6 @@ export function BankAndTreasuryTab({
       toast.error(err?.message || 'خطا در ابطال تراکنش');
     } finally {
       setIsVoiding(false);
-    }
-  };
-
-  // V1.6.0: آشتی‌سنجی بانکی — پردازش فایل صورت‌حساب و تطبیق با تراکنش‌ها
-  const handleStatementFile = async (file: File) => {
-    if (!reconcileAccountId) {
-      toast.error('ابتدا حساب بانکی را برای آشتی‌سنجی انتخاب کنید');
-      return;
-    }
-    try {
-      const buf = await file.arrayBuffer();
-      const wb = xlsx.read(buf);
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = xlsx.utils.sheet_to_json<any>(ws, { defval: '' });
-      const accId = Number(reconcileAccountId);
-      const accTxs = safeTransactions.filter(t => Number(t.bankAccountId) === accId && t.status !== 'voided');
-      const used = new Set<number>();
-
-      const rows = json.map((r: any, i: number) => {
-        const rawDate = toEnglishDigits(String(r['تاریخ'] ?? r['date'] ?? r['Date'] ?? ''));
-        const amount = Math.abs(Number(toEnglishDigits(String(r['مبلغ'] ?? r['amount'] ?? r['Amount'] ?? '0')).replace(/,/g, ''))) || 0;
-        const isReceipt = Number(toEnglishDigits(String(r['مبلغ'] ?? r['amount'] ?? r['Amount'] ?? '0')).replace(/,/g, '')) >= 0;
-        const description = String(r['شرح'] ?? r['توضیحات'] ?? r['description'] ?? r['Description'] ?? '');
-        const tracking = toEnglishDigits(String(r['پیگیری'] ?? r['tracking'] ?? r['Tracking'] ?? ''));
-        const expectedType = isReceipt ? 'receipt' : 'payment';
-
-        let matchedTxId: number | null = null;
-        let matchedTxNumber = '';
-        let matchQuality: 'tracking' | 'amount' | 'none' = 'none';
-
-        if (amount > 0) {
-          const candidates = accTxs.filter(t =>
-            !used.has(t.id) && t.type === expectedType &&
-            Math.abs(Number(t.amount) - amount) < 0.01
-          );
-          if (tracking) {
-            const byTracking = candidates.find(t => t.trackingNumber && t.trackingNumber.includes(tracking));
-            if (byTracking) { matchedTxId = byTracking.id; matchQuality = 'tracking'; }
-          }
-          if (!matchedTxId && candidates.length > 0) {
-            matchedTxId = candidates[0].id;
-            matchQuality = 'amount';
-          }
-          if (matchedTxId) {
-            used.add(matchedTxId);
-            matchedTxNumber = accTxs.find(t => t.id === matchedTxId)?.transactionNumber || '';
-          }
-        }
-
-        return {
-          rowNo: i + 1, date: rawDate, description, tracking, amount,
-          expectedType, matchedTxId, matchedTxNumber, matchQuality,
-          alreadyReconciled: matchedTxId ? (accTxs.find(t => t.id === matchedTxId)?.reconciled === 1) : false,
-        };
-      }).filter(r => r.amount > 0 || r.description);
-
-      setReconcileRows(rows);
-      toast.success(`${rows.length} ردیف صورت‌حساب خوانده شد (${rows.filter(r => r.matchedTxId).length} ردیف تطبیق شد)`);
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در خواندن فایل صورت‌حساب (فرمت اکسل/CSV با ستون‌های تاریخ، مبلغ، شرح، پیگیری)');
-    }
-  };
-
-  const handleCommitReconcile = async () => {
-    if (!onReconcileTransactions || !reconcileAccountId) return;
-    const matchedIds = reconcileRows.filter(r => r.matchedTxId && !r.alreadyReconciled).map(r => r.matchedTxId);
-    if (matchedIds.length === 0) {
-      toast.error('ردیف تطبیق‌شده جدیدی برای ثبت وجود ندارد');
-      return;
-    }
-    const ok = await confirmAction({
-      title: 'ثبت آشتی‌سنجی',
-      message: `${matchedIds.length} تراکنش به‌عنوان «تطبیق‌یافته با صورت‌حساب» ثبت شود؟`
-    });
-    if (!ok) return;
-    setIsCommittingReconcile(true);
-    try {
-      await onReconcileTransactions(Number(reconcileAccountId), matchedIds, `stmt-${Date.now()}`, true);
-      toast.success('آشتی‌سنجی ثبت شد');
-      setReconcileRows([]);
-      setIsReconcileModalOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در ثبت آشتی‌سنجی');
-    } finally {
-      setIsCommittingReconcile(false);
     }
   };
 
@@ -570,13 +485,13 @@ export function BankAndTreasuryTab({
             </button>
           )}
 
-          {/* V1.6.0: آشتی‌سنجی بانکی + جریان نقدی */}
+          {/* V3 Phase 4: مغایرت‌گیری بانکی + جریان نقدی */}
           <button
-            onClick={() => { setIsReconcileModalOpen(true); setReconcileRows([]); }}
+            onClick={() => setIsReconcileModalOpen(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-300 text-xs font-bold rounded-xl transition border border-teal-200 dark:border-teal-800"
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>آشتی‌سنجی بانکی</span>
+            <span>مغایرت‌گیری بانکی</span>
           </button>
           <button
             onClick={() => { setIsCashFlowModalOpen(true); void handleOpenCashFlow(); }}
@@ -732,25 +647,55 @@ export function BankAndTreasuryTab({
                     <button
                       onClick={() => openEditBankModal(bank)}
                       title="ویرایش حساب و کد معین"
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+                      className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={async () => {
-                        if (!(await confirmAction({ title: 'حذف حساب بانکی', message: `آیا از حذف حساب ${bank.title} اطمینان دارید؟` }))) return;
-                        try {
-                          await onDeleteBankAccount(bank.id);
-                          toast.success('حساب حذف شد');
-                        } catch (e) {
-                          toast.error(e.message || 'خطا در حذف حساب');
-                        }
-                      }}
-                      title="حذف حساب"
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <ActionMenu
+                      items={[
+                        {
+                          label: 'مغایرت‌گیری و تطبیق بانکی',
+                          icon: ShieldCheck,
+                          onClick: () => {
+                            setReconcileAccountId(String(bank.id));
+                            setIsReconcileModalOpen(true);
+                          },
+                        },
+                        ...(bank.accountNumber
+                          ? [
+                              {
+                                label: 'کپی شماره حساب',
+                                icon: Copy,
+                                onClick: () => copyToClipboard(bank.accountNumber || '', `acc-${bank.id}`),
+                              },
+                            ]
+                          : []),
+                        ...(bank.shebaNumber
+                          ? [
+                              {
+                                label: 'کپی شماره شبا',
+                                icon: Copy,
+                                onClick: () => copyToClipboard(bank.shebaNumber || '', `sheba-${bank.id}`),
+                              },
+                            ]
+                          : []),
+                        {
+                          label: 'حذف حساب',
+                          icon: Trash2,
+                          variant: 'danger',
+                          onClick: async () => {
+                            if (!(await confirmAction({ title: 'حذف حساب بانکی', message: `آیا از حذف حساب ${bank.title} اطمینان دارید؟` }))) return;
+                            try {
+                              await onDeleteBankAccount(bank.id);
+                              toast.success('حساب حذف شد');
+                            } catch (e: any) {
+                              toast.error(e?.message || 'خطا در حذف حساب');
+                            }
+                          },
+                        },
+                      ]}
+                      align="left"
+                    />
                   </div>
                 </div>
 
@@ -1023,15 +968,38 @@ export function BankAndTreasuryTab({
                         {(tx as any).creatorName || '—'}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        {!isVoided && !tx.payrollId && (tx as any).reversalOfId == null && (
-                          <button
-                            onClick={() => { setVoidTarget(tx); setVoidReason(''); }}
-                            title="ابطال تراکنش با سند معکوس"
-                            className="px-2 py-1 text-[10px] font-bold border border-rose-200 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors cursor-pointer"
-                          >
-                            ابطال
-                          </button>
-                        )}
+                        <ActionMenu
+                          items={[
+                            ...(tx.trackingNumber
+                              ? [
+                                  {
+                                    label: `کپی کد پیگیری (${tx.trackingNumber})`,
+                                    icon: Copy,
+                                    onClick: () => copyToClipboard(tx.trackingNumber, `track-${tx.id}`),
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: `کپی شماره تراکنش (${tx.transactionNumber})`,
+                              icon: Copy,
+                              onClick: () => copyToClipboard(tx.transactionNumber, `txnum-${tx.id}`),
+                            },
+                            ...(!isVoided && !tx.payrollId && (tx as any).reversalOfId == null
+                              ? [
+                                  {
+                                    label: 'ابطال تراکنش با سند معکوس',
+                                    icon: Trash2,
+                                    variant: 'danger' as const,
+                                    onClick: () => {
+                                      setVoidTarget(tx);
+                                      setVoidReason('');
+                                    },
+                                  },
+                                ]
+                              : []),
+                          ]}
+                          align="left"
+                        />
                       </td>
                     </tr>
                     );
@@ -1071,119 +1039,15 @@ export function BankAndTreasuryTab({
         </div>
       </div>
 
-      {/* V1.6.0: Bank Reconciliation Modal */}
-      {isReconcileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-3xl w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-1 flex items-center gap-2">
-              <ShieldCheck size={18} className="text-teal-600" />
-              آشتی‌سنجی بانکی (تطبیق صورت‌حساب بیرونی)
-            </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-6">
-              فایل اکسل/CSV صورت‌حساب بانک (ستون‌های: تاریخ، مبلغ، شرح، پیگیری) را بارگذاری کنید؛
-              ردیف‌ها با تراکنش‌های خزانه (بر اساس مبلغ، شماره پیگیری) تطبیق داده می‌شوند و تراکنش‌های تطبیق‌یافته به‌عنوان «آشتی‌سنجی‌شده» ثبت می‌گردند.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">حساب مورد آشتی‌سنجی *</label>
-                <select
-                  value={reconcileAccountId}
-                  onChange={e => { setReconcileAccountId(e.target.value); setReconcileRows([]); }}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
-                >
-                  <option value="">انتخاب حساب...</option>
-                  {safeBankAccounts.map(b => (
-                    <option key={b.id} value={b.id}>{b.title}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">فایل صورت‌حساب (xlsx / csv)</label>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  disabled={!reconcileAccountId}
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleStatementFile(f);
-                    e.target.value = '';
-                  }}
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-teal-50 file:text-teal-700 disabled:opacity-50"
-                />
-              </div>
-            </div>
-
-            {reconcileRows.length > 0 && (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    {reconcileRows.filter(r => r.matchedTxId).length} از {reconcileRows.length} ردیف تطبیق شد
-                    {reconcileRows.filter(r => r.matchedTxId && !r.alreadyReconciled).length > 0 && (
-                      <span className="text-teal-700 dark:text-teal-300"> ({reconcileRows.filter(r => r.matchedTxId && !r.alreadyReconciled).length} مورد جدید برای ثبت)</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={handleCommitReconcile}
-                    disabled={isCommittingReconcile}
-                    className="px-3 py-1.5 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 text-white rounded-lg disabled:opacity-50 cursor-pointer"
-                  >
-                    {isCommittingReconcile ? 'در حال ثبت...' : 'ثبت آشتی‌سنجی ردیف‌های تطبیق‌یافته'}
-                  </button>
-                </div>
-                <div className="max-h-[40vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
-                  <table className="w-full text-right border-collapse text-[11px]">
-                    <thead className="bg-slate-50 dark:bg-slate-700/50 sticky top-0">
-                      <tr className="text-slate-500 dark:text-slate-400">
-                        <th className="p-2">#</th>
-                        <th className="p-2">تاریخ</th>
-                        <th className="p-2">مبلغ</th>
-                        <th className="p-2">شرح / پیگیری</th>
-                        <th className="p-2">نتیجه تطبیق</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                      {reconcileRows.map(r => (
-                        <tr key={r.rowNo} className={r.matchedTxId ? 'bg-teal-50/40 dark:bg-teal-900/20' : 'bg-amber-50/40 dark:bg-amber-900/20'}>
-                          <td className="p-2 text-slate-400">{r.rowNo}</td>
-                          <td className="p-2 font-mono">{r.date || '—'}</td>
-                          <td className="p-2 font-mono font-bold">{formatPersianPrice(r.amount)}</td>
-                          <td className="p-2 max-w-[220px] truncate" title={r.description}>
-                            {r.description || '—'}
-                            {r.tracking && <span className="text-slate-400"> (پیگیری: {r.tracking})</span>}
-                          </td>
-                          <td className="p-2">
-                            {r.matchedTxId ? (
-                              <span className={`font-bold ${r.matchQuality === 'tracking' ? 'text-emerald-700 dark:text-emerald-300' : 'text-sky-700 dark:text-sky-300'}`}>
-                                {r.matchedTxNumber}
-                                <span className="text-[9px] block font-normal">
-                                  {r.matchQuality === 'tracking' ? 'تطبیق دقیق (پیگیری)' : 'تطبیق مبلغ'}
-                                  {r.alreadyReconciled ? ' — قبلاً ثبت شده' : ''}
-                                </span>
-                              </span>
-                            ) : (
-                              <span className="font-bold text-amber-700 dark:text-amber-300">بدون تطبیق</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={() => { setIsReconcileModalOpen(false); setReconcileRows([]); }}
-                className="px-4 py-2 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
-              >
-                بستن
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* V3 Phase 4: Bank Reconciliation Engine Modal */}
+      <BankReconciliationModal
+        isOpen={isReconcileModalOpen}
+        onClose={() => setIsReconcileModalOpen(false)}
+        bankAccounts={safeBankAccounts}
+        transactions={safeTransactions}
+        initialBankAccountId={reconcileAccountId || undefined}
+        onReconcileTransactions={onReconcileTransactions}
+      />
 
       {/* V1.6.0: Cash-Flow Report Modal */}
       {isCashFlowModalOpen && (

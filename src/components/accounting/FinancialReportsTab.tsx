@@ -8,7 +8,8 @@ import {
   FileText, 
   Activity, 
   ShieldCheck, 
-  BookOpen 
+  BookOpen,
+  Users
 } from 'lucide-react';
 import type { 
   TrialBalanceReport, 
@@ -26,6 +27,7 @@ import { JournalBookView } from './reports/JournalBookView';
 import { IncomeStatementView } from './reports/IncomeStatementView';
 import { BalanceSheetView } from './reports/BalanceSheetView';
 import { LedgerView } from './reports/LedgerView';
+import { PartyLedgerReportView } from './reports/PartyLedgerReportView';
 import { FinancialRatiosView } from './reports/FinancialRatiosView';
 import { AccountingAuditChecklistView } from './reports/AccountingAuditChecklistView';
 import { AutomationStatusView } from './reports/AutomationStatusView';
@@ -58,7 +60,7 @@ export function FinancialReportsTab({
 }: FinancialReportsTabProps) {
   // Navigation
   const [activeSubTab, setActiveSubTab] = useState<
-    'trial_balance' | 'journal_book' | 'income_statement' | 'balance_sheet' | 'ledger' | 'ratios' | 'audit' | 'automation' | 'project'
+    'trial_balance' | 'party_ledger' | 'journal_book' | 'income_statement' | 'balance_sheet' | 'ledger' | 'ratios' | 'audit' | 'automation' | 'project'
   >('trial_balance');
 
   // Filter States
@@ -262,6 +264,18 @@ export function FinancialReportsTab({
         </button>
 
         <button
+          onClick={() => setActiveSubTab('party_ledger')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition whitespace-nowrap ${
+            activeSubTab === 'party_ledger'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>صورت‌حساب طرف‌حساب (گردش اشخاص)</span>
+        </button>
+
+        <button
           onClick={() => { setActiveSubTab('journal_book'); fetchJournalBook(); }}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition whitespace-nowrap ${
             activeSubTab === 'journal_book'
@@ -356,7 +370,7 @@ export function FinancialReportsTab({
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          <span>چک‌لیست و ارزیابی ماژول حسابداری</span>
+          <span>بازرس سلامت مالی و ممیزی دفاتر</span>
         </button>
       </div>
 
@@ -383,7 +397,12 @@ export function FinancialReportsTab({
         />
       )}
 
-      {/* 2. JOURNAL BOOK TAB */}
+      {/* 2. PARTY LEDGER TAB (V3 Phase 3) */}
+      {activeSubTab === 'party_ledger' && (
+        <PartyLedgerReportView />
+      )}
+
+      {/* 3. JOURNAL BOOK TAB */}
       {activeSubTab === 'journal_book' && (
         <JournalBookView
           journalLoading={journalLoading}

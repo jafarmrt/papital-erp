@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -18,7 +18,8 @@ import {
   RotateCcw,
   History,
   ShieldCheck,
-  FileCheck
+  FileCheck,
+  MoreVertical
 } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, formatPersianDate, extractDateString } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -46,6 +47,7 @@ interface JournalVouchersTabProps {
   onCorrectVoucher?: (voucherId: number, data: { reason: string; newItems: any[]; newDescription?: string; date?: string }) => Promise<void>;
   onFinalizeVoucher?: (voucherId: number) => Promise<void>;
   onApproveVoucher?: (voucherId: number) => Promise<any>;
+  onSetVoucherStatus?: (voucherId: number, status: 'draft' | 'approved' | 'permanent', reason?: string) => Promise<any>;
   onBatchFinalizeVouchers?: (ids: number[]) => Promise<any>;
 }
 
@@ -64,6 +66,7 @@ export function JournalVouchersTab({
   onCorrectVoucher,
   onFinalizeVoucher,
   onApproveVoucher,
+  onSetVoucherStatus,
   onBatchFinalizeVouchers,
 }: JournalVouchersTabProps) {
   const appCurrency = useAppCurrency();
@@ -74,13 +77,31 @@ export function JournalVouchersTab({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedVoucherIds, setExpandedVoucherIds] = useState<Record<number, boolean>>({});
+  const [openMenuVoucherId, setOpenMenuVoucherId] = useState<number | null>(null);
+
+  // Close dropdown menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.voucher-action-menu-container')) {
+        setOpenMenuVoucherId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Reversal & Correction modal state
   const [reversalTargetVoucher, setReversalTargetVoucher] = useState<JournalVoucher | null>(null);
   const [correctionTargetVoucher, setCorrectionTargetVoucher] = useState<JournalVoucher | null>(null);
 
-  // V10-0.3: دیالوگ تایید یکدست — جایگزینی window.confirm با ConfirmModal استاندارد
-  type ConfirmAction = { kind: 'finalize' | 'approve' | 'delete'; voucher: JournalVoucher } | null;
+  // Status counters for Subphase 2.1 segmented control
+  const draftCount = useMemo(() => safeVouchers.filter(v => v.status === 'draft').length, [safeVouchers]);
+  const approvedCount = useMemo(() => safeVouchers.filter(v => v.status === 'approved').length, [safeVouchers]);
+  const permanentCount = useMemo(() => safeVouchers.filter(v => v.status === 'permanent').length, [safeVouchers]);
+  const totalCount = safeVouchers.length;
+
+  // دیالوگ تایید یکدست — ConfirmModal استاندارد
+  type ConfirmAction = { kind: 'finalize' | 'approve' | 'revert_to_draft' | 'delete'; voucher: JournalVoucher } | null;
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const confirmBusy = useRef(false);
 
@@ -91,15 +112,17 @@ export function JournalVouchersTab({
     try {
       if (kind === 'delete') {
         await onDeleteVoucher(voucher.id);
-        toast.success('سند حسابداری حذف شد');
+        toast.success('سند حسابداری با موفقیت حذف شد');
       } else if (kind === 'finalize' && onFinalizeVoucher) {
         await onFinalizeVoucher(voucher.id);
       } else if (kind === 'approve' && onApproveVoucher) {
         await onApproveVoucher(voucher.id);
+      } else if (kind === 'revert_to_draft' && onSetVoucherStatus) {
+        await onSetVoucherStatus(voucher.id, 'draft', 'بازگشت به پیش‌نویس توسط کاربر');
       }
       setConfirmAction(null);
     } catch (err: any) {
-      const labels = { finalize: 'قطعی‌سازی', approve: 'تایید', delete: 'حذف' } as const;
+      const labels = { finalize: 'قطعی‌سازی', approve: 'تایید', revert_to_draft: 'بازگشت به پیش‌نویس', delete: 'حذف' } as const;
       toast.error(err?.message || `خطا در ${labels[kind]} سند`);
       setConfirmAction(null);
     } finally {
@@ -113,7 +136,11 @@ export function JournalVouchersTab({
 
   const handleDelete = (voucher: JournalVoucher) => {
     if (voucher.status === 'permanent') {
-      toast.error('اسناد دائم و قطعی‌شده قابل حذف نیستند. لطفاً از گزینه «صدور سند معکوس» استفاده فرمایید.');
+      toast.error('اسناد دائم و قطعی‌شده قابل حذف مستقیم نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» استفاده فرمایید.');
+      return;
+    }
+    if (voucher.status === 'approved') {
+      toast.error('اسناد تاییدشده قابل حذف مستقیم نیستند. لطفاً ابتدا سند را به پیش‌نویس برگردانید.');
       return;
     }
     setConfirmAction({ kind: 'delete', voucher });
@@ -127,6 +154,15 @@ export function JournalVouchersTab({
   const handleApprove = (voucher: JournalVoucher) => {
     if (voucher.status === 'approved' || voucher.status === 'permanent') return;
     setConfirmAction({ kind: 'approve', voucher });
+  };
+
+  const handleRevertToDraft = (voucher: JournalVoucher) => {
+    if (voucher.status === 'permanent') {
+      toast.error('اسناد دائم و قطعی‌شده قابل تغییر وضعیت نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» استفاده فرمایید.');
+      return;
+    }
+    setOpenMenuVoucherId(null);
+    setConfirmAction({ kind: 'revert_to_draft', voucher });
   };
 
   const voucherTypeLabels: Record<string, { label: string; badge: string }> = {
@@ -186,10 +222,10 @@ export function JournalVouchersTab({
         <div>
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <h3 className="font-bold text-slate-900 dark:text-white text-lg">دفتر ثبت اسناد حسابداری (Journal Vouchers)</h3>
+            <h3 className="font-bold text-slate-900 dark:text-white text-lg">دفتر ثبت اسناد حسابداری</h3>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            مشاهده، ثبت دستی، قطعی‌سازی، صدور اسناد معکوس (عطف) و اصلاحی مطابق با الزامات یکپارچگی مالی
+            مشاهده، ثبت دستی، تایید حسابرسی، قطعی‌سازی دفاتر، و صدور اسناد برگشتی و اصلاحی
           </p>
         </div>
 
@@ -202,6 +238,84 @@ export function JournalVouchersTab({
             <span>ثبت سند حسابداری جدید</span>
           </button>
         </div>
+      </div>
+
+      {/* Segmented 3-Status Selector Tabs (فاز ۲ نسخه ۳: تفکیک شفاف سه وضعیت اسناد) */}
+      <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
+        <button
+          onClick={() => setSelectedStatus('all')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            selectedStatus === 'all'
+              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-slate-600'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <span>همه اسناد حسابداری</span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
+            selectedStatus === 'all'
+              ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold'
+              : 'bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-400'
+          }`}>
+            {formatPersianNumber(totalCount)}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedStatus('draft')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            selectedStatus === 'draft'
+              ? 'bg-amber-500 text-white shadow-xs'
+              : 'text-amber-800 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-950/40'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>پیش‌نویس‌ها (یادداشت اولیه)</span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
+            selectedStatus === 'draft'
+              ? 'bg-white/20 text-white font-bold'
+              : 'bg-amber-200/70 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200'
+          }`}>
+            {formatPersianNumber(draftCount)}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedStatus('approved')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            selectedStatus === 'approved'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-blue-800 dark:text-blue-300 hover:bg-blue-100/60 dark:hover:bg-blue-950/40'
+          }`}
+        >
+          <FileCheck className="w-3.5 h-3.5" />
+          <span>تایید شده (حسابرسی‌شده)</span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
+            selectedStatus === 'approved'
+              ? 'bg-white/20 text-white font-bold'
+              : 'bg-blue-200/70 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200'
+          }`}>
+            {formatPersianNumber(approvedCount)}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedStatus('permanent')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            selectedStatus === 'permanent'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40'
+          }`}
+        >
+          <Lock className="w-3.5 h-3.5" />
+          <span>دائم و قطعی (قفل دفاتر)</span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono ${
+            selectedStatus === 'permanent'
+              ? 'bg-white/20 text-white font-bold'
+              : 'bg-emerald-200/70 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200'
+          }`}>
+            {formatPersianNumber(permanentCount)}
+          </span>
+        </button>
       </div>
 
       {/* Filter Bar */}
@@ -232,18 +346,6 @@ export function JournalVouchersTab({
           <option value="payroll">حقوق و دستمزد</option>
           <option value="closing">افتتاحیه / اختتامیه</option>
           <option value="adjustment">اصلاحی / برگشت</option>
-        </select>
-
-        {/* Status Filter */}
-        <select
-          value={selectedStatus}
-          onChange={e => setSelectedStatus(e.target.value)}
-          className="px-3 py-2 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
-        >
-          <option value="all">همه وضعیت‌ها</option>
-          <option value="permanent">دائم و قطعی</option>
-          <option value="approved">تایید شده</option>
-          <option value="draft">پیش‌نویس</option>
         </select>
 
         {/* Date Filters */}
@@ -284,20 +386,20 @@ export function JournalVouchersTab({
       </div>
 
       {/* Vouchers Table */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-visible">
+        <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full text-right border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold">
                 <th className="py-3.5 px-3 w-10 text-center">#</th>
                 <th className="py-3.5 px-3 w-28 text-center">شماره سند</th>
                 <th className="py-3.5 px-3 w-28 text-center">تاریخ</th>
-                <th className="py-3.5 px-3 w-28 text-center">وضعیت</th>
+                <th className="py-3.5 px-3 w-32 text-center">وضعیت سند</th>
                 <th className="py-3.5 px-3 w-32">نوع سند</th>
                 <th className="py-3.5 px-4">شرح کلی سند</th>
                 <th className="py-3.5 px-4 w-36 text-left">مبلغ کل (تراز)</th>
                 <th className="py-3.5 px-3 w-28 text-center">ثبت‌کننده</th>
-                <th className="py-3.5 px-4 w-44 text-center">عملیات</th>
+                <th className="py-3.5 px-4 w-48 text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
@@ -360,92 +462,163 @@ export function JournalVouchersTab({
                           {voucher.createdByUsername || 'کاربر'}
                         </td>
 
+                        {/* Decluttered Actions Column (قانون طلایی ۱: خلوت‌سازی دکمه‌ها و منوی کشویی) */}
                         <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {/* Print */}
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* چاپ سریع */}
                             <button
                               onClick={() => onPrintVoucher(voucher)}
                               title="چاپ سند"
-                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition cursor-pointer"
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-slate-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-950/40 rounded-lg transition cursor-pointer"
                             >
                               <Printer className="w-4 h-4" />
                             </button>
 
-                            {/* Approve Button (If draft) */}
-                            {voucher.status === 'draft' && onApproveVoucher && (
+                            {/* اقدام متنی اصلی */}
+                            {voucher.status === 'draft' && onApproveVoucher ? (
                               <button
                                 onClick={() => handleApprove(voucher)}
-                                title="تایید حسابداری سند (تغییر از پیش‌نویس به تایید شده)"
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition cursor-pointer"
+                                title="تایید حسابداری سند و انتقال به دفاتر رسمی"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/60 rounded-lg border border-blue-200 dark:border-blue-800 transition cursor-pointer shadow-xs"
                               >
-                                <CheckCircle2 className="w-4 h-4" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                                <span>تایید سند</span>
                               </button>
-                            )}
-
-                            {/* Finalize Button (If not permanent) */}
-                            {!isPermanent && onFinalizeVoucher && (
+                            ) : voucher.status === 'approved' && onFinalizeVoucher ? (
                               <button
                                 onClick={() => handleFinalize(voucher)}
-                                title="قطعی‌سازی و دائم کردن سند"
-                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition cursor-pointer"
+                                title="قطعی‌سازی و قفل سند در دفاتر رسمی"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60 rounded-lg border border-emerald-200 dark:border-emerald-800 transition cursor-pointer shadow-xs"
                               >
-                                <Lock className="w-4 h-4" />
-                              </button>
-                            )}
-
-                            {/* Reverse Voucher (Available for permanent and approved) */}
-                            <button
-                              onClick={() => setReversalTargetVoucher(voucher)}
-                              title="صدور سند معکوس (عطف / برگشت)"
-                              className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition cursor-pointer"
-                            >
-                              <RotateCcw className="w-4 h-4" />
-                            </button>
-
-                            {/* Correct Voucher (Available for permanent and approved) */}
-                            <button
-                              onClick={() => setCorrectionTargetVoucher(voucher)}
-                              title="صدور سند اصلاحی جایگزین"
-                              className="p-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition cursor-pointer"
-                            >
-                              <History className="w-4 h-4" />
-                            </button>
-
-                            {/* Edit (Disabled if permanent) */}
-                            {!isPermanent ? (
-                              <button
-                                onClick={() => onEditVoucher(voucher)}
-                                title="ویرایش مستقیم سند"
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition cursor-pointer"
-                              >
-                                <Edit3 className="w-4 h-4" />
+                                <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>قطعی‌سازی</span>
                               </button>
                             ) : (
                               <span 
-                                title="اسناد دائم قابل ویرایش مستقیم نیستند. از دکمه اصلاحیه یا برگشت استفاده نمایید."
-                                className="p-1.5 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40"
+                                title="سند دائم در دفاتر کل قفل است و تغییر مستقیم نمی‌پذیرد"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-lg border border-emerald-200/60 dark:border-emerald-800/60"
                               >
-                                <Edit3 className="w-4 h-4" />
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>قفل دفاتر</span>
                               </span>
                             )}
 
-                            {/* Delete (Disabled if permanent) */}
-                            {!isPermanent ? (
+                            {/* منوی عملیات تکمیلی («...») */}
+                            <div className="relative voucher-action-menu-container">
                               <button
-                                onClick={() => handleDelete(voucher)}
-                                title="حذف سند"
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuVoucherId(openMenuVoucherId === voucher.id ? null : voucher.id);
+                                }}
+                                title="سایر عملیات سند"
+                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <MoreVertical className="w-4 h-4" />
                               </button>
-                            ) : (
-                              <span 
-                                title="اسناد دائم قابل حذف نیستند."
-                                className="p-1.5 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </span>
-                            )}
+
+                              {openMenuVoucherId === voucher.id && (
+                                <div 
+                                  className="absolute left-0 mt-1 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-40 animate-in fade-in zoom-in-95 text-right font-sans"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {/* گزینه‌های وضعیت پیش‌نویس */}
+                                  {voucher.status === 'draft' && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          onEditVoucher(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition cursor-pointer"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5 text-blue-500" />
+                                        <span>ویرایش پیش‌نویس</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          handleDelete(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>حذف پیش‌نویس</span>
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {/* گزینه‌های وضعیت تایید شده */}
+                                  {voucher.status === 'approved' && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          onEditVoucher(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition cursor-pointer"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5 text-blue-500" />
+                                        <span>ویرایش مستقیم سند</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleRevertToDraft(voucher)}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                                        <span>بازگشت به پیش‌نویس</span>
+                                      </button>
+                                      <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          setReversalTargetVoucher(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                                        <span>صدور سند برگشتی (ابطال سند)</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          setCorrectionTargetVoucher(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition cursor-pointer"
+                                      >
+                                        <History className="w-3.5 h-3.5 text-purple-500" />
+                                        <span>صدور سند اصلاحی جایگزین</span>
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {/* گزینه‌های وضعیت دائم و قطعی */}
+                                  {voucher.status === 'permanent' && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          setReversalTargetVoucher(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer"
+                                      >
+                                        <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                                        <span>صدور سند برگشتی (ابطال سند)</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuVoucherId(null);
+                                          setCorrectionTargetVoucher(voucher);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition cursor-pointer"
+                                      >
+                                        <History className="w-3.5 h-3.5 text-purple-500" />
+                                        <span>صدور سند اصلاحی جایگزین</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -535,22 +708,29 @@ export function JournalVouchersTab({
         />
       )}
 
-      {/* V10-0.3: دیالوگ تایید استاندارد برای قطعی‌سازی / تایید / حذف سند */}
+      {/* دیالوگ تایید استاندارد برای قطعی‌سازی / تایید / بازگشت به پیش‌نویس / حذف سند */}
       <ConfirmModal
         isOpen={!!confirmAction}
         title={
           confirmAction?.kind === 'finalize' ? 'قطعی‌سازی سند حسابداری'
           : confirmAction?.kind === 'approve' ? 'تایید حسابداری سند'
+          : confirmAction?.kind === 'revert_to_draft' ? 'بازگشت سند به وضعیت پیش‌نویس'
           : 'حذف سند حسابداری'
         }
         message={
           confirmAction?.kind === 'finalize'
-            ? `آیا از قطعی‌سازی و تبدیل سند شماره #${confirmAction?.voucher.voucherNumber} به سند دائم اطمینان دارید؟ پس از قطعی‌سازی، ویرایش یا حذف مستقیم سند غیرممکن خواهد بود و تنها از مسیر «صدور سند معکوس» قابل بی‌اثر شدن است.`
+            ? `آیا از قطعی‌سازی و تبدیل سند شماره #${confirmAction?.voucher.voucherNumber} به سند دائم اطمینان دارید؟ پس از قطعی‌سازی، ویرایش یا حذف مستقیم سند غیرممکن خواهد بود و تنها از مسیر «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» قابل اصلاح است.`
             : confirmAction?.kind === 'approve'
-            ? `آیا از تایید حسابداری سند شماره #${confirmAction?.voucher.voucherNumber} اطمینان دارید؟`
+            ? `آیا از تایید حسابداری سند شماره #${confirmAction?.voucher.voucherNumber} اطمینان دارید؟ با تایید، سند در دفاتر و گزارش‌های مالی موثر خواهد بود.`
+            : confirmAction?.kind === 'revert_to_draft'
+            ? `آیا از بازگرداندن سند شماره #${confirmAction?.voucher.voucherNumber} به وضعیت پیش‌نویس اطمینان دارید؟ در صورت بازگشت، این سند موقتاً از دفاتر رسمی خارج شده و امکان ویرایش مجدد آن فراهم می‌شود.`
             : `آیا از حذف سند حسابداری شماره #${confirmAction?.voucher.voucherNumber} اطمینان دارید؟`
         }
-        confirmText={confirmAction?.kind === 'delete' ? 'بله، حذف شود' : 'بله، ثبت قطعی'}
+        confirmText={
+          confirmAction?.kind === 'delete' ? 'بله، حذف شود'
+          : confirmAction?.kind === 'revert_to_draft' ? 'بله، بازگشت به پیش‌نویس'
+          : 'بله، ثبت قطعی'
+        }
         onConfirm={executeConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />

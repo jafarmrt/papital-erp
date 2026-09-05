@@ -1,6 +1,6 @@
 import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers } from '../db/schema.js';
+import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers, treasuryTransactions } from '../db/schema.js';
 import { roundFinancial, getTodayJalaliDate } from '../utils.js';
 import { resolveJalaliFiscalYear, businessNowIsoDateTime } from '../lib/businessClock.js';
 import { fin, FinancialMath } from '../lib/financialDecimal.js';
@@ -140,6 +140,21 @@ export interface FormattedDocument {
   total_amount?: number;
   totalDiscount: number;
   grossAmount: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  settlementStatus?: 'unpaid' | 'partially_paid' | 'fully_paid';
+  settlements?: Array<{
+    id: number;
+    transactionNumber: string;
+    type: string;
+    method: string;
+    amount: number;
+    date: string;
+    status: string;
+    trackingNumber?: string | null;
+    bankAccountId?: number | null;
+    description?: string | null;
+  }>;
   items: FormattedDocumentItem[];
 }
 
@@ -694,6 +709,13 @@ export class DocumentService {
       unit: string | null;
       category: string | null;
     }> = [];
+    let treasurySettlements: Array<{
+      documentId: number | null;
+      amount: number;
+      type: string;
+      status: string;
+    }> = [];
+
     if (docIds.length > 0) {
       allItems = await orm.select({
         document_id: documentItems.documentId,
@@ -710,6 +732,19 @@ export class DocumentService {
       .from(documentItems)
       .leftJoin(items, eq(documentItems.itemId, items.id))
       .where(and(inArray(documentItems.documentId, docIds), eq(documentItems.isDeleted, 0)));
+
+      treasurySettlements = await orm.select({
+        documentId: treasuryTransactions.documentId,
+        amount: treasuryTransactions.amount,
+        type: treasuryTransactions.type,
+        status: treasuryTransactions.status,
+      })
+      .from(treasuryTransactions)
+      .where(and(
+        inArray(treasuryTransactions.documentId, docIds),
+        eq(treasuryTransactions.isDeleted, 0),
+        eq(treasuryTransactions.status, 'completed')
+      ));
     }
 
     const formattedDocs: FormattedDocument[] = docs.map(d => {
@@ -727,6 +762,30 @@ export class DocumentService {
         0
       );
 
+      // V3.0.0 Phase 1: وضعیت تسویه فاکتور و تجمیع تراکنش‌های خزانه
+      const docSettlements = treasurySettlements.filter(t => t.documentId === d.id);
+      const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(d.type);
+      const paidAmount = docSettlements.reduce((sum, t) => {
+        const amt = Number(t.amount || 0);
+        if (isPurchase) {
+          return sum + (t.type === 'payment' ? amt : -amt);
+        } else {
+          return sum + (t.type === 'receipt' ? amt : -amt);
+        }
+      }, 0);
+
+      const safePaidAmount = Math.max(0, paidAmount);
+      const remainingAmount = Math.max(0, fin(totalAmount).subtract(safePaidAmount).toNumber());
+      let settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
+
+      if (totalAmount > 0 && safePaidAmount >= totalAmount - 0.01) {
+        settlementStatus = 'fully_paid';
+      } else if (safePaidAmount > 0) {
+        settlementStatus = 'partially_paid';
+      } else {
+        settlementStatus = 'unpaid';
+      }
+
       return {
         ...d,
         buyer_name: d.buyerName,
@@ -739,6 +798,9 @@ export class DocumentService {
         totalAmount,
         totalDiscount,
         grossAmount,
+        paidAmount: safePaidAmount,
+        remainingAmount,
+        settlementStatus,
         items: dItems
       };
     });
@@ -820,6 +882,48 @@ export class DocumentService {
     const totalDiscount = formattedItems.reduce((acc, i) => acc + Number(i.discount || 0), 0);
     const grossAmount = formattedItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || 0)), 0);
 
+    // V3.0.0 Phase 1: بازیابی تراکنش‌های تسویه متصل به این سند
+    const settlements = await orm.select({
+      id: treasuryTransactions.id,
+      transactionNumber: treasuryTransactions.transactionNumber,
+      type: treasuryTransactions.type,
+      method: treasuryTransactions.method,
+      amount: treasuryTransactions.amount,
+      date: treasuryTransactions.date,
+      status: treasuryTransactions.status,
+      trackingNumber: treasuryTransactions.trackingNumber,
+      bankAccountId: treasuryTransactions.bankAccountId,
+      description: treasuryTransactions.description,
+    })
+    .from(treasuryTransactions)
+    .where(and(
+      eq(treasuryTransactions.documentId, doc.id),
+      eq(treasuryTransactions.isDeleted, 0),
+      eq(treasuryTransactions.status, 'completed')
+    ));
+
+    const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
+    const paidAmount = settlements.reduce((sum, t) => {
+      const amt = Number(t.amount || 0);
+      if (isPurchase) {
+        return sum + (t.type === 'payment' ? amt : -amt);
+      } else {
+        return sum + (t.type === 'receipt' ? amt : -amt);
+      }
+    }, 0);
+
+    const safePaidAmount = Math.max(0, paidAmount);
+    const remainingAmount = Math.max(0, fin(totalCalculated).subtract(safePaidAmount).toNumber());
+    let settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
+
+    if (totalCalculated > 0 && safePaidAmount >= totalCalculated - 0.01) {
+      settlementStatus = 'fully_paid';
+    } else if (safePaidAmount > 0) {
+      settlementStatus = 'partially_paid';
+    } else {
+      settlementStatus = 'unpaid';
+    }
+
     return {
       ...doc,
       buyer_name: doc.buyerName,
@@ -838,7 +942,33 @@ export class DocumentService {
       grossAmount,
       total_amount: totalCalculated,
       totalAmount: totalCalculated,
+      paidAmount: safePaidAmount,
+      remainingAmount,
+      settlementStatus,
+      settlements,
       items: formattedItems
+    };
+  }
+
+  /**
+   * V3.0.0 Phase 1: Retrieves detailed invoice settlement status with payment breakdown.
+   */
+  static async getInvoiceSettlementStatus(documentId: number) {
+    const doc = await this.getDocumentById(documentId);
+    if (!doc) throw new NotFoundError('سند یافت نشد');
+    return {
+      documentId: doc.id,
+      refNumber: doc.refNumber,
+      type: doc.type,
+      status: doc.status,
+      buyerName: doc.buyerName,
+      buyerPhone: doc.buyerPhone,
+      currency: doc.currency,
+      totalAmount: doc.totalAmount,
+      paidAmount: doc.paidAmount || 0,
+      remainingAmount: doc.remainingAmount || 0,
+      settlementStatus: doc.settlementStatus || 'unpaid',
+      settlements: doc.settlements || []
     };
   }
 

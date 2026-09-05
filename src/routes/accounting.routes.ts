@@ -405,15 +405,28 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
   res.json({ message: `${result.finalizedCount} سند با موفقیت قطعی و دائم شدند.`, ...result });
 }));
 
-// Status change route
+// Status change route (تغییر وضعیت سند حسابداری: پیش‌نویس، تایید شده، دائم و قطعی)
 router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { status } = req.body;
+  const { status, reason } = req.body;
   if (!['draft', 'approved', 'permanent'].includes(status)) {
     throw new BadRequestError('وضعیت ارسال شده نامعتبر است');
   }
 
+  const existing = await AccountingService.getJournalVoucherById(id);
+  if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
+
   const updated = await AccountingService.setVoucherStatus(id, status, req.user?.id);
+
+  const statusLabels: Record<string, string> = {
+    draft: 'پیش‌نویس (یادداشت اولیه)',
+    approved: 'تایید شده (حسابرسی‌شده)',
+    permanent: 'دائم و قطعی (قفل دفاتر)'
+  };
+
+  const prevText = statusLabels[existing.status] || existing.status;
+  const newText = statusLabels[status] || status;
+  const reasonText = reason?.trim() ? ` (علت: ${reason.trim()})` : '';
 
   await logActivity({
     userId: req.user?.id,
@@ -422,8 +435,8 @@ router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vo
     action: 'UPDATE',
     entity: 'journal_voucher',
     entityId: String(id),
-    description: `تغییر وضعیت سند شماره #${updated.voucherNumber} به ${status}`,
-    details: { id, status },
+    description: `تغییر وضعیت سند حسابداری شماره #${updated.voucherNumber} از «${prevText}» به «${newText}»${reasonText}`,
+    details: { id, previousStatus: existing.status, newStatus: status, reason },
     ipAddress: req.ip || '',
   });
 
@@ -912,6 +925,29 @@ const accountCardReportHandler = asyncHandler(async (req, res) => {
 router.get('/accounting/reports/account-card', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), accountCardReportHandler);
 router.get('/accounting/reports/ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), accountCardReportHandler);
 
+router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), asyncHandler(async (req, res) => {
+  const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = req.query;
+  const data = await AccountingService.getDetailedPartyLedger({
+    partyId: partyId ? Number(partyId) : undefined,
+    partyType: partyType as string,
+    partyName: partyName as string,
+    startDate: startDate as string,
+    endDate: endDate as string,
+    currency: currency as string,
+    includeDrafts: includeDrafts === 'true',
+  });
+  res.json({ report: data, ...data });
+}));
+
+router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), asyncHandler(async (req, res) => {
+  const { search, type } = req.query;
+  const data = await AccountingService.getPartiesList({
+    search: search as string,
+    type: type as string,
+  });
+  res.json({ data });
+}));
+
 router.get('/accounting/reports/journal-book', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
   const { startDate, endDate, search, currency } = req.query;
   const data = await AccountingService.getJournalBook({
@@ -958,6 +994,29 @@ router.get('/accounting/reports/multi-currency-summary', authorizePermission('ac
     endDate: endDate as string,
   });
   res.json({ report: data, ...data });
+}));
+
+// V3 PHASE 5: بازرس هوشمند سلامت مالی و ممیزی دفاتر (Financial Health Inspector)
+router.get('/accounting/reports/health-check', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
+  const report = await AccountingService.runFinancialHealthCheck();
+  res.json(report);
+}));
+
+// اقدام سریع: صدور دسته جمعی اسناد دوبل برای فاکتورها و اسناد نهایی فاقد سند
+router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('accounting.vouchers'), asyncHandler(async (req, res) => {
+  const syncedCount = await AccountingService.syncAllInvoiceVouchers();
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'CREATE',
+    entity: 'journal_voucher',
+    entityId: 'QUICK_FIX_SYNC_ALL',
+    description: `اجرای اقدام سریع صدور مکانیزه اسناد دوبل برای ${syncedCount} سند تجاری`,
+    details: { syncedCount },
+    ipAddress: req.ip || '',
+  });
+  res.json({ success: true, message: `${syncedCount} سند تجاری با موفقیت بررسی و سند دوبل آن‌ها صادر/به‌روزرسانی شد`, syncedCount });
 }));
 
 // ==========================================
@@ -1032,9 +1091,9 @@ router.get('/accounting/reports/project-summary', authorizePermission('accountin
            COALESCE(SUM(jvi.debit), 0) AS total_debit,
            COALESCE(SUM(jvi.credit), 0) AS total_credit
     FROM journal_voucher_items jvi
-    LEFT JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
+    INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
     LEFT JOIN production_projects pp ON pp.id = jvi.detailed_id
-    WHERE jvi.detailed_type = 'project' AND jvi.is_deleted = 0
+    WHERE jvi.detailed_type = 'project'
     GROUP BY jvi.detailed_id
     ORDER BY MAX(pp.created_at) DESC NULLS LAST
   `);
@@ -1068,9 +1127,9 @@ router.get('/accounting/reports/project-detail', authorizePermission('accounting
            jvi.description AS line_description,
            jvi.debit, jvi.credit
     FROM journal_voucher_items jvi
-    LEFT JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
+    INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
     LEFT JOIN accounts a ON a.id = jvi.account_id
-    WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId} AND jvi.is_deleted = 0
+    WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId}
     ORDER BY jv.date ASC, jv.id ASC, jvi.id ASC
   `);
 

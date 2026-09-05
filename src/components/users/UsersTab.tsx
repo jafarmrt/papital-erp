@@ -8,7 +8,10 @@ import {
   Shield,
   KeyRound,
   Search,
+  Copy,
 } from 'lucide-react';
+import { ActionMenu } from '../ActionMenu';
+import toast from 'react-hot-toast';
 
 interface UsersTabProps {
   users: User[];
@@ -145,23 +148,42 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                   </td>
                   <td className="p-3.5">{getRoleBadge(u.role)}</td>
                   <td className="p-3.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1.5">
                       <button
                         onClick={() => onEditUser(u)}
-                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-lg transition-colors"
+                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-lg transition-colors cursor-pointer"
                         title="ویرایش اطلاعات کاربر"
                       >
                         <Edit2 size={16} />
                       </button>
-                      {u.id !== currentUser.id && (
-                        <button
-                          onClick={() => onDeleteUser(u.id)}
-                          className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors"
-                          title="حذف کاربر"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      <ActionMenu
+                        items={[
+                          {
+                            label: 'ویرایش اطلاعات کاربر',
+                            icon: Edit2,
+                            onClick: () => onEditUser(u),
+                          },
+                          {
+                            label: `کپی نام کاربری (${u.username})`,
+                            icon: Copy,
+                            onClick: () => {
+                              navigator.clipboard.writeText(u.username);
+                              toast.success('نام کاربری کپی شد');
+                            },
+                          },
+                          ...(u.id !== currentUser.id
+                            ? [
+                                {
+                                  label: 'حذف کاربر',
+                                  icon: Trash2,
+                                  variant: 'danger' as const,
+                                  onClick: () => onDeleteUser(u.id),
+                                },
+                              ]
+                            : []),
+                        ]}
+                        align="left"
+                      />
                     </div>
                   </td>
                 </tr>

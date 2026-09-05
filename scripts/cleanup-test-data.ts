@@ -169,17 +169,17 @@ async function main() {
       // 9. Customers
       await tx.execute(sql`DELETE FROM customers WHERE ${TEST_CUSTOMER_COND}`);
 
-      // 10. Users (test only)
+      // 10. System events, idempotency keys & queues (delete before users to satisfy FK)
+      await tx.execute(sql`DELETE FROM idempotency_keys`);
+      await tx.execute(sql`DELETE FROM outbox_events`);
+      await tx.execute(sql`DELETE FROM dead_letter_events`);
+      await tx.execute(sql`DELETE FROM event_action_logs`);
+
+      // 11. Users (test only)
       await tx.execute(sql`DELETE FROM form_drafts WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND})`);
       await tx.execute(sql`DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND}) OR sender_id IN (SELECT id FROM users WHERE ${TEST_USER_COND})`);
       await tx.execute(sql`DELETE FROM activity_logs WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND}) OR action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE '%آزمایشی%'`);
       await tx.execute(sql`DELETE FROM users WHERE ${TEST_USER_COND}`);
-
-      // 11. System events & queues
-      await tx.execute(sql`DELETE FROM outbox_events`);
-      await tx.execute(sql`DELETE FROM dead_letter_events`);
-      await tx.execute(sql`DELETE FROM idempotency_keys`);
-      await tx.execute(sql`DELETE FROM event_action_logs`);
 
       console.log('✅ Purge completed inside transaction.');
     });

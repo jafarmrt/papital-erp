@@ -5,7 +5,8 @@ import {
   AccountingReportService,
   VoucherSyncService,
   FiscalYearService,
-  AccountMappingService
+  AccountMappingService,
+  FinancialHealthService
 } from './accounting/index.js';
 import type {
   Account,
@@ -27,7 +28,8 @@ export {
   AccountingReportService,
   VoucherSyncService,
   FiscalYearService,
-  AccountMappingService
+  AccountMappingService,
+  FinancialHealthService
 };
 
 /**
@@ -87,6 +89,8 @@ export class AccountingService {
   // ================= Financial & Accounting Reports =================
   static getTrialBalance = AccountingReportService.getTrialBalance.bind(AccountingReportService);
   static getDetailedAccountCard = AccountingReportService.getDetailedAccountCard.bind(AccountingReportService);
+  static getDetailedPartyLedger = AccountingReportService.getDetailedPartyLedger.bind(AccountingReportService);
+  static getPartiesList = AccountingReportService.getPartiesList.bind(AccountingReportService);
   static getJournalBook = AccountingReportService.getJournalBook.bind(AccountingReportService);
   static getFinancialRatios = AccountingReportService.getFinancialRatios.bind(AccountingReportService);
   static getCashFlowReport = AccountingReportService.getCashFlowReport.bind(AccountingReportService);
@@ -107,4 +111,7 @@ export class AccountingService {
   // ================= Fiscal Year Closing =================
   static getFiscalYearClosingPreview = FiscalYearService.getFiscalYearClosingPreview.bind(FiscalYearService);
   static executeFiscalYearClosing = FiscalYearService.executeFiscalYearClosing.bind(FiscalYearService);
+
+  // ================= Financial Health Inspector =================
+  static runFinancialHealthCheck = FinancialHealthService.runHealthCheck.bind(FinancialHealthService);
 }

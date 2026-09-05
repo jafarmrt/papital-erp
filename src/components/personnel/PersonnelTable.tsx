@@ -1,7 +1,9 @@
 import React from 'react';
-import { Search, Eye, Edit2, Trash2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Search, Eye, Edit2, Trash2, CheckCircle2, XCircle, Clock, AlertCircle, Copy, Phone } from 'lucide-react';
 import { Personnel } from '../../types';
 import { formatPersianCode } from '../../utils';
+import { ActionMenu } from '../ActionMenu';
+import toast from 'react-hot-toast';
 
 interface PersonnelTableProps {
   personnelList: Personnel[];
@@ -168,20 +170,51 @@ export function PersonnelTable({
                           >
                             <Eye size={16} />
                           </button>
-                          <button
-                            onClick={() => onEdit(p)}
-                            title="ویرایش مشخصات"
-                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => onDelete(p)}
-                            title="حذف پرسنل"
-                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <ActionMenu
+                            items={[
+                              {
+                                label: 'ویرایش مشخصات',
+                                icon: Edit2,
+                                onClick: () => onEdit(p),
+                              },
+                              {
+                                label: 'مشاهده پرونده پرسنلی',
+                                icon: Eye,
+                                onClick: () => onViewDetail(p),
+                              },
+                              ...(p.phone
+                                ? [
+                                    {
+                                      label: `کپی شماره تماس (${p.phone})`,
+                                      icon: Copy,
+                                      onClick: () => {
+                                        navigator.clipboard.writeText(p.phone || '');
+                                        toast.success('شماره تماس کپی شد');
+                                      },
+                                    },
+                                  ]
+                                : []),
+                              ...(p.personnelCode
+                                ? [
+                                    {
+                                      label: `کپی کد پرسنلی (${p.personnelCode})`,
+                                      icon: Copy,
+                                      onClick: () => {
+                                        navigator.clipboard.writeText(p.personnelCode || '');
+                                        toast.success('کد پرسنلی کپی شد');
+                                      },
+                                    },
+                                  ]
+                                : []),
+                              {
+                                label: 'حذف پرسنل',
+                                icon: Trash2,
+                                variant: 'danger',
+                                onClick: () => onDelete(p),
+                              },
+                            ]}
+                            align="left"
+                          />
                         </div>
                       </td>
                     </tr>

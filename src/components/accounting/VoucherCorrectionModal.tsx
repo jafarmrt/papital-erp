@@ -44,6 +44,14 @@ interface VoucherItemDraft {
   description: string;
 }
 
+const COMMON_CORRECTION_REASONS = [
+  'اصلاح حساب معین یا تفصیلی',
+  'تصحیح مبالغ بدهکار و بستانکار',
+  'تغییر شرح و پیوست‌های سند',
+  'اصلاح کدینگ مرکز هزینه یا پروژه',
+  'اصلاح مانده طرف‌حساب',
+];
+
 export function VoucherCorrectionModal({
   isOpen,
   onClose,
@@ -212,7 +220,7 @@ export function VoucherCorrectionModal({
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                تولید خودکار سند معکوس (عطف) و ثبت نسخه اصلاح‌شده به صورت کاملاً زنجیره‌ای و غیرقابل انکار.
+                صدور خودکار سند برگشتی برای سند فعلی و ثبت نسخه جدید با حفظ پیوستگی زنجیره اسناد حسابداری
               </p>
             </div>
           </div>
@@ -230,10 +238,10 @@ export function VoucherCorrectionModal({
           <div className="flex items-start gap-3 p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-xl text-xs text-blue-900 dark:text-blue-200">
             <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <span className="font-bold">فرایند استاندارد اصلاح سند (Reversal + Re-issue):</span> در حسابداری حرفه‌ای، سند دائم هرگز پاک یا بازنویسی نمی‌شود؛ با تایید این فرم:
+              <span className="font-bold">فرایند استاندارد اصلاح اسناد در حسابداری دوبل:</span> در حسابداری حرفه‌ای، اسناد تاییدشده هرگز دستکاری یا بازنویسی مستقیم نمی‌شوند؛ با تایید این فرم:
               <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] opacity-90">
-                <li>یک سند معکوس (عطف) به صورت خودکار صادر شده تا سند قبلی را بی‌اثر کند.</li>
-                <li>سند اصلاحی جدید با آرتیکل‌های زیر و ارجاع مستقیم به سند مبدا ثبت می‌گردد.</li>
+                <li>یک سند برگشتی خودکار صادر شده تا اثر مالی سند قبلی را در دفاتر کل خنثی سازد.</li>
+                <li>سند اصلاحی جدید با ردیف‌های زیر و ارجاع مستقیم به سند مبدا ثبت و جایگزین می‌گردد.</li>
               </ul>
             </div>
           </div>
@@ -259,15 +267,40 @@ export function VoucherCorrectionModal({
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                <span>علت و توجیه اصلاح سند (الزامی)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>علت و توجیه اصلاح سند (الزامی)</span>
+                </label>
+                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-blue-500" />
+                  <span>انتخاب سریع:</span>
+                </span>
+              </div>
+
+              {/* Quick Chips */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {COMMON_CORRECTION_REASONS.map((r, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setReason(r)}
+                    className={`text-[11px] px-2 py-0.5 rounded-lg border transition cursor-pointer ${
+                      reason === r
+                        ? 'bg-blue-100 border-blue-400 text-blue-900 font-bold dark:bg-blue-950 dark:border-blue-600 dark:text-blue-200'
+                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-750 dark:border-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+
               <input
                 type="text"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="مثال: تصحیح کد معین تفصیلی مشتری یا اصلاح مبلغ مالیات بر ارزش افزوده..."
+                placeholder="مثال: تصحیح کد معین تفصیلی طرف حساب یا اصلاح ارقام..."
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                 required
               />

@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
-import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { 
   Search, Printer, Edit3, Trash2, ChevronRight, ChevronLeft, Filter, 
-  Plus, FileInput, FileOutput, ArrowDownLeft, ArrowUpRight, Eye, 
+  FileOutput, ArrowDownLeft, ArrowUpRight, Eye, 
   CheckCircle2, AlertCircle, ShoppingCart, CreditCard, DollarSign, 
   Package, X, Building2, User, Layers, RefreshCw, FileText, GitBranch, ShieldCheck
 } from 'lucide-react';
@@ -17,6 +16,8 @@ import { formatPersianNumber, formatPersianCode, formatPersianPrice, formatCurre
 import { Money } from '../components/Money';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
+import { InvoiceSettlementModal } from '../components/invoices/InvoiceSettlementModal';
+import { ActionMenu } from '../components/ActionMenu';
 import { useSearch } from '../SearchContext';
 import { useDocumentsQuery } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
@@ -36,6 +37,7 @@ export default function InvoicesListPage() {
   const [printedDoc, setPrintedDoc] = useState<any>(null);
   const [selectedDocDetails, setSelectedDocDetails] = useState<any>(null);
   const [workflowDoc, setWorkflowDoc] = useState<any | null>(null);
+  const [settlementDoc, setSettlementDoc] = useState<any | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
 
@@ -296,21 +298,6 @@ export default function InvoicesListPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            <Link
-              to="/receipts"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <FileInput size={15} />
-              <span>+ ورود به انبار (خرید کالا)</span>
-            </Link>
-            <Link
-              to="/invoices/create"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <Plus size={15} />
-              <span>+ صدور فاکتور فروش</span>
-            </Link>
-
             <button
               onClick={loadData}
               title="بارگذاری مجدد"
@@ -434,8 +421,9 @@ export default function InvoicesListPage() {
                 <th className="p-3">طرف حساب (تامین‌کننده / خریدار)</th>
                 <th className="p-3 text-center">تعداد و اقلام</th>
                 <th className="p-3">ارزش کل / مبلغ سند</th>
-                <th className="p-3 w-1/4">توضیحات و یادداشت</th>
-                <th className="p-3 text-center w-28">عملیات</th>
+                <th className="p-3">وضعیت تسویه</th>
+                <th className="p-3 w-1/5">توضیحات و یادداشت</th>
+                <th className="p-3 text-center w-36">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
@@ -503,6 +491,12 @@ export default function InvoicesListPage() {
                 );
 
                 const currencyLabel = formatCurrencyLabel(doc.currency);
+
+                // Settlement calculations
+                const isCommercial = (isInvoice || isReceipt) && totalDocAmount > 0;
+                const settlementStatus = doc.settlementStatus || (isCommercial ? 'unpaid' : 'none');
+                const paidAmt = Number(doc.paidAmount || 0);
+                const remainingAmt = doc.remainingAmount !== undefined ? Number(doc.remainingAmount) : Math.max(0, totalDocAmount - paidAmt);
 
                 return (
                   <tr key={doc.id} className="hover:bg-blue-50/30 transition-colors">
@@ -585,6 +579,42 @@ export default function InvoicesListPage() {
                       )}
                     </td>
 
+                    {/* Settlement Status */}
+                    <td className="p-3 whitespace-nowrap">
+                      {isCommercial ? (
+                        <div>
+                          {settlementStatus === 'fully_paid' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <CheckCircle2 size={11} className="text-emerald-600" />
+                              <span>تسویه کامل</span>
+                            </span>
+                          ) : settlementStatus === 'partially_paid' ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                <span>تسویه ناقص</span>
+                              </span>
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                مانده: <span className="text-amber-700 font-bold">{formatPersianPrice(remainingAmt)}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <AlertCircle size={10} className="text-rose-500" />
+                                <span>تسویه نشده</span>
+                              </span>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                مانده: {formatPersianPrice(remainingAmt)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-300 font-mono">-</span>
+                      )}
+                    </td>
+
                     {/* Notes (Editable Inline) */}
                     <td className="p-3">
                       {editingNotesId === doc.id ? (
@@ -629,14 +659,22 @@ export default function InvoicesListPage() {
                     {/* Actions */}
                     <td className="p-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
-                        <button 
-                          onClick={() => setWorkflowDoc(doc)} 
-                          className="p-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1 font-bold"
-                          title="چرخه تاییدات و ارسال به انبار (Workflow)"
-                        >
-                          <GitBranch size={14} />
-                          <span className="hidden xl:inline text-[10px]">گردش‌کار</span>
-                        </button>
+                        {isCommercial && doc.status === 'final' && (
+                          <button 
+                            onClick={() => setSettlementDoc(doc)} 
+                            className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1 font-bold ${
+                              settlementStatus === 'fully_paid'
+                                ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60'
+                                : 'text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs'
+                            }`}
+                            title={settlementStatus === 'fully_paid' ? 'مشاهده سوابق تسویه' : 'تسویه سریع فاکتور'}
+                          >
+                            <CreditCard size={13} />
+                            <span className="text-[10px]">
+                              {settlementStatus === 'fully_paid' ? 'تسویه‌شده' : 'تسویه سریع'}
+                            </span>
+                          </button>
+                        )}
                         <button 
                           onClick={() => handleOpenDetails(doc)} 
                           className="p-1.5 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs transition-colors cursor-pointer"
@@ -644,20 +682,28 @@ export default function InvoicesListPage() {
                         >
                           <Eye size={14} />
                         </button>
-                        <button 
-                          onClick={() => handlePrint(doc.id)} 
-                          className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs transition-colors cursor-pointer"
-                          title="چاپ سند / فاکتور رسمی"
-                        >
-                          <Printer size={14} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteDoc(doc.id, doc.ref_number)} 
-                          className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs transition-colors cursor-pointer"
-                          title="ابطال / حذف سند"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <ActionMenu
+                          align="left"
+                          title="عملیات سند"
+                          items={[
+                            {
+                              label: 'چاپ سند / فاکتور رسمی',
+                              icon: Printer,
+                              onClick: () => handlePrint(doc.id),
+                            },
+                            {
+                              label: 'چرخه تاییدات و گردش کار',
+                              icon: GitBranch,
+                              onClick: () => setWorkflowDoc(doc),
+                            },
+                            {
+                              label: 'ابطال / حذف سند',
+                              icon: Trash2,
+                              onClick: () => handleDeleteDoc(doc.id, doc.ref_number),
+                              variant: 'danger',
+                            },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -665,7 +711,7 @@ export default function InvoicesListPage() {
               })}
               {!loading && safeDocs.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-400 text-xs">
+                  <td colSpan={10} className="p-12 text-center text-slate-400 text-xs">
                     سندی مطابق فیلترهای انتخابی یا عبارت جستجو یافت نشد.
                   </td>
                 </tr>
@@ -906,6 +952,57 @@ export default function InvoicesListPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Settlement Status Card in Document Details */}
+              {(selectedDocDetails.type === 'invoice' || selectedDocDetails.type === 'receipt') && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                      selectedDocDetails.settlementStatus === 'fully_paid'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : selectedDocDetails.settlementStatus === 'partially_paid'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      <CreditCard size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800">وضعیت تسویه مالی:</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          selectedDocDetails.settlementStatus === 'fully_paid'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : selectedDocDetails.settlementStatus === 'partially_paid'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {selectedDocDetails.settlementStatus === 'fully_paid' 
+                            ? 'تسویه کامل' 
+                            : selectedDocDetails.settlementStatus === 'partially_paid'
+                              ? 'تسویه ناقص'
+                              : 'تسویه نشده'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-3">
+                        <span>پرداخت‌شده: <strong className="text-emerald-700 font-mono">{formatPersianPrice(selectedDocDetails.paidAmount || 0, selectedDocDetails.currency)}</strong></span>
+                        <span>•</span>
+                        <span>مانده: <strong className="text-amber-700 font-mono">{formatPersianPrice(selectedDocDetails.remainingAmount !== undefined ? selectedDocDetails.remainingAmount : Math.max(0, (selectedDocDetails.totalAmount || 0) - (selectedDocDetails.paidAmount || 0)), selectedDocDetails.currency)}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedDocDetails.status === 'final' && (
+                    <button
+                      type="button"
+                      onClick={() => setSettlementDoc(selectedDocDetails)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs flex items-center gap-1.5 shrink-0"
+                    >
+                      <CreditCard size={14} />
+                      <span>{selectedDocDetails.settlementStatus === 'fully_paid' ? 'مشاهده / ثبت تراکنش جدید' : 'تسویه سریع فاکتور'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -982,6 +1079,19 @@ export default function InvoicesListPage() {
           </div>
         </div>
       )}
+
+      {/* Quick Invoice Settlement Modal */}
+      <InvoiceSettlementModal
+        isOpen={!!settlementDoc}
+        onClose={() => setSettlementDoc(null)}
+        onSuccess={() => {
+          loadData();
+          if (selectedDocDetails && settlementDoc && selectedDocDetails.id === settlementDoc.id) {
+            handleOpenDetails(settlementDoc);
+          }
+        }}
+        document={settlementDoc}
+      />
     </div>
   );
 }

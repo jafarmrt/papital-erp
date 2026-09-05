@@ -72,7 +72,7 @@ export function getMenuGroups(
       groupIcon: Compass,
       items: [
         { name: 'داشبورد', path: '/', icon: LayoutDashboard, visible: true },
-        { name: 'کارتابل تاییدات (ورکفلو)', path: '/approval-inbox', icon: CheckSquare, visible: true },
+        { name: 'کارتابل تاییدات و گردش کار', path: '/approval-inbox', icon: CheckSquare, visible: true },
       ]
     },
     {
@@ -131,7 +131,6 @@ export function getMenuGroups(
       items: [
         { name: 'گزارش اقلام رزروی', path: '/reserved-items', icon: Lock, visible: hasPerm('products.view') || hasPerm('reports.view') || hasPerm('warehouse.view') },
         { name: 'گزارش تراکنش‌ها', path: '/transactions', icon: History, visible: hasPerm('reports.view') },
-        { name: 'لیست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: hasPerm('documents.view') },
       ]
     },
     {
@@ -144,6 +143,7 @@ export function getMenuGroups(
         { name: 'کدینگ و درخت حساب‌ها', path: '/accounting/coa', icon: FolderTree, visible: hasPerm('accounting.coa') },
         { name: 'اسناد دوبل حسابداری', path: '/accounting/vouchers', icon: FileText, visible: hasPerm('accounting.vouchers') },
         { name: 'خزانه‌داری و حساب‌های بانکی', path: '/accounting/treasury', icon: Building2, visible: hasPerm('accounting.treasury') },
+        { name: 'لیست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: hasPerm('documents.view') || hasPerm('accounting.treasury') || hasPerm('accounting.view') },
         { name: 'مدیریت چک‌های صیادی', path: '/accounting/cheques', icon: CreditCard, visible: hasPerm('accounting.cheques') },
         { name: 'صورت‌ها و گزارش‌های مالی', path: '/accounting/reports', icon: BarChart3, visible: hasPerm('accounting.reports') },
         { name: 'بستن سال مالی', path: '/accounting/fiscal-closing', icon: Lock, visible: hasPerm('accounting.vouchers') },
@@ -156,7 +156,7 @@ export function getMenuGroups(
       items: [
         // V10-5.2: هم‌راستا با API — events.view (admin از طریق isAdmin عبور می‌کند)
         { name: 'رویدادها و اتوماسیون سازمانی', path: '/domain-events', icon: Zap, visible: hasPerm('events.view') },
-        { name: 'طراح ورکفلو و SLA', path: '/workflow-designer', icon: Workflow, visible: user?.role === 'admin' },
+        { name: 'طراح فرایند و گردش کار (SLA)', path: '/workflow-designer', icon: Workflow, visible: user?.role === 'admin' },
         { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: user?.role === 'admin' },
         { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: user?.role === 'admin' },
         { name: 'سجل تغییرات', path: '/activity-logs', icon: ShieldAlert, visible: hasPerm('audit_logs.view') || hasPerm('reports.view') },

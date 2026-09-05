@@ -1,42 +1,72 @@
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { User } from '../types';
 import { PageLoader } from './PageLoader';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import TimezoneProvider from './providers/TimezoneProvider';
 import { ConfirmDialogHost } from './ConfirmDialogHost';
+import { ErrorBoundary } from './ErrorBoundary';
+
+// Helper for resilient lazy loading with auto-retry and cache-busting reload
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await factory();
+    } catch (error: any) {
+      console.warn('Dynamic import failed, retrying module load...', error);
+      try {
+        await new Promise(r => setTimeout(r, 400));
+        return await factory();
+      } catch (err: any) {
+        if (typeof window !== 'undefined') {
+          const key = 'chunk_reload_ts';
+          const last = Number(sessionStorage.getItem(key) || '0');
+          const now = Date.now();
+          if (now - last > 8000) {
+            sessionStorage.setItem(key, String(now));
+            window.location.reload();
+            return new Promise(() => {});
+          }
+        }
+        throw err;
+      }
+    }
+  });
+}
 
 // Lazy-loaded page components for Code Splitting (FE-001)
-const Dashboard = lazy(() => import('../pages/Dashboard'));
-const InventoryStatusPage = lazy(() => import('../pages/InventoryStatusPage'));
-const CustomersPage = lazy(() => import('../pages/CustomersPage'));
-const PricingPage = lazy(() => import('../pages/PricingPage'));
-const GalleryPage = lazy(() => import('../pages/GalleryPage'));
-const DocumentsPage = lazy(() => import('../pages/DocumentsPage'));
-const CreateInvoicePage = lazy(() => import('../pages/CreateInvoicePage'));
-const InvoicesListPage = lazy(() => import('../pages/InvoicesListPage'));
-const InventoryAuditPage = lazy(() => import('../pages/InventoryAuditPage'));
-const SettingsPage = lazy(() => import('../pages/SettingsPage'));
-const UsersPage = lazy(() => import('../pages/UsersPage'));
-const ActivityLogsPage = lazy(() => import('../pages/ActivityLogsPage'));
-const TransactionsPage = lazy(() => import('../pages/TransactionsPage'));
-const ReservedItemsReportPage = lazy(() => import('../pages/ReservedItemsReportPage'));
-const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
-const ProjectInventoryPage = lazy(() => import('../pages/ProjectInventoryPage'));
-const ReorderAlertsPage = lazy(() => import('../pages/ReorderAlertsPage'));
-const PendingMaterialsPage = lazy(() => import('../pages/PendingMaterialsPage'));
-const TransfersPage = lazy(() => import('../pages/TransfersPage'));
-const DailyLogsPage = lazy(() => import('../pages/DailyLogsPage'));
-const PersonnelPage = lazy(() => import('../pages/PersonnelPage'));
-const PieceworkPayrollPage = lazy(() => import('../pages/PieceworkPayrollPage'));
-const MyPayslipsPage = lazy(() => import('../pages/MyPayslipsPage'));
-const CRMPage = lazy(() => import('../pages/CRMPage'));
-const AccountingPage = lazy(() => import('../pages/AccountingPage'));
-const ApprovalInboxPage = lazy(() => import('../pages/ApprovalInboxPage'));
-const WorkflowManagementPage = lazy(() => import('../pages/WorkflowManagementPage'));
-const DomainEventsPage = lazy(() => import('../pages/DomainEventsPage'));
-const ChangelogPage = lazy(() => import('../pages/ChangelogPage'));
-const ItemsPage = lazy(() => import('../pages/ItemsPage'));
+const Dashboard = lazyWithRetry(() => import('../pages/Dashboard'));
+const InventoryStatusPage = lazyWithRetry(() => import('../pages/InventoryStatusPage'));
+const CustomersPage = lazyWithRetry(() => import('../pages/CustomersPage'));
+const PricingPage = lazyWithRetry(() => import('../pages/PricingPage'));
+const GalleryPage = lazyWithRetry(() => import('../pages/GalleryPage'));
+const DocumentsPage = lazyWithRetry(() => import('../pages/DocumentsPage'));
+const CreateInvoicePage = lazyWithRetry(() => import('../pages/CreateInvoicePage'));
+const InvoicesListPage = lazyWithRetry(() => import('../pages/InvoicesListPage'));
+const InventoryAuditPage = lazyWithRetry(() => import('../pages/InventoryAuditPage'));
+const SettingsPage = lazyWithRetry(() => import('../pages/SettingsPage'));
+const UsersPage = lazyWithRetry(() => import('../pages/UsersPage'));
+const ActivityLogsPage = lazyWithRetry(() => import('../pages/ActivityLogsPage'));
+const TransactionsPage = lazyWithRetry(() => import('../pages/TransactionsPage'));
+const ReservedItemsReportPage = lazyWithRetry(() => import('../pages/ReservedItemsReportPage'));
+const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
+const ProjectInventoryPage = lazyWithRetry(() => import('../pages/ProjectInventoryPage'));
+const ReorderAlertsPage = lazyWithRetry(() => import('../pages/ReorderAlertsPage'));
+const PendingMaterialsPage = lazyWithRetry(() => import('../pages/PendingMaterialsPage'));
+const TransfersPage = lazyWithRetry(() => import('../pages/TransfersPage'));
+const DailyLogsPage = lazyWithRetry(() => import('../pages/DailyLogsPage'));
+const PersonnelPage = lazyWithRetry(() => import('../pages/PersonnelPage'));
+const PieceworkPayrollPage = lazyWithRetry(() => import('../pages/PieceworkPayrollPage'));
+const MyPayslipsPage = lazyWithRetry(() => import('../pages/MyPayslipsPage'));
+const CRMPage = lazyWithRetry(() => import('../pages/CRMPage'));
+const AccountingPage = lazyWithRetry(() => import('../pages/AccountingPage'));
+const ApprovalInboxPage = lazyWithRetry(() => import('../pages/ApprovalInboxPage'));
+const WorkflowManagementPage = lazyWithRetry(() => import('../pages/WorkflowManagementPage'));
+const DomainEventsPage = lazyWithRetry(() => import('../pages/DomainEventsPage'));
+const ChangelogPage = lazyWithRetry(() => import('../pages/ChangelogPage'));
+const ItemsPage = lazyWithRetry(() => import('../pages/ItemsPage'));
 
 export interface AppRoutesProps {
   user: User;
@@ -51,8 +81,9 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
       <TimezoneProvider>
       {/* V10-3.1: هاست تایید استاندارد — همه confirm های Promise-based از اینجا رندر می‌شوند */}
       <ConfirmDialogHost />
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
         {/* V10-5.0: وضعیت انبار = داشبورد تحلیلی و هوش تجاری انبار */}
         <Route path="/inventory-status" element={<InventoryStatusPage />} />
         <Route path="/crm" element={
@@ -119,7 +150,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           </ProtectedRoute>
         } />
         <Route path="/invoices" element={
-          <ProtectedRoute requiredPerm="documents.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute requiredPerm={['documents.view', 'accounting.treasury', 'accounting.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <InvoicesListPage />
           </ProtectedRoute>
         } />
@@ -210,6 +241,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           </ProtectedRoute>
         } />
       </Routes>
+      </ErrorBoundary>
       </TimezoneProvider>
     </Suspense>
   );
