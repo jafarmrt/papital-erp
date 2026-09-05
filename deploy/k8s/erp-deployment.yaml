@@ -16,6 +16,12 @@ metadata:
   labels:
     app: erp
 spec:
+  # V3.0.8 (TD-058): rollout کنترل‌شده و قابل برگشت
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   replicas: 2
   selector:
     matchLabels:
@@ -25,16 +31,30 @@ spec:
       labels:
         app: erp
     spec:
+      # V3.0.8 (TD-058): stateful path ها به volume منتقل شدند؛
+      # uploads باید ReadWriteMany باشد تا هر ۲ (یا N) replica به همان داده دسترسی داشته باشند
+      # (Stateless شدن واقعی — داده تصاویر از بین رفتن pod زنده می‌ماند).
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: erp-uploads
+      - name: logs
+        emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v3.0.7
+        image: registry.example.com/erp:v3.0.8
         ports:
         - containerPort: 3000
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/public/uploads
+        - name: logs
+          mountPath: /app/logs
         env:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "3.0.7"
+          value: "3.0.8"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -118,3 +138,20 @@ spec:
       target:
         type: Utilization
         averageUtilization: 70
+
+---
+# V3.0.8 (TD-058): PersistentVolumeClaim ???? ???????? ????? (????/?????? ????).
+# accessMode ???? ????? StorageClass ???? ????? ????? ???? RWX ???? multi-replica ?????? ???.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: erp-uploads
+  labels:
+    app: erp
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: <??? StorageClass ???? ??? ?? ???????? RWX (??? nfs/nfs-subdir)>

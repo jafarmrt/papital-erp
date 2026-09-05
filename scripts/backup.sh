@@ -39,7 +39,12 @@ if [ -d "$UPLOADS_DIR" ] && [ -n "$(ls -A "$UPLOADS_DIR" 2>/dev/null)" ]; then
 fi
 
 # 2. Verify backup integrity
+# 2a. gzip container integrity
 gunzip -t "$DUMP_FILE.gz" || { echo "[$(date)] Backup verification FAILED for $DUMP_FILE.gz — keeping file for inspection"; exit 1; }
+# 2b. V3.0.8 (TD-059): pg_restore must be able to read the archive TOC —
+# gzip integrity alone never proved the dump itself is restorable.
+gunzip -c "$DUMP_FILE.gz" | pg_restore --list - >/dev/null 2>/dev/null \
+  || { echo "[$(date)] Backup verification FAILED (pg_restore --list): $DUMP_FILE.gz is NOT a valid pg_dump archive — keeping file for inspection"; exit 1; }
 
 # 3. Upload to offsite storage (optional, e.g. S3)
 if [ -n "${S3_BACKUP_BUCKET:-}" ]; then

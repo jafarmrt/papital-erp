@@ -58,21 +58,34 @@ jobs:
     - run: npm ci
     - name: Build (vite client + esbuild server bundle)
       run: npm run build
-    # NOTE: Docker build/push intentionally disabled until a Dockerfile is added
-    # to the repository. Enable together with the registry secrets above:
-    # - name: Build Docker image
-    #   run: docker build -t registry.example.com/erp:${{ github.sha }} .
-    # - name: Push to registry
-    #   env:
-    #     REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-    #   run: |
-    #     docker login registry.example.com -u ${{ secrets.REGISTRY_USER }} -p $REGISTRY_TOKEN
-    #     docker push registry.example.com/erp:${{ github.sha }}
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: dist-${{ github.sha }}
         path: dist/
+
+  # V3.0.8 (TD-058): Docker build/push — the image is built on every master push as a
+  # build verification gate; it is pushed only when registry secrets are configured.
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set image version
+      run: echo "IMAGE_TAG=v$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+    - name: Build Docker image
+      run: docker build -t papital-erp:${IMAGE_TAG} .
+    - name: Push to registry (only when secrets are configured)
+      if: ${{ secrets.REGISTRY_TOKEN != '' }}
+      env:
+        REGISTRY: ${{ vars.DOCKER_REGISTRY || 'registry.example.com' }}
+        REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+      run: |
+        echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+        docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
+        docker push "${REGISTRY}/erp:${IMAGE_TAG}"
 
   deploy-staging:
     needs: build

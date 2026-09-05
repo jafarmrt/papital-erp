@@ -1,0 +1,17 @@
+node_modules
+dist
+.pgdata
+.pgsql
+logs
+*.log
+update-*.log
+.env
+.env.*
+!.env.example
+backups
+papital-erp-source-*.zip
+.git
+.github
+deploy
+scripts/backup.sh
+scripts/restore.sh

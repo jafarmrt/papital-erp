@@ -6,6 +6,27 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.0.8',
+    date: '۱۵ شهریور ۱۴۰۵',
+    title: 'فاز ۳ ممیزی Forensic — استقرار و بازگشت از بحران: Dockerfile، قابلیت بازتولید ایمیج، PVC آپلودها، گیت Build ایمیج در CI و تمرین بازیابی (Restore Drill) واقعی',
+    summary: 'اجرای فاز ۳ نقشه راه تثبیت: ساخت Dockerfile چندمرحله‌ای Node 22 Alpine با non-root runtime و HEALTHCHECK، فعال‌سازی گیت Build ایمیج در CI (push شرطی با secrets)، افزودن PVC با accessMode ReadWriteMany برای آپلودها و volume برای لاگ‌ها در مانیفست K8s با پارامترهای rollout ایمن، اعتبارسنجی TOC دامپ با pg_restore --list در backup.sh، و اسکریپت scripts/restore.sh با دو حالت drill (ایزوله و بی‌اثر بر production) و apply (مخرب با تأیید صریح). تمرین بازیابی واقعی روی دیتابیس محلی با موفقیت اجرا و اعتبارسنجی شد.',
+    author: 'AI Agent (Forensic Audit Phase 3 — Deployment & Disaster Recovery)',
+    changes: [
+      'Dockerfile: بیلد چندمرحله‌ای (builder با vite/esbuild → runtime حداقلی)، non-root (USER node)، HEALTHCHECK کانتینری و اجرای migrations از dist/drizzle در startup',
+      '.dockerignore: حذف node_modules، dist، .pgdata، .pgsql، logs، .env و بسته‌های zip از کانتکست بیلد',
+      'ci.yml: جاب docker جدید روی push به master — بیلد ایمیج به‌عنوان گیت راستی‌آزمایی bld و push فقط در صورت تنظیم secretهای REGISTRY_USER/REGISTRY_TOKEN',
+      'deploy/k8s/erp-deployment.yaml: PVC erp-uploads با accessMode ReadWriteMany (اشتراک داده بین replicaها)، volume logs از نوع emptyDir، mount مسیرها و استراتژی RollingUpdate با maxUnavailable=0',
+      'scripts/backup.sh: اعتبارسنجی دومرحله‌ای — افزون بر gunzip -t، اکنون خوانایی TOC دامپ با pg_restore --list نیز الزامی است (گرفتن بکاپ خراب → exit 1)',
+      'scripts/restore.sh: بازیابی دوحالته — drill (ایجاد DB موقتی erp_restore_drill_*، بازگردانی، شمارش ۱۰ جدول حیاتی، drop خودکار) و apply (با RESTORE_CONFIRM=yes)',
+      'README.md: به‌روزرسانی رویه بازیابی با drill خودکار و اصل «backup موجود ≠ قابل بازیابی»'
+    ],
+    fixes: [
+      'رفع ریسک از بین رفتن داده تصاویر در reschedule pod با ماندگاری PVC و از بین رفتن استقرار ایمیج قابل‌ساخت نبودن (Dockerfile غایب)',
+      'رفع پذیرش بکاپ‌های ناقص/خراب در backup.sh که فقط gzip آن‌ها validate می‌شد',
+      'رفع غیاب مطلق تمرین بازیابی — اکنون drill خودکار و قابل زمان‌بندی است'
+    ]
+  },
+  {
     version: 'v3.0.7',
     date: '۱۵ شهریور ۱۴۰۵',
     title: 'فاز ۲ ممیزی Forensic — سخت‌سازی قابلیت اطمینان: قیود یکپارچگی مالی، WAC مسیر تولید، امنیت وب‌هوک/CSRF و ایمن‌سازی پاکسازی تستی',

@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری پایدار `v3.x.y` (نسخه مستقر: `v3.0.7`) — تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md`
+> **نسخه فعلی:** سری پایدار `v3.x.y` (نسخه مستقر: `v3.0.8`) — تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md`
 
 ---
 
@@ -131,14 +131,18 @@ npm run build
 
 ```bash
 ls -lt /var/backups/erp/*.dump.gz | head -3
-# تست صحت روی staging:
-gunzip -c <dump>.dump.gz | pg_restore --clean --if-exists -d papital_staging
-# restore واقعی (با downtime):
-systemctl stop papital-erp
-gunzip -c <dump>.dump.gz | pg_restore --clean --if-exists -d papital_erp
-systemctl start papital-erp
+# V3.0.8 (TD-059): تمرین بازیابی خودکار (drill) — dump در DB موقتی ایزاده بازگردانی
+# می‌شود، شمارش ردیف‌های جدول‌های حیاتی اعتبارسنجی و سپس DB موقتی drop می‌گردد:
+RESTORE_MODE=drill ./scripts/restore.sh [dump-file.dump.gz]
+# (برای نگه‌داشتن DB تمرین جهت بررسی دستی: RESTORE_KEEP=1)
+
+# restore واقعی روی DB هدف (مخرب — نیازمند تأیید صریح):
+RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh <dump>.dump.gz papital_erp
+systemctl restart papital-erp
 curl -fsS http://localhost:3000/health/ready
 ```
+
+> اصل: «backup موجود است» ≠ «قابل بازیابی است». drill فوق پس از هر تغییر بزرگ schema و به‌صورت دوره‌ای (مثلاً ماهانه) باید اجرا شود.
 
 ### Rollback نسخه اپلیکیشن
 
