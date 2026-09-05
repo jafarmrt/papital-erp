@@ -1,8 +1,12 @@
 import { pool, orm } from '../db/drizzle.js';
 import { sql, eq } from 'drizzle-orm';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { DataReconciliationService } from './reconciliation/dataReconciliation.service.js';
 import { SystemRecoveryService } from './recovery/systemRecovery.service.js';
 import { BUILD_INFO } from '../lib/version.js';
+
+const execFileAsync = promisify(execFile);
 
 interface DynamicTestRunnerModule {
   Phase21TestRunner: {
@@ -72,33 +76,62 @@ export class ReleaseGateService {
     `);
     const totalTables = Number(tablesRes.rows[0]?.count || 0);
 
-    // 1. Pillar 1: Build & Type Safety
+    // V3.0.9 (TD-063): سوییت تست و لایه‌های همروندی «اول» اجرا می‌شوند تا ستون‌های
+    // Build/Transaction-Safety از نتایج واقعی مشتق شوند، نه متن ثابت.
+    const { Phase21TestRunner } = await loadTestRunner();
+    const testReport = await Phase21TestRunner.runAllTests();
+    const isTestPassed = testReport.overallStatus === 'passed';
+
+    const layerSummary = (l: string) => (testReport as unknown as {
+      layerSummaries?: Array<{ layer: string; passed: number; failed: number; blocked: number; notRun: number }>
+    }).layerSummaries?.find(x => x.layer === l);
+
+    // 1. Pillar 1: Build & Type Safety — اندازه‌گیری واقعی tsc --noEmit (fail-closed)
+    let typecheckPassed = false;
+    let typecheckEvidence = '';
+    try {
+      await execFileAsync('npx', ['tsc', '--noEmit'], { cwd: process.cwd(), shell: true, timeout: 180_000 });
+      typecheckPassed = true;
+      typecheckEvidence = 'تایپ‌اسکریپت (tsc --noEmit) هم‌اکنون در همین فرایند اجرا و با صفر خطا به پایان رسید.';
+    } catch (err: unknown) {
+      const execErr = err as { code?: unknown; killed?: boolean; message?: string };
+      typecheckEvidence = execErr.killed
+        ? 'tsc --noEmit به دلیل timeout (۱۸۰ ثانیه) ناتمام ماند — ستون رد شد.'
+        : `tsc --noEmit با خطا به پایان رسید (${String(execErr.code ?? 'unknown')}). خروجی: ${(execErr.message || '').slice(-300)}`;
+    }
     criteria.push({
       id: 'pillar_build_and_types',
       category: 'build',
       title: 'کامپایل بدون خطا و صحت کامل سیستم تایپ‌های TypeScript',
-      status: 'passed',
-      evidence: 'اسکریپت tsc --noEmit و vite build بدون هرگونه خطای تایپی، ایمپورت مفقود یا اخطار نحوی کامپایل شدند.'
+      status: typecheckPassed ? 'passed' : 'failed',
+      evidence: typecheckEvidence
     });
 
-    // 2. Pillar 2: Security & Authentication Invariants
-    const adminRoleRes = await pool.query(`SELECT count(*) as count FROM users WHERE role = 'admin' AND is_active = true`);
+    // 2. Pillar 2: Security & Authentication Invariants — مشتق از داده واقعی
+    const adminRoleRes = await pool.query(`SELECT count(*) as count FROM users WHERE role = 'admin' AND is_deleted = 0`);
     const hasActiveAdmin = Number(adminRoleRes.rows[0]?.count || 0) > 0;
+    const securityLayer = layerSummary('security') || layerSummary('penetration');
+    const securityTestsOk = securityLayer ? securityLayer.failed === 0 : false;
+    const securityPassed = hasActiveAdmin && securityTestsOk;
     criteria.push({
       id: 'pillar_security_auth',
       category: 'security',
       title: 'احراز هویت کوکی‌های HttpOnly، کنترل دسترسی چندسطحی (RBAC) و مسدودسازی IDOR/Privilege Escalation',
-      status: hasActiveAdmin ? 'passed' : 'failed',
-      evidence: `تمام توکن‌ها با HttpOnly، Secure و SameSite صادر می‌شوند. دسترسی به مسیرهای سیستم و اسناد محافظت‌شده صرفاً با نقش‌های مجاز امکان‌پذیر است.`
+      status: securityPassed ? 'passed' : 'failed',
+      evidence: `اندازه‌گیری زنده: ادمین فعال=${hasActiveAdmin}؛ لایه امنیت/نفوذ سوییت واقعی: ${securityLayer ? `${securityLayer.passed} PASS / ${securityLayer.failed} FAIL / ${securityLayer.blocked} BLOCKED` : 'بدون اجرا (رد شده)'}`
     });
 
-    // 3. Pillar 3: Transaction Safety & Concurrency
+    // 3. Pillar 3: Transaction Safety & Concurrency — مشتق از لایه‌های همروندی واقعی
+    const concurrencyLayer = layerSummary('concurrency');
+    const criticalPathLayer = layerSummary('critical_path');
+    const concurrencyOk = !!(concurrencyLayer && concurrencyLayer.failed === 0 && concurrencyLayer.passed > 0)
+      && !!(criticalPathLayer && criticalPathLayer.failed === 0 && criticalPathLayer.passed > 0);
     criteria.push({
       id: 'pillar_transaction_safety',
       category: 'transaction_safety',
       title: 'تضمین اتمیک تراکنش‌ها، قفل‌گذاری سطری (.for("update")) و عدم بروز Race Condition',
-      status: 'passed',
-      evidence: 'آزمون‌های همزمانی کسر انبار و تغییر وضعیت فرآیند تایید کردند که تراکنش‌های همزمان با قفل سطری PostgreSQL تفکیک شده و خطاها به‌صورت کامل Rollback می‌شوند.'
+      status: concurrencyOk ? 'passed' : 'failed',
+      evidence: `لایه concurrency: ${concurrencyLayer ? `${concurrencyLayer.passed} PASS / ${concurrencyLayer.failed} FAIL` : 'بدون اجرا'}؛ لایه critical_path: ${criticalPathLayer ? `${criticalPathLayer.passed} PASS / ${criticalPathLayer.failed} FAIL` : 'بدون اجرا'} — شامل کسر اتمیک انبار ۱۰ finalize موازی و یکتایی SEQUENCE با ۸ ووچر موازی.`
     });
 
     // 4. Pillar 4: Data Integrity (12-Point Reconciliation)
@@ -114,15 +147,12 @@ export class ReleaseGateService {
     });
 
     // 5. Pillar 5: Real Tests Across 9 Layers
-    const { Phase21TestRunner } = await loadTestRunner();
-    const testReport = await Phase21TestRunner.runAllTests();
-    const isTestPassed = testReport.overallStatus === 'passed';
     criteria.push({
       id: 'pillar_real_tests',
       category: 'real_tests',
       title: 'قبولی ۱۰۰٪ تمامی سناریوهای آزمون در ۹ لایه معماری (Unit, DB, Workflow, Concurrency, Integration, Security, API, Regression, Recovery)',
       status: isTestPassed ? 'passed' : 'failed',
-      evidence: `تمام ${testReport.totalTests} آزمون در محیط پایگاه‌داده واقعی با وضعیت PASS اجرا شدند (مدت: ${testReport.totalDurationMs}ms).`
+      evidence: `سوییت واقعی در همین اجرا: وضعیت کل=${testReport.overallStatus.toUpperCase()}؛ ${testReport.totalTests} آزمون (مدت: ${testReport.totalDurationMs}ms).`
     });
 
     // 6. Pillar 6: Recovery, KeepAlive & Auto-Healing
@@ -147,13 +177,15 @@ export class ReleaseGateService {
       evidence: `بیش از ${totalAuditLogs} لاگ حسابرسی فعال با اسنپ‌شات‌های تغییرات ثبت شده است. اندپوینت سلامت ۳۶۰ درجه وضعیت HEALTHY را گزارش می‌کند.`
     });
 
-    // 8. Pillar 8: Changelog & Version Traceability
+    // 8. Pillar 8: Changelog & Version Traceability — مشتق از داده واقعی
+    const changelogRes = await pool.query(`SELECT count(*) as count FROM changelogs`);
+    const totalChangelogEntries = Number(changelogRes.rows[0]?.count || 0);
     criteria.push({
       id: 'pillar_changelog_traceability',
       category: 'changelog',
       title: 'مستندسازی جامع تاریخچه تغییرات و انطباق کامل با نقشه راه V8 Master Blueprint',
-      status: 'passed',
-      evidence: 'تمامی مراحل از فاز ۱ تا فاز ۱۴.۳ با جزئیات کامل در فایل‌های تفکیک‌شده چنج‌لاگ ثبت و مستندسازی شدند.'
+      status: totalChangelogEntries > 0 ? 'passed' : 'failed',
+      evidence: `اندازه‌گیری زنده: ${totalChangelogEntries} مدخل چنج‌لاگ در پایگاه‌داده ثبت شده است (نسخه جاری: ${BUILD_INFO.version}).`
     });
 
     // Compute Overall Status
@@ -162,21 +194,23 @@ export class ReleaseGateService {
     const readinessPercentage = Math.round((passedCount / totalCount) * 100);
     const overallStatus = passedCount === totalCount ? 'RELEASE_READY' : 'REJECTED';
 
+    // V3.0.9 (TD-063): تمام متریک‌های سیستم اندازه‌گیری زنده هستند — هیچ مقداری ثابت نیست
+    const migrationsRes = await pool.query(`SELECT count(*) as count FROM drizzle.__drizzle_migrations`);
     return {
       timestamp: new Date().toISOString(),
       version: BUILD_INFO.version,
       overallStatus,
       passedCriteria: passedCount,
       totalCriteria: totalCount,
-      readinessPercentage,
+      readinessPercentage: readinessPercentage,
       criteria,
       systemMetrics: {
         dbLatencyMs,
         totalRegisteredTables: totalTables,
-        totalAppliedMigrations: 155,
-        activeWorkflows: 0,
-        unbalancedVouchers: 0,
-        negativeStockItems: 0
+        totalAppliedMigrations: Number(migrationsRes.rows[0]?.count || 0),
+        activeWorkflows: reconReport.summary.stuckWorkflowsCount,
+        unbalancedVouchers: reconReport.summary.unbalancedVouchersCount,
+        negativeStockItems: reconReport.summary.negativeStockCount
       }
     };
   }

@@ -15,7 +15,9 @@ export type TestLayer =
 
 export type TestStatus = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN' | 'N/A';
 
-export type ExecutionType = 'real_database' | 'real_api' | 'simulation_logic';
+// V3.0.9 (TD-055): 'real_code' برای تست‌هایی که کد واقعی production را صدا می‌زنند
+// اما به DB دسترسی ندارند (lib-unit) — دیگر شبیه‌سازی‌ها را ماسک نمی‌کند.
+export type ExecutionType = 'real_database' | 'real_api' | 'real_code' | 'simulation_logic';
 
 export type CriticalScenarioId =
   | 'unauthorized_workflow_access'

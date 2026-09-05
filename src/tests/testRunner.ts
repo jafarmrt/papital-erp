@@ -133,6 +133,17 @@ export class Phase21TestRunner {
   static async runAllTests(layerFilter?: TestLayer): Promise<TestSuiteReport> {
     assertRunnerEnvironment();
 
+    // V3.0.9 (TD-063): fail-fast شفاف روی DB جعلی — اجرای سوییت روی mockPool
+    // حافظه‌ای نتیجه گمراه‌کننده می‌دهد (بخشی PASS جعلی). بدون DATABASE_URL واقعی
+    // رانر با پیام صریح شکست می‌خورد.
+    const { isMockDatabase } = await import('../db/drizzle.js');
+    if (isMockDatabase()) {
+      throw new Error(
+        'FATAL: DATABASE_URL is missing/placeholder — test runner would run against the in-memory mock pool ' +
+        'and produce misleading results. Configure a real PostgreSQL DATABASE_URL and re-run.'
+      );
+    }
+
     const startTime = Date.now();
     let allCases: TestCaseResult[] = [];
 
@@ -142,8 +153,9 @@ export class Phase21TestRunner {
       if (isTestCleanupAllowed()) {
         await cleanupAllTestFixtures();
       }
-    } catch {
-      // Non-blocking in mock environments
+    } catch (dbReadyErr: any) {
+      // V3.0.9 (TD-063): خطای اتصال دیگر بی‌صدا بلعیده نمی‌شود — fail-fast
+      throw new Error(`Test database unreachable: ${dbReadyErr?.message || dbReadyErr}`);
     }
 
     try {

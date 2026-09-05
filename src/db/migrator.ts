@@ -53,14 +53,33 @@ export async function runMigrations(): Promise<MigrationResult> {
       throw new Error(`Migrations directory not found at ${migrationsFolder}`);
     }
 
+    // V3.0.9 (TD-063): appliedCount واقعی از روی رکوردهای __drizzle_migrations
+    // محاسبه می‌شود (قبلاً ثابت ۱ گزارش می‌شد).
+    let before = 0;
+    try {
+      const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
+      before = Number(res.rows[0]?.count || 0);
+    } catch {
+      // Table may not exist on a fresh database yet — before stays 0
+    }
+
     // Execute official Drizzle migration runner (records applied migrations in __drizzle_migrations)
     await migrate(orm, { migrationsFolder });
 
-    logger.info('[Migrator] Drizzle database migrations completed successfully.');
+    let after = before;
+    try {
+      const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
+      after = Number(res.rows[0]?.count || 0);
+    } catch {
+      // Keep after = before on query failure
+    }
+    const appliedNow = Math.max(after - before, 0);
+
+    logger.info(`[Migrator] Drizzle database migrations completed successfully. ${before} → ${after} applied.`);
 
     return {
       success: true,
-      appliedCount: 1,
+      appliedCount: after,
       errors: []
     };
   } catch (err: any) {

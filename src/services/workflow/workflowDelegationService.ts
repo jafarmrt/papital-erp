@@ -78,7 +78,12 @@ export class WorkflowDelegationService {
       fromUserFullName: sql<string>`fu.full_name`,
       fromUsername: sql<string>`fu.username`,
       toUserFullName: sql<string>`tu.full_name`,
-      toUsername: sql<string>`tu.username`
+      toUsername: sql<string>`tu.username`,
+      // V3.0.9 (TD-055/BUG): ستون‌ها `timestamp WITHOUT time zone` هستند و نود
+      // رشته‌های UTC ISO (با Z که PG نادیده می‌گیرد) را literal ذخیره می‌کند؛ بنابراین
+      // مقایسه باید با «ساعت UTC» باشد نه now() با TZ سشن (تهران) که +۳:۳۰ انحراف می‌دهد.
+      isActiveNow: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.startDate} <= (now() AT TIME ZONE 'utc') AND ${workflowDelegations.endDate} >= (now() AT TIME ZONE 'utc'))`,
+      isExpiredFlag: sql<number>`(${workflowDelegations.isActive} = 1 AND ${workflowDelegations.endDate} < (now() AT TIME ZONE 'utc'))`
     })
     .from(workflowDelegations)
     .leftJoin(sql`users fu`, sql`fu.id = ${workflowDelegations.fromUserId}`)
@@ -97,20 +102,16 @@ export class WorkflowDelegationService {
     const rows = await query
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(workflowDelegations.createdAt));
-    const nowIso = new Date().toISOString();
 
     return rows.map(r => {
-      const isCurrentlyActive = r.delegation.isActive === 1 && 
-        r.delegation.startDate <= nowIso && 
-        r.delegation.endDate >= nowIso;
-
-      const isExpired = r.delegation.endDate < nowIso;
+      const activeNow = Number(r.isActiveNow) === 1;
+      const expired = Number(r.isExpiredFlag) === 1;
 
       return {
         ...r.delegation,
         fromUserName: r.fromUserFullName || r.fromUsername || `کاربر #${r.delegation.fromUserId}`,
         toUserName: r.toUserFullName || r.toUsername || `کاربر #${r.delegation.toUserId}`,
-        status: r.delegation.isActive === 0 ? 'revoked' : (isExpired ? 'expired' : (isCurrentlyActive ? 'active' : 'scheduled'))
+        status: r.delegation.isActive === 0 ? 'revoked' : (expired ? 'expired' : (activeNow ? 'active' : 'scheduled'))
       };
     });
   }

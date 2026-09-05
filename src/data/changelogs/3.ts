@@ -6,6 +6,29 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.0.9',
+    date: '۱۵ شهریور ۱۴۰۵',
+    title: 'فاز ۴ ممیزی Forensic — گواهی تست و رلیز: سوییت کامل سبز (صفر شکست)، حذف False Confidence و کشف/رفع دو باگ واقعی توسط تست‌های جدید',
+    summary: 'اجرای فاز ۴ (پایانی) نقشه راه تثبیت: تعمیر دو شکست pre-existing (فیکسچر حساب بانکی و کاربر FK)، جایگزینی ۱۰ تست tautological با پیاده‌سازی واقعی (رقابت قفل سطری، کسر همزمان، nextval واقعی، finalize موازی، تفویض واقعی، snapshot واقعی، SLA Evaluator واقعی، parsePagination واقعی)، کشف و رفع باگ واقعی وضعیت تفویض اختیار (expired همیشگی به‌دلیل ناسازگاری timezone)، شفاف‌سازی ReleaseGate با شواهد اندازه‌گیری‌شده، شمارش واقعی مهاجرت‌ها و fail-fast تست‌رانر روی DB جعلی. برای اولین بار سوییت کامل با صفر شکست سبز شد.',
+    author: 'AI Agent (Forensic Audit Phase 4 — Test & Release Certification)',
+    changes: [
+      'businessLogicAuditSuite: تست Payroll-Treasury اکنون حساب واقعی/فیکسچر سینتتیک (با مانده صفر) می‌سازد و تست ISO Date کاربر واقعی به‌جای userId سخت‌کد ۱ استفاده می‌کند (TD-067)',
+      'concurrencySuite: ۶ تست شبیه‌سازی متغیر محلی با تست واقعی جایگزین شدند — رقابت draft→final دو تراکنش موازی با .for update، رقابت کسر موجودی ۸/۵ با تریگر سازگار، چرخه WAC با FinancialMath واقعی، ۵ finalizeDocument موازی واقعی (کسر دقیقاً یک‌بار: ۱۰۰→۹۷)، ۱۰ nextval موازی واقعی روی journal_voucher_number_seq و treasury_tx_number_seq (TD-055)',
+      'workflowSuite: تفویض واقعی با WorkflowDelegationService + getDelegations، snapshot واقعی startInstance (definitionVersion همگام snapshotDsl) و تحلیل SLA با WorkflowSlaEvaluator واقعی روی workflow_history_logs (TD-055)',
+      'apiSuite: تابع extractSafe درون‌تستی حذف و با parsePagination واقعی (ورودی‌های 99999999999/NaN) و شکل واقعی داده settings جایگزین شد (TD-055)',
+      '🆕 باگ واقعی کشف‌شده توسط تست جدید: getDelegations مقایسه lexicographic تاریخ timestamp (بدون timezone، ذخیره UTC-literal) با now() سشن تهران → تفویض فعال همیشه expired بود؛ مقایسه به SQL با (now() AT TIME ZONE utc) منتقل شد',
+      'releaseGate.service.ts: ستون Build با اجرای واقعی tsc --noEmit در فرایند (fail-closed)، ستون Transaction-Safety مشتق از لایه‌های concurrency/critical_path سوییت واقعی، ستون Security مشتق از ادمین فعال + لایه نفوذ، و همه systemMetrics (migrations/workflows/unbalanced/negativeStock) اندازه‌گیری زنده — هیچ مقدار ثابت prose-ای باقی نماند (TD-063)',
+      'migrator.ts: appliedCount از شمارش واقعی رکوردهای __drizzle_migrations محاسبه می‌شود (قبلاً ثابت ۱) (TD-063)',
+      'drizzle.ts: فلاگ شفاف isMockDatabase() صادر شد؛ testRunner بدون DATABASE_URL واقعی با پیام صریح fail-fast می‌کند و خطای اتصال DB دیگر بی‌صدا بلعیده نمی‌شود (TD-063)'
+    ],
+    fixes: [
+      'رفع همیشگی-سبز بودن یا fail جعلی تست‌های regression (فیکسچرهای حساب بانکی/کاربر)',
+      'رفع باگ production وضعیت تفویض اختیار (تفویض‌های فعال به‌اشتباه expired نمایش داده می‌شدند)',
+      'رفع گزارش گمراه‌کننده appliedCount ثابت و ستون‌های prose-محور دروازه رلیز',
+      'سوییت کامل ۱۲۴+ آزمون اکنون با صفر شکست PASS می‌شود (Failed: 0)'
+    ]
+  },
+  {
     version: 'v3.0.8',
     date: '۱۵ شهریور ۱۴۰۵',
     title: 'فاز ۳ ممیزی Forensic — استقرار و بازگشت از بحران: Dockerfile، قابلیت بازتولید ایمیج، PVC آپلودها، گیت Build ایمیج در CI و تمرین بازیابی (Restore Drill) واقعی',

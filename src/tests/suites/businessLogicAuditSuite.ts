@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
+import bcrypt from 'bcryptjs';
 import { orm } from '../../db/drizzle.js';
-import { items, pieceworkPayrolls, personnel, itemCodeCounters, dailyWorkLogs, pieceworkLogs, pieceworkTasks, crmActivities } from '../../db/schema.js';
+import { items, pieceworkPayrolls, personnel, itemCodeCounters, dailyWorkLogs, pieceworkLogs, pieceworkTasks, crmActivities, bankAccounts, users } from '../../db/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { StockReconciliationService } from '../../services/inventory/stockReconciliation.service.js';
 import { ItemCatalogService } from '../../services/items/itemCatalog.service.js';
@@ -121,6 +122,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
   // ── 3. Payroll 'paid' فقط از مسیر خزانه (ConflictError روی فیش پرداخت‌شده) ─
   const t3 = Date.now();
   let payrollFixtureId: number | null = null;
+  let tempBankAccountId: number | null = null;
   try {
     const [anyPerson] = await orm.select({ id: personnel.id }).from(personnel).where(eq(personnel.isDeleted, 0)).limit(1);
     if (!anyPerson) {
@@ -135,6 +137,21 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         details: 'No personnel rows — assertion skipped gracefully.'
       }));
     } else {
+      // V3.0.9 (TD-067): سخت‌کد bankAccountId=1 حذف شد — سرویس خزانه حساب را
+      // «قبل از» بررسی وضعیت فیش می‌جست و خطای fixture، پوشش سناریو را می‌کشت.
+      // اکنون یک حساب واقعی موجود یا fixture سینتتیک با مانده صفر استفاده می‌شود.
+      let [bankAcc] = await orm.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.isDeleted, 0)).limit(1);
+      if (!bankAcc) {
+        const [createdBank] = await orm.insert(bankAccounts).values({
+          code: `BA-V10T-${Date.now()}`,
+          title: 'حساب تستی ممیزی V10',
+          type: 'bank',
+          currentBalance: 0,
+          isDeleted: 0
+        }).returning({ id: bankAccounts.id });
+        bankAcc = createdBank;
+        tempBankAccountId = createdBank.id;
+      }
       const [fixture] = await orm.insert(pieceworkPayrolls).values({
         payrollNumber: `PAY-V10T-${Date.now()}`,
         personnelId: anyPerson.id,
@@ -155,7 +172,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       try {
         await PayrollPaymentService.registerPayrollPayment({
           payrollId: fixture.id,
-          bankAccountId: 1,
+          bankAccountId: bankAcc.id,
           method: 'bank_transfer',
           userId: null as any,
           username: 'v10-suite'
@@ -192,6 +209,9 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
   } finally {
     if (payrollFixtureId !== null) {
       try { await orm.delete(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollFixtureId)); } catch { /* non-blocking */ }
+    }
+    if (tempBankAccountId !== null) {
+      try { await orm.delete(bankAccounts).where(eq(bankAccounts.id, tempBankAccountId)); } catch { /* non-blocking */ }
     }
   }
 
@@ -326,12 +346,29 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
   let createdActivityId: number | null = null;
   let tempTaskId: number | null = null;
   let tempPersonId: number | null = null;
+  let tempUserId: number | null = null;
   try {
+    // V3.0.9 (TD-067): سخت‌کد userId=1 حذف شد — FK daily_work_logs.user_id
+    // در DBهایی که schema کامل دارند با id ناموجود شکست می‌خورد. اکنون یک
+    // کاربر واقعی موجود (یا fixture سینتتیک) استفاده می‌شود.
+    let [fixtureUser] = await orm.select({ id: users.id }).from(users).where(eq(users.isDeleted, 0)).limit(1);
+    if (!fixtureUser) {
+      const [createdUser] = await orm.insert(users).values({
+        username: `v10_test_user_${Date.now()}`,
+        password: bcrypt.hashSync('v10-fixture-pass-1234', 10),
+        fullName: 'کاربر تستی V10',
+        role: 'admin',
+        isDeleted: 0
+      }).returning({ id: users.id });
+      fixtureUser = createdUser;
+      tempUserId = createdUser.id;
+    }
+
     // 7.1 Test Daily Work Logs dual-write
     const jDate1 = '1404/05/15';
     const isoExpected1 = jalaliToIsoDate(jDate1); // '2025-08-06'
     const [insertedWorkLog] = await orm.insert(dailyWorkLogs).values({
-      userId: 1,
+      userId: fixtureUser.id,
       username: 'v10_test_user',
       userFullName: 'کاربر تستی V10',
       date: jDate1,
@@ -455,6 +492,9 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     }
     if (tempPersonId !== null) {
       try { await orm.delete(personnel).where(eq(personnel.id, tempPersonId)); } catch { /* non-blocking */ }
+    }
+    if (tempUserId !== null) {
+      try { await orm.delete(users).where(eq(users.id, tempUserId)); } catch { /* non-blocking */ }
     }
   }
 

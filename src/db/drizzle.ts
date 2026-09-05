@@ -136,6 +136,15 @@ const pool: pkg.Pool = new Proxy({} as pkg.Pool, {
 });
 
 /**
+ * V3.0.9 (TD-063): فلاگ شفاف حالت DB جعلی (حافظه‌ای) — تست‌رانر و ابزارهای
+ * تشخیصی از این طریق fail-fast می‌کنند به‌جای گزارش نتیجه گمراه‌کننده روی
+ * mockPool حافظه‌ای.
+ */
+export function isMockDatabase(): boolean {
+  return useMock;
+}
+
+/**
  * Helper to run long-running database operations with an extended statement_timeout.
  */
 export async function withLongQueryTimeout<T>(

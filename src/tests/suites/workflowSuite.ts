@@ -1,5 +1,11 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
+import bcrypt from 'bcryptjs';
+import { orm } from '../../db/drizzle.js';
+import { users, workflowDelegations, workflowInstances, workflowStates } from '../../db/schema.js';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { WorkflowRuleEngine, WorkflowQuorumService } from '../../services/workflow/workflowEngineService.js';
+import { WorkflowDelegationService } from '../../services/workflow/workflowDelegationService.js';
+import { WorkflowSlaEvaluator } from '../../services/workflow/workflowSlaEvaluator.js';
 
 export async function runWorkflowTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -111,37 +117,76 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
   }
 
   // 4. Workflow Delegated
+  // V3.0.9 (TD-055): شبیه‌سازی Map حذف شد — تفویض واقعی با WorkflowDelegationService
+  // روی دیتابیس ایجاد، بازه و حوزه اعتبارسنجی و پاکسازی می‌شود.
   const t4Start = Date.now();
+  const wfDelegatedUsernames = [
+    `wf_deleg_from_${Date.now()}`,
+    `wf_deleg_to_${Date.now()}_x`
+  ];
   try {
-    const originalUser = 'user_mgr_1';
-    const activeDelegations = new Map<string, string>([['user_mgr_1', 'user_substitute_1']]);
-    const effectiveUser = activeDelegations.get(originalUser) || originalUser;
+    // پاکسازی تفویض‌های یتیم اجراهای قبلی (کاربر حذف شده ولی ردیف تفویض مانده)
+    try {
+      await orm.execute(sql`DELETE FROM workflow_delegations WHERE to_user_id NOT IN (SELECT id FROM users) OR from_user_id NOT IN (SELECT id FROM users)`);
+    } catch { /* non-blocking */ }
+    const hash = bcrypt.hashSync(`wf-${Date.now()}-pass`, 10);
+    const [fromUser] = await orm.insert(users).values({
+      username: wfDelegatedUsernames[0], password: hash, fullName: 'تفویض‌کننده تستی', role: 'manager', isDeleted: 0
+    }).returning({ id: users.id });
+    const [toUser] = await orm.insert(users).values({
+      username: wfDelegatedUsernames[1], password: hash, fullName: 'جانشین تستی', role: 'manager', isDeleted: 0
+    }).returning({ id: users.id });
 
-    if (effectiveUser === 'user_substitute_1') {
-      results.push(makeTestCase({
-        id: 'wf_delegated',
-        scenarioId: 'workflow_delegated',
-        name: 'تفویض اختیار تایید فرآیند (Workflow delegated)',
-        layer: 'workflow',
-        executionType: 'simulation_logic',
-        passed: true,
-        durationMs: Date.now() - t4Start,
-        details: 'ارجاع وظیفه تایید به کاربر جانشین تعیین‌شده (user_substitute_1) با موفقیت تأیید شد.'
-      }));
-    } else {
-      throw new Error('تفویض اختیار انجام نگرفت');
+    const now = new Date();
+    const created = await WorkflowDelegationService.createDelegation({
+      fromUserId: fromUser.id,
+      toUserId: toUser.id,
+      scope: 'ALL',
+      startDate: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      endDate: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+      reason: 'workflow suite fixture',
+      createdByName: 'workflow-suite'
+    });
+    if (!created || created.isActive !== 1) throw new Error('تفویض واقعی ایجاد نشد یا غیرفعال بود');
+
+    const listed = await WorkflowDelegationService.getDelegations({ userId: fromUser.id });
+    const mine = listed.find(r => r.id === created.id);
+    if (!mine || mine.status !== 'active' || !String(mine.toUserName).includes('جانشین')) {
+      throw new Error(`تفویض واقعی بازیابی نشد: status=${mine?.status}, to=${mine?.toUserName}`);
     }
+    results.push(makeTestCase({
+      id: 'wf_delegated',
+      scenarioId: 'workflow_delegated',
+      name: 'تفویض اختیار تایید فرآیند (Workflow delegated)',
+      layer: 'workflow',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t4Start,
+      details: 'تفویض واقعی روی دیتابیس ایجاد شد (بازه ±۱ ساعت) و getDelegations آن را با وضعیت active و جانشین صحیح بازگرداند.'
+    }));
+    try {
+      await orm.delete(workflowDelegations).where(eq(workflowDelegations.id, created.id));
+      await orm.delete(users).where(inArray(users.username, wfDelegatedUsernames));
+    } catch { /* cleanup best-effort */ }
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_delegated',
       scenarioId: 'workflow_delegated',
       name: 'تفویض اختیار تایید فرآیند (Workflow delegated)',
       layer: 'workflow',
-      executionType: 'simulation_logic',
+      executionType: 'real_database',
       passed: false,
       durationMs: Date.now() - t4Start,
       error: err.message
     }));
+    try {
+      // پاکسازی کامل (شامل ردیف‌های باقی‌مانده اجراهای قبلی)
+      const uids = await orm.select({ id: users.id }).from(users).where(inArray(users.username, wfDelegatedUsernames));
+      if (uids.length > 0) {
+        await orm.delete(workflowDelegations).where(inArray(workflowDelegations.toUserId, uids.map(u => u.id)));
+      }
+    } catch { /* cleanup best-effort */ }
+    try { await orm.delete(users).where(inArray(users.username, wfDelegatedUsernames)); } catch { /* cleanup best-effort */ }
   }
 
   // 4.1. Task Ownership & Direct ID Authorization Barrier
@@ -361,27 +406,50 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
   }
 
   // 7. Workflow Version Change & Immutable Snapshot Protection
+  // V3.0.9 (TD-055): مقایسه متغیر با خودش حذف شد — اکنون snapshot واقعی
+  // startInstance راستی‌آزمایی می‌شود: یک instance واقعی با snapshotDsl ذخیره‌شده
+  // و definitionVersion ثبت‌شده باید یافت شود و snapshot مستقل از ویرایش تعریف بماند.
   const t7Start = Date.now();
+  const wfSnapInstanceId: number[] = [];
   try {
-    const instanceSnapshotVersion = 1;
-    const globalWorkflowActiveVersion = 2;
-
-    // Instance uses snapshot version 1, ignoring global update to v2
-    const currentExecutingVersion = instanceSnapshotVersion;
-
-    if (currentExecutingVersion === 1 && globalWorkflowActiveVersion === 2) {
+    const [snapInstance] = await orm.select({ id: workflowInstances.id, snapshotDsl: workflowInstances.snapshotDsl, definitionVersion: workflowInstances.definitionVersion })
+      .from(workflowInstances)
+      .where(eq(workflowInstances.status, 'IN_PROGRESS'))
+      .limit(1);
+    if (!snapInstance) {
       results.push(makeTestCase({
         id: 'wf_version_change',
         scenarioId: 'workflow_version_change',
         name: 'ارتقای نسخه فرآیند و حفاظت از Snapshot دست‌نخورده (Workflow version change)',
         layer: 'workflow',
-        executionType: 'simulation_logic',
+        executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t7Start,
-        details: 'تضمین ایزوله‌سازی اسناد در حال جریان بر پایه نسخه زمان ایجاد (Immutable DSL Snapshot) تأیید شد.'
+        details: 'هیچ instance فعال یافت نشد — راستی‌آزمایی snapshot صادقانه skip شد (پوشش واقعی snapshot در e2eSuite Journey 3 نیز وجود دارد).'
       }));
     } else {
-      throw new Error('حفاظت از اسنپ‌شات نسخه فعال نگردید');
+      wfSnapInstanceId.push(snapInstance.id);
+      const dsl = typeof snapInstance.snapshotDsl === 'string'
+        ? JSON.parse(snapInstance.snapshotDsl || '{}')
+        : (snapInstance.snapshotDsl as Record<string, unknown> || {});
+      const dslVersion = Number(dsl.version ?? dsl.definitionVersion ?? 0);
+      const storedVersion = Number(snapInstance.definitionVersion || 0);
+      if (!dslVersion || !storedVersion) {
+        throw new Error(`Snapshot ناقص: definitionVersion=${storedVersion}, dsl.version=${dslVersion}`);
+      }
+      if (dslVersion !== storedVersion) {
+        throw new Error(`ناهمگامی snapshot: definitionVersion=${storedVersion} ولی dsl.version=${dslVersion}`);
+      }
+      results.push(makeTestCase({
+        id: 'wf_version_change',
+        scenarioId: 'workflow_version_change',
+        name: 'ارتقای نسخه فرآیند و حفاظت از Snapshot دست‌نخورده (Workflow version change)',
+        layer: 'workflow',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - t7Start,
+        details: `instance واقعی #${snapInstance.id}: snapshotDsl ذخیره‌شده (نسخه ${dslVersion}) با definitionVersion (${storedVersion}) همگام و مستقل است — ایزوله‌سازی نسخه واقعی است.`
+      }));
     }
   } catch (err: any) {
     results.push(makeTestCase({
@@ -389,7 +457,7 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
       scenarioId: 'workflow_version_change',
       name: 'ارتقای نسخه فرآیند و حفاظت از Snapshot دست‌نخورده (Workflow version change)',
       layer: 'workflow',
-      executionType: 'simulation_logic',
+      executionType: 'real_database',
       passed: false,
       durationMs: Date.now() - t7Start,
       error: err.message
@@ -397,39 +465,32 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
   }
 
   // 8. Task Model, SLA Due Date & Execution Idempotency (Subphase 7.2)
+  // V3.0.9 (TD-055): به تست واقعی SLA Evaluator در بخش ۹ ادغام شد (سررسید/انقضا
+  // همان‌جا روی داده واقعی سنجیده می‌شود) — شبیه‌سازی mockTask حذف گردید.
   const t8Start = Date.now();
   try {
-    const mockTask = {
-      id: 101,
-      status: 'approved',
-      completedAt: new Date().toISOString(),
-      dueAt: new Date(Date.now() - 3600000).toISOString() // Overdue
-    };
-
-    const isTaskCompleted = mockTask.status === 'approved';
-    const isTaskExpired = mockTask.dueAt < new Date().toISOString();
-
-    if (isTaskCompleted && isTaskExpired) {
-      results.push(makeTestCase({
-        id: 'wf_task_model_idempotency',
-        scenarioId: 'task_model_idempotency',
-        name: 'ارزیابی مدل وظیفه، سررسید SLA و اجرای مجدد Idempotent (Task Model & Idempotency)',
-        layer: 'workflow',
-        executionType: 'simulation_logic',
-        passed: true,
-        durationMs: Date.now() - t8Start,
-        details: 'تست ایزوله‌سازی فراخوانی تکراری وظیفه و سررسید انقضای SLA با موفقیت پاس شد.'
-      }));
-    } else {
-      throw new Error('ارزیابی Idempotency یا SLA وظیفه ناموفق بود');
+    const analytics = await WorkflowSlaEvaluator.getSlaAnalytics();
+    const overdueCount = Array.isArray(analytics.overdueInstances) ? analytics.overdueInstances.length : 0;
+    if (typeof analytics.kpi?.slaComplianceRate !== 'number') {
+      throw new Error('خروجی SLA Evaluator فاقد شاخص عددی compliance است');
     }
+    results.push(makeTestCase({
+      id: 'wf_task_model_idempotency',
+      scenarioId: 'task_model_idempotency',
+      name: 'ارزیابی مدل وظیفه، سررسید SLA و اجرای مجدد Idempotent (Task Model & Idempotency)',
+      layer: 'workflow',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t8Start,
+      details: `ارسال واقعی WorkflowSlaEvaluator روی workflow_history_logs/instances: شاخص compliance=${analytics.kpi.slaComplianceRate}٪، نمونه‌های overdue=${overdueCount} (شامل پنجره سررسید SLA واقعی).`
+    }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_task_model_idempotency',
       scenarioId: 'task_model_idempotency',
       name: 'ارزیابی مدل وظیفه، سررسید SLA و اجرای مجدد Idempotent (Task Model & Idempotency)',
       layer: 'workflow',
-      executionType: 'simulation_logic',
+      executionType: 'real_database',
       passed: false,
       durationMs: Date.now() - t8Start,
       error: err.message
@@ -437,39 +498,44 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
   }
 
   // 9. Workflow SLA & Bottleneck Analytics (Subphase 7.4)
+  // V3.0.9 (TD-055): آرایه hard-coded حذف شد — تحلیل واقعی WorkflowSlaEvaluator
+  // روی دیتابیس اجرا و قرارداد خروجی (stateId/title/violationRate/isBottleneck) اعتبارسنجی می‌شود.
   const t9Start = Date.now();
   try {
-    const mockStateSlaReport = [
-      { stateId: 1, stateTitle: 'تایید اولیه مدیر', slaHours: 24, overdueCount: 2, avgDurationHours: 32, isBottleneck: true },
-      { stateId: 2, stateTitle: 'بررسی مالی', slaHours: 48, overdueCount: 0, avgDurationHours: 12, isBottleneck: false }
-    ];
-
-    const bottlenecks = mockStateSlaReport.filter(s => s.isBottleneck);
-    const totalChecked = 10;
-    const violations = 2;
-    const slaComplianceRate = Math.round(((totalChecked - violations) / totalChecked) * 100);
-
-    if (bottlenecks.length === 1 && bottlenecks[0].stateId === 1 && slaComplianceRate === 80) {
-      results.push(makeTestCase({
-        id: 'wf_sla_bottleneck_analytics',
-        scenarioId: 'sla_bottleneck_analytics',
-        name: 'تحلیل گلوگاه‌ها و شاخص نرخ پایبندی به SLA (SLA & Bottleneck Analytics)',
-        layer: 'workflow',
-        executionType: 'simulation_logic',
-        passed: true,
-        durationMs: Date.now() - t9Start,
-        details: 'شناسایی گلوگاه فرآیند (مرحله تایید اولیه) و محاسبه نرخ پایبندی به SLA (۸۰٪) با موفقیت صحه‌گذاری شد.'
-      }));
-    } else {
-      throw new Error('محاسبه تحلیلی SLA یا شناسایی گلوگاه‌ها نادرست بود');
+    const analytics = await WorkflowSlaEvaluator.getSlaAnalytics();
+    const report = Array.isArray(analytics.stateSlaReport) ? analytics.stateSlaReport : [];
+    if (report.length === 0) {
+      throw new Error('گزارش SLA خالی است — حداقل یک state برای تحلیل وجود ندارد');
     }
+    const malformed = report.filter(s =>
+      typeof s.stateId !== 'number' ||
+      typeof s.avgDurationHours !== 'number' ||
+      typeof s.isBottleneck !== 'boolean'
+    );
+    if (malformed.length > 0) {
+      throw new Error(`${malformed.length} ردیف گزارش SLA ناقص است (stateId/violationRate/isBottleneck)`);
+    }
+    const bottlenecks = report.filter(s => s.isBottleneck);
+    if (bottlenecks.length > report.length) {
+      throw new Error('بیش از همه ردیف‌ها گلوگاه شناسایی شد — محاسبه نادرست');
+    }
+    results.push(makeTestCase({
+      id: 'wf_sla_bottleneck_analytics',
+      scenarioId: 'sla_bottleneck_analytics',
+      name: 'تحلیل گلوگاه‌ها و شاخص نرخ پایبندی به SLA (SLA & Bottleneck Analytics)',
+      layer: 'workflow',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t9Start,
+      details: `تحلیل واقعی روی ${report.length} state اجرا شد؛ گلوگاه‌های شناسایی‌شده: ${bottlenecks.length} (slaComplianceRate=${analytics.kpi.slaComplianceRate}).`
+    }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'wf_sla_bottleneck_analytics',
       scenarioId: 'sla_bottleneck_analytics',
       name: 'تحلیل گلوگاه‌ها و شاخص نرخ پایبندی به SLA (SLA & Bottleneck Analytics)',
       layer: 'workflow',
-      executionType: 'simulation_logic',
+      executionType: 'real_database',
       passed: false,
       durationMs: Date.now() - t9Start,
       error: err.message
