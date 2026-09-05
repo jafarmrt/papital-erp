@@ -1,1022 +1,1163 @@
--- ============================================================================
--- Drizzle Migration: 0000_v3_baseline.sql
--- Unified Baseline Migration for Version 3.0.0 Architecture
--- Single Source of Truth for all 55 system tables, atomic sequences, triggers,
--- composite Kardex indexes, and JSONB check constraints.
--- ============================================================================
-
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
--- ----------------------------------------------------------------------------
--- 1. Sequences for Atomic Numbering
--- ----------------------------------------------------------------------------
+--> statement-breakpoint
 CREATE SEQUENCE IF NOT EXISTS journal_voucher_number_seq START WITH 1 INCREMENT BY 1;
+--> statement-breakpoint
 CREATE SEQUENCE IF NOT EXISTS treasury_tx_number_seq START WITH 1 INCREMENT BY 1;
-
--- ----------------------------------------------------------------------------
--- 2. Core Tables
--- ----------------------------------------------------------------------------
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS app_settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
+  key text PRIMARY KEY,
+  value text NOT NULL
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,
-  full_name TEXT NOT NULL,
-  role TEXT NOT NULL,
-  avatar_url TEXT DEFAULT '',
-  must_reset_password INTEGER DEFAULT 0,
-  failed_login_count INTEGER DEFAULT 0,
-  locked_until TEXT,
-  token_version INTEGER DEFAULT 0,
-  is_deleted INTEGER DEFAULT 0,
-  updated_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text NOT NULL,
+  role text NOT NULL,
+  avatar_url text DEFAULT '',
+  must_reset_password integer DEFAULT 0,
+  failed_login_count integer DEFAULT 0,
+  locked_until text,
+  token_version integer DEFAULT 0,
+  is_deleted integer DEFAULT 0,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS roles (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  code TEXT NOT NULL UNIQUE,
-  description TEXT DEFAULT '',
-  permissions JSONB DEFAULT '[]'::jsonb,
-  is_system INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  name text NOT NULL,
+  code text NOT NULL UNIQUE,
+  description text DEFAULT '',
+  permissions jsonb DEFAULT '[]'::jsonb,
+  is_system integer DEFAULT 0
 );
-
-CREATE TABLE IF NOT EXISTS categories (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  prefix TEXT NOT NULL,
-  type TEXT NOT NULL,
-  default_unit TEXT DEFAULT 'عدد'
-);
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS warehouses (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  code TEXT NOT NULL UNIQUE,
-  is_active INTEGER DEFAULT 1
+  id serial PRIMARY KEY,
+  name text NOT NULL,
+  code text NOT NULL UNIQUE,
+  is_active integer DEFAULT 1
 );
-
-CREATE TABLE IF NOT EXISTS migrations_log (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  applied_at TIMESTAMP DEFAULT NOW()
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS categories (
+  id serial PRIMARY KEY,
+  name text NOT NULL,
+  prefix text NOT NULL,
+  type text NOT NULL,
+  default_unit text DEFAULT 'عدد'
 );
-
-CREATE TABLE IF NOT EXISTS changelogs (
-  id SERIAL PRIMARY KEY,
-  version TEXT NOT NULL,
-  date TIMESTAMP NOT NULL DEFAULT NOW(),
-  features TEXT NOT NULL,
-  fixes TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS customers (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  contact_name TEXT DEFAULT '',
-  country TEXT DEFAULT 'ایران',
-  province TEXT DEFAULT '',
-  phone TEXT DEFAULT '',
-  city TEXT DEFAULT '',
-  address TEXT DEFAULT '',
-  notes TEXT DEFAULT '',
-  party_type TEXT DEFAULT 'customer',
-  supplier_category TEXT DEFAULT '',
-  bank_info JSONB DEFAULT '{}'::jsonb,
-  contacts JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  version INTEGER NOT NULL DEFAULT 1,
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS customers_name_trgm_idx ON customers USING gin (name gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_customers_party_type ON customers (party_type);
-CREATE INDEX IF NOT EXISTS idx_customers_is_deleted ON customers (is_deleted);
-
-CREATE TABLE IF NOT EXISTS items (
-  id SERIAL PRIMARY KEY,
-  type TEXT NOT NULL,
-  name TEXT NOT NULL,
-  code TEXT NOT NULL UNIQUE,
-  current_stock NUMERIC(18, 4) DEFAULT 0,
-  unit TEXT NOT NULL,
-  category TEXT DEFAULT '',
-  image TEXT DEFAULT '',
-  thumbnail TEXT DEFAULT '',
-  reorder_point NUMERIC(18, 4) DEFAULT 0,
-  weighted_average_cost NUMERIC(18, 4) DEFAULT 0,
-  stocks JSONB DEFAULT '{}'::jsonb,
-  color TEXT,
-  weight NUMERIC(18, 4),
-  material TEXT,
-  size TEXT,
-  last_kardex_rebuild_at TIMESTAMP,
-  version INTEGER NOT NULL DEFAULT 1,
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS items_type_deleted ON items (type, is_deleted);
-CREATE INDEX IF NOT EXISTS items_code ON items (code);
-CREATE INDEX IF NOT EXISTS items_category ON items (category);
-CREATE INDEX IF NOT EXISTS items_name_trgm_idx ON items USING gin (name gin_trgm_ops);
-
-CREATE TABLE IF NOT EXISTS documents (
-  id SERIAL PRIMARY KEY,
-  type TEXT NOT NULL,
-  ref_number TEXT NOT NULL,
-  date TIMESTAMP NOT NULL DEFAULT NOW(),
-  crm_lead_id INTEGER,
-  "user" TEXT,
-  notes TEXT,
-  buyer_name TEXT DEFAULT '',
-  buyer_city TEXT DEFAULT '',
-  buyer_phone TEXT DEFAULT '',
-  buyer_address TEXT DEFAULT '',
-  status TEXT DEFAULT 'final',
-  currency TEXT DEFAULT 'IRR',
-  version INTEGER NOT NULL DEFAULT 1,
-  is_deleted INTEGER DEFAULT 0,
-  deleted_at TIMESTAMP,
-  deleted_by TEXT
-);
-
-CREATE INDEX IF NOT EXISTS docs_type_deleted ON documents (type, is_deleted);
-CREATE INDEX IF NOT EXISTS docs_date ON documents (date);
-CREATE INDEX IF NOT EXISTS idx_docs_buyer_name ON documents (buyer_name);
-
-CREATE TABLE IF NOT EXISTS document_ref_counters (
-  doc_type VARCHAR(20) NOT NULL,
-  fiscal_year INTEGER NOT NULL,
-  last_ref_number INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (doc_type, fiscal_year)
-);
-
-CREATE TABLE IF NOT EXISTS item_code_counters (
-  scope VARCHAR(20) NOT NULL,
-  prefix_key VARCHAR(60) NOT NULL,
-  last_number INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (scope, prefix_key)
-);
-
-CREATE TABLE IF NOT EXISTS document_items (
-  id SERIAL PRIMARY KEY,
-  document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-  item_id INTEGER NOT NULL REFERENCES items(id),
-  quantity NUMERIC(18, 4) NOT NULL,
-  unit_price NUMERIC(18, 4) DEFAULT 0,
-  discount NUMERIC(18, 4) DEFAULT 0,
-  location TEXT DEFAULT 'main',
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS doc_items_doc_id ON document_items (document_id);
-CREATE INDEX IF NOT EXISTS doc_items_item_id ON document_items (item_id);
-
-CREATE TABLE IF NOT EXISTS transactions (
-  id SERIAL PRIMARY KEY,
-  item_id INTEGER NOT NULL REFERENCES items(id),
-  document_id INTEGER REFERENCES documents(id),
-  type TEXT NOT NULL,
-  quantity NUMERIC(18, 4) NOT NULL,
-  unit_price NUMERIC(18, 4) DEFAULT 0,
-  total_price NUMERIC(18, 4) DEFAULT 0,
-  date TIMESTAMP NOT NULL DEFAULT NOW(),
-  document_type TEXT,
-  document_ref TEXT,
-  created_by TEXT,
-  notes TEXT,
-  location TEXT DEFAULT 'main',
-  reversal_of_id INTEGER,
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS tx_item_date_id_active ON transactions (item_id, is_deleted, date, id);
-CREATE INDEX IF NOT EXISTS tx_item_loc_active ON transactions (item_id, location, is_deleted);
-CREATE INDEX IF NOT EXISTS tx_item_active_date ON transactions (item_id, is_deleted, date DESC);
-CREATE INDEX IF NOT EXISTS tx_doc_id ON transactions (document_id);
-CREATE INDEX IF NOT EXISTS tx_date ON transactions (date);
-CREATE INDEX IF NOT EXISTS tx_type_deleted ON transactions (type, is_deleted);
-
-CREATE TABLE IF NOT EXISTS item_prices (
-  id SERIAL PRIMARY KEY,
-  item_id INTEGER NOT NULL REFERENCES items(id),
-  title TEXT NOT NULL,
-  price NUMERIC(18, 4) NOT NULL,
-  currency TEXT DEFAULT 'IRR',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS item_prices_item_id ON item_prices (item_id);
-
-CREATE TABLE IF NOT EXISTS activity_logs (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER,
-  username TEXT NOT NULL,
-  user_full_name TEXT DEFAULT '',
-  action TEXT NOT NULL,
-  entity TEXT NOT NULL,
-  entity_id TEXT DEFAULT '',
-  description TEXT NOT NULL,
-  details JSONB DEFAULT '{}'::jsonb,
-  ip_address TEXT DEFAULT '',
-  timestamp TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS activity_logs_username ON activity_logs (username);
-CREATE INDEX IF NOT EXISTS activity_logs_action ON activity_logs (action);
-CREATE INDEX IF NOT EXISTS activity_logs_entity ON activity_logs (entity);
-CREATE INDEX IF NOT EXISTS activity_logs_timestamp ON activity_logs (timestamp);
-
-CREATE TABLE IF NOT EXISTS production_projects (
-  id SERIAL PRIMARY KEY,
-  project_code TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  customer_id INTEGER REFERENCES customers(id),
-  customer_name TEXT DEFAULT '',
-  item_id INTEGER REFERENCES items(id),
-  item_code TEXT DEFAULT '',
-  item_name TEXT DEFAULT '',
-  quantity NUMERIC(18, 4) NOT NULL DEFAULT 1,
-  unit TEXT DEFAULT 'عدد',
-  start_date TEXT DEFAULT '',
-  end_date TEXT DEFAULT '',
-  status TEXT DEFAULT 'planned',
-  priority TEXT DEFAULT 'medium',
-  description TEXT DEFAULT '',
-  products JSONB DEFAULT '[]'::jsonb,
-  inventory_control JSONB DEFAULT '{}'::jsonb,
-  stage_schedules JSONB DEFAULT '{}'::jsonb,
-  custom_stages JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  created_by TEXT DEFAULT '',
-  version INTEGER NOT NULL DEFAULT 1,
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_proj_code ON production_projects (project_code);
-CREATE INDEX IF NOT EXISTS idx_proj_status ON production_projects (status);
-CREATE INDEX IF NOT EXISTS idx_proj_deleted ON production_projects (is_deleted);
-
-CREATE TABLE IF NOT EXISTS project_stages (
-  id SERIAL PRIMARY KEY,
-  project_id INTEGER NOT NULL REFERENCES production_projects(id),
-  stage_order INTEGER NOT NULL DEFAULT 1,
-  title TEXT NOT NULL,
-  status TEXT DEFAULT 'pending',
-  start_date TEXT DEFAULT '',
-  end_date TEXT DEFAULT '',
-  assigned_personnel JSONB DEFAULT '[]'::jsonb,
-  required_resources JSONB DEFAULT '[]'::jsonb,
-  progress_percent INTEGER DEFAULT 0,
-  notes TEXT DEFAULT '',
-  completed_at TEXT DEFAULT '',
-  is_deleted INTEGER DEFAULT 0,
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_stage_proj ON project_stages (project_id);
-CREATE INDEX IF NOT EXISTS idx_stage_order ON project_stages (stage_order);
-
-CREATE TABLE IF NOT EXISTS transfers (
-  id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  title TEXT DEFAULT '',
-  image TEXT DEFAULT '',
-  thumbnail TEXT DEFAULT '',
-  notes TEXT DEFAULT '',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_transfer_code ON transfers (code);
-
-CREATE TABLE IF NOT EXISTS daily_work_logs (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  username TEXT NOT NULL,
-  user_full_name TEXT DEFAULT '',
-  date TEXT NOT NULL,
-  date_iso TEXT DEFAULT '',
-  start_time TEXT DEFAULT '08:00',
-  end_time TEXT DEFAULT '17:00',
-  work_hours NUMERIC(18, 4) DEFAULT 8,
-  work_mode TEXT DEFAULT 'onsite',
-  title TEXT NOT NULL,
-  description TEXT DEFAULT '',
-  project_code TEXT DEFAULT '',
-  project_id INTEGER REFERENCES production_projects(id),
-  task_category TEXT DEFAULT '',
-  pieces_completed INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'submitted',
-  admin_notes TEXT DEFAULT '',
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_dwl_user_date ON daily_work_logs (user_id, date);
-CREATE INDEX IF NOT EXISTS idx_dwl_user_date_iso ON daily_work_logs (user_id, date_iso);
-CREATE INDEX IF NOT EXISTS idx_dwl_project ON daily_work_logs (project_id);
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  type TEXT DEFAULT 'info',
-  link TEXT DEFAULT '',
-  is_read INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_notif_user_unread ON notifications (user_id, is_read);
-
-CREATE TABLE IF NOT EXISTS crm_leads (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  company TEXT DEFAULT '',
-  phone TEXT DEFAULT '',
-  email TEXT DEFAULT '',
-  address TEXT DEFAULT '',
-  city TEXT DEFAULT '',
-  province TEXT DEFAULT '',
-  source TEXT DEFAULT 'direct',
-  status TEXT DEFAULT 'new_lead',
-  assigned_to INTEGER REFERENCES users(id),
-  sales_rep_id INTEGER,
-  estimated_value NUMERIC(18, 4) DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  priority TEXT DEFAULT 'medium',
-  notes TEXT DEFAULT '',
-  tags JSONB DEFAULT '[]'::jsonb,
-  customer_id INTEGER REFERENCES customers(id),
-  proforma_id INTEGER REFERENCES documents(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  last_contact_date TIMESTAMP,
-  next_follow_up_date TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  created_by INTEGER REFERENCES users(id),
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_crm_status ON crm_leads (status);
-CREATE INDEX IF NOT EXISTS idx_crm_assigned ON crm_leads (assigned_to);
-CREATE INDEX IF NOT EXISTS idx_crm_customer ON crm_leads (customer_id);
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_documents_crm_lead') THEN
-    ALTER TABLE documents ADD CONSTRAINT fk_documents_crm_lead FOREIGN KEY (crm_lead_id) REFERENCES crm_leads(id) ON DELETE SET NULL;
-  END IF;
-END $$;
-
-CREATE TABLE IF NOT EXISTS crm_activities (
-  id SERIAL PRIMARY KEY,
-  lead_id INTEGER NOT NULL REFERENCES crm_leads(id) ON DELETE CASCADE,
-  type TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  description TEXT DEFAULT '',
-  activity_date TIMESTAMP DEFAULT NOW(),
-  activity_date_iso TEXT DEFAULT '',
-  performed_by INTEGER NOT NULL REFERENCES users(id),
-  duration_minutes INTEGER DEFAULT 0,
-  result TEXT DEFAULT '',
-  next_step TEXT DEFAULT '',
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_crm_act_lead ON crm_activities (lead_id);
-CREATE INDEX IF NOT EXISTS idx_crm_act_lead_iso ON crm_activities (lead_id, activity_date_iso);
-
-CREATE TABLE IF NOT EXISTS personnel (
-  id SERIAL PRIMARY KEY,
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  national_id TEXT DEFAULT '',
-  phone TEXT DEFAULT '',
-  address TEXT DEFAULT '',
-  hire_date TEXT DEFAULT '',
-  job_title TEXT NOT NULL,
-  department TEXT DEFAULT 'تولید',
-  status TEXT DEFAULT 'active',
-  user_id INTEGER REFERENCES users(id),
-  salary_type TEXT DEFAULT 'piecework',
-  monthly_salary NUMERIC(18, 4) DEFAULT 0,
-  insurance_included INTEGER DEFAULT 0,
-  notes TEXT DEFAULT '',
-  emergency_contact JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_personnel_status ON personnel (status);
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_crm_leads_sales_rep') THEN
-    ALTER TABLE crm_leads ADD CONSTRAINT fk_crm_leads_sales_rep FOREIGN KEY (sales_rep_id) REFERENCES personnel(id);
-  END IF;
-END $$;
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS task_categories (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  description TEXT DEFAULT '',
-  is_active INTEGER DEFAULT 1
+  id serial PRIMARY KEY,
+  name text NOT NULL UNIQUE,
+  description text DEFAULT '',
+  is_deleted integer DEFAULT 0,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE TABLE IF NOT EXISTS piecework_tasks (
-  id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  category_id INTEGER REFERENCES task_categories(id),
-  category_name TEXT DEFAULT '',
-  item_id INTEGER REFERENCES items(id),
-  item_code TEXT DEFAULT '',
-  unit TEXT DEFAULT 'عدد',
-  default_rate NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  estimated_minutes NUMERIC(18, 4) DEFAULT 0,
-  difficulty_level TEXT DEFAULT 'medium',
-  description TEXT DEFAULT '',
-  is_active INTEGER DEFAULT 1,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS customers (
+  id serial PRIMARY KEY,
+  name text NOT NULL,
+  contact_name text DEFAULT '',
+  country text DEFAULT 'ایران',
+  province text DEFAULT '',
+  phone text DEFAULT '',
+  city text DEFAULT '',
+  address text DEFAULT '',
+  notes text DEFAULT '',
+  party_type text DEFAULT 'customer',
+  supplier_category text DEFAULT '',
+  bank_info jsonb DEFAULT '{}'::jsonb,
+  contacts jsonb DEFAULT '[]'::jsonb,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_pw_task_code ON piecework_tasks (code);
-CREATE INDEX IF NOT EXISTS idx_pw_task_category ON piecework_tasks (category_id);
-
-CREATE TABLE IF NOT EXISTS piecework_task_rate_history (
-  id SERIAL PRIMARY KEY,
-  task_id INTEGER NOT NULL REFERENCES piecework_tasks(id),
-  rate NUMERIC(18, 4) NOT NULL,
-  effective_date TIMESTAMP DEFAULT NOW(),
-  notes TEXT DEFAULT '',
-  created_by INTEGER REFERENCES users(id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customers_name_trgm_idx ON customers USING gin (name gin_trgm_ops);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_customers_party_type ON customers (party_type);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_customers_is_deleted ON customers (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS changelogs (
+  id serial PRIMARY KEY,
+  version text NOT NULL,
+  date timestamp NOT NULL,
+  features text NOT NULL,
+  fixes text NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_pw_rate_hist_task ON piecework_task_rate_history (task_id);
-
-CREATE TABLE IF NOT EXISTS piecework_personnel_rates (
-  id SERIAL PRIMARY KEY,
-  personnel_id INTEGER NOT NULL REFERENCES personnel(id),
-  task_id INTEGER NOT NULL REFERENCES piecework_tasks(id),
-  custom_rate NUMERIC(18, 4) NOT NULL,
-  notes TEXT DEFAULT '',
-  created_at TIMESTAMP DEFAULT NOW()
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS migrations_log (
+  id serial PRIMARY KEY,
+  name text NOT NULL UNIQUE,
+  applied_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_pw_pr_personnel ON piecework_personnel_rates (personnel_id);
-CREATE INDEX IF NOT EXISTS idx_pw_pr_task ON piecework_personnel_rates (task_id);
-
-CREATE TABLE IF NOT EXISTS piecework_payrolls (
-  id SERIAL PRIMARY KEY,
-  payroll_code TEXT NOT NULL UNIQUE,
-  personnel_id INTEGER NOT NULL REFERENCES personnel(id),
-  start_date TEXT NOT NULL,
-  end_date TEXT NOT NULL,
-  total_pieces INTEGER NOT NULL DEFAULT 0,
-  total_base_amount NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  bonus_amount NUMERIC(18, 4) DEFAULT 0,
-  deduction_amount NUMERIC(18, 4) DEFAULT 0,
-  final_payable NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  total_fixed_amount NUMERIC(18, 4) DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  status TEXT DEFAULT 'draft',
-  payment_method TEXT DEFAULT 'bank_transfer',
-  payment_ref TEXT DEFAULT '',
-  paid_at TIMESTAMP,
-  paid_by INTEGER REFERENCES users(id),
-  notes TEXT DEFAULT '',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS items (
+  id serial PRIMARY KEY,
+  type text NOT NULL,
+  name text NOT NULL,
+  code text NOT NULL,
+  current_stock numeric(18, 4) DEFAULT 0,
+  unit text NOT NULL,
+  category text DEFAULT '',
+  image text DEFAULT '',
+  thumbnail text DEFAULT '',
+  reorder_point numeric(18, 4) DEFAULT 0,
+  weighted_average_cost numeric(18, 4) DEFAULT 0,
+  stocks jsonb DEFAULT '{}'::jsonb,
+  color text,
+  weight numeric(18, 4),
+  material text,
+  size text,
+  last_kardex_rebuild_at timestamp,
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_pw_payroll_personnel ON piecework_payrolls (personnel_id);
-CREATE INDEX IF NOT EXISTS idx_pw_payroll_status ON piecework_payrolls (status);
-
-CREATE TABLE IF NOT EXISTS piecework_logs (
-  id SERIAL PRIMARY KEY,
-  personnel_id INTEGER NOT NULL REFERENCES personnel(id),
-  task_id INTEGER NOT NULL REFERENCES piecework_tasks(id),
-  project_id INTEGER REFERENCES production_projects(id),
-  work_date TEXT NOT NULL,
-  work_date_iso TEXT DEFAULT '',
-  quantity INTEGER NOT NULL DEFAULT 1,
-  unit_rate NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  total_amount NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  status TEXT DEFAULT 'submitted',
-  payroll_id INTEGER REFERENCES piecework_payrolls(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  approved_by INTEGER REFERENCES users(id),
-  approved_at TIMESTAMP,
-  notes TEXT DEFAULT '',
-  created_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS items_type_deleted ON items (type, is_deleted);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS items_code ON items (code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS items_category ON items (category);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS items_name_trgm_idx ON items USING gin (name gin_trgm_ops);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS documents (
+  id serial PRIMARY KEY,
+  type text NOT NULL,
+  ref_number text NOT NULL,
+  date timestamp NOT NULL,
+  crm_lead_id integer,
+  "user" text,
+  notes text,
+  buyer_name text DEFAULT '',
+  buyer_city text DEFAULT '',
+  buyer_phone text DEFAULT '',
+  buyer_address text DEFAULT '',
+  status text DEFAULT 'final',
+  currency text DEFAULT 'IRR',
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0,
+  deleted_at timestamp,
+  deleted_by text
 );
-
-CREATE INDEX IF NOT EXISTS idx_pw_log_personnel_date ON piecework_logs (personnel_id, work_date);
-CREATE INDEX IF NOT EXISTS idx_pw_log_personnel_date_iso ON piecework_logs (personnel_id, work_date_iso);
-CREATE INDEX IF NOT EXISTS idx_pw_log_status ON piecework_logs (status);
-CREATE INDEX IF NOT EXISTS idx_pw_log_payroll ON piecework_logs (payroll_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS docs_type_deleted ON documents (type, is_deleted);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS docs_date ON documents (date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_docs_buyer_name ON documents (buyer_name);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS document_ref_counters (
+  doc_type varchar(20) NOT NULL,
+  fiscal_year integer NOT NULL,
+  last_ref_number integer NOT NULL DEFAULT 0
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS item_code_counters (
+  scope varchar(20) NOT NULL,
+  prefix_key varchar(60) NOT NULL,
+  last_number integer NOT NULL DEFAULT 0
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS document_items (
+  id serial PRIMARY KEY,
+  document_id integer NOT NULL,
+  item_id integer NOT NULL,
+  quantity numeric(18, 4) NOT NULL,
+  unit_price numeric(18, 4) DEFAULT 0,
+  discount numeric(18, 4) DEFAULT 0,
+  location text DEFAULT 'main',
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS doc_items_doc_id ON document_items (document_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS doc_items_item_id ON document_items (item_id);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS transactions (
+  id serial PRIMARY KEY,
+  item_id integer NOT NULL,
+  document_id integer,
+  type text NOT NULL,
+  quantity numeric(18, 4) NOT NULL,
+  unit_price numeric(18, 4) DEFAULT 0,
+  total_price numeric(18, 4) DEFAULT 0,
+  date timestamp NOT NULL,
+  document_type text,
+  document_ref text,
+  created_by text,
+  notes text,
+  location text DEFAULT 'main',
+  reversal_of_id integer,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS tx_item_date_id_active ON transactions (item_id, is_deleted, date, id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS tx_item_loc_active ON transactions (item_id, location, is_deleted);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS tx_item_active_date ON transactions (item_id, is_deleted, date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS tx_doc_id ON transactions (document_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS tx_date ON transactions (date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS tx_type_deleted ON transactions (type, is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS item_prices (
+  id serial PRIMARY KEY,
+  item_id integer NOT NULL,
+  title text NOT NULL,
+  price numeric(18, 4) NOT NULL,
+  currency text DEFAULT 'IRR',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS item_prices_item_id ON item_prices (item_id);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS activity_logs (
+  id serial PRIMARY KEY,
+  user_id integer,
+  username text NOT NULL,
+  user_full_name text DEFAULT '',
+  action text NOT NULL,
+  entity text NOT NULL,
+  entity_id text DEFAULT '',
+  description text NOT NULL,
+  details jsonb DEFAULT '{}'::jsonb,
+  ip_address text DEFAULT '',
+  timestamp timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS activity_logs_username ON activity_logs (username);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS activity_logs_action ON activity_logs (action);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS activity_logs_entity ON activity_logs (entity);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS activity_logs_timestamp ON activity_logs (timestamp);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS personnel (
+  id serial PRIMARY KEY,
+  first_name text DEFAULT '',
+  last_name text DEFAULT '',
+  full_name text NOT NULL,
+  personnel_code text DEFAULT '',
+  user_id integer,
+  gender text DEFAULT 'مرد',
+  birth_date text DEFAULT '',
+  nationality text DEFAULT 'ایرانی',
+  national_id text DEFAULT '',
+  phone text DEFAULT '',
+  employment_status text DEFAULT 'فعال',
+  salary_type text DEFAULT 'none',
+  monthly_salary numeric(18, 4) DEFAULT 0,
+  job_title text DEFAULT '',
+  education text DEFAULT '',
+  end_date text DEFAULT '',
+  termination_reason text DEFAULT '',
+  specialized_skills text DEFAULT '',
+  other_skills text DEFAULT '',
+  referral_source text DEFAULT '',
+  card_number text DEFAULT '',
+  account_number text DEFAULT '',
+  sheba_number text DEFAULT '',
+  bank_name text DEFAULT '',
+  nobitex_username text DEFAULT '',
+  nobitex_password text DEFAULT '',
+  address text DEFAULT '',
+  notes text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_personnel_code ON personnel (personnel_code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_personnel_user ON personnel (user_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_personnel_status ON personnel (employment_status);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_personnel_deleted ON personnel (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS transfers (
+  id serial PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  title text DEFAULT '',
+  image text DEFAULT '',
+  thumbnail text DEFAULT '',
+  notes text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_transfer_code ON transfers (code);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS production_projects (
+  id serial PRIMARY KEY,
+  project_code text NOT NULL UNIQUE,
+  title text NOT NULL,
+  customer_id integer,
+  customer_name text DEFAULT '',
+  item_id integer,
+  item_code text DEFAULT '',
+  item_name text DEFAULT '',
+  quantity numeric(18, 4) NOT NULL DEFAULT 1,
+  unit text DEFAULT 'عدد',
+  start_date text DEFAULT '',
+  end_date text DEFAULT '',
+  status text DEFAULT 'planned',
+  priority text DEFAULT 'medium',
+  description text DEFAULT '',
+  products jsonb DEFAULT '[]'::jsonb,
+  inventory_control jsonb DEFAULT '{}'::jsonb,
+  stage_schedules jsonb DEFAULT '{}'::jsonb,
+  custom_stages jsonb DEFAULT '[]'::jsonb,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_by text DEFAULT '',
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_proj_code ON production_projects (project_code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_proj_status ON production_projects (status);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_proj_deleted ON production_projects (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS project_stages (
+  id serial PRIMARY KEY,
+  project_id integer NOT NULL,
+  stage_order integer NOT NULL DEFAULT 1,
+  title text NOT NULL,
+  status text DEFAULT 'pending',
+  start_date text DEFAULT '',
+  end_date text DEFAULT '',
+  assigned_personnel jsonb DEFAULT '[]'::jsonb,
+  required_resources jsonb DEFAULT '[]'::jsonb,
+  progress_percent integer DEFAULT 0,
+  notes text DEFAULT '',
+  completed_at text DEFAULT '',
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_stage_proj ON project_stages (project_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_stage_order ON project_stages (stage_order);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_work_logs (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL,
+  username text NOT NULL,
+  user_full_name text DEFAULT '',
+  date text NOT NULL,
+  date_iso text DEFAULT '',
+  start_time text DEFAULT '08:00',
+  end_time text DEFAULT '17:00',
+  work_hours numeric(18, 4) DEFAULT 8,
+  work_mode text DEFAULT 'onsite',
+  title text NOT NULL,
+  content text NOT NULL,
+  project_id integer,
+  project_name text DEFAULT '',
+  tags jsonb DEFAULT '[]'::jsonb,
+  mentions jsonb DEFAULT '[]'::jsonb,
+  visibility text DEFAULT 'public',
+  allowed_users jsonb DEFAULT '[]'::jsonb,
+  status text DEFAULT 'submitted',
+  manager_notes text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dwl_user ON daily_work_logs (user_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dwl_date ON daily_work_logs (date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dwl_date_iso ON daily_work_logs (date_iso);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dwl_vis ON daily_work_logs (visibility);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dwl_deleted ON daily_work_logs (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS pending_materials (
-  id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  category TEXT DEFAULT '',
-  unit TEXT NOT NULL,
-  quantity NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  purchase_price NUMERIC(18, 4) DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  supplier_id INTEGER REFERENCES customers(id),
-  supplier_name TEXT DEFAULT '',
-  location TEXT DEFAULT 'main',
-  notes TEXT DEFAULT '',
-  status TEXT DEFAULT 'pending',
-  approved_by INTEGER REFERENCES users(id),
-  approved_at TIMESTAMP,
-  created_by INTEGER REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  code text NOT NULL,
+  name text NOT NULL,
+  unit text NOT NULL,
+  category text DEFAULT '',
+  type text DEFAULT 'raw_material',
+  project_id integer,
+  project_title text DEFAULT '',
+  requested_by text DEFAULT '',
+  status text DEFAULT 'pending',
+  reorder_point numeric(18, 4) DEFAULT 0,
+  weighted_average_cost numeric(18, 4) DEFAULT 0,
+  color text DEFAULT '',
+  weight numeric(18, 4) DEFAULT 0,
+  material text DEFAULT '',
+  size text DEFAULT '',
+  image text DEFAULT '',
+  thumbnail text DEFAULT '',
+  rejection_reason text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_pending_mat_status ON pending_materials (status);
-
--- ----------------------------------------------------------------------------
--- 3. Accounting & Financial Tables
--- ----------------------------------------------------------------------------
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_pmat_status ON pending_materials (status);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_pmat_code ON pending_materials (code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_pmat_deleted ON pending_materials (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS piecework_tasks (
+  id serial PRIMARY KEY,
+  code text NOT NULL,
+  title text NOT NULL,
+  category text DEFAULT 'سایر',
+  default_rate numeric(18, 4) DEFAULT 0,
+  unit text DEFAULT 'عدد',
+  description text DEFAULT '',
+  is_active integer DEFAULT 1,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ptask_code ON piecework_tasks (code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ptask_cat ON piecework_tasks (category);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ptask_deleted ON piecework_tasks (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS piecework_task_rate_history (
+  id serial PRIMARY KEY,
+  task_id integer NOT NULL,
+  task_code text DEFAULT '',
+  task_title text DEFAULT '',
+  old_rate numeric(18, 4) DEFAULT 0,
+  new_rate numeric(18, 4) NOT NULL,
+  change_type text DEFAULT 'rate_change',
+  reason text DEFAULT '',
+  changed_by_user_id integer,
+  changed_by_username text DEFAULT '',
+  effective_date text NOT NULL,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ptrh_task ON piecework_task_rate_history (task_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ptrh_created ON piecework_task_rate_history (created_at);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS piecework_personnel_rates (
+  id serial PRIMARY KEY,
+  personnel_id integer NOT NULL,
+  task_id integer NOT NULL,
+  custom_rate numeric(18, 4) NOT NULL,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ppr_personnel ON piecework_personnel_rates (personnel_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ppr_task ON piecework_personnel_rates (task_id);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS piecework_payrolls (
+  id serial PRIMARY KEY,
+  payroll_number text NOT NULL,
+  personnel_id integer NOT NULL,
+  start_date text NOT NULL,
+  end_date text NOT NULL,
+  title text NOT NULL,
+  total_piecework_amount numeric(18, 4) NOT NULL DEFAULT 0,
+  total_bonuses numeric(18, 4) DEFAULT 0,
+  total_deductions numeric(18, 4) DEFAULT 0,
+  net_payable numeric(18, 4) NOT NULL,
+  total_fixed_amount numeric(18, 4) DEFAULT 0,
+  advance_deduction numeric(18, 4) DEFAULT 0,
+  status text DEFAULT 'draft',
+  payment_date text DEFAULT '',
+  payment_method text DEFAULT '',
+  payment_reference text DEFAULT '',
+  notes text DEFAULT '',
+  created_by_id integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ppay_personnel ON piecework_payrolls (personnel_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ppay_number ON piecework_payrolls (payroll_number);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ppay_status ON piecework_payrolls (status);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_ppay_deleted ON piecework_payrolls (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS piecework_logs (
+  id serial PRIMARY KEY,
+  personnel_id integer NOT NULL,
+  task_id integer NOT NULL,
+  project_id integer,
+  date text NOT NULL,
+  date_iso text DEFAULT '',
+  quantity numeric(18, 4) NOT NULL,
+  unit_rate numeric(18, 4) NOT NULL,
+  total_amount numeric(18, 4) NOT NULL,
+  notes text DEFAULT '',
+  payroll_id integer,
+  status text DEFAULT 'pending',
+  created_by_id integer,
+  created_by_username text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_personnel ON piecework_logs (personnel_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_task ON piecework_logs (task_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_project ON piecework_logs (project_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_date ON piecework_logs (date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_date_iso ON piecework_logs (date_iso);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_payroll ON piecework_logs (payroll_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_plog_deleted ON piecework_logs (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS accounts (
-  id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  level TEXT NOT NULL,
-  parent_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT ON UPDATE CASCADE,
-  nature TEXT NOT NULL,
-  type TEXT NOT NULL,
-  description TEXT DEFAULT '',
-  is_system INTEGER DEFAULT 0,
-  is_active INTEGER DEFAULT 1,
-  balance NUMERIC(18, 4) DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  code text NOT NULL,
+  name text NOT NULL,
+  level text NOT NULL,
+  parent_id integer,
+  account_type text NOT NULL,
+  nature text NOT NULL DEFAULT 'debit',
+  description text DEFAULT '',
+  is_system integer DEFAULT 0,
+  is_active integer DEFAULT 1,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts (code);
-CREATE INDEX IF NOT EXISTS idx_accounts_level ON accounts (level);
-CREATE INDEX IF NOT EXISTS idx_accounts_parent ON accounts (parent_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_acc_code ON accounts (code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_acc_parent ON accounts (parent_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_acc_level ON accounts (level);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_acc_type ON accounts (account_type);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_acc_deleted ON accounts (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS journal_vouchers (
-  id SERIAL PRIMARY KEY,
-  voucher_number INTEGER NOT NULL,
-  voucher_date TIMESTAMP NOT NULL DEFAULT NOW(),
-  type TEXT NOT NULL DEFAULT 'general',
-  description TEXT NOT NULL,
-  reference_type TEXT,
-  reference_id INTEGER,
-  status TEXT NOT NULL DEFAULT 'draft',
-  total_debit NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  total_credit NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  created_by INTEGER REFERENCES users(id),
-  approved_by INTEGER REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0,
-  deleted_at TIMESTAMP,
-  deleted_by INTEGER REFERENCES users(id)
+  id serial PRIMARY KEY,
+  voucher_number integer NOT NULL,
+  manual_voucher_number text DEFAULT '',
+  date text NOT NULL,
+  voucher_type text DEFAULT 'general',
+  status text DEFAULT 'approved',
+  total_debit numeric(18, 4) NOT NULL DEFAULT 0,
+  total_credit numeric(18, 4) NOT NULL DEFAULT 0,
+  description text NOT NULL,
+  reference_module text DEFAULT 'manual',
+  reference_id integer,
+  reference_number text DEFAULT '',
+  currency text DEFAULT 'IRR',
+  created_by_id integer,
+  created_by_username text DEFAULT '',
+  approved_by_id integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_jv_number ON journal_vouchers (voucher_number);
-CREATE INDEX IF NOT EXISTS idx_jv_date ON journal_vouchers (voucher_date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_jv_date ON journal_vouchers (date);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_jv_status ON journal_vouchers (status);
-CREATE INDEX IF NOT EXISTS idx_jv_ref ON journal_vouchers (reference_type, reference_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_jv_module ON journal_vouchers (reference_module);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_jv_deleted ON journal_vouchers (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS journal_voucher_items (
-  id SERIAL PRIMARY KEY,
-  voucher_id INTEGER NOT NULL REFERENCES journal_vouchers(id) ON DELETE CASCADE,
-  account_id INTEGER NOT NULL REFERENCES accounts(id),
-  detailed_account_id INTEGER REFERENCES accounts(id),
-  row_order INTEGER NOT NULL DEFAULT 1,
-  description TEXT NOT NULL,
-  debit NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  credit NUMERIC(18, 4) NOT NULL DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  currency_rate NUMERIC(18, 4) DEFAULT 1,
-  foreign_amount NUMERIC(18, 4) DEFAULT 0,
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  voucher_id integer NOT NULL,
+  account_id integer NOT NULL,
+  row_order integer DEFAULT 1,
+  detailed_type text DEFAULT 'none',
+  detailed_id integer,
+  detailed_name text DEFAULT '',
+  debit numeric(18, 4) NOT NULL DEFAULT 0,
+  credit numeric(18, 4) NOT NULL DEFAULT 0,
+  currency text DEFAULT 'IRR',
+  exchange_rate numeric(18, 4) DEFAULT 1,
+  description text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_jvi_voucher ON journal_voucher_items (voucher_id);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_jvi_account ON journal_voucher_items (account_id);
-CREATE INDEX IF NOT EXISTS idx_jvi_detailed ON journal_voucher_items (detailed_account_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_jvi_detailed ON journal_voucher_items (detailed_type, detailed_id);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS bank_accounts (
-  id SERIAL PRIMARY KEY,
-  bank_name TEXT NOT NULL,
-  branch_name TEXT DEFAULT '',
-  account_number TEXT NOT NULL,
-  account_type TEXT DEFAULT 'checking',
-  shaba_number TEXT DEFAULT '',
-  card_number TEXT DEFAULT '',
-  pos_terminal_id TEXT DEFAULT '',
-  initial_balance NUMERIC(18, 4) DEFAULT 0,
-  current_balance NUMERIC(18, 4) DEFAULT 0,
-  currency TEXT DEFAULT 'IRR',
-  account_id INTEGER REFERENCES accounts(id),
-  is_active INTEGER DEFAULT 1,
-  created_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  code text NOT NULL,
+  title text NOT NULL,
+  type text NOT NULL DEFAULT 'bank',
+  bank_name text DEFAULT '',
+  account_number text DEFAULT '',
+  sheba_number text DEFAULT '',
+  card_number text DEFAULT '',
+  branch text DEFAULT '',
+  initial_balance numeric(18, 4) DEFAULT 0,
+  current_balance numeric(18, 4) DEFAULT 0,
+  currency text DEFAULT 'IRR',
+  account_id integer,
+  is_active integer DEFAULT 1,
+  notes text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_bank_acc_number ON bank_accounts (account_number);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_bank_code ON bank_accounts (code);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_bank_type ON bank_accounts (type);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_bank_deleted ON bank_accounts (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS cheques (
-  id SERIAL PRIMARY KEY,
-  type TEXT NOT NULL,
-  sayad_number TEXT DEFAULT '',
-  serial_number TEXT NOT NULL,
-  bank_name TEXT NOT NULL,
-  branch_name TEXT DEFAULT '',
-  account_number TEXT DEFAULT '',
-  amount NUMERIC(18, 4) NOT NULL,
-  currency TEXT DEFAULT 'IRR',
-  due_date TEXT NOT NULL,
-  issue_date TEXT DEFAULT '',
-  drawer_name TEXT NOT NULL,
-  drawer_national_id TEXT DEFAULT '',
-  payee_name TEXT NOT NULL,
-  customer_id INTEGER REFERENCES customers(id),
-  status TEXT NOT NULL DEFAULT 'received',
-  status_history JSONB DEFAULT '[]'::jsonb,
-  bank_account_id INTEGER REFERENCES bank_accounts(id),
-  voucher_id INTEGER REFERENCES journal_vouchers(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  notes TEXT DEFAULT '',
-  created_by INTEGER REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  type text NOT NULL,
+  cheque_number text NOT NULL,
+  sayad_number text DEFAULT '',
+  bank_name text NOT NULL,
+  branch text DEFAULT '',
+  issue_date text NOT NULL,
+  due_date text NOT NULL,
+  amount numeric(18, 4) NOT NULL,
+  currency text DEFAULT 'IRR',
+  party_type text DEFAULT 'customer',
+  party_id integer,
+  party_name text NOT NULL,
+  status text DEFAULT 'received',
+  drawer_name text DEFAULT '',
+  payee_name text DEFAULT '',
+  bank_account_id integer,
+  voucher_id integer,
+  description text DEFAULT '',
+  status_history jsonb DEFAULT '[]'::jsonb,
+  created_by_id integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_cheques_type ON cheques (type);
-CREATE INDEX IF NOT EXISTS idx_cheques_status ON cheques (status);
-CREATE INDEX IF NOT EXISTS idx_cheques_due_date ON cheques (due_date);
-CREATE INDEX IF NOT EXISTS idx_cheques_sayad ON cheques (sayad_number);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_chq_type ON cheques (type);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_chq_due ON cheques (due_date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_chq_status ON cheques (status);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_chq_sayad ON cheques (sayad_number);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_chq_deleted ON cheques (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS treasury_transactions (
-  id SERIAL PRIMARY KEY,
-  tx_number INTEGER NOT NULL,
-  type TEXT NOT NULL,
-  date TIMESTAMP NOT NULL DEFAULT NOW(),
-  amount NUMERIC(18, 4) NOT NULL,
-  currency TEXT DEFAULT 'IRR',
-  payment_method TEXT NOT NULL,
-  source_type TEXT NOT NULL,
-  source_id INTEGER,
-  destination_type TEXT NOT NULL,
-  destination_id INTEGER,
-  customer_id INTEGER REFERENCES customers(id),
-  cheque_id INTEGER REFERENCES cheques(id),
-  document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  voucher_id INTEGER REFERENCES journal_vouchers(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  reference_number TEXT DEFAULT '',
-  description TEXT NOT NULL,
-  created_by INTEGER REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  transaction_number text NOT NULL,
+  type text NOT NULL,
+  date text NOT NULL,
+  method text NOT NULL,
+  amount numeric(18, 4) NOT NULL,
+  currency text DEFAULT 'IRR',
+  exchange_rate numeric(18, 4) DEFAULT 1,
+  bank_account_id integer,
+  party_type text DEFAULT 'customer',
+  party_id integer,
+  party_name text NOT NULL,
+  tracking_number text DEFAULT '',
+  voucher_id integer,
+  cheque_id integer,
+  document_id integer,
+  payroll_id integer,
+  reversal_of_id integer,
+  description text DEFAULT '',
+  status text DEFAULT 'completed',
+  reconciled integer DEFAULT 0,
+  reconciled_at text DEFAULT '',
+  reconciled_batch text DEFAULT '',
+  created_by_id integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  version integer NOT NULL DEFAULT 1,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_tt_number ON treasury_transactions (tx_number);
-CREATE INDEX IF NOT EXISTS idx_tt_date ON treasury_transactions (date);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_tt_type ON treasury_transactions (type);
-CREATE INDEX IF NOT EXISTS idx_tt_customer ON treasury_transactions (customer_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_tt_date ON treasury_transactions (date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_tt_bank ON treasury_transactions (bank_account_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_tt_deleted ON treasury_transactions (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS accounting_settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  description TEXT DEFAULT '',
-  updated_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  key text NOT NULL UNIQUE,
+  account_id integer,
+  description text DEFAULT '',
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
--- ----------------------------------------------------------------------------
--- 4. Workflow Engine Tables
--- ----------------------------------------------------------------------------
-
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS crm_leads (
+  id serial PRIMARY KEY,
+  title text NOT NULL,
+  customer_id integer,
+  customer_name text DEFAULT '',
+  phone text DEFAULT '',
+  company text DEFAULT '',
+  source text DEFAULT 'تماس تلفنی',
+  stage text DEFAULT 'lead',
+  estimated_value numeric(18, 4) DEFAULT 0,
+  currency text DEFAULT 'IRR',
+  probability integer DEFAULT 50,
+  assigned_to text DEFAULT '',
+  assigned_personnel_id integer,
+  expected_close_date text DEFAULT '',
+  notes text DEFAULT '',
+  status text DEFAULT 'active',
+  contacts jsonb DEFAULT '[]'::jsonb,
+  has_proforma integer DEFAULT 0,
+  proforma_id integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_by text DEFAULT '',
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_stage ON crm_leads (stage);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_assigned ON crm_leads (assigned_to);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_deleted ON crm_leads (is_deleted);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS crm_activities (
+  id serial PRIMARY KEY,
+  lead_id integer,
+  customer_id integer,
+  type text NOT NULL,
+  title text NOT NULL,
+  description text DEFAULT '',
+  result text DEFAULT '',
+  logged_by text DEFAULT '',
+  assigned_to text DEFAULT '',
+  assigned_personnel_id integer,
+  mentions jsonb DEFAULT '[]'::jsonb,
+  activity_date text DEFAULT '',
+  activity_date_iso text DEFAULT '',
+  next_followup_date text DEFAULT '',
+  next_followup_date_iso text DEFAULT '',
+  next_followup_task text DEFAULT '',
+  is_followup_completed integer DEFAULT 0,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  is_deleted integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_act_lead ON crm_activities (lead_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_act_cust ON crm_activities (customer_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_act_date ON crm_activities (activity_date);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_act_date_iso ON crm_activities (activity_date_iso);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_act_next_iso ON crm_activities (next_followup_date_iso);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_crm_act_deleted ON crm_activities (is_deleted);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_definitions (
-  id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  description TEXT DEFAULT '',
-  entity_type TEXT NOT NULL,
-  is_active INTEGER DEFAULT 1,
-  current_version INTEGER NOT NULL DEFAULT 1,
-  created_by INTEGER REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  title text NOT NULL,
+  entity_type text NOT NULL,
+  version integer DEFAULT 1,
+  is_active integer DEFAULT 1,
+  description text DEFAULT '',
+  dsl_json jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_wf_def_code ON workflow_definitions (code);
-CREATE INDEX IF NOT EXISTS idx_wf_def_entity ON workflow_definitions (entity_type);
-
-CREATE TABLE IF NOT EXISTS workflow_states (
-  id SERIAL PRIMARY KEY,
-  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
-  code TEXT NOT NULL,
-  name TEXT NOT NULL,
-  state_type TEXT NOT NULL,
-  position_x NUMERIC(18, 4) DEFAULT 0,
-  position_y NUMERIC(18, 4) DEFAULT 0,
-  sla_hours INTEGER DEFAULT 0,
-  color TEXT DEFAULT '#64748b',
-  is_initial INTEGER DEFAULT 0,
-  is_final INTEGER DEFAULT 0,
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_wf_state_wf ON workflow_states (workflow_id);
-
-CREATE TABLE IF NOT EXISTS workflow_transitions (
-  id SERIAL PRIMARY KEY,
-  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
-  from_state_id INTEGER NOT NULL REFERENCES workflow_states(id),
-  to_state_id INTEGER NOT NULL REFERENCES workflow_states(id),
-  action_code TEXT NOT NULL,
-  action_name TEXT NOT NULL,
-  required_role TEXT,
-  required_permissions JSONB DEFAULT '[]'::jsonb,
-  approval_type TEXT DEFAULT 'SINGLE',
-  required_approvals_count INTEGER DEFAULT 1,
-  rule_conditions_json JSONB DEFAULT '[]'::jsonb,
-  auto_actions_json JSONB DEFAULT '[]'::jsonb,
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_wf_trans_wf ON workflow_transitions (workflow_id);
-CREATE INDEX IF NOT EXISTS idx_wf_trans_from ON workflow_transitions (from_state_id);
-
-CREATE TABLE IF NOT EXISTS workflow_instances (
-  id SERIAL PRIMARY KEY,
-  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id),
-  entity_type TEXT NOT NULL,
-  entity_id INTEGER NOT NULL,
-  current_state_id INTEGER NOT NULL REFERENCES workflow_states(id),
-  definition_version INTEGER NOT NULL DEFAULT 1,
-  snapshot_dsl JSONB DEFAULT '{}'::jsonb,
-  started_by INTEGER REFERENCES users(id),
-  started_at TIMESTAMP DEFAULT NOW(),
-  completed_at TIMESTAMP,
-  status TEXT DEFAULT 'in_progress',
-  updated_at TIMESTAMP DEFAULT NOW(),
-  is_deleted INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_wf_inst_entity ON workflow_instances (entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_wf_inst_status ON workflow_instances (status);
-
-CREATE TABLE IF NOT EXISTS workflow_pending_approvals (
-  id SERIAL PRIMARY KEY,
-  instance_id INTEGER NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
-  transition_id INTEGER NOT NULL REFERENCES workflow_transitions(id),
-  approver_id INTEGER REFERENCES users(id),
-  approver_role TEXT,
-  approval_progress_json JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  status TEXT DEFAULT 'pending'
-);
-
-CREATE INDEX IF NOT EXISTS idx_wf_pa_instance ON workflow_pending_approvals (instance_id);
-
-CREATE TABLE IF NOT EXISTS workflow_history_logs (
-  id SERIAL PRIMARY KEY,
-  instance_id INTEGER NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
-  from_state_id INTEGER REFERENCES workflow_states(id),
-  to_state_id INTEGER NOT NULL REFERENCES workflow_states(id),
-  action_code TEXT NOT NULL,
-  performed_by INTEGER REFERENCES users(id),
-  performed_at TIMESTAMP DEFAULT NOW(),
-  comments TEXT DEFAULT '',
-  metadata JSONB DEFAULT '{}'::jsonb
-);
-
-CREATE INDEX IF NOT EXISTS idx_wf_hist_instance ON workflow_history_logs (instance_id);
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_definition_versions (
-  id SERIAL PRIMARY KEY,
-  workflow_id INTEGER NOT NULL REFERENCES workflow_definitions(id) ON DELETE CASCADE,
-  version INTEGER NOT NULL,
-  definition_dsl JSONB NOT NULL,
-  published_by INTEGER REFERENCES users(id),
-  published_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  definition_id integer NOT NULL,
+  version integer NOT NULL,
+  title text NOT NULL,
+  description text DEFAULT '',
+  dsl_json jsonb DEFAULT '{}'::jsonb,
+  created_by integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_wf_def_ver_wf ON workflow_definition_versions (workflow_id, version);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wdv_def_ver ON workflow_definition_versions (definition_id, version);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS workflow_states (
+  id serial PRIMARY KEY,
+  workflow_definition_id integer NOT NULL,
+  state_key text NOT NULL,
+  title text NOT NULL,
+  state_type text DEFAULT 'intermediate',
+  color text DEFAULT 'gray',
+  step_order integer DEFAULT 0,
+  sla_hours integer DEFAULT 24,
+  position_x integer DEFAULT 100,
+  position_y integer DEFAULT 100
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS workflow_transitions (
+  id serial PRIMARY KEY,
+  workflow_definition_id integer NOT NULL,
+  from_state_id integer NOT NULL,
+  to_state_id integer NOT NULL,
+  action_key text NOT NULL,
+  title text NOT NULL,
+  required_role text DEFAULT '',
+  required_permission text DEFAULT '',
+  approval_rule_type text DEFAULT 'SINGLE',
+  k_value integer DEFAULT 1,
+  rule_conditions_json jsonb DEFAULT '[]'::jsonb,
+  auto_action_key text DEFAULT ''
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS workflow_instances (
+  id serial PRIMARY KEY,
+  workflow_definition_id integer NOT NULL,
+  definition_version integer DEFAULT 1,
+  snapshot_dsl jsonb DEFAULT '{}'::jsonb,
+  approval_progress_json jsonb DEFAULT '{}'::jsonb,
+  entity_type text NOT NULL,
+  entity_id text NOT NULL,
+  current_state_id integer NOT NULL,
+  status text DEFAULT 'IN_PROGRESS',
+  started_by integer,
+  started_by_name text DEFAULT '',
+  version integer NOT NULL DEFAULT 1,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS workflow_pending_approvals (
+  id serial PRIMARY KEY,
+  instance_id integer NOT NULL,
+  transition_id integer NOT NULL,
+  assigned_role text DEFAULT '',
+  assigned_user_id integer,
+  status text DEFAULT 'PENDING',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS workflow_history_logs (
+  id serial PRIMARY KEY,
+  instance_id integer NOT NULL,
+  from_state_id integer,
+  to_state_id integer,
+  transition_id integer,
+  performed_by integer,
+  performed_by_name text DEFAULT '',
+  action_key text NOT NULL,
+  action_title text DEFAULT '',
+  comment text DEFAULT '',
+  snapshot_data jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_tasks (
-  id SERIAL PRIMARY KEY,
-  instance_id INTEGER NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
-  assigned_user_id INTEGER REFERENCES users(id),
-  assigned_role TEXT,
-  task_title TEXT NOT NULL,
-  status TEXT DEFAULT 'open',
-  due_date TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  completed_at TIMESTAMP
+  id serial PRIMARY KEY,
+  instance_id integer NOT NULL,
+  transition_id integer,
+  assigned_user_id integer,
+  assigned_role text DEFAULT '',
+  candidate_users jsonb DEFAULT '[]'::jsonb,
+  candidate_roles jsonb DEFAULT '[]'::jsonb,
+  delegated_to_user_id integer,
+  status text NOT NULL DEFAULT 'pending',
+  title text NOT NULL,
+  description text DEFAULT '',
+  due_at timestamp,
+  completed_at timestamp,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_wf_task_inst ON workflow_tasks (instance_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wft_instance ON workflow_tasks (instance_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wft_assigned_user ON workflow_tasks (assigned_user_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wft_status ON workflow_tasks (status);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_delegations (
-  id SERIAL PRIMARY KEY,
-  delegator_id INTEGER NOT NULL REFERENCES users(id),
-  delegatee_id INTEGER NOT NULL REFERENCES users(id),
-  workflow_id INTEGER REFERENCES workflow_definitions(id),
-  start_date TIMESTAMP NOT NULL,
-  end_date TIMESTAMP NOT NULL,
-  is_active INTEGER DEFAULT 1,
-  created_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  from_user_id integer NOT NULL,
+  to_user_id integer NOT NULL,
+  scope text NOT NULL DEFAULT 'ALL',
+  start_date timestamp NOT NULL,
+  end_date timestamp NOT NULL,
+  is_active integer DEFAULT 1,
+  reason text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_wf_deleg_users ON workflow_delegations (delegator_id, delegatee_id);
-
--- ----------------------------------------------------------------------------
--- 5. Outbox, Event Engine, Dead Letter Queue & Webhooks
--- ----------------------------------------------------------------------------
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wfd_from_user ON workflow_delegations (from_user_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wfd_to_user ON workflow_delegations (to_user_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wfd_active ON workflow_delegations (is_active);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS outbox_events (
-  id SERIAL PRIMARY KEY,
-  event_id TEXT NOT NULL UNIQUE,
-  event_type TEXT NOT NULL,
-  aggregate_type TEXT NOT NULL,
-  aggregate_id TEXT NOT NULL,
-  payload JSONB NOT NULL,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  status TEXT DEFAULT 'pending',
-  retry_count INTEGER DEFAULT 0,
-  next_retry_at TIMESTAMP,
-  error_message TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  processed_at TIMESTAMP
+  id serial PRIMARY KEY,
+  event_id text NOT NULL UNIQUE,
+  event_type text NOT NULL,
+  aggregate_type text NOT NULL,
+  aggregate_id text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  payload jsonb DEFAULT '{}'::jsonb,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  retry_count integer DEFAULT 0,
+  next_retry_at timestamp,
+  last_error text DEFAULT '',
+  occurred_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  processed_at timestamp,
+  locked_at timestamp,
+  locked_by text DEFAULT ''
 );
-
-CREATE INDEX IF NOT EXISTS idx_outbox_status_retry ON outbox_events (status, next_retry_at);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_outbox_status_next ON outbox_events (status, next_retry_at);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON outbox_events (aggregate_type, aggregate_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_outbox_status_locked ON outbox_events (status, locked_at);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS event_action_rules (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  event_type_pattern TEXT NOT NULL,
-  conditions_json JSONB DEFAULT '[]'::jsonb,
-  action_type TEXT NOT NULL,
-  action_config_json JSONB NOT NULL,
-  is_active INTEGER DEFAULT 1,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  name text NOT NULL,
+  description text DEFAULT '',
+  event_type text NOT NULL,
+  conditions_json jsonb DEFAULT '[]'::jsonb,
+  action_type text NOT NULL,
+  action_config_json jsonb DEFAULT '{}'::jsonb,
+  is_active integer DEFAULT 1,
+  execution_count integer DEFAULT 0,
+  last_executed_at timestamp,
+  created_by integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_ear_pattern ON event_action_rules (event_type_pattern);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_action_rules_event_active ON event_action_rules (event_type, is_active);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS event_action_logs (
-  id SERIAL PRIMARY KEY,
-  rule_id INTEGER REFERENCES event_action_rules(id) ON DELETE SET NULL,
-  event_id TEXT NOT NULL,
-  action_type TEXT NOT NULL,
-  status TEXT NOT NULL,
-  details JSONB DEFAULT '{}'::jsonb,
-  executed_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  rule_id integer,
+  rule_name text DEFAULT '',
+  event_id text NOT NULL,
+  event_type text NOT NULL,
+  action_type text NOT NULL,
+  status text NOT NULL,
+  result jsonb DEFAULT '{}'::jsonb,
+  error_message text DEFAULT '',
+  execution_duration_ms integer DEFAULT 0,
+  executed_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_eal_event ON event_action_logs (event_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_action_logs_rule ON event_action_logs (rule_id, executed_at);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_action_logs_event ON event_action_logs (event_id);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS dead_letter_events (
-  id SERIAL PRIMARY KEY,
-  event_id TEXT NOT NULL UNIQUE,
-  event_type TEXT NOT NULL,
-  aggregate_type TEXT NOT NULL,
-  aggregate_id TEXT NOT NULL,
-  payload JSONB NOT NULL,
-  error_message TEXT,
-  stack_trace TEXT,
-  failed_at TIMESTAMP DEFAULT NOW(),
-  status TEXT DEFAULT 'quarantined',
-  replayed_at TIMESTAMP
+  id serial PRIMARY KEY,
+  original_event_id text NOT NULL UNIQUE,
+  event_type text NOT NULL,
+  aggregate_type text NOT NULL,
+  aggregate_id text NOT NULL,
+  source text NOT NULL DEFAULT 'outbox',
+  payload jsonb DEFAULT '{}'::jsonb,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  failure_reason text NOT NULL,
+  error_stack text DEFAULT '',
+  retry_count integer DEFAULT 0,
+  status text NOT NULL DEFAULT 'quarantined',
+  quarantined_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  resolved_at timestamp,
+  resolved_by integer,
+  resolution_notes text DEFAULT ''
 );
-
-CREATE INDEX IF NOT EXISTS idx_dle_status ON dead_letter_events (status);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dlq_status ON dead_letter_events (status);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dlq_event_type ON dead_letter_events (event_type);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_dlq_aggregate ON dead_letter_events (aggregate_type, aggregate_id);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS webhook_subscriptions (
-  id SERIAL PRIMARY KEY,
-  url TEXT NOT NULL,
-  secret TEXT NOT NULL,
-  event_pattern TEXT NOT NULL DEFAULT '*',
-  is_active INTEGER DEFAULT 1,
-  custom_headers JSONB DEFAULT '{}'::jsonb,
-  retry_limit INTEGER DEFAULT 3,
-  timeout_ms INTEGER DEFAULT 5000,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  name text NOT NULL,
+  target_url text NOT NULL,
+  secret_key text NOT NULL,
+  event_patterns jsonb DEFAULT '["*"]'::jsonb,
+  custom_headers jsonb DEFAULT '{}'::jsonb,
+  is_active integer DEFAULT 1,
+  retry_limit integer DEFAULT 3,
+  timeout_ms integer DEFAULT 5000,
+  total_deliveries integer DEFAULT 0,
+  successful_deliveries integer DEFAULT 0,
+  failed_deliveries integer DEFAULT 0,
+  last_delivery_at timestamp,
+  last_status text DEFAULT 'idle',
+  last_error text DEFAULT '',
+  created_by integer,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_wh_sub_active ON webhook_subscriptions (is_active);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_webhook_subs_active ON webhook_subscriptions (is_active);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS webhook_deliveries (
-  id SERIAL PRIMARY KEY,
-  subscription_id INTEGER NOT NULL REFERENCES webhook_subscriptions(id) ON DELETE CASCADE,
-  event_id TEXT NOT NULL,
-  payload JSONB NOT NULL,
-  response_status INTEGER,
-  response_body TEXT,
-  latency_ms INTEGER,
-  delivery_status TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  subscription_id integer NOT NULL,
+  subscription_name text DEFAULT '',
+  event_id text NOT NULL,
+  event_type text NOT NULL,
+  target_url text NOT NULL,
+  status_code integer DEFAULT 0,
+  status text NOT NULL,
+  response_body text DEFAULT '',
+  error_message text DEFAULT '',
+  signature text DEFAULT '',
+  attempt integer DEFAULT 1,
+  duration_ms integer DEFAULT 0,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_wh_del_sub ON webhook_deliveries (subscription_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_webhook_deliv_sub ON webhook_deliveries (subscription_id, created_at);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_webhook_deliv_event ON webhook_deliveries (event_id);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS woocommerce_order_logs (
-  id SERIAL PRIMARY KEY,
-  woo_order_id TEXT NOT NULL UNIQUE,
-  document_id INTEGER REFERENCES documents(id),
-  status TEXT NOT NULL,
-  details JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  wc_order_id text NOT NULL UNIQUE,
+  erp_document_id integer,
+  status text NOT NULL,
+  buyer_name text DEFAULT '',
+  total_amount numeric(15, 2) DEFAULT '0',
+  payload jsonb,
+  error_message text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
 );
-
-CREATE INDEX IF NOT EXISTS idx_woo_order_id ON woocommerce_order_logs (woo_order_id);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wc_order_id ON woocommerce_order_logs (wc_order_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_wc_status ON woocommerce_order_logs (status);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS form_drafts (
-  id SERIAL PRIMARY KEY,
-  form_type TEXT NOT NULL,
-  draft_key TEXT NOT NULL UNIQUE,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  payload JSONB NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  id serial PRIMARY KEY,
+  user_id integer,
+  username text DEFAULT '',
+  session_id text DEFAULT '',
+  entity_type text NOT NULL,
+  draft_key text DEFAULT 'default',
+  payload jsonb NOT NULL,
+  summary text DEFAULT '',
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  expires_at timestamp,
+  is_deleted integer DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_form_drafts_user_type ON form_drafts (user_id, form_type);
-
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_form_drafts_user_entity ON form_drafts (user_id, entity_type, draft_key);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_form_drafts_session ON form_drafts (session_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_form_drafts_updated ON form_drafts (updated_at);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS project_bom_allocations (
-  id SERIAL PRIMARY KEY,
-  project_id INTEGER NOT NULL REFERENCES production_projects(id),
-  project_code TEXT NOT NULL,
-  item_id INTEGER NOT NULL REFERENCES items(id),
-  item_code TEXT NOT NULL,
-  item_name TEXT NOT NULL,
-  quantity NUMERIC(18, 4) NOT NULL,
-  unit TEXT DEFAULT 'عدد',
-  source_transaction_id INTEGER REFERENCES transactions(id),
-  source_location TEXT DEFAULT 'main',
-  status TEXT NOT NULL DEFAULT 'allocated',
-  user_id INTEGER REFERENCES users(id),
-  username TEXT DEFAULT '',
-  notes TEXT DEFAULT '',
-  allocated_at TIMESTAMP DEFAULT NOW(),
-  consumed_at TIMESTAMP,
-  released_at TIMESTAMP,
-  is_deleted INTEGER DEFAULT 0
+  id serial PRIMARY KEY,
+  project_id integer NOT NULL,
+  project_code text NOT NULL,
+  item_id integer NOT NULL,
+  item_code text NOT NULL,
+  item_name text NOT NULL,
+  quantity numeric(18, 4) NOT NULL,
+  unit text DEFAULT 'عدد',
+  source_transaction_id integer,
+  source_location text DEFAULT 'main',
+  status text NOT NULL DEFAULT 'allocated',
+  user_id integer,
+  username text DEFAULT '',
+  notes text DEFAULT '',
+  allocated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  consumed_at timestamp,
+  released_at timestamp,
+  is_deleted integer DEFAULT 0
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_bom_alloc_proj ON project_bom_allocations (project_id);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_bom_alloc_item ON project_bom_allocations (item_id);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_bom_alloc_status ON project_bom_allocations (status);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_bom_alloc_src_tx ON project_bom_allocations (source_transaction_id);
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS idempotency_keys (
-  id SERIAL PRIMARY KEY,
-  key TEXT NOT NULL UNIQUE,
-  scope TEXT NOT NULL DEFAULT 'global',
-  status TEXT NOT NULL DEFAULT 'processing',
-  request_method TEXT,
-  request_path TEXT,
-  request_payload JSONB,
-  response_status INTEGER,
-  response_body JSONB,
-  created_by_id INTEGER,
-  locked_at TIMESTAMP,
-  locked_until TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  completed_at TIMESTAMP,
-  expires_at TIMESTAMP
+  id serial PRIMARY KEY,
+  key text NOT NULL UNIQUE,
+  scope text NOT NULL DEFAULT 'global',
+  status text NOT NULL DEFAULT 'processing',
+  request_method text,
+  request_path text,
+  request_payload jsonb,
+  response_status integer,
+  response_body jsonb,
+  created_by_id integer,
+  locked_at timestamp,
+  locked_until timestamp,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  completed_at timestamp,
+  expires_at timestamp
 );
-
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_idempotency_key ON idempotency_keys (key);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_idempotency_scope_status ON idempotency_keys (scope, status);
-
--- ----------------------------------------------------------------------------
--- 6. Check Constraints for Financial and JSONB Integrity
--- ----------------------------------------------------------------------------
-
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS notifications (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL,
+  sender_id integer,
+  sender_name text DEFAULT '',
+  type text DEFAULT 'mention',
+  title text NOT NULL,
+  message text NOT NULL,
+  link text DEFAULT '',
+  is_read integer DEFAULT 0,
+  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications (user_id);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications (is_read);
+--> statement-breakpoint
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_items_stocks_object') THEN
@@ -1047,18 +1188,13 @@ BEGIN
     ALTER TABLE treasury_transactions ADD CONSTRAINT chk_tt_amount_pos CHECK (amount > 0);
   END IF;
 END $$;
-
--- ----------------------------------------------------------------------------
--- 7. Triggers & PostgreSQL Helper Functions
--- ----------------------------------------------------------------------------
-
--- Function: Stock consistency auto-sync
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION sync_item_current_stock()
 RETURNS TRIGGER AS $$
 DECLARE
   calculated_stock NUMERIC(18,4);
 BEGIN
-  IF NEW.stocks IS NULL OR NEW.stocks = '{}'::jsonb THEN
+  IF NEW.stocks IS NULL OR NEW.stocks = '{}'::jsonb OR jsonb_typeof(NEW.stocks) <> 'object' THEN
     calculated_stock := 0;
   ELSE
     SELECT COALESCE(
@@ -1074,14 +1210,17 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_sync_item_current_stock ON items;
-CREATE TRIGGER trg_sync_item_current_stock
-BEFORE INSERT OR UPDATE OF stocks, current_stock ON items
-FOR EACH ROW
-EXECUTE FUNCTION sync_item_current_stock();
-
--- Function: Generic updated_at timestamp refresher
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_sync_item_current_stock') THEN
+    CREATE TRIGGER trg_sync_item_current_stock
+    BEFORE INSERT OR UPDATE OF stocks, current_stock ON items
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_item_current_stock();
+  END IF;
+END $$;
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1089,43 +1228,94 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
--- Register updated_at triggers
-DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
-CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_personnel_updated_at ON personnel;
-CREATE TRIGGER trg_personnel_updated_at BEFORE UPDATE ON personnel FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_treasury_tx_updated_at ON treasury_transactions;
-CREATE TRIGGER trg_treasury_tx_updated_at BEFORE UPDATE ON treasury_transactions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_workflow_instances_updated_at ON workflow_instances;
-CREATE TRIGGER trg_workflow_instances_updated_at BEFORE UPDATE ON workflow_instances FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_item_prices_updated_at ON item_prices;
-CREATE TRIGGER trg_item_prices_updated_at BEFORE UPDATE ON item_prices FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_project_stages_updated_at ON project_stages;
-CREATE TRIGGER trg_project_stages_updated_at BEFORE UPDATE ON project_stages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_transfers_updated_at ON transfers;
-CREATE TRIGGER trg_transfers_updated_at BEFORE UPDATE ON transfers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_crm_leads_updated_at ON crm_leads;
-CREATE TRIGGER trg_crm_leads_updated_at BEFORE UPDATE ON crm_leads FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_accounting_settings_updated_at ON accounting_settings;
-CREATE TRIGGER trg_accounting_settings_updated_at BEFORE UPDATE ON accounting_settings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_event_action_rules_updated_at ON event_action_rules;
-CREATE TRIGGER trg_event_action_rules_updated_at BEFORE UPDATE ON event_action_rules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_webhook_subscriptions_updated_at ON webhook_subscriptions;
-CREATE TRIGGER trg_webhook_subscriptions_updated_at BEFORE UPDATE ON webhook_subscriptions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_woocommerce_order_logs_updated_at ON woocommerce_order_logs;
-CREATE TRIGGER trg_woocommerce_order_logs_updated_at BEFORE UPDATE ON woocommerce_order_logs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_form_drafts_updated_at ON form_drafts;
-CREATE TRIGGER trg_form_drafts_updated_at BEFORE UPDATE ON form_drafts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_users_updated_at') THEN
+    CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_personnel_updated_at') THEN
+    CREATE TRIGGER trg_personnel_updated_at BEFORE UPDATE ON personnel FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_treasury_transactions_updated_at') THEN
+    CREATE TRIGGER trg_treasury_transactions_updated_at BEFORE UPDATE ON treasury_transactions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_workflow_instances_updated_at') THEN
+    CREATE TRIGGER trg_workflow_instances_updated_at BEFORE UPDATE ON workflow_instances FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_item_prices_updated_at') THEN
+    CREATE TRIGGER trg_item_prices_updated_at BEFORE UPDATE ON item_prices FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_project_stages_updated_at') THEN
+    CREATE TRIGGER trg_project_stages_updated_at BEFORE UPDATE ON project_stages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_transfers_updated_at') THEN
+    CREATE TRIGGER trg_transfers_updated_at BEFORE UPDATE ON transfers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_crm_leads_updated_at') THEN
+    CREATE TRIGGER trg_crm_leads_updated_at BEFORE UPDATE ON crm_leads FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_accounting_settings_updated_at') THEN
+    CREATE TRIGGER trg_accounting_settings_updated_at BEFORE UPDATE ON accounting_settings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_event_action_rules_updated_at') THEN
+    CREATE TRIGGER trg_event_action_rules_updated_at BEFORE UPDATE ON event_action_rules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_webhook_subscriptions_updated_at') THEN
+    CREATE TRIGGER trg_webhook_subscriptions_updated_at BEFORE UPDATE ON webhook_subscriptions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_woocommerce_order_logs_updated_at') THEN
+    CREATE TRIGGER trg_woocommerce_order_logs_updated_at BEFORE UPDATE ON woocommerce_order_logs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_form_drafts_updated_at') THEN
+    CREATE TRIGGER trg_form_drafts_updated_at BEFORE UPDATE ON form_drafts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;

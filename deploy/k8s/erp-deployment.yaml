@@ -27,14 +27,14 @@ spec:
     spec:
       containers:
       - name: erp
-        image: registry.example.com/erp:v3.0.4
+        image: registry.example.com/erp:v3.0.5
         ports:
         - containerPort: 3000
         env:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "3.0.4"
+          value: "3.0.5"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:

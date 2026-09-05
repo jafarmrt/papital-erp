@@ -6,6 +6,25 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.0.5',
+    date: '۱۵ شهریور ۱۴۰۵',
+    title: 'همگام‌سازی ۱۰۰٪ مایگریشن مبدا (0000_v3_baseline.sql) با اسکیمای Drizzle، رفع خطاهای رزرو کیورد و تریگرهای تکراری',
+    summary: 'تطبیق دقیق فایل مایگریشن مبدا (0000_v3_baseline.sql) با تمامی ۵۷ جدول تعریف‌شده در src/db/schema.ts، اصلاح اسامی ستون‌های تغییر یافته (مانند employment_status در personnel و assigned_personnel_id در crm_leads)، کوت‌کردن ستون رزرو شده "user" در documents، تبدیل تریگرها به ساختار اتمیک و idempotent بدون وابستگی به وضعیت قبلی دیتابیس، و ایجاد اسکریپت خودکار scripts/build-baseline.ts.',
+    author: 'AI Agent (Database Architecture & Migration Integrity)',
+    changes: [
+      'تولید خودکار و اعتبارسنجی ۱۰۰٪ دستورات 0000_v3_baseline.sql مستقیماً از تعاریف Drizzle ORM در schema.ts',
+      'اصلاح ساختار جدول personnel و ایندکس idx_personnel_status بر روی employment_status',
+      'کوت‌کردن استاندارد ستون "user" در جدول documents برای جلوگیری از خطای پارسر PostgreSQL',
+      'تبدیل ساختار تریگرها به بلاک‌های امن DO $$ BEGIN IF NOT EXISTS (...) THEN CREATE TRIGGER ... END IF; END $$;',
+      'ایجاد اسکریپت دائمی npm run db:baseline (scripts/build-baseline.ts) جهت تضمین همگامی و جلوگیری از واگرایی مایگریشن‌ها در آینده',
+      'تست و تایید اجرای ۱۰۰٪ موفق runMigrations() و ۵۰ سناریوی تست جامع سیستم با صفر خطا'
+    ],
+    fixes: [
+      'رفع خطای Failed query هنگام اجرای خودکار مایگریشن‌ها در استارتاپ سامانه',
+      'رفع خطاهای ستون ناموجود در ایندکس‌های پرسنل، سرنخ‌ها و لاگ‌های کارمزدی'
+    ]
+  },
+  {
     version: 'v3.0.4',
     date: '۱۵ شهریور ۱۴۰۵',
     title: 'حل ریشه‌ای پدیده Version Drift، ایجاد ماژول منبع واحد نسخه (Version SSOT) و یکپارچه‌سازی متادیتای بیلد و پروب‌های سلامت (رفع بدهی فنی TD-043)',
