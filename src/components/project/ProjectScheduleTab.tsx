@@ -125,30 +125,22 @@ export default function ProjectScheduleTab({
   }, [initialPieceworkTasksList]);
 
   // Stages list
-  const stages: ProjectStage[] = (Array.isArray(project.stages) && project.stages.length > 0
-    ? project.stages
-    : [
-        { id: 1, title: 'خرید و کنترل موجودی', stage_order: 1, status: 'completed' },
-        { id: 2, title: 'ساخت کاشی', stage_order: 2, status: 'in_progress' },
-        { id: 3, title: 'چاپ ترنسفر', stage_order: 3, status: 'pending' },
-        { id: 4, title: 'مونتاژ', stage_order: 4, status: 'pending' },
-        { id: 5, title: 'بسته‌بندی', stage_order: 5, status: 'pending' },
-        { id: 6, title: 'کنترل نهایی و ارسال کار', stage_order: 6, status: 'pending' }
-      ]) as any;
+  // V3.1.0: مراحل ساختگی حذف شد — Empty State صادقانه
+  const stages: ProjectStage[] = (Array.isArray(project.stages) ? project.stages : []) as any;
 
-  // Products list
+  // Products list — V3.1.0: fallback فقط با کالای واقعی پروژه
   const products: ProjectProductItem[] = Array.isArray(project.products) && project.products.length > 0
     ? project.products
-    : [{
-        id: 'prod-1',
-        item_id: project.item_id || null,
+    : project.item_id ? [{
+        id: 'prod-main',
+        item_id: project.item_id,
         item_code: project.item_code || '',
-        item_name: project.item_name || 'محصول اصلی',
+        item_name: project.item_name || '',
         customer_code: '',
         quantity: project.quantity || 100,
         unit: project.unit || 'عدد',
         needs_assembly: true
-      }];
+      }] : [];
 
   // Map of schedules: stageId -> { productId -> ProductStageSchedule }
   const [schedulesMap, setSchedulesMap] = useState<ProjectStageSchedulesMap>({});
@@ -597,7 +589,13 @@ export default function ProjectScheduleTab({
 
       {/* Breakdown per Stage */}
       <div className="space-y-5">
-        {stages.map((stg) => {
+        {stages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-1.5 text-center">
+            <Users className="w-7 h-7 text-slate-300" />
+            <p className="font-bold text-slate-600">هیچ مرحله‌ای برای تقسیم کار وجود ندارد</p>
+            <p className="text-[11px]">ابتدا مراحل پروژه را تعریف کنید (از پریست گردش کار در تنظیمات یا افزودن مرحله در تب خلاصه).</p>
+          </div>
+        ) : stages.map((stg) => {
           const isAssemblyStage = stg.title.includes('مونتاژ');
           const defaultTasksForStage = findStageDefaultTasks(stg.title);
 

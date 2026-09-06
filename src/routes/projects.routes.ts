@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq, desc, and, sql, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, transactions, warehouses } from '../db/schema.js';
+import { productionProjects, projectStages, items, customers, transactions, warehouses, projectProductStageProgress } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -924,6 +924,275 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
     await orm.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
 
     res.json({ success: true, message: 'مرحله با موفقیت حذف شد' });
+  } catch (err) {
+    throw err;
+  }
+});
+
+// ============================================================================
+// V3.1.0 — پیشرفت ماتریسی SKU × مرحله (به تفکیک هر کد کالا)
+// مدل کسب‌وکار: سفارش پروژه = N کد کالا × کمیت؛ وضعیت هر SKU در هر مرحله
+// دودویی (تمام/ناتمام) و پیشرفت کل پروژه = تجمیع وزن‌دار (Σ sku%×qty / Σ qty)
+// ============================================================================
+
+const PRODUCT_PROGRESS_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
+type ProductProgressStatus = typeof PRODUCT_PROGRESS_STATUSES[number];
+
+interface ProjectProductRow {
+  item_id?: number | null;
+  item_id_raw?: number | null;
+  itemId?: number | null;
+  item_code?: string;
+  itemCode?: string;
+  item_name?: string;
+  itemName?: string;
+  quantity?: number | string;
+  unit?: string;
+  selected_optional_stages?: string[];
+}
+
+function resolveProductItemId(p: ProjectProductRow): number | null {
+  const raw = p.item_id ?? p.itemId ?? (p as unknown as { item_id_raw?: number }).item_id_raw;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+// محاسبه مراحل اعمال‌شده برای هر SKU:
+// عنوان‌هایی که در انتخاب‌های اختیاریِ «حداقل یک» محصول آمده‌اند = مراحل اختیاری؛
+// برای SKU فقط آن‌هایی اعمال می‌شوند که خودش انتخاب کرده است.
+function computeApplicableStageOrders(product: ProjectProductRow, optionalTitles: Set<string>, allStages: { stageOrder: number; title: string }[]): number[] {
+  const selected = new Set((product.selected_optional_stages || []).map(t => String(t).trim()));
+  return allStages
+    .filter(s => !optionalTitles.has(s.title) || selected.has(s.title))
+    .map(s => s.stageOrder);
+}
+
+// GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
+router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id, 10);
+    if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+
+    const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+    if (!project) return res.status(404).json({ error: 'پروژه یافت نشد' });
+
+    const stages = await orm.select().from(projectStages)
+      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
+      .orderBy(asc(projectStages.stageOrder));
+
+    const products = (Array.isArray(project.products) ? project.products : []) as ProjectProductRow[];
+
+    const progressRows = await orm.select().from(projectProductStageProgress)
+      .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
+
+    const progressMap = new Map<string, typeof progressRows[number]>();
+    for (const row of progressRows) {
+      progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
+    }
+
+    const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
+
+    const stageMeta = stages.map(s => ({ stage_order: s.stageOrder, title: s.title, status: s.status }));
+    const stagesForCompute = stages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+    const allStageOrders = stages.map(s => s.stageOrder);
+
+    const productRows = products.map(p => {
+      const itemId = resolveProductItemId(p);
+      const applicableOrders = itemId
+        ? computeApplicableStageOrders(p, optionalTitles, stagesForCompute)
+        : [];
+      const qty = Number(p.quantity) || 0;
+      const code = p.item_code ?? p.itemCode ?? '';
+      const name = p.item_name ?? p.itemName ?? '';
+
+      let completedCount = 0;
+      const progress = applicableOrders.map(order => {
+        const stageInfo = stageMeta.find(s => s.stage_order === order);
+        const key = `${itemId}|${order}`;
+        const row = progressMap.get(key);
+        const status = row?.status || 'pending';
+        if (status === 'completed') completedCount++;
+        return {
+          stage_order: order,
+          stage_title: row?.stageTitle || stageInfo?.title || '',
+          status,
+          updated_at: row?.updatedAt || '',
+          updated_by_name: row?.updatedByName || ''
+        };
+      });
+      // مراحل پروژه که برای این SKU اعمال نمی‌شوند (اختیاری انتخاب‌نشده)
+      const excludedOrders = allStageOrders.filter(o => !applicableOrders.includes(o));
+      const percent = applicableOrders.length > 0 ? Math.round((completedCount / applicableOrders.length) * 100) : 0;
+
+      return {
+        item_id: itemId,
+        item_code: code,
+        item_name: name,
+        quantity: qty,
+        unit: p.unit || 'عدد',
+        applicable_stage_orders: applicableOrders,
+        excluded_stage_orders: excludedOrders,
+        progress,
+        completed_count: completedCount,
+        applicable_count: applicableOrders.length,
+        progress_percent: percent
+      };
+    });
+
+    // رول‌آپ وزن‌دار کل پروژه
+    const totalQty = productRows.reduce((acc, p) => acc + (Number(p.quantity) || 0), 0);
+    const weightedProgress = totalQty > 0
+      ? Math.round(productRows.reduce((acc, p) => acc + (p.progress_percent * (Number(p.quantity) || 0)), 0) / totalQty)
+      : 0;
+    const fullyCompletedSkus = productRows.filter(p => p.applicable_count > 0 && p.completed_count === p.applicable_count).length;
+
+    const perStageCounts = stageMeta.map(s => ({
+      stage_order: s.stage_order,
+      title: s.title,
+      completed_count: productRows.filter(p => p.applicable_stage_orders.includes(s.stage_order) && p.progress.some(pr => pr.stage_order === s.stage_order && pr.status === 'completed')).length,
+      applicable_skus: productRows.filter(p => p.applicable_stage_orders.includes(s.stage_order)).length
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        stages: stageMeta,
+        products: productRows,
+        summary: {
+          total_skus: productRows.length,
+          total_quantity: totalQty,
+          weighted_progress_percent: weightedProgress,
+          fully_completed_skus: fullyCompletedSkus,
+          per_stage_counts: perStageCounts
+        }
+      }
+    });
+  } catch (err) {
+    throw err;
+  }
+});
+
+// PUT /api/projects/:id/product-progress — بولک آپسِرت وضعیت دودویی هر SKU در هر مرحله
+const updateProductProgressSchema = z.object({
+  body: z.object({
+    items: z.array(z.object({
+      item_id: z.union([z.number(), z.string()]),
+      item_code: z.string().optional(),
+      item_name: z.string().optional(),
+      quantity: z.union([z.number(), z.string()]).optional(),
+      stage_order: z.union([z.number(), z.string()]),
+      stage_title: z.string().optional(),
+      status: z.enum(PRODUCT_PROGRESS_STATUSES)
+    })).min(1, 'حداقل یک تغییر وضعیت الزامی است')
+  })
+});
+
+router.put('/projects/:id/product-progress', authorizePermission('projects.edit'), validate(updateProductProgressSchema), async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.id, 10);
+    if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+
+    const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0))).for('update');
+    if (!project) return res.status(404).json({ error: 'پروژه یافت نشد' });
+
+    const products = (Array.isArray(project.products) ? project.products : []) as ProjectProductRow[];
+    const productByItemId = new Map<number, ProjectProductRow>();
+    for (const p of products) {
+      const id = resolveProductItemId(p);
+      if (id) productByItemId.set(id, p);
+    }
+
+    const bizNow = await businessNowIsoDateTime();
+    const currentUser = req.user?.username || 'سیستم';
+    const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
+
+    let applied = 0;
+    let skippedInvalid = 0;
+    await orm.transaction(async (tx) => {
+      for (const u of updates) {
+        const itemId = Number(u.item_id);
+        const stageOrder = Number(u.stage_order);
+        if (!Number.isFinite(itemId) || itemId <= 0 || !Number.isFinite(stageOrder) || stageOrder <= 0 || !PRODUCT_PROGRESS_STATUSES.includes(u.status)) {
+          skippedInvalid++;
+          continue;
+        }
+        const product = productByItemId.get(itemId);
+        if (!product) {
+          // SKU باید جزو products تعریف‌شده پروژه باشد
+          skippedInvalid++;
+          continue;
+        }
+
+        const stageRow = await tx.select({ id: projectStages.id, title: projectStages.title }).from(projectStages)
+          .where(and(eq(projectStages.projectId, projectId), eq(projectStages.stageOrder, stageOrder), eq(projectStages.isDeleted, 0)))
+          .limit(1);
+        const stageTitle = stageRow[0]?.title || String(u.stage_title || '').trim() || `مرحله ${stageOrder}`;
+
+        await tx.insert(projectProductStageProgress).values({
+          projectId,
+          itemId,
+          itemCode: product.item_code ?? product.itemCode ?? '',
+          itemName: product.item_name ?? product.itemName ?? '',
+          quantity: Number(product.quantity) || 0,
+          stageOrder,
+          stageTitle,
+          status: u.status,
+          updatedAt: bizNow,
+          updatedByName: currentUser,
+          isDeleted: 0
+        }).onConflictDoUpdate({
+          target: [projectProductStageProgress.projectId, projectProductStageProgress.itemId, projectProductStageProgress.stageOrder],
+          set: {
+            status: u.status,
+            stageTitle,
+            quantity: Number(product.quantity) || 0,
+            updatedAt: bizNow,
+            updatedByName: currentUser
+          }
+        });
+        applied++;
+      }
+    });
+
+    await logActivity({
+      userId: req.user?.id,
+      username: currentUser,
+      userFullName: req.user?.full_name || '',
+      action: 'UPDATE',
+      entity: 'پیشرفت به تفکیک کد کالا',
+      entityId: String(projectId),
+      description: `بروزرسانی پیشرفت ماتریسی SKU×مرحله پروژه ${project.projectCode}: ${applied} تغییر اعمال شد`
+    });
+
+    // وضعیت پروژه: اگر همه SKUها در همه مراحل اعمال‌شده «تمام» شدند → completed
+    const progressRows = await orm.select().from(projectProductStageProgress)
+      .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
+    const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
+    const allStages = await orm.select().from(projectStages)
+      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
+    const stageMetaForCheck = allStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+
+    const rowsByItem = new Map<number, Map<number, string>>();
+    for (const r of progressRows) {
+      if (!rowsByItem.has(r.itemId)) rowsByItem.set(r.itemId, new Map());
+      rowsByItem.get(r.itemId)!.set(r.stageOrder, r.status);
+    }
+    let allDone = products.length > 0;
+    for (const p of products) {
+      const itemId = resolveProductItemId(p);
+      const applicable = itemId ? computeApplicableStageOrders(p, optionalTitles, stageMetaForCheck) : [];
+      if (!itemId || applicable.length === 0) { allDone = false; break; }
+      const statuses = rowsByItem.get(itemId);
+      const allCompleted = applicable.every(o => statuses?.get(o) === 'completed');
+      if (!allCompleted) { allDone = false; break; }
+    }
+    if (allDone && project.status !== 'completed') {
+      await orm.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, projectId));
+    } else if (!allDone && project.status === 'completed') {
+      await orm.update(productionProjects).set({ status: 'in_progress' }).where(eq(productionProjects.id, projectId));
+    }
+
+    res.json({ success: true, applied, skipped_invalid: skippedInvalid });
   } catch (err) {
     throw err;
   }

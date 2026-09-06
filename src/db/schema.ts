@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, unique, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -271,6 +271,32 @@ export const projectStages = pgTable('project_stages', {
 }, (table) => ({
   idx_stage_proj: index('idx_stage_proj').on(table.projectId),
   idx_stage_order: index('idx_stage_order').on(table.stageOrder),
+}));
+
+// V3.1.0 — پیشرفت ماتریسی SKU × مرحله (به تفکیک هر کد کالا)
+// مدل کسب‌وکار: یک سفارش پروژه ممکن است ۶۰ کد کالا × ۱۰۰ عدد باشد و پیشرفت
+// هر کد کالا «جداگانه» ردیابی می‌شود؛ پیشرفت کل پروژه = تجمیع وزن‌دار SKUها.
+// وضعیت هر SKU در هر مرحله دودویی است (تمام/ناتمام) — برخی SKUها مراحل
+// اختیاری متفاوت دارند (products.selected_optional_stages) و فقط مراحل اعمال‌شده
+// برای آن SKU ردیف progress دارند.
+export const projectProductStageProgress = pgTable('project_product_stage_progress', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').notNull().references(() => productionProjects.id),
+  itemId: integer('item_id').notNull().references(() => items.id),
+  itemCode: text('item_code').notNull().default(''), // snapshot کد کالا (SKU)
+  itemName: text('item_name').default(''),
+  quantity: numeric('quantity', { precision: 18, scale: 4 }).$type<number>().notNull().default(0),
+  stageOrder: integer('stage_order').notNull(),
+  stageTitle: text('stage_title').notNull().default(''),
+  status: text('status').notNull().default('pending'), // 'pending' | 'in_progress' | 'completed' | 'blocked'
+  updatedAt: text('updated_at').default(''),
+  updatedByName: text('updated_by_name').default(''),
+  isDeleted: integer('is_deleted').default(0),
+}, (table) => ({
+  uq_ppsp: unique('uq_ppsp_project_item_stage').on(table.projectId, table.itemId, table.stageOrder),
+  idx_ppsp_item: index('idx_ppsp_item').on(table.projectId, table.itemId),
+  idx_ppsp_order: index('idx_ppsp_order').on(table.projectId, table.stageOrder),
+  idx_ppsp_deleted: index('idx_ppsp_deleted').on(table.isDeleted),
 }));
 
 export const transfers = pgTable('transfers', {

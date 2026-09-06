@@ -31,7 +31,7 @@ export default function ProjectsPage() {
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
-  const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock'>('overview');
+  const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>('overview');
 
   const loadInitialData = async (signal?: AbortSignal) => {
     setLoading(true);
@@ -73,7 +73,7 @@ export default function ProjectsPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenDetailModal = (projId: number, tab: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' = 'overview') => {
+  const handleOpenDetailModal = (projId: number, tab: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress' = 'overview') => {
     setSelectedProjectId(projId);
     setDetailInitialTab(tab);
     setIsDetailOpen(true);
@@ -333,6 +333,7 @@ export default function ProjectsPage() {
                   project={p} 
                   onDetail={() => handleOpenDetailModal(p.id, 'overview')}
                   onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
+                  onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
                   onEdit={() => handleOpenEditModal(p)}
                   onDelete={() => handleDeleteProject(p.id, p.project_code)}
                   priorityBadge={getPriorityBadge(p.priority)}
@@ -360,6 +361,7 @@ export default function ProjectsPage() {
                   project={p} 
                   onDetail={() => handleOpenDetailModal(p.id, 'overview')}
                   onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
+                  onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
                   onEdit={() => handleOpenEditModal(p)}
                   onDelete={() => handleDeleteProject(p.id, p.project_code)}
                   priorityBadge={getPriorityBadge(p.priority)}
@@ -387,6 +389,7 @@ export default function ProjectsPage() {
                   project={p} 
                   onDetail={() => handleOpenDetailModal(p.id, 'overview')}
                   onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
+                  onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
                   onEdit={() => handleOpenEditModal(p)}
                   onDelete={() => handleDeleteProject(p.id, p.project_code)}
                   priorityBadge={getPriorityBadge(p.priority)}
@@ -453,6 +456,14 @@ export default function ProjectsPage() {
                         >
                           <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
                           انبار و خرید BOM
+                        </button>
+                        <button
+                          onClick={() => handleOpenDetailModal(p.id, 'product_progress')}
+                          className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold transition-colors border border-emerald-200/80 flex items-center gap-1 cursor-pointer"
+                          title="پیشرفت به تفکیک هر کد کالا (SKU × مرحله)"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          پیشرفت کدها
                         </button>
                         <button
                           onClick={() => handleOpenEditModal(p)}
@@ -573,6 +584,7 @@ function ProjectKanbanCard({
   project,
   onDetail,
   onInventory,
+  onProductProgress,
   onEdit,
   onDelete,
   priorityBadge
@@ -581,6 +593,7 @@ function ProjectKanbanCard({
   project: ProductionProject;
   onDetail: () => void;
   onInventory?: () => void;
+  onProductProgress?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   priorityBadge: React.ReactNode;
@@ -648,6 +661,16 @@ function ProjectKanbanCard({
             <ShoppingCart className="w-3 h-3 text-amber-600" />
             خرید BOM
           </button>
+          {onProductProgress && (
+            <button
+              onClick={onProductProgress}
+              className="text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border border-emerald-200 cursor-pointer"
+              title="پیشرفت به تفکیک هر کد کالا (SKU × مرحله)"
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              پیشرفت کدها
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-1">

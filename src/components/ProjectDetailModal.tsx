@@ -15,6 +15,7 @@ import ProjectInventoryTab from './project/ProjectInventoryTab';
 import ProjectScheduleTab from './project/ProjectScheduleTab';
 import ProjectGanttTab from './project/ProjectGanttTab';
 import ProjectStockEntryTab from './project/ProjectStockEntryTab';
+import ProjectProductProgressTab from './project/ProjectProductProgressTab';
 import { ProjectCostSummaryWidget } from './project/ProjectCostSummaryWidget';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 
@@ -24,7 +25,7 @@ interface ProjectDetailModalProps {
   onClose: () => void;
   onUpdate: () => void;
   onEditProject?: (project: ProductionProject) => void;
-  initialTab?: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock';
+  initialTab?: 'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress';
 }
 
 export default function ProjectDetailModal({
@@ -37,7 +38,9 @@ export default function ProjectDetailModal({
 }: ProjectDetailModalProps) {
   const [project, setProject] = useState<ProductionProject | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock'>(initialTab);
+  // V3.1.0: initialTab صریح پیش‌فرض است — باگ ریست تب حذف شد (useEffect دوم
+  // قبلاً به اجبار تب را به overview برمی‌گرداند و درخواست کاربر نادیده گرفته می‌شد)
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>(initialTab);
 
   useEffect(() => {
     if (initialTab && isOpen) {
@@ -126,7 +129,7 @@ export default function ProjectDetailModal({
       loadProjectData(controller.signal);
       loadAuxiliaryData(controller.signal);
       setEditingStageId(null);
-      setActiveTab('overview');
+      // V3.1.0: دیگر تب به‌اجبار reset نمی‌شود — initialTab از فراخواننده محترم شمرده می‌شود
       return () => controller.abort();
     }
   }, [isOpen, projectId]);
@@ -190,13 +193,15 @@ export default function ProjectDetailModal({
     }
   };
 
+  // V3.1.0: fallback محصولات صادقانه — فقط وقتی کالای اصلی پروژه واقعاً مشخص است؛
+  // در غیر این صورت لیست خالی (Empty State) نمایش داده می‌شود نه محصول جعلی.
   const productsList = project && Array.isArray(project.products) && project.products.length > 0
     ? project.products
-    : project ? [{
-        id: 'prod-1',
-        item_id: project.item_id || null,
+    : project && project.item_id ? [{
+        id: 'prod-main',
+        item_id: project.item_id,
         item_code: project.item_code || '',
-        item_name: project.item_name || 'محصول اصلی',
+        item_name: project.item_name || '',
         customer_code: '',
         quantity: project.quantity || 100,
         unit: project.unit || 'عدد',
@@ -274,6 +279,18 @@ export default function ProjectDetailModal({
           >
             <ShoppingCart className="w-4 h-4 text-emerald-600" />
             ۲. کنترل موجودی و لیست خرید
+          </button>
+
+          <button
+            onClick={() => setActiveTab('product_progress')}
+            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+              activeTab === 'product_progress'
+                ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
+                : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            پیشرفت به تفکیک کد کالا
           </button>
 
           <button
@@ -452,6 +469,14 @@ export default function ProjectDetailModal({
                   project={project} 
                   itemsList={itemsList} 
                   onUpdate={loadProjectData} 
+                />
+              )}
+
+              {/* Tab 2.5: SKU×Stage Progress Matrix (V3.1.0) */}
+              {activeTab === 'product_progress' && (
+                <ProjectProductProgressTab
+                  projectId={project.id}
+                  onUpdate={loadProjectData}
                 />
               )}
 

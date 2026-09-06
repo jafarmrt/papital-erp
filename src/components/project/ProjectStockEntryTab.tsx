@@ -23,18 +23,19 @@ export default function ProjectStockEntryTab({ project, onUpdate }: ProjectStock
     }
   }, [warehouses, targetLocation]);
 
+  // V3.1.0: fallback فقط با کالای واقعی پروژه — بدون محصول جعلی
   const products: ProjectProductItem[] = Array.isArray(project.products) && project.products.length > 0
     ? project.products
-    : [{
-        id: 'prod-1',
-        item_id: project.item_id || null,
+    : project.item_id ? [{
+        id: 'prod-main',
+        item_id: project.item_id,
         item_code: project.item_code || '',
-        item_name: project.item_name || 'محصول اصلی',
+        item_name: project.item_name || '',
         customer_code: '',
         quantity: project.quantity || 100,
         unit: project.unit || 'عدد',
         needs_assembly: true
-      }];
+      }] : [];
 
   const [producedQuantities, setProducedQuantities] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {};

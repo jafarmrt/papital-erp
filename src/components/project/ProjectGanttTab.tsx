@@ -8,29 +8,21 @@ interface ProjectGanttTabProps {
 }
 
 export default function ProjectGanttTab({ project }: ProjectGanttTabProps) {
-  const stages: ProjectStage[] = (Array.isArray(project.stages) && project.stages.length > 0
-    ? project.stages
-    : [
-        { id: 1, title: 'خرید و کنترل موجودی', stage_order: 1, status: 'completed', progress_percent: 100 },
-        { id: 2, title: 'ساخت کاشی', stage_order: 2, status: 'in_progress', progress_percent: 60 },
-        { id: 3, title: 'چاپ ترنسفر', stage_order: 3, status: 'pending', progress_percent: 0 },
-        { id: 4, title: 'مونتاژ', stage_order: 4, status: 'pending', progress_percent: 0 },
-        { id: 5, title: 'بسته‌بندی', stage_order: 5, status: 'pending', progress_percent: 0 },
-        { id: 6, title: 'کنترل نهایی و ارسال کار', stage_order: 6, status: 'pending', progress_percent: 0 }
-      ]) as any;
+  // V3.1.0: مراحل ساختگی با پیشرفت جعلی ۶۰٪ حذف شد — Empty State صادقانه
+  const stages: ProjectStage[] = (Array.isArray(project.stages) ? project.stages : []) as any;
 
   const products: ProjectProductItem[] = Array.isArray(project.products) && project.products.length > 0
     ? project.products
-    : [{
-        id: 'prod-1',
-        item_id: project.item_id || null,
+    : project.item_id ? [{
+        id: 'prod-main',
+        item_id: project.item_id,
         item_code: project.item_code || '',
-        item_name: project.item_name || 'محصول اصلی',
+        item_name: project.item_name || '',
         customer_code: '',
         quantity: project.quantity || 100,
         unit: project.unit || 'عدد',
         needs_assembly: true
-      }];
+      }] : [];
 
   const getStatusBadge = (status: string, progress: number) => {
     if (status === 'completed' || progress === 100) {
@@ -83,16 +75,24 @@ export default function ProjectGanttTab({ project }: ProjectGanttTabProps) {
         </div>
       </div>
 
-      {/* Gantt / Stage Progress Chart */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-2xs">
-        <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2">
-          نمودار پیشرفت خط تولید (Gantt Progress)
-        </h4>
+        {/* Gantt / Stage Progress Chart */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+          <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2">
+            نمودار پیشرفت خط تولید (Gantt Progress)
+          </h4>
 
-        <div className="space-y-4">
-          {stages.map((stg) => {
-            const isAssemblyStage = stg.title.includes('مونتاژ');
-            const prog = stg.progress_percent || (stg.status === 'completed' ? 100 : stg.status === 'in_progress' ? 50 : 0);
+          {stages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-1.5 text-center">
+              <Clock className="w-7 h-7 text-slate-300" />
+              <p className="font-bold text-slate-600">هیچ مرحله‌ای برای این پروژه تعریف نشده است</p>
+              <p className="text-[11px]">مراحل از تنظیمات (پریست گردش کار) یا دکمه «افزودن مرحله» تعریف کنید.</p>
+            </div>
+          ) : (
+          <div className="space-y-4">
+            {stages.map((stg) => {
+              const isAssemblyStage = stg.title.includes('مونتاژ');
+              // V3.1.0: دیگر درصد ساختگی (۵۰٪ برای in_progress) — فقط داده واقعی
+              const prog = stg.progress_percent || (stg.status === 'completed' ? 100 : 0);
 
             return (
               <div key={stg.id} className="space-y-1.5">
@@ -143,9 +143,10 @@ export default function ProjectGanttTab({ project }: ProjectGanttTabProps) {
                 </div>
               </div>
             );
-          })}
+              })}
+          </div>
+          )}
         </div>
       </div>
-    </div>
   );
 }

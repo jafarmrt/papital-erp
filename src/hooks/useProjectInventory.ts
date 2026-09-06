@@ -60,18 +60,37 @@ export function useProjectInventory(
   const [presetSections, setPresetSections] = useState<ProjectInventoryControlSectionData[]>(DEFAULT_INVENTORY_CONTROL_SECTIONS as any);
 
   // Derive products list from project
+  // V3.1.0 (باگ کاربر): قبلاً وقتی product_items موجود نبود، یک محصول جعلی با
+  // «عنوان پروژه» به‌عنوان نام کالا ساخته می‌شد — کنترل کد به کد عملاً به
+  // سطح پروژه سقوط می‌کرد. اکنون از products واقعی پروژه استفاده می‌شود و
+  // fallback فقط وقتی است که کالای اصلی پروژه واقعاً مشخص باشد.
   const products: ProjectProductItem[] = useMemo(() => {
-    if (project.product_items && Array.isArray(project.product_items) && project.product_items.length > 0) {
-      return project.product_items;
+    const raw = (Array.isArray((project as unknown as { products?: unknown[] }).products) ? (project as unknown as { products: Array<Record<string, unknown>> }).products : []) as Array<Record<string, unknown>>;
+    const mapped = raw.map((p, idx) => ({
+      id: String(p.id ?? `prod_${p.item_id ?? idx}`),
+      item_id: (p.item_id ?? null) as number | null,
+      item_name: String(p.item_name ?? p.itemName ?? ''),
+      item_code: String(p.item_code ?? p.itemCode ?? ''),
+      customer_code: String(p.customer_code ?? ''),
+      quantity: Number(p.quantity) || 1,
+      unit: String(p.unit ?? 'عدد'),
+      needs_assembly: p.needs_assembly !== false,
+      selected_optional_stages: (p.selected_optional_stages ?? undefined) as string[] | undefined
+    }));
+    if (mapped.length > 0) return mapped;
+    if (project.item_id) {
+      return [{
+        id: 'prod_main',
+        item_id: project.item_id,
+        item_name: project.item_name || '',
+        item_code: project.item_code || '',
+        customer_code: '',
+        quantity: Number(project.quantity) || 1,
+        unit: project.unit || 'عدد',
+        needs_assembly: true
+      }];
     }
-    return [{
-      id: 'prod_default',
-      item_name: project.title || 'محصول اصلی سفارش',
-      item_code: project.project_code,
-      quantity: 1,
-      unit: 'عدد',
-      needs_assembly: true
-    }];
+    return [];
   }, [project]);
 
   // Main sections state

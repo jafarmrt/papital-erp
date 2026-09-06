@@ -35,7 +35,7 @@ function resolvePackageVersion(): string {
   }
 
   // 4. Default baseline fallback
-  return '3.0.9';
+  return '3.1.0';
 }
 
 export const APP_VERSION: string = resolvePackageVersion();
