@@ -33,20 +33,22 @@ export const ProjectStagesForm: React.FC<ProjectStagesFormProps> = ({
         </h3>
         
         {/* Preset Selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-2xs font-bold text-slate-500">الگوی آماده:</span>
-          <select
-            value={preset}
-            onChange={(e) => onSelectPreset(e.target.value)}
-            className="bg-white border border-slate-300 rounded-xl px-2.5 py-1 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-          >
-            {availablePresets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
-        </div>
+        {availablePresets.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-2xs font-bold text-slate-500">الگوی آماده:</span>
+            <select
+              value={preset}
+              onChange={(e) => onSelectPreset(e.target.value)}
+              className="bg-white border border-slate-300 rounded-xl px-2.5 py-1 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              {availablePresets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Dynamic Stages List */}

@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  Boxes, Save, Lock, Unlock, Plus, ShoppingCart, CheckCircle2 
+  Boxes, Save, Lock, Unlock, Plus, ShoppingCart, CheckCircle2,
+  FolderTree, Table
 } from 'lucide-react';
 import { ProductionProject, Item } from '../../types';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
 import { ProductInventoryCards } from './ProductInventoryCards';
+import { ProductTreeInventoryCards } from './ProductTreeInventoryCards';
 import { InventorySectionsList } from './InventorySectionsList';
 import { ManualPurchaseList } from './ManualPurchaseList';
 import { AddMaterialModal } from './AddMaterialModal';
@@ -19,6 +21,9 @@ interface ProjectInventoryTabProps {
 
 export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUpdate }: ProjectInventoryTabProps) {
   const effectiveItemsList = itemsList || initialItemsList;
+  // State for switching between Product Tree view and Step Matrix view
+  const [viewLayout, setViewLayout] = useState<'matrix' | 'tree'>('tree');
+
   const {
     saving,
     activeStepTab,
@@ -148,8 +153,65 @@ export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUp
         </div>
       </div>
 
-      {/* Product Summary Cards */}
-      <ProductInventoryCards products={products} sections={sections} />
+      {/* Product Summary Cards & View Switcher Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-700">سبک نمایش ساختار تامین:</span>
+          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setViewLayout('matrix')}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewLayout === 'matrix'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5 text-blue-600" />
+              <span>ماتریس مراحل کنترل</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewLayout('tree')}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewLayout === 'tree'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FolderTree className="w-3.5 h-3.5 text-amber-600" />
+              <span>ساختار درختی محصول و قطعات (Tree View)</span>
+            </button>
+          </div>
+        </div>
+
+        <span className="text-[11px] text-slate-500">
+          {viewLayout === 'tree' 
+            ? 'نمایش اقلام بر اساس کدهای محصول سفارش همراه با زیرشاخه مواد اولیه'
+            : 'بررسی مرحله به مرحله مواد اولیه و کسری‌های خرید'
+          }
+        </span>
+      </div>
+
+      {/* Conditionally Render Tree View or Matrix Summary */}
+      {viewLayout === 'tree' ? (
+        <ProductTreeInventoryCards
+          products={products}
+          sections={sections}
+          warehouseItems={warehouseItems}
+          activeStepTab={activeStepTab}
+          handleUpdatePerItemResult={handleUpdatePerItemResult}
+          handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
+          handleOpenUnitConversionModal={handleOpenUnitConversionModal}
+          handleRemoveItemFromSection={handleRemoveItemFromSection}
+          onJumpToSection={(secIdx) => {
+            setViewLayout('matrix');
+            setActiveStepTab(secIdx);
+          }}
+        />
+      ) : (
+        <ProductInventoryCards products={products} sections={sections} />
+      )}
 
       {/* Step Tabs Navigation Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none border-b border-slate-200 print:hidden">

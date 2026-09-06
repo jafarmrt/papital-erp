@@ -100,7 +100,12 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
         <div className="text-center mb-8">
           {companyLogo ? (
             <div className="w-16 h-16 bg-white border border-slate-200 rounded-2xl p-1.5 mx-auto mb-4 flex items-center justify-center shadow-sm">
-              <img src={companyLogo} alt="Logo" className="max-w-full max-h-full object-contain" />
+              <img 
+                src={companyLogo.startsWith('/') || companyLogo.startsWith('http') || companyLogo.startsWith('data:') ? companyLogo : '/' + companyLogo} 
+                alt="Logo" 
+                className="max-w-full max-h-full object-contain"
+                onError={() => setCompanyLogo('')}
+              />
             </div>
           ) : (
             <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white text-xl mx-auto mb-4">

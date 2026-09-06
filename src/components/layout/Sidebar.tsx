@@ -123,7 +123,12 @@ export function Sidebar({
           <div className="flex items-center gap-2.5 text-white min-w-0">
             {companyLogo ? (
               <div className="w-9 h-9 bg-white rounded-xl p-1 shrink-0 flex items-center justify-center shadow-md border border-slate-700 overflow-hidden">
-                <img src={companyLogo} alt="Logo" className="max-w-full max-h-full object-contain" />
+                <img 
+                  src={companyLogo.startsWith('/') || companyLogo.startsWith('http') || companyLogo.startsWith('data:') ? companyLogo : '/' + companyLogo} 
+                  alt="Logo" 
+                  className="max-w-full max-h-full object-contain"
+                  onError={() => setCompanyLogo('')}
+                />
               </div>
             ) : (
               <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-base shrink-0 shadow-md">

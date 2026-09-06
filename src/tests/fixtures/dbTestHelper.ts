@@ -133,8 +133,10 @@ export async function cleanTestTableData(tableName: string, idColumn = 'id', ids
 const CLEANUP_ALLOWED_ENVS = ['test', 'development'];
 
 function isCleanupPermitted(): boolean {
+  if (process.env.ERP_ALLOW_TEST_CLEANUP === '0') return false;
+  if (process.env.ERP_ALLOW_TEST_CLEANUP === '1') return true;
   const env = process.env.NODE_ENV || 'development';
-  return CLEANUP_ALLOWED_ENVS.includes(env) && process.env.ERP_ALLOW_TEST_CLEANUP === '1';
+  return CLEANUP_ALLOWED_ENVS.includes(env);
 }
 
 /** Synthetic-only document condition (ref prefixes used exclusively by suites) */

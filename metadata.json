@@ -1,6 +1,6 @@
 {
   "name": "Remix Remix ERP v.8",
-  "description": "ERP V.8.8",
+  "description": "سامانه یکپارچه مدیریت کارگاه و ERP پاپیتال",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

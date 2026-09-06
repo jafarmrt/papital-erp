@@ -6,7 +6,7 @@ import { extractDateString } from '../../utils';
 export function getOptionalStageNamesForPreset(
   presetId: string,
   availablePresets: WorkflowPreset[],
-  defaultPreset: WorkflowPreset
+  defaultPreset?: WorkflowPreset
 ): string[] {
   const currentPresetObj = availablePresets.find(p => p.id === presetId) || availablePresets[0] || defaultPreset;
   if (!currentPresetObj || !currentPresetObj.stages) return ['مونتاژ و پخت کوره'];

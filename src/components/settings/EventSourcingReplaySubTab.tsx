@@ -82,13 +82,15 @@ export function EventSourcingReplaySubTab() {
   };
 
   const searchAggregates = async (type: string, keyword: string = '') => {
+    if (!type) return;
     try {
-      const params = new URLSearchParams({ aggregateType: type, search: keyword, limit: '25' });
+      const params = new URLSearchParams({ type, aggregateType: type, search: keyword, limit: '25' });
       const data = await fetchJson<{ success?: boolean; data?: { id: string; title: string }[] }>(`/events/event-sourcing/aggregates?${params.toString()}`);
       if (data?.success) {
-        setAggregateOptions(data.data || []);
-        if (data.data && data.data.length > 0 && !selectedAggregateId) {
-          setSelectedAggregateId(data.data[0].id);
+        const list = Array.isArray(data.data) ? data.data : [];
+        setAggregateOptions(list);
+        if (list.length > 0 && !selectedAggregateId) {
+          setSelectedAggregateId(list[0].id);
         }
       }
     } catch (err) {
@@ -101,10 +103,10 @@ export function EventSourcingReplaySubTab() {
     setIsLoadingTimeline(true);
     setTimeline([]);
     try {
-      const params = new URLSearchParams({ aggregateType: type, aggregateId: aggId });
+      const params = new URLSearchParams({ type, aggregateType: type, id: aggId, aggregateId: aggId });
       const data = await fetchJson<{ success?: boolean; timeline?: TimelineItem[]; message?: string }>(`/events/event-sourcing/timeline?${params.toString()}`);
       if (data?.success) {
-        setTimeline(data.timeline || []);
+        setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
       } else {
         showToast(data?.message || 'خطا در بارگذاری خط زمان رویدادها', 'error');
       }

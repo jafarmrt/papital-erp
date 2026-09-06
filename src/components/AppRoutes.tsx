@@ -36,8 +36,9 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
   });
 }
 
+import Dashboard from '../pages/Dashboard';
+
 // Lazy-loaded page components for Code Splitting (FE-001)
-const Dashboard = lazyWithRetry(() => import('../pages/Dashboard'));
 const InventoryStatusPage = lazyWithRetry(() => import('../pages/InventoryStatusPage'));
 const CustomersPage = lazyWithRetry(() => import('../pages/CustomersPage'));
 const PricingPage = lazyWithRetry(() => import('../pages/PricingPage'));

@@ -207,6 +207,10 @@ export interface ProjectStage {
   progress_percent: number;
   notes?: string;
   completed_at?: string;
+  completed_skus_count?: number;
+  completedSkusCount?: number;
+  applicable_skus_count?: number;
+  applicableSkusCount?: number;
 }
 
 export interface ProjectProductItem {

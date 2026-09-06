@@ -40,16 +40,19 @@ export function useProjectForm({
   const [localItems, setLocalItems] = useState<Item[]>([]);
   const [productsList, setProductsList] = useState<ProductRow[]>([]);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>(DEFAULT_WORKFLOW_PRESETS);
-  const [preset, setPreset] = useState<string>('tile_transfer');
+  const [preset, setPreset] = useState<string>('');
   const [stages, setStages] = useState<ProjectStage[]>([]);
   const [saving, setSaving] = useState<boolean>(false);
 
-  const availablePresets = workflowPresets.filter(p => p.id !== 'custom' && !p.title?.includes('سفارشی'));
+  // Exclude archived presets, custom, and legacy presets
+  const availablePresets = workflowPresets.filter(
+    p => !p.isArchived && p.id !== 'custom' && !p.title?.includes('سفارشی') && p.id !== 'tile_transfer' && p.id !== 'general_assembly'
+  );
   const activeCustomersList = localCustomers.length > 0 ? localCustomers : customersList;
   const activeItemsList = localItems.length > 0 ? localItems : itemsList;
 
   const getOptionalStageNames = () => {
-    return getOptionalStageNamesForPreset(preset, availablePresets, DEFAULT_WORKFLOW_PRESETS[0]);
+    return getOptionalStageNamesForPreset(preset, availablePresets);
   };
 
   useEffect(() => {
@@ -78,14 +81,16 @@ export function useProjectForm({
           const p = data.find((s: any) => s.key === 'project_workflow_presets');
           if (p?.value) {
             const parsed = JSON.parse(p.value);
-            if (Array.isArray(parsed) && parsed.length > 0) setWorkflowPresets(parsed);
+            if (Array.isArray(parsed)) {
+              setWorkflowPresets(parsed.filter((item: any) => item.id !== 'tile_transfer' && item.id !== 'general_assembly'));
+            }
           }
         }
       })
       .catch(err => {
         if (err?.name === 'AbortError') return;
         console.error('Failed to load workflow presets, falling back to defaults:', err);
-        setWorkflowPresets(DEFAULT_WORKFLOW_PRESETS);
+        setWorkflowPresets([]);
       });
 
     return () => controller.abort();
@@ -116,13 +121,20 @@ export function useProjectForm({
         setEndDate('');
         setPriority('medium');
         setDescription('');
-        const initialPreset = availablePresets[0] || DEFAULT_WORKFLOW_PRESETS[0];
-        setPreset(initialPreset.id);
-        setStages(initialPreset.stages.map(stg => ({
-          title: typeof stg === 'string' ? stg : stg.title,
-          assigned_personnel: [],
-          required_resources: []
-        })));
+        const initialPreset = availablePresets[0];
+        if (initialPreset) {
+          setPreset(initialPreset.id);
+          setStages(initialPreset.stages.map(stg => ({
+            title: typeof stg === 'string' ? stg : stg.title,
+            assigned_personnel: [],
+            required_resources: []
+          })));
+        } else {
+          setPreset('');
+          setStages([
+            { title: 'مرحله اول تولید', assigned_personnel: [], required_resources: [] }
+          ]);
+        }
       }
     }
   }, [isOpen, projectToEdit, workflowPresets]);
@@ -133,6 +145,15 @@ export function useProjectForm({
 
   const handleUpdateProductRow = (index: number, field: string, value: any) => {
     setProductsList(prev => {
+      // Prevent selecting the same item multiple times in different rows
+      if (field === 'item_id' && value) {
+        const isDuplicate = prev.some((row, i) => i !== index && row.item_id === Number(value));
+        if (isDuplicate) {
+          toast.error('این کالا قبلاً در یکی از ردیف‌های پروژه انتخاب شده است. امکان انتخاب مجدد یک کالا در چند ردیف وجود ندارد.');
+          return prev;
+        }
+      }
+
       const copy = [...prev];
       const item = { ...copy[index], [field]: value };
       if (field === 'item_id') {
@@ -153,7 +174,7 @@ export function useProjectForm({
 
   const handleSelectPreset = (presetId: string) => {
     setPreset(presetId);
-    const found = availablePresets.find(p => p.id === presetId) || availablePresets[0] || DEFAULT_WORKFLOW_PRESETS[0];
+    const found = availablePresets.find(p => p.id === presetId) || availablePresets[0];
     if (found) {
       setStages(found.stages.map(stg => ({
         title: typeof stg === 'string' ? stg : stg.title,
@@ -207,6 +228,13 @@ export function useProjectForm({
     if (!formatPickerDate(startDate)) return toast.error('انتخاب تاریخ شروع پروژه اجباری است');
     if (!formatPickerDate(endDate)) return toast.error('انتخاب تاریخ تحویل (پایان) پروژه اجباری است');
     if (stages.length === 0) return toast.error('حداقل یک مرحله برای فرآیند تولید تعیین کنید');
+
+    // Duplicate check in products list
+    const selectedItemIds = productsList.map(p => p.item_id).filter((id): id is number => id !== null && id !== undefined);
+    const hasDuplicates = new Set(selectedItemIds).size !== selectedItemIds.length;
+    if (hasDuplicates) {
+      return toast.error('یک کالا نمی‌تواند در چند ردیف محصول انتخاب شود. لطفاً کالاهای تکراری را حذف یا ادغام کنید.');
+    }
 
     setSaving(true);
     try {

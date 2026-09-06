@@ -142,8 +142,10 @@ export function useSettings() {
     if (presetsSetting && presetsSetting.value) {
       try {
         const parsed = JSON.parse(presetsSetting.value);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setWorkflowPresets(parsed);
+        if (Array.isArray(parsed)) {
+          // Filter out legacy default presets that the user requested to remove
+          const cleaned = parsed.filter((p: any) => p.id !== 'tile_transfer' && p.id !== 'general_assembly');
+          setWorkflowPresets(cleaned);
         }
       } catch (e) {
         console.error(e);

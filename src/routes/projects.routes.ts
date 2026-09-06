@@ -167,6 +167,10 @@ export interface FormattedStage {
   completed_at: string;
   completedAt: string;
   is_deleted: number;
+  completed_skus_count?: number;
+  completedSkusCount?: number;
+  applicable_skus_count?: number;
+  applicableSkusCount?: number;
 }
 
 export interface StageLike {
@@ -192,6 +196,10 @@ export interface StageLike {
   completed_at?: string | null;
   isDeleted?: number | null;
   is_deleted?: number | null;
+  completedSkusCount?: number | null;
+  completed_skus_count?: number | null;
+  applicableSkusCount?: number | null;
+  applicable_skus_count?: number | null;
 }
 
 function formatStage(s: StageLike | null | undefined): FormattedStage | null {
@@ -208,6 +216,8 @@ function formatStage(s: StageLike | null | undefined): FormattedStage | null {
     ? s.requiredResources 
     : (Array.isArray(s.required_resources) ? s.required_resources : []);
   const prog = Number(s.progressPercent ?? s.progress_percent ?? 0);
+  const compSkus = s.completedSkusCount ?? s.completed_skus_count;
+  const appSkus = s.applicableSkusCount ?? s.applicable_skus_count;
 
   return {
     id: s.id,
@@ -230,7 +240,11 @@ function formatStage(s: StageLike | null | undefined): FormattedStage | null {
     notes: s.notes || '',
     completed_at: cAt,
     completedAt: cAt,
-    is_deleted: Number(s.isDeleted ?? s.is_deleted ?? 0)
+    is_deleted: Number(s.isDeleted ?? s.is_deleted ?? 0),
+    completed_skus_count: compSkus !== undefined && compSkus !== null ? Number(compSkus) : undefined,
+    completedSkusCount: compSkus !== undefined && compSkus !== null ? Number(compSkus) : undefined,
+    applicable_skus_count: appSkus !== undefined && appSkus !== null ? Number(appSkus) : undefined,
+    applicableSkusCount: appSkus !== undefined && appSkus !== null ? Number(appSkus) : undefined
   };
 }
 
@@ -415,6 +429,9 @@ router.get('/projects/:id', authorizePermission('projects.view', 'projects.creat
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+
+    // همگام‌سازی اتوماتیک مراحل و وضعیت پروژه با پیشرفت SKUها
+    await syncProjectStagesAndStatusFromProductProgress(id);
 
     const [projData] = await orm
       .select({
@@ -884,27 +901,12 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
 
     await orm.update(projectStages).set(updateData).where(eq(projectStages.id, stageId));
 
-    const [updatedStage] = await orm.select().from(projectStages).where(eq(projectStages.id, stageId));
-
-    // Check if project status should auto-update to in_progress or completed
-    const allStages = await orm
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
-
-    if (allStages.length > 0) {
-      const allCompleted = allStages.every(s => s.status === 'completed');
-      const anyInProgress = allStages.some(s => s.status === 'in_progress' || (s.progressPercent && s.progressPercent > 0));
-
-      if (allCompleted) {
-        await orm.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, projectId));
-      } else if (anyInProgress) {
-        const [proj] = await orm.select().from(productionProjects).where(eq(productionProjects.id, projectId));
-        if (proj && proj.status === 'planned') {
-          await orm.update(productionProjects).set({ status: 'in_progress' }).where(eq(productionProjects.id, projectId));
-        }
-      }
-    }
+    // همگام‌سازی مجدد و خودکار مراحل و وضعیت پروژه بر اساس پیشرفت SKUها
+    const syncRes = await syncProjectStagesAndStatusFromProductProgress(projectId);
+    const targetStage = syncRes?.stages?.find(s => s.id === stageId);
+    const [updatedStage] = targetStage 
+      ? [targetStage] 
+      : await orm.select().from(projectStages).where(eq(projectStages.id, stageId));
 
     res.json(formatStage(updatedStage));
   } catch (err) {
@@ -967,11 +969,151 @@ function computeApplicableStageOrders(product: ProjectProductRow, optionalTitles
     .map(s => s.stageOrder);
 }
 
+// همگام‌سازی خودکار درصد پیشرفت و وضعیت هر مرحله و کل پروژه بر اساس ماتریس SKUها
+export async function syncProjectStagesAndStatusFromProductProgress(projectId: number) {
+  const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+  if (!project) return null;
+
+  const rawStages = await orm.select().from(projectStages)
+    .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
+    .orderBy(asc(projectStages.stageOrder));
+
+  const products = (Array.isArray(project.products) ? project.products : []) as ProjectProductRow[];
+
+  if (rawStages.length === 0) return { project, stages: [] };
+
+  const progressRows = await orm.select().from(projectProductStageProgress)
+    .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
+
+  const progressMap = new Map<string, typeof progressRows[number]>();
+  for (const row of progressRows) {
+    progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
+  }
+
+  const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
+  const stagesForCompute = rawStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+
+  const productRows = products.map(p => {
+    const itemId = resolveProductItemId(p);
+    const applicableOrders = itemId ? computeApplicableStageOrders(p, optionalTitles, stagesForCompute) : [];
+    let completedCount = 0;
+    for (const order of applicableOrders) {
+      const key = `${itemId}|${order}`;
+      const row = progressMap.get(key);
+      if (row?.status === 'completed') completedCount++;
+    }
+    const percent = applicableOrders.length > 0 ? Math.round((completedCount / applicableOrders.length) * 100) : 0;
+    return {
+      itemId,
+      quantity: Number(p.quantity) || 0,
+      applicableOrders,
+      completedCount,
+      percent
+    };
+  });
+
+  const bizNow = await businessNowIsoDateTime();
+
+  let anyProgressDetected = false;
+  let allStagesCompleted = rawStages.length > 0;
+  const updatedStages: (typeof rawStages[number] & { completedSkusCount?: number; applicableSkusCount?: number })[] = [];
+
+  for (const stg of rawStages) {
+    const applicableProducts = productRows.filter(p => p.itemId && p.applicableOrders.includes(stg.stageOrder));
+    const applicableCount = applicableProducts.length;
+    let completedCount = 0;
+    for (const p of applicableProducts) {
+      const key = `${p.itemId}|${stg.stageOrder}`;
+      const row = progressMap.get(key);
+      if (row?.status === 'completed') completedCount++;
+    }
+
+    let calculatedPercent = 0;
+    let calculatedStatus = 'pending';
+
+    if (applicableCount > 0) {
+      calculatedPercent = Math.round((completedCount / applicableCount) * 100);
+      if (completedCount === applicableCount) {
+        calculatedStatus = 'completed';
+      } else if (completedCount > 0) {
+        calculatedStatus = 'in_progress';
+      } else {
+        calculatedStatus = stg.status === 'blocked' ? 'blocked' : 'pending';
+      }
+    } else {
+      calculatedPercent = Number(stg.progressPercent || 0);
+      calculatedStatus = stg.status || 'pending';
+    }
+
+    if (completedCount > 0 || calculatedPercent > 0) {
+      anyProgressDetected = true;
+    }
+    if (calculatedStatus !== 'completed') {
+      allStagesCompleted = false;
+    }
+
+    const completedAt = calculatedStatus === 'completed' ? (stg.completedAt || bizNow) : null;
+
+    if (stg.progressPercent !== calculatedPercent || stg.status !== calculatedStatus) {
+      await orm.update(projectStages).set({
+        progressPercent: calculatedPercent,
+        status: calculatedStatus,
+        completedAt
+      }).where(eq(projectStages.id, stg.id));
+    }
+
+    updatedStages.push({
+      ...stg,
+      progressPercent: calculatedPercent,
+      status: calculatedStatus,
+      completedAt,
+      completedSkusCount: completedCount,
+      applicableSkusCount: applicableCount
+    });
+  }
+
+  // وضعیت کل پروژه:
+  // ۱) اگر تمام موارد سفارش به انبار ارسال شده و همه مراحل برای تمام کالاها تکمیل شده است -> completed
+  // ۲) اگر هرگونه پیشرفتی در هر SKU یا مرحله‌ای انجام شده است -> از planned به in_progress تغییر می‌یابد
+  const totalQty = productRows.reduce((acc, p) => acc + p.quantity, 0);
+  const weightedProgress = totalQty > 0
+    ? Math.round(productRows.reduce((acc, p) => acc + (p.percent * p.quantity), 0) / totalQty)
+    : 0;
+
+  const allProductsDone = productRows.length > 0 && productRows.every(p => p.applicableOrders.length > 0 && p.completedCount === p.applicableOrders.length);
+  const isOverallCompleted = allProductsDone || (allStagesCompleted && rawStages.length > 0);
+
+  let newProjectStatus = project.status;
+  if (isOverallCompleted) {
+    newProjectStatus = 'completed';
+  } else if (anyProgressDetected || weightedProgress > 0) {
+    if (project.status === 'planned' || project.status === 'completed') {
+      newProjectStatus = 'in_progress';
+    }
+  } else if (!anyProgressDetected && weightedProgress === 0 && project.status === 'completed') {
+    newProjectStatus = 'in_progress';
+  }
+
+  if (newProjectStatus !== project.status) {
+    await orm.update(productionProjects).set({ status: newProjectStatus }).where(eq(productionProjects.id, projectId));
+    project.status = newProjectStatus;
+  }
+
+  return {
+    project,
+    stages: updatedStages,
+    weightedProgress
+  };
+}
+
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
 router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
+
+    // همگام‌سازی پیش از پاسخ
+    await syncProjectStagesAndStatusFromProductProgress(projectId);
 
     const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
     if (!project) return res.status(404).json({ error: 'پروژه یافت نشد' });
@@ -1164,35 +1306,16 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
       description: `بروزرسانی پیشرفت ماتریسی SKU×مرحله پروژه ${project.projectCode}: ${applied} تغییر اعمال شد`
     });
 
-    // وضعیت پروژه: اگر همه SKUها در همه مراحل اعمال‌شده «تمام» شدند → completed
-    const progressRows = await orm.select().from(projectProductStageProgress)
-      .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
-    const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
-    const allStages = await orm.select().from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
-    const stageMetaForCheck = allStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+    // همگام‌سازی اتوماتیک مراحل و وضعیت پروژه
+    const syncResult = await syncProjectStagesAndStatusFromProductProgress(projectId);
 
-    const rowsByItem = new Map<number, Map<number, string>>();
-    for (const r of progressRows) {
-      if (!rowsByItem.has(r.itemId)) rowsByItem.set(r.itemId, new Map());
-      rowsByItem.get(r.itemId)!.set(r.stageOrder, r.status);
-    }
-    let allDone = products.length > 0;
-    for (const p of products) {
-      const itemId = resolveProductItemId(p);
-      const applicable = itemId ? computeApplicableStageOrders(p, optionalTitles, stageMetaForCheck) : [];
-      if (!itemId || applicable.length === 0) { allDone = false; break; }
-      const statuses = rowsByItem.get(itemId);
-      const allCompleted = applicable.every(o => statuses?.get(o) === 'completed');
-      if (!allCompleted) { allDone = false; break; }
-    }
-    if (allDone && project.status !== 'completed') {
-      await orm.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, projectId));
-    } else if (!allDone && project.status === 'completed') {
-      await orm.update(productionProjects).set({ status: 'in_progress' }).where(eq(productionProjects.id, projectId));
-    }
-
-    res.json({ success: true, applied, skipped_invalid: skippedInvalid });
+    res.json({ 
+      success: true, 
+      applied, 
+      skipped_invalid: skippedInvalid,
+      project_status: syncResult?.project?.status || project.status,
+      weighted_progress_percent: syncResult?.weightedProgress || 0
+    });
   } catch (err) {
     throw err;
   }

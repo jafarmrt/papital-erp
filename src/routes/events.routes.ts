@@ -608,7 +608,7 @@ router.get(['/event-sourcing/types', '/timeline/types'], authorizePermission('ev
 
 router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePermission('events.view'), async (req, res) => {
   try {
-    const type = req.query.type as string;
+    const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
     const search = (req.query.search as string) || '';
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
 
@@ -627,10 +627,10 @@ router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePerm
   }
 });
 
-router.get('/event-sourcing/timeline', authorizePermission('events.view'), async (req, res) => {
+router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('events.view'), async (req, res) => {
   try {
-    const type = req.query.type as string;
-    const id = req.query.id as string;
+    const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
+    const id = ((req.query.id as string) || (req.query.aggregateId as string) || '').trim();
 
     if (!type || !id) {
       return res.status(400).json({ success: false, message: 'پارامترهای type و id الزامی هستند.' });
@@ -640,6 +640,7 @@ router.get('/event-sourcing/timeline', authorizePermission('events.view'), async
 
     res.json({
       success: true,
+      data: timeline,
       timeline
     });
   } catch (error) {

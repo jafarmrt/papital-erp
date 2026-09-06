@@ -72,10 +72,16 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                   انتخاب کالا / محصول از انبار <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
-                  options={activeItemsList.map((item) => ({
-                    value: String(item.id),
-                    label: `${item.name} (کد: ${item.code} | موجودی: ${item.current_stock || 0} ${item.unit || 'عدد'})`,
-                  }))}
+                  options={activeItemsList
+                    .filter((item) => {
+                      // Allow currently selected item for this row, but filter out items selected in other rows
+                      const isSelectedElsewhere = productsList.some((p, i) => i !== idx && p.item_id === item.id);
+                      return !isSelectedElsewhere;
+                    })
+                    .map((item) => ({
+                      value: String(item.id),
+                      label: `${item.name} (کد: ${item.code} | موجودی: ${item.current_stock || 0} ${item.unit || 'عدد'})`,
+                    }))}
                   value={product.item_id ? String(product.item_id) : ''}
                   onChange={(val) => onUpdateProductRow(idx, 'item_id', val ? Number(val) : null)}
                   placeholder="جستجوی کالا بر اساس نام یا کد..."

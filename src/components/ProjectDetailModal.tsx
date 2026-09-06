@@ -3,7 +3,7 @@ import {
   X, Check, Plus, Trash2, Calendar, User, Package, Users, ShieldAlert,
   Layers, ArrowUp, ArrowDown, Clock, CheckCircle2, AlertCircle, PlayCircle,
   Edit3, RefreshCw, ChevronRight, UserPlus, Wrench, MessageSquare, Tag,
-  ShoppingCart, BarChart2, CheckSquare, FileText
+  ShoppingCart, BarChart2, CheckSquare, FileText, Maximize2, Minimize2, Sparkles
 } from 'lucide-react';
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
@@ -16,7 +16,6 @@ import ProjectScheduleTab from './project/ProjectScheduleTab';
 import ProjectGanttTab from './project/ProjectGanttTab';
 import ProjectStockEntryTab from './project/ProjectStockEntryTab';
 import ProjectProductProgressTab from './project/ProjectProductProgressTab';
-import { ProjectCostSummaryWidget } from './project/ProjectCostSummaryWidget';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
 
 interface ProjectDetailModalProps {
@@ -38,6 +37,26 @@ export default function ProjectDetailModal({
 }: ProjectDetailModalProps) {
   const [project, setProject] = useState<ProductionProject | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  // Fullscreen state with local storage persistence
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('project_modal_fullscreen');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('project_modal_fullscreen', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   // V3.1.0: initialTab صریح پیش‌فرض است — باگ ریست تب حذف شد (useEffect دوم
   // قبلاً به اجبار تب را به overview برمی‌گرداند و درخواست کاربر نادیده گرفته می‌شد)
   const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>(initialTab);
@@ -208,33 +227,118 @@ export default function ProjectDetailModal({
         needs_assembly: true
       }] : [];
 
+  // Dynamic status styling
+  const statusConfig: Record<string, { label: string; bg: string; text: string; border: string }> = {
+    planned: { label: 'برنامه‌ریزی‌شده', bg: 'bg-slate-800', text: 'text-slate-200', border: 'border-slate-700' },
+    in_progress: { label: 'در حال انجام', bg: 'bg-amber-950/70', text: 'text-amber-300', border: 'border-amber-700/60' },
+    completed: { label: 'تکمیل‌شده', bg: 'bg-emerald-950/70', text: 'text-emerald-300', border: 'border-emerald-700/60' },
+    paused: { label: 'متوقف‌شده', bg: 'bg-orange-950/70', text: 'text-orange-300', border: 'border-orange-700/60' },
+    cancelled: { label: 'لغوشده', bg: 'bg-rose-950/70', text: 'text-rose-300', border: 'border-rose-700/60' }
+  };
+  const currStatus = project?.status ? statusConfig[project.status] || { label: project.status, bg: 'bg-slate-800', text: 'text-slate-200', border: 'border-slate-700' } : null;
+
+  // Dynamic indicators for tab badges
+  const reservedCount = project?.inventory_control?.reservedItems?.length || 0;
+  const purchaseCount = project?.inventory_control?.purchaseOrderItems?.length || 0;
+  const stagesCount = project?.stages?.length || 0;
+  const completedStagesCount = project?.stages?.filter(s => s.status === 'completed').length || project?.completed_stages || 0;
+  const productsCount = productsList.length;
+  const totalQty = project?.quantity || 0;
+  const unit = project?.unit || 'عدد';
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl border border-slate-200 my-4 flex flex-col max-h-[92vh]">
+    <div className={
+      isFullscreen
+        ? "fixed inset-0 z-50 flex flex-col bg-slate-900/90 backdrop-blur-xs w-screen h-screen overflow-hidden animate-fadeIn"
+        : "fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-fadeIn overflow-y-auto"
+    }>
+      <div className={
+        isFullscreen
+          ? "w-full h-full flex flex-col overflow-hidden bg-white shadow-none border-none rounded-none"
+          : "bg-white rounded-3xl max-w-7xl w-full overflow-hidden shadow-2xl border border-slate-200 my-2 flex flex-col max-h-[96vh]"
+      }>
         {/* Modal Header */}
-        <div className="bg-slate-900 text-white p-5 shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 font-bold flex items-center justify-center shadow-md">
+        <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-3.5 shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 font-bold flex items-center justify-center shadow-md shrink-0">
               <Layers className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-bold text-white truncate">
                   {project?.title || 'در حال بارگذاری پروژه...'}
                 </h2>
                 {project?.project_code && (
-                  <span className="px-2.5 py-0.5 bg-slate-800 text-amber-400 rounded-lg font-mono text-xs font-bold border border-slate-700">
+                  <span className="px-2.5 py-0.5 bg-slate-800 text-amber-400 rounded-lg font-mono text-xs font-bold border border-slate-700 shrink-0">
                     {project.project_code}
                   </span>
                 )}
+                {currStatus && (
+                  <span 
+                    className={`px-2.5 py-0.5 rounded-lg text-xs font-bold border shrink-0 ${currStatus.bg} ${currStatus.text} ${currStatus.border}`}
+                    title={project?.status === 'planned' 
+                      ? 'پروژه در وضعیت برنامه‌ریزی است. به محض شروع هر مرحله یا تغییر درصد پیشرفت مراحل کارگاهی، وضعیت پروژه به طور خودکار به «در حال انجام» تغییر می‌یابد.'
+                      : project?.status === 'in_progress'
+                      ? 'پروژه فعال است و عملیات تولید کارگاهی در حال پیشرفت است.'
+                      : undefined
+                    }
+                  >
+                    {currStatus.label}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                سیستم جامع کنترل پروژه تولید، کنترل موجودی، تقسیم کار پرسنل و تحویل به انبار
-              </p>
+
+              <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap">
+                {project?.customer_name && (
+                  <span className="flex items-center gap-1 text-slate-300">
+                    <User className="w-3.5 h-3.5 text-amber-400" />
+                    <span>مشتری: <strong className="text-white font-medium">{project.customer_name}</strong></span>
+                  </span>
+                )}
+                {project?.end_date && (
+                  <span className="flex items-center gap-1 text-slate-300">
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <span>موعد تحویل: <strong className="text-white font-mono">{toPersianDigits(project.end_date)}</strong></span>
+                  </span>
+                )}
+                {project?.quantity && (
+                  <span className="flex items-center gap-1 text-slate-300">
+                    <Package className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>تیراژ: <strong className="text-white font-mono">{toPersianDigits(project.quantity)} {project.unit || 'عدد'}</strong></span>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Miniature Physical Progress Bar */}
+            {project && (
+              <div className="hidden xl:flex items-center gap-2.5 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/70">
+                <span className="text-xs text-slate-300 font-medium">پیشرفت کل:</span>
+                <div className="w-24 bg-slate-700 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.max(0, project.progress_percent || 0))}%` }}
+                  />
+                </div>
+                <span className="font-mono text-xs font-bold text-amber-400">
+                  {toPersianDigits(project.progress_percent || 0)}٪
+                </span>
+              </div>
+            )}
+
+            {/* Fullscreen Workspace Toggle */}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
+              title={isFullscreen ? 'خروج از حالت تمام‌صفحه (نمای پنجره‌ای)' : 'تغییر به فضای کار تمام‌صفحه'}
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-400" /> : <Maximize2 className="w-3.5 h-3.5 text-amber-400" />}
+              <span className="hidden sm:inline">{isFullscreen ? 'پنجره‌ای' : 'تمام‌صفحه'}</span>
+            </button>
+
             {onEditProject && project && (
               <button
                 type="button"
@@ -243,12 +347,14 @@ export default function ProjectDetailModal({
                 title="ویرایش مشخصات اصلی پروژه"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                <span>ویرایش پروژه</span>
+                <span className="hidden sm:inline">ویرایش پروژه</span>
               </button>
             )}
+
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 flex items-center justify-center transition-colors border border-slate-700"
+              title="بستن (Esc)"
             >
               <X className="w-4 h-4" />
             </button>
@@ -256,77 +362,106 @@ export default function ProjectDetailModal({
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-slate-100 border-b border-slate-200 px-4 pt-2 flex items-center gap-1 overflow-x-auto shrink-0 custom-scrollbar">
+        <div className="bg-slate-100 border-b border-slate-200 px-4 pt-2.5 flex items-center gap-1.5 overflow-x-auto shrink-0 custom-scrollbar">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+            className={`px-3.5 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
               activeTab === 'overview'
                 ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
             }`}
           >
-            <FileText className="w-4 h-4 text-amber-500" />
-            ۱. خلاصه و مشخصات
+            <FileText className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>۱. خلاصه و مشخصات</span>
+            {stagesCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-200 text-slate-700">
+                {toPersianDigits(completedStagesCount)}/{toPersianDigits(stagesCount)}
+              </span>
+            )}
           </button>
 
           <button
             onClick={() => setActiveTab('inventory')}
-            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+            className={`px-3.5 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
               activeTab === 'inventory'
                 ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
             }`}
           >
-            <ShoppingCart className="w-4 h-4 text-emerald-600" />
-            ۲. کنترل موجودی و لیست خرید
+            <ShoppingCart className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>۲. کنترل موجودی و لیست خرید</span>
+            {purchaseCount > 0 ? (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">
+                {toPersianDigits(purchaseCount)} قلم کسری
+              </span>
+            ) : reservedCount > 0 ? (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                {toPersianDigits(reservedCount)} رزرو شده
+              </span>
+            ) : null}
           </button>
 
           <button
             onClick={() => setActiveTab('product_progress')}
-            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+            className={`px-3.5 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
               activeTab === 'product_progress'
                 ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            پیشرفت به تفکیک کد کالا
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>۳. پیشرفت به تفکیک کد کالا</span>
+            {productsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-200 text-slate-700">
+                {toPersianDigits(productsCount)} محصول
+              </span>
+            )}
           </button>
 
           <button
             onClick={() => setActiveTab('schedule')}
-            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+            className={`px-3.5 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
               activeTab === 'schedule'
                 ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
             }`}
           >
-            <Users className="w-4 h-4 text-blue-600" />
-            ۳. تقسیم کار و دستمزد پرسنل
+            <Users className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>۴. تقسیم کار و دستمزد پرسنل</span>
+            {stagesCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                {toPersianDigits(stagesCount)} مرحله
+              </span>
+            )}
           </button>
 
           <button
             onClick={() => setActiveTab('gantt')}
-            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+            className={`px-3.5 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
               activeTab === 'gantt'
                 ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
             }`}
           >
-            <BarChart2 className="w-4 h-4 text-purple-600" />
-            ۴. زمان‌بندی (Gantt)
+            <BarChart2 className="w-4 h-4 text-purple-600 shrink-0" />
+            <span>۵. زمان‌بندی (Gantt)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('stock')}
-            className={`px-4 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
+            className={`px-3.5 py-2.5 rounded-t-2xl font-bold text-xs transition-all flex items-center gap-2 border-t border-x shrink-0 ${
               activeTab === 'stock'
                 ? 'bg-white text-slate-900 border-slate-200 shadow-2xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'
             }`}
           >
-            <CheckSquare className="w-4 h-4 text-teal-600" />
-            ۵. ورود به انبار
+            <CheckSquare className="w-4 h-4 text-teal-600 shrink-0" />
+            <span>۶. ورود به انبار</span>
+            {totalQty > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-100">
+                {toPersianDigits(totalQty)} {unit}
+              </span>
+            )}
           </button>
         </div>
 
@@ -349,14 +484,6 @@ export default function ProjectDetailModal({
                     workflowCode="PROJECT_WORKFLOW"
                     title={`چرخه و تاییدات پروژه شماره ${project.project_code || project.id}`}
                     onStateChange={loadProjectData}
-                  />
-
-                  {/* Live Cost & Profitability Summary Widget */}
-                  <ProjectCostSummaryWidget
-                    project={project}
-                    itemsList={itemsList}
-                    pricesMap={pricesMap}
-                    pieceworkLogs={pieceworkLogs}
                   />
 
                   {/* Top Stats Cards */}
@@ -431,33 +558,219 @@ export default function ProjectDetailModal({
 
                   {/* Stages List */}
                   <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-2xs">
-                    <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                      <Layers className="w-4 h-4 text-blue-600" />
-                      مراحل فرآیند کنترل پروژه و کارگاه ({toPersianDigits(project.stages?.length || 0)} مرحله)
-                    </h3>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-blue-600" />
+                        مراحل فرآیند کنترل پروژه و کارگاه ({toPersianDigits(project.stages?.length || 0)} مرحله)
+                      </h3>
+                      <span className="text-[11px] text-blue-700 font-medium bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        پیشرفت و وضعیت مراحل به‌طور خودکار بر اساس ماتریس «پیشرفت به تفکیک کد کالا» محاسبه می‌شود
+                      </span>
+                    </div>
 
-                    <div className="space-y-2">
-                      {(project.stages || []).map((stg) => (
-                        <div key={stg.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-lg bg-slate-900 text-amber-400 font-bold flex items-center justify-center text-xs">
-                              {stg.stage_order || stg.id}
-                            </span>
-                            <span className="font-bold text-slate-900">{stg.title}</span>
-                          </div>
+                    <div className="space-y-3">
+                      {(project.stages || []).map((stg) => {
+                        const isEditing = editingStageId === stg.id;
+                        const statusColors: Record<string, { label: string; bg: string; text: string }> = {
+                          pending: { label: 'در انتظار شروع', bg: 'bg-slate-100', text: 'text-slate-700' },
+                          in_progress: { label: 'در حال انجام', bg: 'bg-amber-100', text: 'text-amber-800' },
+                          completed: { label: 'تکمیل‌شده', bg: 'bg-emerald-100', text: 'text-emerald-800' },
+                          blocked: { label: 'متوقف / مانع', bg: 'bg-rose-100', text: 'text-rose-800' }
+                        };
+                        const stageStatusInfo = statusColors[stg.status] || { label: stg.status, bg: 'bg-slate-100', text: 'text-slate-700' };
+                        const compSkus = stg.completed_skus_count ?? stg.completedSkusCount;
+                        const appSkus = stg.applicable_skus_count ?? stg.applicableSkusCount;
 
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono font-bold text-amber-800">{stg.progress_percent || 0}٪</span>
-                            <button
-                              onClick={() => handleStartEditStage(stg)}
-                              className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-700 font-bold text-[11px] flex items-center gap-1"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-                              ویرایش وضعیت
-                            </button>
+                        return (
+                          <div key={stg.id} className={`rounded-xl border transition-all ${isEditing ? 'border-blue-400 bg-blue-50/40 p-4 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 p-3'}`}>
+                            {/* Normal summary view */}
+                            {!isEditing ? (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className="w-7 h-7 rounded-lg bg-slate-900 text-amber-400 font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                                    {toPersianDigits(stg.stage_order || stg.id)}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-bold text-slate-900 text-xs">{stg.title}</span>
+                                      <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${stageStatusInfo.bg} ${stageStatusInfo.text}`}>
+                                        {stageStatusInfo.label}
+                                      </span>
+                                      {appSkus !== undefined && appSkus > 0 && (
+                                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-100 font-semibold text-[10px] flex items-center gap-1">
+                                          <span>تکمیل‌شده:</span>
+                                          <strong className="font-mono">{toPersianDigits(compSkus || 0)}</strong>
+                                          <span>از</span>
+                                          <strong className="font-mono">{toPersianDigits(appSkus)} SKU</strong>
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                                      {stg.assigned_personnel && stg.assigned_personnel.length > 0 && (
+                                        <span>پرسنل: {stg.assigned_personnel.join('، ')}</span>
+                                      )}
+                                      {stg.start_date && (
+                                        <span>• شروع: {toPersianDigits(stg.start_date)}</span>
+                                      )}
+                                      {stg.end_date && (
+                                        <span>• پایان: {toPersianDigits(stg.end_date)}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                                  <div className="flex items-center gap-1.5 min-w-[70px]">
+                                    <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
+                                      <div 
+                                        className={`h-full transition-all ${stg.progress_percent >= 100 ? 'bg-emerald-500' : stg.progress_percent > 0 ? 'bg-amber-500' : 'bg-slate-300'}`} 
+                                        style={{ width: `${Math.min(100, Math.max(0, stg.progress_percent || 0))}%` }} 
+                                      />
+                                    </div>
+                                    <span className="font-mono font-bold text-slate-700 text-xs">{toPersianDigits(stg.progress_percent || 0)}٪</span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditStage(stg)}
+                                    className="px-3 py-1.5 bg-white border border-slate-300 hover:border-blue-500 hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>ویرایش زمان‌بندی و پرسنل</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              /* Inline editing form */
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between border-b border-blue-200 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-6 h-6 rounded-md bg-blue-600 text-white font-bold flex items-center justify-center text-xs">
+                                      {toPersianDigits(stg.stage_order || stg.id)}
+                                    </span>
+                                    <span className="font-bold text-slate-900 text-xs">ویرایش اطلاعات مرحله: {stg.title}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingStageId(null)}
+                                    className="text-slate-400 hover:text-slate-600 p-1"
+                                    title="انصراف"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">عنوان مرحله</label>
+                                    <input
+                                      type="text"
+                                      value={stageTitle}
+                                      onChange={(e) => setStageTitle(e.target.value)}
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 bg-white"
+                                    />
+                                  </div>
+
+                                  <div className="bg-slate-100 border border-slate-200 rounded-xl p-2.5 space-y-1 sm:col-span-2">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-[11px] font-bold text-slate-700">وضعیت و درصد پیشرفت مرحله</label>
+                                      <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+                                        <Sparkles className="w-3 h-3 text-blue-600" />
+                                        محاسبه خودکار از پیشرفت SKUها
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-1">
+                                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${stageStatusInfo.bg} ${stageStatusInfo.text}`}>
+                                        {stageStatusInfo.label}
+                                      </span>
+                                      <span className="font-mono font-bold text-slate-900 text-xs">{toPersianDigits(stageProgress)}٪</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 pt-0.5">
+                                      * درصد پیشرفت و وضعیت بر اساس تکمیل کد کالاها در بخش «پیشرفت به تفکیک کد کالا» خودکار تنظیم می‌شود.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">پرسنل مسئول (با ویرگول)</label>
+                                    <input
+                                      type="text"
+                                      value={personnelInput}
+                                      onChange={(e) => setPersonnelInput(e.target.value)}
+                                      placeholder="مثال: علی احمدی، مریم رضایی"
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ شروع</label>
+                                    <input
+                                      type="text"
+                                      value={stageStartDate}
+                                      onChange={(e) => setStageStartDate(e.target.value)}
+                                      placeholder="۱۴۰۳/۰۶/۱۵"
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 bg-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">تاریخ پایان / تحویل</label>
+                                    <input
+                                      type="text"
+                                      value={stageEndDate}
+                                      onChange={(e) => setStageEndDate(e.target.value)}
+                                      placeholder="۱۴۰۳/۰۶/۲۰"
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 bg-white"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">یادداشت و نکات مرحله</label>
+                                    <input
+                                      type="text"
+                                      value={stageNotes}
+                                      onChange={(e) => setStageNotes(e.target.value)}
+                                      placeholder="توضیحات تکمیلی..."
+                                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-900 bg-white"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-blue-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingStageId(null)}
+                                    disabled={savingStage}
+                                    className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg font-bold text-xs"
+                                  >
+                                    انصراف
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveStage(stg.id)}
+                                    disabled={savingStage}
+                                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    {savingStage ? (
+                                      <>
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                        <span>در حال ذخیره...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>ذخیره تغییرات مرحله</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -499,6 +812,7 @@ export default function ProjectDetailModal({
               {activeTab === 'stock' && (
                 <ProjectStockEntryTab 
                   project={project} 
+                  itemsList={itemsList}
                   onUpdate={loadProjectData} 
                 />
               )}

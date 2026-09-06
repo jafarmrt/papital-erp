@@ -4,15 +4,16 @@ import { orm } from '../db/drizzle.js';
 import {
   appSettings, changelogs, transactions, documentItems, documents, items,
   warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
-  projectStages, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities,
-  users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates,
+  projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities,
+  users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
   pieceworkLogs, pieceworkPayrolls, pendingMaterials, accounts, journalVouchers,
   journalVoucherItems, bankAccounts, cheques, treasuryTransactions, accountingSettings,
   outboxEvents, deadLetterEvents, workflowInstances, workflowTasks,
   workflowHistoryLogs, workflowPendingApprovals, workflowDelegations,
   workflowDefinitionVersions, workflowTransitions, workflowStates, workflowDefinitions,
   eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions,
-  projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs
+  projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs,
+  documentRefCounters, itemCodeCounters
 } from '../db/schema.js';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
@@ -174,9 +175,9 @@ router.post('/settings', authorize('admin', 'manager'), validate(settingsSchema)
     await orm.transaction(async (tx) => {
       for (const item of settings) {
         let val = item.value;
-        if (item.key === 'company_logo' && val && val.startsWith('data:image')) {
-          // پیشوند 'logo' → سرو عمومی در صفحه ورود (بدون نشست)
-          val = await uploadBase64ToStorage(val, 'image', 'logo');
+        if (item.key === 'company_logo') {
+          // V3.1.11: لوگوی شرکت مستقیماً به‌صورت Data URL متنی در دیتابیس ذخیره می‌شود تا در محیط‌های Containerized پاک نشود
+          val = item.value || '';
         }
         // V10-1.1: TZ اعتبارسنجی سمت سرور برای ساعت توافقی واحد
         if (item.key === 'display_timezone') {
@@ -366,6 +367,7 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
       // 3. Project Dependencies & Allocations (Must be deleted BEFORE transactions, projectStages and productionProjects)
       await tx.delete(pieceworkLogs);
       await tx.delete(dailyWorkLogs);
+      await tx.delete(projectProductStageProgress);
       await tx.delete(projectBomAllocations);
       await tx.delete(projectStages);
       await tx.delete(productionProjects);
@@ -379,21 +381,24 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
       await tx.delete(bankAccounts);
       await tx.delete(accounts);
 
-      // 5. Inventory Transactions & Documents (Must be deleted BEFORE items and customers)
+      // 5. Inventory Transactions & Documents (Must be deleted BEFORE items, customers and crmLeads)
       await tx.delete(documentItems);
       await tx.delete(transactions);
       await tx.delete(documents);
+      await tx.delete(documentRefCounters);
+      await tx.delete(itemCodeCounters);
 
-      // 7. HR, Piecework & Payroll Records
+      // 6. CRM & Customer Relations (Must be deleted BEFORE personnel and customers)
+      await tx.delete(crmActivities);
+      await tx.delete(crmLeads);
+
+      // 7. HR, Piecework & Payroll Records (Must be deleted AFTER CRM and projects)
       await tx.delete(pieceworkPayrolls);
       await tx.delete(pieceworkPersonnelRates);
+      await tx.delete(pieceworkTaskRateHistory);
       await tx.delete(pieceworkTasks);
       await tx.delete(taskCategories);
       await tx.delete(personnel);
-
-      // 8. CRM & Customer Relations
-      await tx.delete(crmActivities);
-      await tx.delete(crmLeads);
 
       // 9. Materials, Transfers, Items & Customers
       await tx.delete(pendingMaterials);
