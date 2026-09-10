@@ -1,6 +1,6 @@
 import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers, treasuryTransactions } from '../db/schema.js';
+import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
 import { roundFinancial, getTodayJalaliDate } from '../utils.js';
 import { resolveJalaliFiscalYear, businessNowIsoDateTime } from '../lib/businessClock.js';
 import { fin, FinancialMath } from '../lib/financialDecimal.js';
@@ -28,6 +28,7 @@ export interface GetDocumentsFilter {
   limit?: number;
   offset?: number;
   isExport?: boolean;
+  projectId?: number | string;
 }
 
 export interface DocumentLineItemInput {
@@ -71,6 +72,8 @@ export interface CreateDocumentInput {
   vat_amount?: number;
   vatAmount?: number;
   attachments?: any[];
+  projectId?: number | string | null;
+  project_id?: number | string | null;
 }
 
 export interface UpdateDocumentInput {
@@ -133,6 +136,8 @@ export interface FormattedDocument {
   currency: string;
   version: number;
   isDeleted: number;
+  projectId?: number | null;
+  project_id?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   deletedBy?: string | null;
@@ -425,12 +430,31 @@ export class DocumentService {
     const docStatus = status || 'final';
     const docLocation = location ? String(location).trim() : '';
 
+    // V3.1.46 (TD-070): لینک رسمی سند به پروژه — اعتبارسنجی وجود پروژه پیش از درج (FK انسانی)
+    const rawProjectId = body.projectId ?? body.project_id;
+    let finalProjectId: number | null = null;
+    if (rawProjectId !== undefined && rawProjectId !== null && String(rawProjectId).trim() !== '') {
+      finalProjectId = Number(rawProjectId);
+      if (isNaN(finalProjectId) || finalProjectId <= 0) {
+        throw new ValidationError(`شناسه پروژه (projectId) نامعتبر است: ${rawProjectId}`);
+      }
+    }
+
     const finalBuyerName = buyerName || buyer_name || '';
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
     const finalBuyerAddress = buyerAddress || buyer_address || '';
 
     const execute = async (tx: DbClient): Promise<number> => {
+      if (finalProjectId !== null) {
+        const [projExists] = await tx
+          .select({ id: productionProjects.id })
+          .from(productionProjects)
+          .where(and(eq(productionProjects.id, finalProjectId), eq(productionProjects.isDeleted, 0)));
+        if (!projExists) {
+          throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
+        }
+      }
       let finalRefNumber = refNumber;
       if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
         finalRefNumber = await DocumentService.getNextRef(docType, date, tx);
@@ -482,6 +506,7 @@ export class DocumentService {
         status: docStatus,
         currency: currency || 'IRR',
         attachments: body.attachments || [],
+        projectId: finalProjectId ?? undefined,
         isDeleted: 0
       }).returning({ id: documents.id });
       const docId = insertedDoc.id;
@@ -662,6 +687,13 @@ export class DocumentService {
     if (filter.status && filter.status !== 'all') {
       conditions.push(eq(documents.status, filter.status));
     }
+    // V3.1.46 (TD-070): فیلتر پروژه‌محور اسناد
+    if (filter.projectId !== undefined && filter.projectId !== null && String(filter.projectId).trim() !== '' && String(filter.projectId) !== 'all') {
+      const projId = Number(filter.projectId);
+      if (!isNaN(projId) && projId > 0) {
+        conditions.push(eq(documents.projectId, projId));
+      }
+    }
     if (filter.startDate) {
       conditions.push(gte(documents.date, filter.startDate));
     }
@@ -796,6 +828,8 @@ export class DocumentService {
         buyer_phone: d.buyerPhone,
         buyer_address: d.buyerAddress,
         ref_number: d.refNumber,
+        projectId: d.projectId ?? null,
+        project_id: d.projectId ?? null,
         itemsCount,
         totalQuantity,
         totalAmount,
@@ -939,6 +973,8 @@ export class DocumentService {
       buyerAddress: doc.buyerAddress,
       ref_number: doc.refNumber,
       refNumber: doc.refNumber,
+      projectId: doc.projectId ?? null,
+      project_id: doc.projectId ?? null,
       itemsCount: formattedItems.length,
       totalQuantity,
       totalDiscount,

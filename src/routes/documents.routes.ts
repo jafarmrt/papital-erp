@@ -384,6 +384,7 @@ router.get('/documents', asyncHandler(async (req, res) => {
   const search = req.query.search as string;
   const startDate = req.query.startDate as string;
   const endDate = req.query.endDate as string;
+  // V3.1.46 (TD-070): فیلتر پروژه‌محور اسناد
   // V9-1.3: صفحه‌بندی NaN-safe با سقف — جلوگیری از dump کل جدول با limit نامعتبر/عظیم
   const isPaginated = req.query.page !== undefined || req.query.limit !== undefined;
   const { page, limit } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
@@ -395,6 +396,7 @@ router.get('/documents', asyncHandler(async (req, res) => {
     search,
     startDate,
     endDate,
+    projectId: req.query.projectId as string | undefined,
     page: isPaginated ? page : undefined,
     limit: isPaginated ? limit : undefined,
     isExport

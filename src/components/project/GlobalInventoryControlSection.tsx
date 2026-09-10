@@ -1,7 +1,7 @@
 import React from 'react';
-import { 
-  Boxes, Plus, Trash2, Search, Scale, Tag, AlertCircle, CheckCircle2, 
-  HelpCircle, Layers
+import {
+  Boxes, Plus, Trash2, Search, Scale, Tag, AlertCircle, CheckCircle2,
+  HelpCircle, Layers, FilePlus
 } from 'lucide-react';
 import { ProjectInventoryControlSectionData, Item } from '../../types';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
@@ -31,6 +31,7 @@ interface GlobalInventoryControlSectionProps {
   handleAddNewSectionOnTheFly: () => void;
   handleRemoveSectionOnTheFly: (secIdx: number) => void;
   handleUpdateSectionDescription: (secIdx: number, newDesc: string) => void;
+  handlePurchaseSection?: (secIdx: number) => void;
 }
 
 export function GlobalInventoryControlSection({
@@ -43,7 +44,8 @@ export function GlobalInventoryControlSection({
   handleUpdateGlobalItem,
   handleAddNewSectionOnTheFly,
   handleRemoveSectionOnTheFly,
-  handleUpdateSectionDescription
+  handleUpdateSectionDescription,
+  handlePurchaseSection
 }: GlobalInventoryControlSectionProps) {
   // Extract sections that are checkType === 'global'
   const globalSections = sections
@@ -166,6 +168,18 @@ export function GlobalInventoryControlSection({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش به سند سفارش خرید */}
+                    {shortfallCount > 0 && handlePurchaseSection && (
+                      <button
+                        type="button"
+                        onClick={() => handlePurchaseSection(originalIdx)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        title="صدور سند سفارش خرید برای کسری‌های همین بخش"
+                      >
+                        <FilePlus className="w-3.5 h-3.5" />
+                        <span>ثبت سفارش خرید ({shortfallCount})</span>
+                      </button>
+                    )}
                     {/* Add Material to this Global Section */}
                     <button
                       type="button"

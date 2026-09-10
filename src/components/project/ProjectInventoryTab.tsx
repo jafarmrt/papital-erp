@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save, 
+import {
+  Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save,
   Layers, FolderTree, AlertCircle, Printer, ArrowLeft, Plus
 } from 'lucide-react';
-import { Item } from '../../types';
+import { Item, ProjectInventoryControlSectionData, PurchaseListItem } from '../../types';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
 import { ProductTreeInventoryCards } from './ProductTreeInventoryCards';
 import { GlobalInventoryControlSection } from './GlobalInventoryControlSection';
 import { ManualPurchaseList } from './ManualPurchaseList';
+import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 import { AddMaterialModal } from './AddMaterialModal';
 import { UnitConversionModal } from './UnitConversionModal';
 
@@ -79,6 +80,51 @@ export function ProjectInventoryTab({
     filteredWarehouseItems,
     currentModalSection
   } = useProjectInventory(project, effectiveItemsList, onUpdate);
+
+  // V3.1.46 (TD-070): پل مستقیم خرید از ردیف بخش — ساخت لیست خرید موقت از کسری‌های همان بخش
+  const [sectionPurchase, setSectionPurchase] = useState<{ list: PurchaseListItem[]; secIdx: number } | null>(null);
+  const handlePurchaseSection = (secIdx: number) => {
+    const sec: ProjectInventoryControlSectionData | undefined = sections[secIdx];
+    if (!sec) return;
+    const items = sec.globalItems || [];
+    const bridged: PurchaseListItem[] = items
+      .map((item, gIdx) => ({ item, gIdx }))
+      .map(({ item, gIdx }) => {
+        const matchWh = (warehouseItems || []).find(i =>
+          (item.itemCode && i.code === item.itemCode) ||
+          (item.name && i.name.toLowerCase() === item.name.toLowerCase())
+        );
+        const currentStock = matchWh ? Number(matchWh.current_stock || 0) : Number(item.stockQty || 0);
+        const requiredQty = Number(item.requiredQty || 1);
+        const shortfall = Math.max(0, requiredQty - currentStock);
+        return {
+          id: `sec${secIdx}_g${gIdx}_${item.itemCode || item.name || gIdx}`,
+          itemCode: item.itemCode || matchWh?.code || '',
+          itemName: item.name || matchWh?.name || '',
+          category: sec.title || 'بخش کنترل',
+          totalRequiredQty: requiredQty,
+          unit: item.unit || matchWh?.unit || 'عدد',
+          warehouseStockQty: currentStock,
+          warehouseUnit: matchWh?.unit || item.unit,
+          toPurchaseQty: shortfall,
+          procurementStatus: item.procurementStatus || 'pending',
+          notes: item.notes
+        };
+      })
+      .filter(p => p.toPurchaseQty > 0);
+    if (bridged.length === 0) return;
+    setSectionPurchase({ list: bridged, secIdx });
+  };
+  const handleSectionPurchaseSuccess = (createdDoc: any, orderedItemIds: string[]) => {
+    for (const id of orderedItemIds || []) {
+      const m = /^sec(\d+)_g(\d+)_/.exec(id);
+      if (m) {
+        handleUpdateGlobalItem(Number(m[1]), Number(m[2]), 'procurementStatus', 'in_progress');
+      }
+    }
+    setSectionPurchase(null);
+    onUpdate?.();
+  };
 
   return (
     <div className="space-y-6 font-farsi dir-rtl">
@@ -254,6 +300,7 @@ export function ProjectInventoryTab({
             handleAddNewSectionOnTheFly={handleAddNewSectionOnTheFly}
             handleRemoveSectionOnTheFly={handleRemoveSectionOnTheFly}
             handleUpdateSectionDescription={handleUpdateSectionDescription}
+            handlePurchaseSection={handlePurchaseSection}
           />
 
           {/* Quick Jump Banner to Purchase List */}
@@ -342,6 +389,17 @@ export function ProjectInventoryTab({
         setConversionForm={setConversionForm}
         handleApplyUnitConversion={handleApplyUnitConversion}
       />
+
+      {sectionPurchase && (
+        <CreatePurchaseOrderModal
+          isOpen={true}
+          onClose={() => setSectionPurchase(null)}
+          project={project}
+          purchaseList={sectionPurchase.list}
+          warehouseItems={warehouseItems}
+          onOrderCreated={handleSectionPurchaseSuccess}
+        />
+      )}
     </div>
   );
 }

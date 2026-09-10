@@ -35,9 +35,11 @@ export function ManualPurchaseList({
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
   const [lastCreatedOrderDoc, setLastCreatedOrderDoc] = useState<any>(null);
 
+  // V3.1.46 (TD-070): رزروها فقط از منبع زنده (سرویس رزرو/تخصیص BOM) —
+  // کپی jsonb در inventory_control منبع دوم است و برای نمایش استفاده نمی‌شود
   const effectiveReservedItems = (reservedItems && reservedItems.length > 0)
     ? reservedItems
-    : (project.inventory_control?.reservedItems || []);
+    : [];
 
   // Count items that have actual shortfalls
   const shortfallCount = purchaseList.filter(i => 
