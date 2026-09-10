@@ -681,7 +681,7 @@ export default function TransfersPage({ user }: { user?: User }) {
                         dir="ltr"
                       />
                       {!selectedTransfer && (
-                        <p className="text-[10px] text-slate-400 mt-1">کد ۳ یا ۴ رقمی طرح ترنسفر (مانند 003 برای استخراج از SKU)</p>
+                        <p className="text-[10px] text-slate-400 mt-1">کد ۳ یا ۴ رقمی طرح ترنسفر (مانند 003 برای استخراج از کد محصول)</p>
                       )}
                     </div>
 

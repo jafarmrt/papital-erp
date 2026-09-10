@@ -13,7 +13,7 @@ import {
   workflowDefinitionVersions, workflowTransitions, workflowStates, workflowDefinitions,
   eventActionLogs, eventActionRules, webhookDeliveries, webhookSubscriptions,
   projectBomAllocations, formDrafts, idempotencyKeys, woocommerceOrderLogs,
-  documentRefCounters, itemCodeCounters
+  documentRefCounters, itemCodeCounters, purchaseRequisitions
 } from '../db/schema.js';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
@@ -352,6 +352,9 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
       await tx.delete(formDrafts);
       await tx.delete(activityLogs);
       await tx.delete(notifications);
+
+      // 1.5. Purchase Requisitions (Must be deleted BEFORE workflowInstances, productionProjects, and users)
+      await tx.delete(purchaseRequisitions);
 
       // 2. Workflow Tasks, Delegations, Instances, History & Definitions
       await tx.delete(workflowHistoryLogs);
@@ -714,8 +717,8 @@ router.post('/system/tests/run', authorize('admin'), async (req, res) => {
       username: req.user?.username || 'سیستم',
       userFullName: req.user?.full_name || '',
       action: 'AUDIT_APPLY',
-      entity: 'آزمون‌های یکپارچگی سیستم (Phase 21)',
-      description: `اجرای آزمون‌های یکپارچگی سرتاسری E2E سیستم - وضعیت: ${report.overallStatus.toUpperCase()} (${report.passedCount}/${report.totalTests} پاس شد)`
+      entity: 'آزمون‌های یکپارچگی و سلامت سیستم',
+      description: `اجرای آزمون‌های یکپارچگی و ارزیابی سرتاسری سیستم - وضعیت: ${report.overallStatus.toUpperCase()} (${report.passedCount}/${report.totalTests} مورد موفق)`
     });
 
     return res.json(report);

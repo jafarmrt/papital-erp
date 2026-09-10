@@ -117,12 +117,22 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
   const isTabAllowed = hasPerm(tabPermissionMap[currentTab]);
 
   useEffect(() => {
+    if (tab === 'coa') {
+      navigate('/settings?tab=chart_of_accounts', { replace: true });
+    }
+  }, [tab, navigate]);
+
+  useEffect(() => {
     if (currentTab !== activeTab) {
       setActiveTab(currentTab);
     }
   }, [currentTab, activeTab, setActiveTab]);
 
   const handleTabChange = (newTab: string) => {
+    if (newTab === 'coa') {
+      navigate('/settings?tab=chart_of_accounts');
+      return;
+    }
     navigate(`/accounting/${newTab}`);
   };
 

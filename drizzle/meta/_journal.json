@@ -22,6 +22,27 @@
       "when": 1788662400000,
       "tag": "0002_project_product_stage_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788748800000,
+      "tag": "0003_add_project_stages_updated_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788835200000,
+      "tag": "0004_purchase_requisitions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788921600000,
+      "tag": "0005_fk_and_cycle_resolution",
+      "breakpoints": true
     }
   ]
 }

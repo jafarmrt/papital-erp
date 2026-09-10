@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   BarChart3, 
   FileSpreadsheet, 
@@ -58,10 +59,26 @@ export function FinancialReportsTab({
   onFetchBalanceSheet,
   onFetchLedger,
 }: FinancialReportsTabProps) {
+  const [searchParams] = useSearchParams();
+  const validSubTabs = ['trial_balance', 'party_ledger', 'journal_book', 'income_statement', 'balance_sheet', 'ledger', 'ratios', 'audit', 'automation', 'project'] as const;
+
   // Navigation
   const [activeSubTab, setActiveSubTab] = useState<
     'trial_balance' | 'party_ledger' | 'journal_book' | 'income_statement' | 'balance_sheet' | 'ledger' | 'ratios' | 'audit' | 'automation' | 'project'
-  >('trial_balance');
+  >(() => {
+    const sub = searchParams.get('subTab');
+    if (sub && (validSubTabs as readonly string[]).includes(sub)) {
+      return sub as any;
+    }
+    return 'trial_balance';
+  });
+
+  useEffect(() => {
+    const sub = searchParams.get('subTab');
+    if (sub && (validSubTabs as readonly string[]).includes(sub) && sub !== activeSubTab) {
+      setActiveSubTab(sub as any);
+    }
+  }, [searchParams]);
 
   // Filter States
   const [trialLevel, setTrialLevel] = useState<'all' | 'group' | 'general' | 'subsidiary' | 'detailed'>('all');
@@ -399,7 +416,9 @@ export function FinancialReportsTab({
 
       {/* 2. PARTY LEDGER TAB (V3 Phase 3) */}
       {activeSubTab === 'party_ledger' && (
-        <PartyLedgerReportView />
+        <PartyLedgerReportView 
+          initialPartyType={searchParams.get('partyType') || undefined}
+        />
       )}
 
       {/* 3. JOURNAL BOOK TAB */}

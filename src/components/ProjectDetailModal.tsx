@@ -3,12 +3,14 @@ import {
   X, Check, Plus, Trash2, Calendar, User, Package, Users, ShieldAlert,
   Layers, ArrowUp, ArrowDown, Clock, CheckCircle2, AlertCircle, PlayCircle,
   Edit3, RefreshCw, ChevronRight, UserPlus, Wrench, MessageSquare, Tag,
-  ShoppingCart, BarChart2, CheckSquare, FileText, Maximize2, Minimize2, Sparkles
+  ShoppingCart, BarChart2, CheckSquare, FileText, Maximize2, Minimize2, Sparkles,
+  Paperclip
 } from 'lucide-react';
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
-import { toPersianDigits } from '../utils';
+import { toPersianDigits, formatPersianNumber } from '../utils';
+import { FinancialAttachmentUploader } from './accounting/FinancialAttachmentUploader';
 
 // Tab Components
 import ProjectInventoryTab from './project/ProjectInventoryTab';
@@ -304,7 +306,7 @@ export default function ProjectDetailModal({
                 {project?.quantity && (
                   <span className="flex items-center gap-1 text-slate-300">
                     <Package className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>تیراژ: <strong className="text-white font-mono">{toPersianDigits(project.quantity)} {project.unit || 'عدد'}</strong></span>
+                    <span>تیراژ: <strong className="text-white font-mono">{formatPersianNumber(project.quantity)} {project.unit || 'عدد'}</strong></span>
                   </span>
                 )}
               </div>
@@ -323,7 +325,7 @@ export default function ProjectDetailModal({
                   />
                 </div>
                 <span className="font-mono text-xs font-bold text-amber-400">
-                  {toPersianDigits(project.progress_percent || 0)}٪
+                  {formatPersianNumber(project.progress_percent || 0)}٪
                 </span>
               </div>
             )}
@@ -376,6 +378,12 @@ export default function ProjectDetailModal({
             {stagesCount > 0 && (
               <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-200 text-slate-700">
                 {toPersianDigits(completedStagesCount)}/{toPersianDigits(stagesCount)}
+              </span>
+            )}
+            {project?.attachments && project.attachments.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-800 flex items-center gap-0.5">
+                <Paperclip className="w-3 h-3" />
+                <span>{toPersianDigits(project.attachments.length)}</span>
               </span>
             )}
           </button>
@@ -495,7 +503,7 @@ export default function ProjectDetailModal({
 
                     <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
                       <span className="text-[10px] text-slate-500 font-semibold block">پیشرفت کل پروژه:</span>
-                      <p className="font-bold font-mono text-amber-700 text-sm">{project.progress_percent || 0}٪</p>
+                      <p className="font-bold font-mono text-amber-700 text-sm">{formatPersianNumber(project.progress_percent || 0)}٪</p>
                     </div>
 
                     <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
@@ -507,7 +515,7 @@ export default function ProjectDetailModal({
 
                     <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
                       <span className="text-[10px] text-slate-500 font-semibold block">تعداد کدهای محصول:</span>
-                      <p className="font-bold text-blue-700">{productsList.length} کد محصول</p>
+                      <p className="font-bold text-blue-700">{formatPersianNumber(productsList.length)} کد محصول</p>
                     </div>
                   </div>
 
@@ -540,7 +548,7 @@ export default function ProjectDetailModal({
                                 {p.customer_code || 'ثبت‌نشده'}
                               </td>
                               <td className="p-2.5 text-center font-mono font-bold text-slate-800">
-                                {p.quantity} {p.unit}
+                                {formatPersianNumber(p.quantity)} {p.unit}
                               </td>
                               <td className="p-2.5 text-center">
                                 {p.needs_assembly !== false ? (
@@ -602,7 +610,7 @@ export default function ProjectDetailModal({
                                           <span>تکمیل‌شده:</span>
                                           <strong className="font-mono">{toPersianDigits(compSkus || 0)}</strong>
                                           <span>از</span>
-                                          <strong className="font-mono">{toPersianDigits(appSkus)} SKU</strong>
+                                          <strong className="font-mono">{toPersianDigits(appSkus)} قلم کالا</strong>
                                         </span>
                                       )}
                                     </div>
@@ -628,7 +636,7 @@ export default function ProjectDetailModal({
                                         style={{ width: `${Math.min(100, Math.max(0, stg.progress_percent || 0))}%` }} 
                                       />
                                     </div>
-                                    <span className="font-mono font-bold text-slate-700 text-xs">{toPersianDigits(stg.progress_percent || 0)}٪</span>
+                                    <span className="font-mono font-bold text-slate-700 text-xs">{formatPersianNumber(stg.progress_percent || 0)}٪</span>
                                   </div>
 
                                   <button
@@ -677,7 +685,7 @@ export default function ProjectDetailModal({
                                       <label className="text-[11px] font-bold text-slate-700">وضعیت و درصد پیشرفت مرحله</label>
                                       <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
                                         <Sparkles className="w-3 h-3 text-blue-600" />
-                                        محاسبه خودکار از پیشرفت SKUها
+                                        محاسبه خودکار از پیشرفت اقلام کالا
                                       </span>
                                     </div>
                                     <div className="flex items-center justify-between pt-1">
@@ -772,6 +780,30 @@ export default function ProjectDetailModal({
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* Attachments Section */}
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-2xs">
+                    <FinancialAttachmentUploader
+                      attachments={Array.isArray(project.attachments) ? project.attachments : []}
+                      onChange={async (newAttachments) => {
+                        try {
+                          await fetchJson(`/projects/${project.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ attachments: newAttachments })
+                          });
+                          toast.success('پیوست‌های پروژه به‌روزرسانی شد');
+                          loadProjectData();
+                          onUpdate();
+                        } catch (err: any) {
+                          toast.error(err.message || 'خطا در ذخیره پیوست‌ها');
+                        }
+                      }}
+                      title="پیوست‌ها و اسناد سفارش مشتری (فایل اکسل سفارش، فاکتور، طرح یا تصویر نمونه)"
+                      helperText="فایل‌ها و پیوست‌های مشتری نظیر فایل اکسل سفارش، طرح و فاکتور در این بخش قابل مشاهده، دانلود و مدیریت است."
+                      maxFiles={15}
+                    />
                   </div>
                 </div>
               )}

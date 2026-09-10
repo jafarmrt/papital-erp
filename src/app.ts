@@ -35,6 +35,7 @@ import workflowRoutes from './routes/workflow.routes.js';
 import inventoryRoutes from './routes/inventory.routes.js';
 import eventsRoutes from './routes/events.routes.js';
 import draftsRoutes from './routes/drafts.routes.js';
+import procurementRoutes from './routes/procurement.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection } from './middleware/auth.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
@@ -200,30 +201,40 @@ export async function createApp(): Promise<express.Express> {
   app.use(morganMiddleware);
   app.use(metricsMiddleware);
 
-  // Rate Limiting (SEC-009)
+  // Rate Limiting (SEC-009): generous limits for ERP operations and distinct user/session buckets
   const generalLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 300,
+    max: process.env.NODE_ENV === 'production' ? 10000 : 50000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند لحظه صبر کنید.' },
+    skip: (req) => {
+      const p = req.path || req.url || '';
+      return p.includes('/health') || p.includes('/metrics');
+    },
     keyGenerator: (req: any) => {
-      return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req);
+      if (req.user?.id) return `user:${req.user.id}`;
+      const token = req.cookies?.auth_token || req.cookies?.token || (req.headers?.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+      if (token && typeof token === 'string' && token.length >= 10) {
+        return `session:${token.slice(-16)}`;
+      }
+      const rawIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || req.ip || '127.0.0.1';
+      return `ip:${ipKeyGenerator(rawIp)}`;
     },
     validate: {
-      xForwardedForHeader: process.env.NODE_ENV === 'production',
+      xForwardedForHeader: false,
       keyGeneratorIpFallback: false
     }
   });
 
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 5,
+    max: 10,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'تلاش‌های ورود بیش از حد مجاز. لطفاً ۱۵ دقیقه صبر کنید.' },
     handler: (req, res) => {
-      logger.warn(`[Login Brute Force] IP ${req.ip} blocked after 5 failed attempts`);
+      logger.warn(`[Login Brute Force] IP ${req.ip} blocked after failed attempts`);
       res.status(429).json({ error: 'تلاش‌های ورود بیش از حد مجاز. لطفاً ۱۵ دقیقه صبر کنید.' });
     },
     // TST-005 Hardening: authentication throttling MUST be keyed on the actual
@@ -234,9 +245,9 @@ export async function createApp(): Promise<express.Express> {
       const v4 = typeof raw === 'string' && raw.startsWith('::ffff:') ? raw.slice('::ffff:'.length) : raw;
       if (typeof v4 === 'string' && v4.includes(':')) {
         // Genuine IPv6 peer — delegate to library-safe IPv6 bucketing
-        return `v6:${ipKeyGenerator(req)}`;
+        return `v6:${ipKeyGenerator(v4)}`;
       }
-      return v4 || 'unknown';
+      return String(v4 || 'unknown');
     },
     validate: {
       xForwardedForHeader: process.env.NODE_ENV === 'production'
@@ -366,12 +377,16 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api/events', eventsRoutes);
   app.use('/api/system', eventsRoutes);
   app.use('/api', draftsRoutes);
+  app.use('/api/procurement', procurementRoutes);
+  app.use('/api', procurementRoutes);
 
   const uploadsStatic = express.static(path.join(process.cwd(), 'public', 'uploads'));
   app.use('/uploads', (req, res, next) => {
     const p = (req.path || '').toLowerCase();
-    // Public assets like favicon, company logos, and files inside /public/
+    // Public assets and media images (catalog items, transfers, logos, product photos)
+    const isImageFile = /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(p);
     if (
+      isImageFile ||
       p.endsWith('.ico') ||
       p.includes('logo') ||
       p.includes('favicon') ||

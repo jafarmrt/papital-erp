@@ -148,7 +148,7 @@ export function AccountingAuditChecklistView() {
                   بازرس هوشمند سلامت مالی و ممیزی دفاتر
                 </h3>
                 <span className="text-[11px] font-semibold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-md">
-                  V3 Phase 5
+                  پایش خودکار
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">

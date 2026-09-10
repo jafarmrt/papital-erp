@@ -29,6 +29,22 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error in component tree:', error, errorInfo);
+
+    const isStaleBundleError =
+      error?.message?.includes('dynamically imported module') ||
+      error?.name === 'ChunkLoadError' ||
+      error?.message?.includes('resolveDispatcher') ||
+      error?.message?.includes('Invalid hook call') ||
+      error?.message?.includes('Loading chunk');
+
+    if (isStaleBundleError && typeof window !== 'undefined') {
+      const lastReload = Number(sessionStorage.getItem('eb_chunk_reload_ts') || '0');
+      const now = Date.now();
+      if (now - lastReload > 8000) {
+        sessionStorage.setItem('eb_chunk_reload_ts', String(now));
+        window.location.reload();
+      }
+    }
   }
 
   private handleReload = () => {
@@ -45,8 +61,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
         return this.props.fallback;
       }
 
-      const isModuleLoadError = this.state.error?.message?.includes('dynamically imported module') ||
-        this.state.error?.name === 'ChunkLoadError';
+      const isModuleLoadError =
+        this.state.error?.message?.includes('dynamically imported module') ||
+        this.state.error?.name === 'ChunkLoadError' ||
+        this.state.error?.message?.includes('resolveDispatcher') ||
+        this.state.error?.message?.includes('Invalid hook call') ||
+        this.state.error?.message?.includes('Loading chunk');
 
       return (
         <div className="min-h-[400px] flex items-center justify-center p-6 text-center">

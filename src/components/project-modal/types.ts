@@ -7,6 +7,14 @@ export interface ProjectModalProps {
   customersList: Customer[];
   itemsList: Item[];
   onSuccess: () => void;
+  initialProducts?: Array<{
+    item_id: number;
+    item_code: string;
+    item_name: string;
+    quantity: number;
+    unit?: string;
+  }>;
+  initialTitle?: string;
 }
 
 export interface ProductRow {

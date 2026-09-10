@@ -7,7 +7,7 @@ import type { Account } from '../../types';
 export interface VoucherItemDraft {
   id?: number;
   accountId: number | '';
-  detailedType: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'custom';
+  detailedType: 'none' | 'customer' | 'supplier' | 'personnel' | 'project' | 'bank_account' | 'custom';
   detailedId: number | null;
   detailedName: string;
   debit: number;
@@ -18,7 +18,7 @@ export interface VoucherItemDraft {
 interface VoucherItemsTableProps {
   items: VoucherItemDraft[];
   selectableAccounts: Account[];
-  customers: Array<{ id: number; name: string }>;
+  customers: Array<{ id: number; name: string; partyType?: string; city?: string; supplierCategory?: string }>;
   personnelList: Array<{ id: number; firstName?: string; lastName?: string; fullName?: string }>;
   currencyLabel: string;
   updateItem: (index: number, patch: Partial<VoucherItemDraft>) => void;
@@ -138,6 +138,7 @@ export function VoucherItemsTable({
                       >
                         <option value="none">بدون تفصیلی</option>
                         <option value="customer">مشتری</option>
+                        <option value="supplier">تامین‌کننده</option>
                         <option value="personnel">پرسنل</option>
                         <option value="custom">متفرقه</option>
                       </select>
@@ -159,9 +160,48 @@ export function VoucherItemsTable({
                           className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
                         >
                           <option value="">انتخاب مشتری...</option>
-                          {customers.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
+                          {(() => {
+                            const custs = customers.filter(c => {
+                              const pt = c.partyType || (c as any).party_type || 'customer';
+                              return pt === 'customer' || pt === 'both';
+                            });
+                            const list = custs.length > 0 ? custs : customers;
+                            return list.map(c => (
+                              <option key={c.id} value={c.id}>{c.name} {c.city ? `(${c.city})` : ''}</option>
+                            ));
+                          })()}
+                        </select>
+                      )}
+
+                      {it.detailedType === 'supplier' && (
+                        <select
+                          ref={itemRefs.current[idx]?.detailedSelectRef as any}
+                          value={it.detailedId || ''}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              itemRefs.current[idx]?.descRef?.current?.focus();
+                            }
+                          }}
+                          onChange={e => {
+                            const s = customers.find(x => x.id === Number(e.target.value));
+                            updateItem(idx, { detailedId: s ? s.id : null, detailedName: s ? s.name : '' });
+                          }}
+                          className="flex-1 px-2 py-1.5 text-[11px] bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
+                        >
+                          <option value="">انتخاب تامین‌کننده...</option>
+                          {(() => {
+                            const suppliers = customers.filter(c => {
+                              const pt = c.partyType || (c as any).party_type;
+                              return pt === 'supplier' || pt === 'both';
+                            });
+                            const list = suppliers.length > 0 ? suppliers : customers;
+                            return list.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} {s.supplierCategory ? `[${s.supplierCategory}]` : ''} {s.city ? `(${s.city})` : ''}
+                              </option>
+                            ));
+                          })()}
                         </select>
                       )}
 

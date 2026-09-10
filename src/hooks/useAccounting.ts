@@ -154,14 +154,14 @@ export function useAccounting() {
   // Load auxiliary lists (Customers, Personnel)
   const loadAuxData = useCallback(async (signal?: AbortSignal) => {
     try {
-      const custRes = await fetchJson('/customers', { signal }).catch((err) => {
+      const custRes = await fetchJson('/customers?limit=1000', { signal }).catch((err) => {
         if (err?.name === 'AbortError') throw err;
         return [];
       });
       const custs = Array.isArray(custRes?.data) ? custRes.data : (Array.isArray(custRes) ? custRes : []);
       setCustomers(custs);
 
-      const persRes = await fetchJson('/personnel', { signal }).catch((err) => {
+      const persRes = await fetchJson('/personnel?limit=1000', { signal }).catch((err) => {
         if (err?.name === 'AbortError') throw err;
         return [];
       });

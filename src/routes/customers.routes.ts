@@ -156,6 +156,218 @@ router.get('/customers', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /api/customers/export-excel - Structured Excel export rows
+router.get('/customers/export-excel', asyncHandler(async (req, res) => {
+  const partyTypeFilter = (req.query.partyType || req.query.type) as string;
+  const conditionsList = [eq(customers.isDeleted, 0)];
+
+  if (partyTypeFilter && partyTypeFilter !== 'all') {
+    if (partyTypeFilter === 'supplier') {
+      conditionsList.push(or(eq(customers.partyType, 'supplier'), eq(customers.partyType, 'both')) as any);
+    } else if (partyTypeFilter === 'customer') {
+      conditionsList.push(or(eq(customers.partyType, 'customer'), eq(customers.partyType, 'both')) as any);
+    } else if (partyTypeFilter === 'both') {
+      conditionsList.push(eq(customers.partyType, 'both') as any);
+    }
+  }
+
+  const list = await orm.select().from(customers).where(and(...conditionsList)).orderBy(customers.id);
+
+  const exportRows = list.map(c => {
+    const pType = c.partyType === 'supplier' ? 'تامین‌کننده' : (c.partyType === 'both' ? 'هر دو' : 'مشتری');
+    const bank = (c.bankInfo as any) || {};
+    return {
+      'شناسه': c.id,
+      'نام طرف حساب': c.name || '',
+      'شخص رابط': c.contactName || '',
+      'شماره تماس': c.phone || '',
+      'نوع طرف حساب': pType,
+      'دسته تامین': c.supplierCategory || '',
+      'کشور': c.country || 'ایران',
+      'استان': c.province || '',
+      'شهر': c.city || '',
+      'آدرس کامل': c.address || '',
+      'نام بانک': bank.bankName || '',
+      'شماره حساب': bank.accountNumber || '',
+      'شماره کارت': bank.cardNumber || '',
+      'شماره شبا': bank.shaba || '',
+      'یادداشت': c.notes || ''
+    };
+  });
+
+  res.json({ rows: exportRows, total: exportRows.length });
+}));
+
+// POST /api/customers/bulk-import - Bulk import and update counterparties from Excel
+router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manager'), asyncHandler(async (req, res) => {
+  const { rows = [], updateIfExists = true } = req.body;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'لیست طرفین حساب جهت ثبت ارسال نشده است.' });
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+  const errors: Array<{ row: number; name?: string; message: string }> = [];
+
+  const existingList = await orm.select().from(customers).where(eq(customers.isDeleted, 0));
+
+  const idMap = new Map<number, typeof customers.$inferSelect>();
+  const nameMap = new Map<string, typeof customers.$inferSelect>();
+  const phoneMap = new Map<string, typeof customers.$inferSelect>();
+
+  existingList.forEach(c => {
+    idMap.set(c.id, c);
+    if (c.name && c.name.trim()) {
+      nameMap.set(c.name.trim().toLowerCase(), c);
+    }
+    if (c.phone && c.phone.trim()) {
+      phoneMap.set(c.phone.trim(), c);
+    }
+  });
+
+  for (let i = 0; i < rows.length; i++) {
+    const item = rows[i];
+    const rowIndex = i + 1;
+
+    try {
+      const name = String(item.name || '').trim();
+      if (!name) {
+        errors.push({ row: rowIndex, message: 'نام طرف حساب مشخص نشده است.' });
+        continue;
+      }
+
+      const id = item.id ? Number(item.id) : undefined;
+      const contactName = String(item.contactName || '').trim();
+      const phone = String(item.phone || '').trim();
+      const rawType = String(item.partyType || '').trim().toLowerCase();
+      let partyType: 'customer' | 'supplier' | 'both' = 'customer';
+      if (rawType.includes('تامین') || rawType === 'supplier') {
+        partyType = 'supplier';
+      } else if (rawType.includes('هر دو') || rawType.includes('مشتری و تامین') || rawType === 'both') {
+        partyType = 'both';
+      } else {
+        partyType = 'customer';
+      }
+
+      const supplierCategory = String(item.supplierCategory || '').trim();
+      const country = String(item.country || 'ایران').trim();
+      const province = String(item.province || '').trim();
+      const city = String(item.city || '').trim();
+      const address = String(item.address || '').trim();
+      const notes = String(item.notes || '').trim();
+
+      const bankInfo = {
+        bankName: String(item.bankName || item.bankInfo?.bankName || '').trim(),
+        accountNumber: String(item.accountNumber || item.bankInfo?.accountNumber || '').trim(),
+        shaba: String(item.shaba || item.bankInfo?.shaba || '').trim(),
+        cardNumber: String(item.cardNumber || item.bankInfo?.cardNumber || '').trim(),
+      };
+
+      // Match existing counterparty
+      let matchedCust: typeof customers.$inferSelect | undefined;
+      if (id && idMap.has(id)) {
+        matchedCust = idMap.get(id);
+      } else if (nameMap.has(name.toLowerCase())) {
+        matchedCust = nameMap.get(name.toLowerCase());
+      } else if (phone && phoneMap.has(phone)) {
+        matchedCust = phoneMap.get(phone);
+      }
+
+      if (matchedCust) {
+        if (updateIfExists) {
+          const updatedData: Partial<typeof customers.$inferInsert> = {
+            name,
+            contactName: contactName || matchedCust.contactName,
+            country: country || matchedCust.country,
+            province: province || matchedCust.province,
+            city: city || matchedCust.city,
+            phone: phone || matchedCust.phone,
+            address: address || matchedCust.address,
+            notes: notes || matchedCust.notes,
+            partyType,
+            supplierCategory: supplierCategory || matchedCust.supplierCategory,
+            bankInfo: {
+              ...((matchedCust.bankInfo as any) || {}),
+              ...(bankInfo.bankName ? { bankName: bankInfo.bankName } : {}),
+              ...(bankInfo.accountNumber ? { accountNumber: bankInfo.accountNumber } : {}),
+              ...(bankInfo.shaba ? { shaba: bankInfo.shaba } : {}),
+              ...(bankInfo.cardNumber ? { cardNumber: bankInfo.cardNumber } : {}),
+            },
+            version: nextVersion(matchedCust.version)
+          };
+
+          await orm.update(customers)
+            .set(updatedData)
+            .where(eq(customers.id, matchedCust.id));
+
+          await logActivity({
+            req,
+            action: 'UPDATE',
+            entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+            entityId: matchedCust.id,
+            description: `به‌روزرسانی دسته‌ای طرف حساب "${name}" از طریق فایل اکسل`,
+            details: { after: updatedData }
+          });
+
+          updatedCount++;
+        } else {
+          errors.push({
+            row: rowIndex,
+            name,
+            message: `طرف حساب "${name}" از قبل در سیستم وجود دارد و گزینه به‌روزرسانی غیرفعال بود.`
+          });
+        }
+      } else {
+        const [newCust] = await orm.insert(customers).values({
+          name,
+          contactName,
+          country,
+          province,
+          city,
+          phone,
+          address,
+          notes,
+          partyType,
+          supplierCategory,
+          bankInfo,
+          contacts: contactName || phone ? [{ id: '1', name: contactName, role: 'رابط اصلی', phone, isPrimary: true }] : [],
+          createdAt: new Date().toISOString()
+        }).returning({ id: customers.id });
+
+        idMap.set(newCust.id, { id: newCust.id, name, phone } as any);
+        nameMap.set(name.toLowerCase(), { id: newCust.id, name, phone } as any);
+        if (phone) phoneMap.set(phone, { id: newCust.id, name, phone } as any);
+
+        await logActivity({
+          req,
+          action: 'CREATE',
+          entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+          entityId: newCust.id,
+          description: `ثبت دسته‌ای طرف حساب جدید "${name}" از طریق فایل اکسل`,
+          details: { id: newCust.id, name, partyType, phone }
+        });
+
+        createdCount++;
+      }
+    } catch (err: any) {
+      errors.push({
+        row: rowIndex,
+        name: rows[i]?.name,
+        message: err.message || 'خطای ناشناخته در پردازش سطر'
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    createdCount,
+    updatedCount,
+    totalProcessed: rows.length,
+    errors
+  });
+}));
+
 router.post('/customers', authorize('admin', 'manager', 'sales_manager'), validate(createCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;

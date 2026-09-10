@@ -335,12 +335,11 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="انتخاب مشتری یا طرف حساب..."
-                  options={[{ value: '', label: 'انتخاب مشتری یا طرف حساب...' },
-                    ...((customerEntities.length > 0 ? customerEntities : customers)).map((c) => ({
-                      value: String(c.id),
-                      label: `${c.name} ${c.city ? `(${c.city})` : ''}`
-                    }))]}
+                  placeholder="جستجو یا انتخاب مشتری..."
+                  options={((customerEntities.length > 0 ? customerEntities : customers)).map((c) => ({
+                    value: String(c.id),
+                    label: `${c.name} ${c.city ? `(${c.city})` : ''}`
+                  }))}
                 />
               )}
 
@@ -349,12 +348,11 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="انتخاب تامین‌کننده یا فروشنده..."
-                  options={[{ value: '', label: 'انتخاب تامین‌کننده یا فروشنده...' },
-                    ...((supplierEntities.length > 0 ? supplierEntities : customers)).map((c) => ({
-                      value: String(c.id),
-                      label: `${c.name} ${c.city ? `(${c.city})` : ''} ${c.supplierCategory ? `[${c.supplierCategory}]` : ''}`
-                    }))]}
+                  placeholder="جستجو یا انتخاب تامین‌کننده..."
+                  options={((supplierEntities.length > 0 ? supplierEntities : customers)).map((c) => ({
+                    value: String(c.id),
+                    label: `${c.name} ${c.city ? `(${c.city})` : ''} ${c.supplierCategory ? `[${c.supplierCategory}]` : ''}`
+                  }))}
                 />
               )}
 
@@ -363,12 +361,11 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="انتخاب همکار / پرسنل..."
-                  options={[{ value: '', label: 'انتخاب همکار / پرسنل...' },
-                    ...(Array.isArray(personnelList) ? personnelList : []).map((p) => ({
-                      value: String(p.id),
-                      label: `${p.fullName} (${p.jobTitle || 'پرسنل'})`
-                    }))]}
+                  placeholder="جستجو یا انتخاب پرسنل..."
+                  options={(Array.isArray(personnelList) ? personnelList : []).map((p) => ({
+                    value: String(p.id),
+                    label: `${p.fullName} (${p.jobTitle || 'پرسنل'})`
+                  }))}
                 />
               )}
 
@@ -377,12 +374,11 @@ export function AccountExplorerTab({
                   value={selectedDetailedEntityId}
                   onChange={(val) => setSelectedDetailedEntityId(val)}
                   className="w-64"
-                  placeholder="انتخاب حساب بانکی یا صندوق..."
-                  options={[{ value: '', label: 'انتخاب حساب بانکی یا صندوق...' },
-                    ...(Array.isArray(bankAccounts) ? bankAccounts : []).map((b) => ({
-                      value: String(b.id),
-                      label: `${b.bankName} - ${b.accountNumber}`
-                    }))]}
+                  placeholder="جستجو یا انتخاب حساب بانکی..."
+                  options={(Array.isArray(bankAccounts) ? bankAccounts : []).map((b) => ({
+                    value: String(b.id),
+                    label: `${b.bankName} - ${b.accountNumber}`
+                  }))}
                 />
               )}
 

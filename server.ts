@@ -70,6 +70,9 @@ async function startServer() {
     logger.error('Unhandled error in background migration/seed runner:', err);
   });
 
+  // Serve public static assets (fonts, icons, images) directly
+  app.use(express.static(path.join(process.cwd(), 'public')));
+
   // ======== Vite Middleware ========
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

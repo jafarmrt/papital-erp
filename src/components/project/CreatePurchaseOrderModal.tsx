@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, ArrowLeft, Building2, Store, Check
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { ProductionProject, PurchaseListItem, Item } from '../../types';
+import { ProductionProject, PurchaseListItem, Item, Customer } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice } from '../../utils';
+import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
+import { SearchableSelect } from '../SearchableSelect';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -36,13 +37,39 @@ export function CreatePurchaseOrderModal({
   warehouseItems,
   onOrderCreated
 }: CreatePurchaseOrderModalProps) {
+  const [orderMode, setOrderMode] = useState<'requisition' | 'direct_document'>('requisition');
+  const [priority, setPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
   const [docStatus, setDocStatus] = useState<'draft' | 'proforma' | 'final'>('draft');
+  const [orderDate, setOrderDate] = useState<string>(() => getTodayJalaliDate());
+  const [refNumber, setRefNumber] = useState<string>(() => `PO-${project.project_code || project.id || 'PRJ'}-${Math.floor(1000 + Math.random() * 9000)}`);
   const [supplierName, setSupplierName] = useState('');
   const [targetWarehouse, setTargetWarehouse] = useState('انبار اصلی');
   const [notes, setNotes] = useState(
-    `سفارش خرید کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
+    `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [suppliers, setSuppliers] = useState<Customer[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsLoadingSuppliers(true);
+    fetchJson('/customers?limit=1000')
+      .then(res => {
+        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        setSuppliers(list);
+      })
+      .catch(err => console.error('Error fetching suppliers:', err))
+      .finally(() => setIsLoadingSuppliers(false));
+  }, [isOpen]);
+
+  const supplierOptions = useMemo(() => {
+    return suppliers.map(s => ({
+      value: s.name,
+      label: `${s.partyType === 'supplier' ? '🏭 تامین‌کننده' : s.partyType === 'customer' ? '👤 مشتری' : '🤝 طرف‌حساب'}: ${s.name} ${s.supplierCategory ? `(${s.supplierCategory})` : ''} ${s.phone ? `- ${s.phone}` : ''}`,
+      _raw: s
+    }));
+  }, [suppliers]);
 
   // Filter items that actually have shortfalls
   const initialRows = useMemo(() => {
@@ -132,23 +159,64 @@ export function CreatePurchaseOrderModal({
 
     setIsSubmitting(true);
     try {
+      const cleanDate = orderDate.trim() || getTodayJalaliDate();
+
+      if (orderMode === 'requisition') {
+        // Submit official Purchase Requisition to Procurement Desk & Workflow Engine
+        const payload = {
+          title: `کسری متریال پروژه ${project.project_code || project.title}`.trim(),
+          projectId: project.id,
+          projectCode: project.project_code,
+          projectName: project.title,
+          priority,
+          requiredDate: cleanDate,
+          notes: notes.trim(),
+          items: selectedRows.map(r => ({
+            itemId: r.matchedItemId!,
+            itemCode: r.itemCode,
+            itemName: r.matchedItemName || r.itemName,
+            unit: r.unit,
+            requestedQty: Number(r.quantity),
+            unitPriceEstimate: Number(r.unitPrice || 0),
+            notes: ''
+          }))
+        };
+
+        const res = await fetchJson<{ success: boolean; data?: any; message?: string }>('/api/procurement/requisitions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const prData = res?.data || res;
+        toast.success(`درخواست خرید ${prData.code || ''} در کارتابل مسئول خرید و تدارکات ثبت و وارد گردش کار شد.`);
+
+        const orderedIds = selectedRows.map(r => r.id);
+        onOrderCreated(prData, orderedIds);
+        onClose();
+        return;
+      }
+
+      // Direct Document Creation (Emergency / Cash purchase)
+      const docType = docStatus === 'proforma' ? 'proforma' : 'receipt';
+      const cleanRefNumber = refNumber.trim() || `PO-${project.project_code || project.id}-${Date.now().toString().slice(-4)}`;
+
       const payload = {
-        type: 'receipt', // سند ورود / فاکتور خرید
-        status: docStatus, // 'draft' (پیش‌نویس سفارش), 'proforma' (پیش‌فاکتور خرید), 'final' (رسید قطعی)
-        buyerName: supplierName.trim() || 'تامین‌کننده تدارکات',
+        docType,
+        refNumber: cleanRefNumber,
+        date: cleanDate,
+        status: docStatus, // 'draft', 'proforma', 'final'
+        buyer_name: supplierName.trim() || 'تامین‌کننده تدارکات',
         notes: notes.trim(),
-        targetWarehouse: targetWarehouse || 'انبار اصلی',
+        location: targetWarehouse || 'انبار اصلی',
         inOut: 'in',
-        actionType: 'in',
         projectId: project.id,
         items: selectedRows.map(r => ({
           itemId: r.matchedItemId!,
           quantity: Number(r.quantity),
-          unitPrice: Number(r.unitPrice || 0),
-          discountAmount: 0,
-          taxRate: 0,
-          location: targetWarehouse || 'انبار اصلی',
-          notes: `کسری پروژه ${project.project_code || project.title} - ${r.itemName}`
+          unit_price: Number(r.unitPrice || 0),
+          discount: 0,
+          location: targetWarehouse || 'انبار اصلی'
         }))
       };
 
@@ -159,17 +227,17 @@ export function CreatePurchaseOrderModal({
       });
 
       const docData = res?.data || res;
-      const refNumber = docData?.ref_number || docData?.refNumber || 'جدید';
+      const createdRef = docData?.ref_number || docData?.refNumber || cleanRefNumber;
 
       toast.success(
-        `سند ${docStatus === 'draft' ? 'سفارش خرید' : docStatus === 'proforma' ? 'پیش‌فاکتور خرید' : 'رسید خرید'} به شماره ${refNumber} با موفقیت ثبت شد.`
+        `سند ${docStatus === 'draft' ? 'سفارش خرید' : docStatus === 'proforma' ? 'پیش‌فاکتور خرید' : 'رسید خرید'} به شماره ${createdRef} با موفقیت ثبت شد.`
       );
 
       const orderedIds = selectedRows.map(r => r.id);
       onOrderCreated(docData, orderedIds);
       onClose();
     } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت سند سفارش خرید');
+      toast.error(err.message || 'خطا در ثبت درخواست یا سفارش خرید');
     } finally {
       setIsSubmitting(false);
     }
@@ -207,53 +275,146 @@ export function CreatePurchaseOrderModal({
 
         {/* Modal Form Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Settings / Meta */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">نوع وضعیت سند:</label>
-              <select
-                value={docStatus}
-                onChange={e => setDocStatus(e.target.value as any)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="draft">پیش‌نویس سفارش خرید (تدارکات - بدون تغییر موجودی)</option>
-                <option value="proforma">پیش‌فاکتور خرید (استعلام قیمت)</option>
-                <option value="final">رسید خرید قطعی (افزایش آنی موجودی انبار)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">نام فروشنده / تأمین‌کننده:</label>
-              <input
-                type="text"
-                placeholder="مثلاً: تأمین قطعات نوین / بازار آهن"
-                value={supplierName}
-                onChange={e => setSupplierName(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
-              <input
-                type="text"
-                placeholder="انبار اصلی"
-                value={targetWarehouse}
-                onChange={e => setTargetWarehouse(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-            </div>
-
-            <div className="sm:col-span-3">
-              <label className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات سند:</label>
-              <input
-                type="text"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-              />
-            </div>
+          {/* Mode Selector Tabs */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setOrderMode('requisition')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                orderMode === 'requisition'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              ارسال درخواست خرید به کارتابل تدارکات (استاندارد گردش کار سازمانی)
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderMode('direct_document')}
+              className={`flex-1 py-2.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                orderMode === 'direct_document'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              صدور مستقیم سند خرید در انبارداری (سریع / اضطراری)
+            </button>
           </div>
+
+          {/* Settings / Meta based on Mode */}
+          {orderMode === 'requisition' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-200 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">اولویت درخواست خرید:</label>
+                <select
+                  value={priority}
+                  onChange={e => setPriority(e.target.value as any)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                >
+                  <option value="normal">عادی</option>
+                  <option value="high">بالا</option>
+                  <option value="urgent">فوری / اضطراری</option>
+                  <option value="low">پایین</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">تاریخ نیاز به کالا:</label>
+                <input
+                  type="text"
+                  placeholder="1405/01/01"
+                  value={orderDate}
+                  onChange={e => setOrderDate(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block font-bold text-slate-700 mb-1">یادداشت و الزامات کیفی/تدارکاتی:</label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="مثال: برند مورد تایید، ضخامت یا عیار مشخص، نیاز به برگ آنالیز آزمایشگاه"
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-3 text-[11px] text-amber-800 bg-amber-100/60 p-2.5 rounded-lg">
+                💡 این درخواست در کارتابل مسئول خرید و تدارکات ثبت شده و پس از استعلام قیمت و تایید مدیر وارد فاز سفارش‌گذاری و خرید خواهد شد.
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">شماره مرجع / سفارش خرید:</label>
+                <input
+                  type="text"
+                  placeholder="مثلاً: PO-102-5421"
+                  value={refNumber}
+                  onChange={e => setRefNumber(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">تاریخ سند:</label>
+                <input
+                  type="text"
+                  placeholder="1405/01/01"
+                  value={orderDate}
+                  onChange={e => setOrderDate(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">نوع وضعیت سند:</label>
+                <select
+                  value={docStatus}
+                  onChange={e => setDocStatus(e.target.value as any)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                >
+                  <option value="draft">پیش‌نویس سفارش خرید (تدارکات - بدون تغییر موجودی)</option>
+                  <option value="final">رسید خرید قطعی (افزایش آنی موجودی انبار)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">نام تأمین‌کننده / فروشنده:</label>
+                <SearchableSelect
+                  value={supplierName}
+                  onChange={(val) => setSupplierName(val)}
+                  placeholder="-- انتخاب یا جستجوی تامین‌کننده --"
+                  options={supplierOptions}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
+                <input
+                  type="text"
+                  placeholder="انبار اصلی"
+                  value={targetWarehouse}
+                  onChange={e => setTargetWarehouse(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات سند:</label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Items Table Section */}
           <div className="space-y-2">
@@ -416,12 +577,12 @@ export function CreatePurchaseOrderModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  در حال صدور سند خرید...
+                  در حال ثبت...
                 </>
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  صدور قطعی سفارش خرید در سیستم
+                  {orderMode === 'requisition' ? 'ثبت و ارسال درخواست به کارتابل تدارکات' : 'صدور قطعی سفارش خرید در سیستم'}
                 </>
               )}
             </button>

@@ -193,7 +193,7 @@ export default function WarehouseTransferModal({
                 <SearchableSelect
                   options={items.map(it => ({
                     value: it.id,
-                    label: `${it.name} (کد: ${it.code}) - موجودی کل: ${it.current_stock || it.currentStock || 0} ${it.unit}`
+                    label: `${it.name} (کد: ${it.code}) - موجودی کل: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
                   }))}
                   value={selectedItemId || ''}
                   onChange={(val) => setSelectedItemId(Number(val) || null)}

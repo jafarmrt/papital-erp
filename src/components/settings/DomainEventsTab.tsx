@@ -377,7 +377,7 @@ export function DomainEventsTab() {
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>اکشن‌های خودکار (Phase 13)</span>
+            <span>عملیات و قوانین خودکار</span>
           </button>
 
           <button
@@ -389,7 +389,7 @@ export function DomainEventsTab() {
             }`}
           >
             <Inbox className="w-3.5 h-3.5" />
-            <span>صندوق Outbox (Phase 12)</span>
+            <span>صندوق ارسال رویدادها</span>
           </button>
 
           <button
@@ -401,7 +401,7 @@ export function DomainEventsTab() {
             }`}
           >
             <AlertOctagon className="w-3.5 h-3.5 text-rose-500" />
-            <span>صف قرنطینه (DLQ)</span>
+            <span>صف خطاهای قرنطینه</span>
           </button>
 
           <button
@@ -413,7 +413,7 @@ export function DomainEventsTab() {
             }`}
           >
             <History className="w-3.5 h-3.5 text-indigo-500" />
-            <span>خط زمان و بازپخش (Replay)</span>
+            <span>خط زمان و بازپخش رویدادها</span>
           </button>
 
           <button
@@ -425,7 +425,7 @@ export function DomainEventsTab() {
             }`}
           >
             <Globe className="w-3.5 h-3.5 text-purple-500" />
-            <span>وب‌هوک و امضا (Webhooks)</span>
+            <span>اشتراک‌ها و وب‌هوک‌ها</span>
           </button>
 
           <button
@@ -437,7 +437,7 @@ export function DomainEventsTab() {
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
-            <span>گذرگاه زنده (EventBus)</span>
+            <span>گذرگاه رویدادهای زنده</span>
           </button>
         </div>
       </div>
@@ -729,12 +729,12 @@ export function DomainEventsTab() {
                   className="text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none"
                 >
                   <option value="ALL">همه انواع رویدادها</option>
-                  <option value="WorkflowTransitioned">فرآیندها (WorkflowTransitioned)</option>
-                  <option value="StockReceived">ورود کالا به انبار (StockReceived)</option>
-                  <option value="StockIssued">خروج کالا از انبار (StockIssued)</option>
-                  <option value="InvoiceApproved">تایید فاکتور فروش (InvoiceApproved)</option>
-                  <option value="PurchaseApproved">تایید فاکتور خرید (PurchaseApproved)</option>
-                  <option value="TreasuryTransactionApproved">تراکنش خزانه‌داری (Treasury)</option>
+                  <option value="WorkflowTransitioned">تغییر وضعیت گردش‌کار</option>
+                  <option value="StockReceived">ورود کالا به انبار</option>
+                  <option value="StockIssued">خروج کالا از انبار</option>
+                  <option value="InvoiceApproved">تایید فاکتور فروش</option>
+                  <option value="PurchaseApproved">تایید فاکتور خرید</option>
+                  <option value="TreasuryTransactionApproved">تراکنش خزانه‌داری و مالی</option>
                   <option value="SimulatedTestEvent">رویدادهای تستی و پایش</option>
                 </select>
               </div>

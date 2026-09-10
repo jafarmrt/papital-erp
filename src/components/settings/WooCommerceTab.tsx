@@ -210,7 +210,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
         <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-5 space-y-3">
           <div className="font-bold text-emerald-950 text-sm flex items-center gap-2">
             <Database size={17} className="text-emerald-600" />
-            همگام‌سازی دسته‌ای موجودی کل کالاها (Bulk Sync)
+            همگام‌سازی دسته‌ای موجودی کل کالاها
           </div>
           <p className="text-xs text-emerald-900 leading-relaxed">
             بروزرسانی یکباره موجودی انبار تمام محصولات دارای کد SKU در فروشگاه آنلاین ووکامرس:

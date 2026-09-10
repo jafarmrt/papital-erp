@@ -7,6 +7,7 @@ import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
+import { ItemStockReservationService } from '../services/items/itemStockReservation.service.js';
 import { logger } from '../middleware/logger.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -68,7 +69,8 @@ const documentCreateSchema = z.object({
     crmLeadId: z.union([z.number(), z.string(), z.null()]).optional(),
     projectId: z.union([z.number(), z.string(), z.null()]).optional(),
     vatPercent: z.union([z.number(), z.string(), z.null()]).optional(),
-    vatAmount: z.union([z.number(), z.string(), z.null()]).optional()
+    vatAmount: z.union([z.number(), z.string(), z.null()]).optional(),
+    attachments: z.array(z.any()).optional()
   }).superRefine((body, ctx) => {
     // اسناد انبارگردانی از physical_stock استفاده می‌کنند و مقدار صفر در آن‌ها مجاز است
     refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, body.docType === 'audit');
@@ -111,6 +113,7 @@ const documentUpdateSchema = z.object({
     location: z.string().nullable().optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
     crmLeadId: z.union([z.number(), z.string(), z.null()]).optional(),
+    attachments: z.array(z.any()).optional(),
     items: z.array(z.object({
       itemId: z.union([z.number(), z.string()]),
       quantity: z.union([z.number(), z.string()]).optional(),
@@ -196,6 +199,43 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
     }
   }
 
+  // Validate stock reservations on exit remittance (inOut === 'out')
+  if (req.body.inOut === 'out') {
+    const reservationReport = await ItemStockReservationService.getReservedStockDetails();
+    const targetProjId = req.body.projectId ? Number(req.body.projectId) : null;
+
+    for (const docLine of req.body.items || []) {
+      const itId = Number(docLine.itemId);
+      const reqQty = Number(docLine.quantity || 0);
+      if (reqQty <= 0) continue;
+
+      const summary = reservationReport.itemSummaries.find(s => s.itemId === itId);
+      if (summary && summary.totalReservedQty > 0) {
+        let reservedForSelectedProject = 0;
+        if (targetProjId) {
+          const projReservations = summary.reservations.filter(
+            r => r.sourceType === 'project' && Number(r.sourceId) === targetProjId
+          );
+          reservedForSelectedProject = projReservations.reduce((acc, r) => acc + r.reservedQty, 0);
+        }
+
+        const reservedForOther = summary.totalReservedQty - reservedForSelectedProject;
+        const maxAllowed = Math.max(0, summary.currentStock - reservedForOther);
+
+        if (reqQty > maxAllowed) {
+          const otherNames = summary.reservations
+            .filter(r => !(targetProjId && r.sourceType === 'project' && Number(r.sourceId) === targetProjId))
+            .map(r => `«${r.sourceRef || r.sourceTitle}» (${r.reservedQty} ${r.unit})`)
+            .join('، ');
+
+          throw new ValidationError(
+            `امکان خروج بیش از ${maxAllowed} ${summary.unit} برای کالا «${summary.itemName}» وجود ندارد. تعداد ${reservedForOther} ${summary.unit} برای سایر مصارف (${otherNames}) رزرو شده است.`
+          );
+        }
+      }
+    }
+  }
+
   const newDocId = await DocumentService.createDocument(req.body);
   const title = docTypeTitles[req.body.docType] || 'سند انبار';
 
@@ -216,7 +256,9 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
 
         if (targetProj) {
           const invControl = (targetProj.inventoryControl as any) || {};
-          let reservedList = Array.isArray(invControl.reservedItems) ? [...invControl.reservedItems] : [];
+          let reservedList = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
+            ? [...invControl.reservedItems]
+            : await ItemStockReservationService.getProjectReservedItems(targetProj);
           let changed = false;
 
           for (const docLine of req.body.items || []) {

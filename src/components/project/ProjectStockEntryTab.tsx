@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, CheckCircle2, RefreshCw, AlertCircle, CheckSquare, 
   Boxes, Square, Search, DollarSign, Warehouse, ArrowDownRight,
-  Info, Check, Tag
+  Info, Check, Tag, Lock
 } from 'lucide-react';
 import { ProductionProject, ProjectProductItem, Item } from '../../types';
 import { fetchJson } from '../../api';
@@ -26,6 +26,59 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // بررسی شرط ماتریس پیشرفت فیزیکی محصولات برای امکان تکمیل پروژه
+  const isAlreadyCompleted = project.status === 'completed';
+  const [matrixStatus, setMatrixStatus] = useState<{
+    loading: boolean;
+    allMatrixCompleted: boolean;
+    totalMatrixCells: number;
+    completedMatrixCells: number;
+    missingMatrixCells: number;
+  }>({
+    loading: true,
+    allMatrixCompleted: false,
+    totalMatrixCells: 0,
+    completedMatrixCells: 0,
+    missingMatrixCells: 0
+  });
+
+  const checkProgressMatrix = useCallback(async () => {
+    try {
+      setMatrixStatus(prev => ({ ...prev, loading: true }));
+      const res = await fetchJson(`/projects/${project.id}/product-progress`);
+      const payload = res?.data ?? res;
+      if (payload && payload.summary) {
+        const total = Number(payload.summary.total_matrix_cells) || 0;
+        const comp = Number(payload.summary.completed_matrix_cells) || 0;
+        const allDone = Boolean(payload.summary.all_matrix_completed);
+        setMatrixStatus({
+          loading: false,
+          allMatrixCompleted: allDone,
+          totalMatrixCells: total,
+          completedMatrixCells: comp,
+          missingMatrixCells: Math.max(0, total - comp)
+        });
+        if (!allDone && markCompleted) {
+          setMarkCompleted(false);
+        }
+      } else {
+        setMatrixStatus({
+          loading: false,
+          allMatrixCompleted: false,
+          totalMatrixCells: 0,
+          completedMatrixCells: 0,
+          missingMatrixCells: 0
+        });
+      }
+    } catch {
+      setMatrixStatus(prev => ({ ...prev, loading: false }));
+    }
+  }, [project.id, markCompleted]);
+
+  useEffect(() => {
+    checkProgressMatrix();
+  }, [checkProgressMatrix, project.progress_percent, project.status, project.updated_at, project.updatedAt]);
 
   useEffect(() => {
     if (!targetLocation && warehouses.length > 0) {
@@ -158,6 +211,11 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
 
     const cost = unitCosts[product.id];
 
+    if (markCompleted && !matrixStatus.allMatrixCompleted && !isAlreadyCompleted) {
+      toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetchJson(`/projects/${project.id}/add-to-inventory`, {
@@ -211,6 +269,11 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
 
     if (validItems.length === 0) {
       toast.error('هیچ محصول معتبر و قابل تحویلی انتخاب نشده است');
+      return;
+    }
+
+    if (markCompleted && !matrixStatus.allMatrixCompleted && !isAlreadyCompleted) {
+      toast.error(`تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} مورد تکمیل شده است)`);
       return;
     }
 
@@ -271,11 +334,11 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
               <div className="flex items-center gap-2">
                 <h4 className="font-bold text-slate-900 text-sm">تحویل نهایی محصولات تولیدی به انبار</h4>
                 <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] border border-emerald-300">
-                  اتصال خودکار به کاردکس و WAC
+                  اتصال خودکار به کاردکس و بهای تمام‌شده
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                پس از اتمام تولید، محصولات را مستقیماً وارد موجودی انبار مقصد کنید. میانگین موزون بهای تمام‌شده (WAC) و سوابق کاردکس به شکل خودکار ثبت می‌شوند.
+                پس از اتمام تولید، محصولات را مستقیماً وارد موجودی انبار مقصد کنید. میانگین موزون بهای تمام‌شده و سوابق کاردکس به شکل خودکار ثبت می‌شوند.
               </p>
             </div>
           </div>
@@ -304,18 +367,82 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
               )}
             </div>
 
-            {/* Mark Completed Toggle */}
-            <label className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-              <input
-                type="checkbox"
-                checked={markCompleted}
-                onChange={(e) => setMarkCompleted(e.target.checked)}
-                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300"
-              />
-              <span className="font-bold text-slate-700 text-[11px]">
-                تغییر وضعیت پروژه به تکمیل‌شده
-              </span>
-            </label>
+            {/* Mark Completed Toggle - Strictly restricted to 100% matrix completion */}
+            <div className="flex flex-col gap-1">
+              <label 
+                onClick={(e) => {
+                  if (isAlreadyCompleted) return;
+                  if (!matrixStatus.allMatrixCompleted) {
+                    e.preventDefault();
+                    toast.error(
+                      `تنها زمانی می‌توانید تیک تغییر وضعیت به تکمیل‌شده را بزنید که در بخش «پیشرفت به تفکیک کد کالا»، تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات تیک خورده باشند. (${toPersianDigits(matrixStatus.completedMatrixCells)} از ${toPersianDigits(matrixStatus.totalMatrixCells)} گزینه تیک خورده است)`,
+                      { id: 'progress-matrix-incomplete', duration: 4500 }
+                    );
+                  }
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all select-none ${
+                  isAlreadyCompleted
+                    ? 'bg-emerald-50 border-emerald-200 cursor-default text-emerald-800'
+                    : matrixStatus.allMatrixCompleted
+                    ? 'bg-amber-50/80 border-amber-200/80 cursor-pointer hover:bg-amber-100/70 text-slate-800'
+                    : 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-80 text-slate-500'
+                }`}
+                title={
+                  isAlreadyCompleted
+                    ? 'پروژه قبلاً در وضعیت تکمیل‌شده قرار گرفته است'
+                    : matrixStatus.allMatrixCompleted
+                    ? 'تمام گزینه‌های ماتریس پیشرفت تیک خورده‌اند و امکان تغییر وضعیت فعال است'
+                    : `برای تغییر وضعیت، باید تمام ${toPersianDigits(matrixStatus.totalMatrixCells)} گزینه ماتریس پیشرفت فیزیکی محصولات در تب پیشرفت به تفکیک کد کالا تیک خورده باشند`
+                }
+              >
+                <input
+                  type="checkbox"
+                  disabled={!matrixStatus.allMatrixCompleted || isAlreadyCompleted}
+                  checked={isAlreadyCompleted || markCompleted}
+                  onChange={(e) => {
+                    if (isAlreadyCompleted) return;
+                    if (!matrixStatus.allMatrixCompleted) {
+                      setMarkCompleted(false);
+                      return;
+                    }
+                    setMarkCompleted(e.target.checked);
+                  }}
+                  className={`w-4 h-4 rounded border-slate-300 ${
+                    matrixStatus.allMatrixCompleted && !isAlreadyCompleted
+                      ? 'text-amber-600 focus:ring-amber-500 cursor-pointer'
+                      : 'text-slate-400 cursor-not-allowed'
+                  }`}
+                />
+                <span className="font-bold text-[11px] flex items-center gap-1.5">
+                  {!matrixStatus.allMatrixCompleted && !isAlreadyCompleted && (
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                  {matrixStatus.allMatrixCompleted && !isAlreadyCompleted && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  )}
+                  تغییر وضعیت پروژه به تکمیل‌شده
+                </span>
+              </label>
+
+              {/* Status Hint */}
+              {!isAlreadyCompleted && (
+                <div className="text-[10px] px-1 flex items-center gap-1">
+                  {matrixStatus.loading ? (
+                    <span className="text-slate-400">در حال بررسی ماتریس پیشرفت فیزیکی...</span>
+                  ) : matrixStatus.allMatrixCompleted ? (
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                      ✓ تمام گزینه‌های ماتریس تیک خورده‌اند ({toPersianDigits(matrixStatus.totalMatrixCells)} از {toPersianDigits(matrixStatus.totalMatrixCells)})
+                    </span>
+                  ) : (
+                    <span className="text-amber-800 font-medium flex items-center gap-1">
+                      <span>🔒 قفل:</span>
+                      <span>{toPersianDigits(matrixStatus.completedMatrixCells)} از {toPersianDigits(matrixStatus.totalMatrixCells)} مرحله تیک خورده</span>
+                      <span className="text-slate-500">({toPersianDigits(matrixStatus.missingMatrixCells)} گزینه مانده)</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -498,14 +625,14 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                   </div>
 
                   {/* Unit Cost Basis (Optional WAC Override) */}
-                  <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200" title="بهای تمام‌شده هر واحد جهت محاسبه مجدد میانگین موزون (WAC) در انبار">
+                  <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200" title="بهای تمام‌شده هر واحد جهت محاسبه مجدد میانگین موزون در انبار">
                     <DollarSign className="w-3.5 h-3.5 text-slate-400" />
                     <span className="text-slate-600 font-semibold text-[11px]">بهای واحد:</span>
                     <input
                       type="number"
                       min="0"
                       step="1000"
-                      placeholder={defaultWac > 0 ? String(defaultWac) : 'WAC جاری'}
+                      placeholder={defaultWac > 0 ? String(defaultWac) : 'میانگین جاری'}
                       value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''}
                       onChange={(e) => handleCostChange(p.id, Number(e.target.value) || 0)}
                       className="w-24 px-1.5 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none placeholder:text-slate-400"

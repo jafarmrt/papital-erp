@@ -66,6 +66,31 @@ export async function runMigrations(): Promise<MigrationResult> {
     // Execute official Drizzle migration runner (records applied migrations in __drizzle_migrations)
     await migrate(orm, { migrationsFolder });
 
+    // V3.1.13: Ensure project_stages has updated_at column to guarantee trg_project_stages_updated_at trigger compatibility
+    try {
+      await pool.query(`
+        ALTER TABLE project_stages ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
+        DROP TRIGGER IF EXISTS trg_project_stages_updated_at ON project_stages;
+        CREATE TRIGGER trg_project_stages_updated_at BEFORE UPDATE ON project_stages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+      `);
+    } catch (e: any) {
+      logger.warn(`[Migrator] project_stages trigger check: ${e.message}`);
+    }
+
+    // V3.1.28: Ensure attachments jsonb columns exist for financial entities
+    try {
+      await pool.query(`
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
+        ALTER TABLE journal_vouchers ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
+        ALTER TABLE cheques ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
+        ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
+        ALTER TABLE piecework_payrolls ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
+        ALTER TABLE production_projects ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
+      `);
+    } catch (e: any) {
+      logger.warn(`[Migrator] financial attachments column check: ${e.message}`);
+    }
+
     let after = before;
     try {
       const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');

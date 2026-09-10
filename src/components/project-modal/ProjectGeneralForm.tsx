@@ -1,11 +1,12 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Paperclip } from 'lucide-react';
 import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import { SearchableSelect } from '../SearchableSelect';
 import { extractDateString } from '../../utils';
-import { Customer } from '../../types';
+import { Customer, FinancialAttachment } from '../../types';
+import { FinancialAttachmentUploader } from '../accounting/FinancialAttachmentUploader';
 
 interface ProjectGeneralFormProps {
   projectCode: string;
@@ -24,6 +25,8 @@ interface ProjectGeneralFormProps {
   description: string;
   setDescription: (val: string) => void;
   onCustomerSelect: (id: number | null) => void;
+  attachments?: FinancialAttachment[];
+  setAttachments?: (val: FinancialAttachment[]) => void;
 }
 
 export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
@@ -42,7 +45,9 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
   setPriority,
   description,
   setDescription,
-  onCustomerSelect
+  onCustomerSelect,
+  attachments = [],
+  setAttachments
 }) => {
   return (
     <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
@@ -171,6 +176,19 @@ export const ProjectGeneralForm: React.FC<ProjectGeneralFormProps> = ({
             className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
           />
         </div>
+
+        {/* Customer Order Files & Attachments */}
+        {setAttachments && (
+          <div className="md:col-span-3 pt-3 border-t border-slate-200/80">
+            <FinancialAttachmentUploader
+              attachments={attachments}
+              onChange={setAttachments}
+              title="پیوست‌ها و فایل‌های سفارش مشتری (فایل اکسل سفارش، فاکتور، طرح یا تصویر نمونه)"
+              helperText="فایل‌های ارسالی مشتری نظیر فایل اکسل سفارش، پی‌دی‌اف، نمونه طرح یا فاکتور را اینجا ضمیمه نمایید."
+              maxFiles={12}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

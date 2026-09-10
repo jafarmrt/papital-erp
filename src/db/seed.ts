@@ -116,6 +116,7 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
         'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
         'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
         'pending_materials.view', 'pending_materials.approve',
+        'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve',
         'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
         'woocommerce.view', 'woocommerce.manage', 'audit_logs.view',
         'users.manage', 'roles.manage', 'settings.manage'
@@ -140,6 +141,7 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
         'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
         'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
         'pending_materials.view', 'pending_materials.approve',
+        'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve',
         'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
         'woocommerce.view', 'woocommerce.manage', 'audit_logs.view'
       ],
@@ -270,6 +272,22 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
       code: 'daily_logger',
       description: 'کاربر ساده با دسترسی محدود صرفاً جهت ثبت و مشاهده گزارش کار روزانه و اعلان‌ها',
       permissions: [
+        'daily_logs.view', 'daily_logs.create'
+      ],
+      isSystem: 1
+    },
+    {
+      name: 'مسئول خرید و تدارکات',
+      code: 'procurement_officer',
+      description: 'مدیریت درخواست‌های خرید پروژه‌ها و انبار، استعلام قیمت، تفکیک اقلام، تخصیص تامین‌کننده و صدور سفارش‌های خرید قطعی',
+      permissions: [
+        'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve',
+        'products.view', 'products.edit_price',
+        'warehouse.view', 'warehouse.in',
+        'documents.view', 'documents.create', 'documents.edit',
+        'customers.view', 'customers.manage',
+        'projects.view',
+        'workflow.view', 'workflow.approve',
         'daily_logs.view', 'daily_logs.create'
       ],
       isSystem: 1

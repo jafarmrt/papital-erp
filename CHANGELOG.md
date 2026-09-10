@@ -18,6 +18,12 @@ going forward.
 
 ## Version 3.x Series
 
+### v3.1.16 — Strict Project Completion Gate & Progress Matrix Enforcement
+- **Strict Matrix Gate:** Enforced backend validation on `PUT /projects/:id` and `POST /projects/:id/add-to-inventory` requiring 100% completion of the SKU × stage physical progress matrix before allowing project status transition to `completed`.
+- **UI Lock & Indicators:** Disabled the "تغییر وضعیت پروژه به تکمیل‌شده" checkbox in `ProjectStockEntryTab` with lock icon, remaining items counter, and intuitive warning toast if clicked while incomplete.
+- **Progress Matrix Feedback Banner:** Added status indicator banner in `ProjectProductProgressTab` showing total matrix items completed vs remaining and completion readiness.
+- **Over-Reservation Inventory Governance:** Integrated comprehensive inventory availability policies for project material reservations.
+
 ### v3.0.4 — Version Drift Resolution & Build SSOT (TD-043)
 - **Version Single Source of Truth (SSOT):** Centralized version resolution in `src/lib/version.ts` dynamically deriving build metadata and package version.
 - **Probe & Health Endpoint Harmonization:** Updated `/health` and `/api/health` to return synchronized `version` and `buildInfo` payload.

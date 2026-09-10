@@ -99,6 +99,7 @@ export class ChequeLifecycleService {
       voucherId: cheques.voucherId,
       description: cheques.description,
       statusHistory: cheques.statusHistory,
+      attachments: cheques.attachments,
       createdAt: cheques.createdAt,
     })
     .from(cheques)
@@ -148,6 +149,7 @@ export class ChequeLifecycleService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
+    attachments?: any[];
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
@@ -265,6 +267,7 @@ export class ChequeLifecycleService {
         voucherId,
         description: data.description?.trim() || '',
         statusHistory: initialHistory,
+        attachments: data.attachments || [],
         createdById: data.userId || null,
       }).returning();
       return row;

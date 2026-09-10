@@ -99,10 +99,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             className="text-xs border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="ALL">همه نقش‌ها ({users.length})</option>
-            <option value="admin">مدیر سیستم (admin)</option>
+            <option value="admin">مدیر سیستم</option>
             {rolesList.map((r) => (
               <option key={r.id} value={r.code}>
-                {r.name} ({r.code})
+                {r.name}
               </option>
             ))}
           </select>

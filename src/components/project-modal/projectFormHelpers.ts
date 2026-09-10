@@ -1,4 +1,4 @@
-import { ProductionProject, Customer, Item } from '../../types';
+import { ProductionProject, Customer, Item, FinancialAttachment } from '../../types';
 import { WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage } from './types';
 import { extractDateString } from '../../utils';
@@ -9,19 +9,15 @@ export function getOptionalStageNamesForPreset(
   defaultPreset?: WorkflowPreset
 ): string[] {
   const currentPresetObj = availablePresets.find(p => p.id === presetId) || availablePresets[0] || defaultPreset;
-  if (!currentPresetObj || !currentPresetObj.stages) return ['مونتاژ و پخت کوره'];
+  if (!currentPresetObj || !currentPresetObj.stages) return [];
 
   const optionalNames: string[] = [];
   for (const stg of currentPresetObj.stages) {
-    if (typeof stg === 'object' && stg !== null) {
-      if (stg.isOptionalPerProduct) {
-        optionalNames.push(stg.title);
-      }
-    } else if (typeof stg === 'string' && stg.includes('مونتاژ')) {
-      optionalNames.push(stg);
+    if (typeof stg === 'object' && stg !== null && stg.isOptionalPerProduct) {
+      optionalNames.push(stg.title);
     }
   }
-  return optionalNames.length > 0 ? optionalNames : ['مونتاژ و پخت کوره'];
+  return optionalNames;
 }
 
 export function formatPickerDate(val: any): string {
@@ -37,7 +33,7 @@ export function createInitialProductRow(): ProductRow {
     customer_code: '',
     quantity: 100,
     unit: 'عدد',
-    needs_assembly: true,
+    needs_assembly: false,
     notes: ''
   };
 }
@@ -83,7 +79,8 @@ export function buildProjectPayload({
   endDate,
   priority,
   description,
-  stages
+  stages,
+  attachments
 }: {
   projectCode: string;
   title: string;
@@ -95,6 +92,7 @@ export function buildProjectPayload({
   priority: 'low' | 'medium' | 'high' | 'urgent';
   description: string;
   stages: ProjectStage[];
+  attachments?: FinancialAttachment[];
 }) {
   const firstProduct = productsList[0];
   const totalQty = productsList.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
@@ -117,6 +115,7 @@ export function buildProjectPayload({
     priority,
     description: description ? description.trim() : '',
     products: finalProducts,
+    attachments: Array.isArray(attachments) ? attachments : [],
     initial_stages: stages.map((s, idx) => ({
       title: s.title ? s.title.trim() : `مرحله ${idx + 1}`,
       stage_order: idx + 1,

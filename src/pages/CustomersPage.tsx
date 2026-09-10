@@ -3,14 +3,17 @@ import { confirmAction } from '../components/ConfirmDialogHost';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchJson } from '../api';
 import { Customer, ContactPerson, User, CRMLead, CRMActivity } from '../types';
-import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, UserPlus, Phone, Building2, UserCheck, Briefcase, Truck, Users, ArrowUpRight, ArrowDownLeft, CreditCard, FileText, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, UserPlus, Phone, Building2, UserCheck, Briefcase, Truck, Users, ArrowUpRight, ArrowDownLeft, CreditCard, FileText, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
 import { CustomerDossierDrawer } from '../components/crm/CustomerDossierDrawer';
 import { CRMInteractionModal } from '../components/crm/CRMInteractionModal';
 import CustomerFormModal, { FormContactPerson } from '../components/customers/CustomerFormModal';
+import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEYS } from '../lib/queryKeys';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
 
@@ -19,11 +22,13 @@ export default function CustomersPage({ user }: { user: User }) {
   const curLbl = formatCurrencyLabel(appCurrency);
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
 
   // Tab filter: 'all' | 'customer' | 'supplier'
   const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier'>('all');
   const [showModal, setShowModal] = useState(false);
+  const [showExcelModal, setShowExcelModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedDossierCustomer, setSelectedDossierCustomer] = useState<Customer | null>(null);
   const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<Customer | null>(null);
@@ -288,23 +293,35 @@ export default function CustomersPage({ user }: { user: User }) {
               <UsersRoundIcon size={20} />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-800">طرفین حساب، مشتریان و تامین‌کنندگان</h2>
+              <h2 className="text-base sm:text-lg font-bold text-slate-800">طرفین حساب</h2>
               <p className="text-xs text-slate-500 mt-0.5">مدیریت متمرکز خریداران، تامین‌کنندگان زنجیره متریال و اشخاص رابط</p>
             </div>
           </div>
         </div>
-        {user.role !== 'viewer' && (
-          <button 
-            onClick={() => {
-              setEditingId(null);
-              resetForm();
-              setShowModal(true);
-            }} 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold shadow-sm transition-all cursor-pointer hover:shadow-md"
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowExcelModal(true)}
+            className="bg-white hover:bg-emerald-50/70 text-emerald-700 border border-emerald-200 hover:border-emerald-300 px-3.5 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs"
           >
-            <Plus size={16} /> ثبت طرف حساب جدید
+            <FileSpreadsheet size={16} className="text-emerald-600" />
+            <span>ورود و خروجی اکسل</span>
           </button>
-        )}
+
+          {user.role !== 'viewer' && (
+            <button 
+              type="button"
+              onClick={() => {
+                setEditingId(null);
+                resetForm();
+                setShowModal(true);
+              }} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold shadow-sm transition-all cursor-pointer hover:shadow-md"
+            >
+              <Plus size={16} /> ثبت طرف حساب جدید
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter Tabs & Search Bar */}
@@ -775,6 +792,17 @@ export default function CustomersPage({ user }: { user: User }) {
         setFollowupResultForm={crm.setFollowupResultForm}
         isSubmittingFollowupResult={crm.isSubmittingFollowupResult}
         onConfirmFollowupResult={crm.handleConfirmFollowupResult}
+      />
+
+      {/* Counterparties Excel Import, Update & Export Modal */}
+      <CustomerExcelModal
+        isOpen={showExcelModal}
+        onClose={() => setShowExcelModal(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
+        }}
+        existingCustomers={customers}
+        activeTabFilter={activeTab}
       />
     </div>
   );

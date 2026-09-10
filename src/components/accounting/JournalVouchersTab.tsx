@@ -23,9 +23,11 @@ import {
 } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, formatPersianDate, extractDateString } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import type { JournalVoucher, Account, Customer, Personnel } from '../../types';
+import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
 import { VoucherReversalModal } from './VoucherReversalModal';
 import { VoucherCorrectionModal } from './VoucherCorrectionModal';
+import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
+import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 import ConfirmModal from '../ConfirmModal';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
@@ -93,6 +95,7 @@ export function JournalVouchersTab({
   // Reversal & Correction modal state
   const [reversalTargetVoucher, setReversalTargetVoucher] = useState<JournalVoucher | null>(null);
   const [correctionTargetVoucher, setCorrectionTargetVoucher] = useState<JournalVoucher | null>(null);
+  const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
 
   // Status counters for Subphase 2.1 segmented control
   const draftCount = useMemo(() => safeVouchers.filter(v => v.status === 'draft').length, [safeVouchers]);
@@ -446,7 +449,18 @@ export function JournalVouchersTab({
                         </td>
 
                         <td className="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
-                          <div>{voucher.description}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{voucher.description}</span>
+                            {voucher.attachments && voucher.attachments.length > 0 && (
+                              <FinancialAttachmentBadge
+                                count={voucher.attachments.length}
+                                onClick={() => setViewingAttachments({
+                                  title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                  attachments: voucher.attachments || []
+                                })}
+                              />
+                            )}
+                          </div>
                           {voucher.referenceNumber && (
                             <div className="text-[10px] text-slate-400 mt-0.5">
                               ارجاع: {voucher.referenceModule} ({voucher.referenceNumber})
@@ -664,6 +678,55 @@ export function JournalVouchersTab({
                                   ))}
                                 </tbody>
                               </table>
+
+                              {/* پیوست‌های سند حسابداری در نمای بازشده */}
+                              {voucher.attachments && voucher.attachments.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                      تصاویر فاکتور و اسناد مثبته پیوست ({voucher.attachments.length} فایل):
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingAttachments({
+                                        title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                        attachments: voucher.attachments || []
+                                      })}
+                                      className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
+                                    >
+                                      مشاهده و بزرگ‌نمایی همه
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                    {voucher.attachments.map((att) => (
+                                      <div
+                                        key={att.id}
+                                        onClick={() => setViewingAttachments({
+                                          title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                          attachments: voucher.attachments || []
+                                        })}
+                                        className="group relative rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden cursor-pointer hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-800 aspect-4/3 flex flex-col"
+                                      >
+                                        {att.fileType.startsWith('image/') ? (
+                                          <img
+                                            src={att.dataUrl}
+                                            alt={att.fileName}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex flex-col items-center justify-center p-2 text-slate-500">
+                                            <FileText className="w-6 h-6 text-rose-500 mb-1" />
+                                            <span className="text-[9px] truncate max-w-full">{att.fileName}</span>
+                                          </div>
+                                        )}
+                                        <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-xs text-white p-1 text-[9px] truncate">
+                                          {att.title || att.fileName}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -734,6 +797,16 @@ export function JournalVouchersTab({
         onConfirm={executeConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
+      {/* مدال پیش‌نمایش و دانلود ضمائم و فاکتورها */}
+      {viewingAttachments && (
+        <FinancialAttachmentViewerModal
+          isOpen={!!viewingAttachments}
+          onClose={() => setViewingAttachments(null)}
+          title={viewingAttachments?.title || 'اسناد و مدارک پیوست'}
+          attachments={viewingAttachments?.attachments || []}
+        />
+      )}
     </div>
   );
 }

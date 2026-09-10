@@ -14,7 +14,8 @@ import { DEFAULT_INVENTORY_CONTROL_SECTIONS } from '../constants/inventoryContro
 import { 
   buildConsolidatedPurchaseList, 
   calculateMaterialProgress, 
-  roundToOneDecimal 
+  roundToOneDecimal,
+  buildReservedItemsToFreeze
 } from '../components/project/projectInventoryUtils';
 
 export function useProjectInventory(
@@ -27,6 +28,7 @@ export function useProjectInventory(
 
   const [isFinalized, setIsFinalized] = useState<boolean>(!!project.inventory_control?.isFinalized);
   const [finalizedAt, setFinalizedAt] = useState<string | undefined>(project.inventory_control?.finalizedAt);
+  const [reservedItems, setReservedItems] = useState<any[]>(() => project.inventory_control?.reservedItems || []);
 
   // Unit Conversion Modal state
   const [isUnitConversionModalOpen, setIsUnitConversionModalOpen] = useState(false);
@@ -109,6 +111,7 @@ export function useProjectInventory(
   // Modal State for adding/selecting raw materials
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [materialModalSectionIdx, setMaterialModalSectionIdx] = useState<number | null>(null);
+  const [materialModalTargetProdId, setMaterialModalTargetProdId] = useState<string | null>(null);
   const [materialModalTab, setMaterialModalTab] = useState<'warehouse' | 'custom'>('warehouse');
   const [warehouseSearchQuery, setWarehouseSearchQuery] = useState('');
   const [changingItemTarget, setChangingItemTarget] = useState<{
@@ -191,6 +194,7 @@ export function useProjectInventory(
     }
     setIsFinalized(!!project.inventory_control?.isFinalized);
     setFinalizedAt(project.inventory_control?.finalizedAt);
+    setReservedItems(project.inventory_control?.reservedItems || []);
   }, [project]);
 
   // Category selection handler for generating item code
@@ -261,8 +265,9 @@ export function useProjectInventory(
     setSections(updated);
   };
 
-  const handleOpenAddMaterialModal = (secIdx: number) => {
+  const handleOpenAddMaterialModal = (secIdx: number, prodId?: string) => {
     setMaterialModalSectionIdx(secIdx);
+    setMaterialModalTargetProdId(prodId || null);
     setChangingItemTarget(null);
     setMaterialModalTab('warehouse');
     setWarehouseSearchQuery('');
@@ -276,6 +281,7 @@ export function useProjectInventory(
     gIdx?: number
   ) => {
     setMaterialModalSectionIdx(secIdx);
+    setMaterialModalTargetProdId(prodId || null);
     setChangingItemTarget({ secIdx, itemId, prodId, gIdx });
     setMaterialModalTab('warehouse');
     setWarehouseSearchQuery('');
@@ -285,50 +291,118 @@ export function useProjectInventory(
   const handleSelectWarehouseItem = (whItem: Item) => {
     if (materialModalSectionIdx === null) return;
 
-    const sec = { ...sections[materialModalSectionIdx] };
+    const targetSecIdx = materialModalSectionIdx;
+    const targetProdId = changingItemTarget?.prodId || materialModalTargetProdId;
 
     if (changingItemTarget) {
-      if (sec.checkType === 'per_item' && changingItemTarget.prodId) {
-        handleUpdatePerItemResult(changingItemTarget.secIdx, changingItemTarget.prodId, changingItemTarget.itemId, 'itemCode', whItem.code);
-        handleUpdatePerItemResult(changingItemTarget.secIdx, changingItemTarget.prodId, changingItemTarget.itemId, 'name', whItem.name);
-        handleUpdatePerItemResult(changingItemTarget.secIdx, changingItemTarget.prodId, changingItemTarget.itemId, 'warehouseUnit', whItem.unit);
-        handleUpdatePerItemResult(changingItemTarget.secIdx, changingItemTarget.prodId, changingItemTarget.itemId, 'stockQty', whItem.current_stock);
-      } else if (sec.checkType === 'global' && changingItemTarget.gIdx !== undefined) {
-        handleUpdateGlobalItem(changingItemTarget.secIdx, changingItemTarget.gIdx, 'itemCode', whItem.code);
-        handleUpdateGlobalItem(changingItemTarget.secIdx, changingItemTarget.gIdx, 'name', whItem.name);
-        handleUpdateGlobalItem(changingItemTarget.secIdx, changingItemTarget.gIdx, 'warehouseUnit', whItem.unit);
-        handleUpdateGlobalItem(changingItemTarget.secIdx, changingItemTarget.gIdx, 'stockQty', whItem.current_stock);
-      }
-      toast.success(`ماده اولیه با کالا «${whItem.name}» جاپایابی و به روز شد.`);
+      setSections(prevSections => {
+        const updated = [...prevSections];
+        const sec = { ...updated[changingItemTarget.secIdx] };
+
+        if (sec.checkType === 'per_item' && changingItemTarget.prodId) {
+          const perRes = { ...(sec.perItemResults || {}) };
+          const prodRes = { ...(perRes[changingItemTarget.prodId] || {}) };
+          const itemRes = { ...(prodRes[changingItemTarget.itemId] || { itemId: changingItemTarget.itemId }) };
+
+          itemRes.itemCode = whItem.code;
+          itemRes.name = whItem.name;
+          itemRes.category = whItem.category;
+          itemRes.warehouseUnit = whItem.unit;
+          itemRes.unit = itemRes.unit || whItem.unit || 'عدد';
+          itemRes.stockQty = whItem.current_stock;
+          const req = Number(itemRes.requiredQty !== undefined ? itemRes.requiredQty : 1);
+          itemRes.status = whItem.current_stock >= req ? 'available' : 'needs_procurement';
+
+          prodRes[changingItemTarget.itemId] = itemRes as any;
+          perRes[changingItemTarget.prodId] = prodRes;
+          sec.perItemResults = perRes;
+        } else if (sec.checkType === 'global' && changingItemTarget.gIdx !== undefined) {
+          const gItems = [...(sec.globalItems || [])];
+          const gItem = { ...(gItems[changingItemTarget.gIdx] || {}) };
+
+          gItem.itemCode = whItem.code;
+          gItem.name = whItem.name;
+          gItem.category = whItem.category;
+          gItem.warehouseUnit = whItem.unit;
+          gItem.unit = gItem.unit || whItem.unit || 'عدد';
+          gItem.stockQty = whItem.current_stock;
+          const req = Number(gItem.requiredQty || 1);
+          gItem.status = whItem.current_stock >= req ? 'available' : 'needs_procurement';
+
+          gItems[changingItemTarget.gIdx] = gItem as any;
+          sec.globalItems = gItems;
+        }
+
+        updated[changingItemTarget.secIdx] = sec;
+        return updated;
+      });
+
+      toast.success(`ماده اولیه با کالا «${whItem.name}» جاپایابی و متصل شد.`);
     } else {
+      // Adding a new material
       const newItemId = `item_${Date.now()}`;
-      if (sec.checkType === 'per_item') {
-        const schema = sec.itemsSchema || [];
-        schema.push({
-          id: newItemId,
-          name: whItem.name,
-          itemCode: whItem.code,
-          unit: whItem.unit || 'عدد'
-        });
-        sec.itemsSchema = schema;
-      } else {
-        const gItems = sec.globalItems || [];
-        gItems.push({
-          itemId: newItemId,
-          name: whItem.name,
-          itemCode: whItem.code,
-          unit: whItem.unit || 'عدد',
-          warehouseUnit: whItem.unit,
-          requiredQty: 1,
-          stockQty: whItem.current_stock,
-          status: 'available'
-        });
-        sec.globalItems = gItems;
-      }
-      const updated = [...sections];
-      updated[materialModalSectionIdx] = sec;
-      setSections(updated);
-      toast.success(`ماده اولیه «${whItem.name}» به بخش کنترل اضافه شد.`);
+
+      setSections(prevSections => {
+        const updated = [...prevSections];
+        const sec = { ...updated[targetSecIdx] };
+
+        if (sec.checkType === 'per_item') {
+          const perRes = { ...(sec.perItemResults || {}) };
+          if (targetProdId) {
+            // Target specific product!
+            const prodRes = { ...(perRes[targetProdId] || {}) };
+            prodRes[newItemId] = {
+              itemId: newItemId,
+              name: whItem.name,
+              itemCode: whItem.code,
+              category: whItem.category,
+              unit: whItem.unit || 'عدد',
+              warehouseUnit: whItem.unit,
+              requiredQty: 1, // Decoupled from order quantity!
+              stockQty: whItem.current_stock,
+              status: whItem.current_stock >= 1 ? 'available' : 'needs_procurement'
+            };
+            perRes[targetProdId] = prodRes;
+          } else {
+            // Fallback if no specific product was targeted
+            products.forEach(p => {
+              const prodRes = { ...(perRes[p.id] || {}) };
+              prodRes[newItemId] = {
+                itemId: newItemId,
+                name: whItem.name,
+                itemCode: whItem.code,
+                category: whItem.category,
+                unit: whItem.unit || 'عدد',
+                warehouseUnit: whItem.unit,
+                requiredQty: 1,
+                stockQty: whItem.current_stock,
+                status: whItem.current_stock >= 1 ? 'available' : 'needs_procurement'
+              };
+              perRes[p.id] = prodRes;
+            });
+          }
+          sec.perItemResults = perRes;
+        } else {
+          const gItems = [...(sec.globalItems || [])];
+          gItems.push({
+            itemId: newItemId,
+            name: whItem.name,
+            itemCode: whItem.code,
+            category: whItem.category,
+            unit: whItem.unit || 'عدد',
+            warehouseUnit: whItem.unit,
+            requiredQty: 1,
+            stockQty: whItem.current_stock,
+            status: whItem.current_stock >= 1 ? 'available' : 'needs_procurement'
+          });
+          sec.globalItems = gItems;
+        }
+
+        updated[targetSecIdx] = sec;
+        return updated;
+      });
+
+      toast.success(`ماده اولیه «${whItem.name}» افزوده شد.`);
     }
 
     setIsMaterialModalOpen(false);
@@ -348,6 +422,7 @@ export function useProjectInventory(
         name: customMaterialForm.name,
         category: customMaterialForm.category,
         code: customMaterialForm.itemCode,
+        type: 'raw_material',
         unit: customMaterialForm.unit,
         current_stock: customMaterialForm.stockQty || 0,
         weighted_average_cost: customMaterialForm.weightedAverageCost || 0,
@@ -391,22 +466,50 @@ export function useProjectInventory(
     }
   };
 
-  const handleRemoveItemFromSection = (secIdx: number, itemId: string, itemIdx?: number) => {
-    const updated = [...sections];
-    const sec = { ...updated[secIdx] };
+  const handleRemoveItemFromSection = (
+    secIdx: number,
+    itemId: string,
+    prodIdOrItemIdx?: string | number,
+    itemIdx?: number
+  ) => {
+    const prodId = typeof prodIdOrItemIdx === 'string' ? prodIdOrItemIdx : undefined;
+    const effectiveItemIdx = typeof prodIdOrItemIdx === 'number' ? prodIdOrItemIdx : itemIdx;
 
-    if (sec.checkType === 'per_item') {
-      sec.itemsSchema = (sec.itemsSchema || []).filter(i => i.id !== itemId);
-    } else {
-      if (itemIdx !== undefined) {
-        sec.globalItems = (sec.globalItems || []).filter((_, idx) => idx !== itemIdx);
+    setSections(prevSections => {
+      const updated = [...prevSections];
+      const sec = { ...updated[secIdx] };
+
+      if (sec.checkType === 'per_item') {
+        if (prodId) {
+          const perRes = { ...(sec.perItemResults || {}) };
+          const prodRes = { ...(perRes[prodId] || {}) };
+          delete prodRes[itemId];
+          perRes[prodId] = prodRes;
+          sec.perItemResults = perRes;
+        } else {
+          sec.itemsSchema = (sec.itemsSchema || []).filter(i => i.id !== itemId);
+          const perRes = { ...(sec.perItemResults || {}) };
+          Object.keys(perRes).forEach(pId => {
+            if (perRes[pId][itemId]) {
+              const copy = { ...perRes[pId] };
+              delete copy[itemId];
+              perRes[pId] = copy;
+            }
+          });
+          sec.perItemResults = perRes;
+        }
       } else {
-        sec.globalItems = (sec.globalItems || []).filter(i => i.itemId !== itemId);
+        if (effectiveItemIdx !== undefined) {
+          sec.globalItems = (sec.globalItems || []).filter((_, idx) => idx !== effectiveItemIdx);
+        } else {
+          sec.globalItems = (sec.globalItems || []).filter(i => i.itemId !== itemId);
+        }
       }
-    }
 
-    updated[secIdx] = sec;
-    setSections(updated);
+      updated[secIdx] = sec;
+      return updated;
+    });
+
     toast.success('ماده اولیه از این بخش حذف شد.');
   };
 
@@ -544,62 +647,13 @@ export function useProjectInventory(
       return;
     }
 
-    if (!(await confirmAction({ title: 'ثبت نهایی و فریز اقلام', message: 'آیا از ثبت نهایی و فریز اقلام رزرو شده در انبار اطمینان دارید؟ پس از ثبت نهایی، موجوی این اقلام به این پروژه اختصاص خواهد یافت.' }))) {
+    if (!(await confirmAction({ title: 'ثبت نهایی و فریز اقلام', message: 'آیا از ثبت نهایی و فریز اقلام رزرو شده در انبار اطمینان دارید؟ پس از ثبت نهایی، موجودی این اقلام به این پروژه اختصاص خواهد یافت.' }))) {
       return;
     }
 
     try {
       setSaving(true);
-      const reservedItemsToFreeze: any[] = [];
-
-      sections.forEach(sec => {
-        if (sec.checkType === 'per_item' && sec.perItemResults) {
-          products.forEach(prod => {
-            const prodRes = sec.perItemResults?.[prod.id] || {};
-            const itemsSchema = sec.itemsSchema || [];
-            itemsSchema.forEach(schema => {
-              const itemRes = prodRes[schema.id];
-              const effectiveCode = itemRes?.itemCode || schema.itemCode || '';
-              const effectiveName = itemRes?.name || schema.name;
-              const reqQty = Number(itemRes?.requiredQty ?? prod.quantity ?? 100);
-              const matchWh = warehouseItems.find(i => (effectiveCode && i.code === effectiveCode) || (i.name.toLowerCase() === effectiveName.toLowerCase()));
-
-              if (matchWh && matchWh.current_stock > 0) {
-                const reservedQty = Math.min(matchWh.current_stock, itemRes?.convertedQty || reqQty);
-                reservedItemsToFreeze.push({
-                  itemId: matchWh.id,
-                  itemCode: matchWh.code,
-                  itemName: matchWh.name,
-                  reservedQty,
-                  originalQty: reqQty,
-                  unit: itemRes?.convertedUnit || matchWh.unit || 'عدد',
-                  originalUnit: itemRes?.unit || 'عدد',
-                  reservedAt: new Date().toISOString()
-                });
-              }
-            });
-          });
-        } else if (sec.checkType === 'global' && sec.globalItems) {
-          sec.globalItems.forEach(gItem => {
-            const matchWh = warehouseItems.find(i => (gItem.itemCode && i.code === gItem.itemCode) || (i.name && i.name.toLowerCase().includes(gItem.name.toLowerCase())));
-            const reqQty = Number(gItem.requiredQty) || 0;
-            if (matchWh && matchWh.current_stock > 0) {
-              const reservedQty = Math.min(matchWh.current_stock, gItem.convertedQty || reqQty);
-              reservedItemsToFreeze.push({
-                itemId: matchWh.id,
-                itemCode: matchWh.code,
-                itemName: matchWh.name,
-                reservedQty,
-                originalQty: reqQty,
-                unit: gItem.convertedUnit || matchWh.unit || 'عدد',
-                originalUnit: gItem.unit || 'عدد',
-                reservedAt: new Date().toISOString()
-              });
-            }
-          });
-        }
-      });
-
+      const reservedItemsToFreeze = buildReservedItemsToFreeze(sections, products, warehouseItems, manualPurchaseItems);
       const nowIso = new Date().toISOString();
       const payload = {
         inventory_control: {
@@ -620,6 +674,7 @@ export function useProjectInventory(
 
       setIsFinalized(true);
       setFinalizedAt(nowIso);
+      setReservedItems(reservedItemsToFreeze);
       toast.success('کنترل موجودی ثبت نهایی شد و اقلام در انبار فریز گردیدند.');
       if (onUpdate) onUpdate();
     } catch (err) {
@@ -653,6 +708,7 @@ export function useProjectInventory(
 
       setIsFinalized(false);
       setFinalizedAt(undefined);
+      setReservedItems([]);
       toast.success('قفل فریز انبار برداشته شد.');
       if (onUpdate) onUpdate();
     } catch (err) {
@@ -674,12 +730,17 @@ export function useProjectInventory(
   const handleSaveInventoryControl = async () => {
     try {
       setSaving(true);
+      const effectiveReserved = isFinalized
+        ? buildReservedItemsToFreeze(sections, products, warehouseItems, manualPurchaseItems)
+        : (reservedItems && reservedItems.length > 0 ? reservedItems : []);
+
       const payload = {
         inventory_control: {
           sections,
           manualPurchaseItems,
           isFinalized,
           finalizedAt,
+          reservedItems: effectiveReserved,
           lastUpdated: new Date().toISOString()
         }
       };
@@ -690,6 +751,7 @@ export function useProjectInventory(
         body: JSON.stringify(payload)
       });
 
+      setReservedItems(effectiveReserved);
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
       if (onUpdate) onUpdate();
     } catch (err) {
@@ -744,7 +806,8 @@ export function useProjectInventory(
   };
 
   const filteredWarehouseItems = useMemo(() => {
-    let result = warehouseItems;
+    // Restrict to raw materials only; exclude finished products
+    let result = warehouseItems.filter(i => i.type === 'raw_material' || (i.type as any) !== 'product');
     const currentModalSection = materialModalSectionIdx !== null ? sections[materialModalSectionIdx] : undefined;
 
     if (currentModalSection && currentModalSection.filterType && currentModalSection.filterType !== 'all') {
@@ -775,6 +838,8 @@ export function useProjectInventory(
     setIsFinalized,
     finalizedAt,
     setFinalizedAt,
+    reservedItems,
+    setReservedItems,
     isUnitConversionModalOpen,
     setIsUnitConversionModalOpen,
     conversionTarget,

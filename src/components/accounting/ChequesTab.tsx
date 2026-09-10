@@ -26,12 +26,15 @@ import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalal
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import type { Cheque, ChequeType, ChequeStatus, BankAccount, Customer, Personnel } from '../../types';
+import type { Cheque, ChequeType, ChequeStatus, BankAccount, Customer, Personnel, FinancialAttachment } from '../../types';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import DateObject from "react-date-object";
+import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
+import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
+import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -65,6 +68,21 @@ export function ChequesTab({
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safePersonnelList = Array.isArray(personnelList) ? personnelList : [];
 
+  const customerList = useMemo(() => {
+    return safeCustomers.filter(c => {
+      const pt = c.partyType || (c as any).party_type || 'customer';
+      return pt === 'customer' || pt === 'both';
+    });
+  }, [safeCustomers]);
+
+  const supplierList = useMemo(() => {
+    const list = safeCustomers.filter(c => {
+      const pt = c.partyType || (c as any).party_type;
+      return pt === 'supplier' || pt === 'both';
+    });
+    return list.length > 0 ? list : safeCustomers;
+  }, [safeCustomers]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
@@ -92,8 +110,10 @@ export function ChequesTab({
     payeeName: '',
     bankAccountId: null as number | null,
     description: '',
+    attachments: [] as FinancialAttachment[],
   });
 
+  const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
   const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
@@ -526,8 +546,19 @@ export function ChequesTab({
                       </td>
 
                       <td className="py-3 px-4">
-                        <div className="font-mono font-bold text-slate-900 dark:text-white">
-                          {c.chequeNumber}
+                        <div className="flex items-center gap-2">
+                          <div className="font-mono font-bold text-slate-900 dark:text-white">
+                            {c.chequeNumber}
+                          </div>
+                          {c.attachments && c.attachments.length > 0 && (
+                            <FinancialAttachmentBadge
+                              count={c.attachments.length}
+                              onClick={() => setViewingAttachments({
+                                title: `تصاویر و مدارک پیوست چک شماره ${c.chequeNumber} (${c.bankName})`,
+                                attachments: c.attachments || []
+                              })}
+                            />
+                          )}
                         </div>
                         {c.sayadNumber && (
                           <div className="text-[10px] font-mono text-slate-400 tracking-wider mt-0.5">
@@ -644,217 +675,277 @@ export function ChequesTab({
 
       {/* New Cheque Modal */}
       {isNewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-4">
-              ثبت مشخصات چک صیادی جدید
-            </h3>
-
-            <form onSubmit={handleCreateCheque} className="space-y-3.5">
-              <div className="grid grid-cols-2 gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className={`p-1.5 rounded-lg ${newFormData.type === 'received' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                  {newFormData.type === 'received' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                </span>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    نوع چک *
-                  </label>
-                  <select
-                    value={newFormData.type}
-                    onChange={e => setNewFormData({ ...newFormData, type: e.target.value as ChequeType })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                  >
-                    <option value="received">چک دریافتی (از مشتری)</option>
-                    <option value="paid">چک پرداختی (به تأمین‌کننده)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    شماره چک (سریال) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="مثال: 123456"
-                    value={newFormData.chequeNumber}
-                    onChange={e => setNewFormData({ ...newFormData, chequeNumber: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
-                  />
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                    ثبت مشخصات چک صیادی جدید
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {newFormData.type === 'received' ? 'ثبت چک دریافت شده از مشتریان' : 'ثبت چک پرداختی به تأمین‌کنندگان'}
+                  </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsNewModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  شناسه صیاد ۱۶ رقمی
-                </label>
-                <input
-                  type="text"
-                  maxLength={16}
-                  placeholder="1234567890123456"
-                  value={newFormData.sayadNumber}
-                  onChange={e => setNewFormData({ ...newFormData, sayadNumber: e.target.value })}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono tracking-widest text-left"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    نام بانک صادرکننده *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="مثال: بانک ملت"
-                    value={newFormData.bankName}
-                    onChange={e => setNewFormData({ ...newFormData, bankName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    شعبه
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="کد یا نام شعبه"
-                    value={newFormData.branch}
-                    onChange={e => setNewFormData({ ...newFormData, branch: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    تاریخ صدور
-                  </label>
-                  <DatePicker
-                    value={newFormData.issueDate}
-                    onChange={(dateObj: any) => {
-                      setNewFormData({ ...newFormData, issueDate: extractDateString(dateObj) });
-                    }}
-                    calendar={persian}
-                    locale={persian_fa}
-                    calendarPosition="bottom-right"
-                    inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
-                    containerClassName="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    تاریخ سررسید *
-                  </label>
-                  <DatePicker
-                    value={newFormData.dueDate}
-                    onChange={(dateObj: any) => {
-                      setNewFormData({ ...newFormData, dueDate: extractDateString(dateObj) });
-                    }}
-                    calendar={persian}
-                    locale={persian_fa}
-                    calendarPosition="bottom-right"
-                    inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                    containerClassName="w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    طرف حساب
-                  </label>
-                  <select
-                    value={newFormData.partyType}
-                    onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '' })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                  >
-                    <option value="customer">مشتری</option>
-                    <option value="personnel">پرسنل</option>
-                    <option value="other">متفرقه</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    نام طرف حساب *
-                  </label>
-                  {newFormData.partyType === 'customer' ? (
-                    <SearchableSelect
-                      value={String(newFormData.partyId || '')}
-                      onChange={(val) => {
-                        const c = safeCustomers.find(x => x.id === Number(val));
-                        setNewFormData({ ...newFormData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
+            <form onSubmit={handleCreateCheque} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      نوع چک *
+                    </label>
+                    <select
+                      value={newFormData.type}
+                      onChange={e => {
+                        const nextType = e.target.value as ChequeType;
+                        setNewFormData({
+                          ...newFormData,
+                          type: nextType,
+                          partyType: nextType === 'paid' ? 'supplier' : 'customer',
+                          partyId: null,
+                          partyName: ''
+                        });
                       }}
-                      placeholder="انتخاب مشتری..."
-                      options={[{ value: '', label: 'انتخاب مشتری...' },
-                        ...(Array.isArray(safeCustomers) ? safeCustomers : []).map(c => ({ value: String(c.id), label: c.name }))]}
-                    />
-                  ) : newFormData.partyType === 'personnel' ? (
-                    <SearchableSelect
-                      value={String(newFormData.partyId || '')}
-                      onChange={(val) => {
-                        const p = safePersonnelList.find(x => x.id === Number(val));
-                        setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}` : '' });
-                      }}
-                      placeholder="انتخاب پرسنل..."
-                      options={[{ value: '', label: 'انتخاب پرسنل...' },
-                        ...(Array.isArray(safePersonnelList) ? safePersonnelList : []).map(p => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` }))]}
-                    />
-                  ) : (
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                    >
+                      <option value="received">چک دریافتی (از مشتری)</option>
+                      <option value="paid">چک پرداختی (به تأمین‌کننده)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      شماره چک (سریال) *
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="نام شخص یا شرکت..."
-                      value={newFormData.partyName}
-                      onChange={e => setNewFormData({ ...newFormData, partyName: e.target.value })}
+                      placeholder="مثال: 123456"
+                      value={newFormData.chequeNumber}
+                      onChange={e => setNewFormData({ ...newFormData, chequeNumber: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    شناسه صیاد ۱۶ رقمی
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={16}
+                    placeholder="1234567890123456"
+                    value={newFormData.sayadNumber}
+                    onChange={e => setNewFormData({ ...newFormData, sayadNumber: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono tracking-widest text-left"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      نام بانک صادرکننده *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="مثال: بانک ملت"
+                      value={newFormData.bankName}
+                      onChange={e => setNewFormData({ ...newFormData, bankName: e.target.value })}
                       className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                     />
-                  )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      شعبه
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="کد یا نام شعبه"
+                      value={newFormData.branch}
+                      onChange={e => setNewFormData({ ...newFormData, branch: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      تاریخ صدور
+                    </label>
+                    <DatePicker
+                      value={newFormData.issueDate}
+                      onChange={(dateObj: any) => {
+                        setNewFormData({ ...newFormData, issueDate: extractDateString(dateObj) });
+                      }}
+                      calendar={persian}
+                      locale={persian_fa}
+                      calendarPosition="bottom-right"
+                      inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                      containerClassName="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      تاریخ سررسید *
+                    </label>
+                    <DatePicker
+                      value={newFormData.dueDate}
+                      onChange={(dateObj: any) => {
+                        setNewFormData({ ...newFormData, dueDate: extractDateString(dateObj) });
+                      }}
+                      calendar={persian}
+                      locale={persian_fa}
+                      calendarPosition="bottom-right"
+                      inputClass="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                      containerClassName="w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      طرف حساب
+                    </label>
+                    <select
+                      value={newFormData.partyType}
+                      onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '' })}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
+                    >
+                      <option value="customer">مشتری</option>
+                      <option value="supplier">تأمین‌کننده</option>
+                      <option value="personnel">پرسنل</option>
+                      <option value="other">متفرقه</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      نام طرف حساب *
+                    </label>
+                    {newFormData.partyType === 'customer' ? (
+                      <SearchableSelect
+                        value={String(newFormData.partyId || '')}
+                        onChange={(val) => {
+                          const c = customerList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val));
+                          setNewFormData({ ...newFormData, partyId: c ? c.id : null, partyName: c ? c.name : '' });
+                        }}
+                        placeholder="جستجو و انتخاب مشتری..."
+                        options={customerList.map(c => ({
+                          value: String(c.id),
+                          label: `${c.name}${c.city ? ` (${c.city})` : ''}${c.phone ? ` - ${c.phone}` : ''}`
+                        }))}
+                      />
+                    ) : newFormData.partyType === 'supplier' ? (
+                      <SearchableSelect
+                        value={String(newFormData.partyId || '')}
+                        onChange={(val) => {
+                          const s = supplierList.find(x => x.id === Number(val)) || safeCustomers.find(x => x.id === Number(val));
+                          setNewFormData({ ...newFormData, partyId: s ? s.id : null, partyName: s ? s.name : '' });
+                        }}
+                        placeholder="جستجو و انتخاب تأمین‌کننده..."
+                        options={supplierList.map(s => ({
+                          value: String(s.id),
+                          label: `${s.name}${s.supplierCategory ? ` [${s.supplierCategory}]` : ''}${s.city ? ` (${s.city})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
+                        }))}
+                      />
+                    ) : newFormData.partyType === 'personnel' ? (
+                      <SearchableSelect
+                        value={String(newFormData.partyId || '')}
+                        onChange={(val) => {
+                          const p = safePersonnelList.find(x => x.id === Number(val));
+                          setNewFormData({ ...newFormData, partyId: p ? p.id : null, partyName: p ? `${p.firstName} ${p.lastName}`.trim() : '' });
+                        }}
+                        placeholder="جستجو و انتخاب پرسنل..."
+                        options={safePersonnelList.map(p => ({
+                          value: String(p.id),
+                          label: `${p.firstName} ${p.lastName}`.trim()
+                        }))}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        required
+                        placeholder="نام شخص یا شرکت متفرقه..."
+                        value={newFormData.partyName}
+                        onChange={e => setNewFormData({ ...newFormData, partyName: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    {`مبلغ چک (${curLbl}) *`}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="50000000"
+                    value={newFormData.amount || ''}
+                    onChange={e => setNewFormData({ ...newFormData, amount: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-black text-left"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    توضیحات و بابت
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="بابت تسویه فاکتور فروش شماره..."
+                    value={newFormData.description}
+                    onChange={e => setNewFormData({ ...newFormData, description: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  />
+                </div>
+
+                {/* الصاق تصاویر رو و پشت چک / رسید و مدارک */}
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <FinancialAttachmentUploader
+                    attachments={newFormData.attachments}
+                    onChange={(atts) => setNewFormData(p => ({ ...p, attachments: atts }))}
+                    title="الصاق تصویر چک (رو و پشت چک) و مدارک پیوست"
+                    description="امکان الصاق چند فایل تصویری و PDF با فشرده‌سازی خودکار هوشمند تا ۳۰۰ کیلوبایت"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  {`مبلغ چک (${curLbl}) *`}
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  placeholder="50000000"
-                  value={newFormData.amount || ''}
-                  onChange={e => setNewFormData({ ...newFormData, amount: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-black text-left"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  توضیحات و بابت
-                </label>
-                <input
-                  type="text"
-                  placeholder="بابت تسویه فاکتور فروش شماره..."
-                  value={newFormData.description}
-                  onChange={e => setNewFormData({ ...newFormData, description: e.target.value })}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3">
+              {/* Fixed Footer */}
+              <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsNewModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700 rounded-xl transition cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm disabled:opacity-50"
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm disabled:opacity-50 transition cursor-pointer"
                 >
                   {isSaving ? 'در حال ثبت...' : 'ثبت قطعی چک'}
                 </button>
@@ -867,7 +958,7 @@ export function ChequesTab({
       {/* Change Status Workflow Modal */}
       {statusModalCheque && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-slate-900 dark:text-white text-base mb-1">
               تغییر وضعیت چک شماره {statusModalCheque.chequeNumber}
             </h3>
@@ -986,6 +1077,16 @@ export function ChequesTab({
             </div>
           </div>
         </div>
+      )}
+
+      {/* مدال پیش‌نمایش و دانلود تصاویر پیوست چک‌ها */}
+      {viewingAttachments && (
+        <FinancialAttachmentViewerModal
+          isOpen={!!viewingAttachments}
+          onClose={() => setViewingAttachments(null)}
+          title={viewingAttachments?.title || 'تصاویر و مدارک پیوست'}
+          attachments={viewingAttachments?.attachments || []}
+        />
       )}
     </div>
   );

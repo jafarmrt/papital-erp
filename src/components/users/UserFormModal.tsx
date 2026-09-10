@@ -130,10 +130,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="admin">مدیر سیستم (admin)</option>
+                <option value="admin">مدیر سیستم</option>
                 {rolesList.map((r) => (
                   <option key={r.id} value={r.code}>
-                    {r.name} ({r.code})
+                    {r.name}
                   </option>
                 ))}
               </select>

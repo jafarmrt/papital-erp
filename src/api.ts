@@ -109,10 +109,11 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
-      throw new ApiError(errorMessage || 'دسترسی غیرمجاز یا توکن CSRF نامعتبر (۴۰۳)', code || 'AUTHORIZATION_ERROR', 403, details);
+      throw new ApiError(data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا توکن CSRF نامعتبر (۴۰۳)', code || 'AUTHORIZATION_ERROR', 403, details);
     }
     if (res.status === 429) {
-      throw new ApiError(errorMessage || 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند لحظه صبر کنید (۴۲۹)', code || 'RATE_LIMIT_EXCEEDED', 429, details);
+      const rateLimitMsg = data.message || (typeof data.error === 'string' ? data.error : '') || data.errorObject?.message || 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند لحظه صبر کنید (۴۲۹)';
+      throw new ApiError(rateLimitMsg, code || 'RATE_LIMIT_EXCEEDED', 429, details);
     }
     throw new ApiError(errorMessage, code, res.status, details);
   }

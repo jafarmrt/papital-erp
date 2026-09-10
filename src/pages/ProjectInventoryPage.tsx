@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ProductionProject, Item, User } from '../types';
 import { fetchJson } from '../api';
+import { formatPersianNumber } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
 
@@ -209,14 +210,14 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
               <p className="text-xs text-slate-300">
                 مشتری: <span className="text-amber-300 font-bold">{project.customer_name || 'ثبت‌نشده'}</span> | 
                 تاریخ تحویل: <span className="font-mono text-slate-200">{project.end_date || 'تعیین نشده'}</span> | 
-                تیراژ کل سفارش: <span className="font-mono font-bold text-emerald-400">{project.quantity || 1} {project.unit || 'عدد'}</span>
+                تیراژ کل سفارش: <span className="font-mono font-bold text-emerald-400">{formatPersianNumber(project.quantity || 1)} {project.unit || 'عدد'}</span>
               </p>
             </div>
 
             <div className="flex items-center gap-3 border-t md:border-t-0 border-slate-700 pt-3 md:pt-0">
               <div className="text-right">
                 <span className="text-[10px] text-slate-400 font-semibold block">پیشرفت کل پروژه:</span>
-                <span className="font-mono font-bold text-amber-400 text-sm">{project.progress_percent || 0}٪</span>
+                <span className="font-mono font-bold text-amber-400 text-sm">{formatPersianNumber(project.progress_percent || 0)}٪</span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400">
                 <BarChart2 size={20} />

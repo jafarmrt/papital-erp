@@ -243,7 +243,7 @@ export default function GlobalHeaderSearch() {
               <div>
                 <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wider border-t pt-2">
                   <UsersRound size={13} className="text-emerald-500" />
-                  طرفین حساب و مشتریان ({formatPersianNumber(results.customers.length)})
+                  طرفین حساب ({formatPersianNumber(results.customers.length)})
                 </div>
                 <div className="space-y-1 mt-1">
                   {results.customers.map(cust => (

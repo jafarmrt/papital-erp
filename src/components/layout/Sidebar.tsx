@@ -79,13 +79,25 @@ export function Sidebar({
     };
   });
 
+  // Helper to determine if a menu item is currently active (supporting query params like /settings?tab=chart_of_accounts)
+  const isItemActive = (itemPath: string) => {
+    const currentFull = location.pathname + location.search;
+    if (itemPath.includes('?')) {
+      return currentFull === itemPath;
+    }
+    if (itemPath === '/settings') {
+      return location.pathname === '/settings' && !currentFull.includes('tab=chart_of_accounts');
+    }
+    if (itemPath === '/accounting/dashboard') {
+      return location.pathname === '/accounting/dashboard' || location.pathname === '/accounting' || location.pathname === '/accounting/';
+    }
+    return location.pathname === itemPath;
+  };
+
   // Ensure the active route's group is expanded automatically upon route change
   useEffect(() => {
     const activeGroup = menuGroups.find(g =>
-      g.items.some(item => item.visible && (
-        location.pathname === item.path ||
-        (item.path === '/accounting/dashboard' && location.pathname.startsWith('/accounting'))
-      ))
+      g.items.some(item => item.visible && isItemActive(item.path))
     );
     if (activeGroup && !openGroups[activeGroup.id]) {
       setOpenGroups(prev => {
@@ -174,17 +186,14 @@ export function Sidebar({
           const GroupIcon = group.groupIcon || Compass;
           const isGroupOpen = openGroups[group.id] ?? true;
           
-          const hasActiveItem = visibleItems.some(item => 
-            location.pathname === item.path || 
-            (item.path === '/accounting/dashboard' && location.pathname.startsWith('/accounting'))
-          );
+          const hasActiveItem = visibleItems.some(item => isItemActive(item.path));
 
           if (isCollapsed) {
             return (
               <div key={group.id} className="space-y-1">
                 {idx > 0 && <div className="h-px bg-slate-800/60 my-2 mx-1" />}
                 {visibleItems.map(item => {
-                  const active = location.pathname === item.path || (item.path === '/accounting/dashboard' && (location.pathname === '/accounting' || location.pathname === '/accounting/'));
+                  const active = isItemActive(item.path);
                   return (
                     <Link
                       key={item.path}
@@ -247,7 +256,7 @@ export function Sidebar({
               {isGroupOpen && (
                 <div className="mr-3 mt-1 mb-1.5 pr-2 space-y-1 border-r-2 border-slate-800/80">
                   {visibleItems.map(item => {
-                    const active = location.pathname === item.path || (item.path === '/accounting/dashboard' && (location.pathname === '/accounting' || location.pathname === '/accounting/'));
+                    const active = isItemActive(item.path);
                     return (
                       <Link
                         key={item.path}

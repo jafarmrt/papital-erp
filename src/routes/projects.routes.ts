@@ -47,6 +47,7 @@ const createProjectSchema = z.object({
     stageSchedules: z.unknown().optional(),
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
+    attachments: z.array(z.unknown()).optional(),
   })
 });
 
@@ -73,6 +74,7 @@ const updateProjectSchema = z.object({
     stageSchedules: z.unknown().optional(),
     custom_stages: z.array(z.unknown()).optional(),
     customStages: z.array(z.unknown()).optional(),
+    attachments: z.array(z.unknown()).optional(),
   }),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
@@ -283,6 +285,7 @@ export interface ProjectLike {
   stage_schedules?: unknown;
   customStages?: unknown;
   custom_stages?: unknown;
+  attachments?: unknown;
   isDeleted?: number | null;
   is_deleted?: number | null;
   itemImage?: string | null;
@@ -327,7 +330,7 @@ function formatProject(p: ProjectLike | null | undefined, rawStages: StageLike[]
     itemCode: itemCode,
     item_name: itemName,
     itemName: itemName,
-    quantity: p.quantity ?? 1,
+    quantity: typeof p.quantity === 'number' ? p.quantity : (Number(p.quantity) || 1),
     unit: p.unit || 'عدد',
     start_date: p.startDate ?? p.start_date ?? '',
     startDate: p.startDate ?? p.start_date ?? '',
@@ -347,6 +350,7 @@ function formatProject(p: ProjectLike | null | undefined, rawStages: StageLike[]
     stageSchedules: stageSchedules,
     custom_stages: customStages,
     customStages: customStages,
+    attachments: Array.isArray(p.attachments) ? p.attachments : [],
     is_deleted: p.isDeleted ?? p.is_deleted ?? 0,
     item_image: extra.item_image || extra.itemThumbnail || extra.itemImage || p.item_image || p.itemThumbnail || p.itemImage || '',
     stages,
@@ -356,6 +360,147 @@ function formatProject(p: ProjectLike | null | undefined, rawStages: StageLike[]
     completedStages: completedStages,
     progress_percent: overallProgress,
     progressPercent: overallProgress
+  };
+}
+
+// ============================================================================
+// V3.1.0 / V3.1.16 — پیشرفت ماتریسی SKU × مرحله و اعتبارسنجی تکمیل پروژه
+// ============================================================================
+
+export const PRODUCT_PROGRESS_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
+export type ProductProgressStatus = typeof PRODUCT_PROGRESS_STATUSES[number];
+
+export interface ProjectProductRow {
+  item_id?: number | null;
+  item_id_raw?: number | null;
+  itemId?: number | null;
+  item_code?: string;
+  itemCode?: string;
+  item_name?: string;
+  itemName?: string;
+  quantity?: number | string;
+  unit?: string;
+  selected_optional_stages?: string[];
+}
+
+export function resolveProductItemId(p: ProjectProductRow): number | null {
+  const raw = p.item_id ?? p.itemId ?? (p as unknown as { item_id_raw?: number }).item_id_raw;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+// محاسبه مراحل اعمال‌شده برای هر SKU:
+// عنوان‌هایی که در انتخاب‌های اختیاریِ «حداقل یک» محصول آمده‌اند = مراحل اختیاری؛
+// برای SKU فقط آن‌هایی اعمال می‌شوند که خودش انتخاب کرده است.
+export function computeApplicableStageOrders(product: ProjectProductRow, optionalTitles: Set<string>, allStages: { stageOrder: number; title: string }[]): number[] {
+  const selected = new Set((product.selected_optional_stages || []).map(t => String(t).trim()));
+  return allStages
+    .filter(s => !optionalTitles.has(s.title) || selected.has(s.title))
+    .map(s => s.stageOrder);
+}
+
+export interface ProjectProgressMatrixStatus {
+  allMatrixCompleted: boolean;
+  totalMatrixCells: number;
+  completedMatrixCells: number;
+  missingMatrixCells: number;
+  reason?: string;
+}
+
+// بررسی جامع وضعیت گزینه‌های ماتریس پیشرفت فیزیکی محصولات
+// تنها در صورتی true برمی‌گرداند که تمام گزینه‌های اعمال‌شده برای تمام SKUها تیک خورده باشند
+export async function getProjectProgressMatrixStatus(
+  projectId: number,
+  dbInstance: any = orm
+): Promise<ProjectProgressMatrixStatus> {
+  const [project] = await dbInstance
+    .select()
+    .from(productionProjects)
+    .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+
+  if (!project) {
+    return {
+      allMatrixCompleted: false,
+      totalMatrixCells: 0,
+      completedMatrixCells: 0,
+      missingMatrixCells: 0,
+      reason: 'پروژه یافت نشد'
+    };
+  }
+
+  const rawStages = await dbInstance
+    .select()
+    .from(projectStages)
+    .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
+    .orderBy(asc(projectStages.stageOrder));
+
+  if (rawStages.length === 0) {
+    return {
+      allMatrixCompleted: false,
+      totalMatrixCells: 0,
+      completedMatrixCells: 0,
+      missingMatrixCells: 0,
+      reason: 'هیچ مرحله‌ای برای پروژه تعریف نشده است'
+    };
+  }
+
+  let products = (Array.isArray(project.products) && project.products.length > 0 ? project.products : []) as ProjectProductRow[];
+  if (products.length === 0 && project.itemId) {
+    products = [{
+      item_id: project.itemId,
+      item_code: project.itemCode || '',
+      item_name: project.itemName || '',
+      quantity: project.quantity || 1,
+      unit: project.unit || 'عدد'
+    }];
+  }
+
+  if (products.length === 0) {
+    return {
+      allMatrixCompleted: false,
+      totalMatrixCells: 0,
+      completedMatrixCells: 0,
+      missingMatrixCells: 0,
+      reason: 'هیچ کد کالایی برای پروژه تعریف نشده است'
+    };
+  }
+
+  const progressRows = await dbInstance
+    .select()
+    .from(projectProductStageProgress)
+    .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
+
+  const progressMap = new Map<string, typeof progressRows[number]>();
+  for (const row of progressRows) {
+    progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
+  }
+
+  const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
+  const stagesForCompute = rawStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+
+  let totalMatrixCells = 0;
+  let completedMatrixCells = 0;
+
+  for (const p of products) {
+    const itemId = resolveProductItemId(p);
+    if (!itemId) continue;
+    const applicableOrders = computeApplicableStageOrders(p, optionalTitles, stagesForCompute);
+    for (const order of applicableOrders) {
+      totalMatrixCells++;
+      const key = `${itemId}|${order}`;
+      const row = progressMap.get(key);
+      if (row?.status === 'completed') {
+        completedMatrixCells++;
+      }
+    }
+  }
+
+  const allMatrixCompleted = totalMatrixCells > 0 && completedMatrixCells === totalMatrixCells;
+  return {
+    allMatrixCompleted,
+    totalMatrixCells,
+    completedMatrixCells,
+    missingMatrixCells: Math.max(0, totalMatrixCells - completedMatrixCells)
   };
 }
 
@@ -469,7 +614,7 @@ router.post('/projects', authorizePermission('projects.create'), validate(create
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, priority, description, initial_stages,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages
+      custom_stages, customStages, attachments
     } = req.body;
 
     // Auto generate or uniquify project code
@@ -535,6 +680,7 @@ router.post('/projects', authorizePermission('projects.create'), validate(create
       inventoryControl: inventoryControl || inventory_control || {},
       stageSchedules: stageSchedules || stage_schedules || {},
       customStages: customStages || custom_stages || [],
+      attachments: Array.isArray(attachments) ? attachments : [],
     }).returning();
 
     // Insert initial stages if provided
@@ -630,7 +776,17 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
     if (unit !== undefined) updateData.unit = unit;
     if (start_date !== undefined) updateData.startDate = start_date;
     if (end_date !== undefined) updateData.endDate = end_date;
-    if (status !== undefined) updateData.status = status;
+    if (status !== undefined) {
+      if (status === 'completed') {
+        const matrixCheck = await getProjectProgressMatrixStatus(id, orm);
+        if (!matrixCheck.allMatrixCompleted) {
+          return res.status(400).json({
+            error: `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`
+          });
+        }
+      }
+      updateData.status = status;
+    }
     if (priority !== undefined) updateData.priority = priority;
     if (description !== undefined) updateData.description = description;
 
@@ -643,6 +799,9 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
     }
     if (req.body.custom_stages !== undefined || req.body.customStages !== undefined) {
       updateData.customStages = req.body.customStages ?? req.body.custom_stages ?? [];
+    }
+    if (req.body.attachments !== undefined) {
+      updateData.attachments = Array.isArray(req.body.attachments) ? req.body.attachments : [];
     }
 
     await orm.update(productionProjects).set(updateData).where(eq(productionProjects.id, id));
@@ -768,6 +927,10 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
 
       // Mark project as completed if requested
       if (markCompleted) {
+        const matrixCheck = await getProjectProgressMatrixStatus(id, tx);
+        if (!matrixCheck.allMatrixCompleted) {
+          throw new Error(`امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`);
+        }
         await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
       }
 
@@ -930,44 +1093,6 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
     throw err;
   }
 });
-
-// ============================================================================
-// V3.1.0 — پیشرفت ماتریسی SKU × مرحله (به تفکیک هر کد کالا)
-// مدل کسب‌وکار: سفارش پروژه = N کد کالا × کمیت؛ وضعیت هر SKU در هر مرحله
-// دودویی (تمام/ناتمام) و پیشرفت کل پروژه = تجمیع وزن‌دار (Σ sku%×qty / Σ qty)
-// ============================================================================
-
-const PRODUCT_PROGRESS_STATUSES = ['pending', 'in_progress', 'completed', 'blocked'] as const;
-type ProductProgressStatus = typeof PRODUCT_PROGRESS_STATUSES[number];
-
-interface ProjectProductRow {
-  item_id?: number | null;
-  item_id_raw?: number | null;
-  itemId?: number | null;
-  item_code?: string;
-  itemCode?: string;
-  item_name?: string;
-  itemName?: string;
-  quantity?: number | string;
-  unit?: string;
-  selected_optional_stages?: string[];
-}
-
-function resolveProductItemId(p: ProjectProductRow): number | null {
-  const raw = p.item_id ?? p.itemId ?? (p as unknown as { item_id_raw?: number }).item_id_raw;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-}
-
-// محاسبه مراحل اعمال‌شده برای هر SKU:
-// عنوان‌هایی که در انتخاب‌های اختیاریِ «حداقل یک» محصول آمده‌اند = مراحل اختیاری؛
-// برای SKU فقط آن‌هایی اعمال می‌شوند که خودش انتخاب کرده است.
-function computeApplicableStageOrders(product: ProjectProductRow, optionalTitles: Set<string>, allStages: { stageOrder: number; title: string }[]): number[] {
-  const selected = new Set((product.selected_optional_stages || []).map(t => String(t).trim()));
-  return allStages
-    .filter(s => !optionalTitles.has(s.title) || selected.has(s.title))
-    .map(s => s.stageOrder);
-}
 
 // همگام‌سازی خودکار درصد پیشرفت و وضعیت هر مرحله و کل پروژه بر اساس ماتریس SKUها
 export async function syncProjectStagesAndStatusFromProductProgress(projectId: number) {
@@ -1188,6 +1313,10 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
       : 0;
     const fullyCompletedSkus = productRows.filter(p => p.applicable_count > 0 && p.completed_count === p.applicable_count).length;
 
+    const totalMatrixCells = productRows.reduce((acc, p) => acc + (p.applicable_count || 0), 0);
+    const completedMatrixCells = productRows.reduce((acc, p) => acc + (p.completed_count || 0), 0);
+    const allMatrixCompleted = totalMatrixCells > 0 && completedMatrixCells === totalMatrixCells;
+
     const perStageCounts = stageMeta.map(s => ({
       stage_order: s.stage_order,
       title: s.title,
@@ -1205,7 +1334,11 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
           total_quantity: totalQty,
           weighted_progress_percent: weightedProgress,
           fully_completed_skus: fullyCompletedSkus,
-          per_stage_counts: perStageCounts
+          per_stage_counts: perStageCounts,
+          total_matrix_cells: totalMatrixCells,
+          completed_matrix_cells: completedMatrixCells,
+          all_matrix_completed: allMatrixCompleted,
+          missing_matrix_cells: Math.max(0, totalMatrixCells - completedMatrixCells)
         }
       }
     });

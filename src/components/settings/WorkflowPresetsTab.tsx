@@ -117,7 +117,7 @@ export function WorkflowPresetsTab({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
           <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-            <Layers size={18} className="text-amber-500" /> مدیریت و ویرایش الگوهای مراحل تولید (Workflow Presets)
+            <Layers size={18} className="text-amber-500" /> مدیریت و ویرایش الگوهای مراحل تولید
           </h3>
           <p className="text-xs text-slate-500 mt-1">
             تعریف الگوهای مراحل تولید کارگاهی. عناوین کاری و نرخ‌های پایه مستقیماً از بخش حقوق و دستمزد خوانده می‌شوند.

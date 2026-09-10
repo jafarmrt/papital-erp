@@ -22,10 +22,11 @@ import {
 } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import type { Account, Customer, Personnel, JournalVoucher, JournalVoucherItem } from '../../types';
+import type { Account, Customer, Personnel, JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types';
 import { AccountSearchSelect } from './AccountSearchSelect';
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
 import VoucherItemsTable, { VoucherItemDraft } from './VoucherItemsTable';
+import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
@@ -61,6 +62,7 @@ export function NewVoucherModal({
   const [manualVoucherNumber, setManualVoucherNumber] = useState('');
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState('IRR');
+  const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
@@ -89,8 +91,9 @@ export function NewVoucherModal({
     manualVoucherNumber,
     description,
     currency,
+    attachments,
     items
-  }), [date, voucherType, manualVoucherNumber, description, currency, items]);
+  }), [date, voucherType, manualVoucherNumber, description, currency, attachments, items]);
 
   const {
     hasServerDraft,
@@ -109,6 +112,7 @@ export function NewVoucherModal({
       if (loaded.manualVoucherNumber) setManualVoucherNumber(loaded.manualVoucherNumber);
       if (loaded.description) setDescription(loaded.description);
       if (loaded.currency) setCurrency(loaded.currency);
+      if (Array.isArray(loaded.attachments)) setAttachments(loaded.attachments);
       if (Array.isArray(loaded.items) && loaded.items.length > 0) {
         setItems(loaded.items);
       }
@@ -134,6 +138,7 @@ export function NewVoucherModal({
       setManualVoucherNumber(editingVoucher.manualVoucherNumber || '');
       setDescription(editingVoucher.description || '');
       setCurrency(editingVoucher.currency || 'IRR');
+      setAttachments(Array.isArray(editingVoucher.attachments) ? editingVoucher.attachments : []);
       if (editingVoucher.items && Array.isArray(editingVoucher.items) && editingVoucher.items.length > 0) {
         setItems(editingVoucher.items.map(it => ({
           id: it.id,
@@ -149,6 +154,7 @@ export function NewVoucherModal({
     } else {
       setDescription('');
       setManualVoucherNumber('');
+      setAttachments([]);
       setItems([
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
         { accountId: '', detailedType: 'none', detailedId: null, detailedName: '', debit: 0, credit: 0, description: '' },
@@ -410,6 +416,7 @@ export function NewVoucherModal({
         manualVoucherNumber,
         description,
         currency,
+        attachments,
         items: items.map(it => ({
           accountId: Number(it.accountId),
           detailedType: it.detailedType,
@@ -572,7 +579,7 @@ export function NewVoucherModal({
             <div className="flex items-start gap-3 p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">
               <AlertCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div className="leading-relaxed">
-                <span className="font-bold">سند حسابداری دائم و قطعی‌شده:</span> این سند به دلیل وضعیت دائم (Permanent) قابل ویرایش یا حذف مستقیم نیست. جهت تعدیل مالی، لطفاً از دکمه‌های «صدور سند معکوس (عطف)» یا «صدور سند اصلاحی» در جدول اسناد استفاده فرمایید.
+                <span className="font-bold">سند حسابداری دائم و قطعی‌شده:</span> این سند به دلیل وضعیت دائم و قطعی، قابل ویرایش یا حذف مستقیم نیست. جهت تعدیل مالی، لطفاً از دکمه‌های «صدور سند معکوس (عطف)» یا «صدور سند اصلاحی» در جدول اسناد استفاده فرمایید.
               </div>
             </div>
           )}
@@ -727,6 +734,15 @@ export function NewVoucherModal({
               handleAutoBalanceRow={handleAutoBalanceRow}
               handleSwapDebitCredit={handleSwapDebitCredit}
               rowRefs={itemRefs}
+            />
+          </div>
+
+          {/* الصاق تصاویر فاکتور و اسناد مثبته پیوست */}
+          <div className="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <FinancialAttachmentUploader
+              attachments={attachments}
+              onChange={setAttachments}
+              title="تصاویر فاکتور و اسناد مثبته ضمیمه سند حسابداری"
             />
           </div>
 

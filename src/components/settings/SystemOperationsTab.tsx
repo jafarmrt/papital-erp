@@ -63,7 +63,7 @@ export function ClearDataModal({
           <AlertTriangle size={22} className="shrink-0 text-red-600" />
           <div>
             <h3 className="font-bold text-base border-0 p-0 m-0">تایید نهایی پاکسازی کامل اطلاعات سیستم</h3>
-            <p className="text-[11px] text-red-600/80 mt-0.5">بازنشانی به وضعیت اولیه (Zero State)</p>
+            <p className="text-[11px] text-red-600/80 mt-0.5">بازنشانی به وضعیت اولیه کارخانه</p>
           </div>
         </div>
 

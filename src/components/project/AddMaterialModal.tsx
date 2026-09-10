@@ -3,6 +3,7 @@ import {
   Database, X, Search, Plus, Filter, AlertCircle, Info, ArrowRight 
 } from 'lucide-react';
 import { Item, Category, ProjectInventoryControlSectionData } from '../../types';
+import { formatPersianNumber } from '../../utils';
 import { COMMON_UNITS } from './projectInventoryUtils';
 
 interface AddMaterialModalProps {
@@ -68,7 +69,7 @@ export function AddMaterialModal({
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-amber-400" />
             <h3 className="font-bold text-sm">
-              {changingItemTarget ? 'تغییر و لینک ماده اولیه با انبار' : 'افزودن ماده اولیه جدید به کنترل موجودی'}
+              {changingItemTarget ? 'اتصال و لینک ردیف به کالای انبار' : 'افزودن ماده اولیه به کنترل موجودی'}
             </h3>
           </div>
           <button
@@ -92,7 +93,7 @@ export function AddMaterialModal({
             }`}
           >
             <Search className="w-4 h-4" />
-            انتخاب از انبار ({warehouseItems.length} کالا موجود)
+            انتخاب از انبار ({filteredWarehouseItems.length} ماده اولیه موجود)
           </button>
 
           <button
@@ -174,7 +175,7 @@ export function AddMaterialModal({
 
                       <div className="flex items-center gap-3">
                         <div className="text-left font-mono">
-                          <span className="font-bold text-slate-800 text-xs">{item.current_stock}</span>
+                          <span className="font-bold text-slate-800 text-xs">{formatPersianNumber(item.current_stock)}</span>
                           <span className="text-[11px] text-slate-500 mr-1">{item.unit || 'عدد'}</span>
                           <div className="text-[10px] text-emerald-600 font-bold">موجودی انبار</div>
                         </div>

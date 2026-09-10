@@ -45,6 +45,7 @@ import TaskExecuteModal, { ApprovalTaskAction } from '../components/approval/Tas
 import TransitionExecuteModal from '../components/approval/TransitionExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
+import { PurchaseRequisition } from '../types';
 
 type DocumentDetails = ApprovalDocumentDetails;
 
@@ -140,6 +141,8 @@ export const ApprovalInboxPage: React.FC = () => {
   const [docDetails, setDocDetails] = useState<DocumentDetails | null>(null);
   const [isLoadingDoc, setIsLoadingDoc] = useState<boolean>(false);
   const [printDoc, setPrintDoc] = useState<DocumentDetails | null>(null);
+  const [requisitionDetails, setRequisitionDetails] = useState<PurchaseRequisition | null>(null);
+  const [isLoadingRequisition, setIsLoadingRequisition] = useState<boolean>(false);
 
   const { data: inboxData, isLoading, refetch, isFetching } = useWorkflowInboxQuery();
   const { data: myTasksData, isLoading: isTasksLoading, refetch: refetchTasks } = useMyTasksQuery(taskStatusFilter);
@@ -153,13 +156,22 @@ export const ApprovalInboxPage: React.FC = () => {
   const rawTasks = Array.isArray(myTasksData) ? myTasksData : (Array.isArray(myTasksData?.data) ? myTasksData.data : []);
   const myTasks: TaskItem[] = rawTasks;
 
-  // Fetch document details when a task or transition item is opened
+  // Fetch document details or requisition details when a task or transition item is opened
   useEffect(() => {
+    if (!selectedTask && !selectedItem) {
+      setDocDetails(null);
+      setIsLoadingDoc(false);
+      setRequisitionDetails(null);
+      setIsLoadingRequisition(false);
+      return;
+    }
+
     const itemObj = selectedTask || selectedItem?.item;
-    const entityType = selectedTask?.instance?.entityType || selectedTask?.entityType || selectedTask?.entity_type || selectedItem?.item?.instance?.entityType || selectedItem?.item?.entityType || 'document';
+    const entityType = selectedTask?.instance?.entityType || selectedTask?.entityType || selectedTask?.entity_type || selectedItem?.item?.instance?.entityType || selectedItem?.item?.entityType || '';
     const entityId = selectedTask?.instance?.entityId || selectedTask?.entityId || selectedTask?.entity_id || selectedItem?.item?.instance?.entityId || selectedItem?.item?.entityId;
 
-    const isDoc = entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma';
+    const isRequisition = entityType === 'purchase_requisition' || entityType === 'requisition';
+    const isDoc = !isRequisition && (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma' || entityType === '');
 
     if (isDoc && entityId) {
       setIsLoadingDoc(true);
@@ -207,7 +219,7 @@ export const ApprovalInboxPage: React.FC = () => {
             });
           } else {
             setDocDetails(null);
-            toast.error('خطا در دریافت جزئیات سند کارتابل');
+            toast.error(err?.message || 'خطا در دریافت جزئیات سند کارتابل');
           }
         })
         .finally(() => {
@@ -216,6 +228,27 @@ export const ApprovalInboxPage: React.FC = () => {
     } else {
       setDocDetails(null);
       setIsLoadingDoc(false);
+    }
+
+    if (isRequisition && entityId) {
+      setIsLoadingRequisition(true);
+      fetchJson<{ success?: boolean; data?: PurchaseRequisition }>(`/procurement/requisitions/${entityId}`)
+        .then((res) => {
+          const req = res?.data || (res as any);
+          if (req && (req.id || req.code)) {
+            setRequisitionDetails(req);
+          }
+        })
+        .catch((err) => {
+          console.error('Could not load requisition details in ApprovalInboxPage:', err);
+          toast.error(err?.message || 'خطا در دریافت مشخصات و اقلام درخواست خرید');
+        })
+        .finally(() => {
+          setIsLoadingRequisition(false);
+        });
+    } else {
+      setRequisitionDetails(null);
+      setIsLoadingRequisition(false);
     }
   }, [selectedTask, selectedItem]);
 
@@ -631,7 +664,7 @@ export const ApprovalInboxPage: React.FC = () => {
                             {isCompletedTask && t.completedAt
                               ? `تاریخ تکمیل: ${formatPersianDate(t.completedAt)}`
                               : overdue
-                              ? 'مهلت تایید (SLA) منقضی شده است!'
+                              ? 'مهلت تایید منقضی شده است!'
                               : `مهلت تایید: ${formatPersianDate(t.dueAt)}`}
                           </span>
                         </div>
@@ -781,33 +814,41 @@ export const ApprovalInboxPage: React.FC = () => {
       )}
 
       {/* V9 Phase 5.2: مودال‌های مودولار استخراج‌شده */}
-      <TaskExecuteModal
-        selectedTask={selectedTask}
-        onClose={() => setSelectedTask(null)}
-        docDetails={docDetails}
-        isLoadingDoc={isLoadingDoc}
-        onPrintDoc={setPrintDoc}
-        taskAction={taskAction}
-        onTaskActionChange={setTaskAction}
-        comment={comment}
-        onCommentChange={setComment}
-        onExecute={handleExecuteTask}
-        isExecuting={executeTaskMutation.isPending}
-      />
+      {selectedTask && (
+        <TaskExecuteModal
+          selectedTask={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          docDetails={docDetails}
+          isLoadingDoc={isLoadingDoc}
+          requisitionDetails={requisitionDetails}
+          isLoadingRequisition={isLoadingRequisition}
+          onPrintDoc={setPrintDoc}
+          taskAction={taskAction}
+          onTaskActionChange={setTaskAction}
+          comment={comment}
+          onCommentChange={setComment}
+          onExecute={handleExecuteTask}
+          isExecuting={executeTaskMutation.isPending}
+        />
+      )}
 
-      <TransitionExecuteModal
-        selectedItem={selectedItem}
-        onClose={() => setSelectedItem(null)}
-        docDetails={docDetails}
-        isLoadingDoc={isLoadingDoc}
-        onPrintDoc={setPrintDoc}
-        comment={comment}
-        onCommentChange={setComment}
-        onExecute={handleExecuteTransition}
-        isExecuting={executeTransitionMutation.isPending}
-      />
+      {selectedItem && (
+        <TransitionExecuteModal
+          selectedItem={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          docDetails={docDetails}
+          isLoadingDoc={isLoadingDoc}
+          requisitionDetails={requisitionDetails}
+          isLoadingRequisition={isLoadingRequisition}
+          onPrintDoc={setPrintDoc}
+          comment={comment}
+          onCommentChange={setComment}
+          onExecute={handleExecuteTransition}
+          isExecuting={executeTransitionMutation.isPending}
+        />
+      )}
 
-      <PrintDocModal printDoc={printDoc} onClose={() => setPrintDoc(null)} />
+      {printDoc && <PrintDocModal printDoc={printDoc} onClose={() => setPrintDoc(null)} />}
 
     </div>
   );

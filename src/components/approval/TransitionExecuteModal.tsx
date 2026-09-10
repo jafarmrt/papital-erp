@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldCheck, X, Printer, MessageSquare, Send } from 'lucide-react';
 import DocumentDetailsPreview, { ApprovalDocumentDetails } from './DocumentDetailsPreview';
+import RequisitionDetailsPreview from './RequisitionDetailsPreview';
+import { PurchaseRequisition } from '../../types';
+import { fetchJson } from '../../api';
 
 interface WorkflowTransitionLite {
   title: string;
@@ -24,6 +27,8 @@ interface TransitionExecuteModalProps {
   onCommentChange: (val: string) => void;
   onExecute: () => void;
   isExecuting: boolean;
+  requisitionDetails?: PurchaseRequisition | null;
+  isLoadingRequisition?: boolean;
 }
 
 /**
@@ -38,16 +43,53 @@ export function TransitionExecuteModal({
   comment,
   onCommentChange,
   onExecute,
-  isExecuting
+  isExecuting,
+  requisitionDetails: propRequisitionDetails,
+  isLoadingRequisition: propIsLoadingRequisition
 }: TransitionExecuteModalProps) {
+  const [internalReq, setInternalReq] = useState<PurchaseRequisition | null>(null);
+  const [internalLoading, setInternalLoading] = useState(false);
+
+  const entityInfo = selectedItem?.item?.instance || selectedItem?.item || {};
+  const entityType = (entityInfo as any).entityType;
+  const entityId = (entityInfo as any).entityId;
+  const isRequisition = entityType === 'purchase_requisition' || entityType === 'requisition';
+
+  useEffect(() => {
+    if (selectedItem && isRequisition && entityId && !propRequisitionDetails && !propIsLoadingRequisition) {
+      setInternalLoading(true);
+      fetchJson<{ success?: boolean; data?: PurchaseRequisition }>(`/procurement/requisitions/${entityId}`)
+        .then((res) => {
+          const reqData = res?.data || (res as any);
+          if (reqData && (reqData.id || reqData.code)) {
+            setInternalReq(reqData);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load requisition inside TransitionExecuteModal:', err);
+        })
+        .finally(() => {
+          setInternalLoading(false);
+        });
+    } else if (!selectedItem) {
+      setInternalReq(null);
+    }
+  }, [selectedItem, isRequisition, entityId, propRequisitionDetails, propIsLoadingRequisition]);
+
   if (!selectedItem) return null;
 
-  const entityInfo = selectedItem.item?.instance || selectedItem.item || {};
-  const entityType = (entityInfo as any).entityType;
+  const activeRequisition = propRequisitionDetails || internalReq;
+  const isLoadingReq = propIsLoadingRequisition !== undefined ? propIsLoadingRequisition : internalLoading;
+
+  const getEntityLabel = () => {
+    if (entityType === 'document' || entityType === 'doc') return 'پیش‌فاکتور / سند';
+    if (isRequisition) return 'درخواست خرید متریال / کالا';
+    return entityType || 'سند';
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl animate-scaleUp max-h-[92vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-3xl w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl animate-scaleUp max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -66,9 +108,9 @@ export function TransitionExecuteModal({
         <div className="space-y-4 overflow-y-auto pr-1 pl-1 flex-1">
           <div className="text-xs bg-indigo-50/70 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
             <div>
-              <span className="text-gray-500 dark:text-gray-400">موجودیت: </span>
+              <span className="text-gray-500 dark:text-gray-400">موضوع: </span>
               <span className="font-bold text-indigo-700 dark:text-indigo-300">
-                {entityType === 'document' ? 'پیش‌فاکتور / سند' : (entityType || 'سند')} #{(entityInfo.entityId || '')}
+                {getEntityLabel()} #{(entityInfo.entityId || '')}
               </span>
               <span className="mx-2 text-gray-300 dark:text-gray-600">|</span>
               <span className="text-gray-500 dark:text-gray-400">وضعیت جاری: </span>
@@ -90,6 +132,13 @@ export function TransitionExecuteModal({
           {(entityType === 'document' || entityType === 'doc') && (
             <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/30">
               <DocumentDetailsPreview docDetails={docDetails} isLoadingDoc={isLoadingDoc} />
+            </div>
+          )}
+
+          {/* Requisition details preview */}
+          {isRequisition && (
+            <div className="border border-amber-200/80 dark:border-amber-900/50 rounded-xl overflow-hidden bg-amber-50/20 dark:bg-gray-900/40">
+              <RequisitionDetailsPreview requisition={activeRequisition} isLoading={isLoadingReq} />
             </div>
           )}
 

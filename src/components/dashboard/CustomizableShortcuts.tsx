@@ -4,7 +4,7 @@ import {
   Plus, Settings2, Package, Box, FileText, Target, CalendarCheck, Layers,
   CheckSquare, FileInput, Warehouse, UsersRound, DollarSign, Sparkles,
   AlertTriangle, Users, Calculator, Landmark, ClipboardList, Check, X,
-  ArrowUpRight
+  ArrowUpRight, ShoppingBag
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -98,6 +98,17 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
     requiredPerm: 'projects.view',
   },
   {
+    id: 'procurement',
+    title: 'میز کار تدارکات و خرید',
+    description: 'کارتابل درخواست‌های خرید و تامین کالا',
+    path: '/procurement',
+    icon: ShoppingBag,
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50 hover:bg-amber-100/80',
+    borderColor: 'border-amber-200/80',
+    requiredPerm: ['procurement.view', 'projects.view', 'documents.view'],
+  },
+  {
     id: 'inventory_status',
     title: 'دیده‌بان وضعیت انبار',
     description: 'گزارش ارزش، جابجایی‌ها و هوش تجاری',
@@ -120,8 +131,8 @@ export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   },
   {
     id: 'customers',
-    title: 'طرفین حساب و مشتریان',
-    description: 'دفترچه مخاطبان و پرونده مشتریان',
+    title: 'طرفین حساب',
+    description: 'دفترچه مخاطبان و پرونده طرفین حساب',
     path: '/customers',
     icon: UsersRound,
     color: 'text-sky-600',

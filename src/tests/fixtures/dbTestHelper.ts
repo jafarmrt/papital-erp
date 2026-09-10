@@ -175,6 +175,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 1. Clear workflow dependencies & instances
   try {
+    await orm.execute(sql`DELETE FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%TEST%' OR title ILIKE '%E2E%'`);
+    await orm.execute(sql`UPDATE purchase_requisitions SET workflow_instance_id = NULL`);
     await orm.execute(sql`DELETE FROM workflow_history_logs`);
     await orm.execute(sql`DELETE FROM workflow_tasks`);
     await orm.execute(sql`DELETE FROM workflow_pending_approvals`);

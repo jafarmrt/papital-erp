@@ -1,5 +1,5 @@
-import React from 'react';
-import { Settings, List, FolderTree, Building2, Tags, ShieldAlert, Activity, Layers, Copy, Check, ShoppingBag, RefreshCw, Zap, ShieldCheck, Landmark } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Settings, Menu, X } from 'lucide-react';
 import { User } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
 import { cn } from '../utils';
@@ -17,69 +17,123 @@ import { SystemOperationsTab, ClearDataModal } from '../components/settings/Syst
 import { WooCommerceTab } from '../components/settings/WooCommerceTab';
 import { NegativeStockPolicySettingsTab } from '../components/settings/NegativeStockPolicySettingsTab';
 import { AccountingSettingsTab } from '../components/settings/AccountingSettingsTab';
+import { ChartOfAccountsSettingsTab } from '../components/settings/ChartOfAccountsSettingsTab';
+import { 
+  SETTINGS_GROUPS, 
+  getVisibleGroups, 
+  findGroupByTabId, 
+  findTabById 
+} from '../components/settings/settingsNavigationConfig';
+import { SettingsNavigationSidebar } from '../components/settings/SettingsNavigationSidebar';
 
 interface SettingsPageProps {
   currentUser: User;
+  userPermissions?: { permissions: string[]; isAdmin: boolean; roleName?: string };
 }
 
-export default function SettingsPage({ currentUser }: SettingsPageProps) {
+export default function SettingsPage({ currentUser, userPermissions }: SettingsPageProps) {
   const s = useSettings();
 
-  if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const isAdmin = currentUser.role === 'admin' || userPermissions?.isAdmin;
+  const isManager = currentUser.role === 'manager';
+  const hasCoaPerm = userPermissions?.permissions?.includes('accounting.coa');
+  const hasSettingsPerm = userPermissions?.permissions?.includes('settings.manage');
+
+  const visibleGroups = useMemo(() => {
+    return getVisibleGroups(SETTINGS_GROUPS, currentUser.role, userPermissions);
+  }, [currentUser.role, userPermissions]);
+
+  const activeTabItem = useMemo(() => {
+    return findTabById(visibleGroups, s.activeTab);
+  }, [visibleGroups, s.activeTab]);
+
+  const activeGroupItem = useMemo(() => {
+    return findGroupByTabId(visibleGroups, s.activeTab);
+  }, [visibleGroups, s.activeTab]);
+
+  if (!isAdmin && !isManager && !hasCoaPerm && !hasSettingsPerm) {
     return <div className="p-8 text-center text-slate-500 font-farsi">عدم دسترسی</div>;
   }
 
-  const tabs = [
-    { id: 'general', label: 'تنظیمات عمومی', icon: List },
-    { id: 'accounting', label: 'تنظیمات حسابداری', icon: Landmark },
-    { id: 'inventory_integrity', label: 'سیاست کنترل موجودی منفی', icon: ShieldCheck },
-    { id: 'categories', label: 'دسته‌بندی انبار', icon: FolderTree },
-    { id: 'task_titles', label: 'عناوین و دسته‌بندی‌های کاری', icon: Layers },
-    { id: 'warehouses', label: 'مدیریت انبارها', icon: Building2 },
-    { id: 'pricing', label: 'سیاست‌های قیمتی', icon: Tags },
-    { id: 'projects', label: 'الگوهای مراحل تولید', icon: Layers },
-    { id: 'inventory_control', label: 'الگوی کنترل موجودی و لیست خرید', icon: ShoppingBag },
-    { id: 'woocommerce', label: 'اتصال به ووکامرس', icon: FolderTree },
-    { id: 'health', label: 'وضعیت سلامت سیستم', icon: Activity },
-    ...(currentUser.role === 'admin' ? [
-      { id: 'system_config', label: 'پیکربندی سیستمی', icon: ShieldAlert },
-      { id: 'system', label: 'عملیات سیستمی', icon: ShieldAlert }
-    ] : [])
-  ] as const;
+  const handleSelectTab = (tabId: string) => {
+    s.setActiveTab(tabId as any);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tabId);
+    window.history.replaceState({}, '', url.toString());
+    setIsMobileMenuOpen(false);
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 font-farsi text-right">
       {/* Page Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4 shrink-0">
-        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-          <Settings size={24} />
+      <div className="bg-white border-b border-slate-200/90 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-2xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 shadow-2xs">
+            <Settings size={22} />
+          </div>
+          <div>
+            <div className="flex items-center flex-wrap gap-2">
+              <h1 className="text-lg font-black text-slate-800">تنظیمات سامانه</h1>
+              {activeGroupItem && (
+                <>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                    {activeGroupItem.title}
+                  </span>
+                </>
+              )}
+              {activeTabItem && (
+                <>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-xs font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
+                    {activeTabItem.label}
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="text-slate-500 text-xs mt-0.5">
+              {activeTabItem?.shortDesc || 'پیکربندی سیستم و مدیریت داده‌های پایه بر اساس ماژول‌های مرتبط'}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">تنظیمات سامانه</h1>
-          <p className="text-slate-500 text-xs mt-1">پیکربندی سیستم و مدیریت داده‌های پایه</p>
-        </div>
-      </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex bg-white border-b border-slate-200 px-6 gap-6 shrink-0 pt-2 overflow-x-auto custom-scrollbar">
-        {tabs.map((t) => (
+        {/* Mobile Toggle Button */}
+        <div className="md:hidden flex items-center gap-2">
           <button
-            key={t.id}
-            onClick={() => s.setActiveTab(t.id as any)}
-            className={cn(
-              'flex items-center gap-2 pb-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap cursor-pointer',
-              s.activeTab === t.id
-                ? 'border-blue-600 text-blue-600 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-            )}
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
           >
-            <t.icon size={16} /> {t.label}
+            {isMobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+            <span>دسته‌بندی‌ها</span>
           </button>
-        ))}
+        </div>
       </div>
 
-      {/* Active Tab Content */}
-      <div className="p-6 flex-1 overflow-auto">
+      {/* Main Layout: Categorized Sidebar + Content Area */}
+      <div className="flex-1 flex flex-col md:flex-row gap-5 p-4 md:p-6 overflow-hidden min-h-0">
+        {/* Navigation Sidebar (Desktop + Collapsible Mobile) */}
+        <div className={cn(
+          'shrink-0',
+          isMobileMenuOpen ? 'block w-full mb-4' : 'hidden md:block'
+        )}>
+          <SettingsNavigationSidebar
+            groups={visibleGroups}
+            activeTab={s.activeTab}
+            onSelectTab={handleSelectTab}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            selectedGroupFilter={selectedGroupFilter}
+            setSelectedGroupFilter={setSelectedGroupFilter}
+          />
+        </div>
+
+        {/* Content Pane */}
+        <main className="flex-1 min-w-0 overflow-y-auto custom-scrollbar flex flex-col space-y-4">
+          <div className="flex-1">
         {s.activeTab === 'general' && (
           <GeneralSettingsTab
             companyName={s.companyName}
@@ -109,6 +163,10 @@ export default function SettingsPage({ currentUser }: SettingsPageProps) {
 
         {s.activeTab === 'accounting' && (
           <AccountingSettingsTab currentUser={currentUser} />
+        )}
+
+        {s.activeTab === 'chart_of_accounts' && (
+          <ChartOfAccountsSettingsTab />
         )}
 
         {s.activeTab === 'inventory_integrity' && (
@@ -227,6 +285,8 @@ export default function SettingsPage({ currentUser }: SettingsPageProps) {
         {s.activeTab === 'system' && currentUser.role === 'admin' && (
           <SystemOperationsTab onOpenClearModal={() => s.setShowClearModal(true)} />
         )}
+          </div>
+        </main>
       </div>
 
       {/* Modals */}

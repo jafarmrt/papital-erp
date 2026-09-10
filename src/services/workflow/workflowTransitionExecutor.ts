@@ -90,6 +90,7 @@ export class WorkflowTransitionExecutor {
       res.add('sales_manager');
       res.add('production');
       res.add('production_manager');
+      res.add('procurement_officer');
       res.add('manager');
     } else if (r === 'warehouse' || r === 'warehouse_keeper') {
       res.add('warehouse');

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
-import { Item, User, Customer, Personnel } from '../types';
+import { Item, User, Customer, Personnel, FinancialAttachment } from '../types';
 import { 
   Plus, Trash2, FileInput, FileOutput, Lock, Unlock, 
   Package, CheckCircle2, AlertTriangle, Users, Building2, 
@@ -21,6 +21,7 @@ import {
 } from '../hooks/queries';
 import GlobalReservationsPanel from '../components/documents/GlobalReservationsPanel';
 import DocItemsTable from '../components/documents/DocItemsTable';
+import { FinancialAttachmentUploader } from '../components/accounting/FinancialAttachmentUploader';
 import { QUERY_KEYS } from '../lib/queryKeys';
 
 export default function DocumentsPage({ user: currentUser }: { user: User }) {
@@ -47,10 +48,30 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
     gcTime: 30 * 60 * 1000,
   });
 
+  const itemsQuery = useQuery<Item[]>({
+    queryKey: QUERY_KEYS.items.list({ scope: 'doc-items-all' }),
+    queryFn: async () => {
+      const res = await fetchJson('/items?limit=2500');
+      return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+    },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  const reservedStockQuery = useQuery({
+    queryKey: ['inventory', 'reserved-items'],
+    queryFn: async () => {
+      const res = await fetchJson('/inventory/reserved-items');
+      return res;
+    },
+    staleTime: 30 * 1000,
+  });
+
   const warehouses = whsQuery.data ?? [];
   const personnelList = personnelQuery.data ?? [];
   const projectsList = projectsQuery.data ?? [];
   const suppliersList = suppliersQuery.data ?? [];
+  const itemsList = itemsQuery.data ?? [];
 
   const [actionType, setActionType] = useState<'in' | 'out'>('in');
   const [docType, setDocType] = useState('receipt');
@@ -73,6 +94,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedProjectObj, setSelectedProjectObj] = useState<any | null>(null);
   const [showGlobalReservationsModal, setShowGlobalReservationsModal] = useState(false);
+  const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
 
   // بروزرسانی موقعیت پیش‌فرض هنگام دریافت انبارها
   useEffect(() => {
@@ -85,6 +107,8 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const reloadReferenceLists = () => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.items.all });
+    queryClient.invalidateQueries({ queryKey: ['inventory', 'reserved-items'] });
   };
 
   const selectedPersonnelObj = useMemo(() => {
@@ -158,10 +182,12 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
     return () => controller.abort();
   }, [docType]);
 
-  // Aggregate all global reservations across ALL projects
+  // Aggregate all global reservations across ALL projects and active proformas
   const allGlobalReservations = useMemo(() => {
     const list: Array<{
-      projectId: string | number;
+      sourceType?: 'proforma' | 'project';
+      sourceLabel?: string;
+      projectId?: string | number;
       projectCode: string;
       projectTitle: string;
       itemId?: number | string;
@@ -172,11 +198,34 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
       reservedAt?: string;
     }> = [];
 
+    const entries = reservedStockQuery.data?.allReservationEntries;
+    if (Array.isArray(entries) && entries.length > 0) {
+      entries.forEach((r: any) => {
+        list.push({
+          sourceType: r.sourceType,
+          sourceLabel: r.sourceLabel || (r.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه'),
+          projectId: r.sourceType === 'project' ? r.sourceId : undefined,
+          projectCode: r.sourceRef || '',
+          projectTitle: r.sourceTitle || '',
+          itemId: r.itemId,
+          itemCode: r.itemCode || '',
+          itemName: r.itemName || '',
+          reservedQty: Number(r.reservedQty || 0),
+          unit: r.unit || 'عدد',
+          reservedAt: r.date
+        });
+      });
+      return list;
+    }
+
+    // Fallback if reserved-items endpoint not ready yet:
     projectsList.forEach(p => {
-      const reservedItems = p.inventory_control?.reservedItems;
+      const reservedItems = p.inventory_control?.reservedItems || p.inventoryControl?.reservedItems;
       if (Array.isArray(reservedItems) && reservedItems.length > 0) {
         reservedItems.forEach((rItem: any) => {
           list.push({
+            sourceType: 'project',
+            sourceLabel: 'پروژه',
             projectId: p.id,
             projectCode: p.project_code || `PRJ-${p.id}`,
             projectTitle: p.title || 'بدون عنوان',
@@ -192,22 +241,31 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
     });
 
     return list;
-  }, [projectsList]);
+  }, [reservedStockQuery.data, projectsList]);
 
   // Total unique reserved items count
   const totalReservedItemsCount = allGlobalReservations.length;
 
+  // Selected project reserved items
+  const selectedProjectReservedItems = useMemo(() => {
+    if (!selectedProjectId) return [];
+    return allGlobalReservations.filter(
+      r => r.sourceType === 'project' && String(r.projectId) === String(selectedProjectId)
+    );
+  }, [selectedProjectId, allGlobalReservations]);
+
   // Helper to calculate reservation metrics for any item
   const getItemReservationSummary = (it: Item) => {
     const matchingReservations = allGlobalReservations.filter(r =>
-      (r.itemCode && it.code && r.itemCode.trim() === it.code.trim()) ||
+      (r.itemId && it.id && Number(r.itemId) === Number(it.id)) ||
+      (r.itemCode && it.code && r.itemCode.trim().toUpperCase() === it.code.trim().toUpperCase()) ||
       (r.itemName && it.name && r.itemName.trim().toLowerCase() === it.name.trim().toLowerCase())
     );
 
     const totalReservedQty = matchingReservations.reduce((acc, r) => acc + r.reservedQty, 0);
 
     const reservedForSelectedProject = selectedProjectId
-      ? matchingReservations.filter(r => String(r.projectId) === String(selectedProjectId)).reduce((acc, r) => acc + r.reservedQty, 0)
+      ? matchingReservations.filter(r => r.sourceType === 'project' && String(r.projectId) === String(selectedProjectId)).reduce((acc, r) => acc + r.reservedQty, 0)
       : 0;
 
     const reservedForOtherProjects = totalReservedQty - reservedForSelectedProject;
@@ -222,6 +280,79 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
       reservedForOtherProjects,
       maxAllowedForExit
     };
+  };
+
+  const handleAddAllProjectReservedItems = () => {
+    if (selectedProjectReservedItems.length === 0) {
+      toast.error('هیچ کالای رزرو شده‌ای برای این پروژه یافت نشد.');
+      return;
+    }
+
+    const itemsToAdd: { item: Item; quantity: number; unitPrice: number }[] = [];
+    const missingItems: string[] = [];
+
+    for (const rItem of selectedProjectReservedItems) {
+      const matchedItem = itemsList.find(i => 
+        (rItem.itemId && Number(i.id) === Number(rItem.itemId)) ||
+        (rItem.itemCode && i.code && i.code.trim().toUpperCase() === rItem.itemCode.trim().toUpperCase()) ||
+        (rItem.itemName && i.name && i.name.trim().toLowerCase() === rItem.itemName.trim().toLowerCase())
+      );
+
+      if (matchedItem) {
+        itemsToAdd.push({
+          item: matchedItem,
+          quantity: rItem.reservedQty,
+          unitPrice: Number(matchedItem.purchase_price || matchedItem.sell_price || 0)
+        });
+      } else {
+        missingItems.push(rItem.itemName || rItem.itemCode);
+      }
+    }
+
+    if (itemsToAdd.length > 0) {
+      setDocItems(prev => {
+        const newMap = new Map<number, { item: Item; quantity: number; unitPrice: number }>();
+        for (const it of prev) {
+          newMap.set(it.item.id, { ...it });
+        }
+        for (const it of itemsToAdd) {
+          newMap.set(it.item.id, it);
+        }
+        return Array.from(newMap.values());
+      });
+      toast.success(`تعداد ${itemsToAdd.length} قلم کالای رزرو شده به حواله خروج افزوده شد.`);
+    }
+
+    if (missingItems.length > 0) {
+      toast(`کالاهای زیر در دیتابیس انبار به عنوان کالای فیزیکی فعال یافت نشدند: ${missingItems.join('، ')}`, { icon: '⚠️' });
+    }
+  };
+
+  const handleAddSingleProjectReservedItem = (rItem: any) => {
+    const matchedItem = itemsList.find(i => 
+      (rItem.itemId && Number(i.id) === Number(rItem.itemId)) ||
+      (rItem.itemCode && i.code && i.code.trim().toUpperCase() === rItem.itemCode.trim().toUpperCase()) ||
+      (rItem.itemName && i.name && i.name.trim().toLowerCase() === rItem.itemName.trim().toLowerCase())
+    );
+
+    if (!matchedItem) {
+      toast.error(`کالای «${rItem.itemName || rItem.itemCode}» در انبار یافت نشد.`);
+      return;
+    }
+
+    setDocItems(prev => {
+      const existingIdx = prev.findIndex(p => p.item.id === matchedItem.id);
+      if (existingIdx >= 0) {
+        return prev.map((p, idx) => idx === existingIdx ? { ...p, quantity: rItem.reservedQty } : p);
+      }
+      return [...prev, {
+        item: matchedItem,
+        quantity: rItem.reservedQty,
+        unitPrice: Number(matchedItem.purchase_price || matchedItem.sell_price || 0)
+      }];
+    });
+
+    toast.success(`کالای «${matchedItem.name}» (${rItem.reservedQty} ${rItem.unit}) به اقلام حواله اضافه شد.`);
   };
 
   const handleItemSelect = (val: string, rawItem?: any) => {
@@ -387,6 +518,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
           inOut: actionType,
           currency,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
+          attachments,
           items: docItems.map(d => ({ 
             itemId: d.item.id, 
             quantity: d.quantity,
@@ -467,6 +599,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
       setQuantity('');
       setSelectedProjectId('');
       setSelectedProjectObj(null);
+      setAttachments([]);
       reloadReferenceLists(); // Refresh project list and reservations
     } catch (err: any) {
       toast.error(err.message || 'خطا در ثبت سند');
@@ -559,7 +692,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
           <div className="flex items-center gap-2 text-slate-800 border-b border-slate-100 pb-2">
             <Building2 size={18} className="text-blue-600" />
             <h3 className="font-bold text-sm">
-              {actionType === 'in' ? 'مشخصات سند رسید ورود / فاکتور خرید و تامین‌کننده' : 'مشخصات سند حواله خروج و تحویل‌گیرنده'}
+              {actionType === 'in' ? 'مشخصات سند رسید ورود و انبارداری' : 'مشخصات سند حواله خروج و تحویل‌گیرنده'}
             </h3>
           </div>
 
@@ -706,12 +839,11 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                       const found = list.find(s => s.name.trim().toLowerCase() === val.trim().toLowerCase());
                       setSelectedSupplierObj(found || null);
                     }}
-                    placeholder="-- انتخاب تامین‌کننده / فروشنده --"
-                    options={[{ value: '', label: '-- انتخاب تامین‌کننده / فروشنده از دفتر طرفین حساب --' },
-                      ...(Array.isArray(suppliersList) ? suppliersList : []).map((s, idx) => ({
-                        value: s.name,
-                        label: `${s.partyType === 'supplier' ? '🏭 تامین‌کننده' : '👤 طرف‌حساب'}: ${s.name} ${s.supplierCategory ? `(${s.supplierCategory})` : ''} ${s.phone ? `- ${s.phone}` : ''}`
-                      }))]}
+                    placeholder="انتخاب طرف‌حساب..."
+                    options={(Array.isArray(suppliersList) ? suppliersList : []).map((s) => ({
+                      value: s.name,
+                      label: `${s.name}${s.supplierCategory ? ` (${s.supplierCategory})` : ''}${s.phone ? ` - ${s.phone}` : ''}`
+                    }))}
                   />
                   {selectedSupplierObj?.bankInfo && (selectedSupplierObj.bankInfo.cardNumber || selectedSupplierObj.bankInfo.shaba) && (
                     <div className="text-[11px] text-slate-600 bg-slate-100/80 px-2.5 py-1.5 rounded-lg border border-slate-200 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -806,31 +938,74 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
 
           {/* Selected Project Reserved Items Info Card */}
           {actionType === 'out' && selectedProjectObj && (
-            <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-4 space-y-2.5 animate-fadeIn">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
-                  🔒 اقلام رزرو شده انبار برای پروژه «{selectedProjectObj.project_code || selectedProjectObj.title}»:
-                </span>
-                <span className="text-[11px] font-mono text-purple-900 font-bold bg-purple-200/80 px-2.5 py-0.5 rounded-full border border-purple-300">
-                  {selectedProjectObj.inventory_control?.reservedItems?.length || 0} کالا فریز شده
-                </span>
+            <div className="bg-purple-50/90 border border-purple-200 rounded-2xl p-4 space-y-3 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-200/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                    🔒
+                  </div>
+                  <div>
+                    <span className="font-bold text-purple-950 text-xs">
+                      اقلام رزرو شده انبار برای پروژه «{selectedProjectObj.project_code || selectedProjectObj.title}»
+                    </span>
+                    <span className="mr-2 text-[11px] font-mono text-purple-800 font-bold bg-purple-200/80 px-2 py-0.5 rounded-full border border-purple-300">
+                      {selectedProjectReservedItems.length} قلم کالا فریز شده
+                    </span>
+                  </div>
+                </div>
+
+                {selectedProjectReservedItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleAddAllProjectReservedItems}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
+                  >
+                    <span>➕ بارگذاری تمام اقلام فریز شده در حواله</span>
+                  </button>
+                )}
               </div>
 
-              {selectedProjectObj.inventory_control?.reservedItems && selectedProjectObj.inventory_control.reservedItems.length > 0 ? (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {selectedProjectObj.inventory_control.reservedItems.map((rItem: any, idx: number) => (
-                    <div key={idx} className="bg-white border border-purple-300 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 shadow-2xs">
-                      <span className="text-purple-900 font-mono">{rItem.itemCode || '---'}</span>
-                      <span className="text-slate-900">{rItem.itemName}</span>
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md font-mono font-bold text-[11px] border border-emerald-300">
-                        {rItem.reservedQty} {rItem.unit}
-                      </span>
-                    </div>
-                  ))}
+              {selectedProjectReservedItems.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                  {selectedProjectReservedItems.map((rItem: any, idx: number) => {
+                    const isAlreadyInDoc = docItems.some(d => 
+                      (rItem.itemId && Number(d.item.id) === Number(rItem.itemId)) ||
+                      (rItem.itemCode && d.item.code && d.item.code.trim().toUpperCase() === rItem.itemCode.trim().toUpperCase()) ||
+                      (rItem.itemName && d.item.name && d.item.name.trim().toLowerCase() === rItem.itemName.trim().toLowerCase())
+                    );
+
+                    return (
+                      <div key={idx} className="bg-white border border-purple-200 hover:border-purple-300 p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 shadow-2xs transition-all">
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-purple-900 font-mono font-bold">{rItem.itemCode || '---'}</span>
+                            <span className="text-slate-900 font-bold truncate">{rItem.itemName}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+                            <span>رزرو:</span>
+                            <span className="text-emerald-700 font-bold">{rItem.reservedQty} {rItem.unit}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddSingleProjectReservedItem(rItem)}
+                          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer shrink-0 ${
+                            isAlreadyInDoc 
+                              ? 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200' 
+                              : 'bg-purple-100 hover:bg-purple-200 text-purple-950 border border-purple-300'
+                          }`}
+                          title={isAlreadyInDoc ? 'به‌روزرسانی مقدار در حواله' : 'افزودن به اقلام سند'}
+                        >
+                          {isAlreadyInDoc ? '✓ در سند' : '+ افزودن'}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-xs text-purple-800">
-                  برای این پروژه هنوز هیچ رزرو انبار ثبتی صورت نگرفته است. خروج کالا مطابق با موجودی آزاد انبار انجام می‌شود.
+                  برای این پروژه هیچ کالای فریز شده‌ای در انبار وجود ندارد یا اقلام رزروی پیش‌تر به طور کامل خارج شده‌اند. خروج کالا با اتکا به موجودی آزاد عمومی انبار انجام می‌شود.
                 </p>
               )}
             </div>
@@ -867,7 +1042,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                       if (actionType === 'out') {
                         if (totalReservedQty > 0) {
                           if (reservedForOtherProjects > 0) {
-                            label += ` | 🔒 رزرو پروژه‌های دیگر: ${reservedForOtherProjects} ${it.unit}`;
+                            label += ` | 🔒 رزرو سایر مصارف: ${reservedForOtherProjects} ${it.unit}`;
                           }
                           if (reservedForSelectedProject > 0) {
                             label += ` | 🟢 سهم رزرو این پروژه: ${reservedForSelectedProject} ${it.unit}`;
@@ -946,19 +1121,19 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                     const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, maxAllowedForExit } = getItemReservationSummary(selectedItemObj);
                     return (
                       <div className="flex flex-wrap items-center gap-2 font-mono">
-                        <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 border">موجودی کل: {selectedItemObj.current_stock} {selectedItemObj.unit}</span>
+                        <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 border">موجودی کل: {formatPersianNumber(selectedItemObj.current_stock)} {selectedItemObj.unit}</span>
                         {reservedForOtherProjects > 0 && (
                           <span className="px-2 py-0.5 bg-purple-100 text-purple-950 rounded font-bold border border-purple-300">
-                            🔒 رزرو سایر پروژه‌ها: {reservedForOtherProjects} {selectedItemObj.unit}
+                            🔒 رزرو سایر پروژه‌ها: {formatPersianNumber(reservedForOtherProjects)} {selectedItemObj.unit}
                           </span>
                         )}
                         {reservedForSelectedProject > 0 && (
                           <span className="px-2 py-0.5 bg-emerald-100 text-emerald-950 rounded font-bold border border-emerald-300">
-                            🟢 رزرو پروژه انتخاب‌شده: {reservedForSelectedProject} {selectedItemObj.unit}
+                            🟢 رزرو پروژه انتخاب‌شده: {formatPersianNumber(reservedForSelectedProject)} {selectedItemObj.unit}
                           </span>
                         )}
                         <span className="px-2.5 py-0.5 bg-amber-100 text-amber-950 rounded font-bold border border-amber-300">
-                          حداکثر مجاز خروج: {maxAllowedForExit} {selectedItemObj.unit}
+                          حداکثر مجاز خروج: {formatPersianNumber(maxAllowedForExit)} {selectedItemObj.unit}
                         </span>
                       </div>
                     );
@@ -980,12 +1155,21 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             onRemove={handleRemove}
           />
 
+          {/* پیوست مدارک، فاکتور، بارنامه و اسناد مثبته */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+            <FinancialAttachmentUploader
+              attachments={attachments}
+              onChange={setAttachments}
+              title={actionType === 'in' ? 'الصاق تصویر فاکتور خرید، پیش‌فاکتور و بارنامه' : 'الصاق تصویر حواله امضا شده و رسید تحویل کالا'}
+              description="امکان الصاق چندین تصویر و فایل اسناد با فشرده‌سازی خودکار هوشمند تا ۳۰۰ کیلوبایت برای هر فایل"
+            />
+          </div>
 
           {/* Submit Action Button */}
           <div className="border-t border-slate-200 pt-5 flex items-center justify-between">
             <div className="text-xs text-slate-500 flex items-center gap-3">
-              <span>تعداد اقلام سند: <strong className="text-slate-900 font-mono font-bold">{docItems.length}</strong> ردیف</span>
-              <span>مجموع تعداد: <strong className="text-slate-900 font-mono font-bold">{totalQuantitySum}</strong> واحد</span>
+              <span>تعداد اقلام سند: <strong className="text-slate-900 font-mono font-bold">{formatPersianNumber(docItems.length)}</strong> ردیف</span>
+              <span>مجموع تعداد: <strong className="text-slate-900 font-mono font-bold">{formatPersianNumber(totalQuantitySum)}</strong> واحد</span>
             </div>
             <button 
               type="submit" 

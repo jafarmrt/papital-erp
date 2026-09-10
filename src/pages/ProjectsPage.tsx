@@ -4,10 +4,12 @@ import { Link } from 'react-router-dom';
 import { 
   Plus, Search, Filter, Layers, LayoutGrid, List, Calendar, CheckCircle2, 
   Clock, AlertCircle, PlayCircle, ShieldAlert, Edit3, Trash2, Eye,
-  ArrowRight, Users, Wrench, ChevronLeft, ChevronRight, RefreshCw, Sparkles, Building, ShoppingCart, Calculator
+  ArrowRight, Users, Wrench, ChevronLeft, ChevronRight, RefreshCw, Sparkles, Building, ShoppingCart,
+  Paperclip
 } from 'lucide-react';
 import { ProductionProject, Customer, Item } from '../types';
 import { fetchJson } from '../api';
+import { formatPersianNumber } from '../utils';
 import ProjectModal from '../components/ProjectModal';
 import ProjectDetailModal from '../components/ProjectDetailModal';
 import toast from 'react-hot-toast';
@@ -172,7 +174,7 @@ export default function ProjectsPage() {
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-slate-500 font-bold text-[11px]">کل پروژه‌ها</p>
-            <p className="text-xl font-black text-slate-900 font-mono mt-1">{totalCount}</p>
+            <p className="text-xl font-black text-slate-900 font-mono mt-1">{formatPersianNumber(totalCount)}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 font-bold flex items-center justify-center">
             <Layers className="w-5 h-5" />
@@ -182,7 +184,7 @@ export default function ProjectsPage() {
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-slate-500 font-bold text-[11px]">در حال اجرای تولید</p>
-            <p className="text-xl font-black text-blue-600 font-mono mt-1">{inProgressCount}</p>
+            <p className="text-xl font-black text-blue-600 font-mono mt-1">{formatPersianNumber(inProgressCount)}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 font-bold flex items-center justify-center">
             <PlayCircle className="w-5 h-5" />
@@ -192,7 +194,7 @@ export default function ProjectsPage() {
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-slate-500 font-bold text-[11px]">برنامه‌ریزی اولیه</p>
-            <p className="text-xl font-black text-slate-700 font-mono mt-1">{plannedCount}</p>
+            <p className="text-xl font-black text-slate-700 font-mono mt-1">{formatPersianNumber(plannedCount)}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 font-bold flex items-center justify-center">
             <Clock className="w-5 h-5" />
@@ -202,7 +204,7 @@ export default function ProjectsPage() {
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-slate-500 font-bold text-[11px]">تکمیل شده</p>
-            <p className="text-xl font-black text-emerald-600 font-mono mt-1">{completedCount}</p>
+            <p className="text-xl font-black text-emerald-600 font-mono mt-1">{formatPersianNumber(completedCount)}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5" />
@@ -322,7 +324,7 @@ export default function ProjectsPage() {
                 برنامه‌ریزی‌شده
               </span>
               <span className="w-5 h-5 rounded-full bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-[10px]">
-                {filteredProjects.filter(p => p.status === 'planned').length}
+                {formatPersianNumber(filteredProjects.filter(p => p.status === 'planned').length)}
               </span>
             </div>
 
@@ -350,7 +352,7 @@ export default function ProjectsPage() {
                 در حال انجام تولید
               </span>
               <span className="w-5 h-5 rounded-full bg-blue-200 font-bold text-blue-900 flex items-center justify-center text-[10px]">
-                {filteredProjects.filter(p => p.status === 'in_progress').length}
+                {formatPersianNumber(filteredProjects.filter(p => p.status === 'in_progress').length)}
               </span>
             </div>
 
@@ -378,7 +380,7 @@ export default function ProjectsPage() {
                 تکمیل شده
               </span>
               <span className="w-5 h-5 rounded-full bg-emerald-200 font-bold text-emerald-900 flex items-center justify-center text-[10px]">
-                {filteredProjects.filter(p => p.status === 'completed').length}
+                {formatPersianNumber(filteredProjects.filter(p => p.status === 'completed').length)}
               </span>
             </div>
 
@@ -418,9 +420,22 @@ export default function ProjectsPage() {
                 {filteredProjects.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-3.5 font-mono font-bold text-blue-700 ltr text-right">{p.project_code}</td>
-                    <td className="p-3.5 font-bold text-slate-900">{p.title}</td>
+                    <td className="p-3.5 font-bold text-slate-900">
+                      <div className="flex items-center gap-1.5">
+                        <span>{p.title}</span>
+                        {p.attachments && p.attachments.length > 0 && (
+                          <span 
+                            className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold flex items-center gap-0.5 shrink-0"
+                            title={`${formatPersianNumber(p.attachments.length)} فایل ضمیمه`}
+                          >
+                            <Paperclip className="w-2.5 h-2.5" />
+                            <span>{formatPersianNumber(p.attachments.length)}</span>
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-3.5 text-slate-700 font-medium">{p.customer_name || '-'}</td>
-                    <td className="p-3.5 font-mono font-bold text-slate-800">{p.quantity} {p.unit}</td>
+                    <td className="p-3.5 font-mono font-bold text-slate-800">{formatPersianNumber(p.quantity)} {p.unit}</td>
                     <td className="p-3.5 min-w-[140px]">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
@@ -429,7 +444,7 @@ export default function ProjectsPage() {
                             style={{ width: `${p.progress_percent || 0}%` }}
                           />
                         </div>
-                        <span className="font-mono text-[11px] font-bold text-slate-600">{p.progress_percent || 0}%</span>
+                        <span className="font-mono text-[11px] font-bold text-slate-600">{formatPersianNumber(p.progress_percent || 0)}%</span>
                       </div>
                     </td>
                     <td className="p-3.5">{getStatusBadge(p.status)}</td>
@@ -442,14 +457,6 @@ export default function ProjectsPage() {
                           مدیریت مراحل
                         </button>
                         <button
-                          onClick={() => handleOpenDetailModal(p.id, 'overview')}
-                          className="px-2.5 py-1 rounded-xl bg-slate-900 text-amber-300 hover:bg-slate-800 font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                          title="مشاهده زنده بهای تمام‌شده و سودآوری"
-                        >
-                          <Calculator className="w-3.5 h-3.5 text-amber-400" />
-                          بهای تمام‌شده
-                        </button>
-                        <button
                           onClick={() => handleOpenDetailModal(p.id, 'inventory')}
                           className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 hover:bg-amber-100 font-bold transition-colors border border-amber-200/80 flex items-center gap-1 cursor-pointer"
                           title="کنترل موجودی و لیست خرید BOM"
@@ -460,7 +467,7 @@ export default function ProjectsPage() {
                         <button
                           onClick={() => handleOpenDetailModal(p.id, 'product_progress')}
                           className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-bold transition-colors border border-emerald-200/80 flex items-center gap-1 cursor-pointer"
-                          title="پیشرفت به تفکیک هر کد کالا (SKU × مرحله)"
+                          title="پیشرفت به تفکیک هر کد کالا (مرحله × محصول)"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                           پیشرفت کدها
@@ -534,7 +541,7 @@ export default function ProjectsPage() {
                       >
                         <div className="flex items-center justify-between text-[11px] font-bold">
                           <span>{idx + 1}. {stg.title}</span>
-                          <span>{stg.progress_percent || 0}%</span>
+                          <span>{formatPersianNumber(stg.progress_percent || 0)}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mt-1.5">
                           <div 
@@ -601,9 +608,20 @@ function ProjectKanbanCard({
   return (
     <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:shadow-md transition-all space-y-3">
       <div className="flex items-center justify-between">
-        <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
-          {project.project_code}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
+            {project.project_code}
+          </span>
+          {project.attachments && project.attachments.length > 0 && (
+            <span 
+              className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold flex items-center gap-1"
+              title={`${formatPersianNumber(project.attachments.length)} فایل ضمیمه`}
+            >
+              <Paperclip className="w-2.5 h-2.5" />
+              <span>{formatPersianNumber(project.attachments.length)}</span>
+            </span>
+          )}
+        </div>
         {priorityBadge}
       </div>
 
@@ -619,14 +637,14 @@ function ProjectKanbanCard({
 
       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between text-[11px]">
         <span className="text-slate-500 font-bold">میزان سفارش:</span>
-        <span className="font-mono font-bold text-slate-900">{project.quantity} {project.unit}</span>
+        <span className="font-mono font-bold text-slate-900">{formatPersianNumber(project.quantity)} {project.unit}</span>
       </div>
 
       {/* Progress */}
       <div>
         <div className="flex items-center justify-between text-[11px] font-bold mb-1">
-          <span className="text-slate-600">پیشرفت کل ({project.completed_stages || 0}/{project.total_stages || 0} مرحله)</span>
-          <span className="font-mono text-blue-600">{project.progress_percent || 0}%</span>
+          <span className="text-slate-600">پیشرفت کل ({formatPersianNumber(project.completed_stages || 0)}/{formatPersianNumber(project.total_stages || 0)} مرحله)</span>
+          <span className="font-mono text-blue-600">{formatPersianNumber(project.progress_percent || 0)}%</span>
         </div>
         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
           <div 
@@ -646,14 +664,6 @@ function ProjectKanbanCard({
             مراحل <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={onDetail}
-            className="text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border border-slate-300 cursor-pointer"
-            title="بهای تمام‌شده و سودآوری"
-          >
-            <Calculator className="w-3 h-3 text-amber-600" />
-            بهای تمام‌شده
-          </button>
-          <button
             onClick={onInventory || onDetail}
             className="text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border border-amber-200 cursor-pointer"
             title="کنترل موجودی و لیست خرید BOM"
@@ -665,7 +675,7 @@ function ProjectKanbanCard({
             <button
               onClick={onProductProgress}
               className="text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border border-emerald-200 cursor-pointer"
-              title="پیشرفت به تفکیک هر کد کالا (SKU × مرحله)"
+              title="پیشرفت به تفکیک هر کد کالا (مرحله × محصول)"
             >
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
               پیشرفت کدها

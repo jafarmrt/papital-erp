@@ -239,6 +239,7 @@ export class VoucherService {
     referenceId?: number | null;
     referenceNumber?: string;
     currency?: string;
+    attachments?: any[];
     userId?: number;
     username?: string;
     items: {
@@ -295,6 +296,7 @@ export class VoucherService {
         referenceId: data.referenceId || null,
         referenceNumber: data.referenceNumber?.trim() || '',
         currency: data.currency || 'IRR',
+        attachments: data.attachments || [],
         createdById: data.userId || null,
         createdByUsername: data.username || '',
       }).returning();
@@ -333,6 +335,7 @@ export class VoucherService {
     manualVoucherNumber?: string;
     description?: string;
     status?: 'draft' | 'approved' | 'permanent';
+    attachments?: any[];
     items?: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
@@ -407,6 +410,7 @@ export class VoucherService {
         ...(data.manualVoucherNumber !== undefined ? { manualVoucherNumber: data.manualVoucherNumber.trim() } : {}),
         ...(data.description ? { description: data.description.trim() } : {}),
         ...(data.status ? { status: data.status } : {}),
+        ...(data.attachments !== undefined ? { attachments: data.attachments } : {}),
         totalDebit: sumDebit.toNumber(),
         totalCredit: sumCredit.toNumber(),
       }).where(eq(journalVouchers.id, id));

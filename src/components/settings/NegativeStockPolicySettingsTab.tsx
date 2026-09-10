@@ -57,7 +57,7 @@ export function NegativeStockPolicySettingsTab() {
             <Sliders size={24} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-800">سیاست کنترل موجودی منفی (Negative Stock Policy)</h2>
+            <h2 className="text-lg font-bold text-slate-800">سیاست کنترل موجودی منفی انبار</h2>
             <p className="text-slate-500 text-xs mt-0.5">
               تنظیم شیوه برخورد سیستم در زمان صدور فاکتور فروش، حواله خروج انبار یا تخصیص به پروژه هنگام ناکافی بودن موجودی
             </p>
@@ -99,7 +99,7 @@ export function NegativeStockPolicySettingsTab() {
                   </span>
                 )}
               </div>
-              <h3 className="font-bold text-slate-800 text-sm mb-1">ممنوع (Strict Mode)</h3>
+              <h3 className="font-bold text-slate-800 text-sm mb-1">ممنوعیت کامل (سخت‌گیرانه)</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
                 رد کامل هرگونه تراکنش خروج در صورت عدم وجود موجودی کافی. هیچ سندی امکان کسر مازاد بر موجودی را ندارد.
               </p>
@@ -129,7 +129,7 @@ export function NegativeStockPolicySettingsTab() {
                   </span>
                 )}
               </div>
-              <h3 className="font-bold text-slate-800 text-sm mb-1">هشدار (Warning Mode)</h3>
+              <h3 className="font-bold text-slate-800 text-sm mb-1">ثبت با هشدار</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
                 نمایش پیام هشدار کسری انبار به کاربر اما امکان تایید و ثبت نهایی سند با کسری موجودی فراهم است.
               </p>
@@ -159,7 +159,7 @@ export function NegativeStockPolicySettingsTab() {
                   </span>
                 )}
               </div>
-              <h3 className="font-bold text-slate-800 text-sm mb-1">مجاز (Allowed Mode)</h3>
+              <h3 className="font-bold text-slate-800 text-sm mb-1">مجاز بدون محدودیت</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
                 صدور و ثبت اسناد بدون هیچ‌گونه محدودیت یا مانعی انجام شده و موجودی انبار می‌تواند منفی گردد.
               </p>
@@ -178,7 +178,7 @@ export function NegativeStockPolicySettingsTab() {
           <span>توضیحات تکمیلی عملکرد سیاست‌های موجودی:</span>
         </div>
         <p>
-          • <strong>ممنوع (Strict):</strong> تمام عملیات مرتبط با صدور فاکتور فروش (با کسر از انبار)، حواله خروج انبار، و تخصیص مستقیم مواد اولیه به پروژه‌ها در صورتی که موجودی کافی در انبار انتخابی وجود نداشته باشد، با پیغام خطای اعتبارسنجی متوقف می‌شوند.
+          • <strong>ممنوعیت کامل:</strong> تمام عملیات مرتبط با صدور فاکتور فروش (با کسر از انبار)، حواله خروج انبار، و تخصیص مستقیم مواد اولیه به پروژه‌ها در صورتی که موجودی کافی در انبار انتخابی وجود نداشته باشد، با پیغام خطای اعتبارسنجی متوقف می‌شوند.
         </p>
         <p>
           • <strong>انبارگردانی و ممیزی سلامت:</strong> جهت مشاهده ماتریس ۳ جانبه سلامت انبار، تطبیق کاردکس و ثبت شمارش‌های عینی به بخش «انبارگردانی و تطبیق ۳جانبه» در منوی اصلی سامانه مراجعه نمایید.

@@ -4,12 +4,14 @@ import {
 } from 'lucide-react';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { formatPersianNumber } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 
 interface ManualPurchaseListProps {
   project: ProductionProject;
   purchaseList: PurchaseListItem[];
   isFinalized: boolean;
+  reservedItems?: any[];
   warehouseItems?: Item[];
   handleAddManualPurchaseRow: () => void;
   handlePrintPurchaseListWithCheck: () => void;
@@ -22,6 +24,7 @@ export function ManualPurchaseList({
   project,
   purchaseList,
   isFinalized,
+  reservedItems,
   warehouseItems = [],
   handleAddManualPurchaseRow,
   handlePrintPurchaseListWithCheck,
@@ -31,6 +34,10 @@ export function ManualPurchaseList({
 }: ManualPurchaseListProps) {
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
   const [lastCreatedOrderDoc, setLastCreatedOrderDoc] = useState<any>(null);
+
+  const effectiveReservedItems = (reservedItems && reservedItems.length > 0)
+    ? reservedItems
+    : (project.inventory_control?.reservedItems || []);
 
   // Count items that have actual shortfalls
   const shortfallCount = purchaseList.filter(i => 
@@ -120,7 +127,7 @@ export function ManualPurchaseList({
       )}
 
       {/* Reserved Items in Warehouse Section */}
-      {((project.inventory_control?.reservedItems && project.inventory_control.reservedItems.length > 0) || isFinalized) && (
+      {(effectiveReservedItems.length > 0 || isFinalized) && (
         <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 sm:p-5 space-y-3 print:hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-200 pb-3">
             <div className="flex items-center gap-2">
@@ -133,11 +140,11 @@ export function ManualPurchaseList({
               </div>
             </div>
             <span className="px-3 py-1 bg-purple-200 text-purple-950 rounded-full text-xs font-bold font-mono self-start sm:self-center">
-              {project.inventory_control?.reservedItems?.length || 0} کالا رزرو شده
+              {effectiveReservedItems.length} کالا رزرو شده
             </span>
           </div>
 
-          {project.inventory_control?.reservedItems && project.inventory_control.reservedItems.length > 0 ? (
+          {effectiveReservedItems.length > 0 ? (
             <div className="overflow-x-auto border border-purple-200 rounded-xl bg-white shadow-xs">
               <table className="w-full text-xs text-right">
                 <thead className="bg-purple-100/80 text-purple-950 font-bold border-b border-purple-200">
@@ -152,7 +159,7 @@ export function ManualPurchaseList({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-purple-100">
-                  {project.inventory_control.reservedItems.map((rItem: any, idx: number) => (
+                  {effectiveReservedItems.map((rItem: any, idx: number) => (
                     <tr key={idx} className="hover:bg-purple-50/50">
                       <td className="p-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
                       <td className="p-2.5 font-mono font-bold text-purple-900">{rItem.itemCode || '---'}</td>
@@ -274,24 +281,24 @@ export function ManualPurchaseList({
                             ))}
                           </select>
                         </div>
-                        <span className="hidden print:inline font-mono font-bold">{item.totalRequiredQty} {item.unit}</span>
+                        <span className="hidden print:inline font-mono font-bold">{formatPersianNumber(item.totalRequiredQty)} {item.unit}</span>
                       </>
                     ) : (
-                      <>{item.totalRequiredQty} {item.unit}</>
+                      <>{formatPersianNumber(item.totalRequiredQty)} {item.unit}</>
                     )}
                   </td>
                   <td className="p-3 text-center font-mono text-slate-600">
-                    {item.id.startsWith('manual_') ? `0 ${item.unit}` : `${item.warehouseStockQty} ${item.warehouseUnit || item.unit}`}
+                    {item.id.startsWith('manual_') ? `۰ ${item.unit}` : `${formatPersianNumber(item.warehouseStockQty)} ${item.warehouseUnit || item.unit}`}
                   </td>
                   <td className="p-3 text-center font-mono font-bold">
                     {item.convertedRequiredQty ? (
                       <div className="space-y-0.5">
                         <span className="px-2 py-0.5 bg-blue-50 text-blue-900 rounded border border-blue-200 text-xs inline-block">
-                          {roundToOneDecimal(item.convertedRequiredQty)} {item.convertedUnit}
+                          {formatPersianNumber(item.convertedRequiredQty)} {item.convertedUnit}
                         </span>
                         {item.conversionRate && (
                           <span className="block text-[10px] text-slate-500 font-normal">
-                            (هر {item.convertedUnit} = {roundToOneDecimal(item.conversionRate)} {item.unit})
+                            (هر {item.convertedUnit} = {formatPersianNumber(item.conversionRate)} {item.unit})
                           </span>
                         )}
                       </div>
@@ -302,11 +309,11 @@ export function ManualPurchaseList({
                   <td className="p-3 text-center font-mono font-bold">
                     {item.convertedToPurchaseQty !== undefined ? (
                       <span className="px-2.5 py-1 bg-amber-100 text-amber-950 rounded-lg border border-amber-300">
-                        {roundToOneDecimal(item.convertedToPurchaseQty)} {item.convertedUnit}
+                        {formatPersianNumber(item.convertedToPurchaseQty)} {item.convertedUnit}
                       </span>
                     ) : (
                       <span className="px-2.5 py-1 bg-amber-100 text-amber-950 rounded-lg border border-amber-300">
-                        {roundToOneDecimal(item.toPurchaseQty)} {item.unit}
+                        {formatPersianNumber(item.toPurchaseQty)} {item.unit}
                       </span>
                     )}
                   </td>

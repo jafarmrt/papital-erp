@@ -24,6 +24,8 @@ export default function ProjectModal(props: ProjectModalProps) {
     setPriority,
     description,
     setDescription,
+    attachments,
+    setAttachments,
     productsList,
     stages,
     preset,
@@ -92,6 +94,8 @@ export default function ProjectModal(props: ProjectModalProps) {
             description={description}
             setDescription={setDescription}
             onCustomerSelect={handleCustomerSelect}
+            attachments={attachments}
+            setAttachments={setAttachments}
           />
 
           <ProjectProductsForm

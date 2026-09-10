@@ -192,6 +192,7 @@ export class TreasuryTransactionService {
       creatorName: users.fullName,
       description: treasuryTransactions.description,
       status: treasuryTransactions.status,
+      attachments: treasuryTransactions.attachments,
       createdAt: treasuryTransactions.createdAt,
     })
     .from(treasuryTransactions)
@@ -235,6 +236,7 @@ export class TreasuryTransactionService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
+    attachments?: any[];
     // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده)
     purpose?: string;
   }): Promise<TreasuryTransaction> {
@@ -341,6 +343,7 @@ export class TreasuryTransactionService {
         documentId: data.documentId || null,
         description: data.description?.trim() || '',
         status: 'completed',
+        attachments: data.attachments || [],
         createdById: data.userId || null,
       }).returning();
 

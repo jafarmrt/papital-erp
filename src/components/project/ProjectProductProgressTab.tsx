@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, 
   Save, Info, Search, CheckSquare, Square, Filter, ChevronRight,
-  RotateCcw, Sparkles
+  RotateCcw, Sparkles, Lock
 } from 'lucide-react';
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
@@ -43,6 +43,10 @@ interface ProductProgressResponse {
     weighted_progress_percent: number;
     fully_completed_skus: number;
     per_stage_counts: Array<{ stage_order: number; title: string; completed_count: number; applicable_skus: number }>;
+    total_matrix_cells?: number;
+    completed_matrix_cells?: number;
+    all_matrix_completed?: boolean;
+    missing_matrix_cells?: number;
   };
 }
 
@@ -262,7 +266,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
     return (
       <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2 text-center">
         <Package className="w-8 h-8 text-slate-300" />
-        <p className="font-bold text-slate-600">هیچ کد کالایی (SKU) به این پروژه پیوند خورده است</p>
+        <p className="font-bold text-slate-600">هیچ کد کالایی به این پروژه پیوند نخورده است</p>
         <p className="text-[11px]">در فرم ویرایش پروژه، ردیف‌های «کد کالا» را با کالای انبار و تیراژ هدف تعریف کنید تا پیشرفت تفکیکی فعال شود.</p>
       </div>
     );
@@ -282,11 +286,11 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
           </div>
         </div>
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
-          <span className="text-[10px] text-slate-500 font-bold block mb-1">تعداد کد کالا (SKU):</span>
+          <span className="text-[10px] text-slate-500 font-bold block mb-1">تعداد اقلام کالا:</span>
           <p className="font-bold font-mono text-slate-900 text-sm">{toPersianDigits(summary?.total_skus || 0)}</p>
         </div>
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3">
-          <span className="text-[10px] text-emerald-700 font-bold block mb-1">SKUهای تکمیل‌شده (همه مراحل):</span>
+          <span className="text-[10px] text-emerald-700 font-bold block mb-1">اقلام تکمیل‌شده (همه مراحل):</span>
           <p className="font-bold font-mono text-emerald-800 text-sm">{toPersianDigits(summary?.fully_completed_skus || 0)} از {toPersianDigits(summary?.total_skus || 0)}</p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3">
@@ -295,15 +299,55 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
         </div>
       </div>
 
+      {/* V3.1.16 — بنر پایش شرط تغییر وضعیت پروژه به تکمیل‌شده بر اساس گزینه‌های ماتریس */}
+      {summary?.total_matrix_cells !== undefined && summary.total_matrix_cells > 0 && (
+        <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+          summary.all_matrix_completed 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+            : 'bg-amber-50/70 border-amber-200 text-amber-900'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            {summary.all_matrix_completed ? (
+              <div className="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            ) : (
+              <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                <Lock className="w-4 h-4" />
+              </div>
+            )}
+            <div>
+              <div className="font-bold text-xs flex items-center gap-2">
+                <span>شرط تغییر وضعیت پروژه به «تکمیل‌شده»:</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  summary.all_matrix_completed ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
+                }`}>
+                  {summary.all_matrix_completed ? 'مجاز و آماده تکمیل' : 'قفل - ماتریس کامل نیست'}
+                </span>
+              </div>
+              <p className="text-[11px] opacity-80 mt-0.5">
+                {summary.all_matrix_completed 
+                  ? `تمام ${toPersianDigits(summary.total_matrix_cells)} گزینه ماتریس فیزیکی محصولات تیک خورده‌اند و امکان ثبت پروژه به عنوان تکمیل‌شده فراهم است.`
+                  : `تنها زمانی کاربر می‌تواند وضعیت پروژه را به تکمیل‌شده تغییر دهد که تمام گزینه‌های ماتریس تیک خورده باشند (در حال حاضر ${toPersianDigits(summary.completed_matrix_cells || 0)} از ${toPersianDigits(summary.total_matrix_cells)} گزینه تیک خورده و ${toPersianDigits(summary.missing_matrix_cells || 0)} گزینه مانده است).`
+                }
+              </p>
+            </div>
+          </div>
+          <div className="text-left shrink-0 font-mono text-xs font-bold px-3 py-1 bg-white/70 rounded-xl border border-black/5">
+            {toPersianDigits(summary.completed_matrix_cells || 0)} / {toPersianDigits(summary.total_matrix_cells)}
+          </div>
+        </div>
+      )}
+
       {/* Per-stage rollup strip */}
       {stages.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-3">
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
-              وضعیت هر مرحله در کل SKUها
+              وضعیت هر مرحله در کل اقلام
             </h4>
-            <span className="text-[10px] text-slate-400">تعداد SKU تکمیل‌شده در هر مرحله / کل SKUهای مرتبط</span>
+            <span className="text-[10px] text-slate-400">تعداد اقلام تکمیل‌شده در هر مرحله / کل اقلام مرتبط</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {stages.map(s => {
@@ -324,7 +368,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                     <button
                       onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
                       className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
-                      title="تمام کردن این مرحله برای همه SKUهای اعمال‌شده"
+                      title="تمام کردن این مرحله برای همه اقلام اعمال‌شده"
                     >
                       تمام همه
                     </button>
@@ -348,7 +392,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
               </div>
               <div>
                 <h4 className="font-bold text-slate-900 text-xs">
-                  ماتریس پیشرفت فیزیکی محصولات (مرحله × SKU)
+                  ماتریس پیشرفت فیزیکی محصولات (مرحله × کالا)
                 </h4>
                 <p className="text-[10px] text-slate-500">
                   کنترل و تیک‌زدن همزمان وضعیت تکمیل مراحل، فیلتر سریع و عملیات گروهی
@@ -505,7 +549,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                   <th key={`o-${s.stage_order}`} className="p-1.5 text-center min-w-[70px] bg-amber-50/50">
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-[9px] text-amber-600 font-mono">{toPersianDigits(s.stage_order)} ◇</span>
-                      <span className="truncate max-w-[80px] text-amber-800" title={`${s.title} (اختیاری — برای برخی SKUها)`}>{s.title}</span>
+                      <span className="truncate max-w-[80px] text-amber-800" title={`${s.title} (اختیاری — برای برخی اقلام)`}>{s.title}</span>
                       <button
                         type="button"
                         onClick={() => setStageForAllSkus(s.stage_order, 'completed')}
@@ -517,7 +561,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
                     </div>
                   </th>
                 ))}
-                <th className="p-2.5 text-center">پیشرفت SKU</th>
+                <th className="p-2.5 text-center">پیشرفت کالا</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -646,7 +690,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
         <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center gap-4 text-[10px] text-slate-500">
           <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> تمام</span>
           <span className="flex items-center gap-1"><Circle className="w-3.5 h-3.5 text-slate-300" /> ناتمام</span>
-          <span className="flex items-center gap-1"><Info className="w-3.5 h-3.5 text-blue-500" /> مراحل اختیاری با نشان ◇ — فقط برای SKUهایی که در فرم پروژه انتخاب کرده‌اند اعمال می‌شود</span>
+          <span className="flex items-center gap-1"><Info className="w-3.5 h-3.5 text-blue-500" /> مراحل اختیاری با نشان ◇ — فقط برای اقلامی که در فرم پروژه انتخاب شده‌اند اعمال می‌شود</span>
         </div>
       </div>
     </div>

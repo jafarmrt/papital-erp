@@ -54,6 +54,7 @@ const TransactionsPage = lazyWithRetry(() => import('../pages/TransactionsPage')
 const ReservedItemsReportPage = lazyWithRetry(() => import('../pages/ReservedItemsReportPage'));
 const ProjectsPage = lazyWithRetry(() => import('../pages/ProjectsPage'));
 const ProjectInventoryPage = lazyWithRetry(() => import('../pages/ProjectInventoryPage'));
+const ProcurementPage = lazyWithRetry(() => import('../pages/ProcurementPage'));
 const ReorderAlertsPage = lazyWithRetry(() => import('../pages/ReorderAlertsPage'));
 const PendingMaterialsPage = lazyWithRetry(() => import('../pages/PendingMaterialsPage'));
 const TransfersPage = lazyWithRetry(() => import('../pages/TransfersPage'));
@@ -170,6 +171,11 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
             <ProjectInventoryPage user={user} />
           </ProtectedRoute>
         } />
+        <Route path="/procurement" element={
+          <ProtectedRoute requiredPerm={['procurement.view', 'procurement_officer', 'projects.view', 'documents.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <ProcurementPage user={user} />
+          </ProtectedRoute>
+        } />
         <Route path="/reserved-items" element={
           <ProtectedRoute requiredPerm={['products.view', 'reports.view', 'warehouse.view', 'documents.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <ReservedItemsReportPage />
@@ -186,8 +192,8 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           </ProtectedRoute>
         } />
         <Route path="/settings" element={
-          <ProtectedRoute requiredPerm="settings.manage" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
-            <SettingsPage currentUser={user} />
+          <ProtectedRoute requiredPerm={['settings.manage', 'accounting.coa']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <SettingsPage currentUser={user} userPermissions={userPermissions} />
           </ProtectedRoute>
         } />
         <Route path="/users" element={

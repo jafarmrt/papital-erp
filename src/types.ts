@@ -13,6 +13,8 @@ export interface Item {
   reorder_point?: number;
   weightedAverageCost?: number;
   weighted_average_cost?: number;
+  purchase_price?: number;
+  sell_price?: number;
   color?: string;
   weight?: number;
   material?: string;
@@ -292,6 +294,7 @@ export interface ProjectInventoryControlItemResult {
   itemId: string;
   name: string;
   itemCode?: string;
+  category?: string;
   unit: string;
   warehouseUnit?: string;
   status: 'available' | 'needs_procurement' | 'not_applicable';
@@ -432,6 +435,8 @@ export interface ProductionProject {
   description?: string;
   created_at?: string;
   createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
   created_by?: string;
   createdBy?: string;
   stages?: ProjectStage[];
@@ -444,6 +449,7 @@ export interface ProductionProject {
   stageSchedules?: ProjectStageSchedulesMap;
   custom_stages?: string[];
   customStages?: string[];
+  attachments?: FinancialAttachment[];
   // Joined or calculated fields
   item_image?: string;
   progress_percent?: number;
@@ -762,6 +768,20 @@ export interface Account {
 }
 
 export type VoucherType = 'general' | 'opening' | 'closing' | 'sales' | 'purchase' | 'treasury' | 'payroll' | 'adjustment';
+export interface FinancialAttachment {
+  id: string;
+  name: string;
+  url: string; // Base64 compressed image data or link
+  size?: number;
+  type?: string;
+  title?: string;
+  uploadedAt?: string;
+  uploadedBy?: string;
+  fileName?: string;
+  fileType?: string;
+  dataUrl?: string;
+}
+
 export type VoucherStatus = 'draft' | 'approved' | 'permanent';
 
 export interface JournalVoucherItem {
@@ -822,6 +842,7 @@ export interface JournalVoucher {
   createdAt?: string;
   created_at?: string;
   items?: JournalVoucherItem[];
+  attachments?: FinancialAttachment[];
 }
 
 export type BankAccountType = 'bank' | 'cash' | 'pos' | 'petty_cash';
@@ -933,6 +954,7 @@ export interface Cheque {
   description?: string;
   statusHistory?: ChequeStatusHistory[];
   status_history?: ChequeStatusHistory[];
+  attachments?: FinancialAttachment[];
   createdAt?: string;
 }
 
@@ -979,6 +1001,7 @@ export interface TreasuryTransaction {
   reconciledBatch?: string;
   description?: string;
   status?: 'completed' | 'voided' | 'cancelled';
+  attachments?: FinancialAttachment[];
   createdAt?: string;
 }
 
@@ -1367,6 +1390,75 @@ export interface FinancialHealthReport {
     totalIssuesCount: number;
   };
   tests: HealthCheckTestResult[];
+}
+
+export interface PurchaseRequisitionItemRow {
+  id?: string;
+  itemId?: number | null;
+  item_id?: number | null;
+  itemCode?: string;
+  item_code?: string;
+  itemName?: string;
+  item_name?: string;
+  category?: string;
+  unit: string;
+  requestedQty: number;
+  requested_qty?: number;
+  orderedQty?: number;
+  ordered_qty?: number;
+  remainingQty?: number;
+  remaining_qty?: number;
+  unitPriceEstimate?: number;
+  unit_price_estimate?: number;
+  currentStock?: number | null;
+  current_stock?: number | null;
+  targetSupplierId?: number | null;
+  target_supplier_id?: number | null;
+  targetSupplierName?: string;
+  target_supplier_name?: string;
+  status?: 'pending' | 'ordered' | 'received' | 'rejected' | 'approved' | 'completed';
+  linkedDocumentIds?: number[];
+  linked_document_ids?: number[];
+  notes?: string;
+}
+
+export type PurchaseRequisitionItem = PurchaseRequisitionItemRow;
+
+export interface PurchaseRequisition {
+  id: number;
+  code: string;
+  title: string;
+  projectId?: number | null;
+  project_id?: number | null;
+  projectCode?: string;
+  project_code?: string;
+  projectName?: string;
+  project_name?: string;
+  status: 'pending' | 'under_review' | 'manager_approval' | 'ordered' | 'received' | 'rejected' | 'cancelled' | 'approved' | 'completed';
+  priority: 'urgent' | 'high' | 'normal' | 'low';
+  requiredDate?: string;
+  required_date?: string;
+  requestedById?: number | null;
+  requested_by_id?: number | null;
+  requestedByName?: string;
+  requested_by_name?: string;
+  assignedToId?: number | null;
+  assigned_to_id?: number | null;
+  assignedToName?: string;
+  assigned_to_name?: string;
+  workflowInstanceId?: number | null;
+  workflow_instance_id?: number | null;
+  notes?: string;
+  description?: string;
+  totalEstimatedAmount?: number;
+  total_estimated_amount?: number;
+  items: PurchaseRequisitionItemRow[];
+  isDeleted?: number;
+  is_deleted?: number;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
 }
 
 export type { DbTransaction, DbExecutor, AppDatabase } from './db/drizzle.js';

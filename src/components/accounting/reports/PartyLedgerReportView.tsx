@@ -42,10 +42,21 @@ export function PartyLedgerReportView({
   // Party selection states
   const [parties, setParties] = useState<PartyOption[]>([]);
   const [loadingParties, setLoadingParties] = useState(false);
-  const [partyTypeFilter, setPartyTypeFilter] = useState<'all' | 'customer' | 'supplier' | 'personnel'>('all');
+  const [partyTypeFilter, setPartyTypeFilter] = useState<'all' | 'customer' | 'supplier' | 'personnel'>(() => {
+    if (initialPartyType && ['customer', 'supplier', 'personnel'].includes(initialPartyType)) {
+      return initialPartyType as any;
+    }
+    return 'all';
+  });
   const [partySearchQuery, setPartySearchQuery] = useState('');
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [isPartyDropdownOpen, setIsPartyDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialPartyType && ['customer', 'supplier', 'personnel'].includes(initialPartyType)) {
+      setPartyTypeFilter(initialPartyType as any);
+    }
+  }, [initialPartyType]);
 
   // Date filters
   const [startDate, setStartDate] = useState('');

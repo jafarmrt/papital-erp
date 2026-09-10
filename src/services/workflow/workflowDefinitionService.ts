@@ -475,6 +475,111 @@ export class WorkflowDefinitionService {
         });
         logger.info('[WorkflowDefinitionService] Seeded default DOC_APPROVAL_WORKFLOW successfully.');
       }
+
+      // Seed PURCHASE_REQUISITION_WORKFLOW (سیستم ساده‌سازی شده ۳ مرحله‌ای خرید و تدارکات کارگاه)
+      const existingPrWf = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, 'PURCHASE_REQUISITION_WORKFLOW'));
+      const prStatesCount = existingPrWf.length > 0
+        ? await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existingPrWf[0].id))
+        : [{ count: 0 }];
+
+      const needsPrUpdate = existingPrWf.length === 0 || Number(prStatesCount[0]?.count || 0) <= 1 || (existingPrWf[0]?.title?.includes('استعلام'));
+
+      if (needsPrUpdate) {
+        await this.saveWorkflowDefinition({
+          id: existingPrWf[0]?.id,
+          code: 'PURCHASE_REQUISITION_WORKFLOW',
+          title: 'گردش کار تدارکات و خرید کارگاه (بررسی و تایید -> در حال خرید -> تحویل انبار)',
+          entityType: 'purchase_requisition',
+          description: 'فرآیند ساده‌سازی شده خرید و تدارکات کارگاه شامل ۳ گام عملیاتی: ۱. در انتظار بررسی و تایید، ۲. تایید شده (در حال خرید)، ۳. خرید و تحویل انبار شده',
+          version: 2,
+          isActive: 1,
+          states: [
+            {
+              stateKey: 'pending',
+              title: 'در انتظار بررسی و تایید',
+              stateType: 'initial',
+              color: 'amber',
+              stepOrder: 1,
+              slaHours: 24,
+              positionX: 100,
+              positionY: 160
+            },
+            {
+              stateKey: 'ordered',
+              title: 'تایید شده (در حال خرید)',
+              stateType: 'normal',
+              color: 'sky',
+              stepOrder: 2,
+              slaHours: 48,
+              positionX: 450,
+              positionY: 160
+            },
+            {
+              stateKey: 'received',
+              title: 'خرید و تحویل انبار شده (تکمیل)',
+              stateType: 'terminal',
+              color: 'emerald',
+              stepOrder: 3,
+              slaHours: 24,
+              positionX: 800,
+              positionY: 160
+            },
+            {
+              stateKey: 'rejected',
+              title: 'رد شده / لغو',
+              stateType: 'terminal',
+              color: 'rose',
+              stepOrder: 4,
+              slaHours: 24,
+              positionX: 450,
+              positionY: 340
+            }
+          ],
+          transitions: [
+            {
+              from: 'pending',
+              to: 'ordered',
+              actionKey: 'approve_request',
+              title: 'تایید و صدور دستور خرید',
+              requiredRole: '',
+              requiredPermission: ''
+            },
+            {
+              from: 'ordered',
+              to: 'received',
+              actionKey: 'receive_items',
+              title: 'تحویل و ورود به انبار',
+              requiredRole: '',
+              requiredPermission: ''
+            },
+            {
+              from: 'pending',
+              to: 'rejected',
+              actionKey: 'reject_request',
+              title: 'رد درخواست خرید',
+              requiredRole: '',
+              requiredPermission: ''
+            },
+            {
+              from: 'ordered',
+              to: 'rejected',
+              actionKey: 'cancel_order',
+              title: 'لغو یا رد سفارش',
+              requiredRole: '',
+              requiredPermission: ''
+            },
+            {
+              from: 'rejected',
+              to: 'pending',
+              actionKey: 'reopen',
+              title: 'بازگشایی و بررسی مجدد',
+              requiredRole: '',
+              requiredPermission: ''
+            }
+          ]
+        });
+        logger.info('[WorkflowDefinitionService] Seeded simplified 3-stage PURCHASE_REQUISITION_WORKFLOW successfully.');
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.warn(`[WorkflowDefinitionService] Seed default workflows warning: ${errMsg}`);

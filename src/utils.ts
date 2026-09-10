@@ -61,11 +61,23 @@ export function formatStrategyDisplayTitle(rawTitle: string | null | undefined):
   return clean || 'عمومی';
 }
 
-export function toPersianDigits(val: string | number | null | undefined): string {
+export function toPersianDigits(val: string | number | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || typeof val === 'object') return '';
   const farsiDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
   try {
-    return String(val).replace(/[0-9]/g, (w) => farsiDigits[parseInt(w)]);
+    let s = String(val).trim();
+    // If it's a numeric or decimal string (e.g. "12.3456", "100.0000", 95.833333)
+    if (/^-?\d+(\.\d+)?$/.test(s)) {
+      const num = Number(s);
+      if (!isNaN(num)) {
+        s = num.toLocaleString('en-US', {
+          maximumFractionDigits: maxDecimals,
+          minimumFractionDigits: 0,
+          useGrouping: false
+        });
+      }
+    }
+    return s.replace(/[0-9]/g, (w) => farsiDigits[parseInt(w, 10)]);
   } catch {
     return '';
   }
@@ -258,21 +270,23 @@ export function getFutureJalaliDate(daysAhead: number = 30): string {
   }
 }
 
-export function cleanDecimalString(val: number | string | null | undefined, maxDecimals: number = 1): string {
+export function cleanDecimalString(val: number | string | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
   try {
     const num = typeof val === 'number' ? val : Number(toEnglishDigits(String(val)).replace(/,/g, ''));
     if (isNaN(num)) return '';
     if (num === 0) return '0';
-    const factor = Math.pow(10, maxDecimals);
-    const rounded = Math.round(num * factor) / factor;
-    return String(rounded);
+    return num.toLocaleString('en-US', {
+      maximumFractionDigits: maxDecimals,
+      minimumFractionDigits: 0,
+      useGrouping: false
+    });
   } catch {
     return '';
   }
 }
 
-export function formatPersianPrice(num: number | string | null | undefined, currency?: string, maxDecimals: number = 1): string {
+export function formatPersianPrice(num: number | string | null | undefined, currency?: string, maxDecimals: number = 0): string {
   if (num === null || num === undefined || num === '' || typeof num === 'object') {
     const zero = '۰';
     return currency ? `${zero} ${formatCurrencyLabel(currency)}` : zero;
@@ -283,11 +297,11 @@ export function formatPersianPrice(num: number | string | null | undefined, curr
       const zero = '۰';
       return currency ? `${zero} ${formatCurrencyLabel(currency)}` : zero;
     }
-    const factor = Math.pow(10, maxDecimals);
-    const rounded = Math.round(n * factor) / factor;
-    // Standard format with thousands separator and at most 1 decimal place (0 if integer)
-    const formatted = rounded.toLocaleString('en-US', {
-      maximumFractionDigits: maxDecimals,
+    // If currency is non-IRR (e.g. USD, EUR) or user didn't specify maxDecimals and fraction exists, allow up to 2 decimals
+    const effDecimals = maxDecimals > 0 ? maxDecimals : (currency && currency !== 'IRR' && n % 1 !== 0 ? 2 : 0);
+    // Standard format with thousands separator and minimum 0 fraction digits (no redundant .0000)
+    const formatted = n.toLocaleString('en-US', {
+      maximumFractionDigits: effDecimals,
       minimumFractionDigits: 0
     });
     const persianVal = toPersianDigits(formatted);
@@ -298,14 +312,12 @@ export function formatPersianPrice(num: number | string | null | undefined, curr
   }
 }
 
-export function formatPersianNumber(val: number | string | null | undefined, maxDecimals: number = 1): string {
+export function formatPersianNumber(val: number | string | null | undefined, maxDecimals: number = 2): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
   
   if (typeof val === 'number') {
     if (isNaN(val)) return '';
-    const factor = Math.pow(10, maxDecimals);
-    const rounded = Math.round(val * factor) / factor;
-    const formatted = rounded.toLocaleString('en-US', {
+    const formatted = val.toLocaleString('en-US', {
       maximumFractionDigits: maxDecimals,
       minimumFractionDigits: 0
     });
@@ -324,9 +336,7 @@ export function formatPersianNumber(val: number | string | null | undefined, max
     const englishStr = toEnglishDigits(rawStr).replace(/,/g, '');
     const num = Number(englishStr);
     if (!isNaN(num)) {
-      const factor = Math.pow(10, maxDecimals);
-      const rounded = Math.round(num * factor) / factor;
-      const formatted = rounded.toLocaleString('en-US', {
+      const formatted = num.toLocaleString('en-US', {
         maximumFractionDigits: maxDecimals,
         minimumFractionDigits: 0
       });
@@ -381,7 +391,7 @@ export function parseQuantityOrTime(val: string | number | null | undefined): nu
   }
 }
 
-export function formatQuantityOrTime(val: number | string | null | undefined, unit?: string): string {
+export function formatQuantityOrTime(val: number | string | null | undefined, unit?: string, maxDecimals: number = 4): string {
   if (val === null || val === undefined || val === '' || typeof val === 'object') return '۰';
   try {
     const parsed = typeof val === 'number' ? val : parseQuantityOrTime(val);
@@ -393,7 +403,7 @@ export function formatQuantityOrTime(val: number | string | null | undefined, un
       if (m === 0) return `${toPersianDigits(h)} ساعت`;
       return `${toPersianDigits(h)}:${String(m).padStart(2, '0').replace(/[0-9]/g, w => ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'][parseInt(w)])} (${toPersianDigits(h)} ساعت و ${toPersianDigits(m)} دقیقه)`;
     }
-    return formatPersianNumber(parsed, 1);
+    return formatPersianNumber(parsed, maxDecimals);
   } catch {
     return '۰';
   }

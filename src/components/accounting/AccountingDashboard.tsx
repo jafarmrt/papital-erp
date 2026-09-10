@@ -100,8 +100,9 @@ export function AccountingDashboard({
 
         {/* Receivables */}
         <div 
-          onClick={() => onTabChange('coa')}
+          onClick={() => onTabChange('reports?subTab=party_ledger&partyType=customer')}
           className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition cursor-pointer group"
+          title="مشاهده گردش حساب و کاردکس مطالبات تجاری (مشتریان)"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">مطالبات تجاری (مشتریان)</span>
@@ -113,15 +114,20 @@ export function AccountingDashboard({
             {formatPersianPrice(stats?.totalReceivables || 0)}
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">مانده بدهکاران تجاری و اسناد دریافتنی</p>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+            <span>مشاهده صورت‌حساب و گردش مشتریان</span>
+            <span className="group-hover:translate-x-[-3px] transition-transform">←</span>
+          </div>
         </div>
 
         {/* Payables */}
         <div 
-          onClick={() => onTabChange('coa')}
+          onClick={() => onTabChange('reports?subTab=party_ledger&partyType=supplier')}
           className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition cursor-pointer group"
+          title="مشاهده گردش حساب و کاردکس بدهی‌ها و تعهدات تجاری"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">بدهی‌ها و تعهدات تجاری</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">بدهی‌ها و تعهدات جاری (تجاری)</span>
             <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:scale-110 transition">
               <ArrowDownLeft className="w-5 h-5" />
             </div>
@@ -130,6 +136,10 @@ export function AccountingDashboard({
             {formatPersianPrice(stats?.totalPayables || 0)}
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">مانده بستانکاران و اسناد پرداختنی</p>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-[11px] text-rose-600 dark:text-rose-400 font-bold">
+            <span>مشاهده صورت‌حساب و بدهی به تامین‌کنندگان</span>
+            <span className="group-hover:translate-x-[-3px] transition-transform">←</span>
+          </div>
         </div>
 
         {/* Net Profit */}

@@ -221,7 +221,7 @@ export default function InventoryRebuildModal({
                   <SearchableSelect
                     options={itemsList.map(it => ({
                       value: it.id,
-                      label: `${it.name} (کد: ${it.code}) - موجودی سیستم: ${it.current_stock || it.currentStock || 0} ${it.unit}`
+                      label: `${it.name} (کد: ${it.code}) - موجودی سیستم: ${formatPersianNumber(it.current_stock || it.currentStock || 0)} ${it.unit}`
                     }))}
                     value={selectedItemId || ''}
                     onChange={(val) => setSelectedItemId(Number(val) || null)}

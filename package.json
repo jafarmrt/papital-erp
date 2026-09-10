@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "3.1.10",
+  "version": "3.1.39",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -20,6 +20,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.101.4",
@@ -52,6 +53,7 @@
     "supertest": "^7.2.2",
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.1",
+    "vazirmatn": "^33.0.3",
     "vite": "^6.2.3",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",

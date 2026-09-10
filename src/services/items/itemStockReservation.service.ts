@@ -85,6 +85,8 @@ interface InventoryControlData {
   isReserved?: boolean;
   reservedItems?: InventoryControlItem[];
   purchaseList?: InventoryControlItem[];
+  sections?: any[];
+  manualPurchaseItems?: any[];
 }
 
 export class ItemStockReservationService {
@@ -121,6 +123,165 @@ export class ItemStockReservationService {
     } catch (err) {
       logger.error({ message: 'Error syncing missing warehouse stocks', error: err });
     }
+  }
+
+  /**
+   * Derive reserved items for a project's inventory control bounded by warehouse stock.
+   */
+  static deriveProjectReservedItems(
+    invControl: InventoryControlData | null | undefined,
+    itemsByCodeMap: Map<string, any>,
+    itemsByNameMap: Map<string, any>,
+    itemsByIdMap: Map<number, any>
+  ): any[] {
+    if (!invControl) return [];
+
+    if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
+      return invControl.reservedItems;
+    }
+    if (Array.isArray(invControl.purchaseList) && invControl.purchaseList.length > 0) {
+      return invControl.purchaseList;
+    }
+    if (!invControl.isFinalized && !invControl.isReserved && (!invControl.sections || invControl.sections.length === 0)) {
+      return [];
+    }
+
+    const itemsList: any[] = [];
+    if (Array.isArray(invControl.sections) && invControl.sections.length > 0) {
+      const allocMap = new Map<string, {
+        itemCode: string;
+        name: string;
+        category?: string;
+        unit?: string;
+        totalRequiredQty: number;
+      }>();
+
+      for (const sec of invControl.sections) {
+        if (sec.checkType === 'per_item' && sec.perItemResults) {
+          for (const prodId of Object.keys(sec.perItemResults)) {
+            const prodRes = sec.perItemResults[prodId] || {};
+            for (const itemId of Object.keys(prodRes)) {
+              const it = prodRes[itemId];
+              if (!it) continue;
+              const code = (it.itemCode || it.code || '').trim();
+              const name = (it.name || it.itemName || '').trim();
+              const reqQty = Number(it.requiredQty !== undefined ? it.requiredQty : 1);
+              if (reqQty <= 0) continue;
+              const key = code ? `C_${code.toUpperCase()}` : `N_${name.toLowerCase()}`;
+              const cur = allocMap.get(key) || {
+                itemCode: code,
+                name,
+                category: it.category,
+                unit: it.unit,
+                totalRequiredQty: 0
+              };
+              cur.totalRequiredQty += reqQty;
+              allocMap.set(key, cur);
+            }
+          }
+        } else if (sec.checkType === 'global' && Array.isArray(sec.globalItems)) {
+          for (const gIt of sec.globalItems) {
+            if (!gIt) continue;
+            const code = (gIt.itemCode || gIt.code || '').trim();
+            const name = (gIt.name || gIt.itemName || '').trim();
+            const reqQty = Number(gIt.requiredQty || 0);
+            if (reqQty <= 0) continue;
+            const key = code ? `C_${code.toUpperCase()}` : `N_${name.toLowerCase()}`;
+            const cur = allocMap.get(key) || {
+              itemCode: code,
+              name,
+              category: gIt.category,
+              unit: gIt.unit,
+              totalRequiredQty: 0
+            };
+            cur.totalRequiredQty += reqQty;
+            allocMap.set(key, cur);
+          }
+        }
+      }
+
+      if (Array.isArray(invControl.manualPurchaseItems)) {
+        for (const mIt of invControl.manualPurchaseItems) {
+          if (!mIt) continue;
+          if (mIt.procurementStatus === 'reserved' || invControl.isFinalized) {
+            const code = (mIt.itemCode || mIt.code || '').trim();
+            const name = (mIt.itemName || mIt.name || '').trim();
+            const reqQty = Number(mIt.totalRequiredQty || mIt.requiredQty || 0);
+            if (reqQty <= 0) continue;
+            const key = code ? `C_${code.toUpperCase()}` : `N_${name.toLowerCase()}`;
+            const cur = allocMap.get(key) || {
+              itemCode: code,
+              name,
+              category: mIt.category,
+              unit: mIt.unit,
+              totalRequiredQty: 0
+            };
+            cur.totalRequiredQty += reqQty;
+            allocMap.set(key, cur);
+          }
+        }
+      }
+
+      // Convert project material allocations into reservations bounded by warehouse current stock
+      for (const alloc of allocMap.values()) {
+        const matchedDbItem = (alloc.itemCode ? itemsByCodeMap.get(alloc.itemCode.toUpperCase()) : null)
+          || (alloc.name ? itemsByNameMap.get(alloc.name.toLowerCase()) : null);
+        if (matchedDbItem) {
+          const stock = Number(matchedDbItem.currentStock || 0);
+          if (stock > 0) {
+            const reservedQty = Math.min(stock, alloc.totalRequiredQty);
+            if (reservedQty > 0) {
+              itemsList.push({
+                itemId: matchedDbItem.id,
+                itemCode: matchedDbItem.code || alloc.itemCode,
+                itemName: matchedDbItem.name || alloc.name,
+                category: matchedDbItem.category || alloc.category,
+                unit: matchedDbItem.unit || alloc.unit,
+                reservedQty,
+                unitPrice: Number(matchedDbItem.weightedAverageCost || 0)
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return itemsList;
+  }
+
+  /**
+   * Fetch active project's reserved items directly from DB.
+   */
+  static async getProjectReservedItems(targetProj: { id: number; inventoryControl: any }): Promise<any[]> {
+    const invControl = targetProj.inventoryControl as InventoryControlData | null;
+    if (!invControl) return [];
+    if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
+      return invControl.reservedItems;
+    }
+
+    const allItems = await orm
+      .select({
+        id: items.id,
+        code: items.code,
+        name: items.name,
+        category: items.category,
+        unit: items.unit,
+        currentStock: items.currentStock,
+        weightedAverageCost: items.weightedAverageCost,
+      })
+      .from(items)
+      .where(eq(items.isDeleted, 0));
+
+    const itemsByCodeMap = new Map<string, typeof allItems[0]>();
+    const itemsByIdMap = new Map<number, typeof allItems[0]>();
+    const itemsByNameMap = new Map<string, typeof allItems[0]>();
+    for (const it of allItems) {
+      if (it.code) itemsByCodeMap.set(it.code.trim().toUpperCase(), it);
+      if (it.name) itemsByNameMap.set(it.name.trim().toLowerCase(), it);
+      itemsByIdMap.set(it.id, it);
+    }
+
+    return ItemStockReservationService.deriveProjectReservedItems(invControl, itemsByCodeMap, itemsByNameMap, itemsByIdMap);
   }
 
   /**
@@ -227,8 +388,10 @@ export class ItemStockReservationService {
 
       const itemsByCodeMap = new Map<string, typeof allItems[0]>();
       const itemsByIdMap = new Map<number, typeof allItems[0]>();
+      const itemsByNameMap = new Map<string, typeof allItems[0]>();
       for (const it of allItems) {
         if (it.code) itemsByCodeMap.set(it.code.trim().toUpperCase(), it);
+        if (it.name) itemsByNameMap.set(it.name.trim().toLowerCase(), it);
         itemsByIdMap.set(it.id, it);
       }
 
@@ -236,39 +399,37 @@ export class ItemStockReservationService {
         const invControl = proj.inventoryControl as InventoryControlData | null;
         if (!invControl) continue;
 
-        if (invControl.isFinalized || invControl.isReserved || (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0)) {
-          const itemsList = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
-            ? invControl.reservedItems
-            : (Array.isArray(invControl.purchaseList) ? invControl.purchaseList : []);
+        const itemsList = ItemStockReservationService.deriveProjectReservedItems(invControl, itemsByCodeMap, itemsByNameMap, itemsByIdMap);
 
-          for (let idx = 0; idx < itemsList.length; idx++) {
-            const item = itemsList[idx];
-            const code = (item.itemCode || item.code || '').trim();
-            const reservedQty = Number(item.convertedReservedQty || item.convertedQty || item.reservedQty || item.warehouseStockQty || item.stockQty || 0);
-            if (reservedQty <= 0) continue;
+        for (let idx = 0; idx < itemsList.length; idx++) {
+          const item = itemsList[idx];
+          const code = (item.itemCode || item.code || '').trim();
+          const reservedQty = Number(item.convertedReservedQty || item.convertedQty || item.reservedQty || item.warehouseStockQty || item.stockQty || 0);
+          if (reservedQty <= 0) continue;
 
-            const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) || (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null);
-            const price = matchedDbItem ? Number(matchedDbItem.weightedAverageCost || 0) : Number(item.unitPrice || 0);
+          const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) 
+            || (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
+            || ((item.itemName || item.name) ? itemsByNameMap.get((item.itemName || item.name).trim().toLowerCase()) : null);
+          const price = matchedDbItem ? Number(matchedDbItem.weightedAverageCost || 0) : Number(item.unitPrice || 0);
 
-            allReservationEntries.push({
-              id: `project-${proj.id}-${matchedDbItem?.id || idx}-${code}`,
-              sourceType: 'project',
-              sourceLabel: 'کنترل پروژه',
-              sourceId: proj.id,
-              sourceRef: proj.projectCode || `PRJ-${proj.id}`,
-              sourceTitle: proj.title || `پروژه ${proj.id}`,
-              buyerOrCustomer: proj.title || 'پروژه تولید',
-              itemId: matchedDbItem?.id || (item.itemId ? Number(item.itemId) : undefined),
-              itemCode: code || matchedDbItem?.code || '',
-              itemName: item.itemName || item.name || matchedDbItem?.name || 'کالای سفارشی',
-              category: item.category || matchedDbItem?.category || 'عمومی',
-              unit: item.convertedUnit || item.warehouseUnit || item.unit || matchedDbItem?.unit || 'عدد',
-              reservedQty,
-              unitPrice: price,
-              totalValue: reservedQty * price,
-              date: proj.createdAt || new Date().toISOString()
-            });
-          }
+          allReservationEntries.push({
+            id: `project-${proj.id}-${matchedDbItem?.id || idx}-${code || idx}`,
+            sourceType: 'project',
+            sourceLabel: 'کنترل پروژه',
+            sourceId: proj.id,
+            sourceRef: proj.projectCode || `PRJ-${proj.id}`,
+            sourceTitle: proj.title || `پروژه ${proj.id}`,
+            buyerOrCustomer: proj.title || 'پروژه تولید',
+            itemId: matchedDbItem?.id || (item.itemId ? Number(item.itemId) : undefined),
+            itemCode: code || matchedDbItem?.code || '',
+            itemName: item.itemName || item.name || matchedDbItem?.name || 'کالای سفارشی',
+            category: item.category || matchedDbItem?.category || 'عمومی',
+            unit: item.convertedUnit || item.warehouseUnit || item.unit || matchedDbItem?.unit || 'عدد',
+            reservedQty,
+            unitPrice: price,
+            totalValue: reservedQty * price,
+            date: proj.createdAt || new Date().toISOString()
+          });
         }
       }
 

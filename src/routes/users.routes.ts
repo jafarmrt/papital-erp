@@ -156,6 +156,16 @@ export const PERMISSION_CATALOG = [
     ]
   },
   {
+    category: 'خرید و تدارکات (Procurement)',
+    permissions: [
+      { key: 'procurement.view', title: 'مشاهده درخواست‌های خرید و کارتابل تدارکات', description: 'مشاهده لیست درخواست‌های خرید، نیازمندی‌های پروژه‌ها و وضعیت تامین' },
+      { key: 'procurement.create', title: 'ثبت درخواست خرید جدید', description: 'ثبت درخواست خرید دستی یا کسری کالا مستقل از پروژه‌ها' },
+      { key: 'procurement.manage', title: 'مدیریت و استعلام تدارکات', description: 'بررسی درخواست‌ها، ثبت برآورد قیمت، تفکیک اقلام و تخصیص تامین‌کننده' },
+      { key: 'procurement.order', title: 'صدور سفارش خرید قطعی و فاکتور خرید', description: 'تبدیل درخواست‌های خرید تاییدشده به اسناد و فاکتورهای خرید رسمی انبار' },
+      { key: 'procurement.approve', title: 'تایید کارتابلی درخواست‌های خرید', description: 'تایید مراحل گردش کار درخواست‌های خرید جهت صدور سفارش قطعی' },
+    ]
+  },
+  {
     category: 'حسابداری، اسناد مالی و خزانه‌داری',
     permissions: [
       { key: 'accounting.view', title: 'مشاهده اسناد و دفاتر حسابداری', description: 'دسترسی به اسناد دوبل، دفتر روزنامه، کل، معین و گزارش‌ها' },

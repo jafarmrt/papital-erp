@@ -178,7 +178,7 @@ export default function SystemHealthDiagnostic() {
         <div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <ShieldCheck size={22} className="text-emerald-600" />
-            پایش سلامت و تست یکپارچگی سیستم (Phase 21 Integration & Health Audit)
+            پایش سلامت و آزمون‌های جامع یکپارچگی سیستم
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             آخرین استعلام: {new Date(health.checkTimestamp).toLocaleTimeString('fa-IR', { timeZone: getDisplayTimezoneClient() })}
@@ -219,7 +219,7 @@ export default function SystemHealthDiagnostic() {
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">{health.database.message}</p>
           <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-slate-400 border-t pt-2 border-slate-200/60 dark:border-slate-700">
-            <span>زمان پاسخگویی (Latency):</span>
+            <span>زمان پاسخگویی دیتابیس:</span>
             <span className="font-mono font-bold text-slate-700 dark:text-slate-200" dir="ltr">{health.database.latencyMs} ms</span>
           </div>
         </div>
@@ -231,7 +231,7 @@ export default function SystemHealthDiagnostic() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
               <Send size={18} className={(health.outbox?.dlqCount || 0) === 0 ? 'text-emerald-600' : 'text-amber-600'} />
-              <span>صف Outbox / DLQ</span>
+              <span>صف رویدادها و قرنطینه</span>
             </div>
             {(health.outbox?.dlqCount || 0) === 0 ? (
               <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
@@ -245,11 +245,11 @@ export default function SystemHealthDiagnostic() {
           </div>
           <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300 mb-2">
             <div className="flex justify-between">
-              <span>رویدادهای در صف (Outbox Pending):</span>
+              <span>رویدادهای در صف ارسال:</span>
               <span className="font-bold">{health.outbox?.pendingCount || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span>صف قرنطینه (Dead Letter DLQ):</span>
+              <span>صف خطاهای قرنطینه:</span>
               <span className={`font-bold ${(health.outbox?.dlqCount || 0) > 0 ? 'text-rose-600' : ''}`}>{health.outbox?.dlqCount || 0}</span>
             </div>
           </div>
@@ -276,7 +276,7 @@ export default function SystemHealthDiagnostic() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-100">
               <GitPullRequest size={18} className="text-purple-600" />
-              <span>موتور ورکفلو و SLA</span>
+              <span>گردش‌کار و مهلت‌های زمانی</span>
             </div>
             <span className="bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-full">
               {health.workflow?.activeInstances || 0} در جریان
@@ -284,7 +284,7 @@ export default function SystemHealthDiagnostic() {
           </div>
           <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
             <div className="flex justify-between">
-              <span>تاییدات منقضی‌شده SLA:</span>
+              <span>اقدامات منقضی‌شده طبق مهلت:</span>
               <span className={`font-bold ${(health.workflow?.overdueSlaTasks || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                 {health.workflow?.overdueSlaTasks || 0} وظیفه
               </span>
@@ -329,7 +329,7 @@ export default function SystemHealthDiagnostic() {
           </div>
           <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
             <div className="flex justify-between">
-              <span>زمان فعالیت (Uptime):</span>
+              <span>مدت زمان فعالیت سرور:</span>
               <span className="font-medium">{formatUptime(health.server.uptimeSeconds)}</span>
             </div>
             <div className="flex justify-between">
@@ -347,7 +347,7 @@ export default function SystemHealthDiagnostic() {
           <div>
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <Activity size={18} className="text-indigo-600" />
-              پایش انطباق و تطبیق خودکار سیستم (System Integrity & Reconciliation)
+              پایش انطباق و مغایرت‌گیری خودکار سیستم
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               ارزیابی لایه‌های دیتابیس، تراز اسناد، صف رویدادها و شاخص‌های سلامت

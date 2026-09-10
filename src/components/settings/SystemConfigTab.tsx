@@ -138,7 +138,7 @@ export function SystemConfigTab({ enableTestEndpoints, setEnableTestEndpoints, i
             </button>
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            کنترل دسترسی به دو مسیر <span className="font-mono" dir="ltr">POST /api/system/tests/run</span> و <span className="font-mono" dir="ltr">POST /api/system/clean-test-data</span> که مجموعه آزمون‌های یکپارچگی (فاز ۲۱) را اجرا می‌کنند. فقط نقش مدیر (admin) به این مسیرها دسترسی دارد.
+            کنترل دسترسی به دو مسیر <span className="font-mono" dir="ltr">POST /api/system/tests/run</span> و <span className="font-mono" dir="ltr">POST /api/system/clean-test-data</span> که مجموعه آزمون‌های یکپارچگی سیستم را اجرا می‌کنند. فقط مدیران سیستم به این مسیرها دسترسی دارند.
           </p>
           <div className="bg-amber-100/70 border border-amber-300 rounded-lg p-3 flex items-start gap-2">
             <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />

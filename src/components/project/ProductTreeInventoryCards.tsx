@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Package, Layers, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, 
-  Search, Scale, Trash2, ShieldCheck, ShoppingCart, Sparkles, ExternalLink, ArrowRight
+  Search, Scale, Trash2, Plus, Tag
 } from 'lucide-react';
 import { 
   ProjectProductItem, 
@@ -9,6 +9,7 @@ import {
   Item 
 } from '../../types';
 import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { formatPersianNumber } from '../../utils';
 
 interface ProductTreeInventoryCardsProps {
   products: ProjectProductItem[];
@@ -31,8 +32,8 @@ interface ProductTreeInventoryCardsProps {
     conversionRate?: number,
     convertedQty?: number
   ) => void;
-  handleRemoveItemFromSection: (secIdx: number, itemId: string, itemIdx?: number) => void;
-  onJumpToSection?: (secIdx: number) => void;
+  handleRemoveItemFromSection: (secIdx: number, itemId: string, prodId?: string, itemIdx?: number) => void;
+  handleOpenAddMaterialModal: (secIdx: number, prodId?: string) => void;
 }
 
 export function ProductTreeInventoryCards({
@@ -44,11 +45,10 @@ export function ProductTreeInventoryCards({
   handleOpenChangeMaterialModal,
   handleOpenUnitConversionModal,
   handleRemoveItemFromSection,
-  onJumpToSection
+  handleOpenAddMaterialModal
 }: ProductTreeInventoryCardsProps) {
   // Keep track of which product cards are expanded
   const [expandedProductIds, setExpandedProductIds] = useState<Record<string, boolean>>(() => {
-    // By default, open the first 2 products for quick visibility
     const initial: Record<string, boolean> = {};
     products.slice(0, 3).forEach(p => {
       initial[p.id] = true;
@@ -115,14 +115,14 @@ export function ProductTreeInventoryCards({
           <button
             type="button"
             onClick={expandAll}
-            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 transition-colors"
+            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 transition-colors cursor-pointer"
           >
             باز کردن همه
           </button>
           <button
             type="button"
             onClick={collapseAll}
-            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 transition-colors"
+            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 transition-colors cursor-pointer"
           >
             بستن همه
           </button>
@@ -144,81 +144,40 @@ export function ProductTreeInventoryCards({
           .map((prod, pIdx) => {
             const isExpanded = !!expandedProductIds[prod.id];
 
-            // Collect all materials required for this product across all per_item sections
-            const productMaterials: Array<{
-              secIdx: number;
-              sectionTitle: string;
-              itemSchema: { id: string; name: string; unit?: string; itemCode?: string };
-              itemRes: any;
-              matchWh: Item | undefined;
-              currentStock: number;
-              effectiveWarehouseUnit: string;
-              reqUnit: string;
-              reqQty: number;
-              shortfall: number;
-              isNeedsProcurement: boolean;
-              hasUnitMismatch: boolean;
-            }> = [];
+            // Match product image from warehouse items or product props
+            const matchingItem = warehouseItems.find(i => 
+              (prod.item_id && i.id === prod.item_id) || 
+              (prod.item_code && i.code === prod.item_code) ||
+              (prod.item_name && i.name.toLowerCase() === prod.item_name.toLowerCase())
+            );
+            const prodImage = (prod as any).image || (prod as any).thumbnail || matchingItem?.image || matchingItem?.thumbnail;
 
-            let prodTotalNeeds = 0;
+            // Compute overall status for this product across all per_item stages
+            let totalMaterialsCount = 0;
             let prodShortfallCount = 0;
 
-            perItemSections.forEach(({ sec, originalIdx }) => {
+            perItemSections.forEach(({ sec }) => {
               const prodRes = sec.perItemResults?.[prod.id] || {};
-              const itemsSchema = sec.itemsSchema || [{ id: 'item_default', name: 'ماده اولیه', unit: 'عدد' }];
-
-              itemsSchema.forEach(itemSchema => {
-                prodTotalNeeds++;
-                const itemRes = prodRes[itemSchema.id] || {
-                  itemId: itemSchema.id,
-                  name: itemSchema.name,
-                  itemCode: itemSchema.itemCode,
-                  unit: itemSchema.unit || 'عدد',
-                  status: 'available',
-                  requiredQty: prod.quantity || 100,
-                  stockQty: 0
-                };
-
-                const effectiveCode = itemRes.itemCode || itemSchema.itemCode || '';
-                const effectiveName = itemRes.name || itemSchema.name;
-
-                const matchWh = warehouseItems.find(i => 
-                  (effectiveCode && i.code === effectiveCode) ||
-                  (i.name.toLowerCase() === effectiveName.toLowerCase())
-                );
-
-                const currentStock = matchWh ? matchWh.current_stock : (itemRes.stockQty ?? 0);
-                const effectiveWarehouseUnit = matchWh?.unit || itemRes.warehouseUnit;
-                const reqUnit = itemRes.unit || itemSchema.unit || 'عدد';
-                const reqQty = Number(itemRes.requiredQty) || prod.quantity || 100;
-                const shortfall = Math.max(0, reqQty - currentStock);
-                const isNeedsProcurement = itemRes.status === 'needs_procurement' || shortfall > 0;
-
-                if (isNeedsProcurement) {
-                  prodShortfallCount++;
-                }
-
-                const hasUnitMismatch = !!(
-                  effectiveWarehouseUnit && 
-                  reqUnit && 
-                  effectiveWarehouseUnit.trim().toLowerCase() !== reqUnit.trim().toLowerCase()
-                );
-
-                productMaterials.push({
-                  secIdx: originalIdx,
-                  sectionTitle: sec.title,
-                  itemSchema,
-                  itemRes,
-                  matchWh,
-                  currentStock,
-                  effectiveWarehouseUnit,
-                  reqUnit,
-                  reqQty,
-                  shortfall,
-                  isNeedsProcurement,
-                  hasUnitMismatch
+              const materials = Object.values(prodRes);
+              if (materials.length > 0) {
+                materials.forEach(mat => {
+                  totalMaterialsCount++;
+                  const effectiveCode = mat.itemCode || '';
+                  const effectiveName = mat.name || '';
+                  const matchWh = warehouseItems.find(i => 
+                    (effectiveCode && i.code === effectiveCode) ||
+                    (effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
+                  );
+                  const currentStock = matchWh ? matchWh.current_stock : (mat.stockQty ?? 0);
+                  const reqQty = Number(mat.requiredQty !== undefined ? mat.requiredQty : 1);
+                  const shortfall = Math.max(0, reqQty - currentStock);
+                  if (mat.status === 'needs_procurement' || shortfall > 0) {
+                    prodShortfallCount++;
+                  }
                 });
-              });
+              } else if ((sec.itemsSchema || []).length > 0) {
+                totalMaterialsCount += sec.itemsSchema.length;
+              }
             });
 
             // Filter by shortage if enabled
@@ -226,14 +185,14 @@ export function ProductTreeInventoryCards({
               return null;
             }
 
-            const isFullyAvailable = prodTotalNeeds > 0 && prodShortfallCount === 0;
+            const isFullyAvailable = totalMaterialsCount > 0 && prodShortfallCount === 0;
 
             return (
               <div 
                 key={prod.id || pIdx}
                 className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-2xs transition-all duration-200"
               >
-                {/* Product Header Row */}
+                {/* Product Header Row (Black / Dark Slate Card) */}
                 <div 
                   onClick={() => toggleExpand(prod.id)}
                   className={`p-3.5 flex items-center justify-between gap-3 cursor-pointer transition-colors select-none ${
@@ -241,13 +200,25 @@ export function ProductTreeInventoryCards({
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 transition-colors ${
-                      isExpanded 
-                        ? 'bg-amber-400 text-slate-950 shadow-xs' 
-                        : 'bg-amber-100 text-amber-900 border border-amber-300'
-                    }`}>
-                      <Package className="w-5 h-5" />
-                    </div>
+                    {/* Product Image Display with Graceful Fallback */}
+                    {prodImage ? (
+                      <div className="relative shrink-0">
+                        <img 
+                          src={prodImage} 
+                          alt={prod.item_name} 
+                          className="w-12 h-12 rounded-xl object-cover border border-amber-400/50 bg-slate-800 shadow-xs" 
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      </div>
+                    ) : (
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold shrink-0 transition-colors ${
+                        isExpanded 
+                          ? 'bg-amber-400 text-slate-950 shadow-xs' 
+                          : 'bg-amber-100 text-amber-900 border border-amber-300'
+                      }`}>
+                        <Package className="w-6 h-6" />
+                      </div>
+                    )}
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -260,7 +231,7 @@ export function ProductTreeInventoryCards({
                               ? 'bg-slate-800 text-amber-300 border-slate-700' 
                               : 'bg-white text-slate-600 border-slate-200'
                           }`}>
-                            کد سیستم: {prod.item_code}
+                            کد: {prod.item_code}
                           </span>
                         )}
                         {prod.customer_code && (
@@ -277,7 +248,7 @@ export function ProductTreeInventoryCards({
                             ? 'bg-slate-800 text-slate-200 border-slate-700' 
                             : 'bg-slate-200 text-slate-800 border-slate-300'
                         }`}>
-                          سفارش: {prod.quantity} {prod.unit || 'عدد'}
+                          سفارش: {formatPersianNumber(prod.quantity)} {prod.unit || 'عدد'}
                         </span>
                       </div>
 
@@ -287,7 +258,7 @@ export function ProductTreeInventoryCards({
                         </span>
                         <span className={isExpanded ? 'text-slate-600' : 'text-slate-300'}>•</span>
                         <span className={isExpanded ? 'text-slate-300' : 'text-slate-500'}>
-                          {productMaterials.length} قلم مواد اولیه تعریف شده
+                          {totalMaterialsCount} قلم مواد اولیه تعریف شده برای این کد
                         </span>
                       </div>
                     </div>
@@ -295,11 +266,11 @@ export function ProductTreeInventoryCards({
 
                   {/* Badges & Expand Arrow */}
                   <div className="flex items-center gap-2.5 shrink-0">
-                    {prodTotalNeeds > 0 && (
+                    {totalMaterialsCount > 0 && (
                       isFullyAvailable ? (
                         <span className="px-2.5 py-1 bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-2xs">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>تامین کامل ({productMaterials.length})</span>
+                          <span>تامین کامل ({totalMaterialsCount})</span>
                         </span>
                       ) : (
                         <span className="px-2.5 py-1 bg-rose-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-2xs animate-pulse">
@@ -319,191 +290,280 @@ export function ProductTreeInventoryCards({
 
                 {/* Materials Breakdown Accordion Body */}
                 {isExpanded && (
-                  <div className="border-t border-slate-200 p-3 sm:p-4 space-y-3 bg-white animate-fadeIn">
+                  <div className="border-t border-slate-200 p-3 sm:p-4 space-y-4 bg-white animate-fadeIn">
                     <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
-                      <span className="font-bold text-slate-700">زیرشاخه مواد اولیه و اجزای مورد نیاز برای این محصول:</span>
-                      <span>برای ویرایش سریع مقدار یا وضعیت، کنترل‌های زیر را مستقیماً تغییر دهید</span>
+                      <span className="font-bold text-slate-800">
+                        مراحل و ساختار درختی مواد اولیه اختصاصی کد «{prod.item_name}»:
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        مواد اولیه در این بخش مستقلاً برای همین کد محصول مدیریت می‌شوند.
+                      </span>
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
-                      <table className="w-full text-right text-xs">
-                        <thead className="bg-slate-100 text-slate-700 font-bold">
-                          <tr>
-                            <th className="p-2.5 border-b border-slate-200 text-center">مرحله کنترل</th>
-                            <th className="p-2.5 border-b border-slate-200">ماده اولیه / قطعه</th>
-                            <th className="p-2.5 border-b border-slate-200 text-center">موجودی انبار</th>
-                            <th className="p-2.5 border-b border-slate-200 text-center">مقدار مورد نیاز</th>
-                            <th className="p-2.5 border-b border-slate-200 text-center">وضعیت تامین و کسری</th>
-                            <th className="p-2.5 border-b border-slate-200">یادداشت تامین</th>
-                            <th className="p-2.5 border-b border-slate-200 text-center">عملیات</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {productMaterials.map((mat, mIdx) => {
-                            const effectiveCode = mat.itemRes.itemCode || mat.itemSchema.itemCode || '';
-                            const effectiveName = mat.itemRes.name || mat.itemSchema.name;
+                    {/* Group materials by stage/section for this product */}
+                    <div className="space-y-4">
+                      {perItemSections.map(({ sec, originalIdx }) => {
+                        const prodRes = sec.perItemResults?.[prod.id] || {};
+                        let materials = Object.values(prodRes);
 
-                            return (
-                              <tr 
-                                key={`${mat.secIdx}_${mat.itemSchema.id}_${mIdx}`} 
-                                className={mat.isNeedsProcurement ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50'}
+                        // If no specific per-item result yet, check if there are legacy default schemas
+                        if (materials.length === 0 && (sec.itemsSchema || []).length > 0) {
+                          materials = (sec.itemsSchema || []).map(s => ({
+                            itemId: s.id,
+                            name: s.name,
+                            itemCode: s.itemCode,
+                            unit: s.unit || 'عدد',
+                            category: (s as any).category,
+                            requiredQty: 1,
+                            stockQty: 0,
+                            status: 'available' as const
+                          }));
+                        }
+
+                        return (
+                          <div 
+                            key={sec.id || originalIdx} 
+                            className="bg-slate-50/70 rounded-xl border border-slate-200 p-3 space-y-3"
+                          >
+                            {/* Stage Header with dedicated Add Material Button */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200/80">
+                              <div className="flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-slate-900 text-amber-400 flex items-center justify-center font-mono text-[10px] font-bold">
+                                  {originalIdx + 1}
+                                </span>
+                                <span className="font-bold text-xs text-slate-800">{sec.title}</span>
+                                {sec.description && (
+                                  <span className="text-[11px] text-slate-400 hidden sm:inline">
+                                    — {sec.description}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Button: Add Material to THIS Stage for THIS Product */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddMaterialModal(originalIdx, prod.id)}
+                                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
                               >
-                                {/* Section Step */}
-                                <td className="p-2.5 border-l border-slate-100 text-center align-middle whitespace-nowrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => onJumpToSection && onJumpToSection(mat.secIdx)}
-                                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg inline-flex items-center gap-1 transition-colors border border-slate-200"
-                                    title={`پرش به مرحله ${mat.sectionTitle}`}
-                                  >
-                                    <span>{mat.sectionTitle}</span>
-                                    <ExternalLink className="w-2.5 h-2.5 text-slate-400" />
-                                  </button>
-                                </td>
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>افزودن ماده اولیه به این مرحله</span>
+                              </button>
+                            </div>
 
-                                {/* Material Name & Code */}
-                                <td className="p-2.5 font-semibold text-slate-800 border-l border-slate-100 align-middle min-w-[180px]">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="font-bold text-slate-900 text-xs truncate" title={effectiveName}>
-                                        {effectiveName}
-                                      </div>
-                                      {effectiveCode && (
-                                        <span className="inline-block font-mono text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5">
-                                          کد: {effectiveCode}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenChangeMaterialModal(mat.secIdx, mat.itemSchema.id, prod.id)}
-                                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-colors shrink-0 cursor-pointer border border-slate-200"
-                                      title="تغییر یا اتصال به کالای انبار"
-                                    >
-                                      <Search className="w-3 h-3 text-slate-500" />
-                                      اتصال انبار
-                                    </button>
-                                  </div>
-                                </td>
+                            {/* Materials Table or Empty State */}
+                            {materials.length === 0 ? (
+                              <div className="py-4 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-lg bg-white">
+                                <span>ماده اولیه‌ای برای این مرحله تعریف نشده است.</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAddMaterialModal(originalIdx, prod.id)}
+                                  className="text-amber-600 font-bold hover:underline mr-2 cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  افزودن اولین ماده اولیه
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                <table className="w-full text-right text-xs">
+                                  <thead className="bg-slate-100/80 text-slate-700 font-bold">
+                                    <tr>
+                                      <th className="p-2.5 border-b border-slate-200">ماده اولیه / قطعه</th>
+                                      <th className="p-2.5 border-b border-slate-200 text-center">موجودی انبار</th>
+                                      <th className="p-2.5 border-b border-slate-200 text-center">مقدار مورد نیاز</th>
+                                      <th className="p-2.5 border-b border-slate-200 text-center">وضعیت تامین و کسری</th>
+                                      <th className="p-2.5 border-b border-slate-200">یادداشت تامین</th>
+                                      <th className="p-2.5 border-b border-slate-200 text-center">عملیات</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {materials.map((mat, mIdx) => {
+                                      const effectiveCode = mat.itemCode || '';
+                                      const effectiveName = mat.name || 'ماده اولیه';
 
-                                {/* Current Stock */}
-                                <td className="p-2.5 text-center font-mono font-bold whitespace-nowrap border-l border-slate-100 align-middle">
-                                  {mat.currentStock > 0 ? (
-                                    <span className="px-2 py-1 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs">
-                                      {mat.currentStock} {mat.effectiveWarehouseUnit || mat.reqUnit}
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg border border-slate-200 text-xs">
-                                      0 {mat.effectiveWarehouseUnit || mat.reqUnit}
-                                    </span>
-                                  )}
-                                </td>
+                                      const matchWh = warehouseItems.find(i => 
+                                        (effectiveCode && i.code === effectiveCode) ||
+                                        (effectiveName && i.name.toLowerCase() === effectiveName.toLowerCase())
+                                      );
 
-                                {/* Required Qty & Unit & Conversion */}
-                                <td className="p-2.5 text-center border-l border-slate-100 align-middle min-w-[140px]">
-                                  <div className="flex flex-col items-center gap-1">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="any"
-                                        value={mat.itemRes.requiredQty ?? prod.quantity ?? 100}
-                                        onChange={(e) => handleUpdatePerItemResult(mat.secIdx, prod.id, mat.itemSchema.id, 'requiredQty', e.target.value)}
-                                        className="w-16 text-center font-mono font-bold bg-white border border-slate-300 rounded-lg py-1 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                                      />
-                                      <select
-                                        value={mat.reqUnit}
-                                        onChange={(e) => handleUpdatePerItemResult(mat.secIdx, prod.id, mat.itemSchema.id, 'unit', e.target.value)}
-                                        className="bg-slate-50 border border-slate-200 rounded-lg py-1 px-1 text-[11px] font-bold text-slate-700 focus:outline-none cursor-pointer"
-                                      >
-                                        {COMMON_UNITS.map(u => (
-                                          <option key={u} value={u}>{u}</option>
-                                        ))}
-                                      </select>
-                                    </div>
+                                      const currentStock = matchWh ? matchWh.current_stock : (mat.stockQty ?? 0);
+                                      const effectiveWarehouseUnit = matchWh?.unit || mat.warehouseUnit;
+                                      const reqUnit = mat.unit || 'عدد';
+                                      const reqQty = Number(mat.requiredQty !== undefined ? mat.requiredQty : 1);
+                                      const shortfall = Math.max(0, reqQty - currentStock);
+                                      const isNeedsProcurement = mat.status === 'needs_procurement' || shortfall > 0;
+                                      const displayCategory = mat.category || matchWh?.category || 'عمومی';
 
-                                    {mat.hasUnitMismatch && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenUnitConversionModal(
-                                          mat.secIdx,
-                                          mat.itemSchema.id,
-                                          prod.id,
-                                          undefined,
-                                          effectiveName,
-                                          effectiveCode,
-                                          mat.reqQty,
-                                          mat.reqUnit,
-                                          mat.effectiveWarehouseUnit || 'ریسه',
-                                          mat.itemRes.convertedUnit,
-                                          mat.itemRes.conversionRate,
-                                          mat.itemRes.convertedQty
-                                        )}
-                                        className="inline-flex items-center gap-1 text-[10px] text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-md font-bold shadow-2xs cursor-pointer transition-colors"
-                                      >
-                                        <Scale className="w-3 h-3 text-amber-700 shrink-0" />
-                                        <span>تبدیل ({mat.effectiveWarehouseUnit})</span>
-                                      </button>
-                                    )}
+                                      const hasUnitMismatch = !!(
+                                        effectiveWarehouseUnit && 
+                                        reqUnit && 
+                                        effectiveWarehouseUnit.trim().toLowerCase() !== reqUnit.trim().toLowerCase()
+                                      );
 
-                                    {mat.itemRes.convertedQty ? (
-                                      <span className="text-[10px] text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold font-mono">
-                                        = {roundToOneDecimal(mat.itemRes.convertedQty)} {mat.itemRes.convertedUnit}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </td>
+                                      return (
+                                        <tr 
+                                          key={mat.itemId || mIdx} 
+                                          className={isNeedsProcurement ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}
+                                        >
+                                          {/* Column 1: Material / Part + CATEGORY Display + Warehouse Link */}
+                                          <td className="p-2.5 font-semibold text-slate-800 border-l border-slate-100 align-middle min-w-[220px]">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <div className="min-w-0 flex-1 space-y-1">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  {/* Category Badge Display */}
+                                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                                    <Tag className="w-2.5 h-2.5 text-slate-500" />
+                                                    {displayCategory}
+                                                  </span>
+                                                  <span className="font-bold text-slate-900 text-xs truncate" title={effectiveName}>
+                                                    {effectiveName}
+                                                  </span>
+                                                </div>
 
-                                {/* Procurement Status & Shortfall */}
-                                <td className="p-2.5 border-l border-slate-100 align-middle min-w-[200px]">
-                                  <div className="flex flex-col gap-1">
-                                    <select
-                                      value={mat.itemRes.status}
-                                      onChange={(e) => handleUpdatePerItemResult(mat.secIdx, prod.id, mat.itemSchema.id, 'status', e.target.value)}
-                                      className={`px-2 py-1 rounded-xl font-bold text-xs border focus:outline-none cursor-pointer w-full ${
-                                        mat.itemRes.status === 'available'
-                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                          : 'bg-amber-100 text-amber-950 border-amber-400'
-                                      }`}
-                                    >
-                                      <option value="available">✓ موجود در انبار</option>
-                                      <option value="needs_procurement">⚠ نیاز به تامین / ساخت</option>
-                                    </select>
-                                    {mat.shortfall > 0 && (
-                                      <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-center">
-                                        کسری خرید: {mat.shortfall} {mat.reqUnit}
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
+                                                {effectiveCode && (
+                                                  <div className="font-mono text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block">
+                                                    کد: {effectiveCode}
+                                                  </div>
+                                                )}
+                                              </div>
 
-                                {/* Notes */}
-                                <td className="p-2.5 border-l border-slate-100 align-middle">
-                                  <input
-                                    type="text"
-                                    value={mat.itemRes.notes || ''}
-                                    onChange={(e) => handleUpdatePerItemResult(mat.secIdx, prod.id, mat.itemSchema.id, 'notes', e.target.value)}
-                                    placeholder="یادداشت..."
-                                    className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                                  />
-                                </td>
+                                              {/* Warehouse Link Button */}
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenChangeMaterialModal(originalIdx, mat.itemId, prod.id)}
+                                                className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-colors shrink-0 cursor-pointer border border-slate-300 shadow-2xs"
+                                                title="اتصال این ردیف به کالای موجود در انبار"
+                                              >
+                                                <Search className="w-3 h-3 text-slate-500" />
+                                                <span>اتصال انبار</span>
+                                              </button>
+                                            </div>
+                                          </td>
 
-                                {/* Actions */}
-                                <td className="p-2.5 text-center align-middle whitespace-nowrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveItemFromSection(mat.secIdx, mat.itemSchema.id)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                    title="حذف این ماده اولیه از کنترل"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                          {/* Current Stock */}
+                                          <td className="p-2.5 text-center font-mono font-bold whitespace-nowrap border-l border-slate-100 align-middle">
+                                            {currentStock > 0 ? (
+                                              <span className="px-2 py-1 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs">
+                                                {formatPersianNumber(currentStock)} {effectiveWarehouseUnit || reqUnit}
+                                              </span>
+                                            ) : (
+                                              <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg border border-slate-200 text-xs">
+                                                ۰ {effectiveWarehouseUnit || reqUnit}
+                                              </span>
+                                            )}
+                                          </td>
+
+                                          {/* Required Qty & Unit (Decoupled from order quantity) & Unit Conversion */}
+                                          <td className="p-2.5 text-center border-l border-slate-100 align-middle min-w-[140px]">
+                                            <div className="flex flex-col items-center gap-1">
+                                              <div className="flex items-center justify-center gap-1">
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  step="any"
+                                                  value={mat.requiredQty !== undefined ? mat.requiredQty : 1}
+                                                  onChange={(e) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'requiredQty', e.target.value)}
+                                                  className="w-16 text-center font-mono font-bold bg-white border border-slate-300 rounded-lg py-1 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                                                  title="مقدار مورد نیاز برای این محصول (مستقل از تعداد سفارش)"
+                                                />
+                                                <select
+                                                  value={reqUnit}
+                                                  onChange={(e) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'unit', e.target.value)}
+                                                  className="bg-slate-50 border border-slate-200 rounded-lg py-1 px-1 text-[11px] font-bold text-slate-700 focus:outline-none cursor-pointer"
+                                                >
+                                                  {COMMON_UNITS.map(u => (
+                                                    <option key={u} value={u}>{u}</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+
+                                              {hasUnitMismatch && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenUnitConversionModal(
+                                                    originalIdx,
+                                                    mat.itemId,
+                                                    prod.id,
+                                                    undefined,
+                                                    effectiveName,
+                                                    effectiveCode,
+                                                    reqQty,
+                                                    reqUnit,
+                                                    effectiveWarehouseUnit || 'ریسه',
+                                                    mat.convertedUnit,
+                                                    mat.conversionRate,
+                                                    mat.convertedQty
+                                                  )}
+                                                  className="inline-flex items-center gap-1 text-[10px] text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-md font-bold shadow-2xs cursor-pointer transition-colors"
+                                                >
+                                                  <Scale className="w-3 h-3 text-amber-700 shrink-0" />
+                                                  <span>تبدیل ({effectiveWarehouseUnit})</span>
+                                                </button>
+                                              )}
+
+                                              {mat.convertedQty ? (
+                                                <span className="text-[10px] text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold font-mono">
+                                                  = {formatPersianNumber(mat.convertedQty)} {mat.convertedUnit}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </td>
+
+                                          {/* Procurement Status & Shortfall */}
+                                          <td className="p-2.5 border-l border-slate-100 align-middle min-w-[190px]">
+                                            <div className="flex flex-col gap-1">
+                                              <select
+                                                value={mat.status}
+                                                onChange={(e) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'status', e.target.value)}
+                                                className={`px-2 py-1 rounded-xl font-bold text-xs border focus:outline-none cursor-pointer w-full ${
+                                                  mat.status === 'available'
+                                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                                    : 'bg-amber-100 text-amber-950 border-amber-400'
+                                                }`}
+                                              >
+                                                <option value="available">✓ موجود در انبار</option>
+                                                <option value="needs_procurement">⚠ نیاز به تامین / خرید</option>
+                                              </select>
+                                              {shortfall > 0 && (
+                                                <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-center">
+                                                  کسری خرید: {formatPersianNumber(shortfall)} {reqUnit}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </td>
+
+                                          {/* Notes */}
+                                          <td className="p-2.5 border-l border-slate-100 align-middle">
+                                            <input
+                                              type="text"
+                                              value={mat.notes || ''}
+                                              onChange={(e) => handleUpdatePerItemResult(originalIdx, prod.id, mat.itemId, 'notes', e.target.value)}
+                                              placeholder="یادداشت..."
+                                              className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                                            />
+                                          </td>
+
+                                          {/* Actions: Delete only from THIS product */}
+                                          <td className="p-2.5 text-center align-middle whitespace-nowrap">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveItemFromSection(originalIdx, mat.itemId, prod.id)}
+                                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                              title="حذف این ماده اولیه از این محصول"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

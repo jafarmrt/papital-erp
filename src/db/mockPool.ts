@@ -197,10 +197,10 @@ function handleUpdate(sqlText: string, params: any[], isArrayMode: boolean) {
 
   if (whereMatch) {
     const cond = whereMatch[1];
-    const eqMatch = cond.match(/["`]?([a-zA-Z0-9_]+)["`]?\s*=\s*\$(\d+)/i);
+    const eqMatch = cond.match(/(?:["`]?([a-zA-Z0-9_]+)["`]?\.)?["`]?([a-zA-Z0-9_]+)["`]?\s*=\s*\$(\d+)/i);
     if (eqMatch) {
-      const col = eqMatch[1].toLowerCase();
-      const pIdx = parseInt(eqMatch[2], 10) - 1;
+      const col = (eqMatch[2] || eqMatch[1]).toLowerCase();
+      const pIdx = parseInt(eqMatch[3] || eqMatch[2], 10) - 1;
       const val = params[pIdx];
       targetFilter = (r: any) => {
         const rVal = r[col] !== undefined ? r[col] : r[snakeToCamel(col)];
@@ -257,10 +257,10 @@ function handleDelete(sqlText: string, params: any[]) {
 
   if (whereMatch) {
     const cond = whereMatch[1];
-    const eqMatch = cond.match(/["`]?([a-zA-Z0-9_]+)["`]?\s*=\s*\$(\d+)/i);
+    const eqMatch = cond.match(/(?:["`]?([a-zA-Z0-9_]+)["`]?\.)?["`]?([a-zA-Z0-9_]+)["`]?\s*=\s*\$(\d+)/i);
     if (eqMatch) {
-      const col = eqMatch[1].toLowerCase();
-      const pIdx = parseInt(eqMatch[2], 10) - 1;
+      const col = (eqMatch[2] || eqMatch[1]).toLowerCase();
+      const pIdx = parseInt(eqMatch[3] || eqMatch[2], 10) - 1;
       const val = params[pIdx];
       list = list.filter((r: any) => {
         const rVal = r[col] !== undefined ? r[col] : r[snakeToCamel(col)];
@@ -292,10 +292,10 @@ function handleSelect(sqlText: string, params: any[], isArrayMode: boolean) {
     }
 
     // Filter equality col = $N
-    const eqMatches = Array.from(cond.matchAll(/["`]?([a-zA-Z0-9_]+)["`]?\s*=\s*\$(\d+)/gi));
+    const eqMatches = Array.from(cond.matchAll(/(?:["`]?([a-zA-Z0-9_]+)["`]?\.)?["`]?([a-zA-Z0-9_]+)["`]?\s*=\s*\$(\d+)/gi));
     for (const m of eqMatches) {
-      const col = m[1].toLowerCase();
-      const pIdx = parseInt(m[2], 10) - 1;
+      const col = (m[2] || m[1]).toLowerCase();
+      const pIdx = parseInt(m[3] || m[2], 10) - 1;
       const val = params[pIdx];
       rows = rows.filter((r: any) => {
         const rVal = r[col] !== undefined ? r[col] : r[snakeToCamel(col)];

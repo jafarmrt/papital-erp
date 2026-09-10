@@ -561,7 +561,7 @@ export function WebhookManagementSubTab() {
           <div className="flex items-center gap-2">
             <Send className="w-4 h-4 text-indigo-500" />
             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              لاگ‌های اخیر تحویل وب‌هوک (Webhook Deliveries)
+              لاگ‌های اخیر تحویل وب‌هوک
             </h4>
           </div>
           <button
@@ -581,7 +581,7 @@ export function WebhookManagementSubTab() {
                 <th className="p-2.5 font-semibold">نوع رویداد</th>
                 <th className="p-2.5 font-semibold">کد وضعیت</th>
                 <th className="p-2.5 font-semibold">وضعیت</th>
-                <th className="p-2.5 font-semibold">تاخیر (Latency)</th>
+                <th className="p-2.5 font-semibold">زمان پاسخ (میلی‌ثانیه)</th>
                 <th className="p-2.5 font-semibold">امضای ارسالی</th>
                 <th className="p-2.5 font-semibold">زمان ارسال</th>
               </tr>
@@ -639,10 +639,10 @@ export function WebhookManagementSubTab() {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Globe className="w-4 h-4 text-indigo-500" />
-                  {editingSub ? `ویرایش درگاه وب‌هوک "${editingSub.name}"` : 'تعریف درگاه جدید وب‌هوک (Webhook Subscription)'}
+                  {editingSub ? `ویرایش درگاه وب‌هوک "${editingSub.name}"` : 'تعریف درگاه جدید وب‌هوک'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  پیکربندی آدرس مقصد، رویدادهای مشترک و کلید امنیتی جهت امضای HMAC-SHA256
+                  پیکربندی آدرس مقصد، رویدادهای مشترک و کلید امنیتی جهت امضای امنیتی
                 </p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -665,7 +665,7 @@ export function WebhookManagementSubTab() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">کلید سری امضا (HMAC Secret Key):</label>
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">کلید محرمانه امضای امنیتی:</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -691,7 +691,7 @@ export function WebhookManagementSubTab() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">آدرس URL مقصد (Endpoint URL):</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300">نشانی مقصد وب‌هوک:</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="url"
@@ -714,7 +714,7 @@ export function WebhookManagementSubTab() {
               {/* Event Subscriptions Presets */}
               <div className="space-y-2">
                 <label className="font-semibold text-slate-700 dark:text-slate-300">
-                  رویدادهای مورد اشتراک (Event Filter Patterns):
+                  رویدادهای مورد اشتراک:
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
                   {AVAILABLE_EVENT_PRESETS.map(preset => {
@@ -740,7 +740,7 @@ export function WebhookManagementSubTab() {
 
               {/* Custom Headers JSON */}
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 dark:text-slate-300">هدرهای سفارشی HTTP (Custom Headers):</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300">هدرهای سفارشی HTTP:</label>
                 <textarea
                   rows={3}
                   value={formData.customHeadersJson}

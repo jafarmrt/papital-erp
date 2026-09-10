@@ -70,6 +70,7 @@ export interface CreateDocumentInput {
   vatPercent?: number;
   vat_amount?: number;
   vatAmount?: number;
+  attachments?: any[];
 }
 
 export interface UpdateDocumentInput {
@@ -88,6 +89,7 @@ export interface UpdateDocumentInput {
   notes?: string;
   location?: string;
   currency?: string;
+  attachments?: any[];
   items?: DocumentLineItemInput[];
   expectedVersion?: number;
   version?: number;
@@ -219,6 +221,7 @@ export class DocumentService {
         buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
         status: status || existingDoc.status,
         currency: currency || existingDoc.currency,
+        attachments: body.attachments !== undefined ? body.attachments : (existingDoc.attachments || []),
         version: nextVersion(existingDoc.version)
       }).where(eq(documents.id, id));
 
@@ -478,6 +481,7 @@ export class DocumentService {
         buyerAddress: finalBuyerAddress,
         status: docStatus,
         currency: currency || 'IRR',
+        attachments: body.attachments || [],
         isDeleted: 0
       }).returning({ id: documents.id });
       const docId = insertedDoc.id;

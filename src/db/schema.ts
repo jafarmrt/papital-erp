@@ -1,5 +1,6 @@
 import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, unique, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { FinancialAttachment } from '../types';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -151,6 +152,7 @@ export const documents = pgTable('documents', {
   buyerAddress: text('buyer_address').default(''),
   status: text('status').default('final'),
   currency: text('currency').default('IRR'),
+  attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
   deletedAt: timestamp('deleted_at', { mode: 'string' }),
@@ -207,7 +209,7 @@ export const itemPrices = pgTable('item_prices', {
 
 export const activityLogs = pgTable('activity_logs', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id'),
+  userId: integer('user_id').references(() => users.id),
   username: text('username').notNull(),
   userFullName: text('user_full_name').default(''),
   action: text('action').notNull(), // 'CREATE', 'UPDATE', 'DELETE', 'LOGIN', etc.
@@ -222,6 +224,7 @@ export const activityLogs = pgTable('activity_logs', {
   idx_action: index('activity_logs_action').on(table.action),
   idx_entity: index('activity_logs_entity').on(table.entity),
   idx_timestamp: index('activity_logs_timestamp').on(table.timestamp),
+  idx_act_log_user: index('idx_act_log_user').on(table.userId),
 }));
 
 export const productionProjects = pgTable('production_projects', {
@@ -244,6 +247,7 @@ export const productionProjects = pgTable('production_projects', {
   inventoryControl: jsonb('inventory_control').default({}),
   stageSchedules: jsonb('stage_schedules').default({}),
   customStages: jsonb('custom_stages').default([]),
+  attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   createdBy: text('created_by').default(''),
   version: integer('version').notNull().default(1),
@@ -267,6 +271,7 @@ export const projectStages = pgTable('project_stages', {
   progressPercent: integer('progress_percent').default(0),
   notes: text('notes').default(''),
   completedAt: text('completed_at').default(''),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_stage_proj: index('idx_stage_proj').on(table.projectId),
@@ -379,7 +384,8 @@ export const crmLeads = pgTable('crm_leads', {
   status: text('status').default('active'), // 'active', 'won', 'lost', 'archived'
   contacts: jsonb('contacts').default([]),
   hasProforma: integer('has_proforma').default(0),
-  proformaId: integer('proforma_id').references(() => documents.id),
+  // V3.1.29: Loose reference without circular FK constraint — documents.crmLeadId is the single source of truth for the relationship
+  proformaId: integer('proforma_id'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
   createdBy: text('created_by').default(''),
@@ -388,6 +394,7 @@ export const crmLeads = pgTable('crm_leads', {
   idx_crm_stage: index('idx_crm_stage').on(table.stage),
   idx_crm_assigned: index('idx_crm_assigned').on(table.assignedTo),
   idx_crm_deleted: index('idx_crm_deleted').on(table.isDeleted),
+  idx_crm_proforma: index('idx_crm_proforma').on(table.proformaId),
 }));
 
 export const crmActivities = pgTable('crm_activities', {
@@ -563,6 +570,7 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   paymentMethod: text('payment_method').default(''),
   paymentReference: text('payment_reference').default(''),
   notes: text('notes').default(''),
+  attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
@@ -580,7 +588,7 @@ export const pendingMaterials = pgTable('pending_materials', {
   unit: text('unit').notNull(),
   category: text('category').default(''),
   type: text('type').default('raw_material'),
-  projectId: integer('project_id'),
+  projectId: integer('project_id').references(() => productionProjects.id),
   projectTitle: text('project_title').default(''),
   requestedBy: text('requested_by').default(''),
   status: text('status').default('pending'), // 'pending', 'approved', 'rejected'
@@ -599,6 +607,7 @@ export const pendingMaterials = pgTable('pending_materials', {
   idx_pmat_status: index('idx_pmat_status').on(table.status),
   idx_pmat_code: index('idx_pmat_code').on(table.code),
   idx_pmat_deleted: index('idx_pmat_deleted').on(table.isDeleted),
+  idx_pmat_project: index('idx_pmat_project').on(table.projectId),
 }));
 
 // ==========================================
@@ -640,6 +649,7 @@ export const journalVouchers = pgTable('journal_vouchers', {
   referenceId: integer('reference_id'),
   referenceNumber: text('reference_number').default(''),
   currency: text('currency').default('IRR'),
+  attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
   createdByUsername: text('created_by_username').default(''),
   approvedById: integer('approved_by_id').references(() => users.id),
@@ -720,6 +730,7 @@ export const cheques = pgTable('cheques', {
   voucherId: integer('voucher_id').references(() => journalVouchers.id),
   description: text('description').default(''),
   statusHistory: jsonb('status_history').default([]),
+  attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   version: integer('version').notNull().default(1),
@@ -759,6 +770,7 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   reconciled: integer('reconciled').default(0),
   reconciledAt: text('reconciled_at').default(''),
   reconciledBatch: text('reconciled_batch').default(''),
+  attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
@@ -1041,7 +1053,7 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
 export const woocommerceOrderLogs = pgTable('woocommerce_order_logs', {
   id: serial('id').primaryKey(),
   wcOrderId: text('wc_order_id').notNull().unique(),
-  erpDocumentId: integer('erp_document_id'),
+  erpDocumentId: integer('erp_document_id').references(() => documents.id),
   status: text('status').notNull(), // 'processed', 'failed', 'already_exists'
   buyerName: text('buyer_name').default(''),
   totalAmount: numeric('total_amount', { precision: 15, scale: 2 }).default('0'),
@@ -1051,7 +1063,8 @@ export const woocommerceOrderLogs = pgTable('woocommerce_order_logs', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_wc_order_id: index('idx_wc_order_id').on(table.wcOrderId),
-  idx_wc_status: index('idx_wc_status').on(table.status)
+  idx_wc_status: index('idx_wc_status').on(table.status),
+  idx_wc_erp_doc: index('idx_wc_erp_doc').on(table.erpDocumentId),
 }));
 
 export const idempotencyKeys = pgTable('idempotency_keys', {
@@ -1064,7 +1077,7 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   requestPayload: jsonb('request_payload'),
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
-  createdById: integer('created_by_id'),
+  createdById: integer('created_by_id').references(() => users.id),
   lockedAt: timestamp('locked_at', { mode: 'string' }),
   lockedUntil: timestamp('locked_until', { mode: 'string' }),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
@@ -1072,7 +1085,8 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   expiresAt: timestamp('expires_at', { mode: 'string' })
 }, (table) => ({
   idx_idempotency_key: index('idx_idempotency_key').on(table.key),
-  idx_idempotency_scope_status: index('idx_idempotency_scope_status').on(table.scope, table.status)
+  idx_idempotency_scope_status: index('idx_idempotency_scope_status').on(table.scope, table.status),
+  idx_idemp_created_by: index('idx_idemp_created_by').on(table.createdById),
 }));
 
 export const projectBomAllocations = pgTable('project_bom_allocations', {
@@ -1118,6 +1132,36 @@ export const formDrafts = pgTable('form_drafts', {
   idx_form_drafts_user_entity: index('idx_form_drafts_user_entity').on(table.userId, table.entityType, table.draftKey),
   idx_form_drafts_session: index('idx_form_drafts_session').on(table.sessionId),
   idx_form_drafts_updated: index('idx_form_drafts_updated').on(table.updatedAt)
+}));
+
+export const purchaseRequisitions = pgTable('purchase_requisitions', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  title: text('title').notNull(),
+  projectId: integer('project_id').references(() => productionProjects.id, { onDelete: 'set null' }),
+  projectCode: text('project_code').default(''),
+  projectName: text('project_name').default(''),
+  status: text('status').notNull().default('pending'), // 'pending', 'under_review', 'manager_approval', 'ordered', 'received', 'rejected', 'cancelled'
+  priority: text('priority').notNull().default('normal'), // 'urgent', 'high', 'normal', 'low'
+  requiredDate: text('required_date').default(''),
+  requestedById: integer('requested_by_id').references(() => users.id, { onDelete: 'set null' }),
+  requestedByName: text('requested_by_name').default(''),
+  assignedToId: integer('assigned_to_id').references(() => users.id, { onDelete: 'set null' }),
+  assignedToName: text('assigned_to_name').default(''),
+  workflowInstanceId: integer('workflow_instance_id').references(() => workflowInstances.id, { onDelete: 'set null' }),
+  notes: text('notes').default(''),
+  totalEstimatedAmount: numeric('total_estimated_amount', { precision: 18, scale: 2 }).$type<number>().default(0),
+  items: jsonb('items').notNull().default([]),
+  isDeleted: integer('is_deleted').default(0),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow()
+}, (table) => ({
+  idx_pr_code: index('idx_pr_code').on(table.code),
+  idx_pr_project: index('idx_pr_project').on(table.projectId),
+  idx_pr_status: index('idx_pr_status').on(table.status),
+  idx_pr_priority: index('idx_pr_priority').on(table.priority),
+  idx_pr_workflow: index('idx_pr_workflow').on(table.workflowInstanceId),
+  idx_pr_deleted: index('idx_pr_deleted').on(table.isDeleted)
 }));
 
 

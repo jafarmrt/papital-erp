@@ -1,35 +1,39 @@
 import React, { useState } from 'react';
 import { 
-  Boxes, Save, Lock, Unlock, Plus, ShoppingCart, CheckCircle2,
-  FolderTree, Table
+  Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save, 
+  Layers, FolderTree, AlertCircle, Printer, ArrowLeft, Plus
 } from 'lucide-react';
-import { ProductionProject, Item } from '../../types';
+import { Item } from '../../types';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
-import { ProductInventoryCards } from './ProductInventoryCards';
 import { ProductTreeInventoryCards } from './ProductTreeInventoryCards';
-import { InventorySectionsList } from './InventorySectionsList';
+import { GlobalInventoryControlSection } from './GlobalInventoryControlSection';
 import { ManualPurchaseList } from './ManualPurchaseList';
 import { AddMaterialModal } from './AddMaterialModal';
 import { UnitConversionModal } from './UnitConversionModal';
 
 interface ProjectInventoryTabProps {
-  project: ProductionProject;
-  initialItemsList?: Item[];
+  project: any;
   itemsList?: Item[];
-  onUpdate?: () => void;
+  warehouseItems?: Item[];
+  onUpdate?: (signal?: AbortSignal) => void | Promise<void>;
 }
 
-export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUpdate }: ProjectInventoryTabProps) {
-  const effectiveItemsList = itemsList || initialItemsList;
-  // State for switching between Product Tree view and Step Matrix view
-  const [viewLayout, setViewLayout] = useState<'matrix' | 'tree'>('tree');
+export function ProjectInventoryTab({
+  project,
+  itemsList,
+  warehouseItems: initialWarehouseItems,
+  onUpdate
+}: ProjectInventoryTabProps) {
+  const effectiveItemsList = itemsList || initialWarehouseItems || [];
+
+  // Active Main Tab: 'control' (Tree View + Global Supplies) vs 'purchase' (Consolidated Purchase List)
+  const [activeMainTab, setActiveMainTab] = useState<'control' | 'purchase'>('control');
 
   const {
     saving,
-    activeStepTab,
-    setActiveStepTab,
     isFinalized,
     finalizedAt,
+    reservedItems,
     isUnitConversionModalOpen,
     setIsUnitConversionModalOpen,
     conversionTarget,
@@ -86,7 +90,7 @@ export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUp
               <Boxes className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-base text-white">کنترل موجودی و تامین مواد اولیه پروژه</h3>
                 {isFinalized && (
                   <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full font-bold text-[10px] flex items-center gap-1">
@@ -94,13 +98,13 @@ export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUp
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">
-                بررسی گام‌به‌گام کدهای سفارش و اقلام کلی با انبار اصلی و استخراج هوشمند کسری‌های خرید
+              <p className="text-xs text-slate-400 mt-0.5">
+                بررسی ساختار درختی کد به کد محصولات و کنترل اقلام عمومی سفارش با انبار اصلی
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
+          <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
             {isFinalized ? (
               <button
                 type="button"
@@ -122,6 +126,16 @@ export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUp
                 ثبت نهایی و فریز انبار
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={handlePrintPurchaseListWithCheck}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="چاپ لیست خرید و اقلام کسری"
+            >
+              <Printer className="w-4 h-4 text-slate-400" />
+              <span>چاپ لیست خرید</span>
+            </button>
 
             <button
               type="button"
@@ -153,146 +167,150 @@ export function ProjectInventoryTab({ project, initialItemsList, itemsList, onUp
         </div>
       </div>
 
-      {/* Product Summary Cards & View Switcher Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-700">سبک نمایش ساختار تامین:</span>
-          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setViewLayout('matrix')}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                viewLayout === 'matrix'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Table className="w-3.5 h-3.5 text-blue-600" />
-              <span>ماتریس مراحل کنترل</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewLayout('tree')}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                viewLayout === 'tree'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FolderTree className="w-3.5 h-3.5 text-amber-600" />
-              <span>ساختار درختی محصول و قطعات (Tree View)</span>
-            </button>
-          </div>
+      {/* Main Tab Navigation: Control View vs Consolidated Purchase List */}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2 print:hidden">
+        <div className="inline-flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('control')}
+            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+              activeMainTab === 'control'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FolderTree className="w-4 h-4 text-amber-400" />
+            <span>کنترل مواد اولیه (کد به کد + عمومی)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('purchase')}
+            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+              activeMainTab === 'purchase'
+                ? 'bg-amber-500 text-slate-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>لیست نهایی خرید و تامین</span>
+            {purchaseList.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
+                activeMainTab === 'purchase' ? 'bg-slate-950 text-amber-400' : 'bg-rose-500 text-white'
+              }`}>
+                {purchaseList.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        <span className="text-[11px] text-slate-500">
-          {viewLayout === 'tree' 
-            ? 'نمایش اقلام بر اساس کدهای محصول سفارش همراه با زیرشاخه مواد اولیه'
-            : 'بررسی مرحله به مرحله مواد اولیه و کسری‌های خرید'
+        <span className="text-xs text-slate-500 hidden md:inline">
+          {activeMainTab === 'control' 
+            ? 'ساختار درختی محصولات برای کنترل کد به کد و جدول اقلام عمومی کل سفارش'
+            : 'تجمیع هوشمند کسری‌های خرید کل پروژه جهت ثبت سفارش تامین'
           }
         </span>
       </div>
 
-      {/* Conditionally Render Tree View or Matrix Summary */}
-      {viewLayout === 'tree' ? (
-        <ProductTreeInventoryCards
-          products={products}
-          sections={sections}
-          warehouseItems={warehouseItems}
-          activeStepTab={activeStepTab}
-          handleUpdatePerItemResult={handleUpdatePerItemResult}
-          handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
-          handleOpenUnitConversionModal={handleOpenUnitConversionModal}
-          handleRemoveItemFromSection={handleRemoveItemFromSection}
-          onJumpToSection={(secIdx) => {
-            setViewLayout('matrix');
-            setActiveStepTab(secIdx);
-          }}
-        />
-      ) : (
-        <ProductInventoryCards products={products} sections={sections} />
-      )}
+      {/* Active Tab View */}
+      {activeMainTab === 'control' ? (
+        <div className="space-y-6">
+          {/* Section 1: Per-Product Tree View (کد به کد) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FolderTree className="w-4 h-4 text-amber-600" />
+                <h3 className="font-bold text-sm text-slate-900">
+                  ساختار درختی محصولات و قطعات (کنترل کد به کد به تفکیک محصول)
+                </h3>
+              </div>
+              <span className="text-xs text-slate-500">
+                {products.length} محصول در سفارش
+              </span>
+            </div>
 
-      {/* Step Tabs Navigation Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none border-b border-slate-200 print:hidden">
-        {sections.map((sec, idx) => (
-          <button
-            key={sec.id || idx}
-            type="button"
-            onClick={() => setActiveStepTab(idx)}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
-              activeStepTab === idx
-                ? 'bg-slate-900 text-amber-400 shadow-md ring-2 ring-slate-900'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center font-mono text-[10px] ${
-              activeStepTab === idx ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {idx + 1}
-            </span>
-            <span>{sec.title}</span>
-          </button>
-        ))}
+            <ProductTreeInventoryCards
+              products={products}
+              sections={sections}
+              warehouseItems={warehouseItems}
+              activeStepTab={0}
+              handleUpdatePerItemResult={handleUpdatePerItemResult}
+              handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
+              handleOpenUnitConversionModal={handleOpenUnitConversionModal}
+              handleRemoveItemFromSection={handleRemoveItemFromSection}
+              handleOpenAddMaterialModal={handleOpenAddMaterialModal}
+            />
+          </div>
 
-        {/* Final Step Tab: Purchase List */}
-        <button
-          type="button"
-          onClick={() => setActiveStepTab(sections.length)}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
-            activeStepTab === sections.length
-              ? 'bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-500'
-              : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
-          }`}
-        >
-          <ShoppingCart className="w-4 h-4 text-amber-900" />
-          <span>لیست نهایی خرید</span>
+          {/* Section 2: Global Supplies for Order (کنترل کلی برای کل سفارش) */}
+          <GlobalInventoryControlSection
+            sections={sections}
+            warehouseItems={warehouseItems}
+            handleOpenAddMaterialModal={handleOpenAddMaterialModal}
+            handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
+            handleOpenUnitConversionModal={handleOpenUnitConversionModal}
+            handleRemoveItemFromSection={handleRemoveItemFromSection}
+            handleUpdateGlobalItem={handleUpdateGlobalItem}
+            handleAddNewSectionOnTheFly={handleAddNewSectionOnTheFly}
+            handleRemoveSectionOnTheFly={handleRemoveSectionOnTheFly}
+            handleUpdateSectionDescription={handleUpdateSectionDescription}
+          />
+
+          {/* Quick Jump Banner to Purchase List */}
           {purchaseList.length > 0 && (
-            <span className="px-2 py-0.5 bg-amber-900 text-amber-100 rounded-full font-mono text-[10px] font-bold">
-              {purchaseList.length}
-            </span>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs text-amber-950">
+                    تعداد {purchaseList.length} قلم کالا دارای کسری موجودی یا نیاز به خرید شناسایی شد.
+                  </h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    کسری‌های استخراج‌شده از ساختار درختی و اقلام عمومی در لیست تجمیعی خرید آماده ثبت هستند.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('purchase')}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+              >
+                <span>مشاهده و مدیریت لیست خرید</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleAddNewSectionOnTheFly}
-          className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors cursor-pointer border border-slate-200 mr-auto shrink-0"
-          title="افزودن بخش کنترل جدید"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Main Content Area */}
-      {activeStepTab < sections.length ? (
-        <InventorySectionsList
-          activeStepTab={activeStepTab}
-          setActiveStepTab={setActiveStepTab}
-          sections={sections}
-          products={products}
-          warehouseItems={warehouseItems}
-          handleUpdateSectionDescription={handleUpdateSectionDescription}
-          handleOpenAddMaterialModal={handleOpenAddMaterialModal}
-          handleRemoveSectionOnTheFly={handleRemoveSectionOnTheFly}
-          handleOpenChangeMaterialModal={handleOpenChangeMaterialModal}
-          handleUpdatePerItemResult={handleUpdatePerItemResult}
-          handleOpenUnitConversionModal={handleOpenUnitConversionModal}
-          handleRemoveItemFromSection={handleRemoveItemFromSection}
-          handleUpdateGlobalItem={handleUpdateGlobalItem}
-        />
+        </div>
       ) : (
-        <ManualPurchaseList
-          project={project}
-          purchaseList={purchaseList}
-          isFinalized={isFinalized}
-          warehouseItems={warehouseItems}
-          handleAddManualPurchaseRow={handleAddManualPurchaseRow}
-          handlePrintPurchaseListWithCheck={handlePrintPurchaseListWithCheck}
-          handleUpdateManualPurchaseItem={handleUpdateManualPurchaseItem}
-          handleRemoveManualPurchaseItem={handleRemoveManualPurchaseItem}
-          handleUpdateProcurementStatus={handleUpdateProcurementStatus}
-        />
+        /* Section 3: Consolidated Purchase List */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('control')}
+              className="text-xs text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
+              <span>بازگشت به کنترل موجودی و ساختار درختی</span>
+            </button>
+          </div>
+
+          <ManualPurchaseList
+            project={project}
+            purchaseList={purchaseList}
+            isFinalized={isFinalized}
+            reservedItems={reservedItems}
+            warehouseItems={warehouseItems}
+            handleAddManualPurchaseRow={handleAddManualPurchaseRow}
+            handlePrintPurchaseListWithCheck={handlePrintPurchaseListWithCheck}
+            handleUpdateManualPurchaseItem={handleUpdateManualPurchaseItem}
+            handleRemoveManualPurchaseItem={handleRemoveManualPurchaseItem}
+            handleUpdateProcurementStatus={handleUpdateProcurementStatus}
+          />
+        </div>
       )}
 
       {/* Modals */}

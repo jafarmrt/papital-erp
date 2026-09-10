@@ -246,7 +246,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                 {formData.id ? 'ویرایش قانون اکشن خودکار' : 'ایجاد قانون اکشن خودکار جدید'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                تعریف شروط تحریک (Trigger) و اقدامات خودکار بر پایه رویدادهای دامنه‌ای
+                تعریف شروط فعال‌سازی و اقدامات خودکار بر پایه رویدادهای سامانه
               </p>
             </div>
           </div>
@@ -284,7 +284,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-                  رویداد تحریک‌کننده (Trigger Event) <span className="text-rose-500">*</span>
+                  رویداد فعال‌کننده <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={formData.eventType}
@@ -318,7 +318,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
           <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 border-r-2 border-indigo-600 pr-2">
-                ۲. شروط فیلتر رویداد (Conditions)
+                ۲. شروط فیلتر رویداد
               </h4>
               <button
                 type="button"
@@ -363,9 +363,9 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                         <option value="gte">بزرگتر مساوی (&ge;)</option>
                         <option value="lt">کوچکتر (&lt;)</option>
                         <option value="lte">کوچکتر مساوی (&le;)</option>
-                        <option value="contains">شامل متن (contains)</option>
-                        <option value="in">عضو مجموعه (in)</option>
-                        <option value="exists">وجود دارد (exists)</option>
+                        <option value="contains">شامل متن</option>
+                        <option value="in">عضو مجموعه</option>
+                        <option value="exists">وجود مقدار</option>
                       </select>
                     </div>
 
@@ -398,7 +398,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
           {/* Action Configuration */}
           <div className="space-y-4 pt-2">
             <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 border-r-2 border-indigo-600 pr-2">
-              ۳. انتخاب و پیکربندی اقدام (Action Configuration)
+              ۳. انتخاب و پیکربندی اقدام
             </h4>
 
             {/* Action Type Select Buttons */}
@@ -442,7 +442,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                      آدرس وب‌هوک (Webhook URL) <span className="text-rose-500">*</span>
+                      آدرس وب‌هوک (URL) <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="url"
@@ -492,7 +492,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        توکن امنیتی هدر (Secret Token)
+                        توکن امنیتی هدر
                       </label>
                       <input
                         type="text"
@@ -515,7 +515,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        نقش کاربری هدف (Target Role)
+                        نقش کاربری هدف
                       </label>
                       <select
                         value={formData.actionConfigJson?.targetRole || 'admin'}
@@ -525,10 +525,10 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                         }))}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
                       >
-                        <option value="admin">مدیر سیستم (admin)</option>
-                        <option value="warehouse_keeper">انباردار (warehouse_keeper)</option>
-                        <option value="accountant">حسابدار (accountant)</option>
-                        <option value="sales_manager">مدیر فروش (sales_manager)</option>
+                        <option value="admin">مدیر سیستم</option>
+                        <option value="warehouse_keeper">انباردار</option>
+                        <option value="accountant">حسابدار</option>
+                        <option value="sales_manager">مدیر فروش</option>
                       </select>
                     </div>
 
@@ -627,7 +627,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        کد فرآیند گردش کار (Workflow Code)
+                        کد فرآیند گردش کار
                       </label>
                       <input
                         type="text"
@@ -643,7 +643,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        فیلد شناسه موجودیت (Entity ID Field)
+                        فیلد شناسه موجودیت
                       </label>
                       <input
                         type="text"
@@ -665,7 +665,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        دسته‌بندی ممیزی (Category)
+                        دسته‌بندی ممیزی
                       </label>
                       <input
                         type="text"
@@ -681,7 +681,7 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
 
                     <div>
                       <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                        برچسب اختصاصی (Tag)
+                        برچسب اختصاصی
                       </label>
                       <input
                         type="text"

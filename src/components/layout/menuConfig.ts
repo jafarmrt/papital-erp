@@ -20,9 +20,8 @@ import {
   Wallet,
   Target,
   CheckSquare,
-  ShoppingCart,
+  ShoppingBag,
   Landmark,
-  FolderTree,
   FileText,
   Building2,
   CreditCard,
@@ -98,7 +97,7 @@ export function getMenuGroups(
       groupIcon: Target,
       items: [
         { name: 'مدیریت CRM و فروش', path: '/crm', icon: Target, visible: hasPerm('crm.view') },
-        { name: 'طرفین حساب (مشتریان)', path: '/customers', icon: UsersRound, visible: hasPerm('customers.view') },
+        { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: hasPerm('customers.view') },
         { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: hasPerm('documents.create') },
       ]
     },
@@ -108,7 +107,14 @@ export function getMenuGroups(
       groupIcon: Layers,
       items: [
         { name: 'کنترل پروژه‌های تولید', path: '/projects', icon: Layers, visible: hasPerm('projects.view') },
-        { name: 'کنترل موجودی BOM', path: '/project-inventory', icon: ShoppingCart, visible: hasPerm('projects.view') || hasPerm('warehouse.view') },
+      ]
+    },
+    {
+      id: 'procurement',
+      title: 'خرید و تدارکات',
+      groupIcon: ShoppingBag,
+      items: [
+        { name: 'میز کار تدارکات و خرید', path: '/procurement', icon: ShoppingBag, visible: hasPerm('procurement.view') || hasPerm('projects.view') || hasPerm('documents.view') },
       ]
     },
     {
@@ -140,7 +146,6 @@ export function getMenuGroups(
       items: [
         { name: 'داشبورد مالی', path: '/accounting/dashboard', icon: LayoutDashboard, visible: hasPerm('accounting.view') },
         { name: 'مرور حساب‌ها (درخت و کاردکس)', path: '/accounting/explorer', icon: Layers, visible: hasPerm('accounting.reports') },
-        { name: 'کدینگ و درخت حساب‌ها', path: '/accounting/coa', icon: FolderTree, visible: hasPerm('accounting.coa') },
         { name: 'اسناد دوبل حسابداری', path: '/accounting/vouchers', icon: FileText, visible: hasPerm('accounting.vouchers') },
         { name: 'خزانه‌داری و حساب‌های بانکی', path: '/accounting/treasury', icon: Building2, visible: hasPerm('accounting.treasury') },
         { name: 'لیست اسناد و فاکتورها', path: '/invoices', icon: ClipboardList, visible: hasPerm('documents.view') || hasPerm('accounting.treasury') || hasPerm('accounting.view') },
@@ -156,9 +161,9 @@ export function getMenuGroups(
       items: [
         // V10-5.2: هم‌راستا با API — events.view (admin از طریق isAdmin عبور می‌کند)
         { name: 'رویدادها و اتوماسیون سازمانی', path: '/domain-events', icon: Zap, visible: hasPerm('events.view') },
-        { name: 'طراح فرایند و گردش کار (SLA)', path: '/workflow-designer', icon: Workflow, visible: user?.role === 'admin' },
+        { name: 'طراح فرایند و گردش کار', path: '/workflow-designer', icon: Workflow, visible: user?.role === 'admin' },
         { name: 'مدیریت کاربران و نقش‌ها', path: '/users', icon: Users, visible: user?.role === 'admin' },
-        { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: user?.role === 'admin' },
+        { name: 'تنظیمات سامانه', path: '/settings', icon: Settings, visible: user?.role === 'admin' || user?.role === 'manager' || hasPerm('settings.manage') || hasPerm('accounting.coa') },
         { name: 'سجل تغییرات', path: '/activity-logs', icon: ShieldAlert, visible: hasPerm('audit_logs.view') || hasPerm('reports.view') },
         { name: 'معرفی و به‌روزرسانی‌ها', path: '/changelog', icon: FileCode2, visible: user?.role === 'admin' },
       ]

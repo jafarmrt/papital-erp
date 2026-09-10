@@ -210,9 +210,9 @@ export function EventSourcingReplaySubTab() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>کاوشگر خط زمان و بازپخش تاریخچه رویدادها (Event Sourcing & Time-Travel)</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-mono">
-                Phase 14
+              <span>کاوشگر خط زمان و بازپخش تاریخچه رویدادها</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-medium">
+                وقایع‌نگاری
               </span>
             </h3>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
@@ -267,7 +267,7 @@ export function EventSourcingReplaySubTab() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">انتخاب نمونه موجودیت (Aggregate Instance):</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">انتخاب نمونه موجودیت:</label>
             <select
               value={selectedAggregateId}
               onChange={e => setSelectedAggregateId(e.target.value)}
@@ -498,10 +498,10 @@ export function EventSourcingReplaySubTab() {
                   <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-1">توضیحات عملکرد:</span>
                   <ul className="list-disc list-inside space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
                     <li>
-                      <strong>شبیه‌سازی خشک (Dry-Run):</strong> بدون تغییر پایگاه‌داده، ارزیابی می‌کند که کدام قوانین اکشن خودکار فعال می‌شدند.
+                      <strong>شبیه‌سازی آزمایشی:</strong> بدون تغییر پایگاه‌داده، ارزیابی می‌کند که کدام قوانین اکشن خودکار فعال می‌شدند.
                     </li>
                     <li>
-                      <strong>بازپخش زنده (Live Replay):</strong> رویداد را واقعاً در گذرگاه دامنه‌ای منتشر می‌کند و اکشن‌های فعال آن اجرا خواهند شد.
+                      <strong>بازپخش واقعی:</strong> رویداد را واقعاً در گذرگاه دامنه‌ای منتشر می‌کند و اکشن‌های فعال آن اجرا خواهند شد.
                     </li>
                   </ul>
                 </div>

@@ -14,7 +14,7 @@ import {
 
 export const ROLE_PRESETS = [
   {
-    name: 'مدیر ارشد مالی (CFO)',
+    name: 'مدیر ارشد مالی',
     code: 'cfo_accountant',
     description: 'دسترسی کامل به تمامی بخش‌های مالی و حسابداری، کدینگ حساب‌ها، اسناد دوبل، خزانه‌داری، چک صیادی و صورت‌های مالی',
     permissions: [

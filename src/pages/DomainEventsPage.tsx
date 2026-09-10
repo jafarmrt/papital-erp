@@ -31,19 +31,16 @@ export default function DomainEventsPage({ currentUser }: DomainEventsPageProps)
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-slate-800">رویدادها و اتوماسیون سازمانی</h1>
-              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold">
-                Domain Events & Automation
-              </span>
             </div>
             <p className="text-slate-500 text-xs mt-1">
-              مدیریت تراکنش‌های رویدادمحور Outbox، قوانین واکنش خودکار، صف خطاهای قرنطینه (DLQ)، بازپخش و وب‌هوک‌های امنیتی
+              مدیریت رویدادهای سیستمی، قوانین واکنش خودکار، صف خطاهای قرنطینه، بازپخش رویدادها و وب‌هوک‌های ارتباطی
             </p>
           </div>
         </div>
 
         <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
           <ShieldCheck size={15} className="text-emerald-600" />
-          <span>پایگاه معماری رویدادمحور (EDA)</span>
+          <span>سیستم مدیریت رویدادهای سازمانی</span>
         </div>
       </div>
 

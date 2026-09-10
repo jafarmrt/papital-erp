@@ -2,6 +2,7 @@ import React from 'react';
 import { Layers, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from '../SearchableSelect';
 import { Item } from '../../types';
+import { formatPersianNumber } from '../../utils';
 import { ProductRow } from './types';
 
 interface ProjectProductsFormProps {
@@ -80,7 +81,7 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
                     })
                     .map((item) => ({
                       value: String(item.id),
-                      label: `${item.name} (کد: ${item.code} | موجودی: ${item.current_stock || 0} ${item.unit || 'عدد'})`,
+                      label: `${item.name} (کد: ${item.code} | موجودی: ${formatPersianNumber(item.current_stock || 0)} ${item.unit || 'عدد'})`,
                     }))}
                   value={product.item_id ? String(product.item_id) : ''}
                   onChange={(val) => onUpdateProductRow(idx, 'item_id', val ? Number(val) : null)}
@@ -132,42 +133,44 @@ export const ProjectProductsForm: React.FC<ProjectProductsFormProps> = ({
             </div>
 
             {/* Optional Stage Checklist */}
-            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-3">
-              <span className="text-2xs font-bold text-slate-600">مراحل انتخابی این ردیف:</span>
-              {optionalStages.map((stgName) => {
-                const currentSelected = product.selected_optional_stages || (product.needs_assembly ? [stgName] : []);
-                const isChecked = currentSelected.includes(stgName);
+            {optionalStages.length > 0 && (
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                <span className="text-2xs font-bold text-slate-600">مراحل انتخابی این ردیف:</span>
+                {optionalStages.map((stgName) => {
+                  const currentSelected = product.selected_optional_stages || [];
+                  const isChecked = currentSelected.includes(stgName);
 
-                return (
-                  <label
-                    key={stgName}
-                    className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border cursor-pointer select-none transition-all ${
-                      isChecked
-                        ? 'bg-blue-50 text-blue-800 border-blue-200 font-bold'
-                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={(e) => {
-                        let newSelected: string[];
-                        if (e.target.checked) {
-                          newSelected = Array.from(new Set([...currentSelected, stgName]));
-                        } else {
-                          newSelected = currentSelected.filter((s) => s !== stgName);
-                        }
-                        onUpdateProductRow(idx, 'selected_optional_stages', newSelected);
-                        onUpdateProductRow(idx, 'needs_assembly', newSelected.length > 0);
-                      }}
-                      className="hidden"
-                    />
-                    <CheckCircle2 size={13} className={isChecked ? 'text-blue-600' : 'text-slate-300'} />
-                    <span>{stgName}</span>
-                  </label>
-                );
-              })}
-            </div>
+                  return (
+                    <label
+                      key={stgName}
+                      className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border cursor-pointer select-none transition-all ${
+                        isChecked
+                          ? 'bg-blue-50 text-blue-800 border-blue-200 font-bold'
+                          : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          let newSelected: string[];
+                          if (e.target.checked) {
+                            newSelected = Array.from(new Set([...currentSelected, stgName]));
+                          } else {
+                            newSelected = currentSelected.filter((s) => s !== stgName);
+                          }
+                          onUpdateProductRow(idx, 'selected_optional_stages', newSelected);
+                          onUpdateProductRow(idx, 'needs_assembly', newSelected.length > 0);
+                        }}
+                        className="hidden"
+                      />
+                      <CheckCircle2 size={13} className={isChecked ? 'text-blue-600' : 'text-slate-300'} />
+                      <span>{stgName}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ))}
       </div>

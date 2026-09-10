@@ -70,13 +70,26 @@ export function useSettings() {
   const [clearMode, setClearMode] = useState<'transactions' | 'all'>('transactions');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce' | 'inventory_integrity'>(() => {
+  const [activeTab, setActiveTab] = useState<'general' | 'accounting' | 'chart_of_accounts' | 'categories' | 'warehouses' | 'pricing' | 'projects' | 'inventory_control' | 'task_titles' | 'health' | 'system_config' | 'system' | 'woocommerce' | 'inventory_integrity'>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam === 'task_titles') return 'task_titles';
-    if (tabParam === 'inventory_integrity') return 'inventory_integrity';
+    if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce', 'inventory_integrity'].includes(tabParam)) {
+      return tabParam as any;
+    }
     return 'general';
   });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['general', 'accounting', 'chart_of_accounts', 'categories', 'warehouses', 'pricing', 'projects', 'inventory_control', 'task_titles', 'health', 'system_config', 'system', 'woocommerce', 'inventory_integrity'].includes(tabParam)) {
+        setActiveTab(tabParam as any);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const [isTestingWc, setIsTestingWc] = useState(false);
 

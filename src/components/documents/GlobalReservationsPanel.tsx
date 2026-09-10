@@ -1,7 +1,9 @@
 import React from 'react';
 
 export interface GlobalReservationRow {
-  projectId: string | number;
+  sourceType?: 'proforma' | 'project';
+  sourceLabel?: string;
+  projectId?: string | number;
   projectCode: string;
   projectTitle: string;
   itemId?: number | string;
@@ -19,7 +21,7 @@ interface GlobalReservationsPanelProps {
 }
 
 /**
- * V9 Phase 5.2: پنل جامع اقلام رزرو‌شده انبار در تمام پروژه‌ها — استخراج‌شده از DocumentsPage.
+ * V9 Phase 5.2: پنل جامع اقلام رزرو‌شده انبار در تمام پروژه‌ها و پیش‌فاکتورها
  */
 export function GlobalReservationsPanel({ isOpen, onClose, reservations }: GlobalReservationsPanelProps) {
   if (!isOpen) return null;
@@ -32,14 +34,14 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
             🔒
           </div>
           <div>
-            <h3 className="font-bold text-purple-950 text-sm">لیست جامع اقلام رزرو شده انبار (تمام پروژه‌ها)</h3>
-            <p className="text-xs text-purple-700">این کالاها در فاز کنترل پروژه فریز شده‌اند و سیستم مانع از خروج غیرمجاز آن‌ها برای سایر پروژه‌ها می‌شود.</p>
+            <h3 className="font-bold text-purple-950 text-sm">لیست جامع اقلام رزرو شده انبار (پروژه‌های تولید و پیش‌فاکتورها)</h3>
+            <p className="text-xs text-purple-700">این کالاها در کنترل پروژه‌ها یا پیش‌فاکتورهای فعال رزرو شده‌اند و سیستم مانع از خروج غیرمجاز آن‌ها برای سایر مصارف می‌شود.</p>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-xs text-purple-700 hover:text-purple-950 underline font-bold"
+          className="text-xs text-purple-700 hover:text-purple-950 underline font-bold cursor-pointer"
         >
           بستن پنل
         </button>
@@ -53,7 +55,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
                 <th className="p-2.5 text-center">#</th>
                 <th className="p-2.5">کد کالا</th>
                 <th className="p-2.5">نام کالا / ماده اولیه</th>
-                <th className="p-2.5">پروژه رزرو کننده</th>
+                <th className="p-2.5">منبع رزروکننده</th>
                 <th className="p-2.5 text-center">مقدار رزرو شده</th>
                 <th className="p-2.5 text-center">وضعیت خروج مجاز</th>
               </tr>
@@ -65,8 +67,12 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
                   <td className="p-2.5 font-mono font-bold text-purple-900">{res.itemCode || '---'}</td>
                   <td className="p-2.5 font-bold text-slate-900">{res.itemName}</td>
                   <td className="p-2.5">
-                    <span className="px-2 py-0.5 bg-purple-100 text-purple-950 font-bold rounded-md border border-purple-200">
-                      {res.projectCode} - {res.projectTitle}
+                    <span className={`px-2 py-0.5 font-bold rounded-md border text-[11px] ${
+                      res.sourceType === 'proforma' 
+                        ? 'bg-blue-50 text-blue-900 border-blue-200' 
+                        : 'bg-purple-100 text-purple-950 border-purple-200'
+                    }`}>
+                      {res.sourceLabel || (res.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه')}: {res.projectCode} {res.projectTitle ? `- ${res.projectTitle}` : ''}
                     </span>
                   </td>
                   <td className="p-2.5 text-center font-mono font-bold text-emerald-800">
@@ -75,7 +81,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
                     </span>
                   </td>
                   <td className="p-2.5 text-center font-bold text-[11px] text-amber-900">
-                    فقط جهت پروژه {res.projectCode}
+                    فقط مجاز برای {res.projectCode || 'منبع فوق'}
                   </td>
                 </tr>
               ))}
@@ -84,7 +90,7 @@ export function GlobalReservationsPanel({ isOpen, onClose, reservations }: Globa
         </div>
       ) : (
         <div className="p-4 bg-white rounded-xl border border-purple-200 text-center text-xs text-purple-800 font-bold">
-          در حال حاضر هیچ کالایی در انبار برای پروژه‌ها رزرو نگردیده است. تمامی موجودی‌های انبار آزاد و قابل خروج هستند.
+          در حال حاضر هیچ کالایی در انبار برای پروژه‌ها یا پیش‌فاکتورها رزرو نگردیده است. تمامی موجودی‌های انبار آزاد و قابل خروج هستند.
         </div>
       )}
     </div>

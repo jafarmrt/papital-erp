@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { ProductionProject, Customer, Item } from '../../types';
+import { ProductionProject, Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
 import { getTodayJalaliDate } from '../../utils';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../../constants/presets';
-import { ProductRow, ProjectStage } from './types';
+import { ProductRow, ProjectStage, ProjectModalProps } from './types';
 import {
   getOptionalStageNamesForPreset,
   formatPickerDate,
@@ -19,15 +19,10 @@ export function useProjectForm({
   projectToEdit,
   customersList,
   itemsList,
-  onSuccess
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  projectToEdit?: ProductionProject | null;
-  customersList: Customer[];
-  itemsList: Item[];
-  onSuccess: () => void;
-}) {
+  onSuccess,
+  initialProducts,
+  initialTitle
+}: ProjectModalProps) {
   const [projectCode, setProjectCode] = useState<string>('');
   const [title, setTitle] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
@@ -35,6 +30,7 @@ export function useProjectForm({
   const [endDate, setEndDate] = useState<any>('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [description, setDescription] = useState<string>('');
+  const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
 
   const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
   const [localItems, setLocalItems] = useState<Item[]>([]);
@@ -112,15 +108,35 @@ export function useProjectForm({
           required_resources: s.required_resources || []
         })) || []);
         setProductsList(mapProjectProductsToRows(projectToEdit));
+        setAttachments(Array.isArray(projectToEdit.attachments) ? projectToEdit.attachments : []);
       } else {
         setProjectCode('');
-        setTitle('');
+        setTitle(initialTitle || (initialProducts && initialProducts.length > 0 
+          ? `تولید کسری انبار (${initialProducts.map(p => p.item_name).slice(0, 2).join('، ')}${initialProducts.length > 2 ? ' و...' : ''})`
+          : ''));
         setSelectedCustomerId(null);
-        setProductsList([createInitialProductRow()]);
+        if (initialProducts && initialProducts.length > 0) {
+          setProductsList(initialProducts.map((p, idx) => ({
+            id: `init-prod-${p.item_id || idx}-${Date.now()}`,
+            item_id: p.item_id,
+            item_code: p.item_code,
+            item_name: p.item_name,
+            customer_code: '',
+            quantity: p.quantity,
+            unit: p.unit || 'عدد',
+            needs_assembly: false,
+            notes: 'تعریف خودکار بر اساس کسری نقطه سفارش انبار'
+          })));
+        } else {
+          setProductsList([createInitialProductRow()]);
+        }
         setStartDate(getTodayJalaliDate());
         setEndDate('');
         setPriority('medium');
-        setDescription('');
+        setDescription(initialProducts && initialProducts.length > 0 
+          ? `پروژه تولید تعریف‌شده جهت جبران کسری نقطه سفارش محصولات در انبار (${initialProducts.length} قلم محصول)` 
+          : '');
+        setAttachments([]);
         const initialPreset = availablePresets[0];
         if (initialPreset) {
           setPreset(initialPreset.id);
@@ -137,7 +153,7 @@ export function useProjectForm({
         }
       }
     }
-  }, [isOpen, projectToEdit, workflowPresets]);
+  }, [isOpen, projectToEdit, workflowPresets, initialProducts, initialTitle]);
 
   const handleAddProductRow = () => {
     setProductsList(prev => [...prev, createInitialProductRow()]);
@@ -248,7 +264,8 @@ export function useProjectForm({
         endDate,
         priority,
         description,
-        stages
+        stages,
+        attachments
       });
 
       const url = projectToEdit ? `/projects/${projectToEdit.id}` : '/projects';
@@ -288,6 +305,8 @@ export function useProjectForm({
     setPriority,
     description,
     setDescription,
+    attachments,
+    setAttachments,
     productsList,
     stages,
     preset,

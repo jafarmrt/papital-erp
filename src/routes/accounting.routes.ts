@@ -186,6 +186,7 @@ const createVoucherSchema = z.object({
     referenceId: z.number().nullable().optional(),
     referenceNumber: z.string().optional(),
     currency: z.string().optional(),
+    attachments: z.array(z.any()).optional(),
     items: z.array(z.object({
       accountId: z.number(),
       detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional(),
@@ -638,6 +639,7 @@ const createTreasuryTxSchema = z.object({
     documentId: z.number().int().positive().nullable().optional(),
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
+    attachments: z.array(z.any()).optional(),
     // V1.8.0: انگیزه پرداخت به پرسنل
     purpose: z.enum(['settlement', 'advance', 'other']).optional(),
   })
@@ -825,6 +827,7 @@ const createChequeSchema = z.object({
     bankAccountId: z.number().int().positive().nullable().optional(),
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
+    attachments: z.array(z.any()).optional(),
   })
 });
 
