@@ -2,8 +2,10 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { getTestApp, getAdminSession, ensureAdminTestUser, cleanupHttpTestUsers, AdminSession, TestApp } from '../fixtures/httpTestHelper.js';
+import { TEST_PASSWORD_HASH } from '../fixtures/factories.js';
 import { orm } from '../../db/drizzle.js';
-import { sql } from 'drizzle-orm';
+import { users } from '../../db/schema.js';
+import { sql, eq } from 'drizzle-orm';
 
 const FALLBACK_DEV_SECRET = 'fallback_secret_key_for_development';
 
@@ -220,19 +222,31 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   await runCase(results, 'pen_rate_limit_xff_bypass', 'rate_limit_no_bypass',
     'پن‌تست: چرخش X-Forwarded-For نباید قفل brute-force لاگین را دور بزند',
     async () => {
+      const rlProbeUser = `pen_rl_probe_${Date.now()}`;
+      await orm.insert(users).values({
+        username: rlProbeUser,
+        password: TEST_PASSWORD_HASH,
+        fullName: 'پروب تست rate-limit',
+        role: 'operator',
+        avatarUrl: ''
+      });
       const attempts = 8;
       const responses = [];
-      for (let i = 0; i < attempts; i++) {
-        responses.push(await request(app)
-          .post('/api/auth/login')
-          .set('X-Forwarded-For', `192.168.77.${i}`)
-          .send({ username: 'admin', password: 'definitely-wrong-pass' }));
+      try {
+        for (let i = 0; i < attempts; i++) {
+          responses.push(await request(app)
+            .post('/api/auth/login')
+            .set('X-Forwarded-For', `192.168.77.${i}`)
+            .send({ username: rlProbeUser, password: 'definitely-wrong-pass' }));
+        }
+      } finally {
+        await orm.delete(users).where(eq(users.username, rlProbeUser));
       }
       const tooMany = responses.filter(r => r.status === 429).length;
       if (tooMany === 0) {
         throw new Error(`هیچ 429ای صادر نشد — مهاجم می‌تواند با جعل XFF محدودیت را دور بزند (${responses.map(r => r.status).join(',')})`);
       }
-      return `${tooMany} درخواست از ${attempts} تلاش با 429 مسدود شد — keyGenerator مبتنی بر socket address مقاوم است.`;
+      return `${tooMany} درخواست از ${attempts} تلاش با 429 مسدود شد — قفل brute-force با چرخش XFF دور زده نمی‌شود (کاربر پروب سینتتیک؛ ادمین واقعی دست‌نخورده).`;
     });
 
   // ===============================================================

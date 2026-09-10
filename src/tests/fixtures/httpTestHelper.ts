@@ -114,11 +114,19 @@ export async function getAdminCookie(): Promise<string> {
 }
 
 export async function getAdminSession(): Promise<AdminSession> {
-  if (!cachedAdminSession) {
-    const app = await getTestApp();
-    await ensureAdminTestUser();
-    cachedAdminSession = await loginTestUserWithSession(app, 'pen_admin');
+  if (cachedAdminSession) {
+    const [live] = await orm
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.username, 'pen_admin'), eq(users.isDeleted, 0)));
+    if (live) {
+      return cachedAdminSession;
+    }
+    cachedAdminSession = null;
   }
+  const app = await getTestApp();
+  await ensureAdminTestUser();
+  cachedAdminSession = await loginTestUserWithSession(app, 'pen_admin');
   return cachedAdminSession;
 }
 

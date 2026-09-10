@@ -39,7 +39,7 @@
 4. Make the change.
 5. Re-run step 2 and diff the caller set — **new callers = unintended coupling introduced**.
 
-**Baseline (v3.1.45):** `applyStockMovement` has **3 real callers** — `DocumentService.finalizeDocument` (lsp-verified, 0.95), the projects stock-entry route `projects.routes.ts:874` (added v3.1.45 — **confirmed by grep, not in the graph**: the LSP resolver misses this cross-module static-method hop; see Appendix), and the file-level `__file__` node (heuristic, 0.90).
+**Baseline (v3.1.46, ground-truthed):** `applyStockMovement` has **4 call sites, all sanctioned** — `createDocument` final-lines (document.service.ts:559), `finalizeDocument` (document.service.ts:1255), admin transaction reversal (transactions.routes.ts:204), and the project stock-entry route (projects.routes.ts:874, added v3.1.45). The graph's LSP resolver misses 2 of these hops — **ground-truth hot-spot caller sets with `rg` before trusting the graph** (see Appendix).
 
 **Success criteria:** post-change caller set == pre-change caller set (or every new caller is intentional and reviewed).
 
@@ -269,7 +269,7 @@ RETURN r.method, r.path
 
 ---
 
-## Scenario 10 — Pre-Release Gate (Run All Checks Together)
+## Scenario 10 — Pre-Release Gate (Run All Checks Together) ✅ EXECUTED (v3.1.46)
 
 **Goal:** One repeatable sweep before tagging a release (feeds `releaseGate.service` and the test runner).
 
@@ -283,6 +283,19 @@ RETURN r.method, r.path
 7. Bump version in the 3 sanctioned places (`package.json`, `/health` via `src/lib/version.ts` (reads package.json), active changelog `src/data/changelogs/3.ts`).
 
 **Success criteria:** all six checks green → taggable. Any red → TD row + scheduled phase, per governance.
+
+**Execution record (v3.1.46):**
+1. `npm run test` (full 15-suite batch): first run **123/125** → root-caused 2 failures → fixed → re-run **125/125 PASSED**:
+   - *Data-Safety gate test failed:* `isCleanupPermitted` implemented OR-semantics (flag OR dev-env) while the V10-0.1 invariant mandates AND → cleanup ran without the flag and killed the canary. Fixed to strict AND (`flag==='1'` AND `NODE_ENV∈{test,development}`) → TD-078.
+   - *XSS penetration 401:* inter-suite cleanup hard-deletes `pen_admin%` users while `httpTestHelper` served a stale cached session → self-heal: liveness check (isDeleted=0) + re-create + re-login → TD-079a.
+   - **Real-admin lockout side effect discovered:** the XFF rate-limit test brute-forced the REAL `admin` username → locked 30 min (columns `failedLoginCount`/`lockedUntil` on the real row). Fixed: synthetic probe user (created + hammered + deleted in-test) → TD-079b; real admin's lockout manually cleared.
+2. `detect_changes` (release diff 83c516c..HEAD): 54 seeds → 28 impacted symbols, all expected (BOM/integrity callers, test suites, accounting routes/pages). No surprise coupling.
+3. Cycles: 1 pre-existing mutual recursion (ruleEngine DSL evaluator pair) — not introduced by this release.
+4. Recursion query: only `renderTreeNode` flagged — guarded since v3.1.42 (MAX_DEPTH + visited set, proven by 9 simulation checks); detector heuristic does not recognize Set-based guards.
+5. Scenario-2 sweep: zero raw-SQL mutations in services/routes; `applyStockMovement` caller map all-sanctioned (4 sites, see Scenario 1 baseline).
+6. Complexity budget: pre-existing >100-cognitive functions found (parseCliArgs 253, useCRMData 177, useAccounting 149, suites ~130-158, processUnifiedImport 117) → registered as TD-080 (open, scheduled), not a blocker for this release.
+7. Version sync: `package.json` = changelog = `/health` (via `src/lib/version.ts` reads package.json) ✓.
+**Verdict: release-gate GREEN → v3.1.46 taggable.**
 
 ---
 
