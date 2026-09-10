@@ -48,12 +48,28 @@ if [ -d ".pgdata" ]; then
 fi
 
 echo -e "${YELLOW}Would you like to drop PostgreSQL database '${DB_NAME}' if installed?${NC}"
+echo -e "${YELLOW}A backup will be created automatically before dropping (pg_dump, if available).${NC}"
 read -p "Reset PostgreSQL database? [y/N]: " reset_db
 if [[ "$reset_db" =~ ^[Yy]$ ]]; then
-    if command -v psql &> /dev/null; then
-        sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE);" 2>/dev/null || true
-        sudo -u postgres psql -c "DROP USER IF EXISTS ${DB_USER};" 2>/dev/null || true
-        echo -e "${GREEN}✔ PostgreSQL database reset.${NC}"
+    read -p "FINAL CONFIRMATION: This destroys ALL data in '${DB_NAME}'. Type 'DROP-DATA' to confirm: " confirm_db
+    if [[ "$confirm_db" == "DROP-DATA" ]]; then
+        if command -v pg_dump &> /dev/null; then
+            BACKUP_FILE="${DB_NAME}_backup_$(date +%Y%m%d_%H%M%S).sql"
+            echo -e "${CYAN}Creating pre-drop backup: ${BACKUP_FILE} ...${NC}"
+            sudo -u postgres pg_dump "${DB_NAME}" > "${BACKUP_FILE}" 2>/dev/null && \
+                echo -e "${GREEN}✔ Backup saved: ${BACKUP_FILE}${NC}" || \
+                echo -e "${RED}Backup FAILED — aborting drop. Resolve backup path/permissions and retry.${NC}" && exit 1
+        else
+            echo -e "${RED}pg_dump not found — install postgresql-client to enable safe backups, then retry.${NC}"
+            exit 1
+        fi
+        if command -v psql &> /dev/null; then
+            sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE);" 2>/dev/null || true
+            sudo -u postgres psql -c "DROP USER IF EXISTS ${DB_USER};" 2>/dev/null || true
+            echo -e "${GREEN}✔ PostgreSQL database reset (with pre-drop backup).${NC}"
+        fi
+    else
+        echo -e "${GREEN}✔ PostgreSQL database PRESERVED (confirmation mismatch).${NC}"
     fi
 fi
 
