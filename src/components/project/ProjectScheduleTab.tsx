@@ -34,6 +34,7 @@ export default function ProjectScheduleTab({
   const appCurrency = useAppCurrency();
   const [saving, setSaving] = useState<boolean>(false);
   const [personnelList, setPersonnelList] = useState<any[]>(initialPersonnelList);
+  const personnelMap = React.useMemo(() => new Map(personnelList.map(p => [p.id, p])), [personnelList]);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>(initialPieceworkTasksList);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>(DEFAULT_WORKFLOW_PRESETS);
 
@@ -733,7 +734,7 @@ export default function ProjectScheduleTab({
                         {sched.tasks && sched.tasks.length > 0 ? (
                           <div className="space-y-2">
                             {sched.tasks.map((task, tIdx) => {
-                              const assignedPerson = personnelList.find(pl => pl.id === task.assignedPersonnelId);
+                              const assignedPerson = personnelMap.get(task.assignedPersonnelId);
 
                               return (
                                 <div key={task.id || tIdx} className="p-2.5 bg-white border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-2 items-center shadow-2xs hover:border-slate-300 transition-colors">

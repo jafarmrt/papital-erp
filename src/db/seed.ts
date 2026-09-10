@@ -305,14 +305,16 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
     // Update existing system roles with missing default permissions
     // V10-5.1: (اختیاری) پاکسازی grants ناشناخته — فقط با ERP_SEED_PERMISSION_CLEANUP=true
     const cleanupEnabled = process.env.ERP_SEED_PERMISSION_CLEANUP === 'true';
+    const defaultRoleMap = new Map(defaultRoles.map(d => [d.code, d]));
+    const defaultPermSets = new Map(defaultRoles.map(d => [d.code, new Set(d.permissions)]));
     for (const existingRole of existingRoles) {
-      const defaultDef = defaultRoles.find(d => d.code === existingRole.code);
+      const defaultDef = defaultRoleMap.get(existingRole.code);
       if (defaultDef) {
         const currentPerms: string[] = Array.isArray(existingRole.permissions) ? (existingRole.permissions as string[]) : [];
         const missingPerms = defaultDef.permissions.filter(p => !currentPerms.includes(p));
 
         if (cleanupEnabled) {
-          const stalePerms = currentPerms.filter(p => !defaultDef.permissions.includes(p) && p !== '*');
+          const stalePerms = currentPerms.filter(p => !defaultPermSets.get(existingRole.code)?.has(p) && p !== '*');
           if (stalePerms.length > 0) {
             logger.warn(`[Seeder] ERP_SEED_PERMISSION_CLEANUP: removing ${stalePerms.length} stale permission(s) from role ${existingRole.code}: ${stalePerms.join(', ')}`);
           }
