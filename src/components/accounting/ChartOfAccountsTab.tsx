@@ -185,7 +185,17 @@ export function ChartOfAccountsTab({
   };
 
   // Render recursive tree node
-  const renderTreeNode = (node: Account, depth = 0) => {
+  const MAX_TREE_DEPTH = 50;
+  const renderTreeNode = (node: Account, depth = 0, visited = new Set<number>()) => {
+    if (depth > MAX_TREE_DEPTH || visited.has(node.id)) {
+      console.warn('ChartOfAccountsTab: tree render guard triggered (cycle or excessive depth)', {
+        nodeId: node.id,
+        code: node.code,
+        depth,
+      });
+      return null;
+    }
+    visited.add(node.id);
     const hasChildren = Array.isArray(node?.children) && node.children.length > 0;
     const isExpanded = expandedNodes[node.id] ?? (depth < 2);
 
@@ -268,7 +278,7 @@ export function ChartOfAccountsTab({
 
         {hasChildren && isExpanded && (
           <div className="border-r-2 border-slate-200/60 dark:border-slate-700/60 mr-4">
-            {(node.children || []).map(child => renderTreeNode(child, depth + 1))}
+            {(node.children || []).map(child => renderTreeNode(child, depth + 1, visited))}
           </div>
         )}
       </div>

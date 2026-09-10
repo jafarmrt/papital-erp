@@ -6,6 +6,24 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.1.42',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'رفع TD-071/TD-072: محافظت درخت نمودار حساب‌ها در برابر چرخه parentId و کرش بازگشت بی‌محافظ',
+    summary: 'پیاده‌سازی قرارداد رفع سناریو ۴ Playbook گراف کد: سازنده خالص buildAccountTree با تشخیص reachability که حساب‌های گرفتار چرخه parentId (متقابل یا خودارجاعی) را به‌جای حذف بی‌صدا به‌صورت root قابل‌مشاهده quarantine و با logger.warn گزارش می‌کند؛ و افزودن گارد MAX_TREE_DEPTH=50 و visited-set به renderTreeNode فرانت برای پیشگیری از stack-overflow هنگام رندر درخت چرخه‌دار.',
+    author: 'AI Agent (Graph Playbook Scenario 4 Fix)',
+    changes: [
+      '🧮 استخراج سازنده خالص buildAccountTree در ChartOfAccountsService با پاس reachability از roots و شناسایی گره‌های غیرقابل‌دسترس (یتیم‌های چرخه‌ای) به‌همراه شمارش و کدهای آن‌ها',
+      '🛡️ چرخه خودارجاعی (parentId=خود) دیگر فرزند خودش نمی‌شود و مستقیماً root می‌شود؛ چرخه متقابل (A↔B) و گره‌های پایین‌دست آن به‌عنوان root اضافه می‌شوند تا هیچ حسابی از درخت UI ناپدید نشود',
+      '🔔 ثبت رویداد یتیم‌ها با logger.warn (orphanCount + orphanCodes) بدون شکستن کلید پاسخ Account[]',
+      '⚛️ گارد رندر در ChartOfAccountsTab: بیشینه عمق ۵۰ سطح و مجموعه ملاقات‌شده هر مسیر — بازدید تکراری یا عمق مازاد null برمی‌گرداند؛ هشدار dev (console.warn) در build تولیدی حذف می‌شود',
+      '✅ تأیید ۹ چک شبیه‌سازی (درخت سالم، چرخه خودارجاعی، چرخه متقابل با فرزند پایین‌دست) به‌همراه tsc بدون خطا'
+    ],
+    fixes: [
+      'رفع حذف بی‌صدای حساب‌های چرخه‌دار از درخت نمودار حساب‌ها (TD-071)',
+      'رفع ریسک stack-overflow و کرش تب نمودار حساب‌ها هنگام رندر درخت چرخه‌دار (TD-072)'
+    ]
+  },
+  {
     version: 'v3.1.41',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'ایجاد Playbook کشف باگ با گراف کد (docs/GRAPH_PLAYBOOK.md) و ثبت دو یافته جدید TD-071/TD-072',

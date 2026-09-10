@@ -2,6 +2,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts } from '../../db/schema.js';
 import { eq, asc } from 'drizzle-orm';
 import { STANDARD_CHART_OF_ACCOUNTS } from '../../data/standardChartOfAccounts.js';
+import { logger } from '../../middleware/logger.js';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types.js';
 
 export class ChartOfAccountsService {
@@ -170,6 +171,23 @@ export class ChartOfAccountsService {
    */
   static async getAccountsTree(): Promise<Account[]> {
     const all = await this.getAllAccounts();
+    const { roots, orphanCount, orphanCodes } = this.buildAccountTree(all);
+
+    if (orphanCount > 0) {
+      logger.warn('ChartOfAccounts: cyclic/orphaned accounts detected — quarantined as visible roots', {
+        orphanCount,
+        orphanCodes,
+      });
+    }
+
+    return roots;
+  }
+
+  static buildAccountTree(all: Account[]): {
+    roots: (Account & { children?: Account[] })[];
+    orphanCount: number;
+    orphanCodes: string[];
+  } {
     const map = new Map<number, Account & { children?: Account[] }>();
     const roots: (Account & { children?: Account[] })[] = [];
 
@@ -179,14 +197,28 @@ export class ChartOfAccountsService {
 
     all.forEach(acc => {
       const node = map.get(acc.id)!;
-      if (acc.parentId && map.has(acc.parentId)) {
+      if (acc.parentId && map.has(acc.parentId) && acc.parentId !== acc.id) {
         map.get(acc.parentId)!.children!.push(node);
       } else {
         roots.push(node);
       }
     });
 
-    return roots;
+    const reachable = new Set<number>();
+    const stack = [...roots];
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      if (reachable.has(node.id)) continue;
+      reachable.add(node.id);
+      (node.children || []).forEach(child => stack.push(child));
+    }
+
+    const orphans = all.filter(acc => !reachable.has(acc.id)).map(acc => map.get(acc.id)!);
+    const orphanCount = orphans.length;
+    const orphanCodes = orphans.map(o => o.code);
+    orphans.forEach(orphan => roots.push(orphan));
+
+    return { roots, orphanCount, orphanCodes };
   }
 
   /**

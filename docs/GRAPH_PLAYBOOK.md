@@ -85,7 +85,7 @@
 
 ---
 
-## Scenario 4 — Unguarded Recursion in Tree Rendering ⚡ EXECUTED (live findings)
+## Scenario 4 — Unguarded Recursion in Tree Rendering ✅ FIXED (v3.1.42)
 
 **Goal:** Detect recursion without a termination guard that can crash the UI, and check the tree producer for cycle protection.
 
@@ -117,6 +117,11 @@ RETURN f.qualified_name, f.file_path
 - DB level: consider a schema-level check constraint / trigger preventing `parentId = id` and same-level cycles (deferred — register only).
 
 **Success criteria:** recursion guard in place; `getAccountsTree` reports orphan count; reintroducing a test-cycle fixture no longer crashes the tab and no longer hides accounts silently.
+
+**Resolution (v3.1.42):** Both fixes shipped per the contract above —
+- Backend: pure `ChartOfAccountsService.buildAccountTree` performs a reachability pass; cyclic orphans (including downstream nodes of a cycle) are quarantined as **visible roots** + `logger.warn` with `orphanCount`/`orphanCodes`; self-referencing `parentId` promotes directly to root without entering its own children. Response contract (`Account[]`) unchanged.
+- Frontend: `renderTreeNode` guards with `MAX_TREE_DEPTH = 50` + per-path `visited` set (dev `console.warn` stripped in production builds by `vite.config.ts`).
+- Verified: 9/9 simulation checks green (valid tree, self-cycle, mutual cycle with downstream child) + `tsc --noEmit` clean. TD-071/TD-072 flipped to `resolved`.
 
 ---
 
