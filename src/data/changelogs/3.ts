@@ -6,6 +6,22 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.1.41',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'ایجاد Playbook کشف باگ با گراف کد (docs/GRAPH_PLAYBOOK.md) و ثبت دو یافته جدید TD-071/TD-072',
+    summary: 'تدوین کتابچه ۱۰ سناریوی عملیاتی برای کشف باگ، استیبل‌سازی و دروازه پیش از ریلیز با بهره‌گیری از سرور MCP گراف کد (codebase-memory) شامل trace_path، query_graph و detect_changes؛ اجرای زنده سناریوی بازگشت بی‌محافظ (Scenario 4) منجر به کشف دو نقص واقعی در نمودار حساب‌ها شد که در رجیستری بدهی فنی ثبت گردید.',
+    author: 'AI Agent (Graph-Driven Debugging Playbook)',
+    changes: [
+      '📘 ایجاد docs/GRAPH_PLAYBOOK.md با ۱۰ سناریوی انگلیسی فنی: blast-radius هات‌فیکس، شکار تخلف قواعد معماری، ریشه‌یابی ناهماهنگی سه‌طرفه انبار، بازگشت بی‌محافظ، حلقه‌های تو در تو، شکستن کامپوننت پرپیچیدگی، مسابقه همزمانی، کد مرده، آدیت Array-Safety و دروازه پیش از ریلیز',
+      '⚡ اجرای واقعی سناریو ۴: شناسایی renderTreeNode در ChartOfAccountsTab به‌عنوان بازگشت بی‌محافظ و ممیزی getAccountsTree در ChartOfAccountsService به‌عنوان سازنده درخت بدون تشخیص چرخه',
+      '📋 ثبت TD-071 (چرخه parentId → حذف بی‌صدای حساب از درخت UI) و TD-072 (بازگشت بی‌محافظ renderTreeNode → ریسک stack-overflow) در TECH_DEBT.md و به‌روزرسانی یادداشت بازبینی',
+      '📦 افزایش نسخه سیستم به v3.1.41'
+    ],
+    fixes: [
+      'شناسایی و مستندسازی دو نقص پیش‌تر کشف‌نشده در درخت نمودار حساب‌ها (ثبت در رجیستری — رفع در فاز بعدی)'
+    ]
+  },
+  {
     version: 'v3.1.40',
     date: '۲۰ شهریور ۱۴۰۵',
     title: 'رفع مشکل بالا نیامدن برنامه در لوکال، مسدودیت CSP وب‌سوکت Vite و پشتیبانی از آلیاس لاگین',
