@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sql, eq, and, gt, desc, inArray } from 'drizzle-orm';
+import { sql, eq, and, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, users, appSettings, warehouses } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -36,69 +36,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-async function syncMissingInitialTransactions() {
-  try {
-    const itemsWithoutInTx = await orm.execute(sql`
-      SELECT i.id, i.current_stock, i.stocks
-      FROM ${items} i
-      LEFT JOIN (
-        SELECT item_id, SUM(quantity) as total_in
-        FROM ${transactions}
-        WHERE type = 'in' AND is_deleted = 0
-        GROUP BY item_id
-      ) t ON i.id = t.item_id
-      WHERE i.is_deleted = 0 AND i.current_stock > 0 AND COALESCE(t.total_in, 0) = 0
-    `);
-
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    for (const row of itemsWithoutInTx.rows) {
-      const itemId = Number(row.id);
-      const totalStock = Number(row.current_stock || 0);
-      const stocksObj = (row.stocks as Record<string, number>) || {};
-
-      if (Object.keys(stocksObj).length > 0) {
-        for (const [whCode, qtyVal] of Object.entries(stocksObj)) {
-          const qty = Number(qtyVal || 0);
-          if (qty > 0) {
-            await orm.insert(transactions).values({
-              itemId,
-              type: 'in',
-              quantity: qty,
-              date: todayStr,
-              documentType: 'audit',
-              documentRef: 'موجودی اولیه (تطبیق سیستم)',
-              location: whCode,
-              notes: 'ثبت موجودی اولیه جهت گردش کالا',
-              createdBy: 'سیستم',
-              isDeleted: 0
-            });
-          }
-        }
-      } else if (totalStock > 0) {
-        await orm.insert(transactions).values({
-          itemId,
-          type: 'in',
-          quantity: totalStock,
-          date: todayStr,
-          documentType: 'audit',
-          documentRef: 'موجودی اولیه (تطبیق سیستم)',
-          location: 'main',
-          notes: 'ثبت موجودی اولیه جهت گردش کالا',
-          createdBy: 'سیستم',
-          isDeleted: 0
-        });
-      }
-    }
-  } catch (err) {
-    logger.error({ message: 'Error syncing missing initial transactions', error: err });
-  }
-}
-
 router.get('/dashboard-bi-stats', async (req, res) => {
-  // Sync any items with stock that lack 'in' transactions
-  await syncMissingInitialTransactions();
-
   const now = Date.now();
   if (dashboardCache.data && (now - dashboardCache.timestamp < dashboardCache.TTL)) {
     return res.json(dashboardCache.data);

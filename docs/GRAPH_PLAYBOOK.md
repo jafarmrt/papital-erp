@@ -86,7 +86,7 @@
 
 ---
 
-## Scenario 3 — Three-Way Stock Mismatch Root Cause
+## Scenario 3 — Three-Way Stock Mismatch Root Cause ✅ EXECUTED (v3.1.44, TD-075 fix)
 
 **Goal:** When `current_stock` ≠ JSONB `stocks` (location) ≠ `stock_movements` ledger (Kardex), reconstruct exactly which write path diverged.
 
@@ -101,6 +101,15 @@
 5. The first node in the path that writes only one of the three stores = the divergence point.
 
 **Success criteria:** divergence point identified with file:line; repair routed through `applyStockMovement` (never ad-hoc UPDATE).
+
+**Execution record (v3.1.44 — TD-075 root-cause + fix):**
+1. Poisoning mechanism proven via data-flow trace: `rebuildItemFromLedger` computes `runningWac = (bal×wac + qty×unitPrice)/(bal+qty)` per 'in' row → synthetic backfill rows with `unitPrice` defaulted to 0 drag WAC toward 0 (halved when mixed with real rows, zeroed when alone).
+2. Race mechanism proven: candidate query ran outside any lock; two concurrent dashboard GETs double-inserted → inflated stock on rebuild. The sync also ran on **every** request (before cache check) and mutated state inside a GET (BUG-14 class).
+3. Fix shipped:
+   - New `KardexBackfillService` (`src/services/inventory/kardexBackfill.service.ts`): inserts inside a single transaction with per-item `.for('update')` + **re-check under lock** (exactly-once), carries `unitPrice`/`totalPrice` from the item's WAC (zero-WAC items warn loudly), uses `businessTodayIsoDate()`, plus a **repair pass** that heals previously-poisoned synthetic rows (`documentRef = 'موجودی اولیه (تطبیق سیستم)'`, unitPrice=0 → item WAC, totalPrice recomputed).
+   - GET `/dashboard-bi-stats` is now pure-read; the backfill runs once in the server's background bootstrap IIFE (server.ts, non-blocking, per AGENTS §8).
+4. Verified on the real DB: 11/11 checks — concurrent double-run yields exactly 1 row; unitPrice/totalPrice = WAC-derived; planted poisoned row repaired; ledger-replay math post-repair gives stock 10 / WAC 12345 unchanged.
+5. Note: `ItemOpeningService.issueItemOpeningVoucher` already retro-patches audit-row unitPrices when opening vouchers are issued — the dashboard path was the one bypassing that healing; now both paths are born-correct.
 
 ---
 

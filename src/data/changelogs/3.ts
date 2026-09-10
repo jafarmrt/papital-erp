@@ -6,6 +6,28 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.1.44',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'رفع TD-075 (سم‌آلودگی WAC در بازسازی کارتکس) با سناریو ۳ Playbook: سرویس KardexBackfillService ایمن و خودترمیم',
+    summary: 'ریشه‌یابی کامل با trace گراف کد: ردیف‌های synthetic «موجودی اولیه» بدون unitPrice که WAC را در بازسازی Event-Sourcing به صفر می‌کشیدند، درج بدون قفل با ریسک دوبل‌نویسی همزمان، و نوشتن state در GET داشبورد؛ بازنویسی کامل در سرویس جدید KardexBackfillService با تراکنش قفل‌شده و ادیمپوتنت، حمل WAC کالا در unitPrice/totalPrice، پاس ترمیم ردیف‌های قبلاً سم‌گرفته، حذف فراخوانی از GET و انتقال به bootstrap پس‌زمینه سرور؛ تأیید ۱۱ چک روی پایگاه‌داده واقعی.',
+    author: 'AI Agent (Graph Playbook Scenario 3 — TD-075 Fix)',
+    changes: [
+      '🧬 ایجاد src/services/inventory/kardexBackfill.service.ts: درج ردیف‌های افتتاحیه کارتکس داخل orm.transaction با قفل .for(\'update\') روی ردیف کالا و re-check وجود تراکنش ورودی زیر قفل (دقیقاً یک‌بار)',
+      '💊 حمل unitPrice و totalPrice از WAC فعلی کالا در ردیف‌های synthetic — بازسازی kardexWacRecalculator دیگر WAC را صفر یا نصف نمی‌کند (کالا با WAC صفر هشدار logger می‌گیرد)',
+      '🩹 پاس ترمیم: ردیف‌های synthetic قبلی با unitPrice=0 (documentRef «موجودی اولیه (تطبیق سیستم)») به WAC کالا اصلاح و totalPrice بازمحاسبه می‌شوند',
+      '🕐 تاریخ از businessTodayIsoDate() به‌جای new Date().toISOString() (انطباق Business Clock)',
+      '🚫 حذف کامل تابع قدیمی و فراخوانی آن از GET /dashboard-bi-stats (نوشتن state در GET — کلاس BUG-14)؛ endpoint اکنون pure-read با کش است',
+      '⚙️ فراخوانی backfill یک‌بار در bootstrap پس‌زمینه server.ts (غیرمسدودکننده، مطابق قاعده §8)',
+      '✅ ۱۱ چک روی DB واقعی: اجرای همزمان دوباره = دقیقاً ۱ ردیف، unitPrice/totalPrice درست، ترمیم ردیف سم‌گرفته، شبیه‌سازی rebuild پس از ترمیم (موجودی ۱۰، WAC ۱۲۳۴۵ بدون تغییر)',
+      '📦 افزایش نسخه سیستم به v3.1.44'
+    ],
+    fixes: [
+      'رفع سم‌آلودگی WAC در بازسازی Event-Sourcing کارتکس (نصف/صفر شدن WAC کالاهای دارای ردیف synthetic)',
+      'رفع ریسک دوبل‌درج ردیف‌های افتتاحیه هنگام درخواست‌های همزمان داشبورد',
+      'رفع نوشتن state در متد GET داشبورد (کلاس باگ CSRF-via-GET)'
+    ]
+  },
+  {
     version: 'v3.1.43',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'اجرای Playbook سناریو ۱ (Blast Radius هات‌فیکس) و رفع TD-073: تاریخ خام و OCC در تخصیص BOM',

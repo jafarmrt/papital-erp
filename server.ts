@@ -16,6 +16,7 @@ import { OutboxService } from './src/services/events/outboxService.js';
 import { EventActionEngineService } from './src/services/events/eventActionEngineService.js';
 import { WebhookSubscriptionService } from './src/services/events/webhookSubscriptionService.js';
 import { WorkflowEngineService } from './src/services/workflow/workflowEngineService.js';
+import { KardexBackfillService } from './src/services/inventory/kardexBackfill.service.js';
 import { pool } from './src/db/drizzle.js';
 
 async function startServer() {
@@ -56,6 +57,7 @@ async function startServer() {
         await WebhookSubscriptionService.seedDefaultSubscriptions();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
         await AccountingService.syncAllInvoiceVouchers().catch(err => logger.error('Error syncing invoice vouchers on start:', err));
+        await KardexBackfillService.syncMissingInitialTransactions().catch(err => logger.error('Error backfilling missing kardex initial transactions on start:', err));
         OutboxService.startOutboxWorker(3000);
         markStartupComplete();
         break;
