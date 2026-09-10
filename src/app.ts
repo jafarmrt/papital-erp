@@ -82,6 +82,7 @@ export async function createApp(): Promise<express.Express> {
       "'self'",
       "https:",
       "wss:",
+      "ws:",
       ...(process.env.EXTERNAL_API_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) || [])
     ],
     fontSrc: ["'self'", "data:", "https:"],

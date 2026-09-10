@@ -276,7 +276,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
   }
 }));
 
-router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
+router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   const tUsername = (username || '').trim();
   

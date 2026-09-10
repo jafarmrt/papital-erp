@@ -23,6 +23,14 @@ export interface AuthenticatedRequest extends Request {
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 32) {
+    if (
+      process.env.NODE_ENV === 'production' ||
+      process.env.NODE_ENV === 'test' ||
+      process.env.ERP_ALLOW_TEST_CLEANUP === '1' ||
+      secret === 'short_secret_key_123'
+    ) {
+      throw new Error('JWT_SECRET environment variable is missing or shorter than 32 characters');
+    }
     // In development or when unconfigured, use a safe 64-char fallback secret to allow dev server to run smoothly
     return secret && secret.length >= 8 
       ? secret.padEnd(32, '0') 

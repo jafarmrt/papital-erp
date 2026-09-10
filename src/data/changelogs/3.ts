@@ -6,6 +6,23 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.1.40',
+    date: '۲۰ شهریور ۱۴۰۵',
+    title: 'رفع مشکل بالا نیامدن برنامه در لوکال، مسدودیت CSP وب‌سوکت Vite و پشتیبانی از آلیاس لاگین',
+    summary: 'اصلاح سیاست امنیتی Content Security Policy (CSP) با افزودن ws: به دایرکتیو connectSrc برای رفع مسدودیت کانکشن HMR وب‌سوکت Vite در مرورگرهای کلاینت (Firefox/Chrome)؛ پشتیبانی مسیر ورود /api/auth/login در کنار /api/login؛ بهبود اعتبارسنجی محیطی کلید JWT_SECRET در تست‌ها و تدوین راهنمای رفع خطای لود استایل (index.css MIME type text/html) بعد از به‌روزرسانی کد.',
+    author: 'AI Agent (Local Dev Environment & CSP WebSocket Fix)',
+    changes: [
+      '🛡️ اضافه شدن پروتکل وب‌سوکت ws: به connectSrc در تنظیمات Helmet CSP در src/app.ts جهت جلوگیری از خطای NS_ERROR_CONTENT_BLOCKED در فایرفاکس و کروم هنگام اتصال به وب‌سوکت Vite Dev',
+      '🔗 پشتیبانی همزمان از هر دو مسیر POST /api/login و POST /api/auth/login در src/routes/auth.routes.ts جهت انطباق با تست‌های نفوذ و کلاینت‌های مختلف',
+      '🔐 ارتقای تابع getJwtSecret در src/middleware/auth.ts جهت اعتبارسنجی دقیق طول کلید در محیط‌های تست و پروداکشن',
+      '📦 افزایش نسخه سیستم به v3.1.40'
+    ],
+    fixes: [
+      'رفع خطای مسدودیت CSP و NS_ERROR_CONTENT_BLOCKED برای ws://localhost:24678/?token=... در کنسول مرورگر',
+      'رفع خطای 404 در تست نفوذ ورود کاربر روی مسیر /api/auth/login'
+    ]
+  },
+  {
     version: 'v3.1.39',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'رفع محدودیت ثبت قیمت زیر ۱,۰۰۰ ریال در فرم ثبت درخواست خرید و بسته‌بندی سفارشات تدارکات',
