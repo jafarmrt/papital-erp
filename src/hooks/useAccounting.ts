@@ -8,14 +8,11 @@ import type {
   Cheque, 
   TreasuryTransaction, 
   FinancialSummaryStats,
-  TrialBalanceReport,
-  IncomeStatementReport,
-  BalanceSheetReport,
-  AccountLedgerReport,
   Customer,
   Personnel
 } from '../types';
 import toast from 'react-hot-toast';
+import { useAccountingReports } from './useAccountingReports';
 
 export function useAccounting() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing'>('dashboard');
@@ -34,11 +31,8 @@ export function useAccounting() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
 
-  // Reports Data
-  const [trialBalance, setTrialBalance] = useState<TrialBalanceReport | null>(null);
-  const [incomeStatement, setIncomeStatement] = useState<IncomeStatementReport | null>(null);
-  const [balanceSheet, setBalanceSheet] = useState<BalanceSheetReport | null>(null);
-  const [ledgerReport, setLedgerReport] = useState<AccountLedgerReport | null>(null);
+  // V3.2.1 (TD-080 / Playbook Scenario 6): گزارش‌ها به هوک اختصاصی useAccountingReports منتقل شدند
+  const reports = useAccountingReports();
 
   // Modals & Active Edit Entities
   const [isNewVoucherModalOpen, setIsNewVoucherModalOpen] = useState(false);
@@ -174,83 +168,6 @@ export function useAccounting() {
   }, []);
 
   // Fetch Reports
-  const fetchTrialBalance = useCallback(async (level = 'subsidiary', startDate?: string, endDate?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('level', level);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      const res = await fetchJson(`/accounting/reports/trial-balance?${params.toString()}`);
-      if (res?.report) {
-        setTrialBalance(res.report);
-      } else if (res) {
-        setTrialBalance(res);
-      }
-    } catch (err) {
-      toast.error(err.message || 'خطا در دریافت تراز آزمایشی');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchIncomeStatement = useCallback(async (startDate?: string, endDate?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      const res = await fetchJson(`/accounting/reports/income-statement?${params.toString()}`);
-      if (res?.report) {
-        setIncomeStatement(res.report);
-      } else if (res) {
-        setIncomeStatement(res);
-      }
-    } catch (err) {
-      toast.error(err.message || 'خطا در دریافت صورت سود و زیان');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchBalanceSheet = useCallback(async (asOfDate?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (asOfDate) params.append('asOfDate', asOfDate);
-      const res = await fetchJson(`/accounting/reports/balance-sheet?${params.toString()}`);
-      if (res?.report) {
-        setBalanceSheet(res.report);
-      } else if (res) {
-        setBalanceSheet(res);
-      }
-    } catch (err) {
-      toast.error(err.message || 'خطا در دریافت ترازنامه');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchLedger = useCallback(async (accountId: number, startDate?: string, endDate?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('accountId', String(accountId));
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      const res = await fetchJson(`/accounting/reports/ledger?${params.toString()}`);
-      if (res?.report) {
-        setLedgerReport(res.report);
-      } else if (res) {
-        setLedgerReport(res);
-      }
-    } catch (err) {
-      toast.error(err.message || 'خطا در دریافت گردش حساب');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Refresh All Data
   const refreshAll = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -576,7 +493,7 @@ export function useAccounting() {
   return {
     activeTab,
     setActiveTab,
-    loading,
+    loading: loading || reports.reportsLoading,
     isSyncingBanks,
     stats,
     accounts,
@@ -588,10 +505,10 @@ export function useAccounting() {
     treasuryTransactions,
     customers,
     personnelList,
-    trialBalance,
-    incomeStatement,
-    balanceSheet,
-    ledgerReport,
+    trialBalance: reports.trialBalance,
+    incomeStatement: reports.incomeStatement,
+    balanceSheet: reports.balanceSheet,
+    ledgerReport: reports.ledgerReport,
     isNewVoucherModalOpen,
     setIsNewVoucherModalOpen,
     editingVoucher,
@@ -599,10 +516,10 @@ export function useAccounting() {
     printingVoucher,
     setPrintingVoucher,
     refreshAll,
-    fetchTrialBalance,
-    fetchIncomeStatement,
-    fetchBalanceSheet,
-    fetchLedger,
+    fetchTrialBalance: reports.fetchTrialBalance,
+    fetchIncomeStatement: reports.fetchIncomeStatement,
+    fetchBalanceSheet: reports.fetchBalanceSheet,
+    fetchLedger: reports.fetchLedger,
     handleCreateAccount,
     handleUpdateAccount,
     handleDeleteAccount,

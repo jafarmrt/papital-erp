@@ -182,7 +182,7 @@ ORDER BY f.transitive_loop_depth DESC LIMIT 15
 
 ---
 
-## Scenario 6 — Splitting a God Component With a Safety Net
+## Scenario 6 — Splitting a God Component With a Safety Net ✅ EXECUTED (v3.2.1, partial — TD-080 ongoing)
 
 **Goal:** Refactor the highest-complexity component without behavioral regression.
 
@@ -202,7 +202,9 @@ ORDER BY f.transitive_loop_depth DESC LIMIT 15
 
 ---
 
-## Scenario 7 — Race Condition / Double Stock Deduction
+**Execution record (v3.2.1):** Report-fetching seam extracted from `useAccounting` (149) into `useAccountingReports.ts` (trialBalance/incomeStatement/balanceSheet/ledgerReport + 4 fetchers + isolated `reportsLoading`). Facade composition inside `useAccounting` keeps the consumer (`AccountingPage`) untouched; `loading` merges core|reports. Suites 125/125 green. Remaining TD-080 targets: useCRMData (177), parseCliArgs (253), test suites — each requires its own guarded session per this methodology.
+
+## Scenario 7 — Race Condition / Double Stock Deduction ✅ EXECUTED (v3.2.1 — verdict GREEN, zero uncovered routes)
 
 **Goal:** Verify concurrency-critical paths use row locks + idempotency, and find call chains that can interleave.
 
@@ -219,6 +221,18 @@ ORDER BY f.transitive_loop_depth DESC LIMIT 15
 4. Document any uncovered route (no idempotency lock) as a `TD-###`.
 
 **Success criteria:** every route into stock deduction has an idempotency key and `.for('update')` guard; evidence column shows no `unresolved` hops on the critical path.
+
+**Execution record (v3.2.1):** All stock-mutating entry points verified —
+| Entry | Idempotency | Locking | Evidence |
+|---|---|---|---|
+| POST /documents | `idempotency({scope:'documents'})` (routes:173) | createDocument → applyStockMovement `.for('update')` | grep + suite DB-002 |
+| PUT /documents/:id/finalize | idempotency (routes:467) | doc + items `.for('update')`; suite proof: 10 concurrent finalize → single deduction | suite DB-002 |
+| WooCommerce webhook | idempotency lock (suite-proven dedup) | applyStockMovement chain | suites: Webhook Idempotency + Deduplicated Ingestion |
+| DELETE /transactions/:id (admin reversal) | not required — row lock + in-lock `isDeleted` re-check (routes:179,182) | `.for('update')` | source read |
+| kardexBackfill | lock + re-check under lock | `.for('update')` | 11 live-DB checks (v3.1.44) |
+| projectBomAllocation | policy + `.for('update')` + OCC bump | validateLockOrder | suite DB-018 |
+| /transfers* | n/a — does not mutate stock directly (not among applyStockMovement call sites) | — | grep ground truth |
+No uncovered routes.
 
 ---
 

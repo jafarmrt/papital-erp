@@ -6,6 +6,22 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.2.1',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'اجرای سناریوهای ۶ و ۷ Playbook: استخراج useAccountingReports و آدیت سبز همزمانی انبار',
+    summary: 'سناریو ۶: استخراج هوک گزارش‌های حسابداری (تراز آزمایشی، سود و زیان، ترازنامه، گردش حساب) به useAccountingReports با ترکیب Facade بدون تغییر مصرف‌کننده؛ سناریو ۷: راستی‌آزمایی ادیمپوتنسی و قفل ردیف روی تمام ورودی‌های تغییر انبار — حکم سبز با صفر مسیر پوشش‌نشده.',
+    author: 'AI Agent (Graph Playbook Scenarios 6 & 7)',
+    changes: [
+      '🧩 ایجاد src/hooks/useAccountingReports.ts: چهار گزارش مالی + fetcherها + reportsLoading مجزا — کاهش بار شناختی useAccounting با حفظ قرارداد بازگشتی قبلی (Facade)',
+      '🔍 سناریو ۷: اثبات گاردهای همزمانی روی ۷ ورودی تغییر انبار (ادیمپوتنسی documents، قفل finalize، وب‌هوک ووکامرس، برگشت ادمین با re-check داخل قفل، backfill، BOM، transfers بدون نوشتن مستقیم انبار)',
+      '📘 ثبت سابقه اجرای هر دو سناریو در GRAPH_PLAYBOOK.md',
+      '📦 افزایش نسخه سیستم به v3.2.1'
+    ],
+    fixes: [
+      'بدون رفع باگ — آدیت تأییدی؛ سوییت کامل ۱۲۵/۱۲۵ سبز ماند'
+    ]
+  },
+  {
     version: 'v3.2.0',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'فاز کنترل پروژه: لینک رسمی سند↔پروژه، پل خرید از بخش‌ها، بهینه‌سازی کارایی و سخت‌سازی عملیاتی (TD-070/002/004)',
