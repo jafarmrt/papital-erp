@@ -39,7 +39,7 @@
 4. Make the change.
 5. Re-run step 2 and diff the caller set — **new callers = unintended coupling introduced**.
 
-**Baseline (v3.1.x):** `applyStockMovement` has exactly **2 callers** — `DocumentService.finalizeDocument` (lsp-verified, confidence 0.95) and the file-level `__file__` node (heuristic, 0.90).
+**Baseline (v3.1.45):** `applyStockMovement` has **3 real callers** — `DocumentService.finalizeDocument` (lsp-verified, 0.95), the projects stock-entry route `projects.routes.ts:874` (added v3.1.45 — **confirmed by grep, not in the graph**: the LSP resolver misses this cross-module static-method hop; see Appendix), and the file-level `__file__` node (heuristic, 0.90).
 
 **Success criteria:** post-change caller set == pre-change caller set (or every new caller is intentional and reviewed).
 
@@ -289,6 +289,7 @@ RETURN r.method, r.path
 ## Appendix — Interpreting Evidence & Coverage Signals
 
 - `trace_path` evidence: `strategy=lsp` + `confidence≥0.9` ⇒ trustworthy edge; `heuristic` ⇒ verify by reading source; `unresolved` ⇒ treat as unknown, grep manually.
+- **Known resolver gap (v3.1.45):** cross-module **static-method calls from route files** (e.g. `DocumentService.applyStockMovement` inside `projects.routes.ts`) may not produce a CALLS edge even after a full re-index. When a hot-spot's caller count looks stale, ground-truth it with `rg "<Service>.<method>" src/` before trusting the graph. The same applies to any file listed in `index_status.parse_partial`.
 - `index_status.parse_partial` files: constructs inside the flagged ranges may be missing from the graph — always grep those ranges.
 - `not_indexed` files are excluded **by design** (gitignore/skip-lists) — not failures.
 - Watcher: the daemon auto-refreshes the graph on git changes (`watcher.baseline strategy=git`); cursor-based re-queries after a reindex may return `stale_cursor` — just re-run.
