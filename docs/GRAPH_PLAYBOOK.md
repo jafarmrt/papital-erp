@@ -23,7 +23,7 @@
 
 ---
 
-## Scenario 1 — Hotfix Blast Radius (before touching a critical service)
+## Scenario 1 — Hotfix Blast Radius (before touching a critical service) ✅ EXECUTED (v3.1.43)
 
 **Goal:** Never edit `DocumentService.applyStockMovement`, `VoucherSync`, or `financialDecimal` without knowing every caller that will be affected.
 
@@ -42,6 +42,25 @@
 **Baseline (v3.1.x):** `applyStockMovement` has exactly **2 callers** — `DocumentService.finalizeDocument` (lsp-verified, confidence 0.95) and the file-level `__file__` node (heuristic, 0.90).
 
 **Success criteria:** post-change caller set == pre-change caller set (or every new caller is intentional and reviewed).
+
+**Execution record (v3.1.43):**
+1. Symbol resolved: `DocumentService.applyStockMovement` (document.service.ts:997-1156, cx=13, 14 callees).
+2. Caller baseline re-verified: still exactly **2** (`finalizeDocument` lsp 0.95, `__file__` heuristic 0.90).
+3. Source audit: all 9 invariants hold inside the choke point (`.for('update')`, negative-stock policy, dual-store sync, WAC-on-in only via `FinancialMath.calculateWAC`, `fin()` decimals, OCC version bump, transactional outbox event, ledger insert with `isDeleted=0`, caller-supplied business date).
+4. **Bypass sweep** (direct `items.currentStock/stocks/weightedAverageCost` writes + `insert(transactions)` outside the choke point) found:
+
+| Site | Verdict | Ref |
+|---|---|---|
+| `projectBomAllocation` release: raw `new Date().toISOString()` date + no OCC bump (allocate & release) | **VIOLATION → fixed (TD-073)** | projectBomAllocation.service.ts:337,541,548 |
+| `projects.routes.ts` project stock entry: full parallel stock-write implementation + float `roundFinancial(qtyToAdd * unitPrice)` | **VIOLATION → TD-074 (open)** | projects.routes.ts:895-925 |
+| `dashboard.routes.ts` `syncMissingInitialTransactions`: GET-triggered synthetic ledger rows without `unitPrice` (WAC-rebuild poisoning) and without lock/idempotency | **VIOLATION → TD-075 (open, HIGH)** | dashboard.routes.ts:41-100 |
+| `deleteDocument` revert: careful but duplicated reversal stock logic (for('update') ✓, fin ✓, nextVersion ✓) | debt (TD-076, open) — centralize as `applyStockReversal` | document.service.ts:1280-1336 |
+| `projectBomAllocation` raw `throw new Error` (OBS-003) | debt (TD-077, open) | projectBomAllocation.service.ts:311,321,515 |
+| `items.crud.routes.ts` initial stock on item creation; `itemCatalog.processUnifiedImport` initial stock seeding | sanctioned opening-balance/import exceptions (documented) | items.crud.routes.ts:265-292, itemCatalog.service.ts:515-650 |
+| `inventoryStockRepair.service.ts` correction pairs | sanctioned repair path (documented) | inventoryStockRepair.service.ts:75-110 |
+| `applyStockMovement`, `deleteDocument` reversal rows (`reversalOfId`) | sanctioned (DB-009) | document.service.ts:1091,1260 |
+
+5. Rule of thumb from this run: **any new endpoint that touches stock must call `applyStockMovement`** — parallel implementations rot silently.
 
 ---
 

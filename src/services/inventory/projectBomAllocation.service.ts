@@ -13,6 +13,7 @@ import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource } from '../../lib/lockOrder.js';
+import { nextVersion } from '../../lib/occHelper.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 export interface BomAllocationItemInput {
@@ -333,6 +334,7 @@ export class ProjectBomAllocationService {
           .set({
             stocks: updatedStocks,
             currentStock: newTotalStock,
+            version: nextVersion(item.version)
           })
           .where(eq(items.id, item.id));
 
@@ -539,6 +541,7 @@ export class ProjectBomAllocationService {
           .set({
             stocks: updatedStocks,
             currentStock: newTotalStock,
+            version: nextVersion(item.version)
           })
           .where(eq(items.id, item.id));
 
@@ -551,7 +554,7 @@ export class ProjectBomAllocationService {
           quantity: qty,
           unitPrice: itemUnitPrice,
           totalPrice: itemTotalPrice,
-          date: new Date().toISOString().split('T')[0],
+          date: await businessTodayIsoDate(),
           documentType: 'آزادسازی تخصیص BOM',
           documentRef: `پروژه ${alloc.projectCode}`,
           location: loc,

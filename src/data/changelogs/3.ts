@@ -6,6 +6,24 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.1.43',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'اجرای Playbook سناریو ۱ (Blast Radius هات‌فیکس) و رفع TD-073: تاریخ خام و OCC در تخصیص BOM',
+    summary: 'اجرای کامل سناریوی ۱ کتابچه گراف کد: تأیید مجدد baseline دو فراخواننده applyStockMovement، آدیت سالم بودن ۹ invariant نقطه چوکان، و پویش کامل سایت‌های مستقیم نوشتن انبار خارج از applyStockMovement با طبقه‌بندی مجاز/مجاز-استثنا/تخلف؛ رفع فوری تخلف سرویس تخصیص BOM (تاریخ خام new Date و حذف bump نسخه OCC) و ثبت چهار بدهی جدید (TD-074 تا TD-077).',
+    author: 'AI Agent (Graph Playbook Scenario 1 Audit)',
+    changes: [
+      '🔍 پویش ساختاری تمام نوشتن‌های مستقیم currentStock/stocks/weightedAverageCost و insert(transactions) در کل سرویس‌ها و روت‌ها با تلاقی گراف کد',
+      '🛠️ رفع TD-073 در projectBomAllocation: جایگزینی new Date().toISOString().split(\'T\')[0] با businessTodayIsoDate() در آزادسازی BOM و افزودن version: nextVersion(item.version) به هر دو آپدیت allocate و release',
+      '📋 ثبت TD-074 (پیاده‌سازی موازی ورود کالای پروژه + ضرب float)، TD-075 (نوشتن ledger synthetic از GET داشبورد بدون unitPrice و قفل — سم‌آلودگی WAC در بازسازی)، TD-076 (revert تکراری deleteDocument) و TD-077 (Error خام در BOM — OBS-003)',
+      '📘 به‌روزرسانی GRAPH_PLAYBOOK.md با سابقه اجرای سناریو ۱ شامل جدول طبقه‌بندی ۸ خانواده سایت انبار (مجاز/استثنای موجه/تخلف)',
+      '📦 افزایش نسخه سیستم به v3.1.43'
+    ],
+    fixes: [
+      'رفع نقض Business Clock در آزادسازی BOM (کلاس TD-062 که قبلاً گمان می‌شد کامل بسته شده است)',
+      'رفع حذف bump نسخه OCC کالا در هر دو مسیر allocate و release تخصیص BOM'
+    ]
+  },
+  {
     version: 'v3.1.42',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'رفع TD-071/TD-072: محافظت درخت نمودار حساب‌ها در برابر چرخه parentId و کرش بازگشت بی‌محافظ',
