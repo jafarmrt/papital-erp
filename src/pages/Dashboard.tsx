@@ -39,7 +39,7 @@ export default function Dashboard() {
   const hasCrmPermission = Boolean(
     userPermissions?.isAdmin ||
     user?.role === 'admin' ||
-    userPermissions?.permissions?.includes('crm.view')
+    Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
 
   // Convert CRM activities and Daily Logs into Calendar Event items

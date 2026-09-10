@@ -6,6 +6,22 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.2.2',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'اجرای سناریو ۹ Playbook (آدیت Array-Safety): گارد jsonb در ۵ سایت پرخطر',
+    summary: 'پویش کلاس crash «is not a function» روی مرز پاسخ API و فیلدهای jsonb بدون قرارداد شکل: مرز React Query از قبل گارددار بود؛ ۵ سایت واقعی (reservedItems در useProjectInventory و permissions نقش در سه صفحه) با Array.isArray محافظت شدند.',
+    author: 'AI Agent (Graph Playbook Scenario 9 — Array-Safety Audit)',
+    changes: [
+      '🛡️ useProjectInventory: گارد Array.isArray برای reservedItems در مقدار اولیه و سینک پروژه (الگوی || [] از آبجکت truthy عبور می‌داد)',
+      '🔐 AccountingPage/Dashboard/SettingsPage: خواندن permissions نقش با گارد Array.isArray پیش از includes',
+      '📘 ثبت سابقه اجرای سناریو ۹ در GRAPH_PLAYBOOK.md + بسته‌شدن TD-082',
+      '📦 افزایش نسخه سیستم به v3.2.2'
+    ],
+    fixes: [
+      'رفع کلاس crash «is not a function» هنگام corruption فیلدهای jsonb (reservedItems و permissions)'
+    ]
+  },
+  {
     version: 'v3.2.1',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'اجرای سناریوهای ۶ و ۷ Playbook: استخراج useAccountingReports و آدیت سبز همزمانی انبار',

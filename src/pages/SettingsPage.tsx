@@ -40,8 +40,8 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
   const isAdmin = currentUser.role === 'admin' || userPermissions?.isAdmin;
   const isManager = currentUser.role === 'manager';
-  const hasCoaPerm = userPermissions?.permissions?.includes('accounting.coa');
-  const hasSettingsPerm = userPermissions?.permissions?.includes('settings.manage');
+  const hasCoaPerm = Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('accounting.coa');
+  const hasSettingsPerm = Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('settings.manage');
 
   const visibleGroups = useMemo(() => {
     return getVisibleGroups(SETTINGS_GROUPS, currentUser.role, userPermissions);

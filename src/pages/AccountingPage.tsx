@@ -39,7 +39,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
   const isAdmin = userPermissions?.isAdmin || user?.role === 'admin';
   const hasPerm = (perm: string) => {
     if (isAdmin) return true;
-    return userPermissions?.permissions?.includes(perm) || false;
+    return Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes(perm) || false;
   };
 
   const {

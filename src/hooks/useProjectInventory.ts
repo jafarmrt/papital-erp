@@ -28,7 +28,7 @@ export function useProjectInventory(
 
   const [isFinalized, setIsFinalized] = useState<boolean>(!!project.inventory_control?.isFinalized);
   const [finalizedAt, setFinalizedAt] = useState<string | undefined>(project.inventory_control?.finalizedAt);
-  const [reservedItems, setReservedItems] = useState<any[]>(() => project.inventory_control?.reservedItems || []);
+  const [reservedItems, setReservedItems] = useState<any[]>(() => Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
 
   // Unit Conversion Modal state
   const [isUnitConversionModalOpen, setIsUnitConversionModalOpen] = useState(false);
@@ -194,7 +194,7 @@ export function useProjectInventory(
     }
     setIsFinalized(!!project.inventory_control?.isFinalized);
     setFinalizedAt(project.inventory_control?.finalizedAt);
-    setReservedItems(project.inventory_control?.reservedItems || []);
+    setReservedItems(Array.isArray(project.inventory_control?.reservedItems) ? project.inventory_control.reservedItems : []);
   }, [project]);
 
   // Category selection handler for generating item code

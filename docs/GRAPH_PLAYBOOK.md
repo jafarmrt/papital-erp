@@ -263,7 +263,7 @@ RETURN r.method, r.path
 
 ---
 
-## Scenario 9 — Array-Safety Audit (Paginated API Responses)
+## Scenario 9 — Array-Safety Audit (Paginated API Responses) ✅ EXECUTED (v3.2.2)
 
 **Goal:** Eliminate the `items.filter is not a function` crash class (AGENTS.md Rule §2) by finding unguarded array operations on API results.
 
@@ -280,6 +280,14 @@ RETURN r.method, r.path
 4. Track audit progress as a TD row with a running count.
 
 **Success criteria:** every `.map/.filter/.forEach` on API-derived data has an `Array.isArray` fallback within one hop of the response boundary.
+
+**Execution record (v3.2.2):**
+- Boundary layer already safe: all `useXxxQuery` queryFns return guarded arrays (`Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : [])`).
+- jsonb-field class (shape not guaranteed by API contract) fixed at 5 sites:
+  - `useProjectInventory` (2×): `reservedItems` init/sync → `Array.isArray` guard (was `|| []` which passes truthy non-arrays).
+  - `AccountingPage` / `Dashboard` / `SettingsPage` (2×): role `permissions?.includes` → `Array.isArray(...) && ...includes` (a corrupt jsonb object would crash `.includes`).
+- Verified false positives: `DocumentsPage` reserved-projects fallback and `ProtectedRoute` already guarded on the adjacent line; `attachments` guards use `&& length > 0` which fails safe on non-arrays.
+- Detector note: single-line `rg -v Array.isArray` filtering produces false positives when the guard sits on the next line — always read the surrounding lines before "fixing".
 
 ---
 
