@@ -202,3 +202,9 @@ This project has specific architectural constraints and conventions discovered d
 - **Pull در شروع سشن:** در ابتدای هر سشن، قبل از هر تغییری، ایجنت MUST یک بار `git pull --rebase` اجرا کند تا تغییرات کامیت‌شده از محیط‌های دیگر روی گیت‌هاب، قبل از شروع کار وارد کد محلی شود. اگر pull تداخل (conflict) داشت، قبل از هر کاری تداخل را با کاربر مطرح و رفع کند.
 - **Exclusions:** هرگز `.env`، داده‌های محلی (`/pgdata`، `/logs`) و فایل‌های زیپ خروجی (`papital-erp-source-*.zip`) را کامیت نکنید (`.gitignore` را رعایت کنید).
 - **Conflict Handling:** اگر push به‌دلیل تغییرات ریموت رد شد، ابتدا `git pull --rebase` و پس از رفع تداخل، دوباره push؛ هرگز force-push نکنید.
+
+## 33. Local MCP Tooling — DBHub Read-Only DB Access (تنظیم‌شده در سشن V3.1.x)
+- **DBHub MCP (بازرسی read-only دیتابیس):** در سطح USER کانفیگ شده است (`%USERPROFILE%\.config\opencode\opencode.jsonc` + `%USERPROFILE%\.config\opencode\dbhub.toml`) — **نه** در `opencode.json` پروژه، چون TOML حاوی credential کاربر read-only است و نباید به گیت‌هاب برود.
+- **نقش `erp_readonly`:** فقط `CONNECT` + `USAGE` روی schema `public` + `SELECT` روی تمام جدول‌ها (و default privileges جدول‌های آینده) دارد؛ write probe با `CREATE TABLE` تأیید شده که DENIED است. Mutation دیتابیس همچنان انحصاراً از طریق Drizzle (Rule #1) — ابزار MCP فقط برای inspect/schema/data-check است.
+- **پیش‌فرض خاموش:** ورود `dbhub` در کانفیگ کاربر `enabled: false` است؛ فقط وقتی DB محلی (پورت 5433) بالا است فعالش کنید (`enabled: true`) — در غیر این صورت سرور اتصال شکسته فقط نویز می‌سازد.
+- **نکته ویندوزی:** فایل `dbhub.toml` باید **بدون BOM** باشد (پارسر TOML با BOM خطای `Unknown character 65279` می‌دهد)؛ هنگام بازنویسی از `[System.IO.File]::WriteAllText` با `ASCIIEncoding` استفاده کنید. فلگ `--readonly` CLI در `@bytebase/dbhub@1.x` حذف شده و readonly از طریق `[[tools]] readonly = true` در TOML تنظیم می‌شود.
