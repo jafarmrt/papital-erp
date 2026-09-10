@@ -6,6 +6,26 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.1.45',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'بسته‌شدن بدهی‌های آدیت سناریو ۱: مسیر واحد حرکت انبار برای ورود کالای پروژه، هِلپر متمرکز applyStockReversal و تایپ‌دار شدن خطاهای BOM (TD-074/076/077)',
+    summary: 'رفع سه بدهی باقی‌مانده از آدیت Playbook: بلوک موازی حرکت انبار در endpoint ورود کالای پروژه حذف و به DocumentService.applyStockMovement مسیریابی شد (با گسترش امضا برای documentId اختیاری و notes) و ضرب float حذف شد؛ منطق revert انبار حذف اسناد به هِلپر مستند applyStockReversal استخراج شد؛ و هر ۹ سایت Error خام سرویس تخصیص BOM به زیرکلاس‌های AppError تایپ‌دار شدند.',
+    author: 'AI Agent (Graph Playbook Scenario 1 Debt Closure)',
+    changes: [
+      '🔀 TD-074: جایگزینی پیاده‌سازی موازی (dual-store + WAC + ثبت transactions) در POST /projects/:id/add-to-inventory با فراخوانی واحد applyStockMovement — حذف ضرب float roundFinancial و ریسک واگرایی invariant؛ ترتیب قفل items→project حفظ شد',
+      '🧩 گسترش امضای applyStockMovement: documentId به optional (ستون document_id واقعاً nullable است) و پارامتر notes برای حفظ یادداشت‌ها در ledger',
+      '↩️ TD-076: استخراج DocumentService.applyStockReversal (قفل ردیف + دوگانه انبار + WAC بازگشتی با همان گاردهای قبلی + bump نسخه OCC) و فراخوانی آن در deleteDocument به‌جای بلوک تکراری',
+      '🏷️ TD-077: تایپ‌دار شدن ۹ سایت throw خام در projectBomAllocation با NotFoundError/InsufficientStockError/ConflictError + ۱ سایت مشابه در projects.routes با ValidationError — کدهای خطا و traceId از دست نمی‌روند',
+      '🧹 حذف importهای بلااستفاده (roundFinancial، FinancialMath، nextVersion، transactions، warehouses) از projects.routes پس از انتقال منطق',
+      '📦 افزایش نسخه سیستم به v3.1.45'
+    ],
+    fixes: [
+      'رفع واگرایی احتمالی invariantهای انبار در مسیر ورود کالای پروژه (پیاده‌سازی موازی که هر تغییر آینده applyStockMovement را از دست می‌داد)',
+      'رفع نقض قاعده اعشار مالی در totalPrice ردیف‌های ورود کالای پروژه',
+      'رفع گم‌شدن کد خطا و traceId در خطاهای سرویس تخصیص BOM'
+    ]
+  },
+  {
     version: 'v3.1.44',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'رفع TD-075 (سم‌آلودگی WAC در بازسازی کارتکس) با سناریو ۳ Playbook: سرویس KardexBackfillService ایمن و خودترمیم',

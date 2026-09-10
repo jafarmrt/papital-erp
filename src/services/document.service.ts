@@ -998,7 +998,7 @@ export class DocumentService {
     tx: DbClient,
     params: {
       itemId: number;
-      documentId: number;
+      documentId?: number | null;
       inOut: 'in' | 'out';
       quantity: number;
       price: number;
@@ -1007,9 +1007,10 @@ export class DocumentService {
       documentRef: string;
       user: string;
       targetLoc: string;
+      notes?: string;
     }
   ): Promise<void> {
-    const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc } = params;
+    const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc, notes } = params;
     const qty = Number(quantity);
     const priceNum = Number(price);
 
@@ -1090,7 +1091,7 @@ export class DocumentService {
 
     await tx.insert(transactions).values({
       itemId,
-      documentId,
+      documentId: documentId ?? undefined,
       type: inOut,
       quantity: qty,
       unitPrice: price,
@@ -1099,7 +1100,7 @@ export class DocumentService {
       documentType,
       documentRef: String(documentRef),
       createdBy: user,
-      notes: '',
+      notes: notes || '',
       location: finalTargetLoc,
       isDeleted: 0,
     });
@@ -1154,6 +1155,69 @@ export class DocumentService {
         );
         await OutboxService.saveToOutbox(tx, stockEvent);
       }
+
+  /**
+   * V3.1.45 (TD-076): معکوس‌سازی متمرکز موجودی برای ابطال اسناد (DB-009) —
+   * دوگانه انبار + WAC بازگشتی + bump نسخه OCC در یک نقطه تا invariantهای آینده یک‌جا اعمال شوند.
+   */
+  static async applyStockReversal(
+    tx: DbClient,
+    params: {
+      itemId: number;
+      quantity: number;
+      originalDirection: 'in' | 'out';
+      unitPrice: number;
+      location: string;
+    }
+  ): Promise<void> {
+    const { itemId, quantity: qty, originalDirection, unitPrice, location: targetLoc } = params;
+
+    const [itemData] = await tx
+      .select({ stocks: items.stocks, currentStock: items.currentStock, weightedAverageCost: items.weightedAverageCost, version: items.version })
+      .from(items)
+      .where(eq(items.id, itemId))
+      .for('update');
+    if (!itemData) return;
+
+    const currentStocks = (itemData.stocks as Record<string, number>) || {};
+    const currentLocStock = Number(currentStocks[targetLoc] || 0);
+
+    currentStocks[targetLoc] = originalDirection === 'in'
+      ? fin(currentLocStock).subtract(qty).round(4).toNumber()
+      : fin(currentLocStock).add(qty).round(4).toNumber();
+
+    const oldTotalStock = Number(itemData.currentStock || 0);
+    const newTotalStock = Object.values(currentStocks)
+      .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
+      .round(4)
+      .toNumber();
+
+    let newWAC = Number(itemData.weightedAverageCost || 0);
+    if (originalDirection === 'in') {
+      if (newTotalStock <= 0) {
+        newWAC = Number(itemData.weightedAverageCost || 0);
+      } else {
+        const oldTotalVal = fin(oldTotalStock).multiply(newWAC);
+        const revertVal = fin(qty).multiply(unitPrice);
+        const remainingVal = oldTotalVal.subtract(revertVal);
+        if (remainingVal.isNegative() || newTotalStock <= 0) {
+          newWAC = Number(itemData.weightedAverageCost || 0);
+        } else {
+          newWAC = remainingVal.divide(newTotalStock).round(4).toNumber();
+        }
+      }
+    }
+
+    await tx
+      .update(items)
+      .set({
+        stocks: currentStocks,
+        currentStock: newTotalStock,
+        weightedAverageCost: newWAC,
+        version: nextVersion(itemData.version)
+      })
+      .where(eq(items.id, itemId));
+  }
 
   /**
    * Finalizes a draft or proforma document, performing stock checks, deducting/adding inventory,
@@ -1278,56 +1342,24 @@ export class DocumentService {
 
       // 4. Revert stock for final documents
       const docLines = await tx.select().from(documentItems).where(eq(documentItems.documentId, id));
-      const inOut = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
+      const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
 
       if (doc.status === 'final') {
         for (const item of docLines) {
-          const qty = item.quantity;
-          // V3.0.7 (TD-061): انبار برگشت = انبار واقعی حرکت اصلی از روی ledger
-          // (transactions ثبت‌شده همان سند)؛ قبلاً بدون تطبیق، کلید 'default'
-          // استفاده می‌شد و stocks.jsonb انبارها از کاردکس فاصله می‌گرفت.
+          // V3.0.7 (TD-061): انبار برگشتی = انبار واقعی ردیف اصلی از ledger
+          // (transactions نسخه‌های قبلی سند)؛ نه کلید 'default' که باعث به‌روزرسانی
+          // گره اشتباه در stocks.jsonb و واگرایی سه‌طرفه می‌شد.
           const origTxForItem = originalTxs.find(t => t.itemId === item.itemId && (t.location || '') === (item.location || ''))
             || originalTxs.find(t => t.itemId === item.itemId);
           const targetLoc = (origTxForItem?.location || item.location || '').trim() || 'default';
 
-          const [itemData] = await tx.select({ stocks: items.stocks, currentStock: items.currentStock, weightedAverageCost: items.weightedAverageCost, version: items.version }).from(items).where(eq(items.id, item.itemId)).for('update');
-          if (!itemData) continue;
-          const currentStocks = (itemData.stocks as Record<string, number>) || {};
-          const currentLocStock = Number(currentStocks[targetLoc] || 0);
-          
-          currentStocks[targetLoc] = inOut === 'in'
-            ? fin(currentLocStock).subtract(qty).round(4).toNumber()
-            : fin(currentLocStock).add(qty).round(4).toNumber();
-          
-          const oldTotalStock = Number(itemData.currentStock || 0);
-          const newTotalStock = Object.values(currentStocks)
-            .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
-            .round(4)
-            .toNumber();
-          
-          let newWAC = Number(itemData.weightedAverageCost || 0);
-          if (inOut === 'in') {
-            if (newTotalStock <= 0) {
-              newWAC = Number(itemData.weightedAverageCost || 0);
-            } else {
-              const unitP = Number(item.unitPrice || 0);
-              const oldTotalVal = fin(oldTotalStock).multiply(newWAC);
-              const revertVal = fin(qty).multiply(unitP);
-              const remainingVal = oldTotalVal.subtract(revertVal);
-              if (remainingVal.isNegative() || newTotalStock <= 0) {
-                newWAC = Number(itemData.weightedAverageCost || 0);
-              } else {
-                newWAC = remainingVal.divide(newTotalStock).round(4).toNumber();
-              }
-            }
-          }
-
-          await tx.update(items).set({
-            stocks: currentStocks,
-            currentStock: newTotalStock,
-            weightedAverageCost: newWAC,
-            version: nextVersion(itemData.version)
-          }).where(eq(items.id, item.itemId));
+          await DocumentService.applyStockReversal(tx, {
+            itemId: item.itemId,
+            quantity: item.quantity,
+            originalDirection: docDirection,
+            unitPrice: Number(item.unitPrice || 0),
+            location: targetLoc
+          });
         }
 
         // V9-1.1: برگشت سند حسابداری متناظر (صدور سند معکوس) در همان تراکنش

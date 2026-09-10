@@ -1,17 +1,16 @@
 import { Router } from 'express';
 import { eq, desc, and, sql, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, transactions, warehouses, projectProductStageProgress } from '../db/schema.js';
+import { productionProjects, projectStages, items, customers, projectProductStageProgress } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { roundFinancial } from '../utils.js';
 import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource } from '../lib/lockOrder.js';
 import { businessNowIsoDateTime } from '../lib/businessClock.js';
-import { FinancialMath } from '../utils/financialMath.js';
-import { nextVersion } from '../lib/occHelper.js';
+import { DocumentService } from '../services/document.service.js';
+import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { inArray } from 'drizzle-orm';
 
 const router = Router();
@@ -849,7 +848,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       // 2. Lock production project (level 50) SECOND
       const [proj] = await tx.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0))).for('update');
       if (!proj) {
-        throw new Error('پروژه یافت نشد');
+        throw new NotFoundError('پروژه یافت نشد');
       }
 
       let addedCount = 0;
@@ -860,66 +859,29 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
         if (!targetItemId || isNaN(targetItemId) || !qtyToAdd || qtyToAdd <= 0) continue;
 
         const [targetItem] = await tx.select({
-          id: items.id,
-          name: items.name,
-          code: items.code,
-          unit: items.unit,
-          stocks: items.stocks,
-          currentStock: items.currentStock,
-          weightedAverageCost: items.weightedAverageCost,
-          version: items.version
+          weightedAverageCost: items.weightedAverageCost
         }).from(items).where(eq(items.id, targetItemId)).for('update');
 
         if (!targetItem) continue;
 
-        const currentStocks = (targetItem.stocks as Record<string, number>) || {};
-        let targetLoc = entry.location ? String(entry.location).trim() : '';
-        if (!targetLoc) {
-          const [firstActiveWh] = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).limit(1);
-          if (!firstActiveWh) {
-            throw new Error('هیچ انبار فعالی در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
-          }
-          targetLoc = firstActiveWh.code;
-        }
-
-        const prevLocStock = Number(currentStocks[targetLoc] || 0);
-        currentStocks[targetLoc] = roundFinancial(prevLocStock + qtyToAdd);
-
-        const newTotalStock = roundFinancial(
-          Object.values(currentStocks).reduce((sum, val) => sum + (Number(val) || 0), 0)
-        );
-
-        // V3.0.7 (TD-054): WAC روی رویداد 'in' طبق قاعده WAC سامانه بازمحاسبه می‌شود؛
+        // V3.0.7 (TD-054) + V3.1.45 (TD-074): مسیر واحد حرکت انبار (applyStockMovement)؛
         // مبنای قیمت: unitPrice اختیاری ورودی و در نبود آن WAC فعلی کالا
         // (ارزش‌گذاری محافظه‌کارانه محصول تولیدی به قیمت تمام‌شده جاری).
-        const oldTotalStock = Number(targetItem.currentStock || 0);
         const oldWac = Number(targetItem.weightedAverageCost || 0);
         const costBasis = Number(entry.unitPrice);
         const unitPrice = !isNaN(costBasis) && costBasis > 0 ? costBasis : oldWac;
-        const newWac = FinancialMath.calculateWAC(oldTotalStock, oldWac, qtyToAdd, unitPrice).toNumber();
 
-        // Update item stock + WAC atomically (Read-Calculate-Update, DB-00x pattern)
-        await tx.update(items).set({
-          stocks: currentStocks,
-          currentStock: newTotalStock,
-          weightedAverageCost: newWac,
-          version: nextVersion(targetItem.version)
-        }).where(eq(items.id, targetItemId));
-
-        // Log transaction
-        await tx.insert(transactions).values({
+        await DocumentService.applyStockMovement(tx, {
           itemId: targetItemId,
-          type: 'in',
+          inOut: 'in',
           quantity: qtyToAdd,
-          unitPrice,
-          totalPrice: roundFinancial(qtyToAdd * unitPrice),
-          // V3.0.7 (TD-062): تاریخ تراکنش از ساعت توافقی کسب‌وکار (نه UTC خام)
+          price: unitPrice,
           date: await businessNowIsoDateTime(),
           documentType: 'پروژه تولید',
           documentRef: proj.projectCode,
-          createdBy: typeof currentUser === 'string' ? currentUser : 'system',
-          notes: entry.notes || `ورود حاصل از تکمیل پروژه ${proj.title} (${proj.projectCode})`,
-          location: targetLoc
+          user: currentUser,
+          targetLoc: entry.location ? String(entry.location).trim() : '',
+          notes: entry.notes || `ورود حاصل از تکمیل پروژه ${proj.title} (${proj.projectCode})`
         });
 
         addedCount++;
@@ -929,7 +891,7 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       if (markCompleted) {
         const matrixCheck = await getProjectProgressMatrixStatus(id, tx);
         if (!matrixCheck.allMatrixCompleted) {
-          throw new Error(`امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`);
+          throw new ValidationError(`امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`);
         }
         await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
       }

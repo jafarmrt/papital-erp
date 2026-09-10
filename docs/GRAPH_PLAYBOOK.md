@@ -52,15 +52,14 @@
 | Site | Verdict | Ref |
 |---|---|---|
 | `projectBomAllocation` release: raw `new Date().toISOString()` date + no OCC bump (allocate & release) | **VIOLATION → fixed (TD-073)** | projectBomAllocation.service.ts:337,541,548 |
-| `projects.routes.ts` project stock entry: full parallel stock-write implementation + float `roundFinancial(qtyToAdd * unitPrice)` | **VIOLATION → TD-074 (open)** | projects.routes.ts:895-925 |
-| `dashboard.routes.ts` `syncMissingInitialTransactions`: GET-triggered synthetic ledger rows without `unitPrice` (WAC-rebuild poisoning) and without lock/idempotency | **VIOLATION → TD-075 (open, HIGH)** | dashboard.routes.ts:41-100 |
-| `deleteDocument` revert: careful but duplicated reversal stock logic (for('update') ✓, fin ✓, nextVersion ✓) | debt (TD-076, open) — centralize as `applyStockReversal` | document.service.ts:1280-1336 |
-| `projectBomAllocation` raw `throw new Error` (OBS-003) | debt (TD-077, open) | projectBomAllocation.service.ts:311,321,515 |
+| `projects.routes.ts` project stock entry: full parallel stock-write implementation + float `roundFinancial(qtyToAdd * unitPrice)` | **VIOLATION → fixed (TD-074, v3.1.45)** — routed through `applyStockMovement` (now accepts optional `documentId` + `notes`); caller baseline is 3 (intentional) | projects.routes.ts:895-925 |
+| `deleteDocument` revert: careful but duplicated reversal stock logic (for('update') ✓, fin ✓, nextVersion ✓) | **centralized (TD-076, v3.1.45)** — extracted as `DocumentService.applyStockReversal` | document.service.ts:1280-1336 |
+| `projectBomAllocation` raw `throw new Error` (OBS-003) | **fixed (TD-077, v3.1.45)** — all 9 sites typed with `NotFoundError`/`InsufficientStockError`/`ConflictError` (+1 site in projects.routes → `ValidationError`) | projectBomAllocation.service.ts:311,321,515 |
 | `items.crud.routes.ts` initial stock on item creation; `itemCatalog.processUnifiedImport` initial stock seeding | sanctioned opening-balance/import exceptions (documented) | items.crud.routes.ts:265-292, itemCatalog.service.ts:515-650 |
 | `inventoryStockRepair.service.ts` correction pairs | sanctioned repair path (documented) | inventoryStockRepair.service.ts:75-110 |
 | `applyStockMovement`, `deleteDocument` reversal rows (`reversalOfId`) | sanctioned (DB-009) | document.service.ts:1091,1260 |
 
-5. Rule of thumb from this run: **any new endpoint that touches stock must call `applyStockMovement`** — parallel implementations rot silently.
+5. Rule of thumb from this run: **any new endpoint that touches stock must call `applyStockMovement`** — parallel implementations rot silently. (All scenario-1 violations now shipped: TD-073 v3.1.43, TD-075 v3.1.44, TD-074/076/077 v3.1.45.)
 
 ---
 

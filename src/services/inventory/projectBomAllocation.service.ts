@@ -14,6 +14,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource } from '../../lib/lockOrder.js';
 import { nextVersion } from '../../lib/occHelper.js';
+import { NotFoundError, ConflictError, InsufficientStockError } from '../../errors/customErrors.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 export interface BomAllocationItemInput {
@@ -97,7 +98,7 @@ export class ProjectBomAllocationService {
         .for('update');
 
       if (!project) {
-        throw new Error(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
+        throw new NotFoundError(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
       }
 
       const activeWHs = await txEngine
@@ -122,7 +123,7 @@ export class ProjectBomAllocationService {
           .for('update');
 
         if (!item) {
-          throw new Error(`کالا با شناسه ${req.itemId} یافت نشد.`);
+          throw new NotFoundError(`کالا با شناسه ${req.itemId} یافت نشد.`);
         }
 
         let resolvedTxId: number | null = req.receiptTransactionId || null;
@@ -284,7 +285,7 @@ export class ProjectBomAllocationService {
         .for('update');
 
       if (!project) {
-        throw new Error(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
+        throw new NotFoundError(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
       }
 
       const activeWHs = await txEngine
@@ -309,7 +310,7 @@ export class ProjectBomAllocationService {
           .for('update');
 
         if (!item) {
-          throw new Error(`کالا با شناسه ${req.itemId} یافت نشد.`);
+          throw new NotFoundError(`کالا با شناسه ${req.itemId} یافت نشد.`);
         }
 
         const stocksObj = (item.stocks as Record<string, number>) || {};
@@ -319,7 +320,7 @@ export class ProjectBomAllocationService {
         // Check negative stock policy
         const policy = await NegativeStockPolicyService.getPolicy();
         if (policy === 'forbidden' && currentLocStock < qty) {
-          throw new Error(
+          throw new InsufficientStockError(
             `عدم موجودی کافی جهت تخصیص به پروژه ${project.projectCode}. موجودی انبار '${targetLocation}' کالای '${item.name}' برابر ${currentLocStock} است در حالی که درخواست ${qty} می‌باشد.`
           );
         }
@@ -451,11 +452,11 @@ export class ProjectBomAllocationService {
         .for('update');
 
       if (!alloc) {
-        throw new Error(`رکورد تخصیص با شناسه ${allocationId} یافت نشد.`);
+        throw new NotFoundError(`رکورد تخصیص با شناسه ${allocationId} یافت نشد.`);
       }
 
       if (alloc.status !== 'allocated') {
-        throw new Error(`رکورد تخصیص در وضعیت '${alloc.status}' قرار دارد و قابل مصرف نیست.`);
+        throw new ConflictError(`رکورد تخصیص در وضعیت '${alloc.status}' قرار دارد و قابل مصرف نیست.`);
       }
 
       const consumedAt = new Date().toISOString();
@@ -510,11 +511,11 @@ export class ProjectBomAllocationService {
         .for('update');
 
       if (!alloc) {
-        throw new Error(`رکورد تخصیص با شناسه ${allocationId} یافت نشد.`);
+        throw new NotFoundError(`رکورد تخصیص با شناسه ${allocationId} یافت نشد.`);
       }
 
       if (alloc.status !== 'allocated') {
-        throw new Error(`فقط رکوردهای در وضعیت 'allocated' قابل آزادسازی به انبار هستند.`);
+        throw new ConflictError(`فقط رکوردهای در وضعیت 'allocated' قابل آزادسازی به انبار هستند.`);
       }
 
       const qty = fin(alloc.quantity).toNumber();
