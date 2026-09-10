@@ -6,6 +6,22 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.2.3',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'تکمیل سناریوهای ۵ و ۶ Playbook: استخراج useCRMFilters و Memoize کردن فیلترهای ProjectsPage',
+    summary: 'فیلترهای CRM (جستجو، فروشنده، مرحله، مشتری و بازه تاریخ با پیش‌تنظیم‌ها) به هوک اختصاصی useCRMFilters با سازنده‌های کوئری خالص منتقل شد؛ ProjectsPage فیلتر و گروه‌بندی وضعیت‌ها را با useMemo یک‌بار در هر رندر محاسبه می‌کند (حذف ۶ بار filter تکراری)؛ CustomersPage ممیزی شد و نیازی به تغییر نداشت.',
+    author: 'AI Agent (Graph Playbook Scenarios 5 & 6 — Completion)',
+    changes: [
+      '🧩 ایجاد src/hooks/useCRMFilters.ts: هفت state فیلتر + handleApplyPreset + توابع خالص buildLeadQueryParams/buildActivityQueryParams/normalizeLeadStage — قرارداد بازگشتی useCRMData برای مصرف‌کنندگان بدون تغییر حفظ شد',
+      '⚡ ProjectsPage: memoize کردن filteredProjects و گروه‌بندی planned/in_progress/completed — حذف شش بار فیلتر تکراری روی کل لیست در هر رندر',
+      '🔍 CustomersPage: ممیزی حلقه‌ها — اسکن آرایه بزرگ تکرارشونده در رندر وجود ندارد؛ تغییر مصنوعی اعمال نشد',
+      '📦 افزایش نسخه سیستم به v3.2.3'
+    ],
+    fixes: [
+      'رفع هزینه رندر اضافی صفحه پروژه‌ها (شش پیمایش تکراری آرایه در هر رندر)'
+    ]
+  },
+  {
     version: 'v3.2.2',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'اجرای سناریو ۹ Playbook (آدیت Array-Safety): گارد jsonb در ۵ سایت پرخطر',

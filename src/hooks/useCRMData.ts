@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, FormEvent } from 'react';
 import { fetchJson } from '../api';
 import { CRMLead, CRMActivity } from '../types';
-import { getTodayJalaliDate, getFutureJalaliDate, getPastJalaliDate, toEnglishDigits } from '../utils';
+import { getTodayJalaliDate, getFutureJalaliDate, toEnglishDigits } from '../utils';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
+import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -30,33 +31,9 @@ export function useCRMData(user: any) {
   const [mentionUsers, setMentionUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [filterSeller, setFilterSeller] = useState<string>('');
-  const [filterStage, setFilterStage] = useState<string>('');
-  const [filterCustomer, setFilterCustomer] = useState<string>('');
-
-  // Date Filters - Default to last 1 month (30 days)
-  const [datePreset, setDatePreset] = useState<'1m' | '7d' | 'today' | 'all' | 'custom'>('1m');
-  const [fromDate, setFromDate] = useState<string>(getPastJalaliDate(30));
-  const [toDate, setToDate] = useState<string>(getTodayJalaliDate());
-
-  const handleApplyPreset = (preset: '1m' | '7d' | 'today' | 'all' | 'custom') => {
-    setDatePreset(preset);
-    if (preset === '1m') {
-      setFromDate(getPastJalaliDate(30));
-      setToDate(getTodayJalaliDate());
-    } else if (preset === '7d') {
-      setFromDate(getPastJalaliDate(7));
-      setToDate(getTodayJalaliDate());
-    } else if (preset === 'today') {
-      setFromDate(getTodayJalaliDate());
-      setToDate(getTodayJalaliDate());
-    } else if (preset === 'all') {
-      setFromDate('');
-      setToDate('');
-    }
-  };
+  // V3.2.3 (TD-080 / Playbook Scenario 6): فیلترها به هوک اختصاصی useCRMFilters منتقل شدند
+  const filters = useCRMFilters();
+  const { searchTerm, filterSeller, filterStage, filterCustomer, fromDate, toDate } = filters;
 
   // Modals state
   const [isLeadModalOpen, setIsLeadModalOpen] = useState<boolean>(false);
@@ -125,22 +102,12 @@ export function useCRMData(user: any) {
       }
 
       // Build query
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      // V10-4.1: فیلتر فروشنده روی id پرسنل
-      if (filterSeller) params.append('assignedPersonnelId', filterSeller);
-      if (filterStage) params.append('stage', filterStage);
-      if (filterCustomer) params.append('customerName', filterCustomer);
+      const params = buildLeadQueryParams({ searchTerm, filterSeller, filterStage, filterCustomer });
 
       try {
         const leadsRes = await fetchJson(`/crm/leads?${params.toString()}`, { signal });
         const rawLeads = Array.isArray(leadsRes?.data) ? leadsRes.data : (Array.isArray(leadsRes) ? leadsRes : []);
-        const mappedLeads = rawLeads.map((l: CRMLead) => {
-          let s = l.stage;
-          if (s === 'contacted') s = 'lead';
-          if (s === 'negotiation') s = 'proposal';
-          return { ...l, stage: s };
-        });
+        const mappedLeads = rawLeads.map((l: CRMLead) => ({ ...l, stage: normalizeLeadStage(l.stage) }));
         setLeads(mappedLeads);
       } catch (e: any) {
         if (e?.name === 'AbortError') return;
@@ -148,9 +115,7 @@ export function useCRMData(user: any) {
         toast.error('خطا در دریافت سرنخ‌های CRM');
       }
 
-      const actParams = new URLSearchParams();
-      if (fromDate) actParams.append('fromDate', fromDate);
-      if (toDate) actParams.append('toDate', toDate);
+      const actParams = buildActivityQueryParams(fromDate, toDate);
 
       try {
         const actRes = await fetchJson(`/crm/activities?${actParams.toString()}`, { signal });
@@ -498,21 +463,21 @@ export function useCRMData(user: any) {
     currentPersonnelId,
     mentionUsers,
     loading,
-    searchTerm,
-    setSearchTerm,
-    filterSeller,
-    setFilterSeller,
-    filterStage,
-    setFilterStage,
-    filterCustomer,
-    setFilterCustomer,
-    datePreset,
-    setDatePreset,
-    fromDate,
-    setFromDate,
-    toDate,
-    setToDate,
-    handleApplyPreset,
+    searchTerm: filters.searchTerm,
+    setSearchTerm: filters.setSearchTerm,
+    filterSeller: filters.filterSeller,
+    setFilterSeller: filters.setFilterSeller,
+    filterStage: filters.filterStage,
+    setFilterStage: filters.setFilterStage,
+    filterCustomer: filters.filterCustomer,
+    setFilterCustomer: filters.setFilterCustomer,
+    datePreset: filters.datePreset,
+    setDatePreset: filters.setDatePreset,
+    fromDate: filters.fromDate,
+    setFromDate: filters.setFromDate,
+    toDate: filters.toDate,
+    setToDate: filters.setToDate,
+    handleApplyPreset: filters.handleApplyPreset,
     isLeadModalOpen,
     setIsLeadModalOpen,
     editingLead,

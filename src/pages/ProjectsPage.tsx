@@ -98,8 +98,9 @@ export default function ProjectsPage() {
   };
 
   // Filter calculation
-  const filteredProjects = projects.filter(p => {
-    const matchesSearch = 
+  // V3.2.3 (Playbook Scenario 5): فیلتر و گروه‌بندی وضعیت‌ها یک‌بار با useMemo — حذف ۶ بار filter در هر رندر
+  const filteredProjects = React.useMemo(() => projects.filter(p => {
+    const matchesSearch =
       p.project_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.customer_name && p.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -110,13 +111,18 @@ export default function ProjectsPage() {
     const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
 
     return matchesSearch && matchesStatus && matchesPriority;
-  });
+  }), [projects, searchQuery, statusFilter, priorityFilter]);
 
   // Summary Statistics
   const totalCount = projects.length;
-  const inProgressCount = projects.filter(p => p.status === 'in_progress').length;
-  const plannedCount = projects.filter(p => p.status === 'planned').length;
-  const completedCount = projects.filter(p => p.status === 'completed').length;
+  const inProgressCount = React.useMemo(() => projects.filter(p => p.status === 'in_progress').length, [projects]);
+  const plannedCount = React.useMemo(() => projects.filter(p => p.status === 'planned').length, [projects]);
+  const completedCount = React.useMemo(() => projects.filter(p => p.status === 'completed').length, [projects]);
+  const filteredByStatus = React.useMemo(() => ({
+    planned: filteredProjects.filter(p => p.status === 'planned'),
+    in_progress: filteredProjects.filter(p => p.status === 'in_progress'),
+    completed: filteredProjects.filter(p => p.status === 'completed'),
+  }), [filteredProjects]);
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -324,12 +330,12 @@ export default function ProjectsPage() {
                 برنامه‌ریزی‌شده
               </span>
               <span className="w-5 h-5 rounded-full bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-[10px]">
-                {formatPersianNumber(filteredProjects.filter(p => p.status === 'planned').length)}
+                {formatPersianNumber(filteredByStatus.planned.length)}
               </span>
             </div>
 
             <div className="space-y-3">
-              {filteredProjects.filter(p => p.status === 'planned').map(p => (
+              {filteredByStatus.planned.map(p => (
                 <ProjectKanbanCard 
                   key={p.id} 
                   project={p} 
@@ -352,12 +358,12 @@ export default function ProjectsPage() {
                 در حال انجام تولید
               </span>
               <span className="w-5 h-5 rounded-full bg-blue-200 font-bold text-blue-900 flex items-center justify-center text-[10px]">
-                {formatPersianNumber(filteredProjects.filter(p => p.status === 'in_progress').length)}
+                {formatPersianNumber(filteredByStatus.in_progress.length)}
               </span>
             </div>
 
             <div className="space-y-3">
-              {filteredProjects.filter(p => p.status === 'in_progress').map(p => (
+              {filteredByStatus.in_progress.map(p => (
                 <ProjectKanbanCard 
                   key={p.id} 
                   project={p} 
@@ -380,12 +386,12 @@ export default function ProjectsPage() {
                 تکمیل شده
               </span>
               <span className="w-5 h-5 rounded-full bg-emerald-200 font-bold text-emerald-900 flex items-center justify-center text-[10px]">
-                {formatPersianNumber(filteredProjects.filter(p => p.status === 'completed').length)}
+                {formatPersianNumber(filteredByStatus.completed.length)}
               </span>
             </div>
 
             <div className="space-y-3">
-              {filteredProjects.filter(p => p.status === 'completed').map(p => (
+              {filteredByStatus.completed.map(p => (
                 <ProjectKanbanCard 
                   key={p.id} 
                   project={p} 

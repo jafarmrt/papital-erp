@@ -202,7 +202,7 @@ ORDER BY f.transitive_loop_depth DESC LIMIT 15
 
 ---
 
-**Execution record (v3.2.1):** Report-fetching seam extracted from `useAccounting` (149) into `useAccountingReports.ts` (trialBalance/incomeStatement/balanceSheet/ledgerReport + 4 fetchers + isolated `reportsLoading`). Facade composition inside `useAccounting` keeps the consumer (`AccountingPage`) untouched; `loading` merges core|reports. Suites 125/125 green. Remaining TD-080 targets: useCRMData (177), parseCliArgs (253), test suites — each requires its own guarded session per this methodology.
+**Execution record (v3.2.1 + v3.2.3 completion):** Report-fetching seam extracted from `useAccounting` (149) into `useAccountingReports.ts` (trialBalance/incomeStatement/balanceSheet/ledgerReport + 4 fetchers + isolated `reportsLoading`). Facade composition inside `useAccounting` keeps the consumer (`AccountingPage`) untouched; `loading` merges core|reports. **v3.2.3:** `useCRMFilters` extracted (search/seller/stage/customer/date-preset states + `handleApplyPreset` + pure builders `buildLeadQueryParams`/`buildActivityQueryParams`/`normalizeLeadStage`) — `useCRMData` consumer contract unchanged via facade keys. `ProjectsPage`: filtering + status-grouping memoized (6 per-render `.filter` passes eliminated). `CustomersPage`: audited — no repeated large-array scans in render (nested maps are inherent DOM structure); no artificial change. Suites 125/125 green. Remaining TD-080 targets: parseCliArgs (253), test suites.
 
 ## Scenario 7 — Race Condition / Double Stock Deduction ✅ EXECUTED (v3.2.1 — verdict GREEN, zero uncovered routes)
 
