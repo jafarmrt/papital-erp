@@ -66,11 +66,26 @@ env_has LOG_DIR || ok "LOG_DIR defaulting to logs/"
 
 # ---------- 1) Service state ----------
 echo "[1] Service state (systemd)"
-if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
-  [ "$(systemctl is-active "$SERVICE_NAME")" = "active" ] && ok "systemd unit active" || bad "systemd unit is not active"
-  [ "$(systemctl is-enabled "$SERVICE_NAME")" = "enabled" ] && ok "systemd unit enabled on boot" || warnc "systemd unit not enabled — service won't start on reboot"
+if ! command -v systemctl >/dev/null 2>&1; then
+  warnc "systemctl not available — service checks skipped"
 else
-  warnc "systemd unit '$SERVICE_NAME' not found (pm2/manual run?)"
+  if ! systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+    # Auto-detect the systemd unit managing the running app (unit may have a custom name)
+    RUNNING_PID="$(pgrep -f 'dist/server.cjs' | head -1 || true)"
+    if [ -n "$RUNNING_PID" ]; then
+      DETECTED="$(systemctl status "$RUNNING_PID" 2>/dev/null | grep -oE '[a-zA-Z0-9_.@-]+\.service' | head -1 | sed 's/\.service$//' || true)"
+      if [ -n "$DETECTED" ] && [ "$DETECTED" != "systemd" ]; then
+        warnc "No unit named '${SERVICE_NAME}' found — detected managing unit: '${DETECTED}' (align update.sh/verifier via SERVICE_NAME=<name> or rename the unit)"
+        SERVICE_NAME="$DETECTED"
+      fi
+    fi
+  fi
+  if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+    [ "$(systemctl is-active "$SERVICE_NAME")" = "active" ] && ok "systemd unit active ($SERVICE_NAME)" || bad "systemd unit is not active"
+    [ "$(systemctl is-enabled "$SERVICE_NAME")" = "enabled" ] && ok "systemd unit enabled on boot" || warnc "systemd unit not enabled — service won't start on reboot"
+  else
+    warnc "systemd unit '$SERVICE_NAME' not found (pm2/manual run?)"
+  fi
 fi
 
 # ---------- 2) Health probes ----------
@@ -86,7 +101,7 @@ STARTUP="$(probe /health/startup || true)"
 # ---------- 3) Version consistency ----------
 echo "[3] Version consistency"
 PKG_VER="$(node -p "require('$APP_DIR/package.json').version" 2>/dev/null || true)"
-HEALTH_VER="$(probe /health | grep -oE '"version":"[^"]+"' | cut -d'"' -f4 || true)"
+HEALTH_VER="$(probe /health | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4 || true)"
 if [ -n "$PKG_VER" ] && [ "$PKG_VER" = "$HEALTH_VER" ]; then
   ok "Runtime version matches package.json (v$PKG_VER)"
 else
@@ -101,7 +116,7 @@ else
   bad "PostgreSQL unreachable via DATABASE_URL (pg_isready)"
 fi
 if command -v psql >/dev/null 2>&1; then
-  LAST_MIG="$(psql "$DATABASE_URL" -tAc "SELECT coalesce(max(step_name),'NONE') FROM migrations_log;" 2>/dev/null || echo "?")"
+  LAST_MIG="$(psql "$DATABASE_URL" -tAc "SELECT coalesce((SELECT name FROM migrations_log ORDER BY applied_at DESC LIMIT 1),'NONE');" 2>/dev/null || echo "?")"
   echo "       Latest migration: $LAST_MIG"
   [ "$LAST_MIG" != "?" ] && ok "migrations_log readable" || warnc "migrations_log not readable via psql"
   PENDING="$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM outbox_events WHERE status='pending';" 2>/dev/null || echo "?")"
