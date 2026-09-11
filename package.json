@@ -1,11 +1,11 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "3.3.6",
+  "version": "3.3.7",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs --external:./src/tests/* && cp -r drizzle dist/drizzle",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs --external:./src/tests/* && node -e \"require('fs').cpSync('drizzle','dist/drizzle',{recursive:true})\"",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "setup:init": "tsx scripts/initial-setup.ts",

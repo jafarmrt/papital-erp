@@ -6,6 +6,23 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.3.7',
+    date: '۲۰ شهریور ۱۴۰۵',
+    title: 'مستندسازی Go-Live و بهبود ابزارهای عملیاتی استقرار',
+    summary: 'برای آماده‌سازی استقرار نهایی روی سرور، چک‌لیست جامع شروع به کار (Go-Live Checklist) با ۹ فاز از گیت‌های کیفی توسعه تا عملیات مستمر اضافه شد؛ اسکریپت صحت‌سنجی آمادگی سرور (go-live-verify.sh) با خروجی انگلیسی فنی ساخته شد؛ آپدیت‌کننده update.sh از حالت دستی (zip/فولدر منبع) علاوه بر مسیر گیت پشتیبانی می‌کند و اسکریپت build برای سازگاری کراس‌پلتفرم (ویندوز/لینوکس) اصلاح شد.',
+    author: 'AI Agent (Go-Live Checklist & Ops Tooling)',
+    changes: [
+      '📄 افزودن docs/GO_LIVE_CHECKLIST.md — چک‌لیست ۹ فازی پیش از شروع به کار: گیت‌های کیفی (lint/test/build)، نصب، ویزارد setup و چرخش توکن، دامنه و HTTPS، پیکربندی درون‌سامانه، بکاپ و تمرین بازیابی (drill)، smoke test، سناریوهای E2E منطق کسب‌وکار و عملیات/مانیتورینگ',
+      '🛠 افزودن scripts/go-live-verify.sh — صحت‌سنجی خودکار آمادگی سرور: گیت‌های ایمنی env، وضعیت systemd، پروب‌های سلامت، همگامی نسخه runtime با package.json، دسترسی دیتابیس و آخرین مایگریشن، وضعیت Outbox/DLQ، زیرساخت بکاپ و cron، HTTPS عمومی و متریک‌ها (خروجی PASS/FAIL انگلیسی، exit code غیر صفر در خطا)',
+      '🔄 ارتقای update.sh — پشتیبانی از آپدیت دستی با `--source <DIR>` و `--zip <FILE.zip>` (rsync محافظ‌شده با حفظ .env، .git، logs، uploads، backups و node_modules) در کنار مسیر پیش‌فرض گیت؛ بکاپ خودکار پیش از هر دو مسیر',
+      '🛠 اصلاح اسکریپت build در package.json — جایگزینی `cp -r` لینوکسی با معادل cross-platform مبتنی بر Node.js (`fs.cpSync`) تا build روی ویندوز نیز بدون خطا کامل شود',
+      '🔢 ارتقای نسخه به v3.3.7'
+    ],
+    fixes: [
+      'رفع شکست مرحله کپی درایو drizzle در انتهای npm run build در محیط ویندوز («cp is not recognized») — اکنون build روی هر دو پلتفرم خروجی کامل dist/ شامل drizzle تولید می‌کند'
+    ]
+  },
+  {
     version: 'v3.3.6',
     date: '۲۱ شهریور ۱۴۰۵',
     title: 'اصلاح ریشه‌ای محدودیت ضریب ریالی (step) در فرم‌های خرید، انبار، نرخ‌های پرکیسی و لیست‌های قیمت',

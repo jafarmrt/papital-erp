@@ -4,6 +4,12 @@
 #  Backs up the database, pulls the latest source, rebuilds,
 #  restarts the service and verifies health.
 #  Migrations run automatically at startup (NEVER db:push).
+#
+#  Usage:
+#    ./update.sh                     # git-based update (default)
+#    ./update.sh --no-backup         # git-based update, skip backup (discouraged)
+#    ./update.sh --source <DIR>      # manual update from an extracted source directory
+#    ./update.sh --zip <FILE.zip>    # manual update from a source zip archive
 # ============================================================
 set -euo pipefail
 
@@ -14,7 +20,19 @@ APP_DIR="${APP_DIR:-/opt/papital-erp}"
 SERVICE_NAME="papital-erp"
 APP_PORT="${APP_PORT:-3000}"
 SKIP_BACKUP=0
-[ "${1:-}" = "--no-backup" ] && SKIP_BACKUP=1
+SOURCE_DIR=""
+SOURCE_ZIP=""
+
+# ---------- Parse arguments ----------
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-backup) SKIP_BACKUP=1 ;;
+    --source)    shift; SOURCE_DIR="${1:-}"; [ -n "$SOURCE_DIR" ] || die "--source requires a directory path"; ;;
+    --zip)       shift; SOURCE_ZIP="${1:-}"; [ -n "$SOURCE_ZIP" ] || die "--zip requires an archive path"; ;;
+    *)           die "Unknown argument: $1 (supported: --no-backup, --source <DIR>, --zip <FILE.zip>)" ;;
+  esac
+  shift
+done
 
 log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 success()  { log "OK: $*"; }
@@ -24,6 +42,33 @@ die()      { log "ERROR: $*"; exit 1; }
 log "=== Papital ERP Updater — log file: $LOG_FILE ==="
 cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
 [ -f .env ] || die ".env not found in $APP_DIR"
+
+# ---------- Manual mode: extract zip / locate source directory ----------
+if [ -n "$SOURCE_ZIP" ]; then
+  [ -f "$SOURCE_ZIP" ] || die "Zip archive not found: $SOURCE_ZIP"
+  STAGE_DIR="$(mktemp -d /tmp/papital-src.XXXXXX)"
+  log "Extracting source archive $SOURCE_ZIP -> $STAGE_DIR ..."
+  unzip -q -o "$SOURCE_ZIP" -d "$STAGE_DIR" || die "Failed to extract archive."
+  # Support archives that wrap everything in a single top-level folder
+  ENTRIES="$(find "$STAGE_DIR" -mindepth 1 -maxdepth 1 | wc -l)"
+  if [ "$ENTRIES" -eq 1 ] && [ -d "$(find "$STAGE_DIR" -mindepth 1 -maxdepth 1 -type d)" ]; then
+    STAGE_DIR="$(find "$STAGE_DIR" -mindepth 1 -maxdepth 1 -type d)"
+  fi
+  [ -f "$STAGE_DIR/package.json" ] && [ -f "$STAGE_DIR/server.ts" ] \
+    || die "Extracted archive does not look like a Papital ERP source tree (missing package.json/server.ts)."
+  SOURCE_DIR="$STAGE_DIR"
+fi
+
+if [ -n "$SOURCE_DIR" ]; then
+  [ -d "$SOURCE_DIR" ] || die "Source directory not found: $SOURCE_DIR"
+  [ -f "$SOURCE_DIR/package.json" ] && [ -f "$SOURCE_DIR/server.ts" ] \
+    || die "Source directory does not look like an application source tree (missing package.json/server.ts)."
+  UPDATE_MODE="manual"
+  log "Update mode: MANUAL (source directory: $SOURCE_DIR)"
+else
+  UPDATE_MODE="git"
+  log "Update mode: GIT (git pull --ff-only)"
+fi
 
 if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
@@ -45,9 +90,33 @@ else
   warn "Backup skipped by --no-backup flag."
 fi
 
-# ---------- 2) Pull latest source ----------
-log "[2/6] Pulling latest source (git pull --ff-only)..."
-git pull --ff-only || die "git pull failed (local changes or divergence). Resolve manually, then re-run."
+# ---------- 2) Update source ----------
+if [ "$UPDATE_MODE" = "git" ]; then
+  log "[2/6] Pulling latest source (git pull --ff-only)..."
+  git pull --ff-only || die "git pull failed (local changes or divergence). Resolve manually, then re-run."
+else
+  log "[2/6] Syncing source from $SOURCE_DIR (state-preserving rsync)..."
+  command -v rsync >/dev/null 2>&1 || die "rsync is required for manual updates (apt-get install -y rsync)."
+  # Preserve live state: .env, git history, logs, uploads, backups, db data, node_modules, dist, installer logs
+  rsync -a \
+    --exclude='.env' \
+    --exclude='.git/' \
+    --exclude='logs/' \
+    --exclude='install-*.log' \
+    --exclude='update-*.log' \
+    --exclude='domain-setup-*.log' \
+    --exclude='.pgdata/' \
+    --exclude='backups/' \
+    --exclude='public/uploads/' \
+    --exclude='node_modules/' \
+    --exclude='dist/' \
+    --exclude='*.zip' \
+    "$SOURCE_DIR"/ "$APP_DIR"/ || die "Source sync failed. Live installation is untouched — investigate and retry."
+  if [ -n "$SOURCE_ZIP" ]; then
+    rm -rf "${STAGE_DIR:-}" && success "Temporary extraction directory removed."
+  fi
+  success "Source synced."
+fi
 
 # ---------- 3) Install & build ----------
 log "[3/6] Installing dependencies (npm ci)..."
