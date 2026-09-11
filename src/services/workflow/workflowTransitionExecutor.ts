@@ -192,6 +192,31 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
+   * Helper to detect negative / rejection / cancellation transitions
+   */
+  static isNegativeTransition(actionKey?: string | null, title?: string | null): boolean {
+    const ak = (actionKey || '').toLowerCase().trim();
+    const t = (title || '').toLowerCase().trim();
+    return (
+      ak === 'reject' ||
+      ak === 'cancel' ||
+      ak === 'fail' ||
+      ak.startsWith('reject_') ||
+      ak.endsWith('_reject') ||
+      ak.startsWith('cancel_') ||
+      ak.endsWith('_cancel') ||
+      ak === 'qc_fail' ||
+      ak.includes('reject') ||
+      ak.includes('cancel') ||
+      t.includes('رد ') ||
+      t.startsWith('رد') ||
+      t.includes('لغو') ||
+      t.includes('مخالفت') ||
+      t.includes('عدم تایید')
+    );
+  }
+
+  /**
    * Refresh pending approvals & tasks when instance state advances
    */
   static async refreshPendingApprovals(instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm) {
@@ -219,15 +244,22 @@ export class WorkflowTransitionExecutor {
         eq(workflowTransitions.fromStateId, newStateId)
       ));
 
-    for (const tr of transitions) {
+    // 3. Consolidated Pending Approvals & Task Cards:
+    // Do NOT generate duplicate cards/tasks for rejection/cancellation actions.
+    // The single approval/review card provides both approve and reject choices in its modal popup.
+    const forwardTransitions = transitions.filter(tr => !WorkflowTransitionExecutor.isNegativeTransition(tr.actionKey, tr.title));
+    const itemsToCreate = forwardTransitions.length > 0 ? forwardTransitions : transitions;
+
+    for (const tr of itemsToCreate) {
       await txExecutor.insert(workflowPendingApprovals).values({
         instanceId,
         transitionId: tr.id,
         assignedRole: tr.requiredRole || '',
         createdAt: new Date().toISOString()
       });
+    }
 
-      // Also create corresponding workflow task
+    for (const tr of itemsToCreate) {
       await txExecutor.insert(workflowTasks).values({
         instanceId,
         transitionId: tr.id,

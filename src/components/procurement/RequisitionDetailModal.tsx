@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   X, FileText, CheckCircle2, Clock, AlertTriangle, Building2, 
-  ShoppingCart, ArrowRight, UserCheck, Check, Ban, Loader2, Link2, ExternalLink
+  ShoppingCart, ArrowRight, UserCheck, Check, Ban, Loader2, Link2, ExternalLink,
+  PackageCheck, Truck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PurchaseRequisition, Item, User } from '../../types';
+import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 
@@ -29,8 +30,78 @@ export function RequisitionDetailModal({
 }: RequisitionDetailModalProps) {
   const [comment, setComment] = useState('');
   const [isActing, setIsActing] = useState(false);
+  const [linkedOrders, setLinkedOrders] = useState<ProcurementOrder[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
+
+  const loadLinkedOrders = useCallback(async () => {
+    if (!requisition?.id) return;
+    setIsLoadingOrders(true);
+    try {
+      const res = await fetchJson<{ success: boolean; data: ProcurementOrder[] }>(`/api/procurement/orders?requisitionId=${requisition.id}`);
+      if (res?.data) {
+        setLinkedOrders(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  }, [requisition?.id]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadLinkedOrders();
+    }
+  }, [isOpen, loadLinkedOrders]);
 
   if (!isOpen) return null;
+
+  const handleDeliverLinkedOrder = async (orderId: number, orderRef: string) => {
+    if (!window.confirm(`آیا از تایید تحویل فاکتور خرید شماره ${orderRef} به انبار و صدور رسید قطعی انبار اطمینان دارید؟`)) {
+      return;
+    }
+
+    setDeliveringOrderId(orderId);
+    try {
+      const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${orderId}/deliver`, {
+        method: 'POST'
+      });
+      toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
+      await loadLinkedOrders();
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'خطا در تحویل فاکتور خرید');
+    } finally {
+      setDeliveringOrderId(null);
+    }
+  };
+
+  const handleDeliverAllOrdersToWarehouse = async () => {
+    const draftOrders = linkedOrders.filter(o => o.status !== 'final');
+    if (draftOrders.length === 0 && linkedOrders.length === 0) {
+      toast.error('ابتدا باید با کلیک بر روی دکمه «تفکیک تامین‌کننده و صدور پیش‌فاکتور»، فاکتور خرید صادر شود.');
+      return;
+    }
+
+    if (!window.confirm(`آیا از تحویل کلیه اقلام فاکتورهای این درخواست (${formatPersianNumber(draftOrders.length)} فاکتور) به انبار اطمینان دارید؟`)) {
+      return;
+    }
+
+    setIsActing(true);
+    try {
+      for (const ord of draftOrders) {
+        await fetchJson(`/api/procurement/orders/${ord.id}/deliver`, { method: 'POST' });
+      }
+      toast.success('کلیه فاکتورهای خرید با موفقیت به انبار تحویل گردید و موجودی کاردکس به‌روز شد.');
+      onRefresh();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || 'خطا در تحویل اقلام به انبار');
+    } finally {
+      setIsActing(false);
+    }
+  };
 
   const handleWorkflowAction = async (actionKey: string) => {
     setIsActing(true);
@@ -301,6 +372,111 @@ export function RequisitionDetailModal({
             </div>
           </div>
 
+          {/* Linked Invoices & Warehouse Receipts */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-sky-600" />
+                <span className="font-bold text-slate-900 text-xs">
+                  فاکتورهای خرید صادره و وضعیت تحویل انبار ({formatPersianNumber(linkedOrders.length)} فاکتور)
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-500">تفکیک فاکتور خرید بر اساس هر تامین‌کننده</span>
+            </div>
+
+            {isLoadingOrders ? (
+              <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-500">
+                <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
+                در حال بارگذاری اطلاعات فاکتورهای متناظر...
+              </div>
+            ) : linkedOrders.length === 0 ? (
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>هنوز فاکتور خریدی برای این درخواست صادر نشده است.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenSplitOrder(requisition)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  صدور فاکتور تامین‌کننده
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {linkedOrders.map(order => {
+                  const isDelivered = order.status === 'final';
+                  const isDelivering = deliveringOrderId === order.id;
+
+                  return (
+                    <div
+                      key={order.id}
+                      className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        isDelivered
+                          ? 'bg-emerald-50/50 border-emerald-200'
+                          : 'bg-white border-slate-200 shadow-2xs'
+                      }`}
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-xs text-slate-900">
+                            فاکتور خرید #{order.orderNumber}
+                          </span>
+                          <span className="font-bold text-xs text-slate-700">
+                            تامین‌کننده: {order.supplierName}
+                          </span>
+                          {order.orderDate && (
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              ({order.orderDate})
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-500 truncate">
+                          اقلام:{' '}
+                          {Array.isArray(order.items)
+                            ? order.items
+                                .map(i => `${i.itemName} (${formatPersianNumber(i.quantity)} ${i.unit || ''})`)
+                                .join('، ')
+                            : '---'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <span className="font-mono font-bold text-xs text-slate-900 ml-2">
+                          {formatPersianPrice(order.totalAmount || 0)} ریال
+                        </span>
+
+                        {isDelivered ? (
+                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 rounded-lg font-bold text-xs flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            تحویل انبار شده (رسید قطعی)
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isDelivering || isActing}
+                            onClick={() => handleDeliverLinkedOrder(order.id, order.orderNumber)}
+                            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors disabled:opacity-50"
+                          >
+                            {isDelivering ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <PackageCheck className="w-3.5 h-3.5" />
+                            )}
+                            تایید تحویل به انبار
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Workflow Action Section */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -364,10 +540,14 @@ export function RequisitionDetailModal({
                   <button
                     type="button"
                     disabled={isActing}
-                    onClick={() => handleWorkflowAction('receive_items')}
+                    onClick={handleDeliverAllOrdersToWarehouse}
                     className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
+                    {isActing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
                     تایید خرید و تحویل کلیه اقلام به انبار
                   </button>
 

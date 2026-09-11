@@ -33,9 +33,13 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: npm
-    - name: Install
-      run: npm ci
+    - name: Install dependencies
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          npm install --no-audit --no-fund
+        fi
     - name: Lint & type check (tsc --noEmit)
       run: npm run lint
     - name: Run tests
@@ -43,6 +47,7 @@ jobs:
         DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
         JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
         NODE_ENV: test
+        ERP_ALLOW_TEST_CLEANUP: '1'
       run: npm test
 
   build:
@@ -54,8 +59,13 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: npm
-    - run: npm ci
+    - name: Install dependencies
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          npm install --no-audit --no-fund
+        fi
     - name: Build (vite client + esbuild server bundle)
       run: npm run build
     - name: Upload build artifacts
@@ -102,6 +112,7 @@ jobs:
   smoke-test-staging:
     needs: deploy-staging
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging' && secrets.STAGING_ADMIN_TOKEN != ''
     steps:
     - uses: actions/checkout@v4
     - name: Run smoke tests

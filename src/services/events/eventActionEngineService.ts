@@ -241,6 +241,117 @@ export class EventActionEngineService {
     }
   }
 
+  private static async executeInAppNotificationAction(
+    rule: typeof eventActionRules.$inferSelect,
+    event: BaseDomainEvent,
+    notifConfig: InAppNotificationConfig
+  ): Promise<unknown> {
+    const title = this.interpolateTemplate(notifConfig.titleTemplate || 'اعلان رویداد سازمانی', event);
+    const message = this.interpolateTemplate(notifConfig.messageTemplate || '', event);
+    const link = notifConfig.linkTemplate ? this.interpolateTemplate(notifConfig.linkTemplate, event) : '';
+    const notifType = notifConfig.notifType || 'system';
+
+    const targetUserIds: number[] = [];
+
+    if (notifConfig.targetUserId) {
+      targetUserIds.push(notifConfig.targetUserId);
+    } else if (notifConfig.targetRole) {
+      const matchedUsers = await orm.select({ id: users.id })
+        .from(users)
+        .where(eq(users.role, notifConfig.targetRole));
+      matchedUsers.forEach(u => targetUserIds.push(u.id));
+    } else {
+      const adminUsers = await orm.select({ id: users.id })
+        .from(users)
+        .where(eq(users.role, 'admin'));
+      adminUsers.forEach(u => targetUserIds.push(u.id));
+    }
+
+    if (targetUserIds.length === 0) {
+      return { deliveredCount: 0, reason: 'هیچ کاربری با نقش مشخص‌شده یافت نشد.' };
+    }
+
+    for (const uId of targetUserIds) {
+      await orm.insert(notifications).values({
+        userId: uId,
+        senderId: event.metadata?.userId || null,
+        senderName: event.metadata?.userName || 'موتور رویدادها',
+        type: notifType,
+        title,
+        message,
+        link,
+        isRead: 0
+      });
+    }
+
+    return { deliveredCount: targetUserIds.length, targetUserIds, title, message, link };
+  }
+
+  private static async executeWorkflowTriggerAction(
+    rule: typeof eventActionRules.$inferSelect,
+    event: BaseDomainEvent,
+    wfConfig: WorkflowTriggerConfig
+  ): Promise<unknown> {
+    const entityId = this.resolveField(wfConfig.entityIdField, event) || event.aggregateId;
+    const comment = wfConfig.commentTemplate
+      ? this.interpolateTemplate(wfConfig.commentTemplate, event)
+      : `تحریک خودکار بر پایه رویداد ${event.eventType}`;
+
+    return {
+      workflowCode: wfConfig.workflowCode,
+      entityType: wfConfig.entityType,
+      entityId: String(entityId),
+      comment,
+      triggered: true,
+      note: 'فرآیند با موفقیت جهت شروع/انتقال در صف قرار گرفت.'
+    };
+  }
+
+  private static async executeSmsSimulationAction(
+    rule: typeof eventActionRules.$inferSelect,
+    event: BaseDomainEvent,
+    smsConfig: SmsSimulationConfig
+  ): Promise<unknown> {
+    const recipientPhone = this.interpolateTemplate(smsConfig.recipientPhoneTemplate || '', event);
+    const message = this.interpolateTemplate(smsConfig.messageTemplate || '', event);
+    const senderLine = smsConfig.senderLine || '983000xxxx';
+
+    logger.info(`[SMS Dispatch Simulation] To: ${recipientPhone} | Line: ${senderLine} | Text: "${message}"`);
+    return {
+      simulated: true,
+      recipientPhone,
+      senderLine,
+      message,
+      dispatchStatus: 'SENT_TO_GATEWAY',
+      simulatedGatewayId: `sms_${Date.now()}`
+    };
+  }
+
+  private static async executeAuditLogAction(
+    rule: typeof eventActionRules.$inferSelect,
+    event: BaseDomainEvent,
+    auditConfig: AuditLogActionConfig
+  ): Promise<unknown> {
+    const description = this.interpolateTemplate(auditConfig.descriptionTemplate || '', event);
+
+    await logActivity({
+      userId: event.metadata?.userId || 0,
+      username: event.metadata?.userName || 'AutoActionEngine',
+      action: 'CREATE',
+      entity: auditConfig.category || `قانون:${rule.name}`,
+      entityId: String(event.aggregateId),
+      description,
+      details: {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        tag: auditConfig.tag,
+        event
+      }
+    });
+
+    return { logged: true, description, category: auditConfig.category };
+  }
+
   public static async executeAction(
     rule: typeof eventActionRules.$inferSelect,
     event: BaseDomainEvent
@@ -253,9 +364,6 @@ export class EventActionEngineService {
       let resultData: unknown = {};
 
       switch (actionType) {
-        // -------------------------------------------------------------
-        // 1. Webhook Execution
-        // -------------------------------------------------------------
         case 'webhook': {
           const webhookConfig = config as unknown as WebhookActionConfig;
           const webhookOutcome = await this.executeWebhookAction(rule, event, webhookConfig, startTime);
@@ -266,117 +374,23 @@ export class EventActionEngineService {
           break;
         }
 
-        // -------------------------------------------------------------
-        // 2. In-App Notification Generation
-        // -------------------------------------------------------------
         case 'in_app_notification': {
-          const notifConfig = config as unknown as InAppNotificationConfig;
-          const title = this.interpolateTemplate(notifConfig.titleTemplate || 'اعلان رویداد سازمانی', event);
-          const message = this.interpolateTemplate(notifConfig.messageTemplate || '', event);
-          const link = notifConfig.linkTemplate ? this.interpolateTemplate(notifConfig.linkTemplate, event) : '';
-          const notifType = notifConfig.notifType || 'system';
-
-          const targetUserIds: number[] = [];
-
-          if (notifConfig.targetUserId) {
-            targetUserIds.push(notifConfig.targetUserId);
-          } else if (notifConfig.targetRole) {
-            // Find all users with this role
-            const matchedUsers = await orm.select({ id: users.id })
-              .from(users)
-              .where(eq(users.role, notifConfig.targetRole));
-            matchedUsers.forEach(u => targetUserIds.push(u.id));
-          } else {
-            // Default to all admins
-            const adminUsers = await orm.select({ id: users.id })
-              .from(users)
-              .where(eq(users.role, 'admin'));
-            adminUsers.forEach(u => targetUserIds.push(u.id));
-          }
-
-          if (targetUserIds.length === 0) {
-            resultData = { deliveredCount: 0, reason: 'هیچ کاربری با نقش مشخص‌شده یافت نشد.' };
-          } else {
-            for (const uId of targetUserIds) {
-              await orm.insert(notifications).values({
-                userId: uId,
-                senderId: event.metadata?.userId || null,
-                senderName: event.metadata?.userName || 'موتور رویدادها',
-                type: notifType,
-                title,
-                message,
-                link,
-                isRead: 0
-              });
-            }
-            resultData = { deliveredCount: targetUserIds.length, targetUserIds, title, message, link };
-          }
+          resultData = await this.executeInAppNotificationAction(rule, event, config as unknown as InAppNotificationConfig);
           break;
         }
 
-        // -------------------------------------------------------------
-        // 3. Workflow Trigger
-        // -------------------------------------------------------------
         case 'workflow_trigger': {
-          const wfConfig = config as unknown as WorkflowTriggerConfig;
-          const entityId = this.resolveField(wfConfig.entityIdField, event) || event.aggregateId;
-          const comment = wfConfig.commentTemplate ? this.interpolateTemplate(wfConfig.commentTemplate, event) : `تحریک خودکار بر پایه رویداد ${event.eventType}`;
-
-          resultData = {
-            workflowCode: wfConfig.workflowCode,
-            entityType: wfConfig.entityType,
-            entityId: String(entityId),
-            comment,
-            triggered: true,
-            note: 'فرآیند با موفقیت جهت شروع/انتقال در صف قرار گرفت.'
-          };
+          resultData = await this.executeWorkflowTriggerAction(rule, event, config as unknown as WorkflowTriggerConfig);
           break;
         }
 
-        // -------------------------------------------------------------
-        // 4. SMS Simulation
-        // -------------------------------------------------------------
         case 'sms_simulation': {
-          const smsConfig = config as unknown as SmsSimulationConfig;
-          const recipientPhone = this.interpolateTemplate(smsConfig.recipientPhoneTemplate || '', event);
-          const message = this.interpolateTemplate(smsConfig.messageTemplate || '', event);
-          const senderLine = smsConfig.senderLine || '983000xxxx';
-
-          logger.info(`[SMS Dispatch Simulation] To: ${recipientPhone} | Line: ${senderLine} | Text: "${message}"`);
-          resultData = {
-            simulated: true,
-            recipientPhone,
-            senderLine,
-            message,
-            dispatchStatus: 'SENT_TO_GATEWAY',
-            simulatedGatewayId: `sms_${Date.now()}`
-          };
+          resultData = await this.executeSmsSimulationAction(rule, event, config as unknown as SmsSimulationConfig);
           break;
         }
 
-        // -------------------------------------------------------------
-        // 5. Audit Log Entry
-        // -------------------------------------------------------------
         case 'audit_log': {
-          const auditConfig = config as unknown as AuditLogActionConfig;
-          const description = this.interpolateTemplate(auditConfig.descriptionTemplate || '', event);
-
-          await logActivity({
-            userId: event.metadata?.userId || 0,
-            username: event.metadata?.userName || 'AutoActionEngine',
-            action: 'CREATE',
-            entity: auditConfig.category || `قانون:${rule.name}`,
-            entityId: String(event.aggregateId),
-            description,
-            details: {
-              ruleId: rule.id,
-              ruleName: rule.name,
-              tag: auditConfig.tag,
-              event
-            }
-          });
-
-          resultData = { logged: true, description, category: auditConfig.category };
+          resultData = await this.executeAuditLogAction(rule, event, config as unknown as AuditLogActionConfig);
           break;
         }
 

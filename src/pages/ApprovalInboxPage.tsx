@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   useWorkflowInboxQuery, 
   useExecuteTransitionMutation,
@@ -258,39 +258,57 @@ export const ApprovalInboxPage: React.FC = () => {
     refetchStats();
   };
 
-  const filteredItems = items.filter((item) => {
-    if (!item) return false;
-    const itemEntityType = item.instance?.entityType || item.entityType || 'document';
-    const itemEntityId = item.instance?.entityId || item.entityId || '';
-    if (activeTab !== 'all' && itemEntityType !== activeTab) {
-      return false;
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      const entityIdMatch = String(itemEntityId).toLowerCase().includes(q);
-      const defMatch = item.definition?.title?.toLowerCase().includes(q);
-      const stateMatch = item.currentState?.title?.toLowerCase().includes(q);
-      return entityIdMatch || defMatch || stateMatch;
-    }
-    return true;
-  });
+  const filteredItems = useMemo(() => {
+    const seenInstances = new Set<number | string>();
+    return items.filter((item) => {
+      if (!item) return false;
+      const instId = item.instance?.id || item.id;
+      if (instId && seenInstances.has(instId)) {
+        return false;
+      }
+      if (instId) seenInstances.add(instId);
 
-  const filteredTasks = myTasks.filter((t) => {
-    if (!t) return false;
-    const tEntityType = t.instance?.entityType || t.entityType || 'document';
-    const tEntityId = t.instance?.entityId || t.entityId || '';
-    if (activeTab !== 'all' && tEntityType !== activeTab) {
-      return false;
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      const titleMatch = t.title?.toLowerCase().includes(q);
-      const descMatch = t.description?.toLowerCase().includes(q);
-      const entityIdMatch = String(tEntityId).toLowerCase().includes(q);
-      return titleMatch || descMatch || entityIdMatch;
-    }
-    return true;
-  });
+      const itemEntityType = item.instance?.entityType || item.entityType || 'document';
+      const itemEntityId = item.instance?.entityId || item.entityId || '';
+      if (activeTab !== 'all' && itemEntityType !== activeTab) {
+        return false;
+      }
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const entityIdMatch = String(itemEntityId).toLowerCase().includes(q);
+        const defMatch = item.definition?.title?.toLowerCase().includes(q);
+        const stateMatch = item.currentState?.title?.toLowerCase().includes(q);
+        return entityIdMatch || defMatch || stateMatch;
+      }
+      return true;
+    });
+  }, [items, activeTab, search]);
+
+  const filteredTasks = useMemo(() => {
+    const seenInstances = new Set<number | string>();
+    return myTasks.filter((t) => {
+      if (!t) return false;
+      const instId = t.instanceId || t.instance?.id;
+      if (instId && seenInstances.has(instId)) {
+        return false;
+      }
+      if (instId) seenInstances.add(instId);
+
+      const tEntityType = t.instance?.entityType || t.entityType || 'document';
+      const tEntityId = t.instance?.entityId || t.entityId || '';
+      if (activeTab !== 'all' && tEntityType !== activeTab) {
+        return false;
+      }
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const titleMatch = t.title?.toLowerCase().includes(q);
+        const descMatch = t.description?.toLowerCase().includes(q);
+        const entityIdMatch = String(tEntityId).toLowerCase().includes(q);
+        return titleMatch || descMatch || entityIdMatch;
+      }
+      return true;
+    });
+  }, [myTasks, activeTab, search]);
 
   const handleExecuteTransition = () => {
     if (!selectedItem) return;

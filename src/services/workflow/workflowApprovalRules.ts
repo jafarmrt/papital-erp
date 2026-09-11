@@ -90,10 +90,26 @@ export class WorkflowApprovalRules {
     .where(eq(workflowTasks.status, targetStatus))
     .orderBy(desc(workflowTasks.createdAt));
 
+    // Consolidate per instance: Ensure at most ONE task card is returned per workflow instance.
+    const seenInstances = new Set<number>();
     const filteredTasks = [];
-    for (const item of allTasks) {
+    
+    // Sort so forward tasks are processed before negative tasks
+    const sortedTasks = [...allTasks].sort((a, b) => {
+      const aNeg = WorkflowTransitionExecutor.isNegativeTransition(undefined, a.task.title);
+      const bNeg = WorkflowTransitionExecutor.isNegativeTransition(undefined, b.task.title);
+      if (aNeg && !bNeg) return 1;
+      if (!aNeg && bNeg) return -1;
+      return 0;
+    });
+
+    for (const item of sortedTasks) {
       const task = item.task;
       const instance = item.instance;
+
+      if (seenInstances.has(task.instanceId)) {
+        continue;
+      }
 
       let isAssigned = false;
       let delegationInfo: Record<string, unknown> | null = null;
@@ -123,6 +139,7 @@ export class WorkflowApprovalRules {
       }
 
       if (isAssigned) {
+        seenInstances.add(task.instanceId);
         const context = await getEntityContext(instance.entityType, instance.entityId);
         filteredTasks.push({
           ...task,
@@ -272,10 +289,31 @@ export class WorkflowApprovalRules {
         throw new Error('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر).');
       }
 
+      // Dynamically resolve target transition matching user's action ('approve' vs 'reject')
+      let effectiveTransitionId = task.transitionId;
+      const stateTransitions = await tx.select()
+        .from(workflowTransitions)
+        .where(and(
+          eq(workflowTransitions.workflowDefinitionId, instance.workflowDefinitionId),
+          eq(workflowTransitions.fromStateId, instance.currentStateId)
+        ));
+
+      if (params.action === 'reject') {
+        const rejectTr = stateTransitions.find(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
+        if (rejectTr) {
+          effectiveTransitionId = rejectTr.id;
+        }
+      } else {
+        const approveTr = stateTransitions.find(t => !WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
+        if (approveTr) {
+          effectiveTransitionId = approveTr.id;
+        }
+      }
+
       // Execute transition through core executor
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
         instanceId: task.instanceId,
-        transitionId: task.transitionId,
+        transitionId: effectiveTransitionId,
         userId: params.userId,
         userName: params.userName,
         userRole: params.userRole,
@@ -328,15 +366,36 @@ export class WorkflowApprovalRules {
     const userRoles = roleNames.map(r => r.toLowerCase());
     const isAdmin = userRoles.includes('admin');
 
-    const pendingList = await orm.select({
+    const rawPendingList = await orm.select({
       approval: workflowPendingApprovals,
-      instance: workflowInstances
+      instance: workflowInstances,
+      transition: workflowTransitions
     })
     .from(workflowPendingApprovals)
-    .innerJoin(workflowInstances, eq(workflowPendingApprovals.instanceId, workflowInstances.id));
+    .innerJoin(workflowInstances, eq(workflowPendingApprovals.instanceId, workflowInstances.id))
+    .leftJoin(workflowTransitions, eq(workflowPendingApprovals.transitionId, workflowTransitions.id));
+
+    // Consolidate per workflow instance: Ensure only ONE approval card is shown per instance in the inbox.
+    // If an instance has both forward approval and negative rejection actions, prioritize the forward action.
+    const instanceMap = new Map<number, typeof rawPendingList[0]>();
+    for (const item of rawPendingList) {
+      const instId = item.instance.id;
+      const isNeg = WorkflowTransitionExecutor.isNegativeTransition(item.transition?.actionKey, item.transition?.title);
+      const existing = instanceMap.get(instId);
+      if (!existing) {
+        instanceMap.set(instId, item);
+      } else {
+        const existingIsNeg = WorkflowTransitionExecutor.isNegativeTransition(existing.transition?.actionKey, existing.transition?.title);
+        if (existingIsNeg && !isNeg) {
+          instanceMap.set(instId, item);
+        }
+      }
+    }
+
+    const consolidatedPendingList = Array.from(instanceMap.values());
 
     const matched = [];
-    for (const item of pendingList) {
+    for (const item of consolidatedPendingList) {
       const app = item.approval;
       const inst = item.instance;
 

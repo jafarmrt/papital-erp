@@ -177,4 +177,45 @@ router.post('/consolidate', authorize('procurement.manage', 'procurement_officer
   });
 }));
 
+/**
+ * GET /api/procurement/orders
+ * List purchase orders / invoices created through procurement
+ */
+router.get('/orders', authorize('procurement.view', 'procurement_officer', 'manager', 'admin', 'projects.view'), asyncHandler(async (req, res) => {
+  const { status, requisitionId, search, page, limit } = req.query;
+
+  const result = await ProcurementService.getProcurementOrders({
+    status: status ? String(status) : undefined,
+    requisitionId: requisitionId ? Number(requisitionId) : undefined,
+    search: search ? String(search) : undefined,
+    page: page ? Number(page) : 1,
+    limit: limit ? Number(limit) : 50
+  });
+
+  res.json({
+    success: true,
+    data: result.data,
+    total: result.total,
+    page: Number(page) || 1,
+    limit: Number(limit) || 50
+  });
+}));
+
+/**
+ * POST /api/procurement/orders/:id/deliver
+ * Deliver a purchase order/invoice to warehouse (finalizes document, increases stock, updates Kardex)
+ */
+router.post('/orders/:id/deliver', authorize('procurement.order', 'procurement.manage', 'procurement_officer', 'manager', 'admin'), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) throw new ValidationError('شناسه سند نامعتبر است.');
+
+  const result = await ProcurementService.deliverOrderToWarehouse(id, {
+    id: req.user.id,
+    username: req.user.username,
+    role: req.user.role
+  });
+
+  res.json(result);
+}));
+
 export default router;

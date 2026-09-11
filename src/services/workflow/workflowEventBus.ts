@@ -6,6 +6,9 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { DocumentService } from '../document.service.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { BankAccountService } from '../accounting/treasury/bankAccount.service.js';
+import { orm } from '../../db/drizzle.js';
+import { purchaseRequisitions } from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 export interface WorkflowTransitionEventPayload {
   instanceId: number;
@@ -167,6 +170,19 @@ export function registerWorkflowListeners() {
             username: payload.performedByName || 'تایید خودکار گردش‌کار'
           });
           logger.info(`[WorkflowEventBus AutoAction] Treasury opening voucher for #${payload.entityId} issued.`);
+        }
+      } else if (payload.entityType === 'purchase_requisition') {
+        const reqId = Number(payload.entityId);
+        if (!isNaN(reqId) && reqId > 0) {
+          const mappedStatus = payload.toStateKey === 'ordered' ? 'ordered'
+            : payload.toStateKey === 'received' ? 'received'
+            : payload.toStateKey === 'rejected' ? 'rejected'
+            : 'pending';
+          logger.info(`[WorkflowEventBus AutoAction] Syncing purchase requisition #${reqId} status to '${mappedStatus}'...`);
+          await orm.update(purchaseRequisitions)
+            .set({ status: mappedStatus, updatedAt: new Date().toISOString() })
+            .where(eq(purchaseRequisitions.id, reqId));
+          logger.info(`[WorkflowEventBus AutoAction] Purchase requisition #${reqId} status synced to '${mappedStatus}'.`);
         }
       } else if (payload.autoActionKey) {
         logger.info(`[WorkflowEventBus AutoAction] Executing auto action '${payload.autoActionKey}' for ${payload.entityType}:${payload.entityId}`);

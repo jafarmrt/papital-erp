@@ -1461,4 +1461,34 @@ export interface PurchaseRequisition {
   updated_at?: string;
 }
 
+export interface ProcurementOrderItem {
+  id: number;
+  itemId: number;
+  itemName: string;
+  itemCode?: string;
+  unit?: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  location?: string;
+}
+
+export interface ProcurementOrder {
+  id: number;
+  refNumber: string;
+  docType: string;
+  status: 'draft' | 'final';
+  date: string;
+  supplierName: string;
+  notes: string;
+  requisitionId?: number | null;
+  requisitionCode?: string | null;
+  projectName?: string | null;
+  location?: string;
+  totalAmount: number;
+  itemsCount: number;
+  items: ProcurementOrderItem[];
+  user?: string;
+}
+
 export type { DbTransaction, DbExecutor, AppDatabase } from './db/drizzle.js';

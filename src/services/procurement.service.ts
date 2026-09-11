@@ -1,6 +1,6 @@
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, workflowInstances, workflowTransitions } from '../db/schema.js';
+import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions } from '../db/schema.js';
 import { resolveJalaliFiscalYear } from '../lib/businessClock.js';
 import { getTodayJalaliDate } from '../utils.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -8,7 +8,7 @@ import { logger } from '../middleware/logger.js';
 import { ValidationError, NotFoundError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecutor.js';
 import { DocumentService } from './document.service.js';
-import type { PurchaseRequisition, PurchaseRequisitionItemRow } from '../types.js';
+import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 
 type DbClient = DbExecutor;
 
@@ -396,6 +396,34 @@ export class ProcurementService {
 
     const transitions = ((wfInst.snapshotDsl as any)?.transitions as any[]) || 
       await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
+    const states = ((wfInst.snapshotDsl as any)?.states as any[]) ||
+      await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
+
+    // Auto-heal / synchronize workflow instance state if desynchronized from requisition business status
+    const statusToStateKeyMap: Record<string, string> = {
+      pending: 'pending',
+      under_review: 'pending',
+      manager_approval: 'pending',
+      ordered: 'ordered',
+      approved: 'ordered',
+      received: 'received',
+      completed: 'received',
+      rejected: 'rejected',
+      cancelled: 'rejected'
+    };
+    const expectedStateKey = statusToStateKeyMap[req.status] || 'pending';
+    const currentStateObj = states.find((s: any) => s.id === wfInst.currentStateId);
+
+    if (currentStateObj && currentStateObj.stateKey !== expectedStateKey) {
+      const correctState = states.find((s: any) => s.stateKey === expectedStateKey);
+      if (correctState) {
+        await orm.update(workflowInstances).set({
+          currentStateId: correctState.id,
+          updatedAt: new Date().toISOString()
+        }).where(eq(workflowInstances.id, wfInst.id));
+        wfInst.currentStateId = correctState.id;
+      }
+    }
 
     const ACTION_KEY_ALIASES: Record<string, string[]> = {
       mark_received: ['receive_items', 'mark_received', 'receive'],
@@ -415,12 +443,24 @@ export class ProcurementService {
 
     const targetActionKeys = ACTION_KEY_ALIASES[actionKey] || [actionKey];
 
+    // Find valid transition from current state only (never pick a transition with mismatched fromStateId)
     let matchedTransition = transitions.find(t => 
       targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
-    ) || transitions.find(t => targetActionKeys.includes(t.actionKey));
+    );
 
+    // If receiving items while still at pending, auto-advance to ordered state first so receive_items can execute
     if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
-      matchedTransition = transitions.find(t => t.actionKey === 'receive_items' || t.actionKey === 'mark_received');
+      const orderedState = states.find((s: any) => s.stateKey === 'ordered');
+      if (orderedState && wfInst.currentStateId !== orderedState.id) {
+        await orm.update(workflowInstances).set({
+          currentStateId: orderedState.id,
+          updatedAt: new Date().toISOString()
+        }).where(eq(workflowInstances.id, wfInst.id));
+        wfInst.currentStateId = orderedState.id;
+        matchedTransition = transitions.find(t => 
+          targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === orderedState.id)
+        );
+      }
     }
 
     let mappedStatus = req.status;
@@ -481,6 +521,77 @@ export class ProcurementService {
         remainingQty: 0,
         status: 'received'
       }));
+
+      // 1. Finalize all linked draft/proforma purchase documents to increase warehouse stock and write Kardex
+      const docIdsToFinalize = new Set<number>();
+      for (const it of (req.items || [])) {
+        if (Array.isArray(it.linkedDocumentIds)) {
+          for (const id of it.linkedDocumentIds) {
+            const numId = Number(id);
+            if (numId > 0) docIdsToFinalize.add(numId);
+          }
+        }
+      }
+
+      const relatedDocs = await orm.select().from(documents).where(and(
+        ilike(documents.notes, `%${req.code}%`),
+        eq(documents.isDeleted, 0)
+      ));
+      for (const rd of relatedDocs) {
+        if (rd.status !== 'final') {
+          docIdsToFinalize.add(rd.id);
+        }
+      }
+
+      for (const docId of docIdsToFinalize) {
+        try {
+          await DocumentService.finalizeDocument(docId, user.username || 'سیستم تدارکات');
+        } catch (err: any) {
+          logger.warn({ message: `[Procurement] Error finalizing linked document #${docId}: ${err.message}` });
+        }
+      }
+
+      // 2. For any items never converted to a document, auto-generate a finalized warehouse receipt document
+      const unhandledItems = (req.items || []).filter(i => {
+        const hasDocs = Array.isArray(i.linkedDocumentIds) && i.linkedDocumentIds.length > 0;
+        return !hasDocs && i.itemId && Number(i.requestedQty || 0) > 0;
+      });
+
+      if (unhandledItems.length > 0) {
+        try {
+          const docLines = unhandledItems.map(i => ({
+            itemId: i.itemId,
+            quantity: Number(i.requestedQty),
+            unit_price: Number(i.unitPriceEstimate || 0),
+            discount: 0,
+            location: 'انبار اصلی'
+          }));
+
+          const newDocId = await DocumentService.createDocument({
+            docType: 'receipt',
+            date: getTodayJalaliDate(),
+            status: 'final',
+            buyer_name: 'تامین‌کننده تدارکات',
+            notes: `[تدارکات: تحویل مستقیم به انبار] درخواست ${req.code} ${req.projectName ? `[پروژه: ${req.projectName}]` : ''}`.trim(),
+            location: 'انبار اصلی',
+            inOut: 'in',
+            currency: 'IRR',
+            user: user.username || 'کارشناس تدارکات',
+            items: docLines
+          });
+
+          // Link newDocId to these items
+          updatedItems = updatedItems.map(it => {
+            if (unhandledItems.some(u => u.id === it.id)) {
+              const prevLinked = Array.isArray(it.linkedDocumentIds) ? it.linkedDocumentIds : [];
+              return { ...it, linkedDocumentIds: [...prevLinked, newDocId] };
+            }
+            return it;
+          });
+        } catch (err: any) {
+          logger.warn({ message: `[Procurement] Error auto-generating receipt document for unhandled items: ${err.message}` });
+        }
+      }
     }
 
     const [updatedReq] = await orm.update(purchaseRequisitions)
@@ -607,6 +718,40 @@ export class ProcurementService {
       updatedAt: new Date().toISOString()
     }).where(eq(purchaseRequisitions.id, req.id)).returning();
 
+    // Keep workflow instance state synchronized with new status
+    if (newStatus === 'ordered' || newStatus === 'under_review') {
+      let wfId = req.workflowInstanceId;
+      if (!wfId) {
+        try {
+          const instance = await WorkflowTransitionExecutor.startInstance({
+            workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
+            entityType: 'purchase_requisition',
+            entityId: String(req.id),
+            userId: user.id,
+            userName: user.username
+          });
+          wfId = instance.id;
+          await orm.update(purchaseRequisitions).set({ workflowInstanceId: wfId }).where(eq(purchaseRequisitions.id, req.id));
+        } catch (wfErr: any) {
+          logger.warn({ message: `[Procurement] Error starting workflow for req #${req.id}: ${wfErr.message}` });
+        }
+      }
+      if (wfId) {
+        const [wf] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, wfId));
+        if (wf) {
+          const wStates = await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wf.workflowDefinitionId));
+          const targetStateKey = newStatus === 'ordered' ? 'ordered' : 'pending';
+          const targetState = wStates.find((s: any) => s.stateKey === targetStateKey);
+          if (targetState && wf.currentStateId !== targetState.id) {
+            await orm.update(workflowInstances).set({
+              currentStateId: targetState.id,
+              updatedAt: new Date().toISOString()
+            }).where(eq(workflowInstances.id, wf.id));
+          }
+        }
+      }
+    }
+
     await logActivity({
       userId: user.id,
       username: user.username || 'سیستم',
@@ -676,6 +821,303 @@ export class ProcurementService {
   }
 
   /**
+   * Get purchase orders/invoices created from procurement requisitions
+   */
+  static async getProcurementOrders(params: {
+    status?: string; // 'all' | 'draft' | 'final' | 'pending_delivery' | 'delivered'
+    requisitionId?: number;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: ProcurementOrder[]; total: number; page: number; limit: number }> {
+    const { status, requisitionId, search, page = 1, limit = 50 } = params;
+
+    const allCandidateDocs = await orm.select().from(documents).where(and(
+      eq(documents.isDeleted, 0),
+      or(
+        eq(documents.type, 'receipt'),
+        eq(documents.type, 'proforma'),
+        ilike(documents.notes, '%[تدارکات:%')
+      )
+    )).orderBy(desc(documents.id));
+
+    const allReqs = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.isDeleted, 0));
+    const reqCodeMap = new Map<string, typeof allReqs[0]>();
+    allReqs.forEach(r => {
+      reqCodeMap.set(r.code, r);
+    });
+
+    const filteredDocs: (typeof allCandidateDocs[0] & { _matchedReq?: typeof allReqs[0] })[] = [];
+
+    for (const doc of allCandidateDocs) {
+      let isProcurement = false;
+      let matchedReq: typeof allReqs[0] | undefined;
+
+      if (doc.notes && doc.notes.includes('[تدارکات:')) {
+        isProcurement = true;
+        const m = doc.notes.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
+        if (m) {
+          const c = m[1].trim();
+          matchedReq = reqCodeMap.get(c);
+        }
+      }
+
+      if (!isProcurement) {
+        for (const r of allReqs) {
+          if (Array.isArray(r.items) && r.items.some(it => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.includes(doc.id))) {
+            isProcurement = true;
+            matchedReq = r;
+            break;
+          }
+        }
+      }
+
+      if (!isProcurement && doc.type === 'receipt') {
+        isProcurement = true;
+      }
+
+      if (!isProcurement) continue;
+
+      if (requisitionId && matchedReq?.id !== requisitionId) {
+        continue;
+      }
+
+      if (status && status !== 'all') {
+        if (status === 'pending_delivery' || status === 'draft') {
+          if (doc.status === 'final') continue;
+        } else if (status === 'delivered' || status === 'final') {
+          if (doc.status !== 'final') continue;
+        }
+      }
+
+      if (search && search.trim()) {
+        const q = search.trim().toLowerCase();
+        const mRef = (doc.refNumber || '').toLowerCase().includes(q);
+        const mBuyer = (doc.buyerName || '').toLowerCase().includes(q);
+        const mNotes = (doc.notes || '').toLowerCase().includes(q);
+        const mReq = matchedReq ? (matchedReq.code.toLowerCase().includes(q) || matchedReq.title.toLowerCase().includes(q)) : false;
+        if (!mRef && !mBuyer && !mNotes && !mReq) continue;
+      }
+
+      const docWithReq = doc as typeof doc & { _matchedReq?: typeof allReqs[0] };
+      docWithReq._matchedReq = matchedReq;
+      filteredDocs.push(docWithReq);
+    }
+
+    const total = filteredDocs.length;
+    const offset = (page - 1) * limit;
+    const pagedDocs = filteredDocs.slice(offset, offset + limit);
+
+    if (pagedDocs.length === 0) {
+      return { data: [], total, page, limit };
+    }
+
+    const docIds = pagedDocs.map(d => d.id);
+    const lines = await orm.select().from(documentItems).where(inArray(documentItems.documentId, docIds));
+    const allItemIds = Array.from(new Set(lines.map(l => l.itemId)));
+
+    let catalogItems: any[] = [];
+    if (allItemIds.length > 0) {
+      catalogItems = await orm.select().from(items).where(inArray(items.id, allItemIds));
+    }
+    const itemMap = new Map<number, any>();
+    catalogItems.forEach(it => itemMap.set(it.id, it));
+
+    const result: ProcurementOrder[] = pagedDocs.map(doc => {
+      const docLines = lines.filter(l => l.documentId === doc.id);
+      const matchedReq = doc._matchedReq;
+
+      let projectN = matchedReq?.projectName || null;
+      if (!projectN && doc.notes) {
+        const pMatch = doc.notes.match(/\[پروژه:\s*([^\]]+)\]/);
+        if (pMatch) projectN = pMatch[1].trim();
+      }
+
+      let requisitionC = matchedReq?.code || null;
+      if (!requisitionC && doc.notes) {
+        const rMatch = doc.notes.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
+        if (rMatch) requisitionC = rMatch[1].trim();
+      }
+
+      let totalAmt = 0;
+      const mappedItems = docLines.map(l => {
+        const cat = itemMap.get(l.itemId);
+        const lineQty = Number(l.quantity || 0);
+        const linePrice = Number(l.unitPrice || 0);
+        const lineTotal = lineQty * linePrice;
+        totalAmt += lineTotal;
+
+        return {
+          id: l.id,
+          itemId: l.itemId,
+          itemName: cat?.name || `کالای کد ${l.itemId}`,
+          itemCode: cat?.code || '',
+          unit: cat?.unit || 'عدد',
+          quantity: lineQty,
+          unitPrice: linePrice,
+          totalPrice: lineTotal,
+          location: l.location || docLines[0]?.location || 'انبار اصلی'
+        };
+      });
+
+      return {
+        id: doc.id,
+        refNumber: doc.refNumber,
+        docType: doc.type,
+        status: doc.status === 'final' ? 'final' : 'draft',
+        date: doc.date,
+        supplierName: doc.buyerName || 'تامین‌کننده تدارکات',
+        notes: doc.notes || '',
+        requisitionId: matchedReq?.id || null,
+        requisitionCode: requisitionC,
+        projectName: projectN,
+        location: docLines[0]?.location || 'انبار اصلی',
+        totalAmount: totalAmt,
+        itemsCount: mappedItems.length,
+        items: mappedItems,
+        user: doc.user || 'کارشناس تدارکات'
+      };
+    });
+
+    return { data: result, total, page, limit };
+  }
+
+  /**
+   * Deliver a specific procurement purchase order to warehouse
+   * (finalizes document, increases stock, updates Kardex, and syncs requisition)
+   */
+  static async deliverOrderToWarehouse(
+    documentId: number,
+    user: { id?: number; username?: string; role?: string }
+  ): Promise<{ success: boolean; message: string }> {
+    const [doc] = await orm.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.isDeleted, 0)));
+    if (!doc) {
+      throw new NotFoundError(`سند خرید با شناسه ${documentId} یافت نشد.`);
+    }
+
+    if (doc.status === 'final') {
+      return {
+        success: true,
+        message: `سند خرید شماره ${doc.refNumber} قبلاً به انبار تحویل و نهایی شده است.`
+      };
+    }
+
+    await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات');
+
+    const matchCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
+    const reqCode = matchCode ? matchCode[1].trim() : null;
+
+    let linkedReq: any = null;
+    if (reqCode) {
+      const [r] = await orm.select().from(purchaseRequisitions).where(and(
+        eq(purchaseRequisitions.code, reqCode),
+        eq(purchaseRequisitions.isDeleted, 0)
+      ));
+      linkedReq = r;
+    }
+
+    if (!linkedReq) {
+      const allReqs = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.isDeleted, 0));
+      for (const r of allReqs) {
+        if (Array.isArray(r.items) && r.items.some((it: any) => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.includes(documentId))) {
+          linkedReq = r;
+          break;
+        }
+      }
+    }
+
+    if (linkedReq) {
+      const allDocIds = new Set<number>();
+      for (const it of (linkedReq.items || [])) {
+        if (Array.isArray(it.linkedDocumentIds)) {
+          for (const dId of it.linkedDocumentIds) {
+            allDocIds.add(Number(dId));
+          }
+        }
+      }
+      const otherDocs = await orm.select().from(documents).where(and(
+        ilike(documents.notes, `%${linkedReq.code}%`),
+        eq(documents.isDeleted, 0)
+      ));
+      for (const od of otherDocs) {
+        allDocIds.add(od.id);
+      }
+
+      let allDelivered = true;
+      if (allDocIds.size > 0) {
+        const checkDocs = await orm.select().from(documents).where(and(
+          inArray(documents.id, Array.from(allDocIds)),
+          eq(documents.isDeleted, 0)
+        ));
+        for (const cd of checkDocs) {
+          if (cd.id !== documentId && cd.status !== 'final') {
+            allDelivered = false;
+            break;
+          }
+        }
+      }
+
+      const docLines = await orm.select().from(documentItems).where(eq(documentItems.documentId, documentId));
+      const updatedReqItems = (linkedReq.items || []).map((rit: any) => {
+        const line = docLines.find(dl => dl.itemId === rit.itemId);
+        if (line) {
+          const prevRcv = Number(rit.receivedQty || 0);
+          const newRcv = prevRcv + Number(line.quantity || 0);
+          return {
+            ...rit,
+            receivedQty: newRcv,
+            remainingQty: Math.max(0, Number(rit.requestedQty || 0) - newRcv),
+            status: newRcv >= Number(rit.requestedQty || 0) ? 'received' : rit.status
+          };
+        }
+        return rit;
+      });
+
+      const nextStatus = allDelivered ? 'received' : linkedReq.status;
+      await orm.update(purchaseRequisitions).set({
+        items: updatedReqItems,
+        status: nextStatus,
+        updatedAt: new Date().toISOString()
+      }).where(eq(purchaseRequisitions.id, linkedReq.id));
+
+      if (allDelivered && linkedReq.workflowInstanceId) {
+        const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+        if (wfInst) {
+          const states = ((wfInst.snapshotDsl as any)?.states as any[]) || 
+            await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
+          const receivedState = states.find(s => s.stateKey === 'received');
+          if (receivedState) {
+            await orm.update(workflowInstances).set({
+              currentStateId: receivedState.id,
+              updatedAt: new Date().toISOString()
+            }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+          }
+        }
+      }
+    }
+
+    await logActivity({
+      userId: user.id || 1,
+      username: user.username || 'سیستم تدارکات',
+      action: 'UPDATE',
+      entity: 'document',
+      description: `تحویل فاکتور خرید ${doc.refNumber} به انبار و صدور رسید قطعی`,
+      details: {
+        operation: 'DELIVER_PROCUREMENT_ORDER',
+        documentId,
+        refNumber: doc.refNumber,
+        supplierName: doc.buyerName,
+        linkedRequisitionCode: reqCode || linkedReq?.code
+      }
+    });
+
+    return {
+      success: true,
+      message: `فاکتور خرید شماره ${doc.refNumber} (${doc.buyerName || 'تامین‌کننده'}) با موفقیت به انبار تحویل داده شد، موجودی کاردکس افزایش یافت و سند رسید قطعی انبار صادر گردید.`
+    };
+  }
+
+  /**
    * Get Procurement Desk Inbox Summary stats
    */
   static async getInboxSummary(): Promise<{
@@ -686,6 +1128,9 @@ export class ProcurementService {
     orderedCount: number;
     receivedCount: number;
     urgentCount: number;
+    pendingDeliveryOrdersCount: number;
+    deliveredOrdersCount: number;
+    totalOrdersCount: number;
   }> {
     const rows = await orm.select({
       status: purchaseRequisitions.status,
@@ -711,6 +1156,30 @@ export class ProcurementService {
       }
     }
 
+    // Also count purchase orders in pipeline
+    const procurementDocs = await orm.select({
+      id: documents.id,
+      status: documents.status
+    }).from(documents).where(and(
+      eq(documents.isDeleted, 0),
+      or(
+        eq(documents.type, 'receipt'),
+        eq(documents.type, 'proforma'),
+        ilike(documents.notes, '%[تدارکات:%')
+      )
+    ));
+
+    let pendingDeliveryOrdersCount = 0;
+    let deliveredOrdersCount = 0;
+
+    for (const d of procurementDocs) {
+      if (d.status === 'final') {
+        deliveredOrdersCount++;
+      } else {
+        pendingDeliveryOrdersCount++;
+      }
+    }
+
     return {
       totalRequisitions: rows.length,
       pendingCount,
@@ -718,7 +1187,10 @@ export class ProcurementService {
       managerApprovalCount,
       orderedCount,
       receivedCount,
-      urgentCount
+      urgentCount,
+      pendingDeliveryOrdersCount,
+      deliveredOrdersCount,
+      totalOrdersCount: procurementDocs.length
     };
   }
 }
