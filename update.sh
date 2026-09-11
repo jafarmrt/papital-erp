@@ -128,8 +128,11 @@ success "Build completed."
 # ---------- 4) Restart service ----------
 PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"
 RESTART_OK=0
+# NOTE: string matching instead of `systemctl | grep -q` — under `set -o pipefail`,
+# grep -q exits early and SIGPIPEs systemctl, making the pipeline falsely fail.
+UNIT_LIST="$(systemctl list-unit-files 2>/dev/null || true)"
 log "[5/6] Restarting service..."
-if ! systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+if [[ "$UNIT_LIST" != *"$SERVICE_NAME.service"* ]]; then
   # Auto-detect the systemd unit managing the running app (unit may have a custom name)
   RUNNING_PID="$(pgrep -f 'dist/server.cjs' | head -1 || true)"
   if [ -n "$RUNNING_PID" ]; then
@@ -140,7 +143,7 @@ if ! systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
     fi
   fi
 fi
-if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+if [[ "$UNIT_LIST" == *"$SERVICE_NAME.service"* ]]; then
   $SUDO systemctl restart "$SERVICE_NAME" && RESTART_OK=1
 elif command -v pm2 >/dev/null 2>&1 && pm2 id "$SERVICE_NAME" >/dev/null 2>&1; then
   pm2 restart "$SERVICE_NAME" && RESTART_OK=1

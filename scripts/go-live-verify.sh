@@ -69,18 +69,21 @@ echo "[1] Service state (systemd)"
 if ! command -v systemctl >/dev/null 2>&1; then
   warnc "systemctl not available — service checks skipped"
 else
-  if ! systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+  # NOTE: string matching instead of `systemctl | grep -q` — under `set -o pipefail`,
+  # grep -q exits early and SIGPIPEs systemctl, making the pipeline falsely fail.
+  UNIT_LIST="$(systemctl list-unit-files 2>/dev/null || true)"
+  if [[ "$UNIT_LIST" != *"$SERVICE_NAME.service"* ]]; then
     # Auto-detect the systemd unit managing the running app (unit may have a custom name)
     RUNNING_PID="$(pgrep -f 'dist/server.cjs' | head -1 || true)"
     if [ -n "$RUNNING_PID" ]; then
       DETECTED="$(systemctl status "$RUNNING_PID" 2>/dev/null | grep -oE '[a-zA-Z0-9_.@-]+\.service' | head -1 | sed 's/\.service$//' || true)"
       if [ -n "$DETECTED" ] && [ "$DETECTED" != "systemd" ]; then
-        warnc "No unit named '${SERVICE_NAME}' found — detected managing unit: '${DETECTED}' (align update.sh/verifier via SERVICE_NAME=<name> or rename the unit)"
+        warnc "No unit named '${SERVICE_NAME}' found — detected managing unit: '${DETECTED}' (align via SERVICE_NAME=<name> or rename the unit)"
         SERVICE_NAME="$DETECTED"
       fi
     fi
   fi
-  if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+  if [[ "$(systemctl list-unit-files 2>/dev/null || true)" == *"$SERVICE_NAME.service"* ]]; then
     [ "$(systemctl is-active "$SERVICE_NAME")" = "active" ] && ok "systemd unit active ($SERVICE_NAME)" || bad "systemd unit is not active"
     [ "$(systemctl is-enabled "$SERVICE_NAME")" = "enabled" ] && ok "systemd unit enabled on boot" || warnc "systemd unit not enabled — service won't start on reboot"
   else
