@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, 
-  FileText, AlertCircle, Loader2, ArrowDown, PackageCheck, AlertTriangle
+  FileText, AlertCircle, Loader2, ArrowDown, PackageCheck, AlertTriangle, Warehouse
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, PurchaseRequisitionItemRow, Item, Customer } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
+import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -38,6 +39,15 @@ interface SplitPackage {
   items: SplitPackageItem[];
 }
 
+const CLOSURE_REASON_OPTIONS = [
+  { value: 'complete', label: 'تطابق کامل خرید با درخواست متقاضی' },
+  { value: 'over_fulfillment', label: 'خرید مازاد بر درخواست (حداقل تیراژ تامین‌کننده / ذخیره استراتژیک انبار)' },
+  { value: 'under_market_shortage', label: 'خرید کمتر به دلیل نایابی کالا یا عدم موجودی در بازار' },
+  { value: 'under_budget_limit', label: 'خرید کمتر به دلیل سقف بودجه مصوب / افزایش ناگهانی قیمت' },
+  { value: 'under_applicant_revised', label: 'خرید کمتر با هماهنگی و تغییر نیاز متقاضی' },
+  { value: 'other', label: 'سایر موارد و توضیحات تکمیلی تدارکات' },
+];
+
 export function SplitOrderModal({
   isOpen,
   requisition,
@@ -48,6 +58,15 @@ export function SplitOrderModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suppliers, setSuppliers] = useState<Customer[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+
+  // Dynamic warehouses query
+  const { data: warehouses = [] } = useWarehousesQuery();
+  const defaultWarehouseCode = warehouses[0]?.code || 'انبار اصلی';
+
+  // Requisition closure options
+  const [closeRequisition, setCloseRequisition] = useState(true);
+  const [closureReasonType, setClosureReasonType] = useState('complete');
+  const [closureNotes, setClosureNotes] = useState('');
 
   // Fetch suppliers list from customers endpoint
   useEffect(() => {
@@ -101,7 +120,7 @@ export function SplitOrderModal({
         id: `pkg-1`,
         packageNumber: 1,
         supplierName: '',
-        targetWarehouse: 'انبار اصلی',
+        targetWarehouse: defaultWarehouseCode,
         status: 'draft',
         notes: `تفکیک سفارش خرید از درخواست ${requisition.code}`,
         items: activeItems.map(it => {
@@ -123,7 +142,17 @@ export function SplitOrderModal({
     ];
   });
 
-  if (!isOpen) return null;
+  // Keep targetWarehouse synced if warehouses loaded after initial render
+  useEffect(() => {
+    if (warehouses.length > 0) {
+      setPackages(prev => prev.map(p => {
+        if (!p.targetWarehouse || p.targetWarehouse === 'انبار اصلی') {
+          return { ...p, targetWarehouse: warehouses[0].code };
+        }
+        return p;
+      }));
+    }
+  }, [warehouses]);
 
   // Real-time calculation: total allocated across all packages for each requisition item
   const getAllocatedQty = (reqItemId: string) => {
@@ -140,6 +169,28 @@ export function SplitOrderModal({
     return initRem - allocated;
   };
 
+  // Check if any items have over or under fulfillment across packages
+  const hasDiscrepancy = useMemo(() => {
+    return requisitionItems.some(reqItem => {
+      const liveRem = getLiveRemainingQty(reqItem.id);
+      return liveRem !== 0;
+    });
+  }, [requisitionItems, packages]);
+
+  // Auto set recommended closure reason if discrepancy exists
+  useEffect(() => {
+    const hasOver = requisitionItems.some(it => getLiveRemainingQty(it.id) < 0);
+    const hasUnder = requisitionItems.some(it => getLiveRemainingQty(it.id) > 0);
+
+    if (hasOver && !hasUnder && closureReasonType === 'complete') {
+      setClosureReasonType('over_fulfillment');
+    } else if (hasUnder && !hasOver && closureReasonType === 'complete') {
+      setClosureReasonType('under_market_shortage');
+    }
+  }, [packages, requisitionItems]);
+
+  if (!isOpen) return null;
+
   // Add new split package (Package #2, #3, ...)
   const handleAddPackage = () => {
     setPackages(prev => {
@@ -150,7 +201,7 @@ export function SplitOrderModal({
           id: `pkg-${Date.now()}`,
           packageNumber: nextNum,
           supplierName: '',
-          targetWarehouse: 'انبار اصلی',
+          targetWarehouse: defaultWarehouseCode,
           status: 'draft',
           notes: `بسته سفارش خرید شماره ${formatPersianNumber(nextNum)} از درخواست ${requisition.code}`,
           items: []
@@ -295,22 +346,13 @@ export function SplitOrderModal({
       }
     }
 
-    // Check for over-allocation warnings
-    for (const reqItem of requisitionItems) {
-      const liveRem = getLiveRemainingQty(reqItem.id);
-      if (liveRem < 0) {
-        toast.error(`مجموع مقادیر تخصیص‌یافته به کالای «${reqItem.itemName}» (${Math.abs(liveRem)} واحد) بیشتر از مانده درخواست است.`);
-        return;
-      }
-    }
-
     setIsSubmitting(true);
     try {
       const orderGroups = packages.map(p => ({
         supplierName: p.supplierName.trim(),
-        targetWarehouse: p.targetWarehouse || 'انبار اصلی',
+        targetWarehouse: p.targetWarehouse || defaultWarehouseCode,
         docType: 'receipt' as const,
-        status: p.status,
+        status: 'draft' as const,
         notes: p.notes.trim(),
         items: p.items.map(i => ({
           itemId: i.itemId,
@@ -322,12 +364,22 @@ export function SplitOrderModal({
         }))
       }));
 
+      const selectedReasonObj = CLOSURE_REASON_OPTIONS.find(o => o.value === closureReasonType);
+      const reasonLabel = selectedReasonObj ? selectedReasonObj.label : closureReasonType;
+      const finalClosureReason = closeRequisition
+        ? `${reasonLabel}${closureNotes.trim() ? ` - توضیحات: ${closureNotes.trim()}` : ''}`
+        : undefined;
+
       const res = await fetchJson<{ success: boolean; message?: string }>(
         `/api/procurement/requisitions/${requisition.id}/convert-to-orders`, 
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderGroups })
+          body: JSON.stringify({ 
+            orderGroups,
+            closeRequisition,
+            closureReason: finalClosureReason
+          })
         }
       );
 
@@ -362,7 +414,7 @@ export function SplitOrderModal({
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                تخصیص اقلام به تامین‌کنندگان منتخب، استعلام قیمت نهایی و صدور اسناد تفکیک‌شده انبار
+                تخصیص اقلام به تامین‌کنندگان، ثبت مقادیر واقعی خرید و صدور فاکتورهای رسمی جهت ورود به انبار
               </p>
             </div>
           </div>
@@ -378,20 +430,16 @@ export function SplitOrderModal({
         {/* Modal Scrollable Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-6">
 
-          {/* ========================================================= */}
-          {/* TOP SECTION: جدول اقلام و وضعیت درخواست خرید مرجع (فرم اصلی) */}
-          {/* Note: This section is strictly for reference & live calculation. */}
-          {/* It is NOT saved as a document. */}
-          {/* ========================================================= */}
+          {/* TOP SECTION: جدول اقلام و وضعیت درخواست خرید مرجع */}
           <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-slate-600" />
                 <span className="font-bold text-slate-900 text-sm">
-                  جدول اقلام و وضعیت درخواست خرید مرجع (فرم اصلی)
+                  جدول اقلام و وضعیت درخواست خرید مرجع
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  (صرفاً جهت اطلاع و محاسبه خودکار کسورات؛ این جدول به عنوان سند ثبت نمی‌شود)
+                  (محاسبه خودکار تطابق، کسری یا مازاد خرید بر اساس مقادیر ورودی بسته‌ها)
                 </span>
               </div>
               <div className="flex items-center gap-4 text-xs text-slate-600">
@@ -405,7 +453,7 @@ export function SplitOrderModal({
               </div>
             </div>
 
-            {/* Reference Items Table with Live Deduction */}
+            {/* Reference Items Table with Live Deduction & Discrepancy Status */}
             <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
               <table className="w-full text-xs text-right">
                 <thead className="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200">
@@ -413,20 +461,19 @@ export function SplitOrderModal({
                     <th className="p-2.5 text-center w-12">ردیف</th>
                     <th className="p-2.5">کد و نام کالا</th>
                     <th className="p-2.5 text-center w-16">واحد</th>
-                    <th className="p-2.5 text-center w-24">مقدار کل درخواستی</th>
+                    <th className="p-2.5 text-center w-24">مقدار درخواستی</th>
                     <th className="p-2.5 text-center w-24">سفارش قبلی</th>
                     <th className="p-2.5 text-center w-28 bg-amber-50/60 text-amber-900">
-                      تخصیص در بسته‌های زیر
+                      مجموع خرید این فاکتورها
                     </th>
                     <th className="p-2.5 text-center w-32 bg-slate-50">
-                      مانده پس از ثبت خرید
+                      مانده از درخواست
                     </th>
-                    <th className="p-2.5 text-center w-28">وضعیت</th>
+                    <th className="p-2.5 text-center w-36">وضعیت تطابق</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {requisitionItems.map((item, idx) => {
-                    const initRem = initialRemainings.get(item.id) || 0;
                     const allocated = getAllocatedQty(item.id);
                     const liveRem = getLiveRemainingQty(item.id);
 
@@ -435,20 +482,20 @@ export function SplitOrderModal({
                       statusBadge = (
                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md font-bold text-[11px] flex items-center justify-center gap-1">
                           <PackageCheck className="w-3 h-3" />
-                          تکمیل تخصیص
+                          تطابق کامل
                         </span>
                       );
                     } else if (liveRem > 0) {
                       statusBadge = (
-                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md font-bold text-[11px]">
-                          {formatPersianNumber(liveRem)} {item.unit} مانده
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-900 rounded-md font-bold text-[11px]">
+                          کسری: {formatPersianNumber(liveRem)} {item.unit}
                         </span>
                       );
                     } else {
                       statusBadge = (
-                        <span className="px-2 py-0.5 bg-rose-100 text-rose-900 rounded-md font-bold text-[11px] flex items-center justify-center gap-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          اضافه بر درخواست
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md font-bold text-[11px] flex items-center justify-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                          مازاد: +{formatPersianNumber(Math.abs(liveRem))} {item.unit}
                         </span>
                       );
                     }
@@ -473,7 +520,7 @@ export function SplitOrderModal({
                         <td className={`p-2.5 text-center font-mono font-black ${
                           liveRem === 0 ? 'text-emerald-700 bg-emerald-50/30' : 
                           liveRem > 0 ? 'text-blue-700 bg-blue-50/20' : 
-                          'text-rose-700 bg-rose-50/30'
+                          'text-amber-700 bg-amber-50/30'
                         }`}>
                           {formatPersianNumber(liveRem)}
                         </td>
@@ -490,21 +537,18 @@ export function SplitOrderModal({
             <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-1">
               <ArrowDown className="w-3.5 h-3.5 text-amber-600" />
               <span>
-                با وارد کردن مقادیر در بسته‌های خرید زیر، مانده هر قلم در جدول بالا به صورت آنی کسر می‌گردد.
+                شما می‌توانید بر اساس فاکتورهای واقعی بازار، مقادیری کمتر، برابر یا بیشتر از درخواست اولیه ثبت کنید.
               </span>
             </div>
           </div>
 
-          {/* ========================================================= */}
-          {/* BOTTOM SECTION: بسته‌های خرید تفکیکی بر اساس تامین‌کننده (فرم زیری) */}
-          {/* First package is «بسته خرید شماره ۱» */}
-          {/* ========================================================= */}
+          {/* BOTTOM SECTION: بسته‌های خرید تفکیکی بر اساس تامین‌کننده */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-amber-600" />
                 <span className="font-bold text-slate-900 text-sm">
-                  بسته‌های خرید تفکیکی بر اساس تامین‌کننده ({formatPersianNumber(packages.length)} بسته)
+                  بسته‌های خرید تفکیکی بر اساس تامین‌کننده ({formatPersianNumber(packages.length)} فاکتور)
                 </span>
               </div>
               <button
@@ -519,34 +563,31 @@ export function SplitOrderModal({
 
             {/* List of Split Packages */}
             {packages.map((pkg) => {
-              const packageTotal = pkg.items.reduce((s, it) => s + (it.quantity * it.unitPrice), 0);
+              const packageTotal = pkg.items.reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
 
               return (
                 <div 
                   key={pkg.id} 
-                  className="border border-slate-200 rounded-2xl bg-white shadow-xs overflow-hidden transition-all"
+                  className="bg-white border-2 border-slate-200 hover:border-amber-400 rounded-2xl shadow-xs overflow-hidden transition-all"
                 >
-                  {/* Package Header */}
-                  <div className="bg-slate-50/90 p-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center font-mono">
-                        {pkg.packageNumber}
-                      </span>
-                      <span className="font-black text-slate-800 text-sm">
+                  {/* Package Card Header */}
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-mono font-black text-xs">
+                        {formatPersianNumber(pkg.packageNumber)}
+                      </div>
+                      <span className="font-bold text-slate-800 text-sm">
                         بسته خرید شماره {formatPersianNumber(pkg.packageNumber)}
                       </span>
                       {pkg.supplierName && (
-                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md text-xs font-bold">
+                        <span className="px-2 py-0.5 bg-slate-200 text-slate-800 rounded font-bold text-xs">
                           {pkg.supplierName}
                         </span>
                       )}
-                      <span className="text-xs text-slate-500 font-mono">
-                        ({pkg.items.length} قلم کالا)
-                      </span>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-700">
+                      <span className="text-xs text-slate-500">
                         مجموع بسته: <span className="font-mono text-amber-700 font-black text-sm">{formatPersianPrice(packageTotal)}</span>
                       </span>
 
@@ -579,38 +620,51 @@ export function SplitOrderModal({
                       />
                     </div>
 
-                    {/* Document Status - Only draft and final (proforma removed) */}
+                    {/* Document Stage Indicator (Replaced confusing draft/final) */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</label>
-                      <select
-                        value={pkg.status}
-                        onChange={e => handleUpdatePackageField(pkg.id, 'status', e.target.value as any)}
-                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                      >
-                        <option value="draft">پیش‌نویس سفارش خرید (عدم تغییر موجودی انبار)</option>
-                        <option value="final">رسید قطعی ورود کالا به انبار (افزایش آنی موجودی انبار)</option>
-                      </select>
+                      <label className="block font-bold text-slate-700 mb-1">نوع و مرحله سند:</label>
+                      <div className="p-2 bg-amber-50/80 border border-amber-200 rounded-lg flex items-center justify-between">
+                        <span className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-amber-600" />
+                          فاکتور خرید تامین‌کننده
+                        </span>
+                        <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold">
+                          سفارش رسمی خرید
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        پس از تحویل اقلام، توسط انباردار تایید و قطعی می‌گردد.
+                      </p>
                     </div>
 
-                    {/* Target Warehouse */}
+                    {/* Target Warehouse (Dynamic select) */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود:</label>
-                      <input
-                        type="text"
+                      <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
+                      <select
                         value={pkg.targetWarehouse}
                         onChange={e => handleUpdatePackageField(pkg.id, 'targetWarehouse', e.target.value)}
-                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-medium focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                      />
+                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer"
+                      >
+                        {warehouses.length > 0 ? (
+                          warehouses.map(w => (
+                            <option key={w.code} value={w.code}>
+                              {w.name} ({w.code})
+                            </option>
+                          ))
+                        ) : (
+                          <option value="انبار اصلی">انبار اصلی</option>
+                        )}
+                      </select>
                     </div>
 
                     {/* Notes */}
                     <div className="sm:col-span-2 lg:col-span-4">
-                      <label className="block font-bold text-slate-700 mb-1">یادداشت و توضیحات این بسته خرید:</label>
+                      <label className="block font-bold text-slate-700 mb-1">یادداشت و شرایط تحویل تامین‌کننده:</label>
                       <input
                         type="text"
                         value={pkg.notes}
                         onChange={e => handleUpdatePackageField(pkg.id, 'notes', e.target.value)}
-                        placeholder="مثال: توافق با تامین‌کننده جهت تحویل ظرف ۴۸ ساعت"
+                        placeholder="مثال: توافق با تامین‌کننده جهت تحویل ظرف ۴۸ ساعت همراه با فاکتور رسمی"
                         className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                       />
                     </div>
@@ -644,14 +698,13 @@ export function SplitOrderModal({
                           <option value="" disabled>افزودن قلم کالا از درخواست...</option>
                           {requisitionItems.map(it => {
                             const isAlreadyInGroup = pkg.items.some(i => i.reqItemId === it.id);
-                            const liveRem = getLiveRemainingQty(it.id);
                             return (
                               <option 
                                 key={it.id} 
-                                value={it.id} 
+                                value={it.id}
                                 disabled={isAlreadyInGroup}
                               >
-                                {it.itemName} {it.itemCode ? `(${it.itemCode})` : ''} - مانده آزاد: {formatPersianNumber(liveRem)} {it.unit}
+                                {it.itemName} ({formatPersianNumber(it.requestedQty)} {it.unit || 'عدد'})
                               </option>
                             );
                           })}
@@ -659,64 +712,61 @@ export function SplitOrderModal({
                       </div>
                     </div>
 
+                    {/* Table of items in this package */}
                     {pkg.items.length === 0 ? (
-                      <div className="p-4 text-center bg-slate-50 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
-                        هنوز هیچ کالایی به این تامین‌کننده تخصیص داده نشده است. از منوی بالا کالا را انتخاب کنید یا بر روی «تخصیص اقلام دارای مانده» کلیک نمایید.
+                      <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+                        هیچ قلم کالایی به این بسته تخصیص نیافته است. از دکمه‌ها یا منوی بالا اقلام را اضافه کنید.
                       </div>
                     ) : (
                       <div className="overflow-x-auto border border-slate-200 rounded-xl">
                         <table className="w-full text-xs text-right">
-                          <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                          <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                             <tr>
-                              <th className="p-2.5 text-center w-12">ردیف</th>
-                              <th className="p-2.5">نام و کد کالا</th>
-                              <th className="p-2.5 text-center w-16">واحد</th>
-                              <th className="p-2.5 text-center w-28">مقدار سفارش</th>
-                              <th className="p-2.5 text-center w-36">قیمت واحد توافقی (ریال)</th>
-                              <th className="p-2.5 text-center w-32">مبلغ کل</th>
-                              <th className="p-2.5 text-center w-12">عملیات</th>
+                              <th className="p-2 text-center w-10">ردیف</th>
+                              <th className="p-2">نام کالا</th>
+                              <th className="p-2 text-center w-16">واحد</th>
+                              <th className="p-2 text-center w-28">مقدار خرید واقعی</th>
+                              <th className="p-2 text-center w-32">قیمت واحد خرید (ریال)</th>
+                              <th className="p-2 text-center w-36">مبلغ کل قلم (ریال)</th>
+                              <th className="p-2 text-center w-12">عملیات</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {pkg.items.map((row, rIdx) => (
-                              <tr key={row.reqItemId} className="hover:bg-slate-50/50">
-                                <td className="p-2.5 text-center font-mono text-slate-400">{rIdx + 1}</td>
-                                <td className="p-2.5">
-                                  <div className="font-bold text-slate-900">{row.itemName}</div>
-                                  <div className="text-[11px] text-slate-500 font-mono">{row.itemCode || 'فاقد کد'}</div>
+                            {pkg.items.map((it, itIdx) => (
+                              <tr key={it.reqItemId} className="hover:bg-slate-50">
+                                <td className="p-2 text-center font-mono text-slate-400">{itIdx + 1}</td>
+                                <td className="p-2">
+                                  <span className="font-bold text-slate-900 block">{it.itemName}</span>
+                                  <span className="text-[11px] text-slate-400 font-mono">{it.itemCode}</span>
                                 </td>
-                                <td className="p-2.5 text-center font-bold text-slate-700">{row.unit}</td>
-                                <td className="p-2.5 text-center">
+                                <td className="p-2 text-center font-bold text-slate-600">{it.unit}</td>
+                                <td className="p-2 text-center">
                                   <input
                                     type="number"
-                                    min={0.001}
+                                    min="0.01"
                                     step="any"
-                                    value={row.quantity === 0 ? '' : row.quantity}
-                                    onChange={e => handleUpdateItemField(pkg.id, row.reqItemId, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}
-                                    placeholder="۱"
-                                    className="w-20 p-1.5 bg-white border border-slate-300 rounded text-center font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                                    dir="ltr"
+                                    value={it.quantity === 0 ? '' : it.quantity}
+                                    onChange={e => handleUpdateItemField(pkg.id, it.reqItemId, 'quantity', parseFloat(e.target.value) || 0)}
+                                    className="w-24 p-1 text-center font-mono font-bold bg-white border border-slate-300 rounded focus:ring-1 focus:ring-amber-500 focus:outline-none"
                                   />
                                 </td>
-                                <td className="p-2.5 text-center">
+                                <td className="p-2 text-center">
                                   <input
                                     type="number"
-                                    min={0}
+                                    min="0"
                                     step="any"
-                                    value={row.unitPrice === 0 ? '' : row.unitPrice}
-                                    onChange={e => handleUpdateItemField(pkg.id, row.reqItemId, 'unitPrice', e.target.value === '' ? 0 : Number(e.target.value))}
-                                    placeholder="۰"
-                                    className="w-32 p-1.5 bg-white border border-slate-300 rounded text-center font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                                    dir="ltr"
+                                    value={it.unitPrice === 0 ? '' : it.unitPrice}
+                                    onChange={e => handleUpdateItemField(pkg.id, it.reqItemId, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                    className="w-28 p-1 text-center font-mono font-bold bg-white border border-slate-300 rounded focus:ring-1 focus:ring-amber-500 focus:outline-none"
                                   />
                                 </td>
-                                <td className="p-2.5 text-center font-mono font-bold text-amber-700">
-                                  {formatPersianPrice(row.quantity * row.unitPrice)}
+                                <td className="p-2 text-center font-mono font-black text-amber-800">
+                                  {formatPersianPrice(it.quantity * it.unitPrice)}
                                 </td>
-                                <td className="p-2.5 text-center">
+                                <td className="p-2 text-center">
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveItemFromPackage(pkg.id, row.reqItemId)}
+                                    onClick={() => handleRemoveItemFromPackage(pkg.id, it.reqItemId)}
                                     className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
                                     title="حذف از این بسته"
                                   >
@@ -735,10 +785,69 @@ export function SplitOrderModal({
             })}
           </div>
 
+          {/* REQUISITION CLOSURE & DISCREPANCY REASON CARD */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 text-xs">
+                <input
+                  type="checkbox"
+                  checked={closeRequisition}
+                  onChange={e => setCloseRequisition(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span>تکمیل و بستن پرونده درخواست خرید با ثبت این سفارش‌ها (خرید قطعی و نهایی)</span>
+              </label>
+
+              {closeRequisition ? (
+                <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  پرونده پس از ثبت بسته شده و به وضعیت آماده ورود به انبار منتقل می‌شود
+                </span>
+              ) : (
+                <span className="text-[11px] bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 rounded-full">
+                  پرونده باز می‌ماند (امکان خرید مجدد اقلام باقی‌مانده)
+                </span>
+              )}
+            </div>
+
+            {closeRequisition && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-200 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    علت یا وضعیت نهایی پرونده:
+                  </label>
+                  <select
+                    value={closureReasonType}
+                    onChange={e => setClosureReasonType(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
+                  >
+                    {CLOSURE_REASON_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    توضیحات تکمیلی مغایرت و تصمیم تدارکات:
+                  </label>
+                  <input
+                    type="text"
+                    value={closureNotes}
+                    onChange={e => setClosureNotes(e.target.value)}
+                    placeholder="مثال: خرید ۳ واحد بیشتر به دلیل پک ۵ تایی تامین‌کننده..."
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Total Overall Summary */}
           <div className="flex flex-wrap items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-amber-950">تعداد بسته‌های خرید تفکیکی:</span>
+              <span className="font-bold text-amber-950">تعداد فاکتورهای تفکیکی صادرشونده:</span>
               <span className="px-2.5 py-0.5 bg-amber-200 text-amber-950 font-black rounded-lg font-mono">
                 {formatPersianNumber(packages.length)} سند خرید
               </span>

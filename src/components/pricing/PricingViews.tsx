@@ -83,6 +83,8 @@ export function PricingGridView(props: PricingViewsShared) {
                       <div className="flex-1 flex items-center gap-1.5 relative">
                         <input
                           type="number"
+                          min="0"
+                          step="any"
                           dir="ltr"
                           placeholder="مبلغ"
                           value={fieldVal.price}
@@ -197,6 +199,8 @@ export function PricingTableView(props: PricingViewsShared) {
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
+                            min="0"
+                            step="any"
                             dir="ltr"
                             placeholder="مبلغ"
                             value={fieldVal.price}

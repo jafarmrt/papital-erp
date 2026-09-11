@@ -138,8 +138,10 @@ export function PieceworkLogModal({
                   <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ واحد (${curLbl})`}</label>
                   <input
                     type="number"
-                    value={editingLog.unitRate}
-                    onChange={(e) => setEditingLog(prev => prev ? { ...prev, unitRate: Number(e.target.value) } : null)}
+                    min="0"
+                    step="any"
+                    value={editingLog.unitRate === 0 ? '' : editingLog.unitRate}
+                    onChange={(e) => setEditingLog(prev => prev ? { ...prev, unitRate: parseFloat(e.target.value) || 0 } : null)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
                   />
                 </div>
@@ -275,10 +277,12 @@ export function PieceworkLogModal({
                           <label className="block text-[10px] font-bold text-slate-500 mb-1">{`نرخ واحد (${curLbl})`}</label>
                           <input
                             type="number"
-                            value={row.unitRate}
+                            min="0"
+                            step="any"
+                            value={row.unitRate === 0 ? '' : row.unitRate}
                             onChange={(e) => {
                               const newRows = [...batchLogRows];
-                              newRows[idx].unitRate = Number(e.target.value);
+                              newRows[idx].unitRate = parseFloat(e.target.value) || 0;
                               setBatchLogRows(newRows);
                             }}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 text-center font-mono"

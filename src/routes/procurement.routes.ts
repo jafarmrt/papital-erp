@@ -138,13 +138,16 @@ router.post('/requisitions/:id/workflow-action', authorize('procurement.approve'
  */
 router.post('/requisitions/:id/convert-to-orders', authorize('procurement.order', 'procurement_officer', 'manager', 'admin'), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { orderGroups } = req.body;
+  const { orderGroups, closeRequisition, closureReason, notes } = req.body;
 
   if (!id) throw new ValidationError('شناسه نامعتبر است.');
 
   const result = await ProcurementService.convertToPurchaseOrders({
     requisitionId: id,
-    orderGroups
+    orderGroups,
+    closeRequisition,
+    closureReason,
+    notes
   }, {
     id: req.user.id,
     username: req.user.username,

@@ -7,8 +7,8 @@ import { DocumentService } from '../document.service.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { BankAccountService } from '../accounting/treasury/bankAccount.service.js';
 import { orm } from '../../db/drizzle.js';
-import { purchaseRequisitions } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { purchaseRequisitions, documents } from '../../db/schema.js';
+import { eq, and, ilike } from 'drizzle-orm';
 
 export interface WorkflowTransitionEventPayload {
   instanceId: number;
@@ -182,6 +182,29 @@ export function registerWorkflowListeners() {
           await orm.update(purchaseRequisitions)
             .set({ status: mappedStatus, updatedAt: new Date().toISOString() })
             .where(eq(purchaseRequisitions.id, reqId));
+
+          // If transition is to 'received', automatically deliver any draft purchase orders linked to this requisition
+          if (payload.toStateKey === 'received' || (payload as any).actionKey === 'receive_items') {
+            const [reqRecord] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, reqId));
+            if (reqRecord) {
+              const docNotesPattern = `%[تدارکات: درخواست ${reqRecord.code}]%`;
+              const draftOrders = await orm.select().from(documents).where(and(
+                ilike(documents.notes, docNotesPattern),
+                eq(documents.status, 'draft'),
+                eq(documents.isDeleted, 0)
+              ));
+              if (draftOrders.length > 0) {
+                logger.info(`[WorkflowEventBus AutoAction] Auto-delivering ${draftOrders.length} linked purchase orders for requisition ${reqRecord.code}...`);
+                const { ProcurementService } = await import('../procurement.service.js');
+                for (const doc of draftOrders) {
+                  await ProcurementService.deliverOrderToWarehouse(doc.id, {
+                    id: payload.performedBy || 1,
+                    username: payload.performedByName || 'انباردار تاییدکننده گردش‌کار'
+                  });
+                }
+              }
+            }
+          }
           logger.info(`[WorkflowEventBus AutoAction] Purchase requisition #${reqId} status synced to '${mappedStatus}'.`);
         }
       } else if (payload.autoActionKey) {

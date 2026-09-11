@@ -9,7 +9,7 @@ import { formatPersianPrice, formatPersianNumber } from '../../utils';
 interface ProcurementOrderListProps {
   orders: ProcurementOrder[];
   isLoading: boolean;
-  onDeliverOrder?: (orderId: number, orderRef: string) => Promise<void>;
+  onDeliverOrder?: (orderId: number, orderRef: string) => Promise<void> | void;
   deliveringOrderId?: number | null;
   onViewRequisition?: (requisitionId: number) => void;
   type: 'active' | 'delivered';

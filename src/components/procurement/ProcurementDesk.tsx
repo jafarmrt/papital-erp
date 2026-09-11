@@ -14,6 +14,7 @@ import { SplitOrderModal } from './SplitOrderModal';
 import { CreateRequisitionModal } from './CreateRequisitionModal';
 import { ConsolidateRequisitionsModal } from './ConsolidateRequisitionsModal';
 import { ProcurementOrderList } from './ProcurementOrderList';
+import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 
 interface ProcurementDeskProps {
   currentUser?: User | null;
@@ -26,6 +27,10 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [activeMainTab, setActiveMainTab] = useState<'requisitions' | 'active_orders' | 'delivered_receipts'>('requisitions');
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
+  const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+  const [requisitionToDelete, setRequisitionToDelete] = useState<{ id: number; code: string } | null>(null);
+  const [isDeletingRequisition, setIsDeletingRequisition] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -85,28 +90,42 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
     loadData();
   }, [loadData]);
 
-  const handleDeliverOrder = async (orderId: number, orderRef: string) => {
-    if (!window.confirm(`آیا از تایید تحویل فاکتور خرید شماره ${orderRef} به انبار و صدور رسید قطعی انبار اطمینان دارید؟\nاین عملیات موجودی کاردکس انبار را افزایش داده و اسناد دوبل حسابداری را ثبت می‌کند.`)) {
-      return;
+  const handleDeliverOrder = (orderId: number, orderRef: string) => {
+    const found = orders.find(o => o.id === orderId);
+    if (found) {
+      setDeliveryModalOrder(found);
+    } else {
+      setDeliveryModalOrder({
+        id: orderId,
+        orderNumber: orderRef,
+        refNumber: orderRef,
+        supplierName: 'تامین‌کننده',
+        targetWarehouse: 'انبار اصلی',
+        status: 'draft',
+        totalAmount: 0,
+        items: []
+      } as any);
     }
+  };
 
-    setDeliveringOrderId(orderId);
+  const handleConfirmDelivery = async () => {
+    if (!deliveryModalOrder) return;
+    setIsSubmittingDelivery(true);
+    setDeliveringOrderId(deliveryModalOrder.id);
     try {
-      const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${orderId}/deliver`, {
+      const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${deliveryModalOrder.id}/deliver`, {
         method: 'POST'
       });
       toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
+      setDeliveryModalOrder(null);
       await loadData();
     } catch (err: any) {
       toast.error(err.message || 'خطا در تحویل فاکتور خرید به انبار');
     } finally {
+      setIsSubmittingDelivery(false);
       setDeliveringOrderId(null);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Filtering
   const filteredRequisitions = useMemo(() => {
@@ -159,15 +178,22 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
     }
   };
 
-  const handleDeleteRequisition = async (id: number, code: string) => {
-    if (!window.confirm(`آیا از حذف درخواست خرید ${code} اطمینان دارید؟`)) return;
+  const handleDeleteRequisition = (id: number, code: string) => {
+    setRequisitionToDelete({ id, code });
+  };
 
+  const handleConfirmDeleteRequisition = async () => {
+    if (!requisitionToDelete) return;
+    setIsDeletingRequisition(true);
     try {
-      await fetchJson(`/api/procurement/requisitions/${id}`, { method: 'DELETE' });
-      toast.success(`درخواست خرید ${code} حذف شد.`);
-      loadData();
+      await fetchJson(`/api/procurement/requisitions/${requisitionToDelete.id}`, { method: 'DELETE' });
+      toast.success(`درخواست خرید ${requisitionToDelete.code} با موفقیت حذف شد.`);
+      setRequisitionToDelete(null);
+      await loadData();
     } catch (err: any) {
       toast.error(err.message || 'خطا در حذف درخواست خرید');
+    } finally {
+      setIsDeletingRequisition(false);
     }
   };
 
@@ -751,6 +777,56 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
           }}
           onSuccess={loadData}
         />
+      )}
+
+      {/* Warehouse Delivery Confirmation Modal */}
+      {deliveryModalOrder && (
+        <ConfirmWarehouseDeliveryModal
+          isOpen={true}
+          order={deliveryModalOrder}
+          isSubmitting={isSubmittingDelivery}
+          onClose={() => setDeliveryModalOrder(null)}
+          onConfirm={handleConfirmDelivery}
+        />
+      )}
+
+      {/* Delete Requisition Confirmation Modal */}
+      {requisitionToDelete && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-farsi animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center font-bold">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-black text-slate-900 text-sm">حذف درخواست خرید</h4>
+                <p className="text-xs text-slate-500 mt-0.5">شناسه: {requisitionToDelete.code}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              آیا از حذف این درخواست خرید اطمینان دارید؟ این عملیات غیرقابل بازگشت است.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setRequisitionToDelete(null)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingRequisition}
+                onClick={handleConfirmDeleteRequisition}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                {isDeletingRequisition ? 'در حال حذف...' : 'بله، حذف شود'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

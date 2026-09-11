@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 
 interface RequisitionDetailModalProps {
   isOpen: boolean;
@@ -33,6 +34,9 @@ export function RequisitionDetailModal({
   const [linkedOrders, setLinkedOrders] = useState<ProcurementOrder[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
+  const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
+  const [bulkDeliveryOrders, setBulkDeliveryOrders] = useState<ProcurementOrder[] | null>(null);
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
 
   const loadLinkedOrders = useCallback(async () => {
     if (!requisition?.id) return;
@@ -57,49 +61,45 @@ export function RequisitionDetailModal({
 
   if (!isOpen) return null;
 
-  const handleDeliverLinkedOrder = async (orderId: number, orderRef: string) => {
-    if (!window.confirm(`آیا از تایید تحویل فاکتور خرید شماره ${orderRef} به انبار و صدور رسید قطعی انبار اطمینان دارید؟`)) {
-      return;
-    }
-
-    setDeliveringOrderId(orderId);
-    try {
-      const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${orderId}/deliver`, {
-        method: 'POST'
-      });
-      toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
-      await loadLinkedOrders();
-      onRefresh();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در تحویل فاکتور خرید');
-    } finally {
-      setDeliveringOrderId(null);
-    }
+  const handleOpenDeliverSingleModal = (order: ProcurementOrder) => {
+    setDeliveryModalOrder(order);
+    setBulkDeliveryOrders(null);
   };
 
-  const handleDeliverAllOrdersToWarehouse = async () => {
+  const handleOpenDeliverBulkModal = () => {
     const draftOrders = linkedOrders.filter(o => o.status !== 'final');
     if (draftOrders.length === 0 && linkedOrders.length === 0) {
-      toast.error('ابتدا باید با کلیک بر روی دکمه «تفکیک تامین‌کننده و صدور پیش‌فاکتور»، فاکتور خرید صادر شود.');
+      toast.error('ابتدا باید با کلیک بر روی دکمه «تفکیک تامین‌کننده و صدور فاکتور»، فاکتور خرید صادر شود.');
       return;
     }
+    setDeliveryModalOrder(null);
+    setBulkDeliveryOrders(draftOrders);
+  };
 
-    if (!window.confirm(`آیا از تحویل کلیه اقلام فاکتورهای این درخواست (${formatPersianNumber(draftOrders.length)} فاکتور) به انبار اطمینان دارید؟`)) {
-      return;
-    }
-
-    setIsActing(true);
+  const handleConfirmDelivery = async () => {
+    setIsSubmittingDelivery(true);
     try {
-      for (const ord of draftOrders) {
-        await fetchJson(`/api/procurement/orders/${ord.id}/deliver`, { method: 'POST' });
+      if (bulkDeliveryOrders && bulkDeliveryOrders.length > 0) {
+        for (const ord of bulkDeliveryOrders) {
+          await fetchJson(`/api/procurement/orders/${ord.id}/deliver`, { method: 'POST' });
+        }
+        toast.success('کلیه فاکتورهای خرید با موفقیت به انبار تحویل گردید و موجودی کاردکس به‌روز شد.');
+        setBulkDeliveryOrders(null);
+        onRefresh();
+        onClose();
+      } else if (deliveryModalOrder) {
+        const res = await fetchJson<{ success: boolean; message: string }>(`/api/procurement/orders/${deliveryModalOrder.id}/deliver`, {
+          method: 'POST'
+        });
+        toast.success(res.message || 'فاکتور خرید با موفقیت به انبار تحویل و رسید قطعی صادر شد.');
+        setDeliveryModalOrder(null);
+        await loadLinkedOrders();
+        onRefresh();
       }
-      toast.success('کلیه فاکتورهای خرید با موفقیت به انبار تحویل گردید و موجودی کاردکس به‌روز شد.');
-      onRefresh();
-      onClose();
     } catch (err: any) {
-      toast.error(err.message || 'خطا در تحویل اقلام به انبار');
+      toast.error(err.message || 'خطا در تحویل فاکتور خرید به انبار');
     } finally {
-      setIsActing(false);
+      setIsSubmittingDelivery(false);
     }
   };
 
@@ -458,7 +458,7 @@ export function RequisitionDetailModal({
                           <button
                             type="button"
                             disabled={isDelivering || isActing}
-                            onClick={() => handleDeliverLinkedOrder(order.id, order.orderNumber)}
+                            onClick={() => handleOpenDeliverSingleModal(order)}
                             className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors disabled:opacity-50"
                           >
                             {isDelivering ? (
@@ -540,7 +540,7 @@ export function RequisitionDetailModal({
                   <button
                     type="button"
                     disabled={isActing}
-                    onClick={handleDeliverAllOrdersToWarehouse}
+                    onClick={handleOpenDeliverBulkModal}
                     className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isActing ? (
@@ -615,6 +615,21 @@ export function RequisitionDetailModal({
           </button>
         </div>
       </div>
+
+      {/* Warehouse Delivery Confirmation Modal */}
+      {(deliveryModalOrder || (bulkDeliveryOrders && bulkDeliveryOrders.length > 0)) && (
+        <ConfirmWarehouseDeliveryModal
+          isOpen={true}
+          order={deliveryModalOrder}
+          bulkOrders={bulkDeliveryOrders || undefined}
+          isSubmitting={isSubmittingDelivery}
+          onClose={() => {
+            setDeliveryModalOrder(null);
+            setBulkDeliveryOrders(null);
+          }}
+          onConfirm={handleConfirmDelivery}
+        />
+      )}
     </div>
   );
 }

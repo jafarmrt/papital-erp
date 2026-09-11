@@ -1,6 +1,6 @@
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions } from '../db/schema.js';
+import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
 import { resolveJalaliFiscalYear } from '../lib/businessClock.js';
 import { getTodayJalaliDate } from '../utils.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -62,6 +62,9 @@ export interface SplitOrderGroup {
 export interface ConvertToOrdersInput {
   requisitionId: number;
   orderGroups: SplitOrderGroup[];
+  closeRequisition?: boolean;
+  closureReason?: string;
+  notes?: string;
 }
 
 export class ProcurementService {
@@ -710,11 +713,32 @@ export class ProcurementService {
 
     // Determine overall requisition status
     const allOrdered = updatedItems.every(i => (i.orderedQty || 0) >= (i.requestedQty || 0));
-    const newStatus = allOrdered ? 'ordered' : 'under_review';
+    const shouldCloseRequisition = Boolean(params.closeRequisition || allOrdered);
+
+    if (shouldCloseRequisition) {
+      // If closing formally, mark remaining items as closed/ordered with optional note
+      for (const item of updatedItems) {
+        if ((item.remainingQty || 0) > 0) {
+          item.remainingQty = 0;
+          item.status = 'ordered';
+          if (params.closureReason) {
+            item.closureNote = params.closureReason;
+          }
+        }
+      }
+    }
+
+    const newStatus = shouldCloseRequisition ? 'ordered' : 'under_review';
+
+    let updatedReqNotes = req.notes || '';
+    if (params.closureReason) {
+      updatedReqNotes = `${updatedReqNotes}\n[تکمیل/بستن خرید: ${params.closureReason}]`.trim();
+    }
 
     const [finalUpdatedReq] = await orm.update(purchaseRequisitions).set({
       status: newStatus,
       items: updatedItems,
+      notes: updatedReqNotes,
       updatedAt: new Date().toISOString()
     }).where(eq(purchaseRequisitions.id, req.id)).returning();
 
@@ -1082,15 +1106,48 @@ export class ProcurementService {
 
       if (allDelivered && linkedReq.workflowInstanceId) {
         const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-        if (wfInst) {
+        if (wfInst && wfInst.status === 'IN_PROGRESS') {
           const states = ((wfInst.snapshotDsl as any)?.states as any[]) || 
             await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
-          const receivedState = states.find(s => s.stateKey === 'received');
-          if (receivedState) {
+          const receivedState = states.find((s: any) => s.stateKey === 'received');
+          
+          const transitions = ((wfInst.snapshotDsl as any)?.transitions as any[]) ||
+            await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
+          const trToReceived = transitions.find((t: any) => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
+
+          if (trToReceived) {
+            try {
+              await WorkflowTransitionExecutor.executeTransition({
+                instanceId: wfInst.id,
+                transitionId: trToReceived.id,
+                userId: user.id || 1,
+                userName: user.username || 'انباردار تحویل‌گیرنده',
+                comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
+              });
+            } catch (trErr: any) {
+              logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${trErr.message}` });
+              if (receivedState) {
+                await orm.update(workflowInstances).set({
+                  currentStateId: receivedState.id,
+                  status: 'COMPLETED',
+                  updatedAt: new Date().toISOString()
+                }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+                await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
+                await orm.update(workflowTasks)
+                  .set({ status: 'completed', completedAt: new Date().toISOString() })
+                  .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
+              }
+            }
+          } else if (receivedState) {
             await orm.update(workflowInstances).set({
               currentStateId: receivedState.id,
+              status: 'COMPLETED',
               updatedAt: new Date().toISOString()
             }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+            await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
+            await orm.update(workflowTasks)
+              .set({ status: 'completed', completedAt: new Date().toISOString() })
+              .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
           }
         }
       }

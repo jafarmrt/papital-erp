@@ -404,9 +404,9 @@ export function ReorderPurchaseModal({
                         <input
                           type="number"
                           min={0}
-                          step={1000}
-                          value={it.unitPrice}
-                          onChange={e => handleUpdateItemField(it.id, 'unitPrice', Number(e.target.value))}
+                          step="any"
+                          value={it.unitPrice === 0 ? '' : it.unitPrice}
+                          onChange={e => handleUpdateItemField(it.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                           className="w-28 p-1.5 bg-white border border-slate-300 rounded text-center font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
                         />
                       </td>

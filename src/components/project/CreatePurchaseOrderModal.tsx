@@ -526,8 +526,9 @@ export function CreatePurchaseOrderModal({
                             <input
                               type="number"
                               min="0"
-                              value={row.unitPrice}
-                              onChange={e => handleUpdateRow(idx, 'unitPrice', Number(e.target.value))}
+                              step="any"
+                              value={row.unitPrice === 0 ? '' : row.unitPrice}
+                              onChange={e => handleUpdateRow(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
                               className="w-24 p-1 border border-slate-300 rounded text-center font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                             />
                             <span className="text-[10px] text-slate-500">ریال</span>

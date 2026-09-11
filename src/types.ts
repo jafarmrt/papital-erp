@@ -1420,6 +1420,8 @@ export interface PurchaseRequisitionItemRow {
   linkedDocumentIds?: number[];
   linked_document_ids?: number[];
   notes?: string;
+  closureNote?: string;
+  closure_note?: string;
 }
 
 export type PurchaseRequisitionItem = PurchaseRequisitionItemRow;

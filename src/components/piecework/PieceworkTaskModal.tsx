@@ -91,8 +91,10 @@ export function PieceworkTaskModal({
             <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ پایه پیش‌فرض (${curLbl})`}</label>
             <input
               type="number"
-              value={taskFormData.defaultRate}
-              onChange={(e) => setTaskFormData(prev => ({ ...prev, defaultRate: Number(e.target.value) }))}
+              min="0"
+              step="any"
+              value={taskFormData.defaultRate === 0 ? '' : taskFormData.defaultRate}
+              onChange={(e) => setTaskFormData(prev => ({ ...prev, defaultRate: parseFloat(e.target.value) || 0 }))}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono outline-none focus:border-blue-500"
             />
           </div>

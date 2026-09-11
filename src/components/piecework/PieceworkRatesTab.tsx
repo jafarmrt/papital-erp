@@ -87,6 +87,8 @@ export function PieceworkRatesTab({
                       <td className="p-3 text-center">
                         <input
                           type="number"
+                          min="0"
+                          step="any"
                           defaultValue={currentVal}
                           key={`${task.id}-${currentVal}`}
                           id={`custom-rate-${task.id}`}

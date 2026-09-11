@@ -631,7 +631,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
                     <input
                       type="number"
                       min="0"
-                      step="1000"
+                      step="any"
                       placeholder={defaultWac > 0 ? String(defaultWac) : 'میانگین جاری'}
                       value={enteredCost !== undefined && enteredCost > 0 ? enteredCost : ''}
                       onChange={(e) => handleCostChange(p.id, Number(e.target.value) || 0)}
