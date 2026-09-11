@@ -119,9 +119,14 @@ else
   bad "PostgreSQL unreachable via DATABASE_URL (pg_isready)"
 fi
 if command -v psql >/dev/null 2>&1; then
-  LAST_MIG="$(psql "$DATABASE_URL" -tAc "SELECT coalesce((SELECT name FROM migrations_log ORDER BY applied_at DESC LIMIT 1),'NONE');" 2>/dev/null || echo "?")"
-  echo "       Latest migration: $LAST_MIG"
-  [ "$LAST_MIG" != "?" ] && ok "migrations_log readable" || warnc "migrations_log not readable via psql"
+  # V3.3.9: the Drizzle migrator records applied migrations in drizzle.__drizzle_migrations
+  # (the legacy migrations_log table is kept only for backward compat display)
+  MIG_INFO="$(psql "$DATABASE_URL" -tAc "SELECT count(*)::text || ' applied; last hash: ' || coalesce((SELECT substr(hash,1,12) FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1),'-') FROM drizzle.__drizzle_migrations;" 2>/dev/null || echo "?")"
+  if [ "$MIG_INFO" = "?" ]; then
+    MIG_INFO="$(psql "$DATABASE_URL" -tAc "SELECT count(*)::text || ' applied (legacy); last: ' || coalesce((SELECT name FROM migrations_log ORDER BY applied_at DESC LIMIT 1),'-') FROM migrations_log;" 2>/dev/null || echo "?")"
+  fi
+  echo "       Migrations: $MIG_INFO"
+  [ "$MIG_INFO" != "?" ] && ok "migration records readable" || warnc "migration records not readable via psql"
   PENDING="$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM outbox_events WHERE status='pending';" 2>/dev/null || echo "?")"
   DLQ="$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM dead_letter_events WHERE status='pending';" 2>/dev/null || echo "?")"
   echo "       Outbox pending: $PENDING | DLQ pending: $DLQ"
