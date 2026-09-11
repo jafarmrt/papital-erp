@@ -141,7 +141,13 @@ if [ -d "$BACKUP_DIR" ]; then
 else
   bad "Backup directory missing: $BACKUP_DIR"
 fi
-if grep -rq "backup.sh" /etc/cron.d/ /etc/crontab /var/spool/cron 2>/dev/null; then
+CRON_HIT=0
+# Check each cron location separately — a missing dir would make a combined
+# grep exit with status 2 and mask real matches elsewhere.
+if [ -e /etc/cron.d ] && grep -rqs "backup.sh" /etc/cron.d 2>/dev/null; then CRON_HIT=1; fi
+if [ "$CRON_HIT" -eq 0 ] && [ -f /etc/crontab ] && grep -qs "backup.sh" /etc/crontab 2>/dev/null; then CRON_HIT=1; fi
+if [ "$CRON_HIT" -eq 0 ] && [ -d /var/spool/cron/crontabs ] && grep -qs "backup.sh" /var/spool/cron/crontabs/* 2>/dev/null; then CRON_HIT=1; fi
+if [ "$CRON_HIT" -eq 1 ]; then
   ok "Backup cron entry found"
 else
   bad "No backup cron entry found (Phase 6 of GO_LIVE_CHECKLIST.md)"
