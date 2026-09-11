@@ -113,12 +113,17 @@ certbot --nginx -d "$DOMAIN" -m "$EMAIL" --agree-tos --non-interactive --redirec
   || die "Certbot failed. Check DNS A record and port 80 reachability, then re-run this script."
 success "HTTPS enabled with auto-renewal (systemd timer)."
 
-# ---------- 7) Update .env ALLOWED_ORIGINS ----------
-log "[5/5] Updating ALLOWED_ORIGINS in $APP_DIR/.env ..."
+# ---------- 7) Update .env ALLOWED_ORIGINS + APP_URL ----------
+log "[5/5] Updating ALLOWED_ORIGINS and APP_URL in $APP_DIR/.env ..."
 if grep -q '^ALLOWED_ORIGINS=' "$APP_DIR/.env"; then
   sed -i "s#^ALLOWED_ORIGINS=.*#ALLOWED_ORIGINS=https://${DOMAIN},http://${DOMAIN},http://localhost:${APP_PORT}#" "$APP_DIR/.env"
 else
   echo "ALLOWED_ORIGINS=https://${DOMAIN},http://${DOMAIN},http://localhost:${APP_PORT}" >> "$APP_DIR/.env"
+fi
+if grep -q '^APP_URL=' "$APP_DIR/.env"; then
+  sed -i "s#^APP_URL=.*#APP_URL=https://${DOMAIN}#" "$APP_DIR/.env"
+else
+  echo "APP_URL=https://${DOMAIN}" >> "$APP_DIR/.env"
 fi
 chmod 600 "$APP_DIR/.env"
 
