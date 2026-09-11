@@ -126,11 +126,13 @@ npm run build
 success "Build completed."
 
 # ---------- 4) Restart service ----------
+PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"
+RESTART_OK=0
 log "[5/6] Restarting service..."
 if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
-  $SUDO systemctl restart "$SERVICE_NAME"
+  $SUDO systemctl restart "$SERVICE_NAME" && RESTART_OK=1
 elif command -v pm2 >/dev/null 2>&1 && pm2 id "$SERVICE_NAME" >/dev/null 2>&1; then
-  pm2 restart "$SERVICE_NAME"
+  pm2 restart "$SERVICE_NAME" && RESTART_OK=1
 else
   warn "No systemd unit or pm2 process named '${SERVICE_NAME}' found — start the app manually."
 fi
@@ -147,8 +149,18 @@ for i in $(seq 1 30); do
 done
 [ "$HEALTH_OK" -eq 1 ] || die "Health probe failed after restart. Check: journalctl -u ${SERVICE_NAME} -n 100"
 
-VERSION="$(curl -fsS "http://localhost:${APP_PORT}/health" | grep -oE '"version":"[^"]+"' || true)"
-success "Update finished successfully. ${VERSION}"
+# ---------- 5b) Version consistency: the RUNNING process must serve the NEW build ----------
+HEALTH_VERSION="$(curl -fsS "http://localhost:${APP_PORT}/health" | grep -oE '"version":"[^"]+"' | cut -d'"' -f4 || true)"
+if [ -n "$PKG_VERSION" ] && [ "$HEALTH_VERSION" != "$PKG_VERSION" ]; then
+  die "Runtime version (v${HEALTH_VERSION:-unknown}) does NOT match the freshly built package.json (v$PKG_VERSION).
+The service was NOT restarted with the new build (old process still running).
+Fix: stop the old process and start the app properly (systemd unit 'papital-erp' recommended — see install.sh), then re-verify:
+  curl -fsS http://localhost:${APP_PORT}/health | grep version"
+fi
+if [ "$RESTART_OK" -ne 1 ]; then
+  die "Health probe passed BUT no managed service was restarted — the running process may still be an old build. Register a systemd/pm2 service and re-run."
+fi
+success "Update finished successfully. Runtime v$HEALTH_VERSION == build v$PKG_VERSION"
 
 log "NOTE: Schema migrations run automatically at startup. NEVER run 'npm run db:push'."
 exit 0
