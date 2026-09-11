@@ -56,6 +56,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '2002', name: 'ابزارآلات و قالب‌ها', level: 'subsidiary', parentCode: '20', accountType: 'asset', nature: 'debit', isSystem: 1 },
   { code: '2003', name: 'اثاثیه و تجهیزات اداری و کامپیوتر', level: 'subsidiary', parentCode: '20', accountType: 'asset', nature: 'debit', isSystem: 1 },
   { code: '21', name: 'استهلاک انباشته دارایی‌های ثابت', level: 'general', parentCode: '2', accountType: 'asset', nature: 'credit', isSystem: 1 },
+  { code: '2101', name: 'استهلاک انباشته ماشین‌آلات و تجهیزات', level: 'subsidiary', parentCode: '21', accountType: 'asset', nature: 'credit', isSystem: 1 },
+  { code: '2102', name: 'استهلاک انباشته اثاثیه و تجهیزات اداری', level: 'subsidiary', parentCode: '21', accountType: 'asset', nature: 'credit', isSystem: 1 },
 
   // ==========================================
   // گروه ۳: بدهی‌های جاری (Current Liabilities)
@@ -105,6 +107,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '5102', name: 'تخفیفات نقدی اعطایی به مشتریان', level: 'subsidiary', parentCode: '51', accountType: 'revenue', nature: 'debit', isSystem: 1 },
   { code: '52', name: 'سایر درآمدهای عملیاتی و غیرعملیاتی', level: 'general', parentCode: '5', accountType: 'revenue', nature: 'credit', isSystem: 1 },
   { code: '5201', name: 'سود تسعیر ارز', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
+  { code: '5202', name: 'سود سپرده‌های بانکی و سرمایه‌گذاری', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
+  { code: '5203', name: 'سایر درآمدهای عملیاتی', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
 
   // ==========================================
   // گروه ۶: بهای تمام‌شده کالای فروش‌رفته (Cost of Goods Sold - COGS)
@@ -129,4 +133,6 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '7007', name: 'هزینه‌های بانکی و کارمزد درگاه پرداخت', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
   { code: '7008', name: 'زیان تسعیر ارز', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
   { code: '7009', name: 'سایر هزینه‌های متفرقه کارگاهی', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
+  { code: '7010', name: 'هزینه پذیرایی، آبدارخانه و ارزاق پرسنل', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
+  { code: '7011', name: 'هزینه تعمیرات و نگهداری ابزار و تجهیزات', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
 ];
