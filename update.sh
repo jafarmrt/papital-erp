@@ -129,6 +129,17 @@ success "Build completed."
 PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"
 RESTART_OK=0
 log "[5/6] Restarting service..."
+if ! systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
+  # Auto-detect the systemd unit managing the running app (unit may have a custom name)
+  RUNNING_PID="$(pgrep -f 'dist/server.cjs' | head -1 || true)"
+  if [ -n "$RUNNING_PID" ]; then
+    DETECTED="$(systemctl status "$RUNNING_PID" 2>/dev/null | grep -oE '[a-zA-Z0-9_.@-]+\.service' | head -1 | sed 's/\.service$//' || true)"
+    if [ -n "$DETECTED" ] && [ "$DETECTED" != "systemd" ]; then
+      warn "No unit named '${SERVICE_NAME}' found — auto-detected managing unit: '${DETECTED}'"
+      SERVICE_NAME="$DETECTED"
+    fi
+  fi
+fi
 if systemctl list-unit-files | grep -q "^${SERVICE_NAME}.service"; then
   $SUDO systemctl restart "$SERVICE_NAME" && RESTART_OK=1
 elif command -v pm2 >/dev/null 2>&1 && pm2 id "$SERVICE_NAME" >/dev/null 2>&1; then
