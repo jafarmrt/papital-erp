@@ -11,6 +11,7 @@ import {
 } from '../../db/schema';
 import { eq, and, or, inArray, desc } from 'drizzle-orm';
 import { workflowEventBus } from './workflowEventBus';
+import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors';
 import { domainEventBus } from '../events/domainEventBus';
 import { DomainEventType, AggregateType } from '../events/domainEvents';
 import { OutboxService } from '../events/outboxService';
@@ -286,7 +287,7 @@ export class WorkflowTransitionExecutor {
       }
 
       if (!def) {
-        throw new Error(`هیچ فرآیند کاری فعال برای موجودیت '${params.entityType}' پیدا نشد.`);
+        throw new NotFoundError(`هیچ فرآیند کاری فعال برای موجودیت '${params.entityType}' پیدا نشد.`);
       }
 
       // Check if instance already exists
@@ -356,7 +357,7 @@ export class WorkflowTransitionExecutor {
       }
 
       if (!initialStateId) {
-        throw new Error('وضعیت اولیه (Initial State) برای این چرخه تعیین نشده است');
+        throw new ValidationError('وضعیت اولیه (Initial State) برای این چرخه تعیین نشده است');
       }
 
       const [newInstance] = await tx.insert(workflowInstances).values({
@@ -410,11 +411,11 @@ export class WorkflowTransitionExecutor {
         .for('update');
 
       if (!instance) {
-        throw new Error('نمونه ورکفلو یافت نشد');
+        throw new NotFoundError('نمونه ورکفلو یافت نشد');
       }
 
       if (instance.status !== 'IN_PROGRESS') {
-        throw new Error('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
+        throw new ConflictError('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
       }
 
       updateRequestContext({
@@ -450,20 +451,20 @@ export class WorkflowTransitionExecutor {
       }
 
       if (!transition) {
-        throw new Error('انتقال (Transition) مورد نظر یافت نشد');
+        throw new NotFoundError('انتقال (Transition) مورد نظر یافت نشد');
       }
 
       if (!fromState || !toState) {
-        throw new Error('وضعیت‌های مرتبط با این انتقال یافت نشدند');
+        throw new NotFoundError('وضعیت‌های مرتبط با این انتقال یافت نشدند');
       }
 
       if (transition.fromStateId !== instance.currentStateId) {
-        throw new Error('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
+        throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
       }
 
       const isAuthorized = this.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
       if (!isAuthorized) {
-        throw new Error(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
+        throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
       }
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
@@ -472,7 +473,7 @@ export class WorkflowTransitionExecutor {
         const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
         if (!ruleEval.passed) {
           const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => `${b.rule.field} ${b.rule.operator} ${b.rule.value} (مقدار واقعی: ${b.actualValue ?? 'خالی'})`);
-          throw new Error(`شرایط سیستمی لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
+          throw new ValidationError(`شرایط سیستمی لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
         }
       }
 

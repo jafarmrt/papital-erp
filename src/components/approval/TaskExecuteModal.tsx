@@ -194,8 +194,9 @@ export function TaskExecuteModal({
           </button>
           <button
             onClick={onExecute}
-            disabled={isExecuting}
-            className={`px-6 py-2.5 text-xs font-bold text-white rounded-xl transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5 cursor-pointer ${
+            disabled={isExecuting || (taskAction === 'reject' && !comment.trim())}
+            title={taskAction === 'reject' && !comment.trim() ? 'برای رد، درج دلیل الزامی است' : undefined}
+            className={`px-6 py-2.5 text-xs font-bold text-white rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer ${
               taskAction === 'approve'
                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
                 : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20'
@@ -207,7 +208,7 @@ export function TaskExecuteModal({
                 ? 'در حال ثبت در گردش‌کار...' 
                 : taskAction === 'approve' 
                 ? (isRequisition ? 'تایید نهایی و صدور مجوز خرید' : 'تایید و ثبت نهایی وظیفه') 
-                : 'رد و عودت وظیفه'}
+                : (comment.trim() ? 'رد و عودت وظیفه' : 'رد و عودت (نیازمند دلیل)')}
             </span>
           </button>
         </div>

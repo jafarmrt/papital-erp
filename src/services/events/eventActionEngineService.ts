@@ -121,6 +121,126 @@ export class EventActionEngineService {
   /**
    * Execute an action based on its type and config
    */
+  private static async executeWebhookAction(
+    rule: typeof eventActionRules.$inferSelect,
+    event: BaseDomainEvent,
+    webhookConfig: WebhookActionConfig,
+    startTime: number
+  ): Promise<{ resultData: unknown; earlyReturn?: { status: 'failed'; result: unknown; errorMessage: string; durationMs: number } }> {
+    if (!webhookConfig.url) {
+      throw new Error('آدرس وب‌هوک (URL) تعیین نشده است.');
+    }
+
+    let targetUrl = this.interpolateTemplate(webhookConfig.url, event);
+    if (targetUrl.startsWith('/')) {
+      targetUrl = `http://127.0.0.1:3000${targetUrl}`;
+    }
+
+    await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
+
+    const method = webhookConfig.method || 'POST';
+    const timeoutMs = webhookConfig.timeoutMs || 8000;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Workshop-ERP-Event-Engine/7.0',
+      'X-ERP-Event-Type': event.eventType,
+      'X-ERP-Event-ID': event.eventId,
+      ...(webhookConfig.headers || {})
+    };
+
+    if (webhookConfig.secretToken) {
+      headers['X-ERP-Signature-Token'] = webhookConfig.secretToken;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const bodyPayload = {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        event: {
+          eventId: event.eventId,
+          eventType: event.eventType,
+          aggregateType: event.aggregateType,
+          aggregateId: event.aggregateId,
+          payload: event.payload,
+          metadata: webhookConfig.includeMetadata ? event.metadata : undefined,
+          occurredAt: event.occurredAt
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      const response = await fetch(targetUrl, {
+        method,
+        headers,
+        body: JSON.stringify(bodyPayload),
+        signal: controller.signal,
+        // V3.0.7 (TD-057): جلوگیری از دورزدن SSRF Guard با redirect
+        redirect: 'manual'
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.status >= 300 && response.status < 400) {
+        throw new Error(`Redirect responses are not followed (SSRF protection) — HTTP ${response.status}`);
+      }
+
+      let resBody: unknown = null;
+      try {
+        resBody = await response.json();
+      } catch {
+        resBody = await response.text();
+      }
+
+      const resultData = {
+        targetUrl,
+        httpStatus: response.status,
+        httpStatusText: response.statusText,
+        ok: response.ok,
+        responseBody: resBody
+      };
+
+      if (!response.ok) {
+        return {
+          resultData,
+          earlyReturn: {
+            status: 'failed',
+            result: resultData,
+            errorMessage: `وب‌هوک با وضعیت HTTP ${response.status} پاسخ داد.`,
+            durationMs: Date.now() - startTime
+          }
+        };
+      }
+
+      return { resultData };
+    } catch (fetchErr: unknown) {
+      clearTimeout(timeoutId);
+      const fetchError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
+      if (
+        targetUrl.includes('webhook-echo') ||
+        targetUrl.includes('httpbin.org') ||
+        targetUrl.includes('example.com') ||
+        targetUrl.includes('localhost') ||
+        targetUrl.includes('127.0.0.1') ||
+        targetUrl.includes('webhook.site')
+      ) {
+        logger.info(`[EventActionEngine Webhook] Local/simulation fallback for ${targetUrl}`);
+        return {
+          resultData: {
+            targetUrl,
+            httpStatus: 200,
+            httpStatusText: 'OK (Simulated Fallback)',
+            ok: true,
+            responseBody: { success: true, message: 'وب‌هوک شبیه‌ساز با موفقیت دریافت گردید.' }
+          }
+        };
+      }
+      throw new Error(`خطای ارتباط با سرور وب‌هوک: ${fetchError.name === 'AbortError' ? 'Timeout (پایان مهلت زمانی)' : fetchError.message}`);
+    }
+  }
+
   public static async executeAction(
     rule: typeof eventActionRules.$inferSelect,
     event: BaseDomainEvent
@@ -138,113 +258,11 @@ export class EventActionEngineService {
         // -------------------------------------------------------------
         case 'webhook': {
           const webhookConfig = config as unknown as WebhookActionConfig;
-          if (!webhookConfig.url) {
-            throw new Error('آدرس وب‌هوک (URL) تعیین نشده است.');
+          const webhookOutcome = await this.executeWebhookAction(rule, event, webhookConfig, startTime);
+          if (webhookOutcome.earlyReturn) {
+            return webhookOutcome.earlyReturn;
           }
-
-          let targetUrl = this.interpolateTemplate(webhookConfig.url, event);
-          if (targetUrl.startsWith('/')) {
-            targetUrl = `http://127.0.0.1:3000${targetUrl}`;
-          }
-
-          // Assert URL is safe against SSRF attacks (SEC-010)
-          await assertSafeExternalUrl(targetUrl, { allowLocalEcho: true });
-
-          const method = webhookConfig.method || 'POST';
-          const timeoutMs = webhookConfig.timeoutMs || 8000;
-
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Workshop-ERP-Event-Engine/7.0',
-            'X-ERP-Event-Type': event.eventType,
-            'X-ERP-Event-ID': event.eventId,
-            ...(webhookConfig.headers || {})
-          };
-
-          if (webhookConfig.secretToken) {
-            headers['X-ERP-Signature-Token'] = webhookConfig.secretToken;
-          }
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-          try {
-            const bodyPayload = {
-              ruleId: rule.id,
-              ruleName: rule.name,
-              event: {
-                eventId: event.eventId,
-                eventType: event.eventType,
-                aggregateType: event.aggregateType,
-                aggregateId: event.aggregateId,
-                payload: event.payload,
-                metadata: webhookConfig.includeMetadata ? event.metadata : undefined,
-                occurredAt: event.occurredAt
-              },
-              timestamp: new Date().toISOString()
-            };
-
-            const response = await fetch(targetUrl, {
-              method,
-              headers,
-              body: JSON.stringify(bodyPayload),
-              signal: controller.signal,
-              // V3.0.7 (TD-057): جلوگیری از دورزدن SSRF Guard با redirect
-              redirect: 'manual'
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.status >= 300 && response.status < 400) {
-              throw new Error(`Redirect responses are not followed (SSRF protection) — HTTP ${response.status}`);
-            }
-
-            let resBody: unknown = null;
-            try {
-              resBody = await response.json();
-            } catch {
-              resBody = await response.text();
-            }
-
-            resultData = {
-              targetUrl,
-              httpStatus: response.status,
-              httpStatusText: response.statusText,
-              ok: response.ok,
-              responseBody: resBody
-            };
-
-            if (!response.ok) {
-              return {
-                status: 'failed',
-                result: resultData,
-                errorMessage: `وب‌هوک با وضعیت HTTP ${response.status} پاسخ داد.`,
-                durationMs: Date.now() - startTime
-              };
-            }
-          } catch (fetchErr: unknown) {
-            clearTimeout(timeoutId);
-            const fetchError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
-            if (
-              targetUrl.includes('webhook-echo') ||
-              targetUrl.includes('httpbin.org') ||
-              targetUrl.includes('example.com') ||
-              targetUrl.includes('localhost') ||
-              targetUrl.includes('127.0.0.1') ||
-              targetUrl.includes('webhook.site')
-            ) {
-              logger.info(`[EventActionEngine Webhook] Local/simulation fallback for ${targetUrl}`);
-              resultData = {
-                targetUrl,
-                httpStatus: 200,
-                httpStatusText: 'OK (Simulated Fallback)',
-                ok: true,
-                responseBody: { success: true, message: 'وب‌هوک شبیه‌ساز با موفقیت دریافت گردید.' }
-              };
-              break;
-            }
-            throw new Error(`خطای ارتباط با سرور وب‌هوک: ${fetchError.name === 'AbortError' ? 'Timeout (پایان مهلت زمانی)' : fetchError.message}`);
-          }
+          resultData = webhookOutcome.resultData;
           break;
         }
 

@@ -41,6 +41,7 @@ export class WorkflowSlaEvaluator {
     const completedInstances = allInstances.filter(i => i.status === 'COMPLETED');
 
     const states = await orm.select().from(workflowStates);
+    const stateById = new Map(states.map(s => [s.id, s]));
     const historyLogs = await orm.select().from(workflowHistoryLogs).orderBy(workflowHistoryLogs.createdAt);
 
     const now = new Date().getTime();
@@ -51,7 +52,7 @@ export class WorkflowSlaEvaluator {
     let totalTransitionsChecked = 0;
 
     for (const inst of activeInstances) {
-      const state = states.find(s => s.id === inst.currentStateId);
+      const state = stateById.get(inst.currentStateId);
       const slaHours = state?.slaHours || 24;
       const lastUpdate = inst.updatedAt ? new Date(inst.updatedAt).getTime() : new Date(inst.createdAt || '').getTime();
       const hoursInState = Math.round(((now - lastUpdate) / (1000 * 60 * 60)) * 10) / 10;
@@ -103,7 +104,7 @@ export class WorkflowSlaEvaluator {
     for (const inst of activeInstances) {
       if (stateStatsMap[inst.currentStateId]) {
         stateStatsMap[inst.currentStateId].activeCount++;
-        const state = states.find(s => s.id === inst.currentStateId);
+        const state = stateById.get(inst.currentStateId);
         const slaHours = state?.slaHours || 24;
         const lastUpdate = inst.updatedAt ? new Date(inst.updatedAt).getTime() : new Date(inst.createdAt || '').getTime();
         const hoursInState = (now - lastUpdate) / (1000 * 60 * 60);

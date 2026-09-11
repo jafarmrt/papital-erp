@@ -6,6 +6,26 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.3.0',
+    date: '۱۹ شهریور ۱۴۰۵',
+    title: 'بررسی و بهبود گردش‌کار، رویدادها و اتوماسیون: تایپ خطاها، کارایی SLA، استخراج وب‌هوک و UX دلیل رد',
+    summary: 'بررسی جامع سلامت موتور گردش کار و رویدادها: تأیید قفل ردیف/اسنپ‌شات/کوانتوم/Outbox/HMAC/SSRF و سپس رفع بدهی‌ها — خطاهای کسب‌وکار ورک‌فلو از Error خام به AppError (403/404/409/422 و حفظ traceId)، حذف اسکن O(n²) در تحلیل SLA، استخراج رفتار وب‌هوک از switch بزرگ executeAction، و الزامی‌کردن درج دلیل هنگام رد وظیفه.',
+    author: 'AI Agent (Workflow & Event Automation Review & Hardening)',
+    changes: [
+      '🏷️ تایپ‌دار شدن ۱۵ خطای خام سرویس‌های workflow با AppError: NotFoundError (نمونه/انتقال/وضعیت/وظیفه)، ConflictError (خاتمه‌یافته/عدم تطابق وضعیت/تعیین‌تکلیف‌شده)، ForbiddenError (نقش/وظیفه غیرمجاز)، ValidationError (شرایط احراز‌نشده/انتقال نامعتبر) — دیگر خطای کسب‌وکار 500 برنمی‌گرداند',
+      '⚡ حذف O(n²) در WorkflowSlaEvaluator: نگاشت stateها به Map به‌جای find داخل حلقه‌های activeInstances',
+      '🧩 استخراج executeWebhookAction از switch بزرگ executeAction (شامل SSRF، timeout، fallback شبیه‌ساز، redirect manual) با حفظ کامل رفتار',
+      '✅ UX: دکمه «رد و عودت» تا درج دلیل غیرفعال است و برچسب راهنما نمایش می‌دهد (کاهش ردهای بی‌دلیل)',
+      '📋 ثبت TD-083 (کد مرده ApprovalRules)، TD-084 (ادامه شکستن executeAction) و TD-085 (پیشنهادات UX) برای فاز بعد',
+      '📦 افزایش نسخه سیستم به v3.3.0'
+    ],
+    fixes: [
+      'رفع بازگشت HTTP 500 برای خطاهای کسب‌وکار گردش‌کار (نقش غیرمجاز، شرط ناحق، وضعیت نامعتبر)',
+      'رفع هزینه O(n²) در تحلیل SLA و گلوگاه‌ها',
+      'رفع امکان ثبت رد بدون دلیل در کارتابل تایید'
+    ]
+  },
+  {
     version: 'v3.2.3',
     date: '۱۹ شهریور ۱۴۰۵',
     title: 'تکمیل سناریوهای ۵ و ۶ Playbook: استخراج useCRMFilters و Memoize کردن فیلترهای ProjectsPage',

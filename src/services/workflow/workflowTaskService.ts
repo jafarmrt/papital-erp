@@ -9,6 +9,7 @@ import { eq, and, inArray, desc, sql } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
+import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
 export class WorkflowTaskService {
   /**
@@ -173,7 +174,7 @@ export class WorkflowTaskService {
     return await orm.transaction(async (tx) => {
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
       if (!task) {
-        throw new Error('وظیفه مورد نظر یافت نشد');
+        throw new NotFoundError('وظیفه مورد نظر یافت نشد');
       }
 
       if (task.status !== 'pending') {
@@ -189,12 +190,12 @@ export class WorkflowTaskService {
       }
 
       if (!task.transitionId) {
-        throw new Error('انتقال معتبری به این وظیفه متصل نیست');
+        throw new ValidationError('انتقال معتبری به این وظیفه متصل نیست');
       }
 
       const [instance] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, task.instanceId));
       if (!instance) {
-        throw new Error('نمونه فرآیند کاری متناظر با این وظیفه یافت نشد');
+        throw new NotFoundError('نمونه فرآیند کاری متناظر با این وظیفه یافت نشد');
       }
 
       const userRole = (params.userRole || '').trim().toLowerCase();
@@ -254,7 +255,7 @@ export class WorkflowTaskService {
       }
 
       if (!isAuthorized) {
-        throw new Error('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر) (WF_TASK_UNAUTHORIZED).');
+        throw new ForbiddenError('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر) (WF_TASK_UNAUTHORIZED).');
       }
 
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
@@ -382,10 +383,10 @@ export class WorkflowTaskService {
     return await orm.transaction(async (tx) => {
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
       if (!task) {
-        throw new Error('وظیفه مورد نظر یافت نشد');
+        throw new NotFoundError('وظیفه مورد نظر یافت نشد');
       }
       if (task.status !== 'pending') {
-        throw new Error('فقط وظایف در انتظار امکان تفویض دارند');
+        throw new ConflictError('فقط وظایف در انتظار امکان تفویض دارند');
       }
 
       await tx.update(workflowTasks)
