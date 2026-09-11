@@ -43,7 +43,10 @@ fi
 gunzip -t "$DUMP_FILE.gz" || { echo "[$(date)] Backup verification FAILED for $DUMP_FILE.gz — keeping file for inspection"; exit 1; }
 # 2b. V3.0.8 (TD-059): pg_restore must be able to read the archive TOC —
 # gzip integrity alone never proved the dump itself is restorable.
-gunzip -c "$DUMP_FILE.gz" | pg_restore --list - >/dev/null 2>/dev/null \
+# NOTE: pg_restore reads stdin when given NO filename argument — it does NOT
+# accept "-" as an stdin alias (unlike pg_dump) and fails with
+# "could not open input file" on PostgreSQL 16.
+gunzip -c "$DUMP_FILE.gz" | pg_restore --list >/dev/null 2>/dev/null \
   || { echo "[$(date)] Backup verification FAILED (pg_restore --list): $DUMP_FILE.gz is NOT a valid pg_dump archive — keeping file for inspection"; exit 1; }
 
 # 3. Upload to offsite storage (optional, e.g. S3)

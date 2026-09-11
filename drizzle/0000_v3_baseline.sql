@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   locked_until text,
   token_version integer DEFAULT 0,
   is_deleted integer DEFAULT 0,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS roles (
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS task_categories (
   name text NOT NULL UNIQUE,
   description text DEFAULT '',
   is_deleted integer DEFAULT 0,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS customers (
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS customers (
   supplier_category text DEFAULT '',
   bank_info jsonb DEFAULT '{}'::jsonb,
   contacts jsonb DEFAULT '[]'::jsonb,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   version integer NOT NULL DEFAULT 1,
   is_deleted integer DEFAULT 0
 );
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS changelogs (
 CREATE TABLE IF NOT EXISTS migrations_log (
   id serial PRIMARY KEY,
   name text NOT NULL UNIQUE,
-  applied_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  applied_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS items (
@@ -214,8 +214,8 @@ CREATE TABLE IF NOT EXISTS item_prices (
   title text NOT NULL,
   price numeric(18, 4) NOT NULL,
   currency text DEFAULT 'IRR',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -232,7 +232,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   description text NOT NULL,
   details jsonb DEFAULT '{}'::jsonb,
   ip_address text DEFAULT '',
-  timestamp timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  timestamp timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS activity_logs_username ON activity_logs (username);
@@ -273,8 +273,8 @@ CREATE TABLE IF NOT EXISTS personnel (
   nobitex_password text DEFAULT '',
   address text DEFAULT '',
   notes text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -293,8 +293,8 @@ CREATE TABLE IF NOT EXISTS transfers (
   image text DEFAULT '',
   thumbnail text DEFAULT '',
   notes text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_transfer_code ON transfers (code);
@@ -319,7 +319,7 @@ CREATE TABLE IF NOT EXISTS production_projects (
   inventory_control jsonb DEFAULT '{}'::jsonb,
   stage_schedules jsonb DEFAULT '{}'::jsonb,
   custom_stages jsonb DEFAULT '[]'::jsonb,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   created_by text DEFAULT '',
   version integer NOT NULL DEFAULT 1,
   is_deleted integer DEFAULT 0
@@ -372,7 +372,7 @@ CREATE TABLE IF NOT EXISTS daily_work_logs (
   allowed_users jsonb DEFAULT '[]'::jsonb,
   status text DEFAULT 'submitted',
   manager_notes text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -406,7 +406,7 @@ CREATE TABLE IF NOT EXISTS pending_materials (
   image text DEFAULT '',
   thumbnail text DEFAULT '',
   rejection_reason text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -425,7 +425,7 @@ CREATE TABLE IF NOT EXISTS piecework_tasks (
   unit text DEFAULT 'عدد',
   description text DEFAULT '',
   is_active integer DEFAULT 1,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -447,7 +447,7 @@ CREATE TABLE IF NOT EXISTS piecework_task_rate_history (
   changed_by_user_id integer,
   changed_by_username text DEFAULT '',
   effective_date text NOT NULL,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_ptrh_task ON piecework_task_rate_history (task_id);
@@ -459,7 +459,7 @@ CREATE TABLE IF NOT EXISTS piecework_personnel_rates (
   personnel_id integer NOT NULL,
   task_id integer NOT NULL,
   custom_rate numeric(18, 4) NOT NULL,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  updated_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -486,7 +486,7 @@ CREATE TABLE IF NOT EXISTS piecework_payrolls (
   payment_reference text DEFAULT '',
   notes text DEFAULT '',
   created_by_id integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -513,7 +513,7 @@ CREATE TABLE IF NOT EXISTS piecework_logs (
   status text DEFAULT 'pending',
   created_by_id integer,
   created_by_username text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -542,7 +542,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   description text DEFAULT '',
   is_system integer DEFAULT 0,
   is_active integer DEFAULT 1,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -573,7 +573,7 @@ CREATE TABLE IF NOT EXISTS journal_vouchers (
   created_by_id integer,
   created_by_username text DEFAULT '',
   approved_by_id integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   version integer NOT NULL DEFAULT 1,
   is_deleted integer DEFAULT 0
 );
@@ -601,7 +601,7 @@ CREATE TABLE IF NOT EXISTS journal_voucher_items (
   currency text DEFAULT 'IRR',
   exchange_rate numeric(18, 4) DEFAULT 1,
   description text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_jvi_voucher ON journal_voucher_items (voucher_id);
@@ -626,7 +626,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
   account_id integer,
   is_active integer DEFAULT 1,
   notes text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   version integer NOT NULL DEFAULT 1,
   is_deleted integer DEFAULT 0
 );
@@ -659,7 +659,7 @@ CREATE TABLE IF NOT EXISTS cheques (
   description text DEFAULT '',
   status_history jsonb DEFAULT '[]'::jsonb,
   created_by_id integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   version integer NOT NULL DEFAULT 1,
   is_deleted integer DEFAULT 0
 );
@@ -699,8 +699,8 @@ CREATE TABLE IF NOT EXISTS treasury_transactions (
   reconciled_at text DEFAULT '',
   reconciled_batch text DEFAULT '',
   created_by_id integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now(),
   version integer NOT NULL DEFAULT 1,
   is_deleted integer DEFAULT 0
 );
@@ -718,7 +718,7 @@ CREATE TABLE IF NOT EXISTS accounting_settings (
   key text NOT NULL UNIQUE,
   account_id integer,
   description text DEFAULT '',
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS crm_leads (
@@ -741,8 +741,8 @@ CREATE TABLE IF NOT EXISTS crm_leads (
   contacts jsonb DEFAULT '[]'::jsonb,
   has_proforma integer DEFAULT 0,
   proforma_id integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now(),
   created_by text DEFAULT '',
   is_deleted integer DEFAULT 0
 );
@@ -771,7 +771,7 @@ CREATE TABLE IF NOT EXISTS crm_activities (
   next_followup_date_iso text DEFAULT '',
   next_followup_task text DEFAULT '',
   is_followup_completed integer DEFAULT 0,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   is_deleted integer DEFAULT 0
 );
 --> statement-breakpoint
@@ -796,7 +796,7 @@ CREATE TABLE IF NOT EXISTS workflow_definitions (
   is_active integer DEFAULT 1,
   description text DEFAULT '',
   dsl_json jsonb DEFAULT '{}'::jsonb,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_definition_versions (
@@ -807,7 +807,7 @@ CREATE TABLE IF NOT EXISTS workflow_definition_versions (
   description text DEFAULT '',
   dsl_json jsonb DEFAULT '{}'::jsonb,
   created_by integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_wdv_def_ver ON workflow_definition_versions (definition_id, version);
@@ -853,8 +853,8 @@ CREATE TABLE IF NOT EXISTS workflow_instances (
   started_by integer,
   started_by_name text DEFAULT '',
   version integer NOT NULL DEFAULT 1,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_pending_approvals (
@@ -864,7 +864,7 @@ CREATE TABLE IF NOT EXISTS workflow_pending_approvals (
   assigned_role text DEFAULT '',
   assigned_user_id integer,
   status text DEFAULT 'PENDING',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_history_logs (
@@ -879,7 +879,7 @@ CREATE TABLE IF NOT EXISTS workflow_history_logs (
   action_title text DEFAULT '',
   comment text DEFAULT '',
   snapshot_data jsonb DEFAULT '{}'::jsonb,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS workflow_tasks (
@@ -896,7 +896,7 @@ CREATE TABLE IF NOT EXISTS workflow_tasks (
   description text DEFAULT '',
   due_at timestamp,
   completed_at timestamp,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_wft_instance ON workflow_tasks (instance_id);
@@ -914,7 +914,7 @@ CREATE TABLE IF NOT EXISTS workflow_delegations (
   end_date timestamp NOT NULL,
   is_active integer DEFAULT 1,
   reason text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_wfd_from_user ON workflow_delegations (from_user_id);
@@ -935,7 +935,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
   retry_count integer DEFAULT 0,
   next_retry_at timestamp,
   last_error text DEFAULT '',
-  occurred_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  occurred_at timestamp DEFAULT now(),
   processed_at timestamp,
   locked_at timestamp,
   locked_by text DEFAULT ''
@@ -959,8 +959,8 @@ CREATE TABLE IF NOT EXISTS event_action_rules (
   execution_count integer DEFAULT 0,
   last_executed_at timestamp,
   created_by integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_action_rules_event_active ON event_action_rules (event_type, is_active);
@@ -976,7 +976,7 @@ CREATE TABLE IF NOT EXISTS event_action_logs (
   result jsonb DEFAULT '{}'::jsonb,
   error_message text DEFAULT '',
   execution_duration_ms integer DEFAULT 0,
-  executed_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  executed_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_action_logs_rule ON event_action_logs (rule_id, executed_at);
@@ -996,7 +996,7 @@ CREATE TABLE IF NOT EXISTS dead_letter_events (
   error_stack text DEFAULT '',
   retry_count integer DEFAULT 0,
   status text NOT NULL DEFAULT 'quarantined',
-  quarantined_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  quarantined_at timestamp DEFAULT now(),
   resolved_at timestamp,
   resolved_by integer,
   resolution_notes text DEFAULT ''
@@ -1025,8 +1025,8 @@ CREATE TABLE IF NOT EXISTS webhook_subscriptions (
   last_status text DEFAULT 'idle',
   last_error text DEFAULT '',
   created_by integer,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_webhook_subs_active ON webhook_subscriptions (is_active);
@@ -1045,7 +1045,7 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
   signature text DEFAULT '',
   attempt integer DEFAULT 1,
   duration_ms integer DEFAULT 0,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_webhook_deliv_sub ON webhook_deliveries (subscription_id, created_at);
@@ -1061,8 +1061,8 @@ CREATE TABLE IF NOT EXISTS woocommerce_order_logs (
   total_amount numeric(15, 2) DEFAULT '0',
   payload jsonb,
   error_message text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_wc_order_id ON woocommerce_order_logs (wc_order_id);
@@ -1078,8 +1078,8 @@ CREATE TABLE IF NOT EXISTS form_drafts (
   draft_key text DEFAULT 'default',
   payload jsonb NOT NULL,
   summary text DEFAULT '',
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
-  updated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now(),
   expires_at timestamp,
   is_deleted integer DEFAULT 0
 );
@@ -1105,7 +1105,7 @@ CREATE TABLE IF NOT EXISTS project_bom_allocations (
   user_id integer,
   username text DEFAULT '',
   notes text DEFAULT '',
-  allocated_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  allocated_at timestamp DEFAULT now(),
   consumed_at timestamp,
   released_at timestamp,
   is_deleted integer DEFAULT 0
@@ -1132,7 +1132,7 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   created_by_id integer,
   locked_at timestamp,
   locked_until timestamp,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb,
+  created_at timestamp DEFAULT now(),
   completed_at timestamp,
   expires_at timestamp
 );
@@ -1151,7 +1151,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   message text NOT NULL,
   link text DEFAULT '',
   is_read integer DEFAULT 0,
-  created_at timestamp DEFAULT '{"decoder":{},"shouldInlineParams":false,"usedTables":[],"queryChunks":[{"value":["now()"]}]}'::jsonb
+  created_at timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications (user_id);

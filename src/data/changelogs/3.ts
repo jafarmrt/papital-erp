@@ -6,6 +6,23 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.3.9',
+    date: '۲۰ شهریور ۱۴۰۵',
+    title: 'رفع خرابی بحرانی baseline مایگریشن و false-negative تأیید بکاپ',
+    summary: 'دو باگ بحرانی زیرساخت رفع شد: (۱) فایل baseline مایگریشن (drizzle/0000_v3_baseline.sql) در ۵۳ نقطه دچار خراب مقدار DEFAULT بود — به‌جای now() عبارت corrupted JSON درون drizzle به‌صورت jsonb درج شده بود که اجرای مایگریشن روی هر دیتابیس تمیز را می‌شکست (شکست CREATE TABLE users و ۵۲ ستون دیگر). (۲) چک صحت بکاپ در scripts/backup.sh از pg_restore --list - استفاده می‌کرد؛ pg_restore برخلاف pg_dump آرگومان "-" برای stdin نمی‌پذیرد و همه بکاپ‌های سالم به‌اشتباه FAILED اعلام می‌شدند.',
+    author: 'AI Agent (Migration Baseline Repair & Backup Verification Fix)',
+    changes: [
+      '🛠 بازتولید drizzle/0000_v3_baseline.sql — جایگزینی ۵۳ مقدار DEFAULT خراب («{"decoder":...}\'::jsonb) با now() استاندارد در ستون‌های timestamp',
+      '🛠 اصلاح scripts/backup.sh — چک صحت pg_restore از «--list -» به «--list» (خواندن stdin بدون آرگومان) — TD-059 اکنون درست عمل می‌کند',
+      '✅ راستی‌آزمایی روی دیتابیس تمیز: مایگریشن 0→7 کامل، ۵۹ جدول، صفر ستون شناور، seed کامل داده‌های پایه سیستمی',
+      '🔢 ارتقای نسخه به v3.3.9'
+    ],
+    fixes: [
+      'مایگریشن اتمیک روی دیتابیس خالی/جدید شکست می‌خورد و startup به لوپ خطای ۵ مرتبه می‌رفت — اکنون نصب تمیز از baseline سالم عبور می‌کند',
+      'بکاپ‌های سالم به‌اشتباه «NOT a valid pg_dump archive» اعلام و فرآیند آپدیت مسدود می‌شد — اکنون تأیید واقعی TOC انجام می‌شود'
+    ]
+  },
+  {
     version: 'v3.3.8',
     date: '۲۰ شهریور ۱۴۰۵',
     title: 'گسترش کدینگ استاندارد حسابداری با ۶ حساب معین جدید',
