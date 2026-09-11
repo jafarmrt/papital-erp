@@ -164,7 +164,7 @@ done
 [ "$HEALTH_OK" -eq 1 ] || die "Health probe failed after restart. Check: journalctl -u ${SERVICE_NAME} -n 100"
 
 # ---------- 5b) Version consistency: the RUNNING process must serve the NEW build ----------
-HEALTH_VERSION="$(curl -fsS "http://localhost:${APP_PORT}/health" | grep -oE '"version":"[^"]+"' | cut -d'"' -f4 || true)"
+HEALTH_VERSION="$(curl -fsS "http://localhost:${APP_PORT}/health" | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4 || true)"
 if [ -n "$PKG_VERSION" ] && [ "$HEALTH_VERSION" != "$PKG_VERSION" ]; then
   die "Runtime version (v${HEALTH_VERSION:-unknown}) does NOT match the freshly built package.json (v$PKG_VERSION).
 The service was NOT restarted with the new build (old process still running).
