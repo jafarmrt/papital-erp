@@ -32,13 +32,18 @@ echo "[5/8] Testing /api/items..."
 curl -fsS -H "Cookie: auth_token=$ADMIN_TOKEN" \
   "$BASE_URL/api/items?limit=1" | jq -e '.data' > /dev/null
 
-# 5. WooCommerce webhook must reject unsigned payloads (HMAC enforced since PHASE 0)
-echo "[6/8] Testing webhook rejection..."
+# 5. WooCommerce webhook must reject unsigned ORDER payloads:
+#    - wc_webhook_secret set      → 401 (missing X-WC-Webhook-Signature)
+#    - wc_webhook_secret NOT set  → 403 (fail-closed for real orders)
+#    NOTE: non-order payloads (no id/number) are politely ACKed with 200 by
+#    design — so the probe MUST look like a real order to exercise the guard.
+echo "[6/8] Testing webhook rejection (unsigned order-shaped payload)..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "$BASE_URL/api/woocommerce/webhook/order" \
   -H "Content-Type: application/json" \
-  -d '{"test": true}')
-echo "$STATUS" | grep -qE "401|403|503" || { echo "  unexpected webhook status: $STATUS"; exit 1; }
+  -H "X-ERP-Order-Probe: 1" \
+  -d '{"id": 900001, "number": "900001", "status": "processing", "line_items": [{"name": "Smoke Probe", "sku": "SMOKE-PROBE-SKU", "quantity": 1}]}')
+echo "$STATUS" | grep -qE "401|403|503" || { echo "  unexpected webhook status: $STATUS (expected 401 unsigned / 403 fail-closed)"; exit 1; }
 
 # 6. Rate limit (loginLimiter: max 5 attempts / 15 min keyed on socket peer address)
 echo "[7/8] Testing rate limit..."
