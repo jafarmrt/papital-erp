@@ -5,7 +5,8 @@ import { User } from '../types';
 import {
   Layers, Search, Upload, Image as ImageIcon, Plus, RefreshCw,
   Package, AlertCircle, Edit3, X, Check, Eye, Trash2, Sparkles, Filter,
-  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Printer
+  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Printer,
+  Download, ZoomIn
 } from 'lucide-react';
 import { formatPersianNumber, formatPersianPrice } from '../utils';
 import { compressTo300KB } from '../utils/imageCompression';
@@ -38,8 +39,13 @@ export default function TransfersPage({ user }: { user?: User }) {
   const [editImage, setEditImage] = useState<string>('');
   const [editThumbnail, setEditThumbnail] = useState<string>('');
 
-  // Image preview modal state
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  // Image lightbox modal state (for transfer designs and product images)
+  const [lightboxData, setLightboxData] = useState<{
+    url: string;
+    title?: string;
+    subtitle?: string;
+  } | null>(null);
+
   // V10-3.2: پیش‌نمایش چاپ کارت ترنسفر
   const [printTarget, setPrintTarget] = useState<TransferItem | null>(null);
 
@@ -48,6 +54,17 @@ export default function TransfersPage({ user }: { user?: User }) {
   const loadTransfers = () => {
     refetch();
   };
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightboxData(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Reset page to 1 on filter or search change
   useEffect(() => {
@@ -403,12 +420,20 @@ export default function TransfersPage({ user }: { user?: User }) {
                         src={item.image}
                         alt={`ترنسفر کد ${item.code}`}
                         className="max-h-36 max-w-full object-contain rounded-xl shadow-xs transition-transform duration-300 group-hover/img:scale-105 cursor-pointer"
-                        onClick={() => setPreviewImageUrl(item.image)}
+                        onClick={() => setLightboxData({
+                          url: item.image,
+                          title: item.title || `طرح ترنسفر کد ${item.code}`,
+                          subtitle: `کد ترنسفر: ${item.code} • ${formatPersianNumber(item.productCount)} کالای متصل`
+                        })}
                       />
                       <button
-                        onClick={() => setPreviewImageUrl(item.image)}
-                        className="absolute top-3 left-3 bg-slate-900/80 hover:bg-slate-900 text-white p-1.5 rounded-xl text-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-sm"
-                        title="بزرگنمایی تصویر"
+                        onClick={() => setLightboxData({
+                          url: item.image,
+                          title: item.title || `طرح ترنسفر کد ${item.code}`,
+                          subtitle: `کد ترنسفر: ${item.code} • ${formatPersianNumber(item.productCount)} کالای متصل`
+                        })}
+                        className="absolute top-3 left-3 bg-slate-900/80 hover:bg-slate-900 text-white p-1.5 rounded-xl text-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 shadow-sm cursor-pointer"
+                        title="بزرگنمایی تصویر طرح ترنسفر"
                       >
                         <Eye size={13} />
                       </button>
@@ -430,36 +455,75 @@ export default function TransfersPage({ user }: { user?: User }) {
 
                 {/* Linked Products Summary Section */}
                 <div className="p-4 bg-white flex-1 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 pb-1 border-b">
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 pb-1.5 border-b border-slate-100">
                       <span>محصولات متصل به کد {item.code}:</span>
-                      <span className="text-slate-400">{formatPersianNumber(item.products.length)} کالا</span>
+                      <span className="text-slate-400 font-mono">{formatPersianNumber(item.products.length)} کالا</span>
                     </div>
 
                     {item.products.length > 0 ? (
-                      <div className="space-y-1.5">
-                        {item.products.slice(0, 3).map((prod) => (
-                          <div key={prod.id} className="flex items-center justify-between text-xs p-1.5 rounded-xl bg-slate-50 border border-slate-100">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              {prod.thumbnail || prod.image ? (
-                                <SafeImage src={prod.thumbnail || prod.image} alt={prod.name} className="w-6 h-6 rounded-md object-cover border" />
-                              ) : (
-                                <div className="w-6 h-6 rounded-md bg-slate-200 flex items-center justify-center text-[10px] text-slate-500 font-bold">
-                                  {prod.name.charAt(0)}
+                      <div className="space-y-2">
+                        {item.products.slice(0, 3).map((prod) => {
+                          const prodImg = prod.thumbnail || prod.image;
+                          return (
+                            <div 
+                              key={prod.id} 
+                              className="flex items-center justify-between p-2 rounded-xl bg-slate-50 hover:bg-blue-50/40 border border-slate-100 hover:border-blue-200 transition-all group/proditem"
+                            >
+                              <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
+                                {prodImg ? (
+                                  <div
+                                    onClick={() => setLightboxData({
+                                      url: prod.image || prod.thumbnail || '',
+                                      title: prod.name,
+                                      subtitle: `کد محصول: ${prod.code} • دسته‌بندی: ${prod.category || '-'}`
+                                    })}
+                                    className="relative group/prodimg shrink-0 cursor-pointer"
+                                    title="کلیک برای بزرگنمایی تصویر محصول (لایت‌باکس)"
+                                  >
+                                    <SafeImage
+                                      src={prodImg}
+                                      alt={prod.name}
+                                      className="w-11 h-11 rounded-xl object-cover border border-slate-200 bg-white shadow-2xs group-hover/prodimg:ring-2 group-hover/prodimg:ring-blue-500 group-hover/prodimg:scale-105 transition-all"
+                                    />
+                                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover/prodimg:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white">
+                                      <Eye size={15} />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="w-11 h-11 rounded-xl bg-slate-200/90 text-slate-600 flex items-center justify-center text-xs font-black shrink-0 border border-slate-200">
+                                    {prod.name.charAt(0)}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-bold text-slate-800 text-xs truncate block" title={prod.name}>
+                                    {prod.name}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="font-mono text-[10px] bg-white border border-slate-200 px-1.5 py-0.2 rounded text-slate-700 dir-ltr font-semibold">
+                                      {prod.code}
+                                    </span>
+                                    {prod.category && (
+                                      <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                                        {prod.category}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                              <span className="font-bold text-slate-800 truncate" title={prod.name}>{prod.name}</span>
-                            </div>
+                              </div>
 
-                            <span className="font-mono text-[10px] bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-700 shrink-0 dir-ltr">
-                              {prod.code}
-                            </span>
-                          </div>
-                        ))}
+                              {prod.currentStock !== undefined && (
+                                <span className="text-[10px] bg-white border border-slate-200 px-2 py-1 rounded-lg text-slate-600 font-bold shrink-0 mr-2 shadow-2xs">
+                                  {formatPersianNumber(prod.currentStock)} {prod.unit || 'عدد'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
 
                         {item.products.length > 3 && (
-                          <p className="text-[10px] text-slate-400 text-center pt-1 font-medium">
-                            و {formatPersianNumber(item.products.length - 3)} کالای دیگر...
+                          <p className="text-[10px] text-slate-400 text-center pt-0.5 font-medium">
+                            و {formatPersianNumber(item.products.length - 3)} کالای دیگر متصل به این کد...
                           </p>
                         )}
                       </div>
@@ -622,7 +686,13 @@ export default function TransfersPage({ user }: { user?: User }) {
                           <img
                             src={editImage}
                             alt="Transfer preview"
-                            className="max-h-24 rounded-lg object-contain shadow-2xs bg-white p-1 border"
+                            className="max-h-24 rounded-lg object-contain shadow-2xs bg-white p-1 border cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => setLightboxData({
+                              url: editImage,
+                              title: editTitle || `طرح ترنسفر کد ${editCode}`,
+                              subtitle: `کد ترنسفر: ${editCode}`
+                            })}
+                            title="کلیک برای مشاهده تصویر بزرگ طرح"
                           />
                           <div className="flex items-center gap-1.5 mt-2">
                             <button
@@ -712,42 +782,72 @@ export default function TransfersPage({ user }: { user?: User }) {
                 {/* Linked Products Section */}
                 {selectedTransfer && selectedTransfer.products && selectedTransfer.products.length > 0 && (
                   <div className="border-t border-slate-200 pt-3">
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex justify-between items-center mb-2.5">
                       <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
                         <Package size={14} className="text-purple-600" />
                         کالاهای متصل به کد ترنسفر {selectedTransfer.code}
                       </h4>
-                      <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2.5 py-0.5 rounded-full font-mono">
                         {formatPersianNumber(selectedTransfer.products.length)} کالا
                       </span>
                     </div>
 
-                    <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                      {selectedTransfer.products.map((prod) => (
-                        <div key={prod.id} className="p-2 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2 overflow-hidden">
-                            {prod.thumbnail || prod.image ? (
-                              <SafeImage src={prod.thumbnail || prod.image} alt={prod.name} className="w-7 h-7 rounded-md object-cover border bg-white shrink-0" />
-                            ) : (
-                              <div className="w-7 h-7 rounded-md bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[10px] shrink-0">
-                                {prod.name.charAt(0)}
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                      {selectedTransfer.products.map((prod) => {
+                        const prodImg = prod.thumbnail || prod.image;
+                        return (
+                          <div 
+                            key={prod.id} 
+                            className="p-2.5 bg-slate-50 hover:bg-blue-50/40 border border-slate-100 hover:border-blue-200 rounded-xl flex items-center justify-between text-xs transition-all group/modalitem"
+                          >
+                            <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
+                              {prodImg ? (
+                                <div
+                                  onClick={() => setLightboxData({
+                                    url: prod.image || prod.thumbnail || '',
+                                    title: prod.name,
+                                    subtitle: `کد محصول: ${prod.code} • دسته‌بندی: ${prod.category || '-'}`
+                                  })}
+                                  className="relative group/modalthumb shrink-0 cursor-pointer"
+                                  title="کلیک برای مشاهده تصویر بزرگ محصول (لایت‌باکس)"
+                                >
+                                  <SafeImage 
+                                    src={prodImg} 
+                                    alt={prod.name} 
+                                    className="w-11 h-11 rounded-xl object-cover border border-slate-200 bg-white shadow-2xs group-hover/modalthumb:ring-2 group-hover/modalthumb:ring-blue-500 group-hover/modalthumb:scale-105 transition-all" 
+                                  />
+                                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover/modalthumb:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white">
+                                    <Eye size={15} />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="w-11 h-11 rounded-xl bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-xs shrink-0 border border-slate-200">
+                                  {prod.name.charAt(0)}
+                                </div>
+                              )}
+                              <div className="truncate min-w-0 flex-1">
+                                <p className="font-bold text-slate-800 text-xs truncate" title={prod.name}>{prod.name}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.2 rounded text-slate-700 font-mono dir-ltr font-semibold">
+                                    {prod.code}
+                                  </span>
+                                  {prod.category && (
+                                    <span className="text-[10px] text-slate-400 truncate">
+                                      {prod.category}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            <div className="truncate">
-                              <p className="font-bold text-slate-800 text-xs truncate">{prod.name}</p>
+                            </div>
+
+                            <div className="text-left font-mono shrink-0 flex items-center gap-2 mr-2">
+                              <span className="text-[11px] font-bold text-slate-700 bg-white px-2 py-1 rounded-lg border border-slate-200 font-sans shadow-2xs">
+                                {formatPersianNumber(prod.currentStock)} {prod.unit || 'عدد'}
+                              </span>
                             </div>
                           </div>
-
-                          <div className="text-left font-mono shrink-0 flex items-center gap-2">
-                            <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-700 dir-ltr">
-                              {prod.code}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-sans">
-                              {formatPersianNumber(prod.currentStock)} {prod.unit}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -791,17 +891,63 @@ export default function TransfersPage({ user }: { user?: User }) {
         </div>
       )}
 
-      {/* Image Full Preview Modal */}
-      {previewImageUrl && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setPreviewImageUrl(null)}>
-          <div className="relative max-w-4xl max-h-[90vh] bg-white p-2 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => setPreviewImageUrl(null)}
-              className="absolute top-4 left-4 bg-slate-900/80 text-white p-2 rounded-full hover:bg-slate-900 z-10 transition-colors"
-            >
-              <X size={18} />
-            </button>
-            <img src={previewImageUrl} alt="Full preview" className="max-h-[85vh] w-auto max-w-full object-contain rounded-xl" />
+      {/* Modern Accessible Lightbox Modal */}
+      {lightboxData && (
+        <div 
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setLightboxData(null)}
+        >
+          <div 
+            className="relative max-w-4xl w-full bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Lightbox Header */}
+            <div className="px-5 py-3.5 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between text-white">
+              <div className="min-w-0 flex-1 pr-2">
+                <h3 className="font-bold text-sm text-slate-100 truncate">
+                  {lightboxData.title || 'پیش‌نمایش تصویر'}
+                </h3>
+                {lightboxData.subtitle && (
+                  <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">
+                    {lightboxData.subtitle}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={lightboxData.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs transition-colors cursor-pointer"
+                  title="دانلود یا باز کردن تصویر در تب جدید"
+                >
+                  <Download size={16} />
+                </a>
+                <button
+                  onClick={() => setLightboxData(null)}
+                  className="p-2 bg-slate-800 hover:bg-rose-600 text-slate-200 hover:text-white rounded-xl transition-colors cursor-pointer"
+                  title="بستن (ESC)"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Image Display Area */}
+            <div className="p-4 sm:p-6 flex items-center justify-center bg-slate-950/70 max-h-[75vh] overflow-hidden">
+              <img 
+                src={lightboxData.url} 
+                alt={lightboxData.title || 'تصویر پیش‌نمایش'} 
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl shadow-lg select-none"
+              />
+            </div>
+
+            {/* Lightbox Footer Note */}
+            <div className="px-5 py-2.5 bg-slate-950/90 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+              <span>برای بستن می‌توانید روی دکمه ضربدر، پس‌زمینه یا کلید Esc کلیک کنید</span>
+              <span className="font-mono text-slate-500">کیفیت اصلی</span>
+            </div>
           </div>
         </div>
       )}

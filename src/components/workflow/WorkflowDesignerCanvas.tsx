@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchJson } from '../../api';
 import { 
   Plus, 
   Save, 
@@ -66,6 +68,15 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const { data: detailData, isLoading, refetch } = useWorkflowDefinitionDetailQuery(definitionId);
   const saveMutation = useSaveWorkflowDefinitionMutation();
   const updatePositionsMutation = useUpdateCanvasPositionsMutation();
+
+  const { data: dbRoles } = useQuery<{ id: number; name: string; code: string; isSystem?: number }[]>({
+    queryKey: ['roles', 'list'],
+    queryFn: async () => {
+      const res = await fetchJson('/users/roles');
+      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+    },
+    staleTime: 5 * 60 * 1000
+  });
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [edges, setEdges] = useState<CanvasEdge[]>([]);
@@ -555,10 +566,27 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
                   <option value="">همه کاربران (بدون محدودیت نقش)</option>
-                  <option value="admin">مدیر سیستم (Admin)</option>
-                  <option value="warehouse">مدیر انبار</option>
-                  <option value="accounting">حسابداری</option>
-                  <option value="qc">کنترل کیفیت</option>
+                  {dbRoles && dbRoles.length > 0 ? (
+                    dbRoles.map((r) => (
+                      <option key={r.code} value={r.code}>
+                        {r.name} ({r.code})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="admin">مدیر سیستم (admin)</option>
+                      <option value="warehouse_keeper">انباردار (warehouse_keeper)</option>
+                      <option value="accountant">حسابدار (accountant)</option>
+                      <option value="sales_manager">مدیر فروش (sales_manager)</option>
+                      <option value="production_manager">مدیر تولید (production_manager)</option>
+                    </>
+                  )}
+                  {selectedEdge.requiredRole && 
+                   (!dbRoles || !dbRoles.some(r => r.code === selectedEdge.requiredRole)) && (
+                    <option value={selectedEdge.requiredRole}>
+                      نقش سفارشی یا قبلی: {selectedEdge.requiredRole}
+                    </option>
+                  )}
                 </select>
               </div>
 

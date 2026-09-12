@@ -17,11 +17,14 @@ import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, extractDa
 import { SearchableSelect } from '../components/SearchableSelect';
 import {
   useWarehousesQuery,
-  usePersonnelListQuery
+  usePersonnelListQuery,
+  useCategoriesQuery
 } from '../hooks/queries';
 import GlobalReservationsPanel from '../components/documents/GlobalReservationsPanel';
 import DocItemsTable from '../components/documents/DocItemsTable';
 import { FinancialAttachmentUploader } from '../components/accounting/FinancialAttachmentUploader';
+import { ItemFormModal } from '../components/items/ItemFormModal';
+import { useAuth } from '../contexts/AuthContext';
 import { QUERY_KEYS } from '../lib/queryKeys';
 
 export default function DocumentsPage({ user: currentUser }: { user: User }) {
@@ -95,6 +98,29 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const [selectedProjectObj, setSelectedProjectObj] = useState<any | null>(null);
   const [showGlobalReservationsModal, setShowGlobalReservationsModal] = useState(false);
   const [attachments, setAttachments] = useState<FinancialAttachment[]>([]);
+
+  const { userPermissions } = useAuth();
+  const categoriesQuery = useCategoriesQuery();
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [modalItemToEdit, setModalItemToEdit] = useState<Item | null>(null);
+
+  const canCreateOrEditItem = useMemo(() => {
+    return !!(
+      userPermissions?.isAdmin || 
+      currentUser?.role === 'admin' || 
+      currentUser?.role === 'manager' ||
+      userPermissions?.permissions?.includes('*') ||
+      userPermissions?.permissions?.includes('products.create') ||
+      userPermissions?.permissions?.includes('products.edit')
+    );
+  }, [userPermissions, currentUser]);
+
+  const handleItemModalSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.items.all });
+    setIsItemModalOpen(false);
+    setModalItemToEdit(null);
+    toast.success('مشخصات و تصویر کالا با موفقیت ذخیره شد');
+  };
 
   // بروزرسانی موقعیت پیش‌فرض هنگام دریافت انبارها
   useEffect(() => {
@@ -1030,7 +1056,22 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                 <div className={actionType === 'in' ? "md:col-span-5 w-full" : "md:col-span-8 w-full"}>
-                  <label className="block text-xs font-bold mb-1.5 text-slate-700">جستجو و انتخاب کالا / ماده اولیه</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700">جستجو و انتخاب کالا / ماده اولیه</label>
+                    {canCreateOrEditItem && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalItemToEdit(null);
+                          setIsItemModalOpen(true);
+                        }}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                      >
+                        <Plus size={13} />
+                        <span>تعریف کالا / افزودن تصویر کالا</span>
+                      </button>
+                    )}
+                  </div>
                   <SearchableSelect
                     className="w-full shadow-2xs rounded-xl"
                     fetchUrl="/items"
@@ -1153,6 +1194,11 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             onUpdateItemQty={handleUpdateItemQty}
             onUpdateItemPrice={handleUpdateItemPrice}
             onRemove={handleRemove}
+            canEditItem={canCreateOrEditItem}
+            onEditItem={(item) => {
+              setModalItemToEdit(item);
+              setIsItemModalOpen(true);
+            }}
           />
 
           {/* پیوست مدارک، فاکتور، بارنامه و اسناد مثبته */}
@@ -1193,6 +1239,22 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
           </div>
         </form>
       </div>
+
+      {/* مودال تعریف کالای جدید یا افزودن/ویرایش تصویر کالا */}
+      {isItemModalOpen && (
+        <ItemFormModal
+          isOpen={isItemModalOpen}
+          onClose={() => {
+            setIsItemModalOpen(false);
+            setModalItemToEdit(null);
+          }}
+          item={modalItemToEdit}
+          editingItem={modalItemToEdit}
+          categories={categoriesQuery.data || []}
+          warehouses={warehouses}
+          onSuccess={handleItemModalSuccess}
+        />
+      )}
     </div>
   );
 }

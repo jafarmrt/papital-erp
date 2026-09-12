@@ -170,7 +170,7 @@ const docTypeTitles: Record<string, string> = {
   waste: 'سند ضایعات'
 };
 
-router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accountant', 'warehouse_keeper'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
+router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accountant', 'warehouse_keeper', 'documents.create', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
   const userRole = req.user?.role;
   const isSalesUser = userRole === 'sales_manager' || (userRole !== 'admin' && userRole !== 'manager' && userRole !== 'warehouse_keeper' && userRole !== 'accountant');
   
@@ -464,7 +464,7 @@ router.get('/documents/:id', validate(paramsDocIdOrRefSchema), asyncHandler(asyn
   res.json(doc);
 }));
 
-router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_keeper', 'accountant'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
+router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_keeper', 'accountant', 'documents.edit', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const { user } = req.body || {};
   const beforeDoc = await DocumentService.getDocumentById(docId);
@@ -496,7 +496,7 @@ router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_k
   res.json({ success: true });
 }));
 
-router.put('/documents/:id', authorize('admin', 'manager', 'sales_manager', 'accountant', 'warehouse_keeper'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
+router.put('/documents/:id', authorize('admin', 'manager', 'sales_manager', 'accountant', 'warehouse_keeper', 'documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   await DocumentService.updateDocument(docId, req.body);
 
@@ -526,7 +526,7 @@ router.put('/documents/:id', authorize('admin', 'manager', 'sales_manager', 'acc
   res.json({ success: true, docId });
 }));
 
-router.put('/documents/:id/notes', authorize('admin', 'manager'), validate(updateDocumentNotesSchema), asyncHandler(async (req, res) => {
+router.put('/documents/:id/notes', authorize('admin', 'manager', 'documents.edit'), validate(updateDocumentNotesSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const { notes } = req.body;
   await DocumentService.updateDocumentNotes(docId, notes);

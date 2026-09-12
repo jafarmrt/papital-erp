@@ -222,7 +222,7 @@ router.get('/items', async (req, res) => {
 });
 
 // POST /items
-router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSchema), async (req, res) => {
+router.post('/items', authorize('admin', 'manager', 'products.create'), validate(itemCreateUpdateSchema), async (req, res) => {
   try {
     const { type, name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = req.body;
 
@@ -354,7 +354,7 @@ router.post('/items', authorize('admin', 'manager'), validate(itemCreateUpdateSc
 });
 
 // PUT /items/:id
-router.put('/items/:id', authorize('admin', 'manager'), validate(itemUpdateSchema), async (req, res) => {
+router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validate(itemUpdateSchema), async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const { name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = req.body;
@@ -461,7 +461,7 @@ router.put('/items/:id', authorize('admin', 'manager'), validate(itemUpdateSchem
 });
 
 // DELETE /items/:id
-router.delete('/items/:id', authorize('admin'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/items/:id', authorize('admin', 'products.delete'), validate(paramsIdSchema), async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const [delItem] = await orm.select().from(items).where(eq(items.id, itemId));
@@ -528,7 +528,7 @@ router.get('/items/next-code', asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
-router.post('/items/next-code', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
+router.post('/items/next-code', authorize('admin', 'manager', 'products.create', 'products.edit'), asyncHandler(async (req, res) => {
   const { type, year, prefix, transfer } = req.body || {};
   const result = await ItemCatalogService.consumeNextItemCode({ type, year, prefix, transfer });
   await logActivity({

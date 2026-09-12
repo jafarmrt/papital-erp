@@ -82,7 +82,7 @@ router.get('/items/:id/prices/history', validate(paramsIdSchema), async (req, re
 });
 
 // POST /items/:id/prices
-router.post('/items/:id/prices', authorize('admin', 'manager'), validate(itemPriceSchema), async (req, res) => {
+router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_price'), validate(itemPriceSchema), async (req, res) => {
   try {
     const { title, price, currency = 'IRR' } = req.body;
     const itemId = Number(req.params.id);
@@ -144,7 +144,7 @@ router.post('/items/:id/prices', authorize('admin', 'manager'), validate(itemPri
 });
 
 // DELETE /items/:id/prices/:priceId
-router.delete('/items/:id/prices/:priceId', authorize('admin', 'manager'), validate(itemPriceDeleteSchema), async (req, res) => {
+router.delete('/items/:id/prices/:priceId', authorize('admin', 'manager', 'products.edit_price'), validate(itemPriceDeleteSchema), async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const priceId = Number(req.params.priceId);
@@ -185,7 +185,7 @@ router.delete('/items/:id/prices/:priceId', authorize('admin', 'manager'), valid
 });
 
 // POST /items/prices/batch-update
-router.post('/items/prices/batch-update', authorize('admin', 'manager'), validate(batchPriceUpdateSchema), async (req, res) => {
+router.post('/items/prices/batch-update', authorize('admin', 'manager', 'products.edit_price'), validate(batchPriceUpdateSchema), async (req, res) => {
   try {
     const { updates } = req.body;
     const nowIso = new Date().toISOString();

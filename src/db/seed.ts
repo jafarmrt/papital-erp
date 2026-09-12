@@ -8,6 +8,7 @@ import { INITIAL_PIECEWORK_TASKS } from '../data/pieceworkTasksData.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowDefinitionService } from '../services/workflow/workflowDefinitionService.js';
 import { logger } from '../middleware/logger.js';
+import { invalidateRoleCache } from '../lib/memoryCache.js';
 
 /**
  * Executes system seed with PostgreSQL Advisory Lock (89345) to ensure multi-instance safety.
@@ -169,7 +170,7 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
       code: 'warehouse_keeper',
       description: 'مسئول ورود/خروج فیزیکی کالاها، جابجایی بین انبارها و ثبت شمارش انبارگردانی',
       permissions: [
-        'products.view',
+        'products.view', 'products.create', 'products.edit',
         'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile',
         'audit.view', 'audit.create', 'audit.apply',
         'pending_materials.view', 'pending_materials.approve',
@@ -319,9 +320,11 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
             logger.warn(`[Seeder] ERP_SEED_PERMISSION_CLEANUP: removing ${stalePerms.length} stale permission(s) from role ${existingRole.code}: ${stalePerms.join(', ')}`);
           }
           await orm.update(roles).set({ permissions: [...defaultDef.permissions] }).where(eq(roles.id, existingRole.id));
+          invalidateRoleCache(existingRole.code);
         } else if (missingPerms.length > 0) {
           const updatedPerms = [...currentPerms, ...missingPerms];
           await orm.update(roles).set({ permissions: updatedPerms }).where(eq(roles.id, existingRole.id));
+          invalidateRoleCache(existingRole.code);
         }
       }
     }

@@ -199,7 +199,7 @@ router.get('/customers/export-excel', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/customers/bulk-import - Bulk import and update counterparties from Excel
-router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manager'), asyncHandler(async (req, res) => {
+router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), asyncHandler(async (req, res) => {
   const { rows = [], updateIfExists = true } = req.body;
 
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -368,7 +368,7 @@ router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manag
   });
 }));
 
-router.post('/customers', authorize('admin', 'manager', 'sales_manager'), validate(createCustomerValidation), asyncHandler(async (req, res) => {
+router.post('/customers', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(createCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;
   let { contactName, phone } = req.body;
@@ -448,7 +448,7 @@ router.post('/customers', authorize('admin', 'manager', 'sales_manager'), valida
   res.json({ id: info.id, name, contactName, country, province, phone, city, address, notes, partyType, supplierCategory, bankInfo, contacts: activeContacts, createdAt });
 }));
 
-router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager'), validate(updateCustomerValidation), asyncHandler(async (req, res) => {
+router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(updateCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;
   let { contactName, phone } = req.body;
@@ -535,7 +535,7 @@ router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager'), val
   res.json({ success: true });
 }));
 
-router.delete('/customers/:id', authorize('admin', 'manager', 'sales_manager'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.delete('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const customerId = Number(req.params.id);
   const [delCust] = await orm.select().from(customers).where(eq(customers.id, customerId));
   if (!delCust) {

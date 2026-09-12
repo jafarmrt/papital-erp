@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, AlertTriangle, Trash2, Package, ShoppingCart } from 'lucide-react';
+import { Lock, AlertTriangle, Trash2, Package, ShoppingCart, Edit3 } from 'lucide-react';
 import { formatPersianPrice } from '../../utils';
 import { Item } from '../../types';
 
@@ -23,6 +23,8 @@ interface DocItemsTableProps {
   onUpdateItemQty: (index: number, newQty: number) => void;
   onUpdateItemPrice: (index: number, newPrice: number) => void;
   onRemove: (itemId: number) => void;
+  onEditItem?: (item: Item) => void;
+  canEditItem?: boolean;
 }
 
 /**
@@ -37,7 +39,9 @@ export function DocItemsTable({
   getItemReservationSummary,
   onUpdateItemQty,
   onUpdateItemPrice,
-  onRemove
+  onRemove,
+  onEditItem,
+  canEditItem = false
 }: DocItemsTableProps) {
   if (docItems.length === 0) {
     return (
@@ -57,7 +61,7 @@ export function DocItemsTable({
             <tr>
               <th className="p-3 text-center">#</th>
               <th className="p-3">کد کالا</th>
-              <th className="p-3">نام و عنوان کالا</th>
+              <th className="p-3">نام و تصویر کالا</th>
               <th className="p-3 text-center">تعداد / مقدار سند</th>
               {actionType === 'in' && (
                 <>
@@ -78,7 +82,47 @@ export function DocItemsTable({
                 <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                   <td className="p-3 text-center font-bold text-slate-400">{i + 1}</td>
                   <td className="p-3 font-mono font-bold text-blue-900">{d.item.code}</td>
-                  <td className="p-3 font-bold text-slate-900">{d.item.name}</td>
+                  <td className="p-3 font-bold text-slate-900">
+                    <div className="flex items-center gap-2.5">
+                      <div 
+                        onClick={() => canEditItem && onEditItem && onEditItem(d.item)}
+                        className={`w-9 h-9 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center shrink-0 ${canEditItem && onEditItem ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
+                        title={canEditItem && onEditItem ? 'کلیک جهت مشاهده یا ویرایش کالا و تصویر' : undefined}
+                      >
+                        {d.item.thumbnail || d.item.image ? (
+                          <img 
+                            src={d.item.thumbnail || d.item.image} 
+                            alt={d.item.name} 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer" 
+                          />
+                        ) : (
+                          <Package size={16} className="text-slate-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 truncate">{d.item.name}</span>
+                          {canEditItem && onEditItem && (
+                            <button
+                              type="button"
+                              onClick={() => onEditItem(d.item)}
+                              className="text-slate-400 hover:text-blue-600 p-0.5 rounded transition-colors"
+                              title="ویرایش مشخصات یا افزودن/تغییر تصویر کالا"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                          <span>دسته: {d.item.category || 'عمومی'}</span>
+                          {d.item.current_stock !== undefined && (
+                            <span className="font-mono">موجودی: {d.item.current_stock} {d.item.unit}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
                   <td className="p-3">
                     <div className="flex items-center justify-center gap-2">
                       <input 

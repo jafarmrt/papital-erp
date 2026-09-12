@@ -147,7 +147,7 @@ router.get('/personnel/export', async (req, res) => {
 });
 
 // POST /api/personnel/bulk-import - Bulk import personnel from Excel
-router.post('/personnel/bulk-import', authorize('admin', 'manager'), async (req, res) => {
+router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.manage'), async (req, res) => {
   try {
     const { rows = [], updateIfExists = true } = req.body;
 
@@ -447,7 +447,7 @@ router.get('/personnel/:id', validate(paramsIdSchema), async (req, res) => {
 });
 
 // POST /api/personnel - Create new personnel
-router.post('/personnel', authorize('admin', 'manager'), validate(createPersonnelSchema), async (req, res) => {
+router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), validate(createPersonnelSchema), async (req, res) => {
   try {
     const {
       firstName = '',
@@ -550,7 +550,7 @@ router.post('/personnel', authorize('admin', 'manager'), validate(createPersonne
 });
 
 // PUT /api/personnel/:id - Update personnel
-router.put('/personnel/:id', authorize('admin', 'manager'), validate(updatePersonnelSchema), async (req, res) => {
+router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(updatePersonnelSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -668,7 +668,7 @@ router.put('/personnel/:id', authorize('admin', 'manager'), validate(updatePerso
 });
 
 // DELETE /api/personnel/:id - Soft delete
-router.delete('/personnel/:id', authorize('admin', 'manager'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
 

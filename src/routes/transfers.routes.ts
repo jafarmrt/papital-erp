@@ -236,13 +236,13 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
   }
 };
 
-router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper'), validate(saveTransferSchema), handleSaveTransfer);
-router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper'), validate(saveTransferSchema), handleSaveTransfer);
-router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper'), validate(saveTransferSchema), handleSaveTransfer);
-router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper'), validate(saveTransferSchema), handleSaveTransfer);
+router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
+router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
+router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
+router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
 
 // DELETE /api/transfers/:code - Delete transfer details/image
-router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager'), validate(deleteTransferSchema), async (req: Request, res: Response) => {
+router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'products.delete'), validate(deleteTransferSchema), async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
     await orm.delete(transfers).where(eq(transfers.code, code));
