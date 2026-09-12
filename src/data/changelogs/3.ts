@@ -6,6 +6,22 @@ import { AIUpdateLog } from './types';
  */
 export const v3Updates: AIUpdateLog[] = [
   {
+    version: 'v3.3.13',
+    date: '۲۲ شهریور ۱۴۰۵',
+    title: 'تعمیر ابزارهای عملیاتی Go-Live: خود-لود DATABASE_URL در restore.sh و هم‌ترازی probeهای smoke-test با گاردهای واقعی',
+    summary: 'سه اصلاح در اسکریپت‌های عملیاتی استقرار که همگی حین اجرای فاز ۶/۷ چک‌لیست Go-Live روی سرور production کشف شدند: (۱) restore.sh اکنون هنگام نبود DATABASE_URL در محیط، آن را به‌طور خودکار از .env اپلیکیشن لود می‌کند. (۲) probe وب‌هوک smoke-test به payload شبه‌سفارش ارتقا یافت تا گارد fail-closed/امضای HMAC واقعاً فعال شود (payload بی‌خطر قبلی طبق طراحی با 200 پاسخ می‌گرفت و گارد را آزمایش نمی‌کرد). (۳) تعداد پروب‌های rate limit از 8 به 12 افزایش یافت تا از سقف واقعی loginLimiter (max=10 در پنجره ۱۵ دقیقه) عبور کند.',
+    author: 'AI Agent (Ops Tooling Alignment: restore.sh + smoke-test probes)',
+    changes: [
+      '🛠 scripts/restore.sh — auto-load دیتابیس از .env اپلیکیشن هنگام نبود DATABASE_URL در محیط (رفع خطای «DATABASE_URL must be set» هنگام drill)',
+      '🛠 scripts/smoke-test.sh گام ۶ — payload شبه‌سفارش (id/number/status/line_items) به‌جای {"test": true} تا مسیرهای 401 (امضای ناموجود) و 403 (fail-closed) واقعاً آزموده شوند',
+      '🛠 scripts/smoke-test.sh گام ۷ — ارتقای پروب‌های لاگین از 8 به 12 برای عبور از سقف واقعی loginLimiter (max=10؛ کامنت قدیمی «max 5» منسوخ بود)',
+      '🔢 ارتقای نسخه به v3.3.13'
+    ],
+    fixes: [
+      'Smoke test گام ۶ به‌اشتباه پاسخ 200 مؤدبانه payload غیرسفارشی را «عدم رد وب‌هوک» تشخیص می‌داد — لایه امنیتی سرور سالم بود؛ فقط آزمون نادرست بود'
+    ]
+  },
+  {
     version: 'v3.3.12',
     date: '۲۲ شهریور ۱۴۰۵',
     title: 'رفع اساسی خطای ۴۰۳ و مدیریت هوشمند توکن امنیتی CSRF در نشست‌های کلاینت و سرور',
