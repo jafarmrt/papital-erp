@@ -1,7 +1,8 @@
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, useMemo, FormEvent, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { Personnel } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
+import { normalizePersianText } from '../utils';
 import {
   usePersonnelListQuery,
   useUsersListQuery,
@@ -84,6 +85,15 @@ export function usePersonnel() {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(15);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   // Modal states
   const [showFormModal, setShowFormModal] = useState<boolean>(false);
@@ -179,24 +189,62 @@ export function usePersonnel() {
     setShowDetailModal(true);
   };
 
-  // Filtered List
+  // Filtered List with robust Persian normalization and comprehensive field matching
   const filteredPersonnel = useMemo(() => {
     const safePersonnel = Array.isArray(personnelList) ? personnelList : [];
+    const normalizedQ = normalizePersianText(searchQuery);
+
     return safePersonnel.filter((p) => {
       const matchesStatus = statusFilter === 'all' || p.employmentStatus === statusFilter;
-      const q = searchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        (p.fullName && p.fullName.toLowerCase().includes(q)) ||
-        (p.personnelCode && p.personnelCode.toLowerCase().includes(q)) ||
-        (p.phone && p.phone.includes(q)) ||
-        (p.jobTitle && p.jobTitle.toLowerCase().includes(q)) ||
-        (p.nationalId && p.nationalId.includes(q)) ||
-        (p.specializedSkills && p.specializedSkills.toLowerCase().includes(q));
+      if (!matchesStatus) return false;
 
-      return matchesStatus && matchesSearch;
+      if (!normalizedQ) return true;
+
+      const searchableFields = [
+        p.fullName,
+        p.firstName,
+        p.lastName,
+        p.personnelCode,
+        p.phone,
+        p.nationalId,
+        p.jobTitle,
+        p.education,
+        p.specializedSkills,
+        p.otherSkills,
+        p.bankName,
+        p.cardNumber,
+        p.accountNumber,
+        p.shebaNumber,
+        p.username,
+        p.address,
+        p.notes,
+        p.referralSource
+      ];
+
+      return searchableFields.some(field => {
+        if (!field) return false;
+        return normalizePersianText(String(field)).includes(normalizedQ);
+      });
     });
   }, [personnelList, statusFilter, searchQuery]);
+
+  // Pagination computations
+  const totalFilteredCount = filteredPersonnel.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / (pageSize || 15)));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFilteredCount);
+
+  const paginatedPersonnel = useMemo(() => {
+    return filteredPersonnel.slice(startIndex, endIndex);
+  }, [filteredPersonnel, startIndex, endIndex]);
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setCurrentPage(1);
+  };
 
   // Statistics
   const stats = useMemo(() => {
@@ -217,6 +265,18 @@ export function usePersonnel() {
     setSearchQuery,
     statusFilter,
     setStatusFilter,
+    resetFilters,
+    // Pagination
+    currentPage: safeCurrentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    totalFilteredCount,
+    totalAllCount: personnelList.length,
+    startIndex,
+    endIndex,
+    paginatedPersonnel,
     showFormModal,
     setShowFormModal,
     editingId,

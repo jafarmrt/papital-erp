@@ -376,11 +376,18 @@ router.get('/personnel', async (req, res) => {
       const q = search.trim().toLowerCase();
       filtered = filtered.filter(p => 
         (p.fullName && p.fullName.toLowerCase().includes(q)) ||
+        (p.firstName && p.firstName.toLowerCase().includes(q)) ||
+        (p.lastName && p.lastName.toLowerCase().includes(q)) ||
         (p.personnelCode && p.personnelCode.toLowerCase().includes(q)) ||
         (p.phone && p.phone.includes(q)) ||
         (p.nationalId && p.nationalId.includes(q)) ||
         (p.jobTitle && p.jobTitle.toLowerCase().includes(q)) ||
-        (p.specializedSkills && p.specializedSkills.toLowerCase().includes(q))
+        (p.specializedSkills && p.specializedSkills.toLowerCase().includes(q)) ||
+        (p.otherSkills && p.otherSkills.toLowerCase().includes(q)) ||
+        (p.education && p.education.toLowerCase().includes(q)) ||
+        (p.bankName && p.bankName.toLowerCase().includes(q)) ||
+        (p.notes && p.notes.toLowerCase().includes(q)) ||
+        (p.address && p.address.toLowerCase().includes(q))
       );
     }
 

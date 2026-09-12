@@ -17,6 +17,17 @@ export function PersonnelPage() {
     setSearchQuery,
     statusFilter,
     setStatusFilter,
+    resetFilters,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    totalFilteredCount,
+    totalAllCount,
+    startIndex,
+    endIndex,
+    paginatedPersonnel,
     showFormModal,
     setShowFormModal,
     editingId,
@@ -80,12 +91,22 @@ export function PersonnelPage() {
 
       {/* Personnel Table & Filter Bar */}
       <PersonnelTable
-        personnelList={filteredPersonnel}
+        personnelList={paginatedPersonnel}
+        totalFilteredCount={totalFilteredCount}
+        totalAllCount={totalAllCount}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalPages={totalPages}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
         isLoading={isLoading}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
+        onResetFilters={resetFilters}
         onViewDetail={handleViewDetail}
         onEdit={handleOpenEditModal}
         onDelete={handleDelete}
