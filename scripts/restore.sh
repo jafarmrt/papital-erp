@@ -26,7 +26,17 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESTORE_MODE="${RESTORE_MODE:-drill}"
 RESTORE_KEEP="${RESTORE_KEEP:-0}"
 
-[ -n "${DATABASE_URL:-}" ] || { echo "ERROR: DATABASE_URL must be set"; exit 1; }
+[ -n "${DATABASE_URL:-}" ] || {
+  # Convenience: auto-load DATABASE_URL from the app .env when run from/near the app dir
+  for CAND in "${APP_DIR:-}/.env" "$(pwd)/.env" /opt/papital-erp/.env; do
+    if [ -f "$CAND" ] && grep -q '^DATABASE_URL=' "$CAND"; then
+      DATABASE_URL="$(grep -E '^DATABASE_URL=' "$CAND" | head -1 | cut -d= -f2- | tr -d '"')"
+      export DATABASE_URL
+      break
+    fi
+  done
+}
+[ -n "${DATABASE_URL:-}" ] || { echo "ERROR: DATABASE_URL must be set (or run from the app directory with a valid .env)"; exit 1; }
 
 # Parse DATABASE_URL parts
 DB_URL_RE='^(postgresql|postgres)://([^:@/]+)(:([^@]*))?@([^:/]+)(:([0-9]+))?/([^/?]+)'
