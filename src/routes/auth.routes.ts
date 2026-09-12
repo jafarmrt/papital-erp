@@ -253,7 +253,8 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
         .onConflictDoUpdate({ target: appSettings.key, set: { value: item.value } });
     }
 
-    const token = generateToken({ id: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion || 0 });
+    const csrfToken = generateCsrfToken();
+    const token = generateToken({ id: user.id, username: user.username, role: user.role, csrfToken, tokenVersion: user.tokenVersion || 0 });
     const { password: _, ...userWithoutPassword } = user;
     
     // Set secure HttpOnly cookie
@@ -263,7 +264,8 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     res.json({ 
       success: true, 
       user: { ...userWithoutPassword, full_name: user.fullName || user.username },
-      token
+      token,
+      csrfToken
     });
   } finally {
     // 4. Always release the advisory lock
@@ -423,6 +425,21 @@ const meHandler = asyncHandler(async (req, res) => {
     throw new UnauthorizedError('حساب کاربری یافت نشد یا حذف شده است');
   }
 
+  // V3.3.12: ضمانت وجود توکن معتبر CSRF در نشست جاری — در صورت ورود از سشن‌های قدیمی،
+  // توکن به صورت خودکار ارتقا یافته و کوکی جدید صادر می‌شود تا هیچ درخواست جهش وضعیتی با خطای ۴۰۳ مسدود نشود.
+  let csrfToken = req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken;
+  if (!csrfToken) {
+    csrfToken = generateCsrfToken();
+    const token = generateToken({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      csrfToken,
+      tokenVersion: user.tokenVersion || 0
+    });
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+  }
+
   // V3.0.6 (BUG-08): توکن بازتولیدشده دیگر در بدنه پاسخ برگردانده نمی‌شود
   // (قبلاً هرگز به‌صورت کوکی هم ست نمی‌شد و صرفاً افشای توکن بود).
   const { password: _, ...userWithoutPassword } = user;
@@ -435,11 +452,40 @@ const meHandler = asyncHandler(async (req, res) => {
       mustResetPassword: Boolean(user.mustResetPassword),
       must_reset_password: Boolean(user.mustResetPassword)
     },
-    csrfToken: req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken || ''
+    csrfToken
   });
 });
 
 router.get('/auth/me', authenticateToken, meHandler);
 router.get('/me', authenticateToken, meHandler);
+
+// Endpoint to acquire or refresh CSRF token for active session
+const csrfHandler = asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new UnauthorizedError('کاربر احراز هویت نشده است');
+  }
+
+  let csrfToken = req.user?.csrfToken || (req as unknown as { csrfToken?: string }).csrfToken;
+  if (!csrfToken) {
+    csrfToken = generateCsrfToken();
+    const [user] = await orm.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (user && user.isDeleted !== 1) {
+      const token = generateToken({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        csrfToken,
+        tokenVersion: user.tokenVersion || 0
+      });
+      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+    }
+  }
+
+  res.json({ success: true, csrfToken });
+});
+
+router.get('/auth/csrf', authenticateToken, csrfHandler);
+router.get('/csrf', authenticateToken, csrfHandler);
 
 export default router;

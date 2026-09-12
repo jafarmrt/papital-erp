@@ -37,6 +37,35 @@ export function getCsrfToken(): string | null {
   return null;
 }
 
+let activeCsrfRefreshPromise: Promise<string | null> | null = null;
+
+async function refreshActiveCsrfToken(): Promise<string | null> {
+  if (activeCsrfRefreshPromise) {
+    return activeCsrfRefreshPromise;
+  }
+  activeCsrfRefreshPromise = (async () => {
+    try {
+      const csrfRes = await fetch(`${API_URL}/auth/csrf`, {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (csrfRes.ok) {
+        const csrfData = await csrfRes.json().catch(() => ({}));
+        if (csrfData?.csrfToken) {
+          setCsrfToken(csrfData.csrfToken);
+          return csrfData.csrfToken;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      activeCsrfRefreshPromise = null;
+    }
+  })();
+  return activeCsrfRefreshPromise;
+}
+
 export function setAuthToken(token: string | null | undefined): void {
   inMemoryAuthToken = token || null;
 }
@@ -46,7 +75,27 @@ export function getAuthToken(): string | null {
 }
 
 export async function fetchJson<T = any>(endpoint: string, options?: RequestInit, retries = 1): Promise<T> {
-  const csrfToken = getCsrfToken();
+  const method = (options?.method || 'GET').toUpperCase();
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const isPublicEndpoint = 
+    cleanEndpoint.includes('/login') || 
+    cleanEndpoint.includes('/check-setup') || 
+    cleanEndpoint.includes('/public-settings') || 
+    cleanEndpoint.includes('/setup') ||
+    cleanEndpoint.includes('/csrf') ||
+    cleanEndpoint.includes('/auth/me') ||
+    cleanEndpoint.includes('/me');
+
+  // Proactively acquire CSRF token if missing for mutation requests on authenticated routes
+  let csrfToken = getCsrfToken();
+  if (isMutation && !csrfToken && !isPublicEndpoint && typeof window !== 'undefined') {
+    const refreshedToken = await refreshActiveCsrfToken();
+    if (refreshedToken) {
+      csrfToken = refreshedToken;
+    }
+  }
+
   const authToken = getAuthToken();
   
   const headers: Record<string, string> = {
@@ -56,7 +105,6 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     ...((options?.headers as Record<string, string>) || {}),
   };
 
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const normalizedEndpoint = cleanEndpoint.startsWith('/api/')
     ? cleanEndpoint.substring(4)
     : cleanEndpoint === '/api'
@@ -85,18 +133,25 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) {
-      const isPublicEndpoint = 
-        endpoint.includes('/login') || 
-        endpoint.includes('/check-setup') || 
-        endpoint.includes('/public-settings') || 
-        endpoint.includes('/setup') ||
-        endpoint.includes('/auth/me') ||
-        endpoint.includes('/me');
-
       if (typeof window !== 'undefined' && !isPublicEndpoint) {
         setCsrfToken(null);
         setAuthToken(null);
         window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+    }
+
+    const isCsrfError = 
+      res.status === 403 && (
+        data.error === 'CSRF token invalid' ||
+        (typeof data.message === 'string' && (data.message.includes('CSRF') || data.message.includes('توکن امنیتی'))) ||
+        (typeof data.error === 'string' && (data.error.includes('CSRF') || data.error.includes('توکن امنیتی')))
+      );
+
+    // Auto-heal and retry on CSRF mismatch/expiry
+    if (isCsrfError && retries > 0 && typeof window !== 'undefined') {
+      const newCsrf = await refreshActiveCsrfToken();
+      if (newCsrf) {
+        return fetchJson(endpoint, options, retries - 1);
       }
     }
 
@@ -109,7 +164,8 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     const details = data.details || data.errorDetails || data.errorObject?.details || null;
 
     if (res.status === 403) {
-      throw new ApiError(data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا توکن CSRF نامعتبر (۴۰۳)', code || 'AUTHORIZATION_ERROR', 403, details);
+      const forbiddenMsg = data.message || (typeof data.error === 'string' ? data.error : '') || 'دسترسی غیرمجاز یا توکن امنیتی منقضی شده است (۴۰۳)';
+      throw new ApiError(forbiddenMsg, code || 'AUTHORIZATION_ERROR', 403, details);
     }
     if (res.status === 429) {
       const rateLimitMsg = data.message || (typeof data.error === 'string' ? data.error : '') || data.errorObject?.message || 'تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً چند لحظه صبر کنید (۴۲۹)';
