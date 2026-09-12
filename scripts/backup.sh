@@ -21,7 +21,14 @@ mkdir -p "$BACKUP_DIR"
 
 # 1. Full dump (custom format, restorable with pg_restore --clean)
 DUMP_FILE="$BACKUP_DIR/erp_${BACKUP_KIND}_${TIMESTAMP}.dump"
-pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$DUMP_FILE"
+PG_DUMP_ERR="$(mktemp)"
+if ! pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL" > "$DUMP_FILE" 2> "$PG_DUMP_ERR"; then
+  echo "[$(date)] pg_dump FAILED (exit $?) — stderr:"
+  cat "$PG_DUMP_ERR"
+  rm -f "$PG_DUMP_ERR" "$DUMP_FILE"
+  exit 1
+fi
+rm -f "$PG_DUMP_ERR"
 gzip "$DUMP_FILE"
 
 # 1b. V3.0.7 (TD-058 precursor): آپلودهای دیسکی (لوگو/تصاویر کالا) بخشی از داده
@@ -43,11 +50,18 @@ fi
 gunzip -t "$DUMP_FILE.gz" || { echo "[$(date)] Backup verification FAILED for $DUMP_FILE.gz — keeping file for inspection"; exit 1; }
 # 2b. V3.0.8 (TD-059): pg_restore must be able to read the archive TOC —
 # gzip integrity alone never proved the dump itself is restorable.
-# NOTE: pg_restore reads stdin when given NO filename argument — it does NOT
-# accept "-" as an stdin alias (unlike pg_dump) and fails with
-# "could not open input file" on PostgreSQL 16.
-gunzip -c "$DUMP_FILE.gz" | pg_restore --list >/dev/null 2>/dev/null \
-  || { echo "[$(date)] Backup verification FAILED (pg_restore --list): $DUMP_FILE.gz is NOT a valid pg_dump archive — keeping file for inspection"; exit 1; }
+# NOTE: do NOT use `gunzip -c | pg_restore --list` under `set -o pipefail`:
+# pg_restore --list exits right after the TOC, gunzip receives SIGPIPE (exit
+# 141) once the dump grows beyond a few KB, and the pipeline falsely fails.
+# Decompress to a temp file and verify the file instead.
+DUMP_TMP="$DUMP_FILE.gz.verify"
+gunzip -c "$DUMP_FILE.gz" > "$DUMP_TMP"
+if ! pg_restore --list "$DUMP_TMP" >/dev/null 2>&1; then
+  echo "[$(date)] Backup verification FAILED (pg_restore --list): $DUMP_FILE.gz is NOT a valid pg_dump archive — keeping file for inspection"
+  rm -f "$DUMP_TMP"
+  exit 1
+fi
+rm -f "$DUMP_TMP"
 
 # 3. Upload to offsite storage (optional, e.g. S3)
 if [ -n "${S3_BACKUP_BUCKET:-}" ]; then
