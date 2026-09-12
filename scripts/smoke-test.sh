@@ -45,14 +45,16 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   -d '{"id": 900001, "number": "900001", "status": "processing", "line_items": [{"name": "Smoke Probe", "sku": "SMOKE-PROBE-SKU", "quantity": 1}]}')
 echo "$STATUS" | grep -qE "401|403|503" || { echo "  unexpected webhook status: $STATUS (expected 401 unsigned / 403 fail-closed)"; exit 1; }
 
-# 6. Rate limit (loginLimiter: max 5 attempts / 15 min keyed on socket peer address)
+# 6. Rate limit (loginLimiter: max 10 attempts / 15 min window keyed on the
+#    actual socket peer address — see src/app.ts loginLimiter). Probe 12 times
+#    so the threshold is crossed regardless of bucket state.
 echo "[7/8] Testing rate limit..."
-for i in $(seq 1 8); do
+for i in $(seq 1 12); do
   curl -s -o /dev/null -w "%{http_code}\n" \
     -X POST "$BASE_URL/api/auth/login" \
     -H "Content-Type: application/json" \
     -d '{"username": "nonexistent", "password": "wrong"}' || true
-done | grep -q "429" || { echo "  no 429 observed after 8 failed logins"; exit 1; }
+done | grep -q "429" || { echo "  no 429 observed after 12 failed logins"; exit 1; }
 
 # 7. Metrics endpoint (Prometheus format — protected by METRICS_TOKEN or admin session since V9 Phase 2)
 echo "[8/8] Testing /metrics..."
