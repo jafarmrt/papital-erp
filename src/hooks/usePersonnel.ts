@@ -2,7 +2,7 @@ import { useState, useMemo, FormEvent, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { Personnel } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
-import { normalizePersianText } from '../utils';
+import { normalizePersianText, toEnglishDigits, validateIranianNationalId, validateIranianPhoneNumber } from '../utils';
 import {
   usePersonnelListQuery,
   useUsersListQuery,
@@ -158,9 +158,31 @@ export function usePersonnel() {
       return;
     }
 
+    // اعتبارسنجی کد ملی
+    const cleanNationalId = toEnglishDigits(formData.nationalId || '').trim();
+    if (cleanNationalId) {
+      const nationalIdValidation = validateIranianNationalId(cleanNationalId);
+      if (!nationalIdValidation.isValid) {
+        hotToast.error(nationalIdValidation.error || 'کد ملی وارد شده نامعتبر است');
+        return;
+      }
+    }
+
+    // اعتبارسنجی شماره تماس (۱۱ رقم و شروع با ۰)
+    const cleanPhone = toEnglishDigits(formData.phone || '').trim();
+    if (cleanPhone) {
+      const phoneValidation = validateIranianPhoneNumber(cleanPhone);
+      if (!phoneValidation.isValid) {
+        hotToast.error(phoneValidation.error || 'شماره تماس باید ۱۱ رقم بوده و با صفر (۰) شروع شود');
+        return;
+      }
+    }
+
     const computedFullName = formData.fullName.trim() || `${formData.firstName} ${formData.lastName}`.trim();
     const payload = {
       ...formData,
+      nationalId: cleanNationalId,
+      phone: cleanPhone,
       fullName: computedFullName,
       userId: formData.userId ? Number(formData.userId) : null
     };

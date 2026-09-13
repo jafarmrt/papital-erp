@@ -195,6 +195,14 @@ export function PersonnelDetailModal({
                   </span>
                 </div>
               )}
+              {personnel.nobitexPassword && (
+                <div>
+                  <span className="text-[10px] text-slate-500 block">رمز عبور نوبیتکس:</span>
+                  <span className="font-bold font-mono text-slate-800 mt-0.5 block select-all">
+                    {personnel.nobitexPassword}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

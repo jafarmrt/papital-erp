@@ -673,6 +673,52 @@ export function safeExtractArray<T = unknown>(res: unknown): T[] {
 }
 
 /**
+ * Validates Iranian 10-digit National ID (کد ملی)
+ * Returns { isValid: boolean, error?: string }
+ */
+export function validateIranianNationalId(id: string | null | undefined): { isValid: boolean; error?: string } {
+  if (!id || !id.trim()) {
+    return { isValid: true }; // فیلد اختیاری است؛ اگر وارد نشده معتبر تلقی می‌شود
+  }
+  const cleanId = toEnglishDigits(id).trim();
+  if (!/^\d{10}$/.test(cleanId)) {
+    return { isValid: false, error: 'کد ملی باید دقیقاً ۱۰ رقم عددی باشد' };
+  }
+  // جلوگیری از ارقام تکراری نامعتبر مانند ۱۱۱۱۱۱۱۱۱۱
+  const allSame = /^(\d)\1{9}$/.test(cleanId);
+  if (allSame) {
+    return { isValid: false, error: 'کد ملی وارد شده نامعتبر است' };
+  }
+  // محاسبه رقم کنترلی استاندارد ثبت‌احوال
+  const check = parseInt(cleanId[9], 10);
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(cleanId[i], 10) * (10 - i);
+  }
+  const remainder = sum % 11;
+  const isChecksumValid = (remainder < 2 && check === remainder) || (remainder >= 2 && check === 11 - remainder);
+  if (!isChecksumValid) {
+    return { isValid: false, error: 'رقم کنترلی کد ملی صحیح نمی‌باشد' };
+  }
+  return { isValid: true };
+}
+
+/**
+ * Validates Iranian Phone number (موبایل یا تلفن ثابت ۱۱ رقمی شروع با ۰)
+ * Returns { isValid: boolean, error?: string }
+ */
+export function validateIranianPhoneNumber(phone: string | null | undefined): { isValid: boolean; error?: string } {
+  if (!phone || !phone.trim()) {
+    return { isValid: true }; // فیلد اختیاری است؛ در صورت خالی بودن خطا نمی‌دهد
+  }
+  const cleanPhone = toEnglishDigits(phone).trim();
+  if (!/^0\d{10}$/.test(cleanPhone)) {
+    return { isValid: false, error: 'شماره تماس باید ۱۱ رقم بوده و با صفر (۰) شروع شود (مانند ۰۹۱۲۳۴۵۶۷۸۹ یا ۰۲۱۸۸۸۸۸۸۸۸)' };
+  }
+  return { isValid: true };
+}
+
+/**
  * Standard multi-value parser supporting both English and Persian commas (, and ،)
  */
 export function parseMultiValue(val?: string | null): string[] {

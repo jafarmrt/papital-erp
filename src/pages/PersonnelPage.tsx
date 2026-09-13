@@ -35,8 +35,6 @@ export function PersonnelPage() {
     setShowDetailModal,
     selectedPersonnel,
     isSaving,
-    showNobitexPass,
-    setShowNobitexPass,
     formData,
     setFormData,
     loadData,
@@ -122,8 +120,6 @@ export function PersonnelPage() {
         setFormData={setFormData}
         usersList={usersList}
         isSaving={isSaving}
-        showNobitexPass={showNobitexPass}
-        setShowNobitexPass={setShowNobitexPass}
       />
 
       {/* Modal 2: View Detail / Dossier */}

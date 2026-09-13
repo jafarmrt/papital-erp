@@ -10,9 +10,7 @@ import {
   Award,
   Wallet,
   X,
-  CheckCircle2,
-  Eye,
-  EyeOff
+  CheckCircle2
 } from 'lucide-react';
 import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
@@ -27,8 +25,6 @@ interface PersonnelFormModalProps {
   setFormData: React.Dispatch<React.SetStateAction<PersonnelFormData>>;
   usersList: User[];
   isSaving: boolean;
-  showNobitexPass: boolean;
-  setShowNobitexPass: (val: boolean) => void;
 }
 
 export function PersonnelFormModal({
@@ -39,9 +35,7 @@ export function PersonnelFormModal({
   formData,
   setFormData,
   usersList,
-  isSaving,
-  showNobitexPass,
-  setShowNobitexPass
+  isSaving
 }: PersonnelFormModalProps) {
   if (!isOpen) return null;
 
@@ -72,7 +66,13 @@ export function PersonnelFormModal({
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={onSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <form
+          onSubmit={onSubmit}
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          className="p-6 space-y-6 max-h-[80vh] overflow-y-auto"
+        >
           {/* Section 1: اطلاعات فردی */}
           <div className="space-y-3">
             <h3 className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5 w-fit">
@@ -128,13 +128,23 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">کد ملی</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  کد ملی <span className="text-[10px] text-slate-400 font-normal">(۱۰ رقم عددی)</span>
+                </label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  autoComplete="off"
                   value={formData.nationalId}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, nationalId: e.target.value }))}
-                  placeholder="۱۰ رقم"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
+                  onChange={(e) => {
+                    // فیلتر آنی: تبدیل ارقام فارسی و حذف کاراکترهای غیرعددی با سقف ۱۰ رقم
+                    const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 10);
+                    setFormData((prev) => ({ ...prev, nationalId: digits }));
+                  }}
+                  placeholder="۱۰ رقم عددی"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono tracking-widest text-left"
+                  dir="ltr"
                 />
               </div>
 
@@ -178,13 +188,23 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">شماره تماس</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  شماره تماس <span className="text-[10px] text-slate-400 font-normal">(۱۱ رقم شروع با ۰)</span>
+                </label>
                 <input
-                  type="text"
-                  placeholder="۰۹۱۲..."
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={11}
+                  autoComplete="off"
+                  placeholder="۰۹۱۲۳۴۵۶۷۸۹"
                   value={formData.phone}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
+                  onChange={(e) => {
+                    // فیلتر آنی: تبدیل ارقام فارسی و حذف کاراکترهای غیرعددی با سقف ۱۱ رقم
+                    const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 11);
+                    setFormData((prev) => ({ ...prev, phone: digits }));
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono tracking-widest text-left"
+                  dir="ltr"
                 />
               </div>
 
@@ -443,6 +463,11 @@ export function PersonnelFormModal({
                 <label className="block text-xs font-bold text-slate-700 mb-1">نام کاربری نوبیتکس</label>
                 <input
                   type="text"
+                  name="personnel_nobitex_username_field"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  placeholder="نام کاربری نوبیتکس پرسنل"
                   value={formData.nobitexUsername}
                   onChange={(e) => setFormData((prev) => ({ ...prev, nobitexUsername: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
@@ -450,22 +475,18 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">رمز عبور نوبیتکس</label>
-                <div className="relative">
-                  <input
-                    type={showNobitexPass ? 'text' : 'password'}
-                    value={formData.nobitexPassword}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, nobitexPassword: e.target.value }))}
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNobitexPass(!showNobitexPass)}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showNobitexPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">رمز عبور نوبیتکس (رشته متنی)</label>
+                <input
+                  type="text"
+                  name="personnel_nobitex_password_field"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  placeholder="رمز عبور نوبیتکس پرسنل"
+                  value={formData.nobitexPassword}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, nobitexPassword: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
+                />
               </div>
             </div>
           </div>
