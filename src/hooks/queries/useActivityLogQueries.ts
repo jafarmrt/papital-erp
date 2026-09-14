@@ -9,6 +9,7 @@ export interface ActivityLogFilters {
   user?: string;
   action?: string;
   entity?: string;
+  category?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -38,6 +39,7 @@ export function useActivityLogsQuery(filters: ActivityLogFilters) {
       if (filters.user) params.set('user', filters.user);
       if (filters.action) params.set('action', filters.action);
       if (filters.entity) params.set('entity', filters.entity);
+      if (filters.category) params.set('category', filters.category);
       if (filters.startDate) params.set('startDate', filters.startDate);
       if (filters.endDate) params.set('endDate', filters.endDate);
 

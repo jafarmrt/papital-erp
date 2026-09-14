@@ -8,7 +8,7 @@ import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOption
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
-import { logActivity } from '../lib/auditLogger.js';
+import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError, BadRequestError, ConflictError, AppError } from '../errors/customErrors.js';
@@ -281,11 +281,30 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
 router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   const tUsername = (username || '').trim();
+  const clientIp = extractClientIp(req);
+  const userAgent = (req.headers['user-agent'] as string) || '';
   
   // Check account lockout status (SEC-009)
   const lockout = await checkAccountLockout(tUsername);
   if (lockout.isLocked) {
     logger.warn(`[Login Rejected] Account ${tUsername} is locked for ${lockout.remainingMinutes} more minutes`);
+    
+    await logActivity({
+      username: tUsername,
+      action: 'LOGIN_FAILED',
+      entity: 'احراز هویت',
+      description: `تلاش ناموفق برای ورود با حساب قفل‌شده «${tUsername}» (${lockout.remainingMinutes} دقیقه قفل باقی‌مانده)`,
+      ipAddress: clientIp,
+      details: {
+        reason: 'حساب کاربری به دلیل تلاش‌های ناموفق مکرر قفل است',
+        remainingMinutes: lockout.remainingMinutes,
+        status: 'account_locked',
+        method: 'نام کاربری و رمز عبور',
+        userAgent
+      },
+      req
+    });
+
     return res.status(429).json({ 
       error: `حساب کاربری به دلیل تلاش‌های ناموفق مکرر قفل شده است. لطفاً ${lockout.remainingMinutes} دقیقه دیگر تلاش فرمایید.`,
       locked: true,
@@ -297,6 +316,23 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
 
   // V9-2.2: کاربران حذف‌شده (soft-delete) امکان ورود ندارند
   if (user && user.isDeleted === 1) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      userFullName: user.fullName || user.username,
+      action: 'LOGIN_FAILED',
+      entity: 'احراز هویت',
+      entityId: user.id,
+      description: `تلاش ناموفق برای ورود به حساب کاربری غیرفعال یا حذف‌شده «${user.username}»`,
+      ipAddress: clientIp,
+      details: {
+        reason: 'حساب کاربری غیرفعال یا حذف شده است',
+        status: 'user_deleted',
+        method: 'نام کاربری و رمز عبور',
+        userAgent
+      },
+      req
+    });
     return res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است' });
   }
 
@@ -321,17 +357,24 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
       const { password: _, ...userWithoutPassword } = user;
       
       // Set secure HttpOnly cookie
-    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
       await logActivity({
         userId: user.id,
         username: user.username,
         userFullName: user.fullName || user.username,
         action: 'LOGIN',
-        entity: 'کاربر',
+        entity: 'احراز هویت',
         entityId: user.id,
         description: `ورود موفق کاربر ${user.fullName || user.username} به سامانه`,
-        ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+        ipAddress: clientIp,
+        details: {
+          role: user.role,
+          method: 'نام کاربری و رمز عبور',
+          status: 'success',
+          userAgent
+        },
+        req
       });
 
       res.json({ 
@@ -348,6 +391,30 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
       });
     } else {
       const failStatus = await recordFailedAttempt(tUsername);
+
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        userFullName: user.fullName || user.username,
+        action: 'LOGIN_FAILED',
+        entity: 'احراز هویت',
+        entityId: user.id,
+        description: failStatus.locked
+          ? `قفل شدن حساب کاربری «${user.username}» پس از ۵ بار تلاش ناموفق پیاپی برای ورود`
+          : `تلاش ناموفق برای ورود با رمز عبور اشتباه توسط کاربر «${user.username}» (${failStatus.remainingAttempts} تلاش باقی‌مانده)`,
+        ipAddress: clientIp,
+        details: {
+          reason: 'رمز عبور اشتباه است',
+          remainingAttempts: failStatus.remainingAttempts,
+          isLocked: failStatus.locked,
+          remainingMinutes: failStatus.remainingMinutes,
+          status: failStatus.locked ? 'account_locked_now' : 'wrong_password',
+          method: 'نام کاربری و رمز عبور',
+          userAgent
+        },
+        req
+      });
+
       if (failStatus.locked) {
         return res.status(429).json({ 
           error: `حساب کاربری شما پس از ۵ تلاش ناموفق به مدت ${failStatus.remainingMinutes} دقیقه قفل شد.`,
@@ -361,6 +428,22 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
       });
     }
   } else {
+    await logActivity({
+      username: tUsername,
+      action: 'LOGIN_FAILED',
+      entity: 'احراز هویت',
+      description: `تلاش ناموفق برای ورود با نام کاربری ناموجود «${tUsername}»`,
+      ipAddress: clientIp,
+      details: {
+        reason: 'نام کاربری در سامانه یافت نشد',
+        attemptedUsername: tUsername,
+        status: 'user_not_found',
+        method: 'نام کاربری و رمز عبور',
+        userAgent
+      },
+      req
+    });
+
     res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است' });
   }
 }));
@@ -368,6 +451,9 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
 // Logout endpoint - Clears the HttpOnly auth cookie
 const logoutHandler = asyncHandler(async (req, res) => {
   const user = req.user;
+  let targetUserId = user?.id;
+  let targetUsername = user?.username;
+  let targetFullName = (user as any)?.full_name || (user as any)?.fullName || user?.username;
 
   // V3.0.6 (BUG-08): ابطال واقعی توکن هنگام خروج — مسیر logout عمومی است و
   // authenticateToken روی آن اجرا نمی‌شود، بنابراین توکن را مستقیم از کوکی
@@ -376,11 +462,15 @@ const logoutHandler = asyncHandler(async (req, res) => {
   try {
     const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
     if (rawToken) {
-      const payload = jwt.verify(rawToken, getJwtSecret()) as { id?: number };
-      const targetUserId = user?.id || payload?.id;
+      const payload = jwt.verify(rawToken, getJwtSecret()) as { id?: number; username?: string; role?: string };
+      targetUserId = targetUserId || payload?.id;
+      targetUsername = targetUsername || payload?.username;
+
       if (targetUserId) {
-        const [row] = await orm.select({ tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, targetUserId)).limit(1);
+        const [row] = await orm.select().from(users).where(eq(users.id, targetUserId)).limit(1);
         if (row) {
+          targetUsername = targetUsername || row.username;
+          targetFullName = targetFullName || row.fullName || row.username;
           await orm.update(users)
             .set({ tokenVersion: (row.tokenVersion || 0) + 1 })
             .where(eq(users.id, targetUserId));
@@ -392,16 +482,25 @@ const logoutHandler = asyncHandler(async (req, res) => {
     logger.debug(`[Logout] Token revocation skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  if (user) {
+  const clientIp = extractClientIp(req);
+  const userAgent = (req.headers['user-agent'] as string) || '';
+
+  if (targetUserId || targetUsername) {
     await logActivity({
-      userId: user.id,
-      username: user.username,
-      userFullName: user.fullName || user.username,
-      action: 'LOGIN',
-      entity: 'کاربر',
-      entityId: user.id,
-      description: `خروج کاربر ${user.fullName || user.username} از سامانه`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+      userId: targetUserId,
+      username: targetUsername || 'کاربر',
+      userFullName: targetFullName || targetUsername || '',
+      action: 'LOGOUT',
+      entity: 'احراز هویت',
+      entityId: targetUserId,
+      description: `خروج کاربر ${targetFullName || targetUsername} از سامانه`,
+      ipAddress: clientIp,
+      details: {
+        userAgent,
+        method: 'خروج توسط کاربر',
+        status: 'success'
+      },
+      req
     });
   }
 

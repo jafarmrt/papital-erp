@@ -110,8 +110,8 @@ export interface AuditLogParams {
   userId?: number;
   username?: string;
   userFullName?: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'SETTING_CHANGE' | 'EXPORT' | 'RESTORE' | 'AUDIT_APPLY' | 'RECONCILIATION_EXECUTE' | 'VIEW' | 'AUDIT' | 'SEED' | 'IMPORT';
-  entity: string; // e.g. 'کالا', 'فاکتور', 'کاربر', 'نقش', 'مشتری', 'تنظیمات', 'قیمت کالا', 'انبار', 'موجودی انبار'
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'SETTING_CHANGE' | 'EXPORT' | 'RESTORE' | 'AUDIT_APPLY' | 'RECONCILIATION_EXECUTE' | 'VIEW' | 'AUDIT' | 'SEED' | 'IMPORT';
+  entity: string; // e.g. 'کالا', 'فاکتور', 'کاربر', 'نقش', 'مشتری', 'تنظیمات', 'قیمت کالا', 'انبار', 'موجودی انبار', 'احراز هویت'
   entityId?: string | number;
   description: string;
   details?: {

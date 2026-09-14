@@ -238,11 +238,30 @@ router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => 
     const userFilter = req.query.user as string;
     const actionFilter = req.query.action as string;
     const entityFilter = req.query.entity as string;
+    const categoryFilter = req.query.category as string;
     const search = req.query.search as string;
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
 
     const conditions: SQL[] = [];
+
+    if (categoryFilter === 'auth_security') {
+      conditions.push(
+        sql`(${activityLogs.action} IN ('LOGIN', 'LOGIN_FAILED', 'LOGOUT') OR ${activityLogs.entity} IN ('احراز هویت', 'کاربر', 'کاربران سیستم', 'پروفایل کاربر', 'نقش و دسترسی', 'نقش'))`
+      );
+    } else if (categoryFilter === 'financial_docs') {
+      conditions.push(
+        sql`(${activityLogs.entity} IN ('فاکتور', 'پیش‌فاکتور', 'اسناد انبار', 'اسناد انبار / پیش‌فاکتور', 'account', 'journal_voucher', 'bank_account', 'bank_reconciliation', 'treasury_transaction', 'treasury_transfer', 'treasury_reconciliation', 'cheque', 'فیش حقوقی', 'پرداخت حقوق', 'طرف حساب', 'تامین‌کننده', 'طرفین حساب') OR ${activityLogs.entity} ILIKE 'حسابداری%')`
+      );
+    } else if (categoryFilter === 'inventory_items') {
+      conditions.push(
+        sql`(${activityLogs.entity} IN ('کالا', 'کالاها_و_محصولات', 'قیمت کالا', 'ماده اولیه', 'موجودی انبار', 'انبار', 'انبارداری و موجودی', 'ترنسفر', 'پروژه تولید', 'پیشرفت به تفکیک کد کالا', 'عنوان پرکیسی', 'عناوین پرکیسی', 'کارکرد پرکیسی') OR ${activityLogs.entity} ILIKE '%کالا%' OR ${activityLogs.entity} ILIKE '%انبار%')`
+      );
+    } else if (categoryFilter === 'settings_system') {
+      conditions.push(
+        sql`(${activityLogs.action} IN ('SETTING_CHANGE', 'EXPORT', 'RESTORE', 'AUDIT_APPLY', 'RECONCILIATION_EXECUTE', 'SEED') OR ${activityLogs.entity} LIKE 'سیستم:%' OR ${activityLogs.entity} IN ('تنظیمات سیستم', 'صف خطاهای قرنطینه (DLQ)', 'رویدادهای سیستم'))`
+      );
+    }
 
     if (userFilter) {
       conditions.push(eq(activityLogs.username, userFilter));
