@@ -384,15 +384,8 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
     logger.error('[Seeder] Error seeding changelogs:', err);
   }
 
-  // 7. Seed task categories
-  try {
-    const defaultCategories = Array.from(new Set(INITIAL_PIECEWORK_TASKS.map(t => t.category).filter(Boolean)));
-    for (const catName of defaultCategories) {
-      await orm.insert(taskCategories).values({ name: catName, description: 'دسته‌بندی کاری پیش‌فرض کارگاه' }).onConflictDoNothing();
-    }
-  } catch (err) {
-    logger.error('[Seeder] Error seeding task categories:', err);
-  }
+  // 7. Task categories: No hardcoded defaults seeded as per user configuration (managed from scratch)
+  logger.info('[Seeder] Task categories: skipped default seed (user defined from zero).');
 
   // 8. Seed piecework tasks
   try {

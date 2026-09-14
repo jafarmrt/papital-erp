@@ -504,6 +504,10 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
 
     // Double check constraints for all items before submitting
     if (actionType === 'out') {
+      if (!buyerName || !buyerName.trim()) {
+        toast.error('لطفاً پرسنل گیرنده حواله را انتخاب کنید.');
+        return;
+      }
       for (const d of docItems) {
         const { reservedForOtherProjects, maxAllowedForExit, matchingReservations } = getItemReservationSummary(d.item);
         if (d.quantity > maxAllowedForExit) {
@@ -654,11 +658,11 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                   ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
                   : 'bg-amber-100 text-amber-950 border-amber-300'
               }`}>
-                {actionType === 'in' ? 'ثبت ورود کالا (رسید انبار / فاکتور خرید)' : 'ثبت خروج کالا (حواله مصرف)'}
+                {actionType === 'in' ? 'ثبت ورود کالا (رسید انبار)' : 'ثبت خروج کالا (حواله مصرف)'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              مدیریت تراکنش‌های انبار، صدور اسناد رسید خرید و حواله مصرف با محاسبه خودکار میانگین بهای خرید و صدور اسناد دوبل حسابداری.
+              مدیریت تراکنش‌های انبار، صدور اسناد رسید ورود و حواله مصرف با محاسبه خودکار میانگین بهای خرید و صدور اسناد دوبل حسابداری.
             </p>
           </div>
         </div>
@@ -697,7 +701,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
             onClick={() => setActionType('in')}
           >
             <FileInput size={18} className={actionType === 'in' ? 'text-emerald-600' : 'text-slate-400'} />
-            <span>ورود به انبار (رسید انبار / فاکتور خرید)</span>
+            <span>ورود به انبار (رسید انبار)</span>
           </button>
           <button 
             type="button" 
@@ -835,26 +839,34 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                   </span>
                 )}
               </label>
-              {actionType === 'out' && personnelList.length > 0 ? (
-                <select
-                  required
-                  value={buyerName}
-                  onChange={e => setBuyerName(e.target.value)}
-                  className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                >
-                  <option value="">-- انتخاب پرسنل گیرنده از لیست پرسنل کارگاه --</option>
-                  {personnelList.map((p, idx) => {
-                    const name = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'پرسنل';
-                    const code = p.personnelCode ? `[کد: ${p.personnelCode}]` : '';
-                    const title = p.jobTitle ? `- ${p.jobTitle}` : '';
-                    const status = p.employmentStatus && p.employmentStatus !== 'فعال' ? `(${p.employmentStatus})` : '';
-                    return (
-                      <option key={`pers-${p.id || idx}-${idx}`} value={name}>
-                        👤 {name} {code} {title} {status}
-                      </option>
-                    );
-                  })}
-                </select>
+              {actionType === 'out' ? (
+                personnelList.length > 0 ? (
+                  <SearchableSelect
+                    value={buyerName}
+                    onChange={(val) => setBuyerName(val)}
+                    placeholder="جستجو و انتخاب پرسنل کارگاه..."
+                    maxResults={100}
+                    options={personnelList.map((p, idx) => {
+                      const name = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'پرسنل';
+                      const code = p.personnelCode ? `[کد: ${p.personnelCode}]` : '';
+                      const title = p.jobTitle ? `- ${p.jobTitle}` : '';
+                      const status = p.employmentStatus && p.employmentStatus !== 'فعال' ? `(${p.employmentStatus})` : '';
+                      return {
+                        value: name,
+                        label: `👤 ${name} ${code} ${title} ${status}`.trim().replace(/\s+/g, ' ')
+                      };
+                    })}
+                  />
+                ) : (
+                  <input 
+                    required
+                    type="text" 
+                    value={buyerName} 
+                    onChange={e => setBuyerName(e.target.value)} 
+                    placeholder="نام پرسنل گیرنده حواله..." 
+                    className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                  />
+                )
               ) : actionType === 'in' ? (
                 <div className="space-y-1.5">
                   <SearchableSelect
@@ -887,11 +899,10 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                 </div>
               ) : (
                 <input 
-                  required={actionType === 'out'} 
                   type="text" 
                   value={buyerName} 
                   onChange={e => setBuyerName(e.target.value)} 
-                  placeholder="نام پرسنل گیرنده حواله..." 
+                  placeholder="نام طرف حساب..." 
                   className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
                 />
               )}

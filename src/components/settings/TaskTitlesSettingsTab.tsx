@@ -37,7 +37,7 @@ export function TaskTitlesSettingsTab() {
   const [taskForm, setTaskForm] = useState({
     code: '',
     title: '',
-    category: 'کاشی و خشت',
+    category: '',
     defaultRate: 0,
     unit: 'عدد',
     description: ''
@@ -203,37 +203,43 @@ export function TaskTitlesSettingsTab() {
         </div>
 
         {/* Categories Chips */}
-        <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
-            <div
-              key={cat.id}
-              className="group flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-800 rounded-xl text-xs font-medium transition-colors"
-            >
-              <Tag size={13} className="text-slate-500" />
-              <span>{cat.name}</span>
-              <div className="flex items-center gap-1 border-r border-slate-300 pr-1.5 mr-0.5">
-                <button
-                  onClick={() => {
-                    setEditingCat(cat);
-                    setCatName(cat.name);
-                    setCatDesc(cat.description || '');
-                    setIsCatModalOpen(true);
-                  }}
-                  className="p-1 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
-                  title="ویرایش نام دسته‌بندی"
-                >
-                  <Edit3 size={13} />
-                </button>
-                <button
-                  onClick={() => handleDeleteCategory(cat)}
-                  className="p-1 text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
-                  title="حذف دسته‌بندی"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          {categories.length === 0 ? (
+            <div className="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-xl px-4 py-3 w-full flex items-center justify-between">
+              <span>هیچ دسته‌بندی کاری هنوز تعریف نشده است. با کلیک بر روی «افزودن دسته‌بندی جدید» می‌توانید دسته‌بندی‌های مورد نیاز کارگاه خود را از صفر تعریف کنید.</span>
             </div>
-          ))}
+          ) : (
+            categories.map((cat) => (
+              <div
+                key={cat.id}
+                className="group flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-800 rounded-xl text-xs font-medium transition-colors"
+              >
+                <Tag size={13} className="text-slate-500" />
+                <span>{cat.name}</span>
+                <div className="flex items-center gap-1 border-r border-slate-300 pr-1.5 mr-0.5">
+                  <button
+                    onClick={() => {
+                      setEditingCat(cat);
+                      setCatName(cat.name);
+                      setCatDesc(cat.description || '');
+                      setIsCatModalOpen(true);
+                    }}
+                    className="p-1 text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+                    title="ویرایش نام دسته‌بندی"
+                  >
+                    <Edit3 size={13} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCategory(cat)}
+                    className="p-1 text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+                    title="حذف دسته‌بندی"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -277,7 +283,7 @@ export function TaskTitlesSettingsTab() {
                 setTaskForm({
                   code: '',
                   title: '',
-                  category: categories[0]?.name || 'کاشی و خشت',
+                  category: categories[0]?.name || '',
                   defaultRate: 0,
                   unit: 'عدد',
                   description: ''
@@ -348,7 +354,7 @@ export function TaskTitlesSettingsTab() {
                             setTaskForm({
                               code: task.code,
                               title: task.title,
-                              category: task.category || 'کاشی و خشت',
+                              category: task.category || (categories[0]?.name || ''),
                               defaultRate: task.defaultRate,
                               unit: task.unit,
                               description: task.description || ''
@@ -412,9 +418,18 @@ export function TaskTitlesSettingsTab() {
                     onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
                   >
-                    {categories.map((c, idx) => (
-                      <option key={`task-cat-form-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
-                    ))}
+                    {categories.length === 0 ? (
+                      <option value="">بدون دسته‌بندی</option>
+                    ) : (
+                      <>
+                        {!categories.some(c => c.name === taskForm.category) && taskForm.category && (
+                          <option value={taskForm.category}>{taskForm.category}</option>
+                        )}
+                        {categories.map((c, idx) => (
+                          <option key={`task-cat-form-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
               </div>

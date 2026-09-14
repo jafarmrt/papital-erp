@@ -644,26 +644,34 @@ router.get('/piecework/categories', async (req, res) => {
       logger.warn({ message: 'pieceworkTasks query error', error: e });
     }
 
-    const catSet = new Set<string>();
-    dbCats.forEach(c => catSet.add(c.name));
-    tasks.forEach(t => { if (t.cat) catSet.add(t.cat); });
+    // Map categories from the database (user created) and any active categories used in tasks
+    const catMap = new Map<string, { id: number | string; name: string; description: string }>();
     
-    const defaults = ['کاشی و خشت', 'سمباده و روتوش', 'ترنسفر', 'رنگ و گلیز', 'مونتاژ', 'بندبافی', 'بسته‌بندی', 'سایر'];
-    defaults.forEach(d => catSet.add(d));
+    // First, add all active database categories
+    for (const c of dbCats) {
+      catMap.set(c.name, {
+        id: c.id,
+        name: c.name,
+        description: c.description || ''
+      });
+    }
 
-    const resultList = Array.from(catSet).map(name => {
-      const match = dbCats.find(c => c.name === name);
-      return {
-        id: match ? match.id : name,
-        name: name,
-        description: match ? match.description || '' : ''
-      };
-    });
+    // Also include any distinct category names present in existing tasks that may not yet be in taskCategories table
+    for (const t of tasks) {
+      if (t.cat && t.cat.trim() && !catMap.has(t.cat.trim())) {
+        catMap.set(t.cat.trim(), {
+          id: t.cat.trim(),
+          name: t.cat.trim(),
+          description: ''
+        });
+      }
+    }
 
+    const resultList = Array.from(catMap.values());
     res.json(resultList);
   } catch (err) {
     logger.error({ message: 'Error fetching task categories', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
@@ -674,15 +682,28 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
     const { name, description } = req.body;
     const catName = String(name).trim();
 
+    // Check if category already exists (active)
     const [existing] = await orm.select().from(taskCategories).where(and(eq(taskCategories.name, catName), eq(taskCategories.isDeleted, 0)));
     if (existing) {
       return res.status(400).json({ error: 'این دسته‌بندی کاری قبلاً ثبت شده است' });
     }
 
-    const [inserted] = await orm.insert(taskCategories).values({
-      name: catName,
-      description: description ? String(description).trim() : ''
-    }).returning();
+    // If it was soft-deleted, reactivate it
+    const [deletedExisting] = await orm.select().from(taskCategories).where(and(eq(taskCategories.name, catName), eq(taskCategories.isDeleted, 1)));
+    let inserted;
+    if (deletedExisting) {
+      const [reactivated] = await orm.update(taskCategories).set({
+        isDeleted: 0,
+        description: description ? String(description).trim() : deletedExisting.description
+      }).where(eq(taskCategories.id, deletedExisting.id)).returning();
+      inserted = reactivated;
+    } else {
+      const [newRow] = await orm.insert(taskCategories).values({
+        name: catName,
+        description: description ? String(description).trim() : ''
+      }).returning();
+      inserted = newRow;
+    }
 
     await logActivity({
       userId: req.user?.id,
@@ -696,7 +717,7 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
     res.status(201).json(inserted);
   } catch (err) {
     logger.error({ message: 'Error creating task category', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
@@ -704,45 +725,109 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
 // PUT /api/piecework/categories/:id
 router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), validate(updateTaskCategorySchema), async (req, res) => {
   try {
-    const id = req.params.id;
+    const rawId = req.params.id;
     const { name, description } = req.body;
     const newName = String(name).trim();
 
     let oldName = '';
-    if (!isNaN(Number(id))) {
-      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.id, Number(id)));
+    let targetId: number | null = null;
+
+    if (!isNaN(Number(rawId)) && Number(rawId) > 0) {
+      // It's a numeric ID
+      const numId = Number(rawId);
+      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.id, numId));
       if (existing) {
         oldName = existing.name;
-        await orm.update(taskCategories).set({ name: newName, description: description ? String(description).trim() : existing.description }).where(eq(taskCategories.id, Number(id)));
+        targetId = existing.id;
+        await orm.update(taskCategories).set({
+          name: newName,
+          description: description !== undefined ? String(description).trim() : existing.description
+        }).where(eq(taskCategories.id, numId));
       }
     } else {
-      oldName = String(id);
-      await orm.insert(taskCategories).values({ name: newName, description: description ? String(description).trim() : '' }).onConflictDoNothing();
+      // It's a string name (e.g. from existing tasks or legacy default)
+      oldName = decodeURIComponent(String(rawId)).trim();
+      // Check if a row with this name already exists in DB
+      const [existingByName] = await orm.select().from(taskCategories).where(eq(taskCategories.name, oldName));
+      if (existingByName) {
+        targetId = existingByName.id;
+        await orm.update(taskCategories).set({
+          name: newName,
+          description: description !== undefined ? String(description).trim() : existingByName.description,
+          isDeleted: 0
+        }).where(eq(taskCategories.id, existingByName.id));
+      } else {
+        const [inserted] = await orm.insert(taskCategories).values({
+          name: newName,
+          description: description ? String(description).trim() : ''
+        }).returning();
+        targetId = inserted.id;
+      }
     }
 
+    // If the category name was changed, cascade update all tasks using the old category name
     if (oldName && oldName !== newName) {
       await orm.update(pieceworkTasks).set({ category: newName }).where(eq(pieceworkTasks.category, oldName));
     }
 
-    res.json({ status: 'ok', name: newName });
+    await logActivity({
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم',
+      action: 'UPDATE',
+      entity: 'دسته‌بندی کاری',
+      entityId: targetId || 0,
+      description: `ویرایش دسته‌بندی کاری «${oldName || newName}» به «${newName}»`
+    });
+
+    res.json({ status: 'ok', id: targetId, name: newName });
   } catch (err) {
     logger.error({ message: 'Error updating task category', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), async (req, res) => {
   try {
-    const id = req.params.id;
-    if (!isNaN(Number(id))) {
-      await orm.update(taskCategories).set({ isDeleted: 1 }).where(eq(taskCategories.id, Number(id)));
+    const rawId = req.params.id;
+    let deletedName = '';
+
+    if (!isNaN(Number(rawId)) && Number(rawId) > 0) {
+      const numId = Number(rawId);
+      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.id, numId));
+      if (existing) {
+        deletedName = existing.name;
+        await orm.update(taskCategories).set({ isDeleted: 1 }).where(eq(taskCategories.id, numId));
+      }
+    } else {
+      // String ID (e.g. from existing task category or legacy default)
+      deletedName = decodeURIComponent(String(rawId)).trim();
+      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.name, deletedName));
+      if (existing) {
+        await orm.update(taskCategories).set({ isDeleted: 1 }).where(eq(taskCategories.id, existing.id));
+      } else {
+        // Insert as soft-deleted record so it doesn't reappear
+        await orm.insert(taskCategories).values({
+          name: deletedName,
+          description: '',
+          isDeleted: 1
+        }).onConflictDoNothing();
+      }
     }
-    res.json({ status: 'ok' });
+
+    await logActivity({
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم',
+      action: 'DELETE',
+      entity: 'دسته‌بندی کاری',
+      description: `حذف دسته‌بندی کاری «${deletedName || rawId}»`
+    });
+
+    res.json({ status: 'ok', message: `دسته‌بندی «${deletedName || rawId}» با موفقیت حذف شد` });
   } catch (err) {
     logger.error({ message: 'Error deleting task category', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
