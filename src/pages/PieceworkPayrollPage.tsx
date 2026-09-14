@@ -121,7 +121,8 @@ export function PieceworkPayrollPage() {
     projectCostsSummary,
     filteredTasks,
     totalLoggedAmount,
-    pendingLoggedAmount
+    pendingLoggedAmount,
+    taskCategories
   } = usePiecework();
 
   return (
@@ -133,7 +134,7 @@ export function PieceworkPayrollPage() {
             <Calculator size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900">حقوق و دستمزد (Piecework & Payroll)</h1>
+            <h1 className="text-xl font-black text-slate-900">حقوق و دستمزد</h1>
             <p className="text-xs text-slate-500 mt-0.5">
               ثبت روزانه کارکرد، مدیریت عناوین و نرخ‌ها، تسهیم هزینه بر پروژه‌ها و صدور فیش رسمی حقوق
             </p>
@@ -271,6 +272,7 @@ export function PieceworkPayrollPage() {
         taskFormData={taskFormData}
         setTaskFormData={setTaskFormData}
         isSaving={isSavingTask}
+        categories={taskCategories}
       />
 
       {/* MODAL 3: PAYROLL GENERATION MODAL */}

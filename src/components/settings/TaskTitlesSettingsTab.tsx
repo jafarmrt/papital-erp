@@ -448,20 +448,20 @@ export function TaskTitlesSettingsTab() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">واحد شمارش *</label>
+                  <label className="block font-bold text-slate-700 mb-1">واحد اندازه‌گیری *</label>
                   <select
                     value={taskForm.unit}
                     onChange={(e) => setTaskForm({ ...taskForm, unit: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none font-bold text-blue-800"
                   >
+                    {!['عدد', 'جفت', 'ساعت', 'درصدی', 'سایر'].includes(taskForm.unit) && taskForm.unit && (
+                      <option value={taskForm.unit}>{taskForm.unit}</option>
+                    )}
                     <option value="عدد">عدد</option>
-                    <option value="ساعت">ساعت (زمانی HH:MM)</option>
-                    <option value="متر">متر</option>
-                    <option value="مترمربع">مترمربع</option>
-                    <option value="کادر">کادر</option>
-                    <option value="کیلوگرم">کیلوگرم</option>
-                    <option value="ست">ست</option>
-                    <option value="دسته">دسته</option>
+                    <option value="جفت">جفت</option>
+                    <option value="ساعت">ساعت</option>
+                    <option value="درصدی">درصدی</option>
+                    <option value="سایر">سایر</option>
                   </select>
                 </div>
 

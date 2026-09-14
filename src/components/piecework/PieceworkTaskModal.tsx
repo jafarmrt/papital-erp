@@ -1,9 +1,10 @@
-import React, { FormEvent } from 'react';
-import { X, Award } from 'lucide-react';
+import React, { FormEvent, useState, useEffect } from 'react';
+import { X, Award, Tag } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { TaskFormData } from '../../hooks/usePiecework';
 import { formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { fetchJson } from '../../api';
 
 interface PieceworkTaskModalProps {
   isOpen: boolean;
@@ -13,7 +14,10 @@ interface PieceworkTaskModalProps {
   taskFormData: TaskFormData;
   setTaskFormData: React.Dispatch<React.SetStateAction<TaskFormData>>;
   isSaving?: boolean;
+  categories?: { id: number | string; name: string; description?: string }[] | string[];
 }
+
+const MEASUREMENT_UNITS = ['عدد', 'جفت', 'ساعت', 'درصدی', 'سایر'] as const;
 
 export function PieceworkTaskModal({
   isOpen,
@@ -22,10 +26,49 @@ export function PieceworkTaskModal({
   editingTask,
   taskFormData,
   setTaskFormData,
-  isSaving = false
+  isSaving = false,
+  categories: propCategories = []
 }: PieceworkTaskModalProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
+  const [categories, setCategories] = useState<{ id: number | string; name: string }[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState<boolean>(false);
+
+  // Load task categories directly from system settings task categories management
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (Array.isArray(propCategories) && propCategories.length > 0) {
+      setCategories(
+        propCategories.map(c => typeof c === 'string' ? { id: c, name: c } : { id: c.id, name: c.name })
+      );
+    }
+
+    let isMounted = true;
+    setLoadingCategories(true);
+    fetchJson<any[]>('/piecework/categories')
+      .then((res) => {
+        if (!isMounted) return;
+        if (Array.isArray(res)) {
+          const list = res.map(c => typeof c === 'string' ? { id: c, name: c } : { id: c.id, name: c.name });
+          setCategories(list);
+          if (!taskFormData.category && list.length > 0) {
+            setTaskFormData(prev => ({ ...prev, category: list[0].name }));
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch task categories in modal:', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingCategories(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -56,34 +99,44 @@ export function PieceworkTaskModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">دسته‌بندی</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>دسته‌بندی کاری</span>
+                {loadingCategories && <span className="text-[10px] text-blue-500 font-normal">در حال دریافت...</span>}
+              </label>
               <select
                 value={taskFormData.category}
                 onChange={(e) => setTaskFormData(prev => ({ ...prev, category: e.target.value }))}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
               >
-                <option value="کاشی و خشت">کاشی و خشت</option>
-                <option value="سمباده و روتوش">سمباده و روتوش</option>
-                <option value="ترنسفر، رنگ و گلیز">ترنسفر، رنگ و گلیز</option>
-                <option value="مونتاژ و بندبافی">مونتاژ و بندبافی</option>
-                <option value="بسته بندی و رنگ آمیزی">بسته بندی و رنگ آمیزی</option>
-                <option value="طراحی و آموزشی">طراحی و آموزشی</option>
-                <option value="ساعتی و عمومی">ساعتی و عمومی</option>
-                <option value="مدیریت و کنترل تولید">مدیریت و کنترل تولید</option>
-                <option value="بازاریابی و پورسانت">بازاریابی و پورسانت</option>
-                <option value="پاداش و مزایا">پاداش و مزایا</option>
-                <option value="سایر">سایر</option>
+                {categories.length === 0 ? (
+                  <option value="">بدون دسته‌بندی (تعریف در تنظیمات سامانه)</option>
+                ) : (
+                  <>
+                    {!categories.some(c => c.name === taskFormData.category) && taskFormData.category && (
+                      <option value={taskFormData.category}>{taskFormData.category}</option>
+                    )}
+                    {categories.map((c, idx) => (
+                      <option key={`task-modal-cat-${c.id || idx}-${idx}`} value={c.name}>{c.name}</option>
+                    ))}
+                  </>
+                )}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">واحد اندازه‌گیری</label>
-              <input
-                type="text"
-                value={taskFormData.unit}
+              <label className="block text-xs font-bold text-slate-700 mb-1">واحد اندازه‌گیری *</label>
+              <select
+                value={taskFormData.unit || 'عدد'}
                 onChange={(e) => setTaskFormData(prev => ({ ...prev, unit: e.target.value }))}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
-              />
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-medium"
+              >
+                {!MEASUREMENT_UNITS.includes(taskFormData.unit as any) && taskFormData.unit && (
+                  <option value={taskFormData.unit}>{taskFormData.unit}</option>
+                )}
+                {MEASUREMENT_UNITS.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
             </div>
           </div>
 

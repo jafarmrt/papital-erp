@@ -73,10 +73,13 @@ export function usePiecework() {
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
   const [taskFormData, setTaskFormData] = useState<TaskFormData>({
     title: '',
-    category: 'کاشی و خشت',
+    category: '',
     unit: 'عدد',
     defaultRate: 0
   });
+
+  // Task Categories from Settings
+  const [taskCategories, setTaskCategories] = useState<{ id: number | string; name: string; description?: string }[]>([]);
 
   // Tab 3: Custom Rates
   const [selectedPersonnelForRates, setSelectedPersonnelForRates] = useState<number | ''>('');
@@ -102,7 +105,7 @@ export function usePiecework() {
   const loadData = async (signal?: AbortSignal, status: 'active' | 'archived' | 'all' = taskStatusFilter) => {
     setLoading(true);
     try {
-      const [pRes, tRes, lRes, payRes, projRes] = await Promise.all([
+      const [pRes, tRes, lRes, payRes, projRes, catRes] = await Promise.all([
         fetchJson('/personnel', { signal }),
         fetchJson(`/piecework/tasks?status=${status}`, { signal }),
         fetchJson('/piecework/logs', { signal }),
@@ -110,6 +113,11 @@ export function usePiecework() {
         fetchJson('/projects', { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load projects for piecework:', err);
+          return [];
+        }),
+        fetchJson('/piecework/categories', { signal }).catch((err) => {
+          if (err?.name === 'AbortError') throw err;
+          console.error('Failed to load piecework categories:', err);
           return [];
         })
       ]);
@@ -119,6 +127,7 @@ export function usePiecework() {
       setPayrollsList(Array.isArray(payRes) ? payRes : []);
       const projectsArr = Array.isArray(projRes?.data) ? projRes.data : (Array.isArray(projRes) ? projRes : []);
       setProjectsList(projectsArr);
+      setTaskCategories(Array.isArray(catRes) ? catRes : []);
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Error loading piecework data:', err);
@@ -145,12 +154,18 @@ export function usePiecework() {
     return () => controller.abort();
   }, []);
 
-  // Category list derived from tasks
+  // Category list derived from settings management and existing tasks
   const categoriesList = useMemo(() => {
+    const set = new Set<string>();
+    (taskCategories || []).forEach(c => {
+      if (c && c.name && c.name.trim()) set.add(c.name.trim());
+    });
     const safeTasks = Array.isArray(tasksList) ? tasksList : [];
-    const set = new Set(safeTasks.map(t => t.category).filter(Boolean));
+    safeTasks.forEach(t => {
+      if (t.category && t.category.trim()) set.add(t.category.trim());
+    });
     return Array.from(set);
-  }, [tasksList]);
+  }, [taskCategories, tasksList]);
 
   // Options for SearchableSelect
   const taskSelectOptions = useMemo(() => {
@@ -309,7 +324,8 @@ export function usePiecework() {
   // Task Actions
   const handleOpenAddTaskModal = () => {
     setEditingTask(null);
-    setTaskFormData({ title: '', category: 'کاشی و خشت', unit: 'عدد', defaultRate: 0 });
+    const defaultCat = taskCategories[0]?.name || (categoriesList[0] || '');
+    setTaskFormData({ title: '', category: defaultCat, unit: 'عدد', defaultRate: 0 });
     setIsTaskModalOpen(true);
   };
 
@@ -317,7 +333,7 @@ export function usePiecework() {
     setEditingTask(task);
     setTaskFormData({
       title: task.title,
-      category: task.category || 'کاشی و خشت',
+      category: task.category || (taskCategories[0]?.name || (categoriesList[0] || '')),
       unit: task.unit || 'عدد',
       defaultRate: Number(task.defaultRate) || 0
     });
@@ -782,6 +798,7 @@ export function usePiecework() {
     setPayrollAdvanceDeduction,
     viewingPayroll,
     setViewingPayroll,
+    taskCategories,
     categoriesList,
     taskSelectOptions,
     personnelSelectOptions,
