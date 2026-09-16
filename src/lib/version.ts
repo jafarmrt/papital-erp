@@ -35,11 +35,11 @@ function resolvePackageVersion(): string {
   }
 
   // 4. Default baseline fallback
-  return '3.1.0';
+  return '4.0.0';
 }
 
 export const APP_VERSION: string = resolvePackageVersion();
-export const GIT_COMMIT_SHA: string = process.env.GIT_COMMIT_SHA || process.env.COMMIT_SHA || 'v3-master';
+export const GIT_COMMIT_SHA: string = process.env.GIT_COMMIT_SHA || process.env.COMMIT_SHA || 'v4-master';
 export const BUILD_TIMESTAMP: string = process.env.BUILD_TIMESTAMP || '2026-09-05T06:30:00.000Z';
 
 export const BUILD_INFO: AppBuildInfo = Object.freeze({

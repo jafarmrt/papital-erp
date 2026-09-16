@@ -78,8 +78,31 @@ export function useActivityLogFilterOptionsQuery() {
   });
 }
 
+export interface AuditLogIntegrityReport {
+  healthy: boolean;
+  totalLogs: number;
+  criticalLogsCount: number;
+  earliestTimestamp: string | null;
+  latestTimestamp: string | null;
+  minRetentionDays: number;
+}
+
+export function useAuditLogIntegrityQuery() {
+  return useQuery<AuditLogIntegrityReport>({
+    queryKey: ['activity-logs', 'integrity'],
+    queryFn: async () => {
+      return await fetchJson('/activity-logs/integrity');
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 /** دسترسی imperative به invalidation لاگ‌ها برای فراخوانی پس از ثبت ممیزی یا تنظیمات */
 export function useInvalidateActivityLogs() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activityLogs.all });
+  return () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activityLogs.all });
+    queryClient.invalidateQueries({ queryKey: ['activity-logs', 'integrity'] });
+  };
 }

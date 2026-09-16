@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری پایدار `v3.x.y` (نسخه مستقر: `v3.1.0`) — تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md`
+> **نسخه فعلی:** سری پایدار `v3.x.y` (نسخه مستقر: `v3.3.21`) — تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/3.ts`
 
 ---
 
@@ -10,11 +10,12 @@
 
 | لایه | تکنولوژی |
 |---|---|
-| Frontend | React 18 + Vite + TailwindCSS + TanStack Query + react-multi-date-picker |
-| Backend | Node.js + Express + TypeScript (tsx در توسعه / esbuild در بیلد) |
-| Database | PostgreSQL 16+ با Drizzle ORM — مهاجرت اتمیک داخلی (`src/db/migrator.ts`) |
-| احراز هویت | JWT در کوکی HttpOnly (`auth_token`) |
+| Frontend | React 19 + Vite 6 + Tailwind CSS 4 + TanStack Query v5 + React Router 7 + Motion 12 + react-multi-date-picker |
+| Backend | Node.js 20+ (پیشنهادی 22 LTS) + Express 4 + TypeScript 5.8 (tsx در توسعه / esbuild در بیلد تولید) |
+| Database | PostgreSQL 14+ (پیشنهادی 16/17) با Drizzle ORM 0.45 — مهاجرت اتمیک داخلی (`src/db/migrator.ts`) |
+| احراز هویت | JWT در کوکی امن HttpOnly (`auth_token`) |
 | رویدادها | Domain Event Bus + Transactional Outbox + DLQ + Webhook با امضای HMAC-SHA256 |
+| اعتبارسنجی و لاگینگ | Zod 4 + Winston Logger + prom-client (Prometheus Metrics) |
 
 ساختار کلیدی: `src/routes` (API) • `src/services` (منطق کسب‌وکار، شامل `accounting/`) • `src/components` + `src/pages` (UI) • `src/db` (schema + migrator + seed) • `src/tests` (سوییت ۱۵ سناریوی بحرانی)
 
@@ -51,6 +52,15 @@ npm run dev          # سرور توسعه + API روی پورت 3000
 
 ## نصب — مسیر ۲: سرور / VPS لینوکسی
 
+### روش ۱: نصاب خودکار (پیشنهادی)
+اسکریپت نصاب خودکار `install.sh` تمام مراحل نصب پیش‌نیازها، تنظیم دیتابیس PostgreSQL، بیلد پروژه، راه‌اندازی سرویس systemd و بکاپ روزانه را انجام می‌دهد:
+
+```bash
+git clone <repo-url> && cd <repo>
+sudo ./install.sh
+```
+
+### روش ۲: راه‌اندازی دستی
 ```bash
 git clone <repo-url> && cd <repo>
 cp .env.production.example .env    # سپس مقادیر را ویرایش کنید
@@ -59,7 +69,11 @@ npm run build                       # کلاینت + bundle سرور (dist/serve
 NODE_ENV=production npm start      # مهاجرت‌ها هنگام startup اعمال می‌شوند
 ```
 
-> نصاب خودکار `install.sh` (systemd + backup) در زیرفاز 7.2 نقشه راه V10 در حال آماده‌سازی است و جایگزین `UBUNTU_INSTALL_GUIDE.md` فعلی خواهد شد.
+برای به‌روزرسانی خودکار سرور و سرویس‌های در حال اجرا در آینده نیز اسکریپت `update.sh` آماده است:
+
+```bash
+sudo ./update.sh
+```
 
 ### تنظیمات اولیه پس از نصب
 
@@ -190,4 +204,4 @@ systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 - مهاجرت فقط از migrator اتمیک؛ شماره‌گذاری‌ها فقط با SEQUENCE/counter اتمیک
 - خواندن‌ها با `is_deleted = 0` (soft delete)؛ حذف‌ها فقط نرم
 - فرانت: همه فراخوانی‌ها با `fetchJson`، آرایه‌ها با گارد `Array.isArray`
-- هر تغییر کارکردی: bump نسخه + مدخل چنجلاگ در `src/data/changelogs/2.ts` (سری 2.x) یا فایل فعال مربوطه
+- هر تغییر کارکردی: bump نسخه + مدخل چنجلاگ در `src/data/changelogs/3.ts` (سری 3.x) یا فایل فعال مربوطه

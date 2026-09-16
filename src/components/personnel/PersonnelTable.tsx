@@ -18,7 +18,7 @@ import {
   Users
 } from 'lucide-react';
 import { Personnel } from '../../types';
-import { formatPersianCode, formatPersianNumber } from '../../utils';
+import { formatPersianCode, formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber } from '../../utils';
 import { ActionMenu } from '../ActionMenu';
 import toast from 'react-hot-toast';
 
@@ -232,10 +232,10 @@ export function PersonnelTable({
                         {p.jobTitle || '---'}
                       </td>
                       <td className="p-3 font-mono text-slate-800">
-                        {p.phone ? formatPersianCode(p.phone) : '---'}
+                        {p.phone ? formatPersianPhone(p.phone) : '---'}
                       </td>
                       <td className="p-3 font-mono text-slate-600">
-                        {p.nationalId ? formatPersianCode(p.nationalId) : '---'}
+                        {p.nationalId ? formatPersianNationalId(p.nationalId) : '---'}
                       </td>
                       <td className="p-3">
                         {p.employmentStatus === 'فعال' && (
@@ -296,10 +296,11 @@ export function PersonnelTable({
                               ...(p.phone
                                 ? [
                                     {
-                                      label: `کپی شماره تماس (${p.phone})`,
+                                      label: `کپی شماره تماس (${formatPersianPhone(p.phone)})`,
                                       icon: Copy,
                                       onClick: () => {
-                                        navigator.clipboard.writeText(p.phone || '');
+                                        const clean = normalizePhoneNumber(p.phone) || p.phone || '';
+                                        navigator.clipboard.writeText(clean);
                                         toast.success('شماره تماس کپی شد');
                                       },
                                     },

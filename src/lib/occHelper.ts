@@ -124,3 +124,37 @@ export async function withOccRetry<T>(
 
   throw new Error('Unreachable OCC retry loop exit');
 }
+
+export interface OccOperationConfig<TRecord> {
+  entityType: string;
+  entityId: string | number;
+  fetch: () => Promise<TRecord | null | undefined>;
+  mutate: (record: TRecord, attempt: number) => Promise<any>;
+  options?: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+  };
+}
+
+/**
+ * Executes an optimistic concurrency update with automatic retry loop.
+ * Fetches latest record version, verifies OCC conditions, and retries on transient collisions.
+ */
+export async function executeOccUpdate<TRecord extends { version?: number | null }>(
+  config: OccOperationConfig<TRecord>
+): Promise<any> {
+  return withOccRetry(async (attempt) => {
+    const record = await config.fetch();
+    if (!record) {
+      throw new OptimisticLockError({
+        entityType: config.entityType,
+        entityId: config.entityId,
+        expectedVersion: 1,
+        message: `${config.entityType} with ID ${config.entityId} not found.`
+      });
+    }
+    return await config.mutate(record, attempt);
+  }, config.options);
+}
+

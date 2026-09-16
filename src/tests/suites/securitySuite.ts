@@ -860,5 +860,86 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // Test 17: Runtime Validation Middleware & Sanitized Body Replacement Guard (S-6 / Sub-phase 4.1)
+  const t17Start = Date.now();
+  try {
+    const { validate } = await import('../../middleware/validate.js');
+    const { z } = await import('zod');
+
+    const testSchema = z.object({
+      body: z.object({
+        name: z.string().min(2),
+        count: z.number().int().positive()
+      }),
+      query: z.object({
+        filter: z.string().optional()
+      }).optional()
+    });
+
+    const middleware = validate(testSchema);
+
+    // Mock Express Req / Res / Next
+    const mockReq: any = {
+      body: {
+        name: 'کالای تستی Zod',
+        count: 5,
+        maliciousUnsanitizedField: 'DROP TABLE items;',
+        extraField: 12345
+      },
+      query: {
+        filter: 'active',
+        pollutedQuery: 'select 1'
+      },
+      params: {}
+    };
+
+    let nextCalled = false;
+    let nextError: any = null;
+    const mockRes: any = {
+      status: () => mockRes,
+      json: () => mockRes
+    };
+
+    await middleware(mockReq, mockRes, (err?: any) => {
+      nextCalled = true;
+      nextError = err;
+    });
+
+    if (!nextCalled || nextError) {
+      throw new Error(`میدل‌ور اعتبارسنجی باید برای ورودی معتبر تابع next را بدون خطا فراخوانی کند: ${nextError?.message}`);
+    }
+
+    // بررسی اینکه فیلدهای اضافه و ناخواسته توسط Zod حذف شده و داده‌های پالایش‌شده جایگزین req.body شده‌اند
+    if (mockReq.body.maliciousUnsanitizedField !== undefined || mockReq.body.extraField !== undefined) {
+      throw new Error('فیلدهای غیرمجاز و ناشناخته باید پس از اعتبارسنجی Zod از req.body حذف شوند (جایگزینی داده تمیز S-6).');
+    }
+
+    if (mockReq.body.name !== 'کالای تستی Zod' || mockReq.body.count !== 5) {
+      throw new Error('فیلدهای معتبر ارسالی باید به درستی در req.body نگهداری و جایگزین شوند.');
+    }
+
+    results.push(makeTestCase({
+      id: 'sec_runtime_validation_middleware_guard',
+      scenarioId: 'v4_runtime_validation_middleware_guard',
+      name: 'سنگربندی میدل‌ور اعتبارسنجی Zod و جایگزینی داده‌های تمیز در req.body (یافته S-6)',
+      layer: 'security',
+      executionType: 'simulation_logic',
+      passed: true,
+      durationMs: Date.now() - t17Start,
+      details: 'تضمین شد که خروجی اعتبارسنجی و پالایش‌شده Zod مستقیماً در req.body/query/params جایگزین شده و فیلدهای ناخواسته حذف می‌گردند.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'sec_runtime_validation_middleware_guard',
+      scenarioId: 'v4_runtime_validation_middleware_guard',
+      name: 'سنگربندی میدل‌ور اعتبارسنجی Zod و جایگزینی داده‌های تمیز در req.body (یافته S-6)',
+      layer: 'security',
+      executionType: 'simulation_logic',
+      passed: false,
+      durationMs: Date.now() - t17Start,
+      error: err.message
+    }));
+  }
+
   return results;
 }

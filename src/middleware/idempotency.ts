@@ -7,6 +7,11 @@ export interface IdempotencyMiddlewareOptions {
   headerName?: string;
   ttlSeconds?: number;
   lockTimeoutSeconds?: number;
+  /**
+   * If true, mutating requests (POST, PUT, PATCH, DELETE) lacking an Idempotency-Key
+   * will be rejected with 400 Bad Request (fail-closed policy for sensitive financial/inventory routes).
+   */
+  required?: boolean;
 }
 
 /**
@@ -25,11 +30,17 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     const key = (req.headers[headerName] || req.headers[altHeaderName] || req.body?.idempotencyKey) as string | undefined;
 
     if (!key || typeof key !== 'string' || key.trim() === '') {
+      if (options.required) {
+        return res.status(400).json({
+          error: 'ارسال شناسه ایدمپوتنسی (Idempotency-Key) برای این عملیات مالی و انبارداری الزامی است.',
+          code: 'IDEMPOTENCY_KEY_REQUIRED'
+        });
+      }
       return next();
     }
 
     const cleanKey = key.trim();
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.id ?? null;
     const scope = options.scope || req.baseUrl || 'api';
 
     try {
@@ -46,6 +57,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
       if (result.state === 'cached') {
         res.setHeader('X-Idempotency-Hit', 'true');
         res.setHeader('X-Idempotency-Key', cleanKey);
+        res.setHeader('X-Idempotency-Scope', scope);
         return res.status(result.responseStatus).json(result.responseBody);
       }
 
@@ -75,7 +87,10 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
               parsedBody = { raw: body };
             }
           }
-          await IdempotencyService.saveResponse(cleanKey, res.statusCode, parsedBody);
+          await IdempotencyService.saveResponse(cleanKey, res.statusCode, parsedBody, {
+            scope,
+            userId
+          });
         } catch (saveErr) {
           logger.error(`[Idempotency Middleware] Failed to save response for key ${cleanKey}:`, saveErr);
         }
@@ -84,19 +99,24 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
       res.json = function (body: any): Response {
         saveResponseOnce(body);
         res.setHeader('X-Idempotency-Key', cleanKey);
+        res.setHeader('X-Idempotency-Scope', scope);
         return originalJson(body);
       };
 
       res.send = function (body: any): Response {
         saveResponseOnce(body);
         res.setHeader('X-Idempotency-Key', cleanKey);
+        res.setHeader('X-Idempotency-Scope', scope);
         return originalSend(body);
       };
 
       next();
     } catch (err: any) {
       logger.error(`[Idempotency Middleware] Error handling key ${cleanKey}:`, err);
-      // Fail-open or propagate based on need
+      await IdempotencyService.markFailed(cleanKey, err, {
+        scope,
+        userId
+      });
       next(err);
     }
   };

@@ -11,12 +11,22 @@ going forward.
 | Client-bundled update center | `src/data/changelogs/0.ts` | baseline `v1.0.0` entry |
 | Client-bundled update center | `src/data/changelogs/1.ts` | `1.x.y` release series |
 | Client-bundled update center | `src/data/changelogs/2.ts` | `2.x.y` release series |
-| Client-bundled update center (active) | `src/data/changelogs/3.ts` | current `3.x.y` release series |
+| Client-bundled update center (archive) | `src/data/changelogs/3.ts` | completed `3.x.y` release series (`v3.0.0` - `v3.3.22`) |
+| Client-bundled update center (active) | `src/data/changelogs/4.ts` | current `4.x.y` release series (`v4.0.0` onward) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 3.x Series
+## Version 4.x Series (Active)
+
+### v4.0.0 — Official Launch of Version 4 & Version 3 Closure
+- **Version 3 Closure:** Officially concluded and archived the comprehensive v3.x series (`v3.0.0` through `v3.3.22`) covering financial core automation, 4-level trial balance, multi-warehouse management, workflow FSM, domain event bus, and Iranian identifier normalization.
+- **Version 4 Mission:** Initiated Version 4 series focusing on architectural optimization, codebase simplification, and targeted UI/UX refinements following the principles of visual decluttering, simplicity, and full Persian terminology.
+- **Governance Alignment:** Synchronized `AGENTS.md`, `package.json` (`4.0.0`), and activated `src/data/changelogs/4.ts`.
+
+---
+
+## Version 3.x Series (Archived / Finalized)
 
 ### v3.1.16 — Strict Project Completion Gate & Progress Matrix Enforcement
 - **Strict Matrix Gate:** Enforced backend validation on `PUT /projects/:id` and `POST /projects/:id/add-to-inventory` requiring 100% completion of the SKU × stage physical progress matrix before allowing project status transition to `completed`.

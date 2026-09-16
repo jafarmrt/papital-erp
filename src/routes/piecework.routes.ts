@@ -9,9 +9,11 @@ import { logger } from '../middleware/logger.js';
 import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
 import { VoucherSyncService } from '../services/accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
-import { ConflictError } from '../errors/customErrors.js';
+import { ConflictError, BusinessLogicError, ValidationError, NotFoundError } from '../errors/customErrors.js';
+import { fin, FinancialMath } from '../lib/financialDecimal.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 
@@ -1468,145 +1470,183 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
 });
 
 // POST /api/piecework/payrolls - Generate new payroll for personnel
-router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('personnel.manage', 'admin'), validate(generatePieceworkPayrollSchema), async (req, res) => {
+router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), async (req, res) => {
   try {
     const currentUserId = req.user?.id;
+    const currentUsername = req.user?.username || 'سیستم';
     const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
 
     const pId = Number(personnelId);
-    const [pInfo] = await orm.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0)));
-    if (!pInfo) {
-      return res.status(404).json({ error: 'پرسنل انتخاب شده یافت نشد' });
-    }
-
     const sDate = normalizePersianDate(String(startDate));
     const eDate = normalizePersianDate(String(endDate));
 
-    // Find pending work logs in this date range
-    const allPersonnelLogs = await orm.select()
-      .from(pieceworkLogs)
-      .where(and(
-        eq(pieceworkLogs.personnelId, pId),
-        eq(pieceworkLogs.isDeleted, 0),
-        or(eq(pieceworkLogs.status, 'pending'), sql`${pieceworkLogs.payrollId} IS NULL`)
-      ));
-
-    const eligibleLogs = allPersonnelLogs.filter(log => {
-      const d = normalizePersianDate(log.date);
-      return d >= sDate && d <= eDate;
-    });
-
-    // V10-4.4: مدل حقوق ثابت/ترکیبی — سهم حقوق ماهانه بدون نیاز به ردیف کارکرد
-    // V1.3.2: حقوق ماهانه فقط «یک بار» در هر ماه جلالی به پرسنل تعلق می‌گیرد —
-    // جمع سهم ثابت فیش‌های قبلی همان ماه از سهم فعلی کسر می‌شود تا صدور چند فیش در یک ماه منجر به پرداخت تکراری نشود.
-    const salaryType = String((pInfo as any).salaryType || 'none');
-    const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
-    let fixedPortion = fixedIncluded ? Number(pInfo.monthlySalary || 0) : 0;
-
-    let fixedDedupNote = '';
-    if (fixedIncluded && fixedPortion > 0) {
-      const targetMonthKey = sDate.slice(0, 7); // '1405/06'
-      const priorFixedPayrolls = await orm.select({
-        id: pieceworkPayrolls.id,
-        payrollNumber: pieceworkPayrolls.payrollNumber,
-        startDate: pieceworkPayrolls.startDate,
-        totalFixedAmount: pieceworkPayrolls.totalFixedAmount
-      })
-      .from(pieceworkPayrolls)
-      .where(and(
-        eq(pieceworkPayrolls.personnelId, pId),
-        eq(pieceworkPayrolls.isDeleted, 0)
-      ));
-      const sameMonthFixed = priorFixedPayrolls.filter(pr => String(pr.startDate || '').slice(0, 7) === targetMonthKey);
-      const alreadyGranted = sameMonthFixed.reduce((sum, pr) => sum + Number(pr.totalFixedAmount || 0), 0);
-      if (alreadyGranted > 0) {
-        fixedPortion = Math.max(0, fixedPortion - alreadyGranted);
-        const refs = sameMonthFixed.map(pr => pr.payrollNumber).join('، ');
-        fixedDedupNote = alreadyGranted >= Number(pInfo.monthlySalary || 0)
-          ? `سهم حقوق ثابت ماه ${targetMonthKey} قبلاً به‌طور کامل در فیش(های) ${refs} محاسبه شده است؛ این فیش فقط کارکرد پرکیسی را پوشش می‌دهد.`
-          : `سهم حقوق ثابت این ماه با کسر مبلغ قبلی (فیش ${refs}) محاسبه شد.`;
+    // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
+    const result = await orm.transaction(async (tx) => {
+      const [pInfo] = await tx.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0))).for('update');
+      if (!pInfo) {
+        return { status: 404, error: 'پرسنل انتخاب شده یافت نشد' };
       }
-    }
 
-    if (eligibleLogs.length === 0 && fixedPortion <= 0) {
-      return res.status(400).json({ error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' });
-    }
+      // 1. Find pending work logs in this date range WITH ROW LOCKING (.for('update'))
+      const allPersonnelLogs = await tx.select()
+        .from(pieceworkLogs)
+        .where(and(
+          eq(pieceworkLogs.personnelId, pId),
+          eq(pieceworkLogs.isDeleted, 0),
+          or(eq(pieceworkLogs.status, 'pending'), sql`${pieceworkLogs.payrollId} IS NULL`)
+        ))
+        .for('update');
 
-    const pieceworkTotal = eligibleLogs.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0);
-    const totBonuses = Number(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0)) || 0;
-    const totDeductions = Number(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0)) || 0;
-    // V1.9.0: کسر از مساعده/وام پرسنلی — بستانکار حساب مساعده (1301) در سند تسویه
-    const advanceDeduction = Math.max(0, Number(reqAdvanceDeduction) || 0);
-    // V10-4.4: net = کارکرد پرکیسی + سهم ثابت (در صورت وجود) + پاداش − کسورات − کسر مساعده
-    const net = pieceworkTotal + fixedPortion + totBonuses - totDeductions - advanceDeduction;
-    if (net < 0) {
-      return res.status(400).json({ error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' });
-    }
+      const eligibleLogs = allPersonnelLogs.filter(log => {
+        const d = normalizePersianDate(log.date);
+        return d >= sDate && d <= eDate;
+      });
 
-    // Generate unique payroll number
-    const countRes = await orm.select({ count: sql<number>`count(*)` }).from(pieceworkPayrolls);
-    const seq = Number(countRes[0]?.count || 0) + 1001;
-    const payrollNumber = `PAY-${seq}`;
+      // 2. Fixed salary deduction & dedup within transaction
+      const salaryType = String((pInfo as any).salaryType || 'none');
+      const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
+      let fixedPortionFin = fixedIncluded ? fin(pInfo.monthlySalary || 0) : fin(0);
 
-    const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${sDate} تا ${eDate})`;
-    const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
+      let fixedDedupNote = '';
+      if (fixedIncluded && fixedPortionFin.greaterThan(0)) {
+        const targetMonthKey = sDate.slice(0, 7); // '1405/06'
+        const priorFixedPayrolls = await tx.select({
+          id: pieceworkPayrolls.id,
+          payrollNumber: pieceworkPayrolls.payrollNumber,
+          startDate: pieceworkPayrolls.startDate,
+          totalFixedAmount: pieceworkPayrolls.totalFixedAmount
+        })
+        .from(pieceworkPayrolls)
+        .where(and(
+          eq(pieceworkPayrolls.personnelId, pId),
+          eq(pieceworkPayrolls.isDeleted, 0)
+        ))
+        .for('update');
 
-    const [newPayroll] = await orm.insert(pieceworkPayrolls).values({
-      payrollNumber,
-      personnelId: pId,
-      startDate: sDate,
-      endDate: eDate,
-      title: defaultTitle,
-      totalPieceworkAmount: pieceworkTotal,
-      totalFixedAmount: fixedPortion,
-      totalBonuses: totBonuses,
-      totalDeductions: totDeductions,
-      advanceDeduction,
-      netPayable: net,
-      status: 'approved',
-      notes: finalNotes,
-      createdById: currentUserId,
-      isDeleted: 0
-    }).returning();
+        const sameMonthFixed = priorFixedPayrolls.filter(pr => String(pr.startDate || '').slice(0, 7) === targetMonthKey);
+        const alreadyGranted = sameMonthFixed.reduce((sum, pr) => sum.add(pr.totalFixedAmount || 0), fin(0));
+        if (alreadyGranted.greaterThan(0)) {
+          fixedPortionFin = fixedPortionFin.subtract(alreadyGranted);
+          if (fixedPortionFin.isNegative()) {
+            fixedPortionFin = fin(0);
+          }
+          const refs = sameMonthFixed.map(pr => pr.payrollNumber).join('، ');
+          fixedDedupNote = alreadyGranted.greaterThanOrEqual(pInfo.monthlySalary || 0)
+            ? `سهم حقوق ثابت ماه ${targetMonthKey} قبلاً به‌طور کامل در فیش(های) ${refs} محاسبه شده است؛ این فیش فقط کارکرد پرکیسی را پوشش می‌دهد.`
+            : `سهم حقوق ثابت این ماه با کسر مبلغ قبلی (فیش ${refs}) محاسبه شد.`;
+        }
+      }
 
-    // Link all logs to this payroll (فقط اگر ردیف کارکردی وجود داشت — فیش صرفاً ثابت ممکن است لاگ نداشته باشد)
-    const logIds = eligibleLogs.map(l => l.id);
-    if (logIds.length > 0) {
-      await orm.update(pieceworkLogs)
-        .set({ payrollId: newPayroll.id, status: 'approved' })
-        .where(inArray(pieceworkLogs.id, logIds));
-    }
+      if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
+        return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
+      }
 
-    // Automated Double-Entry Accounting Journal Voucher Creation (Subphase 11.1)
-    let autoVoucher: { id: number; voucherNumber: number } | null = null;
-    try {
-      autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
+      // 3. Financial calculations with financialDecimal (TD-091)
+      let pieceworkTotalFin = fin(0);
+      for (const log of eligibleLogs) {
+        pieceworkTotalFin = pieceworkTotalFin.add(log.totalAmount || 0);
+      }
+      const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
+      const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
+      const advanceDeductionFin = fin(Math.max(0, Number(reqAdvanceDeduction) || 0));
+
+      const netFin = pieceworkTotalFin
+        .add(fixedPortionFin)
+        .add(totBonusesFin)
+        .subtract(totDeductionsFin)
+        .subtract(advanceDeductionFin)
+        .round(4);
+
+      if (netFin.isNegative()) {
+        return { status: 400, error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
+      }
+
+      const pieceworkTotal = pieceworkTotalFin.round(4).toNumber();
+      const fixedPortion = fixedPortionFin.round(4).toNumber();
+      const totBonuses = totBonusesFin.round(4).toNumber();
+      const totDeductions = totDeductionsFin.round(4).toNumber();
+      const advanceDeduction = advanceDeductionFin.round(4).toNumber();
+      const net = netFin.toNumber();
+
+      // 4. Atomic Sequence Numbering from piecework_payroll_number_seq
+      const seqResult = await tx.execute(sql`SELECT nextval('piecework_payroll_number_seq') AS num`);
+      const seq = Number(seqResult.rows?.[0]?.num);
+      const payrollNumber = `PAY-${seq}`;
+
+      const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${sDate} تا ${eDate})`;
+      const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
+
+      // 5. Insert payroll record
+      const [newPayroll] = await tx.insert(pieceworkPayrolls).values({
+        payrollNumber,
+        personnelId: pId,
+        startDate: sDate,
+        endDate: eDate,
+        title: defaultTitle,
+        totalPieceworkAmount: pieceworkTotal,
+        totalFixedAmount: fixedPortion,
+        totalBonuses: totBonuses,
+        totalDeductions: totDeductions,
+        advanceDeduction,
+        netPayable: net,
+        status: 'approved',
+        notes: finalNotes,
+        createdById: currentUserId,
+        isDeleted: 0
+      }).returning();
+
+      // 6. Link logs to payroll with atomic WHERE payrollId IS NULL guard
+      const logIds = eligibleLogs.map(l => l.id);
+      if (logIds.length > 0) {
+        await tx.update(pieceworkLogs)
+          .set({ payrollId: newPayroll.id, status: 'approved' })
+          .where(and(
+            inArray(pieceworkLogs.id, logIds),
+            sql`${pieceworkLogs.payrollId} IS NULL`
+          ));
+      }
+
+      // 7. Synchronize double-entry journal voucher inside the same transaction
+      // V4.0.5 (F-3 / TD-093): صدور الزامی سند دوبل حسابداری در حالت strict — جلوگیری از ایجاد فیش‌های معلق بدون سند
+      const autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
         newPayroll.id,
         currentUserId,
-        req.user?.username || 'سیستم'
+        currentUsername,
+        tx,
+        { strict: true }
       );
-    } catch (vErr) {
-      logger.warn({ message: 'Auto voucher creation warning for piecework payroll', error: vErr });
+
+      return {
+        status: 201,
+        payroll: newPayroll,
+        personnelName: pInfo.fullName,
+        voucher: autoVoucher
+      };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
+
+    const { payroll, personnelName, voucher } = result;
 
     await logActivity({
       userId: currentUserId,
-      username: req.user?.username || 'سیستم',
+      username: currentUsername,
       action: 'CREATE',
       entity: 'فیش حقوقی',
-      entityId: newPayroll.id,
-      description: `صدور فیش حقوقی پرکیسی ${newPayroll.payrollNumber} برای ${pInfo.fullName} (سند حسابداری: ${autoVoucher ? autoVoucher.voucherNumber : 'بدون سند'})`
+      entityId: payroll.id,
+      description: `صدور فیش حقوقی پرکیسی ${payroll.payrollNumber} برای ${personnelName} (سند حسابداری: ${voucher ? voucher.voucherNumber : 'بدون سند'})`
     });
 
     res.status(201).json({
-      ...newPayroll,
-      voucherId: autoVoucher ? autoVoucher.id : null,
-      voucherNumber: autoVoucher ? autoVoucher.voucherNumber : null,
-      isVoucherSynced: !!autoVoucher
+      ...payroll,
+      voucherId: voucher ? voucher.id : null,
+      voucherNumber: voucher ? voucher.voucherNumber : null,
+      isVoucherSynced: !!voucher
     });
   } catch (err) {
     logger.error({ message: 'Error generating payroll', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -1624,65 +1664,77 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
       );
     }
 
-    const [pay] = await orm.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0)));
-    if (!pay) {
-      return res.status(404).json({ error: 'فیش حقوقی یافت نشد' });
-    }
+    const currentUserId = req.user?.id;
+    const currentUsername = req.user?.username || 'سیستم';
 
-    const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
-    if (status) updates.status = String(status);
-    if (paymentDate !== undefined) updates.paymentDate = String(paymentDate).trim();
-    if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
-    if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
-    if (notes !== undefined) updates.notes = String(notes).trim();
+    const result = await orm.transaction(async (tx) => {
+      const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
+      if (!pay) {
+        return { status: 404, error: 'فیش حقوقی یافت نشد' };
+      }
 
-    await orm.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));
+      const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
+      if (status) updates.status = String(status);
+      if (paymentDate !== undefined) updates.paymentDate = String(paymentDate).trim();
+      if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
+      if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
+      if (notes !== undefined) updates.notes = String(notes).trim();
 
-    // Also update attached logs status
-    if (status) {
-      await orm.update(pieceworkLogs)
-        .set({ status: String(status) })
-        .where(eq(pieceworkLogs.payrollId, id));
-    }
+      await tx.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));
 
-    // Trigger or verify journal voucher when approved or paid (Subphase 11.1)
-    let autoVoucher: { id: number; voucherNumber: number } | null = null;
-    if (status === 'approved' || status === 'paid') {
-      try {
+      // Also update attached logs status
+      if (status) {
+        await tx.update(pieceworkLogs)
+          .set({ status: String(status) })
+          .where(eq(pieceworkLogs.payrollId, id));
+      }
+
+      // Trigger or verify journal voucher inside transaction
+      let autoVoucher: { id: number; voucherNumber: number } | null = null;
+      if (status === 'approved' || status === 'paid') {
         autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
           id,
-          req.user?.id,
-          req.user?.username || 'سیستم'
+          currentUserId,
+          currentUsername,
+          tx,
+          { strict: true }
         );
-      } catch (vErr) {
-        logger.warn({ message: 'Auto voucher sync error on payroll status change', error: vErr });
       }
+
+      return {
+        status: 200,
+        payroll: pay,
+        voucher: autoVoucher
+      };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
 
     await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
+      userId: currentUserId,
+      username: currentUsername,
       action: 'UPDATE',
       entity: 'فیش حقوقی',
       entityId: id,
-      description: `تغییر وضعیت فیش حقوقی ${pay.payrollNumber} به «${status}»`
+      description: `تغییر وضعیت فیش حقوقی ${result.payroll.payrollNumber} به «${status}»`
     });
 
     res.json({
       status: 'ok',
       message: 'وضعیت فیش حقوقی به‌روزرسانی شد',
-      voucherId: autoVoucher ? autoVoucher.id : null,
-      voucherNumber: autoVoucher ? autoVoucher.voucherNumber : null
+      voucherId: result.voucher ? result.voucher.id : null,
+      voucherNumber: result.voucher ? result.voucher.voucherNumber : null
     });
   } catch (err) {
     logger.error({ message: 'Error updating payroll status', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق
-router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.manage', 'admin'), validate(registerPayrollPaymentSchema), async (req, res) => {
+router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { bankAccountId, method, amount, paymentDate, paymentReference, notes } = req.body;
@@ -1725,28 +1777,39 @@ router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.man
 });
 
 // POST /api/piecework/payrolls/:id/sync-voucher - Explicitly sync accounting journal voucher for payroll
-router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecework.payroll', 'personnel.manage'), validate(paramsIdSchema), async (req, res) => {
+router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecework.payroll', 'personnel.manage'), idempotency({ scope: 'payroll' }), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [pay] = await orm.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0)));
-    if (!pay) {
-      return res.status(404).json({ error: 'فیش حقوقی یافت نشد' });
-    }
 
-    const voucher = await VoucherSyncService.autoCreateVoucherForPayroll(
-      id,
-      req.user?.id,
-      req.user?.username || 'سیستم'
-    );
+    const result = await orm.transaction(async (tx) => {
+      const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
+      if (!pay) {
+        return { status: 404, error: 'فیش حقوقی یافت نشد' };
+      }
 
-    if (!voucher) {
-      return res.status(400).json({ error: 'ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.' });
+      const voucher = await VoucherSyncService.autoCreateVoucherForPayroll(
+        id,
+        req.user?.id,
+        req.user?.username || 'سیستم',
+        tx,
+        { strict: true }
+      );
+
+      if (!voucher) {
+        return { status: 400, error: 'ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.' };
+      }
+
+      return { status: 200, payroll: pay, voucher };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
 
     res.json({
       success: true,
-      message: `سند حسابداری شماره ${voucher.voucherNumber} برای فیش حقوقی ${pay.payrollNumber} ثبت یا همگام گردید.`,
-      voucher
+      message: `سند حسابداری شماره ${result.voucher.voucherNumber} برای فیش حقوقی ${result.payroll.payrollNumber} ثبت یا همگام گردید.`,
+      voucher: result.voucher
     });
   } catch (err) {
     logger.error({ message: 'Error syncing payroll voucher', error: err });
@@ -1758,17 +1821,41 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
 router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [pay] = await orm.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0)));
-    if (!pay) {
-      return res.status(404).json({ error: 'فیش حقوقی یافت نشد' });
+
+    const result = await orm.transaction(async (tx) => {
+      const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
+      if (!pay) {
+        return { status: 404, error: 'فیش حقوقی یافت نشد' };
+      }
+
+      // Check linked voucher
+      const [linkedVoucher] = await tx.select().from(journalVouchers).where(and(
+        eq(journalVouchers.referenceModule, 'payroll'),
+        eq(journalVouchers.referenceId, id),
+        eq(journalVouchers.isDeleted, 0)
+      )).for('update');
+
+      if (linkedVoucher && linkedVoucher.status === 'permanent') {
+        return { status: 400, error: `سند حسابداری شماره #${linkedVoucher.voucherNumber} قطعی شده است و امکان ابطال فیش حقوقی وجود ندارد.` };
+      }
+
+      if (linkedVoucher) {
+        await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, linkedVoucher.id));
+      }
+
+      // Unlink logs back to pending
+      await tx.update(pieceworkLogs)
+        .set({ payrollId: null, status: 'pending' })
+        .where(eq(pieceworkLogs.payrollId, id));
+
+      await tx.update(pieceworkPayrolls).set({ isDeleted: 1 }).where(eq(pieceworkPayrolls.id, id));
+
+      return { status: 200, payroll: pay };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
-
-    // Unlink logs back to pending
-    await orm.update(pieceworkLogs)
-      .set({ payrollId: null, status: 'pending' })
-      .where(eq(pieceworkLogs.payrollId, id));
-
-    await orm.update(pieceworkPayrolls).set({ isDeleted: 1 }).where(eq(pieceworkPayrolls.id, id));
 
     await logActivity({
       userId: req.user?.id,
@@ -1776,13 +1863,12 @@ router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'),
       action: 'DELETE',
       entity: 'فیش حقوقی',
       entityId: id,
-      description: `ابطال و حذف فیش حقوقی ${pay.payrollNumber}`
+      description: `ابطال و حذف فیش حقوقی ${result.payroll.payrollNumber}`
     });
 
     res.json({ status: 'ok', message: 'فیش حقوقی با موفقیت باطل شد' });
   } catch (err) {
     logger.error({ message: 'Error deleting payroll', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });

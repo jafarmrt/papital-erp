@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
-import { toEnglishDigits, extractDateString } from '../../utils';
+import { toEnglishDigits, extractDateString, normalizeNationalId, normalizePhoneNumber } from '../../utils';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -142,6 +142,11 @@ export function PersonnelFormModal({
                     const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 10);
                     setFormData((prev) => ({ ...prev, nationalId: digits }));
                   }}
+                  onBlur={() => {
+                    if (formData.nationalId) {
+                      setFormData((prev) => ({ ...prev, nationalId: normalizeNationalId(prev.nationalId) }));
+                    }
+                  }}
                   placeholder="۱۰ رقم عددی"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono tracking-widest text-left"
                   dir="ltr"
@@ -202,6 +207,11 @@ export function PersonnelFormModal({
                     // فیلتر آنی: تبدیل ارقام فارسی و حذف کاراکترهای غیرعددی با سقف ۱۱ رقم
                     const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 11);
                     setFormData((prev) => ({ ...prev, phone: digits }));
+                  }}
+                  onBlur={() => {
+                    if (formData.phone) {
+                      setFormData((prev) => ({ ...prev, phone: normalizePhoneNumber(prev.phone) }));
+                    }
                   }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono tracking-widest text-left"
                   dir="ltr"

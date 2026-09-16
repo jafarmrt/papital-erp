@@ -1,8 +1,9 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { items, documents, documentItems, workflowInstances } from '../../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { items, documents, documentItems, workflowInstances, pieceworkLogs, pieceworkPayrolls, personnel, pieceworkTasks, users } from '../../db/schema.js';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
+import { IdempotencyService } from '../../services/idempotency.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../lib/lockOrder.js';
 
 export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
@@ -95,17 +96,25 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
         return 'ok8';
       }),
       orm.transaction(async (tx) => {
-        const [it] = await tx.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, raceItem.id)).for('update');
+        const [it] = await tx.select({ currentStock: items.currentStock, stocks: items.stocks }).from(items).where(eq(items.id, raceItem.id)).for('update');
         if (!it || Number(it.currentStock) < 5) throw new Error('INSUFFICIENT_STOCK_5');
-        await tx.update(items).set({ currentStock: Number(it.currentStock) - 5 }).where(eq(items.id, raceItem.id));
+        const remaining = Number(it.currentStock) - 5;
+        const newStocks = { ...((it.stocks as Record<string, number>) || {}), main: remaining };
+        await tx.update(items).set({ currentStock: remaining, stocks: newStocks }).where(eq(items.id, raceItem.id));
         return 'ok5';
       })
     ]);
     const ok8 = outcomes[0].status === 'fulfilled' && outcomes[0].value === 'ok8';
+    const ok5 = outcomes[1].status === 'fulfilled' && outcomes[1].value === 'ok5';
+    const blocked8 = outcomes[0].status === 'rejected';
     const blocked5 = outcomes[1].status === 'rejected';
     const [afterItem] = await orm.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, raceItem.id));
-    if (!ok8 || !blocked5 || Number(afterItem?.currentStock) !== 2) {
-      throw new Error(`رقابت کسر واقعی: ok8=${ok8}، مسدود دوم=${blocked5}، موجودی نهایی=${afterItem?.currentStock} (انتظار: 2)`);
+    const finalStock = Number(afterItem?.currentStock);
+    
+    // Precisely one transaction must win, and the other must be rejected for insufficient stock
+    const validOutcome = (ok8 && blocked5 && finalStock === 2) || (ok5 && blocked8 && finalStock === 5);
+    if (!validOutcome) {
+      throw new Error(`رقابت کسر واقعی: ok8=${ok8}, ok5=${ok5}, مسدود8=${blocked8}, مسدود5=${blocked5}, موجودی نهایی=${finalStock} (انتظار: دقیقا یک تراکنش موفق و دیگری مسدود)`);
     }
     results.push(makeTestCase({
       id: 'conc_simultaneous_stock_issue',
@@ -248,6 +257,41 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       throw new Error('Lock ordering mismatch detected across conflicting transactions');
     }
 
+    // Test 4: resolveLockHierarchyLevel and withOrderedLocks validation
+    const { resolveLockHierarchyLevel, withOrderedLocks } = await import('../../lib/lockOrder.js');
+    const { items, productionProjects } = await import('../../db/schema.js');
+    const lvlItem = resolveLockHierarchyLevel(items, 'items');
+    const lvlProj = resolveLockHierarchyLevel(productionProjects, 'productionProjects');
+    if (lvlItem >= lvlProj) {
+      throw new Error(`Lock level item (${lvlItem}) must be lower than productionProjects (${lvlProj})`);
+    }
+
+    // Mock transaction engine to test withOrderedLocks
+    const executedLockCalls: string[] = [];
+    const mockTx: any = {
+      select: (fields?: any) => ({
+        from: (table: any) => ({
+          where: (condition: any) => ({
+            for: (mode: string) => {
+              executedLockCalls.push(mode);
+              return Promise.resolve([{ id: 1 }]);
+            }
+          })
+        })
+      })
+    };
+
+    const orderedLockExecuted = await withOrderedLocks(mockTx, [
+      { table: items, ids: [9, 2, 5], name: 'items' },
+      { table: productionProjects, id: 1, name: 'productionProjects' }
+    ], async () => {
+      return 'LOCKED_SUCCESSFULLY';
+    });
+
+    if (orderedLockExecuted !== 'LOCKED_SUCCESSFULLY' || executedLockCalls.length < 2) {
+      throw new Error(`withOrderedLocks mock execution failed: ${orderedLockExecuted}, calls: ${executedLockCalls.length}`);
+    }
+
     results.push(makeTestCase({
       id: 'conc_deadlock_prevention_lock_ordering',
       name: 'پیشگیری از بن‌بست و انضباط ترتیبی قفل‌ها (Deadlock Prevention & Lock Ordering)',
@@ -317,6 +361,37 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
 
     if (attemptCount !== 2 || retryResult.version !== 3) {
       throw new Error(`withOccRetry failed: attempts=${attemptCount}, resultVersion=${retryResult.version}`);
+    }
+
+    // Test 5.4: executeOccUpdate helper workflow validation
+    const { executeOccUpdate } = await import('../../lib/occHelper.js');
+    let occState = { id: 200, version: 1, stock: 50 };
+    let occAttempts = 0;
+    const occUpdatedResult = await executeOccUpdate<{ id: number; version: number; stock: number }>({
+      entityType: 'Item',
+      entityId: 200,
+      fetch: async () => ({ ...occState }),
+      mutate: async (current, attempt) => {
+        occAttempts++;
+        if (attempt === 1) {
+          // Simulate someone else changing version in between
+          occState.version = 2;
+          throw new OptimisticLockError({
+            entityType: 'Item',
+            entityId: 200,
+            expectedVersion: 1,
+            currentVersion: 2
+          });
+        }
+        occState.version = nextVersion(current.version);
+        occState.stock += 10;
+        return { success: true, updatedStock: occState.stock, version: occState.version };
+      },
+      options: { maxRetries: 3, baseDelayMs: 10 }
+    });
+
+    if (occAttempts !== 2 || occUpdatedResult.version !== 3 || occUpdatedResult.updatedStock !== 60) {
+      throw new Error(`executeOccUpdate failed: attempts=${occAttempts}, version=${occUpdatedResult.version}`);
     }
 
     results.push(makeTestCase({
@@ -442,6 +517,103 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: false,
       durationMs: Date.now() - t6Start,
+      error: err.message
+    }));
+  }
+
+  // 6b. V4.0.13: Triple-Key Idempotency Isolation (TD-095: user + scope + key)
+  const t6bStart = Date.now();
+  try {
+    const existingUsers = await orm.select({ id: users.id }).from(users).limit(2);
+    const u1Id = existingUsers[0]?.id || 1;
+    const u2Id = existingUsers[1]?.id || (existingUsers[0]?.id ? null : 2);
+
+    const sharedKey = `iso_key_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // User 1, Scope 'documents'
+    const acqU1Docs = await IdempotencyService.acquireOrGet({
+      key: sharedKey,
+      scope: 'documents',
+      userId: u1Id,
+      requestPath: '/api/documents',
+      requestMethod: 'POST'
+    });
+    if (acqU1Docs.action !== 'PROCESS_NEW') {
+      throw new Error(`User 1 docs acquire expected PROCESS_NEW, got ${acqU1Docs.action}`);
+    }
+
+    // User 2, same key, Scope 'documents' -> MUST succeed independently (user isolation)
+    const acqU2Docs = await IdempotencyService.acquireOrGet({
+      key: sharedKey,
+      scope: 'documents',
+      userId: u2Id,
+      requestPath: '/api/documents',
+      requestMethod: 'POST'
+    });
+    if (acqU2Docs.action !== 'PROCESS_NEW') {
+      throw new Error(`User 2 docs acquire expected PROCESS_NEW, got ${acqU2Docs.action}`);
+    }
+
+    // User 1, same key, Scope 'vouchers' -> MUST succeed independently (scope isolation)
+    const acqU1Vouchers = await IdempotencyService.acquireOrGet({
+      key: sharedKey,
+      scope: 'vouchers',
+      userId: u1Id,
+      requestPath: '/api/accounting/vouchers',
+      requestMethod: 'POST'
+    });
+    if (acqU1Vouchers.action !== 'PROCESS_NEW') {
+      throw new Error(`User 1 vouchers acquire expected PROCESS_NEW, got ${acqU1Vouchers.action}`);
+    }
+
+    // User 1, same key, Scope 'documents' again -> MUST be rejected as IN_PROGRESS (no cross-user leak, exact match)
+    const acqU1DocsRepeat = await IdempotencyService.acquireOrGet({
+      key: sharedKey,
+      scope: 'documents',
+      userId: u1Id,
+      requestPath: '/api/documents',
+      requestMethod: 'POST'
+    });
+    if (acqU1DocsRepeat.action !== 'IN_PROGRESS') {
+      throw new Error(`User 1 repeat acquire expected IN_PROGRESS, got ${acqU1DocsRepeat.action}`);
+    }
+
+    // Complete User 1 docs
+    await IdempotencyService.complete({
+      key: sharedKey,
+      scope: 'documents',
+      userId: u1Id,
+      statusCode: 201,
+      responseBody: { ok: true, user: u1Id }
+    });
+
+    // User 1 re-query -> RETURN_CACHED
+    const acqU1DocsCached = await IdempotencyService.acquireOrGet({
+      key: sharedKey,
+      scope: 'documents',
+      userId: u1Id
+    });
+    if (acqU1DocsCached.action !== 'RETURN_CACHED') {
+      throw new Error(`User 1 cached acquire expected RETURN_CACHED, got ${acqU1DocsCached.action}`);
+    }
+
+    results.push(makeTestCase({
+      id: 'conc_idempotency_triple_key_isolation',
+      name: 'ایزوله‌سازی سه‌گانه کلید ایدمپوتنسی (Triple-Key: User + Scope + Key)',
+      layer: 'concurrency',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t6bStart,
+      details: 'تفکیک کامل دامنه‌ها و کاربران مستقل با کلید یکسان بدون تداخل و بدون نشت اطلاعات (TD-095) راستی‌آزمایی شد.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'conc_idempotency_triple_key_isolation',
+      name: 'ایزوله‌سازی سه‌گانه کلید ایدمپوتنسی (Triple-Key: User + Scope + Key)',
+      layer: 'concurrency',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t6bStart,
       error: err.message
     }));
   }
@@ -695,6 +867,146 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       durationMs: Date.now() - t11Start,
       error: err.message
     }));
+  }
+
+  // 12. Concurrent piecework payroll generation race guard & atomic sequence (TD-091 / Subphase 3.1)
+  const t12Start = Date.now();
+  let tempWorkerId: number | null = null;
+  let tempLogId: number | null = null;
+  try {
+    let [task] = await orm.select({ id: pieceworkTasks.id }).from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0)).limit(1);
+    let tempTaskId: number | null = null;
+    if (!task) {
+      const [newTask] = await orm.insert(pieceworkTasks).values({
+        code: `TASK_${Date.now()}`,
+        title: 'تسک آزمایشی همزمانی',
+        defaultRate: 50000,
+        unit: 'عدد',
+        isDeleted: 0
+      }).returning({ id: pieceworkTasks.id });
+      task = newTask;
+      tempTaskId = newTask.id;
+    }
+
+    const [testWorker] = await orm.insert(personnel).values({
+      fullName: `پرسنل تست همزمانی فیش ${Date.now()}`,
+      jobTitle: 'کارشناس طلاساز',
+      phone: `0912${Math.floor(1000000 + Math.random() * 8999999)}`,
+      monthlySalary: 0,
+      isDeleted: 0
+    }).returning({ id: personnel.id });
+    tempWorkerId = testWorker.id;
+
+    const [testLog] = await orm.insert(pieceworkLogs).values({
+      personnelId: testWorker.id,
+      taskId: task.id,
+      date: '1405/01/15',
+      quantity: 10,
+      unitRate: 50000,
+      totalAmount: 500000,
+      status: 'pending',
+      isDeleted: 0,
+      notes: 'تست همزمانی فیش حقوقی'
+    }).returning({ id: pieceworkLogs.id });
+    tempLogId = testLog.id;
+
+    let successCount = 0;
+    let conflictCount = 0;
+
+    await Promise.all(Array.from({ length: 2 }).map(async () => {
+      try {
+        await orm.transaction(async (tx) => {
+          // Row lock personnel
+          await tx.select().from(personnel).where(eq(personnel.id, testWorker.id)).for('update');
+
+          // Row lock pending logs
+          const pendingLogs = await tx.select()
+            .from(pieceworkLogs)
+            .where(and(
+              eq(pieceworkLogs.personnelId, testWorker.id),
+              eq(pieceworkLogs.isDeleted, 0),
+              or(eq(pieceworkLogs.status, 'pending'), sql`${pieceworkLogs.payrollId} IS NULL`)
+            ))
+            .for('update');
+
+          const unassigned = pendingLogs.filter(l => !l.payrollId);
+          if (unassigned.length === 0) {
+            throw new Error('NO_PENDING_LOGS');
+          }
+
+          // Atomic PostgreSQL sequence
+          const seqRes = await tx.execute(sql`SELECT nextval('piecework_payroll_number_seq') AS num`);
+          const seq = Number(seqRes.rows?.[0]?.num);
+          const payrollNumber = `PAY-${seq}`;
+
+          const [pr] = await tx.insert(pieceworkPayrolls).values({
+            payrollNumber,
+            personnelId: testWorker.id,
+            startDate: '1405/01/01',
+            endDate: '1405/01/30',
+            title: 'فیش آزمایشی همزمانی',
+            totalPieceworkAmount: 500000,
+            totalFixedAmount: 0,
+            totalBonuses: 0,
+            totalDeductions: 0,
+            netPayable: 500000,
+            status: 'approved',
+            isDeleted: 0
+          }).returning({ id: pieceworkPayrolls.id });
+
+          await tx.update(pieceworkLogs)
+            .set({ payrollId: pr.id, status: 'approved' })
+            .where(and(
+              eq(pieceworkLogs.id, testLog.id),
+              sql`${pieceworkLogs.payrollId} IS NULL`
+            ));
+
+          successCount++;
+        });
+      } catch (err: any) {
+        if (err.message === 'NO_PENDING_LOGS') {
+          conflictCount++;
+        } else {
+          throw err;
+        }
+      }
+    }));
+
+    if (successCount !== 1 || conflictCount !== 1) {
+      throw new Error(`رفتار همزمانی فیش نامعتبر است: موفقیت=${successCount} (انتظار: ۱)، تعارض=${conflictCount} (انتظار: ۱)`);
+    }
+
+    results.push(makeTestCase({
+      id: 'conc_piecework_payroll_atomic_race_guard',
+      scenarioId: 'piecework_payroll_concurrency_race_guard',
+      name: 'جلوگیری از صدور همزمان چند فیش روی کارکردهای معوق و توالی اتمیک (TD-091)',
+      layer: 'concurrency',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t12Start,
+      details: 'دو تراکنش همزمان برای صدور فیش روی کارکرد یکسان اجرا شدند: دقیقاً یک فیش با شماره سریال اتمیک صادر شد و تراکنش موازی به درستی از ادعای تکراری کارکرد جلوگیری کرد.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'conc_piecework_payroll_atomic_race_guard',
+      scenarioId: 'piecework_payroll_concurrency_race_guard',
+      name: 'جلوگیری از صدور همزمان چند فیش روی کارکردهای معوق و توالی اتمیک (TD-091)',
+      layer: 'concurrency',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t12Start,
+      error: err.message
+    }));
+  } finally {
+    if (tempLogId) {
+      try { await orm.delete(pieceworkLogs).where(eq(pieceworkLogs.id, tempLogId)); } catch {}
+    }
+    if (tempWorkerId) {
+      try {
+        await orm.delete(pieceworkPayrolls).where(eq(pieceworkPayrolls.personnelId, tempWorkerId));
+        await orm.delete(personnel).where(eq(personnel.id, tempWorkerId));
+      } catch {}
+    }
   }
 
   return results;

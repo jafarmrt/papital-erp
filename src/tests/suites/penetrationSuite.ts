@@ -151,14 +151,17 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
   await runCase(results, 'pen_xss_customer_name', 'xss_sanitized',
     'پن‌تست: payload اسکریپت در نام مشتری نباید خام ذخیره/بازگردانی شود',
     async () => {
-      if (!adminCookie) throw new Error('admin cookie in hand nist');
+      await ensureAdminTestUser();
+      session = await getAdminSession();
+      const currentCookie = session.cookie;
+      if (!currentCookie) throw new Error('admin cookie in hand nist');
       const suffix = Date.now();
       const xssPayload = `<script>alert("XSS")</script>مشتری امن ${suffix}`;
       const createRes = await request(app)
         .post('/api/customers')
         .set('Origin', 'http://localhost:3000')
         .set('x-csrf-token', session.csrfToken)
-        .set('Cookie', adminCookie)
+        .set('Cookie', currentCookie)
         .send({ name: xssPayload });
 
       if (createRes.status === 403) {
@@ -173,7 +176,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
 
       const getRes = await request(app)
         .get(`/api/customers/${getId}`)
-        .set('Cookie', adminCookie);
+        .set('Cookie', currentCookie);
       const body = JSON.stringify(getRes.body || {});
       if (body.includes('<script>')) {
         await orm.execute(sql`DELETE FROM customers WHERE id = ${getId}`);

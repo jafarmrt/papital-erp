@@ -2,7 +2,7 @@ import { useState, useMemo, FormEvent, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { Personnel } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
-import { normalizePersianText, toEnglishDigits, validateIranianNationalId, validateIranianPhoneNumber } from '../utils';
+import { normalizePersianText, toEnglishDigits, validateIranianNationalId, validateIranianPhoneNumber, normalizeNationalId, normalizePhoneNumber } from '../utils';
 import {
   usePersonnelListQuery,
   useUsersListQuery,
@@ -159,7 +159,7 @@ export function usePersonnel() {
     }
 
     // اعتبارسنجی کد ملی
-    const cleanNationalId = toEnglishDigits(formData.nationalId || '').trim();
+    const cleanNationalId = normalizeNationalId(formData.nationalId || '');
     if (cleanNationalId) {
       const nationalIdValidation = validateIranianNationalId(cleanNationalId);
       if (!nationalIdValidation.isValid) {
@@ -169,7 +169,7 @@ export function usePersonnel() {
     }
 
     // اعتبارسنجی شماره تماس (۱۱ رقم و شروع با ۰)
-    const cleanPhone = toEnglishDigits(formData.phone || '').trim();
+    const cleanPhone = normalizePhoneNumber(formData.phone || '');
     if (cleanPhone) {
       const phoneValidation = validateIranianPhoneNumber(cleanPhone);
       if (!phoneValidation.isValid) {

@@ -66,8 +66,10 @@ export function toPersianDigits(val: string | number | null | undefined, maxDeci
   const farsiDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
   try {
     let s = String(val).trim();
-    // If it's a numeric or decimal string (e.g. "12.3456", "100.0000", 95.833333)
-    if (/^-?\d+(\.\d+)?$/.test(s)) {
+    // اگر رشته دارای صفر پیشین غیر اعشاری باشد (مانند تلفن "021..." یا کد ملی "001..."), نباید به عدد تبدیل شود چون صفرهای پیشین حذف می‌شوند
+    const hasLeadingZero = (s.startsWith('0') || s.startsWith('-0')) && !s.startsWith('0.') && !s.startsWith('-0.') && s !== '0';
+    // If it's a numeric or decimal string (e.g. "12.3456", "100.0000", 95.833333) and not a code with leading zeros
+    if (/^-?\d+(\.\d+)?$/.test(s) && !hasLeadingZero && (typeof val === 'number' || s.includes('.'))) {
       const num = Number(s);
       if (!isNaN(num)) {
         s = num.toLocaleString('en-US', {
@@ -362,6 +364,83 @@ export function formatPersianCode(val: number | string | null | undefined): stri
   } catch {
     return '';
   }
+}
+
+/**
+ * استانداردسازی شماره تلفن در ایران:
+ * - ارقام انگلیسی می‌شوند و کاراکترهای غیرعددی پاک می‌شوند.
+ * - پیشوندهای بین‌المللی (+98 یا 0098 یا 98) به 0 تبدیل می‌شوند.
+ * - در صورتی که شماره ۱۰ رقمی باشد و بدون صفر شروع شده باشد (مانند 2122610001 یا 9123456789)، صفر پیشین اضافه می‌شود.
+ */
+export function normalizePhoneNumber(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
+  try {
+    let str = toEnglishDigits(String(val)).trim();
+    if (!str) return '';
+
+    // تبدیل پیشوندهای +98 یا 0098 یا 98 کشوری به 0
+    if (str.startsWith('+98')) {
+      str = '0' + str.slice(3);
+    } else if (str.startsWith('0098')) {
+      str = '0' + str.slice(4);
+    } else if (str.startsWith('98') && (str.length === 12 || str.length === 11)) {
+      str = '0' + str.slice(2);
+    }
+
+    const digits = str.replace(/\D/g, '');
+    if (!digits) return str;
+
+    // شماره‌های ایران (تلفن همراه یا ثابت استانی) با پیش‌شماره معمولاً ۱۱ رقمی با ۰ هستند.
+    // در اکسل یا هنگام تایپ اگر ۱۰ رقم بدون صفر وارد شود (مثلاً 2122610001 یا 9123456789)، با صفر پد می‌شود.
+    if (digits.length === 10 && !digits.startsWith('0')) {
+      return '0' + digits;
+    }
+
+    return digits;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * فرمت‌بندی شماره تلفن با ارقام فارسی و تضمین عدم حذف صفر اول
+ */
+export function formatPersianPhone(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
+  const normalized = normalizePhoneNumber(val);
+  if (!normalized) return '';
+  return toPersianDigits(normalized);
+}
+
+/**
+ * استانداردسازی کد ملی ایران:
+ * - ارقام انگلیسی شده و کاراکترهای غیرعددی پاک می‌شوند.
+ * - کد ملی در ایران ۱۰ رقم است؛ در صورتی که به دلیل ورود در اکسل یا بدون صفر ۱ تا ۹ رقم باشد،
+ *   با صفرهای پیشین به ۱۰ رقم کامل تبدیل می‌شود (مثلاً 87654321 -> 0087654321).
+ */
+export function normalizeNationalId(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
+  try {
+    const rawStr = toEnglishDigits(String(val)).trim();
+    const digits = rawStr.replace(/\D/g, '');
+    if (!digits) return rawStr;
+    if (digits.length > 0 && digits.length < 10) {
+      return digits.padStart(10, '0');
+    }
+    return digits;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * فرمت‌بندی کد ملی با ارقام فارسی و تضمین نمایش کامل ۱۰ رقم با صفرهای پیشین
+ */
+export function formatPersianNationalId(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '' || typeof val === 'object') return '';
+  const normalized = normalizeNationalId(val);
+  if (!normalized) return '';
+  return toPersianDigits(normalized);
 }
 
 export function formatCurrencyLabel(c?: string): string {
@@ -677,10 +756,10 @@ export function safeExtractArray<T = unknown>(res: unknown): T[] {
  * Returns { isValid: boolean, error?: string }
  */
 export function validateIranianNationalId(id: string | null | undefined): { isValid: boolean; error?: string } {
-  if (!id || !id.trim()) {
+  if (!id || !String(id).trim()) {
     return { isValid: true }; // فیلد اختیاری است؛ اگر وارد نشده معتبر تلقی می‌شود
   }
-  const cleanId = toEnglishDigits(id).trim();
+  const cleanId = normalizeNationalId(id);
   if (!/^\d{10}$/.test(cleanId)) {
     return { isValid: false, error: 'کد ملی باید دقیقاً ۱۰ رقم عددی باشد' };
   }
@@ -708,10 +787,10 @@ export function validateIranianNationalId(id: string | null | undefined): { isVa
  * Returns { isValid: boolean, error?: string }
  */
 export function validateIranianPhoneNumber(phone: string | null | undefined): { isValid: boolean; error?: string } {
-  if (!phone || !phone.trim()) {
+  if (!phone || !String(phone).trim()) {
     return { isValid: true }; // فیلد اختیاری است؛ در صورت خالی بودن خطا نمی‌دهد
   }
-  const cleanPhone = toEnglishDigits(phone).trim();
+  const cleanPhone = normalizePhoneNumber(phone);
   if (!/^0\d{10}$/.test(cleanPhone)) {
     return { isValid: false, error: 'شماره تماس باید ۱۱ رقم بوده و با صفر (۰) شروع شود (مانند ۰۹۱۲۳۴۵۶۷۸۹ یا ۰۲۱۸۸۸۸۸۸۸۸)' };
   }

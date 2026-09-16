@@ -143,6 +143,29 @@ export default function ActivityLogsPage() {
             تغییر تنظیمات
           </span>
         );
+      case 'PURGE':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-300">
+            <Trash2 className="w-3.5 h-3.5 text-orange-600" />
+            پاکسازی ممیزی
+          </span>
+        );
+      case 'AUDIT_APPLY':
+      case 'RECONCILIATION_EXECUTE':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
+            <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+            اصلاح و تطبیق
+          </span>
+        );
+      case 'SEED':
+      case 'IMPORT':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-200">
+            <Layers className="w-3.5 h-3.5 text-cyan-600" />
+            بارگذاری پایه
+          </span>
+        );
       case 'EXPORT':
       case 'RESTORE':
         return (

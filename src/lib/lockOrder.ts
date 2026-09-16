@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, getTableName } from 'drizzle-orm';
 import type { PgTableWithColumns } from 'drizzle-orm/pg-core';
 import { logger } from '../middleware/logger.js';
 import type { DbTransaction } from '../db/drizzle.js';
@@ -151,19 +151,127 @@ export function validateLockOrder(arg1: LockableResource[] | LockHierarchyLevel 
   return isOrdered;
 }
 
+export interface LockResourceTarget {
+  table: PgTableWithColumns<any> | any;
+  tableName?: string;
+  name?: string;
+  id?: number | string;
+  ids?: (number | string)[];
+  level?: number;
+}
+
+/**
+ * Resolves hierarchy level for a table or resource name from LOCK_ORDER_MAP.
+ * Accepts either a LockResourceTarget object, a Drizzle table instance, or a resource string.
+ */
+export function resolveLockHierarchyLevel(
+  targetOrResource: any,
+  fallbackName?: string
+): number {
+  if (!targetOrResource) return 999;
+
+  if (typeof targetOrResource === 'number') {
+    return targetOrResource;
+  }
+
+  if (typeof targetOrResource.level === 'number') {
+    return targetOrResource.level;
+  }
+
+  let extractedTableName: string | undefined;
+  try {
+    if (targetOrResource && typeof targetOrResource === 'object') {
+      extractedTableName = getTableName(targetOrResource);
+    }
+  } catch {
+    // not a drizzle table directly
+  }
+
+  let tableUnderScoreName: string | undefined;
+  try {
+    if (targetOrResource.table && typeof targetOrResource.table === 'object') {
+      tableUnderScoreName = getTableName(targetOrResource.table);
+    }
+  } catch {
+    // not a drizzle table
+  }
+
+  const candidateNames = [
+    typeof targetOrResource === 'string' ? targetOrResource : undefined,
+    fallbackName,
+    extractedTableName,
+    tableUnderScoreName,
+    targetOrResource.tableName,
+    targetOrResource.name,
+    targetOrResource._?.name,
+    targetOrResource[Symbol.for('drizzle:Name')],
+    targetOrResource[Symbol.for('drizzle:OriginalName')],
+    targetOrResource.table?._?.name,
+    (targetOrResource.table as any)?.[Symbol.for('drizzle:Name')]
+  ].filter(Boolean).map(n => String(n).toLowerCase());
+
+  for (const name of candidateNames) {
+    if (LOCK_ORDER_MAP[name]) {
+      return LOCK_ORDER_MAP[name].level;
+    }
+    const normalizedName = name.replace(/[-_]/g, '');
+    for (const [mapKey, meta] of Object.entries(LOCK_ORDER_MAP)) {
+      const normalizedMapKey = mapKey.replace(/[-_]/g, '');
+      if (normalizedName === normalizedMapKey || normalizedName.startsWith(normalizedMapKey) || normalizedMapKey.startsWith(normalizedName)) {
+        return meta.level;
+      }
+    }
+  }
+
+  return 999;
+}
+
 /**
  * Helper wrapper for ordering and acquiring row-level locks across multiple resources in tx.
+ * Automatically resolves lock hierarchy, sorts IDs in ascending order, validates sequence,
+ * and acquires row-level exclusive locks (.for('update')) to prevent database deadlocks.
  */
 export async function withOrderedLocks<T>(
-  tx: DbTransaction,
-  resources: Array<{ table: PgTableWithColumns<any>; id: number; level: number; name: string }>,
+  tx: DbTransaction | any,
+  resources: Array<LockResourceTarget | { table: PgTableWithColumns<any>; id: number; level: number; name: string }>,
   fn: () => Promise<T>
 ): Promise<T> {
-  validateLockOrder(resources.map(r => ({ name: r.name, hierarchyLevel: r.level })));
-  const sorted = [...resources].sort((a, b) => a.level - b.level);
-  for (const r of sorted) {
-    await (tx as any).select().from(r.table).where(eq((r.table as any).id, r.id)).for('update');
+  // Normalize and resolve levels and IDs
+  const normalized = resources.map((r, idx) => {
+    const rawIds = 'ids' in r && Array.isArray(r.ids) 
+      ? r.ids 
+      : ('id' in r && r.id !== undefined ? [r.id] : []);
+    const sortedIds = sortIdsForLocking(rawIds);
+    const resolvedLevel = resolveLockHierarchyLevel(r);
+    const candidateTableName = 'tableName' in r ? r.tableName : undefined;
+    const resolvedName = r.name || candidateTableName || r.table?._?.name || `resource_${idx}`;
+
+    return {
+      table: r.table,
+      name: resolvedName,
+      level: resolvedLevel,
+      ids: sortedIds
+    };
+  });
+
+  // Validate locking sequence
+  validateLockOrder(normalized.map(r => ({ name: r.name, hierarchyLevel: r.level })));
+
+  // Sort resources strictly by hierarchy level
+  const sortedResources = [...normalized].sort((a, b) => a.level - b.level);
+
+  // Acquire locks in ascending hierarchy level, and for each entity in ascending ID order
+  for (const resource of sortedResources) {
+    if (!resource.table) continue;
+    const idCol = resource.table.id;
+    for (const targetId of resource.ids) {
+      if (idCol) {
+        await tx.select().from(resource.table).where(eq(idCol, targetId)).for('update');
+      }
+    }
   }
+
   return fn();
 }
+
 

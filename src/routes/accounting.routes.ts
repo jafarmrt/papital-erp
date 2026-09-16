@@ -155,8 +155,22 @@ router.post('/accounting/mappings', authorizePermission('accounting.coa'), async
 // ==========================================
 // 3. JOURNAL VOUCHERS (اسناد حسابداری)
 // ==========================================
-router.get('/accounting/vouchers', authorizePermission('accounting.vouchers', 'accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { page, limit, search, status, voucherType, startDate, endDate } = req.query;
+export const vouchersQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(1000).optional(),
+    search: z.string().optional(),
+    status: z.enum(['draft', 'approved', 'permanent', 'all']).optional(),
+    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement', 'all']).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory', 'all']).optional(),
+    referenceId: z.coerce.number().int().positive().optional(),
+  }).optional()
+});
+
+router.get('/accounting/vouchers', authorizePermission('accounting.vouchers', 'accounting.reports', 'accounting.view'), validate(vouchersQuerySchema), asyncHandler(async (req, res) => {
+  const { page, limit, search, status, voucherType, startDate, endDate } = (req.query as any) || {};
   const result = await AccountingService.getJournalVouchers({
     page: page ? Number(page) : undefined,
     limit: limit ? Number(limit) : undefined,
@@ -176,32 +190,66 @@ router.get('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'
   res.json(voucher);
 }));
 
-const createVoucherSchema = z.object({
+export const voucherItemSchema = z.object({
+  accountId: z.coerce.number().int().positive('شناسه حساب الزامی و باید عدد مثبت باشد'),
+  detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional().default('none'),
+  detailedId: z.coerce.number().int().positive().nullable().optional(),
+  detailedName: z.string().optional(),
+  debit: z.coerce.number().min(0, 'مبلغ بدهکار نمی‌تواند منفی باشد').default(0),
+  credit: z.coerce.number().min(0, 'مبلغ بستانکار نمی‌تواند منفی باشد').default(0),
+  currency: z.string().optional(),
+  exchangeRate: z.coerce.number().positive().optional(),
+  description: z.string().optional(),
+}).refine(it => (it.debit > 0 || it.credit > 0), {
+  message: 'هر ردیف سند باید حداقل دارای مبلغ بدهکار یا بستانکار بزرگتر از صفر باشد'
+});
+
+export const createVoucherSchema = z.object({
   body: z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است'),
-    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment']).optional(),
+    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional().default('general'),
     manualVoucherNumber: z.string().optional(),
     description: z.string().min(1, 'شرح کلی سند الزامی است'),
-    referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory']).optional(),
-    referenceId: z.number().nullable().optional(),
+    referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory']).optional().default('manual'),
+    referenceId: z.coerce.number().int().positive().nullable().optional(),
     referenceNumber: z.string().optional(),
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
-    items: z.array(z.object({
-      accountId: z.number(),
-      detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional(),
-      detailedId: z.number().nullable().optional(),
-      detailedName: z.string().optional(),
-      debit: z.number().min(0),
-      credit: z.number().min(0),
-      currency: z.string().optional(),
-      exchangeRate: z.number().optional(),
-      description: z.string().optional(),
-    })).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
+    items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
+  }).refine((data) => {
+    const totalDebit = data.items.reduce((s, it) => s + (it.debit || 0), 0);
+    const totalCredit = data.items.reduce((s, it) => s + (it.credit || 0), 0);
+    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
+  }, {
+    message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
+    path: ['items']
   })
 });
 
-router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), validate(createVoucherSchema), asyncHandler(async (req, res) => {
+export const updateVoucherSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه سند باید عددی باشد')
+  }),
+  body: z.object({
+    date: z.string().min(1, 'تاریخ سند الزامی است').optional(),
+    description: z.string().min(1, 'شرح کلی سند الزامی است').optional(),
+    manualVoucherNumber: z.string().optional(),
+    voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional(),
+    currency: z.string().optional(),
+    attachments: z.array(z.any()).optional(),
+    items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
+  }).refine((data) => {
+    if (!data.items) return true;
+    const totalDebit = data.items.reduce((s, it) => s + (it.debit || 0), 0);
+    const totalCredit = data.items.reduce((s, it) => s + (it.credit || 0), 0);
+    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
+  }, {
+    message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
+    path: ['items']
+  })
+});
+
+router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(createVoucherSchema), asyncHandler(async (req, res) => {
   const voucher = await AccountingService.createJournalVoucher({
     ...req.body,
     userId: req.user?.id,
@@ -221,7 +269,7 @@ router.post('/accounting/vouchers', authorizePermission('accounting.vouchers'), 
   res.status(201).json(voucher);
 }));
 
-router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.put('/accounting/vouchers/:id', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(updateVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const voucher = await AccountingService.updateJournalVoucher(id, req.body);
   await logActivity({
@@ -256,7 +304,17 @@ router.delete('/accounting/vouchers/:id', authorizePermission('accounting.vouche
 }));
 
 // Reversal Voucher Route (صدور سند معکوس / برگشت)
-router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+export const reverseVoucherSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه سند باید عددی باشد')
+  }),
+  body: z.object({
+    date: z.string().min(1, 'تاریخ سند برگشت الزامی است').optional(),
+    reason: z.string().min(1, 'علت صدور سند برگشت الزامی است').optional()
+  }).optional()
+});
+
+router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(reverseVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { date, reason } = req.body;
   const reversalVoucher = await AccountingService.reverseVoucher({
@@ -286,7 +344,26 @@ router.post('/accounting/vouchers/:id/reverse', authorizePermission('accounting.
 }));
 
 // Correction Voucher Route (صدور سند اصلاحی)
-router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+export const correctVoucherSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه سند باید عددی باشد')
+  }),
+  body: z.object({
+    date: z.string().min(1, 'تاریخ سند اصلاحی الزامی است').optional(),
+    reason: z.string().min(1, 'علت اصلاح سند الزامی است'),
+    newDescription: z.string().optional(),
+    newItems: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند اصلاحی الزامی است')
+  }).refine((data) => {
+    const totalDebit = data.newItems.reduce((s, it) => s + (it.debit || 0), 0);
+    const totalCredit = data.newItems.reduce((s, it) => s + (it.credit || 0), 0);
+    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
+  }, {
+    message: 'سند اصلاحی تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
+    path: ['newItems']
+  })
+});
+
+router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(correctVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { date, reason, newItems, newDescription } = req.body;
   const result = await AccountingService.correctVoucher({
@@ -320,7 +397,27 @@ router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.
 }));
 
 // Repost Voucher Route (سند ابطال و بازثبت / Repost)
-router.post('/accounting/vouchers/:id/repost', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+export const repostVoucherSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه سند باید عددی باشد')
+  }),
+  body: z.object({
+    date: z.string().min(1, 'تاریخ سند الزامی است').optional(),
+    reason: z.string().min(1, 'علت ابطال و بازثبت سند الزامی است'),
+    newDescription: z.string().optional(),
+    newManualVoucherNumber: z.string().optional(),
+    newItems: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند جدید الزامی است')
+  }).refine((data) => {
+    const totalDebit = data.newItems.reduce((s, it) => s + (it.debit || 0), 0);
+    const totalCredit = data.newItems.reduce((s, it) => s + (it.credit || 0), 0);
+    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
+  }, {
+    message: 'سند جدید تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
+    path: ['newItems']
+  })
+});
+
+router.post('/accounting/vouchers/:id/repost', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(repostVoucherSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { date, reason, newItems, newDescription, newManualVoucherNumber } = req.body;
   const result = await AccountingService.repostVoucher({
@@ -355,7 +452,7 @@ router.post('/accounting/vouchers/:id/repost', authorizePermission('accounting.v
 }));
 
 // Finalize Voucher Route (قطعی‌سازی و تبدیل به دائم)
-router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const finalized = await AccountingService.finalizeJournalVoucher(
     id,
@@ -379,12 +476,14 @@ router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting
 }));
 
 // Batch Finalize Vouchers
-router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounting.vouchers'), asyncHandler(async (req, res) => {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    throw new BadRequestError('شناسه اسناد انتخاب شده نامعتبر است');
-  }
+export const batchFinalizeVouchersSchema = z.object({
+  body: z.object({
+    ids: z.array(z.coerce.number().int().positive('شناسه سند نامعتبر است')).min(1, 'حداقل یک سند باید انتخاب شود')
+  })
+});
 
+router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounting.vouchers'), validate(batchFinalizeVouchersSchema), asyncHandler(async (req, res) => {
+  const { ids } = req.body;
   const result = await AccountingService.finalizeJournalVouchers(
     ids,
     req.user?.id,
@@ -407,12 +506,21 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
 }));
 
 // Status change route (تغییر وضعیت سند حسابداری: پیش‌نویس، تایید شده، دائم و قطعی)
-router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+export const setVoucherStatusSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه سند باید عددی باشد')
+  }),
+  body: z.object({
+    status: z.enum(['draft', 'approved', 'permanent'], {
+      message: 'وضعیت سند باید یکی از مقادیر draft، approved یا permanent باشد'
+    }),
+    reason: z.string().optional()
+  })
+});
+
+router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vouchers'), validate(setVoucherStatusSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const { status, reason } = req.body;
-  if (!['draft', 'approved', 'permanent'].includes(status)) {
-    throw new BadRequestError('وضعیت ارسال شده نامعتبر است');
-  }
 
   const existing = await AccountingService.getJournalVoucherById(id);
   if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
@@ -448,7 +556,7 @@ router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vo
 // Auto-voucher manual triggers
 router.post('/accounting/vouchers/auto/invoice/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  const v = await AccountingService.autoCreateVoucherForInvoice(docId, req.user?.id, req.user?.fullName || req.user?.username);
+  const v = await AccountingService.autoCreateVoucherForInvoice(docId, req.user?.id, req.user?.fullName || req.user?.username, undefined, { strict: true });
   if (!v) {
     throw new BadRequestError('امکان صدور خودکار سند برای این فاکتور وجود ندارد (یا قبلاً صادر شده یا نهایی نیست)');
   }
@@ -457,7 +565,7 @@ router.post('/accounting/vouchers/auto/invoice/:id', authorizePermission('accoun
 
 router.post('/accounting/vouchers/auto/payroll/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const payrollId = Number(req.params.id);
-  const v = await AccountingService.autoCreateVoucherForPayroll(payrollId, req.user?.id, req.user?.fullName || req.user?.username);
+  const v = await AccountingService.autoCreateVoucherForPayroll(payrollId, req.user?.id, req.user?.fullName || req.user?.username, undefined, { strict: true });
   if (!v) {
     throw new BadRequestError('امکان صدور سند خودکار برای این فیش حقوقی وجود ندارد');
   }
@@ -543,6 +651,43 @@ const reportBanksHandler = asyncHandler(async (req, res) => {
 router.get('/accounting/banks/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 router.get('/accounting/bank-accounts/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 
+export const createBankAccountSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, 'عنوان حساب بانکی/صندوق الزامی است'),
+    type: z.enum(['bank', 'cash', 'petty_cash'], {
+      message: 'نوع حساب باید bank، cash یا petty_cash باشد'
+    }).optional().default('bank'),
+    accountNumber: z.string().optional(),
+    shabaNumber: z.string().optional(),
+    cardNumber: z.string().optional(),
+    branch: z.string().optional(),
+    currency: z.string().optional().default('IRR'),
+    initialBalance: z.coerce.number().default(0),
+    accountCode: z.string().optional(),
+    accountName: z.string().optional(),
+    notes: z.string().optional(),
+  })
+});
+
+export const updateBankAccountSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه حساب باید عددی باشد')
+  }),
+  body: z.object({
+    title: z.string().min(1, 'عنوان حساب الزامی است').optional(),
+    type: z.enum(['bank', 'cash', 'petty_cash']).optional(),
+    accountNumber: z.string().optional(),
+    shabaNumber: z.string().optional(),
+    cardNumber: z.string().optional(),
+    branch: z.string().optional(),
+    currency: z.string().optional(),
+    initialBalance: z.coerce.number().optional(),
+    accountCode: z.string().optional(),
+    accountName: z.string().optional(),
+    notes: z.string().optional(),
+  })
+});
+
 const createBankHandler = asyncHandler(async (req, res) => {
   const bank = await AccountingService.createBankAccount({
     ...req.body,
@@ -562,8 +707,8 @@ const createBankHandler = asyncHandler(async (req, res) => {
   });
   res.status(201).json(bank);
 });
-router.post('/accounting/banks', authorizePermission('accounting.treasury'), createBankHandler);
-router.post('/accounting/bank-accounts', authorizePermission('accounting.treasury'), createBankHandler);
+router.post('/accounting/banks', authorizePermission('accounting.treasury'), validate(createBankAccountSchema), createBankHandler);
+router.post('/accounting/bank-accounts', authorizePermission('accounting.treasury'), validate(createBankAccountSchema), createBankHandler);
 
 const updateBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -587,8 +732,8 @@ const updateBankHandler = asyncHandler(async (req, res) => {
   });
   res.json(updated);
 });
-router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), updateBankHandler);
-router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), updateBankHandler);
+router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(updateBankAccountSchema), updateBankHandler);
+router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(updateBankAccountSchema), updateBankHandler);
 
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -611,8 +756,19 @@ router.delete('/accounting/banks/:id', authorizePermission('accounting.treasury'
 router.delete('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), deleteBankHandler);
 
 // Treasury Transactions (دریافت و پرداخت)
-router.get('/accounting/treasury', authorizePermission('accounting.treasury', 'accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { type, bankAccountId, startDate, endDate } = req.query;
+export const treasuryQuerySchema = z.object({
+  query: z.object({
+    type: z.enum(['receipt', 'payment', 'all']).optional(),
+    bankAccountId: z.coerce.number().int().positive().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(1000).optional(),
+  }).optional()
+});
+
+router.get('/accounting/treasury', authorizePermission('accounting.treasury', 'accounting.reports', 'accounting.view'), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
+  const { type, bankAccountId, startDate, endDate } = (req.query as any) || {};
   const list = await AccountingService.getTreasuryTransactions({
     type: type as any,
     bankAccountId: bankAccountId ? Number(bankAccountId) : undefined,
@@ -622,25 +778,23 @@ router.get('/accounting/treasury', authorizePermission('accounting.treasury', 'a
   res.json(list);
 }));
 
-// V1.4.0: اعتبارسنجی ورودی ثبت دریافت/پرداخت (قبلاً body خام بود)
-const createTreasuryTxSchema = z.object({
+export const createTreasuryTxSchema = z.object({
   body: z.object({
-    type: z.enum(['receipt', 'payment']),
-    date: z.string().min(1),
-    method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque']),
-    amount: z.number().positive(),
-    currency: z.string().optional(),
-    exchangeRate: z.number().optional(),
-    bankAccountId: z.number().int().positive(),
+    type: z.enum(['receipt', 'payment'], { message: 'نوع عملیات باید دریافت یا پرداخت باشد' }),
+    date: z.string().min(1, 'تاریخ تراکنش الزامی است'),
+    method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque'], { message: 'روش پرداخت نامعتبر است' }),
+    amount: z.coerce.number().positive('مبلغ تراکنش باید بزرگتر از صفر باشد'),
+    currency: z.string().optional().default('IRR'),
+    exchangeRate: z.coerce.number().positive().optional(),
+    bankAccountId: z.coerce.number().int().positive('انتخاب حساب بانکی یا صندوق الزامی است'),
     partyType: z.enum(['customer', 'personnel', 'supplier', 'other']).optional(),
-    partyId: z.number().int().positive().nullable().optional(),
-    partyName: z.string().min(1),
+    partyId: z.coerce.number().int().positive().nullable().optional(),
+    partyName: z.string().min(1, 'نام طرف حساب الزامی است'),
     trackingNumber: z.string().optional(),
-    documentId: z.number().int().positive().nullable().optional(),
+    documentId: z.coerce.number().int().positive().nullable().optional(),
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
-    // V1.8.0: انگیزه پرداخت به پرسنل
     purpose: z.enum(['settlement', 'advance', 'other']).optional(),
   })
 });
@@ -666,37 +820,40 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
   res.status(201).json(tx);
 }));
 
-// V1.8.0: پیش‌نمایش سند دوبل ثبت دریافت/پرداخت — بدون ذخیره‌سازی
-const previewTreasurySchema = z.object({
+export const previewTreasurySchema = z.object({
   body: z.object({
     type: z.enum(['receipt', 'payment']),
-    amount: z.number(),
-    currency: z.string().optional(),
-    bankAccountId: z.number().int().positive(),
+    amount: z.coerce.number().positive('مبلغ تراکنش باید مثبت باشد'),
+    currency: z.string().optional().default('IRR'),
+    bankAccountId: z.coerce.number().int().positive('شناسه حساب بانکی الزامی است'),
     partyType: z.string().optional(),
     purpose: z.string().optional(),
-    partyId: z.number().int().positive().nullable().optional(),
+    partyId: z.coerce.number().int().positive().nullable().optional(),
     partyName: z.string().optional(),
   })
 });
+
 router.post('/accounting/treasury/preview-voucher', authorizePermission('accounting.treasury'), validate(previewTreasurySchema), asyncHandler(async (req, res) => {
   const preview = await AccountingService.previewTreasuryVoucher(req.body);
   res.json(preview);
 }));
 
-// V1.5.0: انتقال بین‌بانکی/بین‌صندوقی
-const transferSchema = z.object({
+export const transferSchema = z.object({
   body: z.object({
-    date: z.string().min(1),
-    amount: z.number().positive(),
-    currency: z.string().optional(),
-    fromBankAccountId: z.number().int().positive(),
-    toBankAccountId: z.number().int().positive(),
+    date: z.string().min(1, 'تاریخ انتقال وجه الزامی است'),
+    amount: z.coerce.number().positive('مبلغ انتقال باید بزرگتر از صفر باشد'),
+    currency: z.string().optional().default('IRR'),
+    fromBankAccountId: z.coerce.number().int().positive('حساب مبدا الزامی است'),
+    toBankAccountId: z.coerce.number().int().positive('حساب مقصد الزامی است'),
     trackingNumber: z.string().optional(),
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
+  }).refine(data => data.fromBankAccountId !== data.toBankAccountId, {
+    message: 'حساب مبدا و مقصد انتقال وجه نمی‌توانند یکسان باشند',
+    path: ['toBankAccountId']
   })
 });
+
 router.post('/accounting/treasury/transfer', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(transferSchema), asyncHandler(async (req, res) => {
   const result = await AccountingService.createTreasuryTransfer({
     ...req.body,
@@ -718,10 +875,19 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
 }));
 
 // V1.6.0: گزارش جریان نقدی خزانه
-router.get('/accounting/reports/cash-flow', authorizePermission('accounting.reports', 'accounting.treasury', 'accounting.view'), asyncHandler(async (req, res) => {
+export const dateRangeQuerySchema = z.object({
+  query: z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional()
+  }).optional()
+});
+
+router.get('/accounting/reports/cash-flow', authorizePermission('accounting.reports', 'accounting.treasury', 'accounting.view'), validate(dateRangeQuerySchema), asyncHandler(async (req, res) => {
+  const { startDate, endDate } = (req.query as any) || {};
   const report = await AccountingService.getCashFlowReport({
-    startDate: req.query.startDate as string,
-    endDate: req.query.endDate as string,
+    startDate: startDate as string,
+    endDate: endDate as string,
   });
   res.json(report);
 }));
@@ -733,14 +899,15 @@ router.get('/accounting/reports/cheque-reconciliation', authorizePermission('acc
 }));
 
 // V1.6.0: ثبت گروهی وضعیت آشتی‌سنجی بانکی
-const reconcileSchema = z.object({
+export const reconcileSchema = z.object({
   body: z.object({
-    bankAccountId: z.number().int().positive(),
-    txIds: z.array(z.number().int().positive()).max(2000),
+    bankAccountId: z.coerce.number().int().positive('شناسه حساب بانکی الزامی است'),
+    txIds: z.array(z.coerce.number().int().positive('شناسه تراکنش نامعتبر است')).min(1, 'حداقل یک تراکنش باید انتخاب شود').max(2000),
     batch: z.string().optional().default(''),
-    reconciled: z.boolean(),
+    reconciled: z.boolean({ message: 'وضعیت آشتی‌سنجی باید بولی باشد' }),
   })
 });
+
 router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
   const { bankAccountId, txIds, batch, reconciled } = req.body;
   const result = await AccountingService.reconcileTransactions({
@@ -766,12 +933,16 @@ router.post('/accounting/treasury/reconcile', authorizePermission('accounting.tr
 }));
 
 // V1.4.0: ابطال تراکنش خزانه با سند معکوس (DB-009)
-const voidTreasuryTxSchema = z.object({
+export const voidTreasuryTxSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه تراکنش باید عددی باشد')
+  }),
   body: z.object({
-    reason: z.string().min(3, 'دلیل ابطال الزامی است'),
+    reason: z.string().min(3, 'دلیل ابطال الزامی است و باید حداقل ۳ کاراکتر باشد'),
   })
 });
-router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(paramsIdSchema), validate(voidTreasuryTxSchema), asyncHandler(async (req, res) => {
+
+router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(voidTreasuryTxSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const reversal = await AccountingService.voidTreasuryTransaction(id, {
     reason: req.body.reason,
@@ -795,8 +966,20 @@ router.post('/accounting/treasury/:id/void', authorizePermission('accounting.tre
 // ==========================================
 // 5. CHEQUES (دفتر چک صیادی)
 // ==========================================
-router.get('/accounting/cheques', authorizePermission('accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { type, status, startDate, endDate, search } = req.query;
+export const chequesQuerySchema = z.object({
+  query: z.object({
+    type: z.enum(['received', 'paid', 'all']).optional(),
+    status: z.enum(['pending', 'passed', 'cashed', 'returned', 'voided', 'bounced', 'all']).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    search: z.string().optional(),
+    page: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().positive().max(1000).optional(),
+  }).optional()
+});
+
+router.get('/accounting/cheques', authorizePermission('accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'), validate(chequesQuerySchema), asyncHandler(async (req, res) => {
+  const { type, status, startDate, endDate, search } = (req.query as any) || {};
   const list = await AccountingService.getCheques({
     type: type as any,
     status: status as string,
@@ -807,31 +990,30 @@ router.get('/accounting/cheques', authorizePermission('accounting.cheques', 'acc
   res.json(list);
 }));
 
-// V1.4.0: اعتبارسنجی ورودی ثبت چک (قبلاً body خام بود)
-const createChequeSchema = z.object({
+export const createChequeSchema = z.object({
   body: z.object({
-    type: z.enum(['received', 'paid']),
-    chequeNumber: z.string().min(1),
-    sayadNumber: z.string().optional(),
-    bankName: z.string().min(1),
+    type: z.enum(['received', 'paid'], { message: 'نوع چک باید دریافتی یا پرداختی باشد' }),
+    chequeNumber: z.string().min(1, 'شماره چک الزامی است'),
+    sayadNumber: z.string().regex(/^\d{16}$/, 'شناسه صیادی چک باید دقیقاً ۱۶ رقم عددی باشد').optional().or(z.literal('')),
+    bankName: z.string().min(1, 'نام بانک صادرکننده الزامی است'),
     branch: z.string().optional(),
-    issueDate: z.string().min(1),
-    dueDate: z.string().min(1),
-    amount: z.number().positive(),
-    currency: z.string().optional(),
+    issueDate: z.string().min(1, 'تاریخ صدور الزامی است'),
+    dueDate: z.string().min(1, 'تاریخ سررسید الزامی است'),
+    amount: z.coerce.number().positive('مبلغ چک باید بزرگتر از صفر باشد'),
+    currency: z.string().optional().default('IRR'),
     partyType: z.enum(['customer', 'personnel', 'supplier', 'other']).optional(),
-    partyId: z.number().int().positive().nullable().optional(),
-    partyName: z.string().min(1),
+    partyId: z.coerce.number().int().positive().nullable().optional(),
+    partyName: z.string().min(1, 'نام طرف حساب الزامی است'),
     drawerName: z.string().optional(),
     payeeName: z.string().optional(),
-    bankAccountId: z.number().int().positive().nullable().optional(),
+    bankAccountId: z.coerce.number().int().positive().nullable().optional(),
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
   })
 });
 
-router.post('/accounting/cheques', authorizePermission('accounting.cheques'), validate(createChequeSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/cheques', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(createChequeSchema), asyncHandler(async (req, res) => {
   const chq = await AccountingService.createCheque({
     ...req.body,
     userId: req.user?.id,
@@ -850,6 +1032,20 @@ router.post('/accounting/cheques', authorizePermission('accounting.cheques'), va
   });
   res.status(201).json(chq);
 }));
+
+export const updateChequeStatusSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه چک باید عددی باشد')
+  }),
+  body: z.object({
+    status: z.enum(['pending', 'passed', 'cashed', 'returned', 'voided', 'bounced'], {
+      message: 'وضعیت چک نامعتبر است'
+    }),
+    actionDate: z.string().optional(),
+    bankAccountId: z.coerce.number().int().positive().optional(),
+    notes: z.string().optional()
+  })
+});
 
 const updateChequeStatusHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -874,8 +1070,8 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
   });
   res.json(chq);
 });
-router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), validate(paramsIdSchema), updateChequeStatusHandler);
-router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), validate(paramsIdSchema), updateChequeStatusHandler);
+router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
+router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
 
 router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -883,7 +1079,6 @@ router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
   });
-  // V1.4.0: audit حذف چک (قبلاً وجود نداشت)
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
@@ -901,8 +1096,17 @@ router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques
 // ==========================================
 // 6. REPORTS & FINANCIAL STATEMENTS
 // ==========================================
-router.get('/accounting/reports/trial-balance', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { level, startDate, endDate, currency } = req.query;
+export const trialBalanceQuerySchema = z.object({
+  query: z.object({
+    level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+router.get('/accounting/reports/trial-balance', authorizePermission('accounting.reports', 'accounting.view'), validate(trialBalanceQuerySchema), asyncHandler(async (req, res) => {
+  const { level, startDate, endDate, currency } = (req.query as any) || {};
   const data = await AccountingService.getTrialBalance({
     level: level as any,
     startDate: startDate as string,
@@ -912,8 +1116,20 @@ router.get('/accounting/reports/trial-balance', authorizePermission('accounting.
   res.json({ report: data, ...data });
 }));
 
+export const accountCardQuerySchema = z.object({
+  query: z.object({
+    accountId: z.coerce.number().int().positive().optional(),
+    detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional(),
+    detailedId: z.coerce.number().int().positive().optional(),
+    detailedName: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
 const accountCardReportHandler = asyncHandler(async (req, res) => {
-  const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency } = req.query;
+  const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency } = (req.query as any) || {};
   const data = await AccountingService.getDetailedAccountCard({
     accountId: accountId ? Number(accountId) : undefined,
     detailedType: detailedType as any,
@@ -925,11 +1141,23 @@ const accountCardReportHandler = asyncHandler(async (req, res) => {
   });
   res.json({ report: data, ...data });
 });
-router.get('/accounting/reports/account-card', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), accountCardReportHandler);
-router.get('/accounting/reports/ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), accountCardReportHandler);
+router.get('/accounting/reports/account-card', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
+router.get('/accounting/reports/ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
 
-router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), asyncHandler(async (req, res) => {
-  const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = req.query;
+export const partyLedgerQuerySchema = z.object({
+  query: z.object({
+    partyId: z.coerce.number().int().positive().optional(),
+    partyType: z.string().optional(),
+    partyName: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+    includeDrafts: z.string().optional(),
+  }).optional()
+});
+
+router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(partyLedgerQuerySchema), asyncHandler(async (req, res) => {
+  const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = (req.query as any) || {};
   const data = await AccountingService.getDetailedPartyLedger({
     partyId: partyId ? Number(partyId) : undefined,
     partyType: partyType as string,
@@ -943,7 +1171,7 @@ router.get('/accounting/reports/party-ledger', authorizePermission('accounting.r
 }));
 
 router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), asyncHandler(async (req, res) => {
-  const { search, type } = req.query;
+  const { search, type } = (req.query as any) || {};
   const data = await AccountingService.getPartiesList({
     search: search as string,
     type: type as string,
@@ -951,8 +1179,17 @@ router.get('/accounting/reports/parties', authorizePermission('accounting.report
   res.json({ data });
 }));
 
-router.get('/accounting/reports/journal-book', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { startDate, endDate, search, currency } = req.query;
+export const journalBookQuerySchema = z.object({
+  query: z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    search: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+router.get('/accounting/reports/journal-book', authorizePermission('accounting.reports', 'accounting.view'), validate(journalBookQuerySchema), asyncHandler(async (req, res) => {
+  const { startDate, endDate, search, currency } = (req.query as any) || {};
   const data = await AccountingService.getJournalBook({
     startDate: startDate as string,
     endDate: endDate as string,
@@ -962,8 +1199,15 @@ router.get('/accounting/reports/journal-book', authorizePermission('accounting.r
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/financial-ratios', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { asOfDate, currency } = req.query;
+export const financialRatiosQuerySchema = z.object({
+  query: z.object({
+    asOfDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+router.get('/accounting/reports/financial-ratios', authorizePermission('accounting.reports', 'accounting.view'), validate(financialRatiosQuerySchema), asyncHandler(async (req, res) => {
+  const { asOfDate, currency } = (req.query as any) || {};
   const data = await AccountingService.getFinancialRatios({
     asOfDate: asOfDate as string,
     currency: currency as string,
@@ -971,8 +1215,16 @@ router.get('/accounting/reports/financial-ratios', authorizePermission('accounti
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/income-statement', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { startDate, endDate, currency } = req.query;
+export const incomeStatementQuerySchema = z.object({
+  query: z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+router.get('/accounting/reports/income-statement', authorizePermission('accounting.reports', 'accounting.view'), validate(incomeStatementQuerySchema), asyncHandler(async (req, res) => {
+  const { startDate, endDate, currency } = (req.query as any) || {};
   const data = await AccountingService.getIncomeStatement({
     startDate: startDate as string,
     endDate: endDate as string,
@@ -981,8 +1233,16 @@ router.get('/accounting/reports/income-statement', authorizePermission('accounti
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/balance-sheet', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { date, asOfDate, currency } = req.query;
+export const balanceSheetQuerySchema = z.object({
+  query: z.object({
+    date: z.string().optional(),
+    asOfDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+router.get('/accounting/reports/balance-sheet', authorizePermission('accounting.reports', 'accounting.view'), validate(balanceSheetQuerySchema), asyncHandler(async (req, res) => {
+  const { date, asOfDate, currency } = (req.query as any) || {};
   const data = await AccountingService.getBalanceSheet({
     date: (date || asOfDate) as string,
     currency: currency as string,
@@ -990,8 +1250,8 @@ router.get('/accounting/reports/balance-sheet', authorizePermission('accounting.
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/multi-currency-summary', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const { startDate, endDate } = req.query;
+router.get('/accounting/reports/multi-currency-summary', authorizePermission('accounting.reports', 'accounting.view'), validate(dateRangeQuerySchema), asyncHandler(async (req, res) => {
+  const { startDate, endDate } = (req.query as any) || {};
   const data = await AccountingService.getMultiCurrencySummary({
     startDate: startDate as string,
     endDate: endDate as string,
@@ -1113,12 +1373,15 @@ router.get('/accounting/reports/project-summary', authorizePermission('accountin
   })));
 }));
 
+export const projectDetailQuerySchema = z.object({
+  query: z.object({
+    projectId: z.coerce.number().int().positive('شناسه پروژه الزامی است و باید عدد مثبت باشد')
+  })
+});
+
 // V10-6.1: ریز گردش یک پروژه با تراز جاری (read-model ساده، بدون سطح ۵)
-router.get('/accounting/reports/project-detail', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
+router.get('/accounting/reports/project-detail', authorizePermission('accounting.reports', 'accounting.view'), validate(projectDetailQuerySchema), asyncHandler(async (req, res) => {
   const projectId = Number(req.query.projectId);
-  if (!projectId || Number.isNaN(projectId)) {
-    throw new BadRequestError('شناسه پروژه الزامی است');
-  }
 
   const result = await orm.execute(sql`
     SELECT jvi.id AS line_id,
@@ -1158,10 +1421,15 @@ router.get('/accounting/reports/project-detail', authorizePermission('accounting
   res.json({ projectId, detail });
 }));
 
+export const docSignaturesQuerySchema = z.object({
+  query: z.object({
+    entityId: z.string().min(1, 'شناسه سند الزامی است')
+  })
+});
+
 // V10-6.2: تاییدکنندگان سند از تاریخچه ورکفلو — برای بخش امضای چاپ
-router.get('/accounting/doc-signatures', authorizePermission('accounting.reports', 'accounting.view', 'documents.view'), asyncHandler(async (req, res) => {
+router.get('/accounting/doc-signatures', authorizePermission('accounting.reports', 'accounting.view', 'documents.view'), validate(docSignaturesQuerySchema), asyncHandler(async (req, res) => {
   const entityId = String(req.query.entityId || '').trim();
-  if (!entityId) throw new BadRequestError('شناسه سند الزامی است');
 
   const instances = await orm
     .select({ id: workflowInstances.id })
@@ -1204,8 +1472,16 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
 // ==========================================
 // 7. FISCAL YEAR CLOSING & INVOICE VOUCHER SYNC
 // ==========================================
-router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting.vouchers'), asyncHandler(async (req, res) => {
-  const { year, closingDate, openingDateNewYear } = req.query;
+export const fiscalClosingPreviewQuerySchema = z.object({
+  query: z.object({
+    year: z.string().min(1, 'سال مالی الزامی است'),
+    closingDate: z.string().min(1, 'تاریخ سند اختتامیه الزامی است'),
+    openingDateNewYear: z.string().optional(),
+  })
+});
+
+router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting.vouchers'), validate(fiscalClosingPreviewQuerySchema), asyncHandler(async (req, res) => {
+  const { year, closingDate, openingDateNewYear } = (req.query as any) || {};
   const data = await AccountingService.getFiscalYearClosingPreview({
     year: year as string,
     closingDate: closingDate as string,
@@ -1214,11 +1490,17 @@ router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting
   res.json(data);
 }));
 
-router.post('/accounting/fiscal-closing/execute', authorize('admin'), asyncHandler(async (req, res) => {
+export const fiscalClosingExecuteSchema = z.object({
+  body: z.object({
+    year: z.string().min(1, 'سال مالی الزامی است'),
+    closingDate: z.string().min(1, 'تاریخ سند بستن سال الزامی است'),
+    openingDateNewYear: z.string().optional(),
+    createOpeningVoucher: z.boolean().optional(),
+  })
+});
+
+router.post('/accounting/fiscal-closing/execute', authorize('admin'), validate(fiscalClosingExecuteSchema), asyncHandler(async (req, res) => {
   const { year, closingDate, openingDateNewYear, createOpeningVoucher } = req.body;
-  if (!year || !closingDate) {
-    throw new BadRequestError('سال مالی و تاریخ سند بستن سال الزامی هستند');
-  }
 
   const result = await AccountingService.executeFiscalYearClosing({
     year,
@@ -1244,9 +1526,19 @@ router.post('/accounting/fiscal-closing/execute', authorize('admin'), asyncHandl
   res.json(result);
 }));
 
-router.post('/accounting/invoices/:id/sync-voucher', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+export const invoiceSyncVoucherSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, 'شناسه فاکتور باید عددی باشد')
+  }),
+  body: z.object({
+    vatPercent: z.coerce.number().min(0).max(100).optional(),
+    vatAmount: z.coerce.number().min(0).optional(),
+  }).optional()
+});
+
+router.post('/accounting/invoices/:id/sync-voucher', authorizePermission('accounting.vouchers'), validate(invoiceSyncVoucherSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  const { vatPercent, vatAmount } = req.body;
+  const { vatPercent, vatAmount } = req.body || {};
   const voucher = await AccountingService.syncSalesInvoiceVoucher(docId, {
     vatPercent,
     vatAmount,

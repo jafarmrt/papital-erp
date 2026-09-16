@@ -149,6 +149,7 @@ export class KardexWacRecalculatorService {
 
       // Audit Log
       await logActivity({
+        tx: txEngine,
         userId,
         username: userName,
         action: 'AUDIT_APPLY',

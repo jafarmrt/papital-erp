@@ -22,7 +22,7 @@ import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ValidationError, ForbiddenError } from '../errors/customErrors.js';
-import { logActivity } from '../lib/auditLogger.js';
+import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity } from '../lib/auditLogger.js';
 import { isTestEndpointsEnabled, getTestEndpointsSource } from '../lib/runtimeFlags.js';
 import { runSeed } from '../db/seed.js';
 import { runMigrations, validateDbSchema } from '../db/migrator.js';
@@ -340,6 +340,39 @@ router.get('/activity-logs/filters', authorize('admin', 'manager'), async (req, 
       actions: distinctActions.map(a => a.action).filter(Boolean),
       entities: distinctEntities.map(e => e.entity).filter(Boolean)
     });
+  } catch (err) {
+    throw err;
+  }
+});
+
+// Purge old audit logs (Admin only with strict retention policy enforcement - Sub-phase 1.5 / D-2)
+router.post('/activity-logs/purge', authorize('admin'), async (req, res) => {
+  try {
+    const { retentionDays, preserveCritical, allowForceRecent } = req.body || {};
+    const report = await purgeOldAuditLogs({
+      retentionDays: retentionDays !== undefined ? Number(retentionDays) : undefined,
+      preserveCritical: preserveCritical !== undefined ? Boolean(preserveCritical) : true,
+      allowForceRecent: Boolean(allowForceRecent),
+      actorUsername: (req as any).user?.username,
+      actorUserId: (req as any).user?.id,
+      actorIp: extractClientIp(req)
+    });
+
+    res.json({
+      success: true,
+      message: `پاکسازی ایمن تاریخچه ممیزی با موفقیت انجام شد (${report.purgedCount} رکورد).`,
+      report
+    });
+  } catch (err) {
+    throw err;
+  }
+});
+
+// Audit log integrity and retention status check
+router.get('/activity-logs/integrity', authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const integrity = await checkAuditLogIntegrity();
+    res.json(integrity);
   } catch (err) {
     throw err;
   }

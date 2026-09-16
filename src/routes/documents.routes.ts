@@ -24,6 +24,20 @@ router.use(authenticateToken);
 const nonNegativeMoney = (label: string) => (val: unknown): boolean =>
   val === undefined || val === null || (Number.isFinite(Number(val)) && Number(val) >= 0);
 
+export const documentItemInputSchema = z.object({
+  itemId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/)]).transform(v => Number(v)),
+  quantity: z.union([z.number(), z.string()]).optional(),
+  unit_price: z.union([z.number(), z.string()]).optional(),
+  unitPrice: z.union([z.number(), z.string()]).optional(),
+  price: z.union([z.number(), z.string()]).optional(),
+  discount: z.union([z.number(), z.string()]).optional(),
+  system_stock: z.union([z.number(), z.string()]).optional(),
+  physical_stock: z.union([z.number(), z.string()]).optional(),
+  location: z.string().max(100).optional(),
+  targetLoc: z.string().max(100).optional(),
+  unit: z.string().max(50).optional()
+});
+
 const refineDocumentItems = (ctx: z.RefinementCtx, docLines: Array<Record<string, unknown>>, skipQuantityCheck: boolean): void => {
   for (let i = 0; i < docLines.length; i++) {
     const it = docLines[i] || {};
@@ -33,7 +47,8 @@ const refineDocumentItems = (ctx: z.RefinementCtx, docLines: Array<Record<string
         ctx.addIssue({ code: 'custom', path: ['items', i, 'quantity'], message: 'مقدار/تعداد باید عددی بزرگ‌تر از صفر باشد' });
       }
     }
-    if (!nonNegativeMoney('unit_price')(it.unit_price)) {
+    const unitPrice = it.unit_price ?? it.unitPrice ?? it.price;
+    if (!nonNegativeMoney('unit_price')(unitPrice)) {
       ctx.addIssue({ code: 'custom', path: ['items', i, 'unit_price'], message: 'قیمت واحد نمی‌تواند منفی یا نامعتبر باشد' });
     }
     if (!nonNegativeMoney('discount')(it.discount)) {
@@ -42,34 +57,32 @@ const refineDocumentItems = (ctx: z.RefinementCtx, docLines: Array<Record<string
   }
 };
 
-const documentCreateSchema = z.object({
+export const documentCreateSchema = z.object({
   body: z.object({
-    docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste']),
-    refNumber: z.union([z.string(), z.number()]),
-    date: z.string(),
-    items: z.array(z.object({
-      itemId: z.number(),
-      quantity: z.union([z.number(), z.string()]).optional(),
-      unit_price: z.union([z.number(), z.string()]).optional(),
-      discount: z.union([z.number(), z.string()]).optional(),
-      system_stock: z.union([z.number(), z.string()]).optional(),
-      physical_stock: z.union([z.number(), z.string()]).optional(),
-      location: z.string().optional()
-    })).min(1, 'حداقل یک کالا باید ثبت شود'),
-    user: z.string().nullable().optional(),
+    docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'], {
+      message: 'نوع سند نامعتبر است'
+    }),
+    refNumber: z.union([z.string().min(1, 'شماره مرجع الزامی است'), z.number().int().positive()]),
+    date: z.string().min(1, 'تاریخ سند الزامی است'),
+    items: z.array(documentItemInputSchema).min(1, 'حداقل یک کالا باید ثبت شود'),
+    user: z.string().max(100).nullable().optional(),
     inOut: z.enum(['in', 'out']).nullable().optional(),
-    buyer_name: z.string().nullable().optional(),
-    buyer_city: z.string().nullable().optional(),
-    buyer_phone: z.string().nullable().optional(),
-    buyer_address: z.string().nullable().optional(),
+    buyer_name: z.string().max(255).nullable().optional(),
+    buyerName: z.string().max(255).nullable().optional(),
+    buyer_city: z.string().max(100).nullable().optional(),
+    buyerCity: z.string().max(100).nullable().optional(),
+    buyer_phone: z.string().max(50).nullable().optional(),
+    buyerPhone: z.string().max(50).nullable().optional(),
+    buyer_address: z.string().max(500).nullable().optional(),
+    buyerAddress: z.string().max(500).nullable().optional(),
     status: z.enum(['draft', 'proforma', 'final']).nullable().optional(),
-    currency: z.string().nullable().optional(),
-    notes: z.string().nullable().optional(),
-    location: z.string().nullable().optional(),
-    crmLeadId: z.union([z.number(), z.string(), z.null()]).optional(),
-    projectId: z.union([z.number(), z.string(), z.null()]).optional(),
-    vatPercent: z.union([z.number(), z.string(), z.null()]).optional(),
-    vatAmount: z.union([z.number(), z.string(), z.null()]).optional(),
+    currency: z.string().max(10).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    location: z.string().max(100).nullable().optional(),
+    crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
+    projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
+    vatPercent: z.union([z.number().min(0).max(100), z.string(), z.null()]).optional(),
+    vatAmount: z.union([z.number().min(0), z.string(), z.null()]).optional(),
     attachments: z.array(z.any()).optional()
   }).superRefine((body, ctx) => {
     // اسناد انبارگردانی از physical_stock استفاده می‌کنند و مقدار صفر در آن‌ها مجاز است
@@ -77,50 +90,48 @@ const documentCreateSchema = z.object({
   })
 });
 
-const finalizeDocumentSchema = z.object({
+export const finalizeDocumentSchema = z.object({
   body: z.object({
-    user: z.string().optional()
+    user: z.string().max(100).optional()
   }).optional(),
   params: z.object({
     id: numericIdString
   })
 });
 
-const updateDocumentNotesSchema = z.object({
+export const updateDocumentNotesSchema = z.object({
   body: z.object({
-    notes: z.string().optional()
+    notes: z.string().max(2000).optional()
   }),
   params: z.object({
     id: numericIdString
   })
 });
 
-const documentUpdateSchema = z.object({
+export const documentUpdateSchema = z.object({
   body: z.object({
-    refNumber: z.union([z.string(), z.number()]).optional(),
-    date: z.string().optional(),
-    user: z.string().nullable().optional(),
-    buyer_name: z.string().nullable().optional(),
-    buyer_city: z.string().nullable().optional(),
-    buyer_phone: z.string().nullable().optional(),
-    buyer_address: z.string().nullable().optional(),
+    refNumber: z.union([z.string().min(1), z.number().int().positive()]).optional(),
+    date: z.string().min(1).optional(),
+    user: z.string().max(100).nullable().optional(),
+    buyer_name: z.string().max(255).nullable().optional(),
+    buyerName: z.string().max(255).nullable().optional(),
+    buyer_city: z.string().max(100).nullable().optional(),
+    buyerCity: z.string().max(100).nullable().optional(),
+    buyer_phone: z.string().max(50).nullable().optional(),
+    buyerPhone: z.string().max(50).nullable().optional(),
+    buyer_address: z.string().max(500).nullable().optional(),
+    buyerAddress: z.string().max(500).nullable().optional(),
     status: z.string().optional().refine(
       (v) => v === undefined || v === 'draft' || v === 'proforma',
       { message: 'گذار وضعیت سند به «نهایی» از مسیر ویرایش مجاز نیست؛ برای نهایی‌سازی از عملیات «نهایی‌سازی و تایید» استفاده کنید.' }
     ),
-    currency: z.string().nullable().optional(),
-    notes: z.string().nullable().optional(),
-    location: z.string().nullable().optional(),
+    currency: z.string().max(10).nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+    location: z.string().max(100).nullable().optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
-    crmLeadId: z.union([z.number(), z.string(), z.null()]).optional(),
+    crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     attachments: z.array(z.any()).optional(),
-    items: z.array(z.object({
-      itemId: z.union([z.number(), z.string()]),
-      quantity: z.union([z.number(), z.string()]).optional(),
-      unit_price: z.union([z.number(), z.string()]).optional(),
-      discount: z.union([z.number(), z.string()]).optional(),
-      location: z.string().optional()
-    })).min(1, 'حداقل یک کالا باید ثبت شود').optional()
+    items: z.array(documentItemInputSchema).min(1, 'حداقل یک کالا باید ثبت شود').optional()
   }).superRefine((body, ctx) => {
     if (body.items) {
       refineDocumentItems(ctx, body.items as unknown as Array<Record<string, unknown>>, false);
@@ -131,25 +142,51 @@ const documentUpdateSchema = z.object({
   }).passthrough()
 }).passthrough();
 
-const paramsRefSchema = z.object({
+export const paramsRefSchema = z.object({
   params: z.object({
     ref: z.string().min(1, 'شماره سند الزامی است')
   })
 });
 
-const paramsDocIdOrRefSchema = z.object({
+export const paramsDocIdOrRefSchema = z.object({
   params: z.object({
     id: z.string().min(1, 'شناسه یا شماره سند الزامی است')
   })
 });
 
-const nextRefQuerySchema = z.object({
+export const nextRefQuerySchema = z.object({
   query: z.object({
     type: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'], {
       message: 'نوع سند نامعتبر است'
     })
   }).passthrough()
 }).passthrough();
+
+export const documentsQuerySchema = z.object({
+  query: z.object({
+    type: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste']).optional(),
+    status: z.enum(['draft', 'proforma', 'final']).optional(),
+    search: z.string().max(100).optional(),
+    startDate: z.string().max(30).optional(),
+    endDate: z.string().max(30).optional(),
+    projectId: z.union([z.string(), z.number()]).optional(),
+    page: z.union([z.string(), z.number()]).optional(),
+    limit: z.union([z.string(), z.number()]).optional(),
+    export: z.union([z.string(), z.boolean()]).optional()
+  }).passthrough()
+}).passthrough();
+
+export const auditItemsQuerySchema = z.object({
+  query: z.object({
+    location: z.string().max(100).optional()
+  }).passthrough()
+}).passthrough();
+
+export const reconcileStockSchema = z.object({
+  body: z.object({
+    itemId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional()
+  }).optional()
+});
 
 // V9-1.2: نگاه غیرمخرب (Peek) — شماره بعدی را بدون افزایش شمارنده برمی‌گرداند تا
 // بارگذاری فرم‌ها و فرم‌های رهاشده هرگز شماره سند نسوزانند.
@@ -378,7 +415,7 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
   res.json({ success: true, docId: newDocId });
 }));
 
-router.get('/documents', asyncHandler(async (req, res) => {
+router.get('/documents', validate(documentsQuerySchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
   const status = req.query.status as string;
   const search = req.query.search as string;
@@ -388,7 +425,7 @@ router.get('/documents', asyncHandler(async (req, res) => {
   // V9-1.3: صفحه‌بندی NaN-safe با سقف — جلوگیری از dump کل جدول با limit نامعتبر/عظیم
   const isPaginated = req.query.page !== undefined || req.query.limit !== undefined;
   const { page, limit } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
-  const isExport = req.query.export === 'true';
+  const isExport = String(req.query.export) === 'true';
 
   const result = await DocumentService.getDocuments({
     type,
@@ -418,7 +455,7 @@ router.get('/documents/by-ref/:ref', validate(paramsRefSchema), asyncHandler(asy
   res.json(doc);
 }));
 
-router.get('/documents/audit-items', asyncHandler(async (req, res) => {
+router.get('/documents/audit-items', validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
   const location = (req.query.location as string) || 'main';
   const allItems = await orm
     .select()
@@ -448,7 +485,7 @@ router.get('/documents/audit-items', asyncHandler(async (req, res) => {
   res.json(formatted);
 }));
 
-router.get('/documents/:id/settlement-status', asyncHandler(async (req, res) => {
+router.get('/documents/:id/settlement-status', validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   if (isNaN(docId) || docId <= 0) {
     throw new ValidationError('شناسه سند نامعتبر است');
@@ -605,8 +642,8 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
   res.json({ success: true });
 }));
 
-router.post('/documents/reconcile-stock', authorize('admin', 'manager', 'warehouse_keeper'), asyncHandler(async (req, res) => {
-  const targetItemId = req.body.itemId ? Number(req.body.itemId) : undefined;
+router.post('/documents/reconcile-stock', authorize('admin', 'manager', 'warehouse_keeper'), validate(reconcileStockSchema), asyncHandler(async (req, res) => {
+  const targetItemId = req.body?.itemId ? Number(req.body.itemId) : undefined;
   const result = await DocumentService.reconcileAndRebuildStock(targetItemId);
 
   await logActivity({

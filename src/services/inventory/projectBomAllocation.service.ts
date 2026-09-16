@@ -12,7 +12,7 @@ import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
-import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource } from '../../lib/lockOrder.js';
+import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource, withOrderedLocks } from '../../lib/lockOrder.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ConflictError, InsufficientStockError } from '../../errors/customErrors.js';
 
@@ -77,25 +77,17 @@ export class ProjectBomAllocationService {
     const operatorId = typeof params.userId === 'number' && !isNaN(params.userId) && params.userId > 0 ? params.userId : null;
 
     return await orm.transaction(async (txEngine) => {
-      // Strictly observe Lock Hierarchy: Items (Level 40) -> Production (Level 50)
-      const requestedItemIds = sortIdsForLocking(params.allocations.map(a => a.itemId));
-      const lockResources: LockableResource[] = [
-        { name: 'items', hierarchyLevel: LockHierarchyLevel.ITEMS_STOCK },
-        { name: 'productionProjects', hierarchyLevel: LockHierarchyLevel.PRODUCTION },
-      ];
-      validateLockOrder(lockResources);
+      // Strictly observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
+      const requestedItemIds = params.allocations.map(a => a.itemId);
+      await withOrderedLocks(txEngine, [
+        { table: items, ids: requestedItemIds, name: 'items' },
+        { table: productionProjects, id: params.projectId, name: 'productionProjects' }
+      ], async () => true);
 
-      // 1. Lock items (level 40) FIRST
-      if (requestedItemIds.length > 0) {
-        await txEngine.select().from(items).where(and(inArray(items.id, requestedItemIds), eq(items.isDeleted, 0))).for('update');
-      }
-
-      // 2. Lock production project (level 50) SECOND
       const [project] = await txEngine
         .select()
         .from(productionProjects)
-        .where(and(eq(productionProjects.id, params.projectId), eq(productionProjects.isDeleted, 0)))
-        .for('update');
+        .where(and(eq(productionProjects.id, params.projectId), eq(productionProjects.isDeleted, 0)));
 
       if (!project) {
         throw new NotFoundError(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
@@ -264,25 +256,17 @@ export class ProjectBomAllocationService {
     const operatorId = typeof params.userId === 'number' && !isNaN(params.userId) && params.userId > 0 ? params.userId : null;
 
     return await orm.transaction(async (txEngine) => {
-      // Strictly observe Lock Hierarchy: Items (Level 40) -> Production (Level 50)
-      const requestedItemIds = sortIdsForLocking(params.allocations.map(a => a.itemId));
-      const lockResources: LockableResource[] = [
-        { name: 'items', hierarchyLevel: LockHierarchyLevel.ITEMS_STOCK },
-        { name: 'productionProjects', hierarchyLevel: LockHierarchyLevel.PRODUCTION },
-      ];
-      validateLockOrder(lockResources);
+      // Strictly observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
+      const requestedItemIds = params.allocations.map(a => a.itemId);
+      await withOrderedLocks(txEngine, [
+        { table: items, ids: requestedItemIds, name: 'items' },
+        { table: productionProjects, id: params.projectId, name: 'productionProjects' }
+      ], async () => true);
 
-      // 1. Lock items (level 40) FIRST
-      if (requestedItemIds.length > 0) {
-        await txEngine.select().from(items).where(and(inArray(items.id, requestedItemIds), eq(items.isDeleted, 0))).for('update');
-      }
-
-      // 2. Lock production project (level 50) SECOND
       const [project] = await txEngine
         .select()
         .from(productionProjects)
-        .where(and(eq(productionProjects.id, params.projectId), eq(productionProjects.isDeleted, 0)))
-        .for('update');
+        .where(and(eq(productionProjects.id, params.projectId), eq(productionProjects.isDeleted, 0)));
 
       if (!project) {
         throw new NotFoundError(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
@@ -492,11 +476,10 @@ export class ProjectBomAllocationService {
       // Pre-read allocation to get itemId for locking in hierarchy order: Items (Level 40) -> Production (Level 50)
       const [preAlloc] = await txEngine.select({ itemId: projectBomAllocations.itemId }).from(projectBomAllocations).where(eq(projectBomAllocations.id, allocationId));
       if (preAlloc?.itemId) {
-        validateLockOrder([
-          { name: 'items', hierarchyLevel: LockHierarchyLevel.ITEMS_STOCK },
-          { name: 'projectBomAllocations', hierarchyLevel: LockHierarchyLevel.PRODUCTION },
-        ]);
-        await txEngine.select().from(items).where(eq(items.id, preAlloc.itemId)).for('update');
+        await withOrderedLocks(txEngine, [
+          { table: items, id: preAlloc.itemId, name: 'items' },
+          { table: projectBomAllocations, id: allocationId, name: 'projectBomAllocations' }
+        ], async () => true);
       }
 
       const [alloc] = await txEngine
@@ -507,8 +490,7 @@ export class ProjectBomAllocationService {
             eq(projectBomAllocations.id, allocationId),
             eq(projectBomAllocations.isDeleted, 0)
           )
-        )
-        .for('update');
+        );
 
       if (!alloc) {
         throw new NotFoundError(`رکورد تخصیص با شناسه ${allocationId} یافت نشد.`);

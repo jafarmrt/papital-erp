@@ -16,6 +16,7 @@ import { AccountMappingService } from './accountMapping.service.js';
 import { logger } from '../../middleware/logger.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
 
 export class VoucherSyncService {
@@ -27,15 +28,25 @@ export class VoucherSyncService {
     vatAmount?: number;
     userId?: number;
     username?: string;
+    strict?: boolean;
   }, tx?: DbExecutor): Promise<JournalVoucher | null> {
+    const isStrict = options?.strict === true;
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || (doc.type !== 'invoice' && doc.type !== 'proforma') || doc.status !== 'final') {
+      if (isStrict) {
+        throw new ValidationError(`فاکتور فروش با شناسه ${docId} نامعتبر، حذف‌شده، یا نهایی‌نشده است.`);
+      }
       return null;
     }
 
     const items = await executor.select().from(documentItems).where(eq(documentItems.documentId, docId));
-    if (!items || items.length === 0) return null;
+    if (!items || items.length === 0) {
+      if (isStrict) {
+        throw new ValidationError(`فاکتور فروش شماره «${doc.refNumber}» فاقد هرگونه قلم کالا برای صدور سند حسابداری است.`);
+      }
+      return null;
+    }
 
     // V9-1.3: جمع مبالغ با FinancialDecimal — حذف خطای شناور float در مبالغ بزرگ ریالی
     let grossAmount = fin(0);
@@ -78,7 +89,14 @@ export class VoucherSyncService {
     const vatAcc = await AccountMappingService.getSalesVatPayableAccount(tx);
 
     if (!customerAcc || !revenueAcc) {
-      logger.warn({ message: 'Standard customer or revenue accounts not found for invoice auto voucher' });
+      const missingAccounts = [
+        !customerAcc && 'حساب‌های دریافتنی (1201)',
+        !revenueAcc && 'درآمد فروش (5001)'
+      ].filter(Boolean).join('، ');
+      logger.warn({ message: `Standard customer or revenue accounts not found for invoice auto voucher: ${missingAccounts}` });
+      if (isStrict) {
+        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای صدور سند فاکتور فروش شماره «${doc.refNumber}» یافت نشد (${missingAccounts}) — لطفاً از تنظیمات حسابداری پیکربندی نمایید.`);
+      }
       return null;
     }
 
@@ -155,18 +173,19 @@ export class VoucherSyncService {
         eq(journalVouchers.isDeleted, 0)
       ));
 
+    let resultVoucher: JournalVoucher | null = null;
     if (existingVoucher) {
       if (existingVoucher.status === 'permanent') {
         return VoucherService.getJournalVoucherById(existingVoucher.id, tx);
       }
-      return VoucherService.updateJournalVoucher(existingVoucher.id, {
+      resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {
         date: docDate,
         voucherType: 'sales',
         description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum > 0 ? ' (همراه با تخفیف)' : ''}${vatAmount > 0 ? ' (شامل ارزش‌افزوده)' : ''}`,
         items: voucherItems,
       }, tx);
     } else {
-      return VoucherService.createJournalVoucher({
+      resultVoucher = await VoucherService.createJournalVoucher({
         date: docDate,
         voucherType: 'sales',
         description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum > 0 ? ' (همراه با تخفیف)' : ''}${vatAmount > 0 ? ' (شامل ارزش‌افزوده)' : ''}`,
@@ -179,6 +198,12 @@ export class VoucherSyncService {
         items: voucherItems
       }, tx);
     }
+
+    if (!resultVoucher && isStrict) {
+      throw new ValidationError(`صدور سند خودکار حسابداری برای فاکتور فروش شماره «${doc.refNumber}» ناموفق بود.`);
+    }
+
+    return resultVoucher;
   }
 
   /**
@@ -187,10 +212,15 @@ export class VoucherSyncService {
   static async syncPurchaseInvoiceVoucher(docId: number, options?: {
     userId?: number;
     username?: string;
+    strict?: boolean;
   }, tx?: DbExecutor): Promise<JournalVoucher | null> {
+    const isStrict = options?.strict === true;
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || !['receipt', 'production_receipt', 'purchase'].includes(doc.type) || doc.status !== 'final') {
+      if (isStrict) {
+        throw new ValidationError(`سند خرید/رسید با شناسه ${docId} نامعتبر، حذف‌شده، یا نهایی‌نشده است.`);
+      }
       return null;
     }
 
@@ -212,7 +242,12 @@ export class VoucherSyncService {
     .leftJoin(items, eq(documentItems.itemId, items.id))
     .where(eq(documentItems.documentId, docId));
 
-    if (!itemsList || itemsList.length === 0) return null;
+    if (!itemsList || itemsList.length === 0) {
+      if (isStrict) {
+        throw new ValidationError(`سند خرید/رسید شماره «${doc.refNumber}» فاقد هرگونه قلم کالا برای صدور سند حسابداری است.`);
+      }
+      return null;
+    }
 
     // V9-1.3: جمع مبالغ با FinancialDecimal
     let rawMaterialsAmount = fin(0);
@@ -338,10 +373,21 @@ export class VoucherSyncService {
           currency: doc.currency || 'IRR',
           description: `بستانکاری تامین‌کننده بابت فاکتور خرید / رسید ورود کالا و مواد شماره ${doc.refNumber}`
         });
+      } else if (isStrict) {
+        throw new ValidationError('سرفصل حسابداری بستانکاران تجاری/تامین‌کنندگان (3001) برای صدور سند خرید یافت نشد.');
       }
     }
 
-    if (voucherItems.length === 0) return null;
+    if (isProduction && !wipAcc && isStrict) {
+      throw new ValidationError('سرفصل حسابداری کالای در جریان ساخت (1402) برای صدور سند رسید تولید یافت نشد.');
+    }
+
+    if (voucherItems.length === 0) {
+      if (isStrict) {
+        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای اقلام سند شماره «${doc.refNumber}» یافت نشد — لطفاً سرفصل‌های مواد و کالا را در کدینگ بررسی نمایید.`);
+      }
+      return null;
+    }
 
     const voucherType: JournalVoucher['voucherType'] = isProduction ? 'general' : 'purchase';
     const voucherDesc = isProduction 
@@ -355,18 +401,19 @@ export class VoucherSyncService {
         eq(journalVouchers.isDeleted, 0)
       ));
 
+    let resultVoucher: JournalVoucher | null = null;
     if (existingVoucher) {
       if (existingVoucher.status === 'permanent') {
         return VoucherService.getJournalVoucherById(existingVoucher.id, tx);
       }
-      return VoucherService.updateJournalVoucher(existingVoucher.id, {
+      resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {
         date: docDate,
         voucherType,
         description: voucherDesc,
         items: voucherItems,
       }, tx);
     } else {
-      return VoucherService.createJournalVoucher({
+      resultVoucher = await VoucherService.createJournalVoucher({
         date: docDate,
         voucherType,
         description: voucherDesc,
@@ -379,6 +426,12 @@ export class VoucherSyncService {
         items: voucherItems
       }, tx);
     }
+
+    if (!resultVoucher && isStrict) {
+      throw new ValidationError(`صدور سند خودکار حسابداری برای سند خرید/رسید شماره «${doc.refNumber}» ناموفق بود.`);
+    }
+
+    return resultVoucher;
   }
 
   /**
@@ -387,10 +440,15 @@ export class VoucherSyncService {
   static async syncWarehouseDocumentVoucher(docId: number, options?: {
     userId?: number;
     username?: string;
+    strict?: boolean;
   }, tx?: DbExecutor): Promise<JournalVoucher | null> {
+    const isStrict = options?.strict === true;
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || doc.status !== 'final') {
+      if (isStrict) {
+        throw new ValidationError(`سند انبار با شناسه ${docId} نامعتبر، حذف‌شده، یا نهایی‌نشده است.`);
+      }
       return null;
     }
 
@@ -619,7 +677,12 @@ export class VoucherSyncService {
       return null;
     }
 
-    if (voucherItems.length === 0) return null;
+    if (voucherItems.length === 0) {
+      if (isStrict) {
+        throw new ValidationError(`سرفصل‌های حسابداری متناظر برای اقلام حواله انبار شماره «${doc.refNumber}» یافت نشد.`);
+      }
+      return null;
+    }
 
     const [existingVoucher] = await executor.select().from(journalVouchers)
       .where(and(
@@ -628,18 +691,19 @@ export class VoucherSyncService {
         eq(journalVouchers.isDeleted, 0)
       ));
 
+    let resultVoucher: JournalVoucher | null = null;
     if (existingVoucher) {
       if (existingVoucher.status === 'permanent') {
         return VoucherService.getJournalVoucherById(existingVoucher.id, tx);
       }
-      return VoucherService.updateJournalVoucher(existingVoucher.id, {
+      resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {
         date: docDate,
         voucherType,
         description: voucherDescription,
         items: voucherItems,
       }, tx);
     } else {
-      return VoucherService.createJournalVoucher({
+      resultVoucher = await VoucherService.createJournalVoucher({
         date: docDate,
         voucherType,
         description: voucherDescription,
@@ -652,15 +716,33 @@ export class VoucherSyncService {
         items: voucherItems
       }, tx);
     }
+
+    if (!resultVoucher && isStrict) {
+      throw new ValidationError(`صدور سند خودکار حسابداری برای حواله انبار شماره «${doc.refNumber}» ناموفق بود.`);
+    }
+
+    return resultVoucher;
   }
 
   /**
    * Auto-generate double-entry voucher when a document is finalized
    */
-  static async autoCreateVoucherForInvoice(documentId: number, userId?: number, username?: string, tx?: DbExecutor): Promise<JournalVoucher | null> {
+  static async autoCreateVoucherForInvoice(
+    documentId: number,
+    userId?: number,
+    username?: string,
+    tx?: DbExecutor,
+    options?: { strict?: boolean }
+  ): Promise<JournalVoucher | null> {
+    const isStrict = Boolean(options?.strict);
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, documentId));
-    if (!doc || doc.isDeleted === 1 || doc.status !== 'final') return null;
+    if (!doc || doc.isDeleted === 1 || doc.status !== 'final') {
+      if (isStrict) {
+        throw new ValidationError(`سند با شناسه ${documentId} نامعتبر، حذف‌شده، یا نهایی‌نشده است.`);
+      }
+      return null;
+    }
 
     const existing = await executor.select().from(journalVouchers)
       .where(and(
@@ -671,11 +753,11 @@ export class VoucherSyncService {
     if (existing.length > 0) return VoucherService.getJournalVoucherById(existing[0].id, tx);
 
     if (doc.type === 'invoice') {
-      return this.syncSalesInvoiceVoucher(documentId, { userId, username }, tx);
+      return this.syncSalesInvoiceVoucher(documentId, { userId, username, strict: isStrict }, tx);
     } else if (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'purchase') {
-      return this.syncPurchaseInvoiceVoucher(documentId, { userId, username }, tx);
+      return this.syncPurchaseInvoiceVoucher(documentId, { userId, username, strict: isStrict }, tx);
     } else if (['remittance', 'waste', 'return'].includes(doc.type)) {
-      return this.syncWarehouseDocumentVoucher(documentId, { userId, username }, tx);
+      return this.syncWarehouseDocumentVoucher(documentId, { userId, username, strict: isStrict }, tx);
     }
 
     return null;
@@ -683,11 +765,24 @@ export class VoucherSyncService {
 
   /**
    * Auto-generate double-entry voucher when piecework payroll is approved/paid
+   * V4.0.5 (F-3 / TD-093): پشتیبانی از strict mode جهت جلوگیری از بلعیده‌شدن خطاهای صدور سند
    */
-  static async autoCreateVoucherForPayroll(payrollId: number, userId?: number, username?: string, tx?: DbExecutor): Promise<JournalVoucher | null> {
+  static async autoCreateVoucherForPayroll(
+    payrollId: number,
+    userId?: number,
+    username?: string,
+    tx?: DbExecutor,
+    options?: { strict?: boolean }
+  ): Promise<JournalVoucher | null> {
     const executor = tx || orm;
+    const isStrict = Boolean(options?.strict);
     const [pay] = await executor.select().from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollId));
-    if (!pay || pay.isDeleted === 1) return null;
+    if (!pay || pay.isDeleted === 1) {
+      if (isStrict) {
+        throw new NotFoundError(`فیش حقوقی با شناسه ${payrollId} یافت نشد یا حذف شده است.`);
+      }
+      return null;
+    }
 
     const existing = await executor.select().from(journalVouchers)
       .where(and(
@@ -707,7 +802,16 @@ export class VoucherSyncService {
     const fixedSalaryExpenseAcc = await AccountMappingService.getFixedSalaryExpenseAccount(tx);
 
     if (!wageExpenseAcc || !payableAcc || !fixedSalaryExpenseAcc) {
-      logger.warn({ message: 'Conceptual payroll accounts not found for payroll auto voucher (wages payable / fixed salary expense / production wages)' });
+      const missingAccounts = [
+        !wageExpenseAcc && 'دستمزد مستقیم تولید (6002)',
+        !payableAcc && 'حقوق و دستمزد پرداختنی (3201)',
+        !fixedSalaryExpenseAcc && 'هزینه حقوق و دستمزد ثابت (6003)'
+      ].filter(Boolean).join('، ');
+
+      logger.warn({ message: `Conceptual payroll accounts not found for payroll auto voucher: ${missingAccounts}` });
+      if (isStrict) {
+        throw new ValidationError(`سرفصل‌های معین حسابداری برای صدور سند حقوق یافت نشد (${missingAccounts}) — لطفاً از تنظیمات ← تنظیمات حسابداری پیکربندی کنید.`);
+      }
       return null;
     }
 
@@ -766,7 +870,7 @@ export class VoucherSyncService {
       description: `بستانکاری حقوق و دستمزد ${pers?.fullName || ''} بابت دوره ${pay.startDate} تا ${pay.endDate}`
     });
 
-    return VoucherService.createJournalVoucher({
+    const createdVoucher = await VoucherService.createJournalVoucher({
       // V3.0.7 (TD-062): فال‌بک تاریخ از ساعت توافقی کسب‌وکار (نه UTC خام)
       date: pay.endDate || await businessTodayIsoDate(),
       voucherType: 'payroll',
@@ -779,6 +883,12 @@ export class VoucherSyncService {
       username,
       items
     }, tx);
+
+    if (!createdVoucher && isStrict) {
+      throw new ValidationError(`ثبت سند دوبل حسابداری برای فیش ${pay.payrollNumber} ناموفق بود.`);
+    }
+
+    return createdVoucher;
   }
 
   /**

@@ -8,10 +8,11 @@ import { logger } from '../middleware/logger.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 
-const saveTransferSchema = z.object({
+export const saveTransferSchema = z.object({
   body: z.object({
     code: z.string().optional(),
     title: z.string().optional(),
@@ -24,7 +25,7 @@ const saveTransferSchema = z.object({
   }).optional()
 });
 
-const deleteTransferSchema = z.object({
+export const deleteTransferSchema = z.object({
   params: z.object({
     code: z.string().min(1, 'کد ترنسفر الزامی است')
   })
@@ -236,10 +237,10 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
   }
 };
 
-router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
-router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
-router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
-router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), validate(saveTransferSchema), handleSaveTransfer);
+router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
+router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
+router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
+router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
 
 // DELETE /api/transfers/:code - Delete transfer details/image
 router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'products.delete'), validate(deleteTransferSchema), async (req: Request, res: Response) => {

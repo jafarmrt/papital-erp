@@ -7,7 +7,7 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource } from '../lib/lockOrder.js';
+import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource, withOrderedLocks } from '../lib/lockOrder.js';
 import { businessNowIsoDateTime } from '../lib/businessClock.js';
 import { DocumentService } from '../services/document.service.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
@@ -833,20 +833,15 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
     const currentUser = req.user?.username || 'سیستم';
 
     const result = await orm.transaction(async (tx) => {
-      // Observe Lock Hierarchy: Items (Level 40) -> Production (Level 50)
-      const targetItemIds = sortIdsForLocking((itemsToAdd || []).map((e: { itemId: number | string }) => Number(e.itemId)).filter(Boolean));
-      validateLockOrder([
-        { name: 'items', hierarchyLevel: LockHierarchyLevel.ITEMS_STOCK },
-        { name: 'productionProjects', hierarchyLevel: LockHierarchyLevel.PRODUCTION },
-      ]);
+      // Observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
+      const targetItemIds = (itemsToAdd || []).map((e: { itemId: number | string }) => Number(e.itemId)).filter(Boolean);
+      await withOrderedLocks(tx, [
+        { table: items, ids: targetItemIds, name: 'items' },
+        { table: productionProjects, id, name: 'productionProjects' }
+      ], async () => true);
 
-      // 1. Lock items (level 40) FIRST
-      if (targetItemIds.length > 0) {
-        await tx.select({ id: items.id }).from(items).where(inArray(items.id, targetItemIds)).for('update');
-      }
-
-      // 2. Lock production project (level 50) SECOND
-      const [proj] = await tx.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0))).for('update');
+      // Read production project
+      const [proj] = await tx.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
       if (!proj) {
         throw new NotFoundError('پروژه یافت نشد');
       }

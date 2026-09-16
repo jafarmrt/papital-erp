@@ -91,6 +91,15 @@ export async function runMigrations(): Promise<MigrationResult> {
       logger.warn(`[Migrator] financial attachments column check: ${e.message}`);
     }
 
+    // V4.0.4 (TD-091 / Subphase 3.1): Ensure piecework_payroll_number_seq exists for atomic payroll numbering
+    try {
+      await pool.query(`
+        CREATE SEQUENCE IF NOT EXISTS piecework_payroll_number_seq START WITH 1001 INCREMENT BY 1;
+      `);
+    } catch (e: any) {
+      logger.warn(`[Migrator] piecework_payroll_number_seq check: ${e.message}`);
+    }
+
     let after = before;
     try {
       const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');

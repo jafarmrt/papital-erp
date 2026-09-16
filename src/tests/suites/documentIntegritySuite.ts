@@ -498,5 +498,118 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // ------------------------------------------------------------------
+  // Test 7: Runtime Contracts & Zod Validation for Documents (Sub-phase 4.2)
+  // ------------------------------------------------------------------
+  const t7Start = Date.now();
+  try {
+    const { documentCreateSchema, documentUpdateSchema, documentsQuerySchema } = await import('../../routes/documents.routes.js');
+
+    // Case 1: تایید سند معتبر با ساختار استاندارد
+    const validDocPayload = {
+      body: {
+        docType: 'invoice',
+        refNumber: 'INV-TEST-402',
+        date: '1405/06/25',
+        buyer_name: 'شرکت آزمایشی',
+        currency: 'IRR',
+        items: [
+          { itemId: '10', quantity: '5', unit_price: '150000', discount: '5000' }
+        ]
+      }
+    };
+    const parsedValid = await documentCreateSchema.parseAsync(validDocPayload);
+    if (!parsedValid.body || parsedValid.body.items[0].itemId !== 10) {
+      throw new Error('شِمای سند باید itemId رشته‌ای معتبر را به عدد تبدیل کند.');
+    }
+
+    // Case 2: رد سند بدون اقلام (آرایه خالی)
+    let emptyItemsThrew = false;
+    try {
+      await documentCreateSchema.parseAsync({
+        body: {
+          docType: 'invoice',
+          refNumber: 'INV-TEST-EMPTY',
+          date: '1405/06/25',
+          items: []
+        }
+      });
+    } catch {
+      emptyItemsThrew = true;
+    }
+    if (!emptyItemsThrew) {
+      throw new Error('شِمای سند باید ایجاد سند با آرایه خالی اقلام را مسدود کند.');
+    }
+
+    // Case 3: رد سند با قیمت منفی یا تخفیف منفی
+    let negativePriceThrew = false;
+    try {
+      await documentCreateSchema.parseAsync({
+        body: {
+          docType: 'invoice',
+          refNumber: 'INV-TEST-NEG',
+          date: '1405/06/25',
+          items: [{ itemId: 1, quantity: 2, unit_price: -5000 }]
+        }
+      });
+    } catch {
+      negativePriceThrew = true;
+    }
+    if (!negativePriceThrew) {
+      throw new Error('شِمای سند باید اقلام با قیمت منفی را مسدود کند.');
+    }
+
+    // Case 4: رد تلاش برای تغییر وضعیت به 'final' در ویرایش عادی (Bypass Guard)
+    let updateFinalThrew = false;
+    try {
+      await documentUpdateSchema.parseAsync({
+        body: {
+          status: 'final'
+        },
+        params: { id: '12' }
+      });
+    } catch {
+      updateFinalThrew = true;
+    }
+    if (!updateFinalThrew) {
+      throw new Error('شِمای ویرایش سند باید تغییر وضعیت به final را رد کند.');
+    }
+
+    // Case 5: اعتبارسنجی فیلترهای کوئری لیست اسناد
+    const validQuery = await documentsQuerySchema.parseAsync({
+      query: {
+        type: 'invoice',
+        status: 'draft',
+        page: '2',
+        limit: '25'
+      }
+    });
+    if (!validQuery.query || validQuery.query.type !== 'invoice') {
+      throw new Error('شِمای کوئری اسناد باید پارامترهای مجاز را به درستی بپذیرد.');
+    }
+
+    results.push(makeTestCase({
+      id: 'v4_document_runtime_contracts_guard',
+      scenarioId: 'v4_document_runtime_contracts_guard',
+      name: 'قراردادهای زمان اجرای اسناد و فاکتورها با Zod (زیرفاز ۴.۲)',
+      layer: 'regression',
+      executionType: 'simulation_logic',
+      passed: true,
+      durationMs: Date.now() - t7Start,
+      details: 'تمامی اعتبارسنجی‌های صلب ساختار اسناد، اقلام نامنفی، شماره عطف، فیلترهای کوئری و حفاظت از وضعیت‌های فاکتور با موفقیت تایید شدند.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'v4_document_runtime_contracts_guard',
+      scenarioId: 'v4_document_runtime_contracts_guard',
+      name: 'قراردادهای زمان اجرای اسناد و فاکتورها با Zod (زیرفاز ۴.۲)',
+      layer: 'regression',
+      executionType: 'simulation_logic',
+      passed: false,
+      durationMs: Date.now() - t7Start,
+      error: err.message
+    }));
+  }
+
   return results;
 }

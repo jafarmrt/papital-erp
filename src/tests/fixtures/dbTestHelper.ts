@@ -203,12 +203,15 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 3. Clear project dependencies & production projects (scoped)
   try {
+    const TEST_PROJ_COND = sql`(project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`;
     // V3.0.7 (TD-064): شرط user-scoped کافی است؛ الگوهای واژه‌ای روی title/content
     // گزارش واقعی روزانه حاوی واژه «تست» را نیز حذف می‌کردند.
     await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%')`);
-    await orm.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`);
-    await orm.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`);
-    await orm.execute(sql`DELETE FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%'`);
+    await orm.execute(sql`DELETE FROM piecework_logs WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    await orm.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    await orm.execute(sql`DELETE FROM project_product_stage_progress WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    await orm.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE ${TEST_PROJ_COND})`);
+    await orm.execute(sql`DELETE FROM production_projects WHERE ${TEST_PROJ_COND}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning project fixtures: ${err.message}`);
   }

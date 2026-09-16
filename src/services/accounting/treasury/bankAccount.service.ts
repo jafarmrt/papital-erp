@@ -228,29 +228,37 @@ export class BankAccountService {
     notes?: string;
     userId?: number;
     username?: string;
-  }): Promise<BankAccount> {
+    strict?: boolean;
+  }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = Number(data.initialBalance) || 0;
-    const [inserted] = await orm.insert(bankAccounts).values({
-      code: data.code.trim(),
-      title: data.title.trim(),
-      type: data.type,
-      bankName: data.bankName?.trim() || '',
-      accountNumber: data.accountNumber?.trim() || '',
-      shebaNumber: data.shebaNumber?.trim() || '',
-      cardNumber: data.cardNumber?.trim() || '',
-      branch: data.branch?.trim() || '',
-      initialBalance: initialBal,
-      currentBalance: initialBal,
-      currency: data.currency || 'IRR',
-      accountId: data.accountId || null,
-      isActive: 1,
-      notes: data.notes?.trim() || '',
-    }).returning();
+    const isStrict = data.strict !== false;
 
-    // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
-    // ورکفلو شرطی: اگر تعریف workflow فعال برای «bank_account» باشد، سند پس از تأیید نهایی صادر می‌شود
-    if (initialBal !== 0) {
-      try {
+    // V4.0.5 (F-3 / TD-093): قانون صریح — اگر موجودی اولیه غیرصفر باشد، انتساب به سرفصل معین حسابداری برای صدور سند افتتاحیه الزامی است
+    if (initialBal !== 0 && !data.accountId && isStrict) {
+      throw new ValidationError('برای ثبت حساب بانکی یا صندوق با موجودی اولیه غیرصفر، انتخاب سرفصل معین حسابداری الزامی است.');
+    }
+
+    const run = async (tx: DbExecutor) => {
+      const [inserted] = await tx.insert(bankAccounts).values({
+        code: data.code.trim(),
+        title: data.title.trim(),
+        type: data.type,
+        bankName: data.bankName?.trim() || '',
+        accountNumber: data.accountNumber?.trim() || '',
+        shebaNumber: data.shebaNumber?.trim() || '',
+        cardNumber: data.cardNumber?.trim() || '',
+        branch: data.branch?.trim() || '',
+        initialBalance: initialBal,
+        currentBalance: initialBal,
+        currency: data.currency || 'IRR',
+        accountId: data.accountId || null,
+        isActive: 1,
+        notes: data.notes?.trim() || '',
+      }).returning();
+
+      // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
+      // ورکفلو شرطی: اگر تعریف workflow فعال برای «bank_account» باشد، سند پس از تأیید نهایی صادر می‌شود
+      if (initialBal !== 0) {
         const { WorkflowEngineService } = await import('../../workflow/workflowEngineService.js');
         const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
           entityType: 'bank_account',
@@ -262,17 +270,22 @@ export class BankAccountService {
           await this.issueTreasuryOpeningVoucher(inserted.id, {
             userId: data.userId,
             username: data.username,
+            tx,
+            strict: isStrict
           });
         }
-      } catch (err: unknown) {
-        logger.warn({ message: `Opening voucher for bank account ${inserted.id} deferred/failed`, error: err });
       }
-    }
 
-    return {
-      ...inserted,
-      type: inserted.type as BankAccount['type'],
+      return {
+        ...inserted,
+        type: inserted.type as BankAccount['type'],
+      };
     };
+
+    if (externalTx) {
+      return run(externalTx);
+    }
+    return orm.transaction(run);
   }
 
   /**
@@ -283,13 +296,24 @@ export class BankAccountService {
     userId?: number;
     username?: string;
     tx?: DbExecutor;
+    strict?: boolean;
   } = {}): Promise<JournalVoucher | null> {
     const executor = params.tx || orm;
+    const isStrict = params.strict !== false;
     const [bank] = await executor.select().from(bankAccounts).where(eq(bankAccounts.id, bankId));
-    if (!bank || bank.isDeleted === 1) return null;
+    if (!bank || bank.isDeleted === 1) {
+      if (isStrict) throw new NotFoundError(`حساب بانکی یا صندوق با شناسه ${bankId} یافت نشد.`);
+      return null;
+    }
 
     const initialBal = Number(bank.initialBalance) || 0;
-    if (initialBal === 0 || !bank.accountId) return null; // بدون کدینگ یا بدون مانده — سند ندارد
+    if (initialBal === 0) return null; // بدون مانده — سند نیاز ندارد
+    if (!bank.accountId) {
+      if (isStrict) {
+        throw new ValidationError(`حساب «${bank.title}» دارای موجودی اولیه است اما به سرفصل معین حسابداری متصل نشده است.`);
+      }
+      return null;
+    }
 
     // idempotency: سند افتتاحیه قبلی؟
     const [existing] = await executor.select({ id: journalVouchers.id })
@@ -303,13 +327,13 @@ export class BankAccountService {
 
     const capitalAcc = await AccountMappingService.getOpeningCapitalAccount(params.tx);
     if (!capitalAcc) {
-      throw new ValidationError('حساب «سرمایه اولیه» (4001) برای سند افتتاحیه یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
+      throw new ValidationError('حساب «سرمایه اولیه» (4001) برای صدور سند افتتاحیه یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید.');
     }
 
     const amount = Math.abs(initialBal);
     const isDebitBank = initialBal > 0; // موجودی مثبت = بدهکار بانک
 
-    return VoucherService.createJournalVoucher({
+    const created = await VoucherService.createJournalVoucher({
       date: await businessTodayJalaliDash(),
       voucherType: 'opening',
       description: `سند افتتاحیه موجودی اولیه ${bank.title} (${bank.type === 'bank' ? 'حساب بانکی' : 'صندوق'})`,
@@ -341,6 +365,12 @@ export class BankAccountService {
         }
       ]
     }, params.tx);
+
+    if (!created && isStrict) {
+      throw new ValidationError(`صدور سند افتتاحیه برای حساب «${bank.title}» ناموفق بود.`);
+    }
+
+    return created;
   }
 
   static async updateBankAccount(id: number, data: Partial<{
@@ -358,49 +388,59 @@ export class BankAccountService {
     notes: string;
     userId?: number;
     username?: string;
-  }>): Promise<BankAccount> {
-    const [existing] = await orm.select().from(bankAccounts).where(eq(bankAccounts.id, id));
-    if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
+    strict?: boolean;
+  }>, externalTx?: DbExecutor): Promise<BankAccount> {
+    const isStrict = data.strict !== false;
 
-    const [updated] = await orm.update(bankAccounts).set({
-      ...(data.title ? { title: data.title.trim() } : {}),
-      ...(data.code ? { code: data.code.trim() } : {}),
-      ...(data.type ? { type: data.type } : {}),
-      ...(data.bankName !== undefined ? { bankName: data.bankName.trim() } : {}),
-      ...(data.accountNumber !== undefined ? { accountNumber: data.accountNumber.trim() } : {}),
-      ...(data.shebaNumber !== undefined ? { shebaNumber: data.shebaNumber.trim() } : {}),
-      ...(data.cardNumber !== undefined ? { cardNumber: data.cardNumber.trim() } : {}),
-      ...(data.branch !== undefined ? { branch: data.branch.trim() } : {}),
-      ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
-      ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
-      ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
-    }).where(eq(bankAccounts.id, id)).returning();
+    const run = async (tx: DbExecutor) => {
+      const [existing] = await tx.select().from(bankAccounts).where(eq(bankAccounts.id, id));
+      if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
 
-    // V2.0.0: تغییر موجودی اولیه → سند اصلاحی مابه‌التفاوت (فقط برای حساب‌های کدینگ‌شده)
-    if (data.initialBalance !== undefined) {
-      const newInitial = Number(data.initialBalance) || 0;
-      const oldInitial = Number(existing.initialBalance) || 0;
-      const delta = Math.round((newInitial - oldInitial) * 10000) / 10000;
-      // اصلاح currentBalance با دلتا
-      if (delta !== 0) {
-        const newCur = Math.round(((Number(updated.currentBalance) || 0) + delta) * 10000) / 10000;
-        await orm.update(bankAccounts).set({ currentBalance: newCur, initialBalance: newInitial }).where(eq(bankAccounts.id, id));
-      }
-      if (delta !== 0 && updated.accountId) {
-        try {
-          const [openingVoucher] = await orm.select({ id: journalVouchers.id })
-            .from(journalVouchers)
-            .where(and(
-              eq(journalVouchers.referenceModule, 'treasury_opening'),
-              eq(journalVouchers.referenceId, id),
-              eq(journalVouchers.isDeleted, 0)
-            ));
-          if (openingVoucher) {
-            // سند افتتاحیه قبلی موجود است → سند اصلاحی مابه‌التفاوت
-            const capitalAcc = await AccountMappingService.getOpeningCapitalAccount();
-            if (capitalAcc) {
+      const [updated] = await tx.update(bankAccounts).set({
+        ...(data.title ? { title: data.title.trim() } : {}),
+        ...(data.code ? { code: data.code.trim() } : {}),
+        ...(data.type ? { type: data.type } : {}),
+        ...(data.bankName !== undefined ? { bankName: data.bankName.trim() } : {}),
+        ...(data.accountNumber !== undefined ? { accountNumber: data.accountNumber.trim() } : {}),
+        ...(data.shebaNumber !== undefined ? { shebaNumber: data.shebaNumber.trim() } : {}),
+        ...(data.cardNumber !== undefined ? { cardNumber: data.cardNumber.trim() } : {}),
+        ...(data.branch !== undefined ? { branch: data.branch.trim() } : {}),
+        ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
+      }).where(eq(bankAccounts.id, id)).returning();
+
+      // V2.0.0: تغییر موجودی اولیه → سند اصلاحی مابه‌التفاوت (فقط برای حساب‌های کدینگ‌شده)
+      if (data.initialBalance !== undefined) {
+        const newInitial = Number(data.initialBalance) || 0;
+        const oldInitial = Number(existing.initialBalance) || 0;
+        const delta = Math.round((newInitial - oldInitial) * 10000) / 10000;
+        // اصلاح currentBalance با دلتا
+        if (delta !== 0) {
+          const newCur = Math.round(((Number(updated.currentBalance) || 0) + delta) * 10000) / 10000;
+          await tx.update(bankAccounts).set({ currentBalance: newCur, initialBalance: newInitial }).where(eq(bankAccounts.id, id));
+        }
+        if (delta !== 0) {
+          if (!updated.accountId && isStrict) {
+            throw new ValidationError('برای به‌روزرسانی موجودی اولیه حساب خزانه، اتصال به سرفصل معین حسابداری الزامی است.');
+          }
+
+          if (updated.accountId) {
+            const [openingVoucher] = await tx.select({ id: journalVouchers.id })
+              .from(journalVouchers)
+              .where(and(
+                eq(journalVouchers.referenceModule, 'treasury_opening'),
+                eq(journalVouchers.referenceId, id),
+                eq(journalVouchers.isDeleted, 0)
+              ));
+            if (openingVoucher) {
+              // سند افتتاحیه قبلی موجود است → سند اصلاحی مابه‌التفاوت
+              const capitalAcc = await AccountMappingService.getOpeningCapitalAccount(tx);
+              if (!capitalAcc) {
+                throw new ValidationError('حساب «سرمایه اولیه» (4001) برای اصلاح سند افتتاحیه یافت نشد — از تنظیمات حسابداری پیکربندی کنید.');
+              }
               const amount = Math.abs(delta);
-              await VoucherService.createJournalVoucher({
+              const adjVoucher = await VoucherService.createJournalVoucher({
                 date: await businessTodayJalaliDash(),
                 voucherType: 'adjustment',
                 description: `اصلاح موجودی اولیه ${updated.title} (${delta > 0 ? '+' : ''}${delta})`,
@@ -431,25 +471,34 @@ export class BankAccountService {
                     description: `اصلاح سهم سرمایه بابت موجودی اولیه ${updated.title}`
                   }
                 ]
+              }, tx);
+
+              if (!adjVoucher && isStrict) {
+                throw new ValidationError(`ثبت سند اصلاحی موجودی اولیه برای حساب «${updated.title}» ناموفق بود.`);
+              }
+            } else if (newInitial !== 0) {
+              // حساب قدیمی بدون سند افتتاحیه → اکنون سند افتتاحیه صادر کن
+              await this.issueTreasuryOpeningVoucher(id, {
+                userId: data.userId,
+                username: data.username,
+                tx,
+                strict: isStrict
               });
             }
-          } else if (newInitial !== 0) {
-            // حساب قدیمی بدون سند افتتاحیه → اکنون سند افتتاحیه صادر کن
-            await this.issueTreasuryOpeningVoucher(id, {
-              userId: data.userId,
-              username: data.username,
-            });
           }
-        } catch (err: unknown) {
-          logger.warn({ message: `Opening voucher adjustment for bank account ${id} failed`, error: err instanceof Error ? err.message : String(err) });
         }
       }
-    }
 
-    return {
-      ...updated,
-      type: updated.type as BankAccount['type'],
+      return {
+        ...updated,
+        type: updated.type as BankAccount['type'],
+      };
     };
+
+    if (externalTx) {
+      return run(externalTx);
+    }
+    return orm.transaction(run);
   }
 
   static async deleteBankAccount(id: number): Promise<{ success: boolean }> {

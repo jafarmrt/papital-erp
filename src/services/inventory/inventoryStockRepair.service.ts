@@ -2,6 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
+import { withOrderedLocks } from '../../lib/lockOrder.js';
 
 export class InventoryStockRepairService {
   /**
@@ -36,11 +37,14 @@ export class InventoryStockRepairService {
     const operatorName = params.user || params.createdBy || 'سیستم';
 
     return await orm.transaction(async (txEngine) => {
+      await withOrderedLocks(txEngine, [
+        { table: items, id: params.itemId, name: 'items' }
+      ], async () => true);
+
       const [item] = await txEngine
         .select()
         .from(items)
-        .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)))
-        .for('update');
+        .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)));
 
       if (!item) {
         throw new Error(`کالا با شناسه ${params.itemId} یافت نشد.`);

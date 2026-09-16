@@ -32,8 +32,8 @@ export async function ensureAdminTestUser(username = 'pen_admin'): Promise<{ id:
     .where(and(eq(users.username, username), eq(users.role, 'admin')));
 
   if (existing) {
-    // Keep password deterministic for the current run
-    await orm.update(users).set({ password: TEST_PASSWORD_HASH }).where(eq(users.id, existing.id));
+    // Keep password deterministic for the current run and ensure active
+    await orm.update(users).set({ password: TEST_PASSWORD_HASH, isDeleted: 0 }).where(eq(users.id, existing.id));
     return { id: existing.id, username: existing.username };
   }
 

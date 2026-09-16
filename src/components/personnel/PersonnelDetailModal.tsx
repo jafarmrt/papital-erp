@@ -14,7 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Personnel } from '../../types';
-import { formatPersianCode, formatPersianNumber } from '../../utils';
+import { formatPersianCode, formatPersianNumber, formatPersianPhone, formatPersianNationalId } from '../../utils';
 
 interface PersonnelDetailModalProps {
   isOpen: boolean;
@@ -87,14 +87,14 @@ export function PersonnelDetailModal({
               <span className="text-[10px] text-slate-400 block">شماره تماس</span>
               <span className="font-bold font-mono text-slate-800 mt-0.5 flex items-center gap-1">
                 <Phone size={12} className="text-blue-500" />
-                {personnel.phone ? formatPersianCode(personnel.phone) : '---'}
+                {personnel.phone ? formatPersianPhone(personnel.phone) : '---'}
               </span>
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
               <span className="text-[10px] text-slate-400 block">کد ملی</span>
               <span className="font-bold font-mono text-slate-800 mt-0.5 block">
-                {personnel.nationalId ? formatPersianCode(personnel.nationalId) : '---'}
+                {personnel.nationalId ? formatPersianNationalId(personnel.nationalId) : '---'}
               </span>
             </div>
 

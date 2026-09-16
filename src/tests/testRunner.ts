@@ -37,6 +37,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   unauthorized_approval: 'Unauthorized approval',
   two_users_approve_simultaneously: 'Two users approve simultaneously',
   two_users_issue_same_stock: 'Two users issue same stock',
+  piecework_payroll_concurrency_race_guard: 'Piecework payroll atomic race guard',
   two_webhook_deliveries: 'Two webhook deliveries',
   workflow_rejected: 'Workflow rejected',
   workflow_delegated: 'Workflow delegated',
@@ -109,7 +110,14 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v10_menu_visibility_deny_list: 'Business Logic: menu_visibility Deny-List & Admin Bypass',
   v10_cleanup_refusal_without_flag: 'Data Safety: Test-Cleanup Refusal Without Safety Flag (Silent No-Op)',
   v10_date_normalization_idempotence: 'Data Safety: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
-  v10_iso_date_standardization: 'Data Safety: ISO Date Standardization & Dual-Write Accuracy'
+  v10_iso_date_standardization: 'Data Safety: ISO Date Standardization & Dual-Write Accuracy',
+  v4_strict_financial_voucher_guard: 'Data Integrity: Strict Financial Voucher Guard & Elimination of Log-and-Continue (F-3 / TD-093)',
+  v4_atomic_document_orchestration: 'Data Integrity: Atomic 3-Step Document Finalization Orchestration (Phase 3.4 / DB-008)',
+  v4_audit_log_retention_and_integrity_guard: 'Data Safety: Audit Log Retention Policy & Insertion Integrity Guard (Sub-phase 1.5 / D-2)',
+  v4_runtime_validation_middleware_guard: 'Security & Validation: Zod Sanitized Body Replacement & Mutation Permissions Guard (S-6 / Sub-phase 4.1)',
+  v4_document_runtime_contracts_guard: 'Data Integrity: Runtime Contracts & Zod Validation for Documents and Invoices (Sub-phase 4.2)',
+  v4_inventory_runtime_contracts_guard: 'Data Integrity: Runtime Contracts & Zod Validation for Inventory, Transfers & BOM (Sub-phase 4.3)',
+  v4_accounting_treasury_runtime_contracts_guard: 'Data Integrity: Runtime Contracts & Zod Validation for Double-Entry Accounting and Treasury (Sub-phase 4.4)'
 };
 
 

@@ -2,8 +2,9 @@ import { orm } from '../db/drizzle.js';
 import { activityLogs } from '../db/schema.js';
 import { logger } from '../middleware/logger.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
-import { sql, lt } from 'drizzle-orm';
+import { sql, lt, and, notInArray, count, desc, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
+import { ValidationError } from '../errors/customErrors.js';
 
 // Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
 const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpassword|currentpassword|old_password|oldpassword|confirmpassword|confirm_password|token|access_token|accesstoken|refresh_token|refreshtoken|auth_token|authtoken|secret|jwt|apikey|api_key|authorization|cookie|card_number|credit_card|cvv|ssn)$/i;
@@ -106,11 +107,30 @@ export function computeAuditDiff(
   };
 }
 
+export type AuditAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'LOGIN'
+  | 'LOGIN_FAILED'
+  | 'LOGOUT'
+  | 'SETTING_CHANGE'
+  | 'EXPORT'
+  | 'RESTORE'
+  | 'AUDIT_APPLY'
+  | 'RECONCILIATION_EXECUTE'
+  | 'VIEW'
+  | 'AUDIT'
+  | 'SEED'
+  | 'IMPORT'
+  | 'PURGE'
+  | (string & {});
+
 export interface AuditLogParams {
   userId?: number;
   username?: string;
   userFullName?: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'SETTING_CHANGE' | 'EXPORT' | 'RESTORE' | 'AUDIT_APPLY' | 'RECONCILIATION_EXECUTE' | 'VIEW' | 'AUDIT' | 'SEED' | 'IMPORT';
+  action: AuditAction;
   entity: string; // e.g. 'کالا', 'فاکتور', 'کاربر', 'نقش', 'مشتری', 'تنظیمات', 'قیمت کالا', 'انبار', 'موجودی انبار', 'احراز هویت'
   entityId?: string | number;
   description: string;
@@ -122,23 +142,35 @@ export interface AuditLogParams {
   } | unknown;
   ipAddress?: string;
   req?: Request | any; // If express req is passed, IP & User are auto-extracted if missing
+  strict?: boolean; // When true, does not swallow insertion errors; re-throws after structured logging
+  throwOnError?: boolean; // Alias for strict
+  tx?: any; // Allows participating in an ongoing database transaction
+}
+
+export interface AuditLogResult {
+  success: boolean;
+  id?: number;
+  error?: unknown;
 }
 
 /**
  * Persistently writes a hardened, sanitized audit log record to the database.
+ * Supports transactional execution, strict error propagation, and emergency structured fallback logging.
  */
-export async function logActivity(params: AuditLogParams) {
+export async function logActivity(params: AuditLogParams): Promise<AuditLogResult> {
+  const ipAddress = params.ipAddress || (params.req ? extractClientIp(params.req) : '');
+  const reqUser = params.req?.user as { id?: number; username?: string; full_name?: string } | undefined;
+  const userId = params.userId ?? reqUser?.id;
+  const username = params.username || reqUser?.username || 'سیستم';
+  const userFullName = params.userFullName || reqUser?.full_name || '';
+
+  // Guarantee full sanitization on all recorded metadata
+  const sanitizedDetails = sanitizeSensitiveData(params.details || {});
+  const nowTimestamp = systemNowUtcIso();
+
   try {
-    const ipAddress = params.ipAddress || (params.req ? extractClientIp(params.req) : '');
-    const reqUser = params.req?.user as { id?: number; username?: string; full_name?: string } | undefined;
-    const userId = params.userId ?? reqUser?.id;
-    const username = params.username || reqUser?.username || 'سیستم';
-    const userFullName = params.userFullName || reqUser?.full_name || '';
-
-    // Guarantee full sanitization on all recorded metadata
-    const sanitizedDetails = sanitizeSensitiveData(params.details || {});
-
-    await orm.insert(activityLogs).values({
+    const executor = params.tx || orm;
+    const [inserted] = await executor.insert(activityLogs).values({
       userId: userId ? Number(userId) : null,
       username: String(username).trim(),
       userFullName: String(userFullName).trim(),
@@ -148,24 +180,230 @@ export async function logActivity(params: AuditLogParams) {
       description: params.description,
       details: sanitizedDetails,
       ipAddress: ipAddress || '',
-      timestamp: systemNowUtcIso()
-    });
+      timestamp: nowTimestamp
+    }).returning({ id: activityLogs.id });
+
+    return {
+      success: true,
+      id: inserted?.id
+    };
   } catch (err) {
-    logger.error({ message: 'Error recording hardened activity log', error: err });
+    // Critical Fallback: ensure unwritten audit record is preserved in structured application logs
+    logger.error({
+      message: 'CRITICAL: Error recording hardened activity log to database',
+      error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+      auditFallbackRecord: {
+        userId: userId ? Number(userId) : null,
+        username: String(username).trim(),
+        userFullName: String(userFullName).trim(),
+        action: params.action,
+        entity: params.entity,
+        entityId: params.entityId,
+        description: params.description,
+        timestamp: nowTimestamp,
+        ipAddress,
+        details: sanitizedDetails
+      }
+    });
+
+    if (params.strict === true || params.throwOnError === true) {
+      throw err;
+    }
+
+    return {
+      success: false,
+      error: err
+    };
   }
 }
 
 /**
- * پاکسازی/بایگانی لاگ‌های ممیزی قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۹۰ روز)
+ * Minimum permitted retention period in days for general audit logs.
+ * Enforces data governance rule (D-2) to prevent accidental or malicious premature wiping of audit trails.
  */
-export async function purgeOldAuditLogs(retentionDays: number = 90): Promise<number> {
+export const MIN_AUDIT_RETENTION_DAYS = 90;
+
+/**
+ * Actions considered critical to security, financial integrity, or governance.
+ * These records are preserved during standard routine purges unless explicitly requested with forced administrative override.
+ */
+export const CRITICAL_AUDIT_ACTIONS = [
+  'DELETE',
+  'RESTORE',
+  'AUDIT_APPLY',
+  'RECONCILIATION_EXECUTE',
+  'SETTING_CHANGE',
+  'SEED',
+  'LOGIN_FAILED',
+  'PURGE'
+] as const;
+
+export const CRITICAL_AUDIT_ENTITIES = [
+  'احراز هویت',
+  'کاربر',
+  'کاربران سیستم',
+  'پروفایل کاربر',
+  'نقش و دسترسی',
+  'نقش',
+  'تنظیمات سیستم',
+  'صف خطاهای قرنطینه (DLQ)',
+  'حسابداری',
+  'اسناد دوبل مالی',
+  'بستن سال مالی',
+  'فیش حقوقی'
+] as const;
+
+export interface PurgeAuditLogsOptions {
+  retentionDays?: number;
+  preserveCritical?: boolean;
+  allowForceRecent?: boolean;
+  tx?: any;
+  actorUsername?: string;
+  actorUserId?: number;
+  actorIp?: string;
+}
+
+export interface PurgeAuditLogsResult {
+  success: boolean;
+  purgedCount: number;
+  cutoffDate: string;
+  retentionDays: number;
+  criticalLogsPreserved: boolean;
+  error?: unknown;
+}
+
+/**
+ * پاکسازی/بایگانی ایمن لاگ‌های ممیزی قدیمی‌تر از تعداد روز مشخص (پیش‌فرض ۹۰ روز)
+ * طبق سیاست حاکمیت داده و ارتقای ممیزی (یافته D-2 / زیرفاز ۱.۵ نقشه راه ۴):
+ * ۱. حداقل زمان نگه‌داشت ۹۰ روز است و حذف بازه‌های جدیدتر مگر با تایید صریح allowForceRecent مسدود می‌شود.
+ * ۲. لاگ‌های ممیزی رخدادهای حساس امنیتی، مالی و مدیریتی به‌صورت پیش‌فرض حفظ و استثنا می‌شوند (preserveCritical).
+ * ۳. تاریخ برش دقیقا بر اساس ساعت هماهنگ کسب‌وکار (systemNowUtcIso) محاسبه می‌گردد.
+ * ۴. رخداد خود پاکسازی در جدول لاگ‌های ممیزی با تمام جزئیات ثبت می‌گردد.
+ */
+export async function purgeOldAuditLogs(
+  retentionDaysOrOptions: number | PurgeAuditLogsOptions = MIN_AUDIT_RETENTION_DAYS
+): Promise<PurgeAuditLogsResult & { valueOf: () => number; [Symbol.toPrimitive]: (hint: string) => number | string }> {
+  const options: PurgeAuditLogsOptions = typeof retentionDaysOrOptions === 'number'
+    ? { retentionDays: retentionDaysOrOptions }
+    : (retentionDaysOrOptions || {});
+
+  const retentionDays = options.retentionDays ?? MIN_AUDIT_RETENTION_DAYS;
+
+  if (typeof retentionDays !== 'number' || !Number.isFinite(retentionDays) || retentionDays <= 0) {
+    throw new ValidationError('مدت زمان نگه‌داشت لاگ‌های ممیزی باید یک عدد معتبر و مثبت باشد.');
+  }
+
+  if (retentionDays < MIN_AUDIT_RETENTION_DAYS && !options.allowForceRecent) {
+    throw new ValidationError(
+      `سیاست نگه‌داشت ممیزی (D-2): حذف لاگ‌های ممیزی با قدمت کمتر از ${MIN_AUDIT_RETENTION_DAYS} روز بدون مجوز اضطراری صریح (allowForceRecent) مجاز نمی‌باشد.`
+    );
+  }
+
+  const preserveCritical = options.preserveCritical !== false;
+
+  const nowIso = systemNowUtcIso();
+  const nowMs = new Date(nowIso).getTime();
+  const cutoffMs = nowMs - retentionDays * 24 * 60 * 60 * 1000;
+  const cutoffDate = new Date(cutoffMs).toISOString();
+
+  const conditions: SQL[] = [lt(activityLogs.timestamp, cutoffDate)];
+
+  if (preserveCritical) {
+    conditions.push(
+      notInArray(activityLogs.action, [...CRITICAL_AUDIT_ACTIONS]),
+      notInArray(activityLogs.entity, [...CRITICAL_AUDIT_ENTITIES])
+    );
+  }
+
   try {
-    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    const result = await orm.delete(activityLogs).where(lt(activityLogs.timestamp, cutoffDate));
-    return (result as any)?.rowCount || 0;
+    const executor = options.tx || orm;
+    const result = await executor.delete(activityLogs).where(and(...conditions));
+    const purgedCount = Number((result as any)?.rowCount || 0);
+
+    // ثبت ردپای خود عملیات پاکسازی در سیستم ممیزی
+    if (purgedCount > 0) {
+      await logActivity({
+        action: 'PURGE',
+        entity: 'تنظیمات سیستم',
+        entityId: 'audit_purge',
+        description: `پاکسازی ایمن تاریخچه ممیزی: تعداد ${purgedCount} رکورد با قدمت بیش از ${retentionDays} روز حذف شد (تاریخ برش: ${cutoffDate}).`,
+        details: {
+          purgedCount,
+          cutoffDate,
+          retentionDays,
+          criticalLogsPreserved: preserveCritical
+        },
+        username: options.actorUsername || 'سیستم',
+        userId: options.actorUserId,
+        ipAddress: options.actorIp,
+        tx: options.tx
+      });
+    }
+
+    const report: PurgeAuditLogsResult & { valueOf: () => number; [Symbol.toPrimitive]: (hint: string) => number | string } = {
+      success: true,
+      purgedCount,
+      cutoffDate,
+      retentionDays,
+      criticalLogsPreserved: preserveCritical,
+      valueOf: () => purgedCount,
+      [Symbol.toPrimitive]: (hint: string) => (hint === 'number' ? purgedCount : String(purgedCount))
+    };
+
+    return report;
   } catch (err) {
-    logger.error({ message: 'Error purging old activity logs', error: err });
-    return 0;
+    logger.error({ message: 'Error executing safe audit log purge', error: err });
+    if (err instanceof ValidationError) throw err;
+    throw err;
+  }
+}
+
+export interface AuditLogIntegrityReport {
+  healthy: boolean;
+  totalLogs: number;
+  criticalLogsCount: number;
+  earliestTimestamp: string | null;
+  latestTimestamp: string | null;
+  minRetentionDays: number;
+}
+
+/**
+ * بررسی سلامت و یکپارچگی ثبت لاگ‌های ممیزی در سامانه
+ */
+export async function checkAuditLogIntegrity(): Promise<AuditLogIntegrityReport> {
+  try {
+    const [stats] = await orm.select({
+      total: count(),
+      earliest: sql<string>`min(${activityLogs.timestamp})`,
+      latest: sql<string>`max(${activityLogs.timestamp})`
+    }).from(activityLogs);
+
+    const [critical] = await orm.select({
+      criticalCount: count()
+    }).from(activityLogs).where(
+      sql`(${activityLogs.action} IN ${CRITICAL_AUDIT_ACTIONS} OR ${activityLogs.entity} IN ${CRITICAL_AUDIT_ENTITIES})`
+    );
+
+    const totalLogs = Number(stats?.total || 0);
+
+    return {
+      healthy: true,
+      totalLogs,
+      criticalLogsCount: Number(critical?.criticalCount || 0),
+      earliestTimestamp: stats?.earliest || null,
+      latestTimestamp: stats?.latest || null,
+      minRetentionDays: MIN_AUDIT_RETENTION_DAYS
+    };
+  } catch (err) {
+    logger.error({ message: 'Error checking audit log integrity', error: err });
+    return {
+      healthy: false,
+      totalLogs: 0,
+      criticalLogsCount: 0,
+      earliestTimestamp: null,
+      latestTimestamp: null,
+      minRetentionDays: MIN_AUDIT_RETENTION_DAYS
+    };
   }
 }
 

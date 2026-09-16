@@ -208,7 +208,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
             erpDocumentId: doc.id,
             status: 'processed',
             buyerName: doc.buyerName || '',
-            totalAmount: String(wcOrder.total || 0),
+            totalAmount: Number(wcOrder.total || 0),
             payload: wcOrder
           });
         } catch (logErr) {
@@ -317,7 +317,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
             wcOrderId,
             status: 'failed',
             buyerName,
-            totalAmount: String(orderTotalNumeric),
+            totalAmount: orderTotalNumeric,
             payload: wcOrder,
             errorMessage: errMessage
           });
@@ -362,7 +362,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
           status: 'processed',
           erpDocumentId: newDocId,
           buyerName,
-          totalAmount: String(orderTotalNumeric),
+          totalAmount: orderTotalNumeric,
           payload: wcOrder,
           errorMessage: '',
           updatedAt: new Date().toISOString()
@@ -374,7 +374,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
         erpDocumentId: newDocId,
         status: 'processed',
         buyerName,
-        totalAmount: String(orderTotalNumeric),
+        totalAmount: orderTotalNumeric,
         payload: wcOrder
       });
     }

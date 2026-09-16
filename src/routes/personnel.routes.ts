@@ -8,6 +8,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { normalizePhoneNumber, normalizeNationalId } from '../utils.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -122,8 +123,8 @@ router.get('/personnel/export', async (req, res) => {
       'نام خانوادگی': p.lastName || '',
       'نام و نام خانوادگی': p.fullName || '',
       'عنوان شغلی': p.jobTitle || '',
-      'شماره تماس': p.phone || '',
-      'کد ملی': p.nationalId || '',
+      'شماره تماس': p.phone ? normalizePhoneNumber(p.phone) : '',
+      'کد ملی': p.nationalId ? normalizeNationalId(p.nationalId) : '',
       'وضعیت همکاری': p.employmentStatus || 'فعال',
       'جنسیت': p.gender || 'مرد',
       'تاریخ تولد': p.birthDate || '',
@@ -193,8 +194,8 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
         }
 
         const personnelCode = String(item.personnelCode || '').trim();
-        const phone = String(item.phone || '').trim();
-        const nationalId = String(item.nationalId || '').trim();
+        const phone = normalizePhoneNumber(item.phone || '');
+        const nationalId = normalizeNationalId(item.nationalId || '');
         const jobTitle = String(item.jobTitle || '').trim();
         const gender = item.gender === 'زن' ? 'زن' : 'مرد';
         const employmentStatus = ['فعال', 'قطع همکاری', 'مرخصی', 'تعلیق'].includes(item.employmentStatus)
@@ -515,8 +516,8 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         gender,
         birthDate,
         nationality,
-        nationalId: nationalId.trim(),
-        phone: phone.trim(),
+        nationalId: normalizeNationalId(nationalId),
+        phone: normalizePhoneNumber(phone),
         employmentStatus,
         salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
         monthlySalary: monthlySalary !== undefined ? Number(monthlySalary) || 0 : 0,
@@ -633,8 +634,8 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         gender,
         birthDate,
         nationality,
-        nationalId: nationalId ? nationalId.trim() : '',
-        phone: phone ? phone.trim() : '',
+        nationalId: nationalId ? normalizeNationalId(nationalId) : '',
+        phone: phone ? normalizePhoneNumber(phone) : '',
         employmentStatus,
         // V10-4.4: مدل حقوق ثابت/ترکیبی
         salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
@@ -710,5 +711,24 @@ router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'
     throw err;
   }
 });
+
+// Asynchronous background remediation: Ensure existing records have leading zeros for phone and nationalId
+(async () => {
+  try {
+    const list = await orm.select().from(personnel);
+    for (const p of list) {
+      const fixedPhone = p.phone ? normalizePhoneNumber(p.phone) : '';
+      const fixedNationalId = p.nationalId ? normalizeNationalId(p.nationalId) : '';
+      if ((p.phone && fixedPhone !== p.phone) || (p.nationalId && fixedNationalId !== p.nationalId)) {
+        await orm.update(personnel).set({
+          phone: fixedPhone || p.phone,
+          nationalId: fixedNationalId || p.nationalId
+        }).where(eq(personnel.id, p.id));
+      }
+    }
+  } catch (err) {
+    logger.warn('Personnel leading zeros migration check notice:', err);
+  }
+})().catch(() => {});
 
 export default router;

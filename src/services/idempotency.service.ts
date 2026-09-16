@@ -22,6 +22,24 @@ export type AcquireResult =
 
 export class IdempotencyService {
   /**
+   * Helper to construct WHERE conditions for idempotency records
+   */
+  private static buildKeyCondition(cleanKey: string, scope?: string, userId?: number | null) {
+    const conditions = [eq(idempotencyKeys.key, cleanKey)];
+    if (scope !== undefined && scope !== null) {
+      conditions.push(eq(idempotencyKeys.scope, scope));
+    }
+    if (userId !== undefined) {
+      if (userId === null) {
+        conditions.push(isNull(idempotencyKeys.createdById));
+      } else {
+        conditions.push(eq(idempotencyKeys.createdById, userId));
+      }
+    }
+    return and(...conditions);
+  }
+
+  /**
    * Attempts to acquire an idempotency key.
    * If already completed, returns cached response.
    * If in-flight and not expired, indicates concurrent execution.
@@ -33,6 +51,7 @@ export class IdempotencyService {
 
     const cleanKey = key.trim();
     const scope = options.scope || 'global';
+    const userId = options.userId !== undefined && options.userId !== null ? options.userId : null;
     const lockTimeoutSec = options.lockTimeoutSeconds || 60; // 60s lock
     const ttlSec = options.ttlSeconds || 86400; // 24 hours retention
     const now = new Date();
@@ -41,7 +60,7 @@ export class IdempotencyService {
     const expiresAt = new Date(now.getTime() + ttlSec * 1000).toISOString();
 
     try {
-      // 1. Try INSERT ON CONFLICT DO NOTHING (atomic check-and-insert)
+      // 1. Try INSERT ON CONFLICT DO NOTHING (atomic check-and-insert on triple unique index)
       const inserted = await orm
         .insert(idempotencyKeys)
         .values({
@@ -51,24 +70,24 @@ export class IdempotencyService {
           requestMethod: options.requestMethod || null,
           requestPath: options.requestPath || null,
           requestPayload: options.requestPayload || options.requestBody || null,
-          createdById: options.userId || null,
+          createdById: userId,
           lockedAt: nowIso,
           lockedUntil,
           createdAt: nowIso,
           expiresAt
         })
-        .onConflictDoNothing({ target: idempotencyKeys.key })
+        .onConflictDoNothing({ target: [idempotencyKeys.createdById, idempotencyKeys.scope, idempotencyKeys.key] })
         .returning();
 
       if (inserted.length > 0) {
         return { state: 'acquired', action: 'PROCESS_NEW' };
       }
 
-      // 2. Record already exists (conflict occurred) -> fetch existing record
+      // 2. Record already exists (conflict occurred) -> fetch existing record for this (user, scope, key)
       const existing = await orm
         .select()
         .from(idempotencyKeys)
-        .where(eq(idempotencyKeys.key, cleanKey))
+        .where(this.buildKeyCondition(cleanKey, scope, userId))
         .limit(1);
 
       if (existing.length > 0) {
@@ -82,13 +101,13 @@ export class IdempotencyService {
         const existing = await orm
           .select()
           .from(idempotencyKeys)
-          .where(eq(idempotencyKeys.key, cleanKey))
+          .where(this.buildKeyCondition(cleanKey, scope, userId))
           .limit(1);
         if (existing.length > 0) {
           return this.handleExistingKey(existing[0], cleanKey, lockedUntil, nowIso);
         }
       }
-      logger.error(`[Idempotency] Error in acquireKey for '${cleanKey}':`, error);
+      logger.error(`[Idempotency] Error in acquireKey for '${cleanKey}' [scope: ${scope}, user: ${userId}]:`, error);
       throw error;
     }
   }
@@ -185,19 +204,19 @@ export class IdempotencyService {
       .returning();
 
     if (result.length === 0) {
-      // OCC collision: state or lock changed between SELECT and UPDATE -> re-fetch current state
-      logger.info(`[Idempotency] OCC collision for key '${cleanKey}', fetching updated state...`);
-      return this.getResponseForKey(cleanKey, newLockedUntil);
+      // OCC collision: state or lock changed between SELECT and UPDATE -> re-fetch current state by record ID
+      logger.info(`[Idempotency] OCC collision for record id ${record.id} / key '${cleanKey}', fetching updated state...`);
+      return this.getResponseForRecord(record.id, fallbackLockedUntilHelper(newLockedUntil));
     }
 
     return { state: 'acquired', action: 'PROCESS_NEW' };
   }
 
-  private static async getResponseForKey(cleanKey: string, fallbackLockedUntil: string): Promise<AcquireResult> {
+  private static async getResponseForRecord(recordId: number, fallbackLockedUntil: string): Promise<AcquireResult> {
     const reFetched = await orm
       .select()
       .from(idempotencyKeys)
-      .where(eq(idempotencyKeys.key, cleanKey))
+      .where(eq(idempotencyKeys.id, recordId))
       .limit(1);
 
     if (reFetched.length > 0) {
@@ -227,11 +246,17 @@ export class IdempotencyService {
   /**
    * Saves the completed response against the idempotency key.
    */
-  static async saveResponse(key: string, responseStatus: number, responseBody: unknown): Promise<void> {
+  static async saveResponse(
+    key: string,
+    responseStatus: number,
+    responseBody: unknown,
+    options?: { scope?: string; userId?: number | null }
+  ): Promise<void> {
     if (!key || typeof key !== 'string' || key.trim() === '') return;
     const cleanKey = key.trim();
 
     try {
+      const condition = this.buildKeyCondition(cleanKey, options?.scope, options?.userId);
       await orm
         .update(idempotencyKeys)
         .set({
@@ -240,8 +265,8 @@ export class IdempotencyService {
           responseBody: (responseBody as Record<string, unknown>) || {},
           completedAt: new Date().toISOString()
         })
-        .where(eq(idempotencyKeys.key, cleanKey));
-      logger.info(`[Idempotency] Saved response for key: ${cleanKey} (status: ${responseStatus})`);
+        .where(condition);
+      logger.info(`[Idempotency] Saved response for key: ${cleanKey} [scope: ${options?.scope || 'any'}, user: ${options?.userId ?? 'any'}] (status: ${responseStatus})`);
     } catch (error) {
       logger.error(`[Idempotency] Error saving response for key '${cleanKey}':`, error);
     }
@@ -250,15 +275,29 @@ export class IdempotencyService {
   /**
    * Universal complete helper
    */
-  static async complete(options: { key: string; scope?: string; statusCode?: number; responseStatus?: number; responseBody: unknown }): Promise<void> {
+  static async complete(options: {
+    key: string;
+    scope?: string;
+    userId?: number | null;
+    statusCode?: number;
+    responseStatus?: number;
+    responseBody: unknown;
+  }): Promise<void> {
     const status = options.statusCode ?? options.responseStatus ?? 200;
-    return this.saveResponse(options.key, status, options.responseBody);
+    return this.saveResponse(options.key, status, options.responseBody, {
+      scope: options.scope,
+      userId: options.userId
+    });
   }
 
   /**
    * Marks an idempotency key as failed.
    */
-  static async markFailed(key: string, error?: unknown): Promise<void> {
+  static async markFailed(
+    key: string,
+    error?: unknown,
+    options?: { scope?: string; userId?: number | null }
+  ): Promise<void> {
     if (!key || typeof key !== 'string' || key.trim() === '') return;
     const cleanKey = key.trim();
 
@@ -267,6 +306,7 @@ export class IdempotencyService {
       : (typeof error === 'object' && error !== null && 'message' in error ? String((error as { message: unknown }).message) : 'Operation failed');
 
     try {
+      const condition = this.buildKeyCondition(cleanKey, options?.scope, options?.userId);
       await orm
         .update(idempotencyKeys)
         .set({
@@ -275,7 +315,7 @@ export class IdempotencyService {
           responseBody: { error: errorMessage },
           completedAt: new Date().toISOString()
         })
-        .where(eq(idempotencyKeys.key, cleanKey));
+        .where(condition);
     } catch (err) {
       logger.error(`[Idempotency] Error marking failed key '${cleanKey}':`, err);
     }
@@ -284,8 +324,16 @@ export class IdempotencyService {
   /**
    * Universal fail helper
    */
-  static async fail(options: { key: string; error?: unknown }): Promise<void> {
-    return this.markFailed(options.key, options.error);
+  static async fail(options: {
+    key: string;
+    scope?: string;
+    userId?: number | null;
+    error?: unknown;
+  }): Promise<void> {
+    return this.markFailed(options.key, options.error, {
+      scope: options.scope,
+      userId: options.userId
+    });
   }
 
   /**
@@ -303,4 +351,8 @@ export class IdempotencyService {
       return 0;
     }
   }
+}
+
+function fallbackLockedUntilHelper(newLockedUntil: string): string {
+  return newLockedUntil;
 }

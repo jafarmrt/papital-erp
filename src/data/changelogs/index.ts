@@ -3,13 +3,15 @@ import { v0Updates } from './0';
 import { v1Updates } from './1';
 import { v2Updates } from './2';
 import { v3Updates } from './3';
+import { v4Updates } from './4';
 
 export type { AIUpdateLog };
 
 /**
- * تجمیع چنج‌لاگ‌های نسخه پایه 0.ts، سری 1.x.y، سری 2.x.y و نسخه ۳ در 3.ts
+ * تجمیع چنج‌لاگ‌های نسخه پایه 0.ts، سری 1.x.y، سری 2.x.y، آرشیو ۳ در 3.ts و نسخه ۴ در 4.ts
  */
 export const SYSTEM_UPDATES: AIUpdateLog[] = [
+  ...v4Updates,
   ...v3Updates,
   ...v2Updates,
   ...v1Updates,

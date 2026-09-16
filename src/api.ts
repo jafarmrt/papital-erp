@@ -105,6 +105,20 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     ...((options?.headers as Record<string, string>) || {}),
   };
 
+  // Auto-attach Idempotency-Key for mutating requests if not explicitly supplied
+  if (isMutation && !isPublicEndpoint) {
+    const existingKey = headers['Idempotency-Key'] || headers['idempotency-key'] || headers['x-idempotency-key'];
+    const keyToUse = existingKey || (
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `fe_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+    );
+    headers['Idempotency-Key'] = keyToUse;
+    if (options && typeof options === 'object') {
+      options.headers = { ...(options.headers as Record<string, string>), 'Idempotency-Key': keyToUse };
+    }
+  }
+
   const normalizedEndpoint = cleanEndpoint.startsWith('/api/')
     ? cleanEndpoint.substring(4)
     : cleanEndpoint === '/api'

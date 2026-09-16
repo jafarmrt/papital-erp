@@ -10,7 +10,7 @@ import { eq, and } from 'drizzle-orm';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
-import { validateLockOrder, LockHierarchyLevel } from '../../lib/lockOrder.js';
+import { validateLockOrder, LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -53,18 +53,17 @@ function toJalaliToday(): string {
 export class PayrollPaymentService {
   static async registerPayrollPayment(input: RegisterPayrollPaymentInput): Promise<RegisterPayrollPaymentResult> {
     return await orm.transaction(async (tx) => {
-      // V1.4.0: ترتیب واقعی قفل مطابق سلسله‌مراتب — بانک (سطح ۱۰) اول، سپس فیش حقوقی
-      validateLockOrder([
-        { name: 'bank_account', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
-        { name: 'piecework_payrolls', hierarchyLevel: LockHierarchyLevel.PARTIES }
-      ]);
+      // V1.4.0: ترتیب واقعی قفل مطابق سلسله‌مراتب با withOrderedLocks — بانک (سطح ۱۰) اول، سپس فیش حقوقی (سطح ۳۰)
+      await withOrderedLocks(tx, [
+        { table: bankAccounts, id: input.bankAccountId, name: 'bank_account', level: LockHierarchyLevel.BANK_ACCOUNTS },
+        { table: pieceworkPayrolls, id: input.payrollId, name: 'piecework_payrolls', level: LockHierarchyLevel.PARTIES }
+      ], async () => true);
 
-      // 1. قفل انحصاری حساب خزانه (سطح ۱۰) — همیشه قبل از فیش
+      // 1. خواندن حساب خزانه قفل‌شده (سطح ۱۰)
       const [bank] = await tx
         .select()
         .from(bankAccounts)
-        .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)))
-        .for('update');
+        .where(and(eq(bankAccounts.id, input.bankAccountId), eq(bankAccounts.isDeleted, 0)));
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
       if (!bank.accountId) {
         throw new ValidationError('برای این حساب بانکی/صندوق، حساب معین در چارت حساب‌ها تعریف نشده است؛ ابتدا آن را در بخش کدینگ متصل کنید.');
@@ -75,12 +74,11 @@ export class PayrollPaymentService {
         throw new ValidationError(`تسویه حقوق فقط با حساب ریالی امکان‌پذیر است (حساب انتخاب‌شده «${bank.title}» ارز ${bank.currency} دارد).`);
       }
 
-      // 2. قفل انحصاری فیش (سطح ۳۰) — جلوگیری از پرداخت همزمان/دوبل
+      // 2. خواندن فیش حقوقی قفل‌شده (سطح ۳۰)
       const [payroll] = await tx
         .select()
         .from(pieceworkPayrolls)
-        .where(and(eq(pieceworkPayrolls.id, input.payrollId), eq(pieceworkPayrolls.isDeleted, 0)))
-        .for('update');
+        .where(and(eq(pieceworkPayrolls.id, input.payrollId), eq(pieceworkPayrolls.isDeleted, 0)));
 
       if (!payroll) throw new NotFoundError('فیش حقوقی یافت نشد');
       if (payroll.status === 'paid') {

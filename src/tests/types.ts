@@ -24,6 +24,7 @@ export type CriticalScenarioId =
   | 'unauthorized_approval'
   | 'two_users_approve_simultaneously'
   | 'two_users_issue_same_stock'
+  | 'piecework_payroll_concurrency_race_guard'
   | 'two_webhook_deliveries'
   | 'workflow_rejected'
   | 'workflow_delegated'
@@ -96,7 +97,14 @@ export type CriticalScenarioId =
   | 'v10_menu_visibility_deny_list'
   | 'v10_cleanup_refusal_without_flag'
   | 'v10_date_normalization_idempotence'
-  | 'v10_iso_date_standardization';
+  | 'v10_iso_date_standardization'
+  | 'v4_strict_financial_voucher_guard'
+  | 'v4_atomic_document_orchestration'
+  | 'v4_audit_log_retention_and_integrity_guard'
+  | 'v4_runtime_validation_middleware_guard'
+  | 'v4_document_runtime_contracts_guard'
+  | 'v4_inventory_runtime_contracts_guard'
+  | 'v4_accounting_treasury_runtime_contracts_guard';
 
 
 export interface TestCaseResult {

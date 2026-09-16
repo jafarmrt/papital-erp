@@ -66,6 +66,7 @@ export interface CreateDocumentInput {
   location?: string;
   currency?: string;
   skipVoucherSync?: boolean;
+  strict?: boolean;
   externalTx?: DbClient;
   vat_percent?: number;
   vatPercent?: number;
@@ -643,19 +644,21 @@ export class DocumentService {
         await OutboxService.saveToOutbox(tx, purchEvent);
       }
 
-      if (docStatus === 'final') {
+      if (docStatus === 'final' && !body.skipVoucherSync) {
         const vatPercent = body.vat_percent !== undefined ? body.vat_percent : body.vatPercent;
         const vatAmount = body.vat_amount !== undefined ? body.vat_amount : body.vatAmount;
+        const isStrict = body.strict;
         if (docType === 'invoice' || docType === 'proforma') {
           await VoucherSyncService.syncSalesInvoiceVoucher(docId, {
             username: user,
             vatPercent: vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined,
             vatAmount: vatAmount !== undefined && vatAmount !== null ? Number(vatAmount) : undefined,
+            strict: isStrict,
           }, tx);
         } else if (['receipt', 'production_receipt', 'purchase'].includes(docType)) {
-          await VoucherSyncService.syncPurchaseInvoiceVoucher(docId, { username: user }, tx);
+          await VoucherSyncService.syncPurchaseInvoiceVoucher(docId, { username: user, strict: isStrict }, tx);
         } else if (['remittance', 'waste', 'return'].includes(docType)) {
-          await VoucherSyncService.syncWarehouseDocumentVoucher(docId, { username: user }, tx);
+          await VoucherSyncService.syncWarehouseDocumentVoucher(docId, { username: user, strict: isStrict }, tx);
         }
       }
 
@@ -1256,11 +1259,25 @@ export class DocumentService {
   }
 
   /**
-   * Finalizes a draft or proforma document, performing stock checks, deducting/adding inventory,
-   * and automatically generating double-entry accounting journal vouchers.
+   * Finalizes a draft or proforma document in a strict 4-step atomic orchestration:
+   * 1. Pre-flight validation & row-level locking (.for('update'))
+   * 2. Inventory & Kardex Stock Movement (WAC preserved via applyStockMovement)
+   * 3. Document status commitment (draft/proforma -> final) & Domain Event outbox
+   * 4. Double-entry accounting voucher generation (strict mode by default, Rule DB-008)
+   *
+   * If any step fails (e.g. insufficient inventory or accounting error), the entire
+   * transaction rolls back and the document status remains unchanged.
    */
-  static async finalizeDocument(id: number, user?: string): Promise<void> {
-    await orm.transaction(async (tx) => {
+  static async finalizeDocument(
+    id: number,
+    user?: string,
+    externalTx?: DbExecutor,
+    options?: { strict?: boolean }
+  ): Promise<void> {
+    const isStrict = options?.strict !== false;
+
+    const execute = async (tx: DbExecutor): Promise<void> => {
+      // Step 1: Pre-flight validation & row-level locking
       const [doc] = await tx.select().from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
         .for('update');
@@ -1273,20 +1290,31 @@ export class DocumentService {
         return;
       }
 
-      const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
-
-      await tx.update(documents).set({ 
-        status: 'final',
-        type: targetType
-      }).where(eq(documents.id, id));
-
-      const docLines = await tx.select().from(documentItems).where(eq(documentItems.documentId, id));
-      const inOut = (targetType === 'receipt' || targetType === 'return') ? 'in' : 'out';
+      // Pre-flight: verify line items existence and validity
+      const docLines = await tx.select().from(documentItems).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      if (!docLines || docLines.length === 0) {
+        throw new ValidationError(`سند شماره «${doc.refNumber || id}» فاقد هرگونه قلم کالا برای نهایی‌سازی است.`);
+      }
 
       for (const item of docLines) {
+        const qty = Number(item.quantity);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          throw new ValidationError(`مقدار قلم کالا (شناسه ${item.itemId}) در سند شماره «${doc.refNumber || id}» باید عددی بزرگ‌تر از صفر باشد.`);
+        }
+        const price = Number(item.unitPrice || 0);
+        if (!Number.isFinite(price) || price < 0) {
+          throw new ValidationError(`قیمت واحد قلم کالا (شناسه ${item.itemId}) در سند شماره «${doc.refNumber || id}» نمی‌تواند منفی باشد.`);
+        }
+      }
+
+      const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
+      const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
+
+      // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
+      for (const item of docLines) {
         const targetLoc = item.location ? String(item.location).trim() : '';
-        const qty = item.quantity;
-        const price = item.unitPrice || 0;
+        const qty = Number(item.quantity);
+        const price = Number(item.unitPrice || 0);
 
         await DocumentService.applyStockMovement(tx, {
           itemId: item.itemId,
@@ -1302,37 +1330,91 @@ export class DocumentService {
         });
       }
 
-      // Auto-generate double-entry accounting voucher for the finalized document
-      if (targetType === 'invoice' || targetType === 'proforma') {
+      // Step 3: Document Status Commitment & Domain Event Outbox
+      await tx.update(documents).set({ 
+        status: 'final',
+        type: targetType,
+        version: nextVersion(doc.version)
+      }).where(eq(documents.id, id));
+
+      const isSales = targetType === 'invoice' || targetType === 'proforma';
+      const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
+
+      if (isSales) {
+        const invEvent = domainEventBus.createEvent(
+          DomainEventType.INVOICE_APPROVED,
+          'Document',
+          String(id),
+          {
+            documentId: id,
+            refNumber: doc.refNumber,
+            docType: targetType,
+            buyerName: doc.buyerName || '',
+            currency: doc.currency || 'IRR',
+            itemCount: docLines.length,
+            status: 'final'
+          },
+          { userName: user || doc.user }
+        );
+        await OutboxService.saveToOutbox(tx, invEvent);
+      } else if (isPurchase) {
+        const purchEvent = domainEventBus.createEvent(
+          DomainEventType.PURCHASE_APPROVED,
+          'Document',
+          String(id),
+          {
+            documentId: id,
+            refNumber: doc.refNumber,
+            supplierName: doc.buyerName || '',
+            currency: doc.currency || 'IRR',
+            itemCount: docLines.length,
+            status: 'final'
+          },
+          { userName: user || doc.user }
+        );
+        await OutboxService.saveToOutbox(tx, purchEvent);
+      }
+
+      // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
+      if (isSales) {
         await VoucherSyncService.syncSalesInvoiceVoucher(id, {
           username: user || doc.user,
+          strict: isStrict,
         }, tx);
-      } else if (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'purchase') {
+      } else if (isPurchase) {
         await VoucherSyncService.syncPurchaseInvoiceVoucher(id, {
           username: user || doc.user,
+          strict: isStrict,
         }, tx);
       } else if (['remittance', 'waste', 'return'].includes(targetType)) {
         await VoucherSyncService.syncWarehouseDocumentVoucher(id, {
           username: user || doc.user,
+          strict: isStrict,
         }, tx);
       }
-    });
+    };
+
+    if (externalTx) {
+      await execute(externalTx);
+    } else {
+      await orm.transaction(execute);
+    }
   }
 
   /**
    * Soft deletes a document and performs a cascade soft-delete on associated documentItems and transactions,
    * reverting any finalized inventory changes and recording audit logs.
    */
-  static async deleteDocument(id: number, user?: string): Promise<void> {
-    await orm.transaction(async (tx) => {
+  static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor): Promise<void> {
+    const execute = async (tx: DbExecutor): Promise<void> => {
       const [doc] = await tx.select().from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
         .for('update');
       if (!doc) return;
 
-    const deletedByUser = user || doc.user || 'system';
-    // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
-    const nowIso = await businessNowIsoDateTime();
+      const deletedByUser = user || doc.user || 'system';
+      // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
+      const nowIso = await businessNowIsoDateTime();
 
       // 1. Soft-delete document with deletedAt & deletedBy
       await tx.update(documents).set({
@@ -1433,7 +1515,13 @@ export class DocumentService {
           deletedBy: deletedByUser
         }
       });
-    });
+    };
+
+    if (externalTx) {
+      await execute(externalTx);
+    } else {
+      await orm.transaction(execute);
+    }
   }
 
   /**

@@ -140,11 +140,25 @@ export const paramsPersonnelIdSchema = createParamsIdSchema('id', 'شناسه پ
 export const validate = (schema: ZodSchema) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await schema.parseAsync({
+      const parsed = await schema.parseAsync({
         body: req.body,
         query: req.query,
         params: req.params,
       });
+
+      // S-6: الصاق مستقیم داده‌های تمیز، تایپ‌شده و فیلترشده Zod به شیء req
+      if (parsed && typeof parsed === 'object') {
+        if ('body' in parsed && (parsed as any).body !== undefined) {
+          req.body = (parsed as any).body;
+        }
+        if ('query' in parsed && (parsed as any).query !== undefined) {
+          req.query = (parsed as any).query;
+        }
+        if ('params' in parsed && (parsed as any).params !== undefined) {
+          req.params = (parsed as any).params;
+        }
+      }
+
       next();
     } catch (error) {
       if (error instanceof ZodError) {

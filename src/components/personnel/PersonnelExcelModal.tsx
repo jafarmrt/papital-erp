@@ -19,7 +19,7 @@ import {
 import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, normalizeNationalId } from '../../utils';
 import { Personnel } from '../../types';
 
 interface PersonnelExcelModalProps {
@@ -114,6 +114,16 @@ export function PersonnelExcelModal({
       }
 
       const ws = xlsx.utils.json_to_sheet(rows);
+      // تضمین اینکه فیلدهای کد، شماره تماس، کد ملی، حساب و کارت رشته متنی باشند
+      Object.keys(ws).forEach((k) => {
+        if (!k.startsWith('!') && ws[k] && typeof ws[k].v !== 'undefined') {
+          if (['کد پرسنلی', 'شماره تماس', 'کد ملی', 'شماره شبا', 'شماره کارت', 'شماره حساب'].some(col => String(ws[k].v).includes(col))) {
+            ws[k].t = 's';
+          } else if (typeof ws[k].v === 'string' && /^\d+$/.test(ws[k].v)) {
+            ws[k].t = 's';
+          }
+        }
+      });
       const wb = xlsx.utils.book_new();
       xlsx.utils.book_append_sheet(wb, ws, 'لیست_پرسنل');
       xlsx.writeFile(wb, 'گزارش_جامع_پرسنل.xlsx');
@@ -221,8 +231,10 @@ export function PersonnelExcelModal({
           }
 
           const personnelCode = getField(row, ['کد پرسنلی', 'کدپرسنلی', 'شماره پرسنلی', 'کد', 'personnelcode', 'personnel_code', 'code', 'empcode', 'id']);
-          const phone = getField(row, ['شماره تماس', 'شماره همراه', 'تلفن', 'موبایل', 'phone', 'mobile', 'cellphone']);
-          const nationalId = getField(row, ['کد ملی', 'کدملی', 'شماره ملی', 'nationalid', 'national_id', 'ssn']);
+          const rawPhone = getField(row, ['شماره تماس', 'شماره همراه', 'تلفن', 'موبایل', 'phone', 'mobile', 'cellphone']);
+          const phone = normalizePhoneNumber(rawPhone);
+          const rawNationalId = getField(row, ['کد ملی', 'کدملی', 'شماره ملی', 'nationalid', 'national_id', 'ssn']);
+          const nationalId = normalizeNationalId(rawNationalId);
           const jobTitle = getField(row, ['عنوان شغلی', 'عنوانشغلی', 'شغل', 'سمت', 'سمت سازمانی', 'jobtitle', 'job_title', 'position', 'role']);
           const genderRaw = getField(row, ['جنسیت', 'gender', 'sex']);
           const gender = genderRaw === 'زن' || genderRaw.toLowerCase() === 'female' ? 'زن' : 'مرد';
@@ -644,8 +656,8 @@ export function PersonnelExcelModal({
                           </td>
                           <td className="p-3 font-black text-slate-900">{row.fullName}</td>
                           <td className="p-3 text-slate-600">{row.jobTitle || '---'}</td>
-                          <td className="p-3 font-mono text-slate-600">{row.phone || '---'}</td>
-                          <td className="p-3 font-mono text-slate-600">{row.nationalId || '---'}</td>
+                          <td className="p-3 font-mono text-slate-600">{row.phone ? formatPersianPhone(row.phone) : '---'}</td>
+                          <td className="p-3 font-mono text-slate-600">{row.nationalId ? formatPersianNationalId(row.nationalId) : '---'}</td>
                           <td className="p-3">
                             <span
                               className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${

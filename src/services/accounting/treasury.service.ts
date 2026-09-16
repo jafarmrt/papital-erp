@@ -27,8 +27,11 @@ export class TreasuryService {
     currency?: string;
     accountId?: number | null;
     notes?: string;
-  }): Promise<BankAccount> {
-    return BankAccountService.createBankAccount(data);
+    userId?: number;
+    username?: string;
+    strict?: boolean;
+  }, tx?: DbExecutor): Promise<BankAccount> {
+    return BankAccountService.createBankAccount(data, tx);
   }
 
   static async updateBankAccount(id: number, data: Partial<{
@@ -40,11 +43,15 @@ export class TreasuryService {
     shebaNumber: string;
     cardNumber: string;
     branch: string;
+    initialBalance: number;
     accountId: number | null;
     isActive: number;
     notes: string;
-  }>): Promise<BankAccount> {
-    return BankAccountService.updateBankAccount(id, data);
+    userId?: number;
+    username?: string;
+    strict?: boolean;
+  }>, tx?: DbExecutor): Promise<BankAccount> {
+    return BankAccountService.updateBankAccount(id, data, tx);
   }
 
   static async deleteBankAccount(id: number): Promise<{ success: boolean }> {
