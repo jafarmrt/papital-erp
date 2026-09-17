@@ -1,10 +1,6 @@
-import React from 'react';
-import {
-  Boxes, Plus, Trash2, Search, Scale, Tag, AlertCircle, CheckCircle2,
-  HelpCircle, Layers, FilePlus
-} from 'lucide-react';
+import { Boxes, Plus, Trash2, Search, Scale, Tag, AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
 import { ProjectInventoryControlSectionData, Item } from '../../types';
-import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { COMMON_UNITS } from './projectInventoryUtils';
 import { formatPersianNumber } from '../../utils';
 
 interface GlobalInventoryControlSectionProps {

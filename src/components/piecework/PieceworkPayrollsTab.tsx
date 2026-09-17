@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileText, Plus, Eye, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
+import { Plus, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatPersianNumber, formatPersianPrice, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';

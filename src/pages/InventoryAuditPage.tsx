@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   ShieldCheck, 
   RotateCcw, 
@@ -49,7 +49,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
 
   // Tab 2: Physical Audit Form State
   const [selectedLocation, setSelectedLocation] = useState('انبار مرکزی');
-  const [nextRef, setNextRef] = useState('AUD-1001');
+  const [nextRef] = useState('AUD-1001');
   const [notes, setNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ProcurementDesk } from '../components/procurement/ProcurementDesk';
 import { User } from '../types';
 

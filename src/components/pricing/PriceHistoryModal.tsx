@@ -1,4 +1,3 @@
-import React from 'react';
 import { History, Filter, X, RefreshCw, Clock, Tag } from 'lucide-react';
 import { cn, formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 

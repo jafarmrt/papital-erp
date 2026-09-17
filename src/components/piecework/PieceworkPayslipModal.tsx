@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, FileText, Printer } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
 import { formatPersianPrice, formatQuantityOrTime, formatPersianDate, formatPersianNumber, formatCurrencyLabel } from '../../utils';

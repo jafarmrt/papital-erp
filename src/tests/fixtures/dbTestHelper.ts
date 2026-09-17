@@ -1,32 +1,10 @@
 import { orm } from '../../db/drizzle.js';
-import { runMigrations, validateDbSchema } from '../../db/migrator.js';
+import { runMigrations } from '../../db/migrator.js';
 import { 
-  users, 
   roles, 
-  customers, 
-  items, 
-  itemPrices,
-  projectBomAllocations,
-  productionProjects,
   warehouses, 
-  documents, 
-  documentItems, 
-  transactions, 
-  treasuryTransactions, 
-  journalVouchers, 
-  journalVoucherItems, 
-  workflowDefinitions, 
-  workflowStates, 
-  workflowTransitions, 
-  workflowInstances, 
-  workflowTasks, 
-  workflowPendingApprovals, 
-  workflowHistoryLogs, 
-  outboxEvents, 
-  deadLetterEvents,
-  idempotencyKeys
 } from '../../db/schema.js';
-import { sql, or, ilike, inArray, eq, and } from 'drizzle-orm';
+import { sql, ilike, eq, and } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 
 export interface DbIsolationOptions {

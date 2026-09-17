@@ -1,12 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   APP_FEATURES, 
   TECH_STACK, 
   SYSTEM_UPDATES, 
   getLatestAppVersion,
-  AppFeature, 
-  TechStackItem, 
-  AIUpdateLog 
 } from '../data/appInfoAndChangelog';
 import { formatPersianNumber } from '../utils';
 import { 
@@ -38,8 +35,6 @@ import {
   Search,
   X,
   Filter,
-  Check,
-  Tag,
   CheckCircle,
   Scale,
   Boxes,

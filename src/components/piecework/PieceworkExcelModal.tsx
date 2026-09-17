@@ -1,18 +1,5 @@
 import React, { useState, useRef } from 'react';
-import {
-  X,
-  FileSpreadsheet,
-  Upload,
-  Download,
-  CheckCircle2,
-  AlertTriangle,
-  FileText,
-  Loader2,
-  ArrowRight,
-  RefreshCw,
-  Trash2,
-  Check
-} from 'lucide-react';
+import { X, FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, Loader2, Check } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { formatPersianNumber, formatPersianPrice, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';

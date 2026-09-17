@@ -1,27 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  FileText, 
-  Plus, 
-  Search, 
-  Filter, 
-  Printer, 
-  Edit3, 
-  Trash2, 
-  ChevronDown, 
-  ChevronRight, 
-  CheckCircle2, 
-  Clock, 
-  Calendar,
-  Layers,
-  ArrowUpDown,
-  Lock,
-  RotateCcw,
-  History,
-  ShieldCheck,
-  FileCheck,
-  MoreVertical
-} from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, toEnglishDigits, formatPersianDate, extractDateString } from '../../utils';
+import { FileText, Plus, Search, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical } from 'lucide-react';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
 import { VoucherReversalModal } from './VoucherReversalModal';

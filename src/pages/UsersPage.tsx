@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
-import { User, Role, PermissionCategory } from '../types';
+import { User, Role } from '../types';
 import {
   Users,
   ShieldCheck,

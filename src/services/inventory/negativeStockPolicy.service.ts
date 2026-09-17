@@ -1,6 +1,6 @@
 import { orm, DbExecutor } from '../../db/drizzle.js';
-import { appSettings, items, transactions } from '../../db/schema.js';
-import { eq, and, sql, asc } from 'drizzle-orm';
+import { appSettings, items } from '../../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
 
 export type NegativeStockPolicyType = 'forbidden' | 'warning' | 'allowed';

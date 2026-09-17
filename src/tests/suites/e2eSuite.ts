@@ -7,11 +7,8 @@ import { VoucherSyncService } from '../../services/accounting/voucherSync.servic
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
 import { WorkflowDelegationService } from '../../services/workflow/workflowDelegationService.js';
 import { IdempotencyService } from '../../services/idempotency.service.js';
-import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
 import { orm } from '../../db/drizzle.js';
 import {
-  documents,
-  documentItems,
   items,
   transactions,
   journalVouchers,
@@ -20,11 +17,9 @@ import {
   workflowHistoryLogs,
   pieceworkPayrolls,
   personnel,
-  customers,
-  activityLogs,
   accounts
 } from '../../db/schema.js';
-import { eq, sql, and, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 /**
  * Phase 14 — Subphase 14.1: Critical E2E Journeys Suite
@@ -273,7 +268,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const userB = await createTestUser({ role: 'supervisor' });
 
     // Step 1: Delegation window setup (User A delegates to User B)
-    const delegation = await WorkflowDelegationService.createDelegation({
+    await WorkflowDelegationService.createDelegation({
       fromUserId: userA.id,
       toUserId: userB.id,
       startDate: new Date(Date.now() - 3600000).toISOString(),

@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  useWorkflowInstanceQuery, 
-  useStartWorkflowMutation, 
-  useExecuteTransitionMutation,
-  WorkflowState,
-  WorkflowTransition,
-  WorkflowHistoryLog
-} from '../../hooks/queries';
+import { useWorkflowInstanceQuery, useStartWorkflowMutation, useExecuteTransitionMutation, WorkflowTransition } from '../../hooks/queries';
 import { 
   CheckCircle2, 
   Clock, 
@@ -228,7 +221,6 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
               {Object.entries(wfData.approvalProgress).map(([trId, prog]: [string, any]) => {
                 const tr = (allStates || []).flatMap(() => availableTransitions || []).find((t: any) => String(t.id) === String(trId));
                 const sigs = prog.signatures || [];
-                const rejs = prog.rejections || [];
                 const reqCount = tr?.kValue || 2;
                 const ruleType = prog.ruleType || tr?.approvalRuleType || 'MULTI';
                 const ruleLabel = ruleType === 'AND_ALL' || ruleType === 'ALL' ? 'اتفاق آرا (AND_ALL)' :

@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp } from 'lucide-react';
 import { formatPersianPrice } from '../../../utils';
 import type { IncomeStatementReport } from '../../../types';

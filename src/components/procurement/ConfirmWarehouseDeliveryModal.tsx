@@ -1,5 +1,5 @@
 import React from 'react';
-import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, AlertCircle, Building2 } from 'lucide-react';
+import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 } from 'lucide-react';
 import { formatPersianNumber, formatPersianPrice } from '../../utils';
 
 export interface ConfirmWarehouseDeliveryModalProps {

@@ -4,7 +4,7 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import 'dotenv/config';
 
-import { logger, errorHandler } from './src/middleware/logger.js';
+import { logger } from './src/middleware/logger.js';
 import { createApp, markStartupComplete } from './src/app.js';
 import { runMigrations } from './src/db/migrator.js';
 import { runSeedWithLock } from './src/db/seed.js';

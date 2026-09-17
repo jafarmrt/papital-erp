@@ -1,9 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  X, FileText, CheckCircle2, Clock, AlertTriangle, Building2, 
-  ShoppingCart, ArrowRight, UserCheck, Check, Ban, Loader2, Link2, ExternalLink,
-  PackageCheck, Truck
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, FileText, CheckCircle2, Clock, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
@@ -33,7 +29,7 @@ export function RequisitionDetailModal({
   const [isActing, setIsActing] = useState(false);
   const [linkedOrders, setLinkedOrders] = useState<ProcurementOrder[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  const [deliveringOrderId, setDeliveringOrderId] = useState<number | null>(null);
+  const [deliveringOrderId] = useState<number | null>(null);
   const [deliveryModalOrder, setDeliveryModalOrder] = useState<ProcurementOrder | null>(null);
   const [bulkDeliveryOrders, setBulkDeliveryOrders] = useState<ProcurementOrder[] | null>(null);
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
@@ -326,7 +322,6 @@ export function RequisitionDetailModal({
                     const reqQty = Number(row.requestedQty || 0);
                     const ordQty = Number(row.orderedQty || 0);
                     const remQty = Math.max(0, reqQty - ordQty);
-                    const isFullyOrdered = ordQty >= reqQty;
 
                     return (
                       <tr key={row.id || idx} className="hover:bg-slate-50/50">

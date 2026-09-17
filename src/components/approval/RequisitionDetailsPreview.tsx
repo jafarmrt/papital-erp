@@ -1,4 +1,3 @@
-import React from 'react';
 import { RefreshCw, FileText, AlertTriangle, CheckCircle2, Clock, ShoppingCart } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { PurchaseRequisition, PurchaseRequisitionItemRow } from '../../types';

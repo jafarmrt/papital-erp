@@ -2,7 +2,7 @@ import { useState, useMemo, FormEvent, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { Personnel } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
-import { normalizePersianText, toEnglishDigits, validateIranianNationalId, validateIranianPhoneNumber, normalizeNationalId, normalizePhoneNumber } from '../utils';
+import { normalizePersianText, validateIranianNationalId, validateIranianPhoneNumber, normalizeNationalId, normalizePhoneNumber } from '../utils';
 import {
   usePersonnelListQuery,
   useUsersListQuery,

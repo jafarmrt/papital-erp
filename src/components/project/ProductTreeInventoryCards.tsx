@@ -1,14 +1,11 @@
-import React, { useState } from 'react';
-import { 
-  Package, Layers, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, 
-  Search, Scale, Trash2, Plus, Tag
-} from 'lucide-react';
+import { useState } from 'react';
+import { Package, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Search, Scale, Trash2, Plus, Tag } from 'lucide-react';
 import { 
   ProjectProductItem, 
   ProjectInventoryControlSectionData, 
   Item 
 } from '../../types';
-import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { COMMON_UNITS } from './projectInventoryUtils';
 import { formatPersianNumber } from '../../utils';
 
 interface ProductTreeInventoryCardsProps {

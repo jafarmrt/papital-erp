@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, X, ChevronLeft } from 'lucide-react';
 import { SettingCategoryGroup } from './settingsNavigationConfig';
 import { cn } from '../../utils';
@@ -121,7 +120,6 @@ export function SettingsNavigationSidebar({
         ) : (
           filteredGroups.map(group => {
             const GroupIcon = group.icon;
-            const hasActiveTab = group.tabs.some(t => t.id === activeTab);
 
             return (
               <div key={group.id} className="space-y-1">

@@ -1,37 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Layers, 
-  ChevronLeft, 
-  Search, 
-  Calendar, 
-  Printer, 
-  Download, 
-  Eye, 
-  RefreshCw, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  User, 
-  Building2, 
-  Users, 
-  FolderKanban, 
-  CheckCircle2, 
-  AlertCircle, 
-  Filter, 
-  RotateCcw, 
-  FileText, 
-  X,
-  ChevronDown,
-  Hash,
-  ArrowLeft
-} from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Layers, ChevronLeft, Search, Printer, Download, Eye, ArrowUpRight, ArrowDownLeft, User, Users, FolderKanban, RotateCcw, FileText, X } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, normalizePersianText, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
 import { fetchJson } from '../../api';
-import { AccountSearchSelect } from './AccountSearchSelect';
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
 
 interface AccountExplorerTabProps {
@@ -42,20 +17,6 @@ interface AccountExplorerTabProps {
   loading?: boolean;
   onRefresh?: () => void;
   onViewVoucher?: (voucher: JournalVoucher) => void;
-}
-
-interface ExplorerItem {
-  id: number;
-  code: string;
-  name: string;
-  level: 'group' | 'general' | 'subsidiary' | 'detailed';
-  parentId: number | null;
-  accountType: string;
-  debitTurnover: number;
-  creditTurnover: number;
-  balance: number;
-  balanceType: 'debit' | 'credit' | 'zero';
-  childrenCount?: number;
 }
 
 interface VoucherItemRow {
@@ -120,7 +81,7 @@ export function AccountExplorerTab({
 
   // Single Voucher Detail View Modal State
   const [selectedVoucherModal, setSelectedVoucherModal] = useState<JournalVoucher | null>(null);
-  const [isLoadingVoucherDetail, setIsLoadingVoucherDetail] = useState<boolean>(false);
+  const [, setIsLoadingVoucherDetail] = useState<boolean>(false);
 
   // Fetch Ledger / Transactions Data when selection changes
   useEffect(() => {

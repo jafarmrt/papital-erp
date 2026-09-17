@@ -1,10 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Building2, Phone, MapPin, User, Users, Briefcase, Plus, Calendar, 
-  PhoneCall, CheckCircle2, Clock, FileText, ChevronLeft, X, Edit2, 
-  TrendingUp, Award, AlertCircle, ExternalLink, DollarSign, BookOpen,
-  ArrowDownLeft, ArrowUpRight, Scale, RefreshCw
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { Customer, CRMLead, CRMActivity } from '../../types';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -56,7 +51,6 @@ export function CustomerDossierDrawer({
   const totalPipelineValue = customerLeads.reduce((acc, l) => acc + (l.estimatedValue || 0), 0);
   const wonLeads = customerLeads.filter((l) => l.stage === 'won');
   const wonValue = wonLeads.reduce((acc, l) => acc + (l.estimatedValue || 0), 0);
-  const activeLeads = customerLeads.filter((l) => l.stage !== 'won' && l.stage !== 'lost');
 
   // Load documents and accounting read model for this customer
   useEffect(() => {

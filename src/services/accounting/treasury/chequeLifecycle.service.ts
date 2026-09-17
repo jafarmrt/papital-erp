@@ -348,7 +348,7 @@ export class ChequeLifecycleService {
       const actDate = data.actionDate || await businessTodayJalaliDash();
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
-      const allAccs = await ChartOfAccountsService.getAllAccounts(txEngine);
+      await ChartOfAccountsService.getAllAccounts(txEngine);
       const amount = Number(existing.amount) || 0;
 
       if (data.status === 'passed' && bankRecord) {

@@ -252,5 +252,5 @@ export const getLatestAppVersion = (): string => {
     const latest = SYSTEM_UPDATES[0].version;
     return latest.startsWith('v') ? latest : `v${latest}`;
   }
-  return 'v1.8.0';
+  return 'v4.0.0';
 };

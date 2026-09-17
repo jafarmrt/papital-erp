@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ShieldCheck, X, Printer, MessageSquare, Send } from 'lucide-react';
 import DocumentDetailsPreview, { ApprovalDocumentDetails } from './DocumentDetailsPreview';
 import RequisitionDetailsPreview from './RequisitionDetailsPreview';

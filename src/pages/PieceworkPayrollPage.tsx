@@ -1,4 +1,3 @@
-import React from 'react';
 import { Calculator } from 'lucide-react';
 import { usePiecework } from '../hooks/usePiecework';
 import { PieceworkStatsCards } from '../components/piecework/PieceworkStatsCards';
@@ -106,7 +105,6 @@ export function PieceworkPayrollPage() {
     handleOpenTaskHistoryModal,
     handleOpenGlobalHistoryModal,
     handleCloseHistoryModal,
-    handleExportTasksExcel,
     handleDownloadTemplate,
     handleSelectPersonnelForRates,
     handleSaveCustomRate,

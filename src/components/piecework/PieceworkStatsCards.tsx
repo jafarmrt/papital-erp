@@ -1,4 +1,3 @@
-import React from 'react';
 import { DollarSign, Clock, FileText, CheckCircle2 } from 'lucide-react';
 import { formatPersianNumber, formatPersianPrice } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';

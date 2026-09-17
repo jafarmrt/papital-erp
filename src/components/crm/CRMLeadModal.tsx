@@ -1,12 +1,12 @@
 import React from 'react';
-import { Briefcase, Trash2, Users, Plus, UserPlus } from 'lucide-react';
+import { Briefcase, Trash2, Users, Plus } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
-import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, toEnglishDigits, extractDateString } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString } from '../../utils';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;

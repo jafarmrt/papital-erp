@@ -1,8 +1,8 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import bcrypt from 'bcryptjs';
 import { orm } from '../../db/drizzle.js';
-import { users, workflowDelegations, workflowInstances, workflowStates } from '../../db/schema.js';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { users, workflowDelegations, workflowInstances } from '../../db/schema.js';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { WorkflowRuleEngine, WorkflowQuorumService } from '../../services/workflow/workflowEngineService.js';
 import { WorkflowDelegationService } from '../../services/workflow/workflowDelegationService.js';
 import { WorkflowSlaEvaluator } from '../../services/workflow/workflowSlaEvaluator.js';
@@ -217,7 +217,6 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
 
     // Case B: Valid delegate with active delegation window and matching scope
     const delegateUserId = 88;
-    const delegateRole = 'auditor';
     const validDelegations = [
       { fromUserId: 50, toUserId: 88, scope: 'ALL', isActive: 1, startDate: '2026-01-01', endDate: '2026-12-31' }
     ];

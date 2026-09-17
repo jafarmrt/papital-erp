@@ -1,9 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { fetchJson } from '../api';
-import { 
-  X, RefreshCw, ShieldCheck, AlertTriangle, CheckCircle2, 
-  Layers, Wrench, Check, RotateCcw
-} from 'lucide-react';
+import { X, RefreshCw, ShieldCheck, AlertTriangle, CheckCircle2, Wrench, RotateCcw } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 import { formatPersianNumber } from '../utils';
 

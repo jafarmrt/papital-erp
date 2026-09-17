@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, 
-  FileText, AlertCircle, Loader2, ArrowDown, PackageCheck, AlertTriangle, Warehouse
-} from 'lucide-react';
+import { X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, FileText, AlertCircle, Loader2, ArrowDown, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { PurchaseRequisition, PurchaseRequisitionItemRow, Item, Customer } from '../../types';
+import { PurchaseRequisition, PurchaseRequisitionItemRow, Item } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
@@ -57,7 +54,7 @@ export function SplitOrderModal({
   onSuccess
 }: SplitOrderModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { options: supplierOptions, isLoading: isLoadingSuppliers } = useSupplierSelectOptions();
+  const { options: supplierOptions } = useSupplierSelectOptions();
 
   // Dynamic warehouses query
   const { data: warehouses = [] } = useWarehousesQuery();
@@ -149,12 +146,6 @@ export function SplitOrderModal({
   };
 
   // Check if any items have over or under fulfillment across packages
-  const hasDiscrepancy = useMemo(() => {
-    return requisitionItems.some(reqItem => {
-      const liveRem = getLiveRemainingQty(reqItem.id);
-      return liveRem !== 0;
-    });
-  }, [requisitionItems, packages]);
 
   // Auto set recommended closure reason if discrepancy exists
   useEffect(() => {

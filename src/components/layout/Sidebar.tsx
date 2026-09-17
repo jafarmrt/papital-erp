@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { PanelRightClose, PanelRightOpen, ChevronDown, Settings, LogOut, Compass } from 'lucide-react';
 import { cn } from '../../utils';

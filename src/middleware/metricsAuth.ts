@@ -1,22 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret, AUTH_COOKIE_NAME } from './auth.js';
 import { AuthUserPayload } from '../types.js';
 import { logger } from './logger.js';
+import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 
-/**
- * Performs a constant-time comparison of two string tokens using SHA-256 hashes
- * to eliminate timing side-channel attacks.
- */
-export function safeCompareTokens(a: string, b: string): boolean {
-  if (!a || !b || typeof a !== 'string' || typeof b !== 'string') {
-    return false;
-  }
-  const hashA = crypto.createHash('sha256').update(a.trim()).digest();
-  const hashB = crypto.createHash('sha256').update(b.trim()).digest();
-  return crypto.timingSafeEqual(hashA, hashB);
-}
+export { safeCompareTokens };
 
 /**
  * Verifies credentials for the Prometheus metrics endpoints (/metrics, /api/metrics).

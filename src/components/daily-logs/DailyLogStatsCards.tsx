@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock, Building2, Laptop, AtSign, Printer, Plus } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import { User } from '../../types';

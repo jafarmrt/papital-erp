@@ -1,26 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import {
-  AlertOctagon,
-  RefreshCw,
-  Search,
-  Filter,
-  RotateCcw,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Trash2,
-  Edit3,
-  Eye,
-  AlertTriangle,
-  Play,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Sliders,
-  CheckSquare,
-  Square
-} from 'lucide-react';
+import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCircle, Trash2, Edit3, AlertTriangle, Layers, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { fetchJson } from '../../api';
 

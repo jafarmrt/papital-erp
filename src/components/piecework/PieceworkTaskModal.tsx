@@ -1,5 +1,5 @@
 import React, { FormEvent, useState, useEffect } from 'react';
-import { X, Award, Tag } from 'lucide-react';
+import { X, Award } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { TaskFormData } from '../../hooks/usePiecework';
 import { formatCurrencyLabel } from '../../utils';

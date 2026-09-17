@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Item, User } from '../types';
 import { Search, Plus, FileSpreadsheet, CheckSquare, Package, Box, AlertTriangle, Layers, Tag } from 'lucide-react';
@@ -20,7 +20,7 @@ import {
 } from '../hooks/queries';
 
 export default function ItemsPage({ user }: { user: User }) {
-  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [page, setPage] = useState(1);
 
   // V10-2.2: تب دوتایی محصول/مواد اولیه در یک صفحه واحد — منبع حقیقت = کوئری‌پارام URL برای deep-link
@@ -41,7 +41,7 @@ export default function ItemsPage({ user }: { user: User }) {
 
   const [showModal, setShowModal] = useState(false);
   const [showExcelModal, setShowExcelModal] = useState(false);
-  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
+  const [importProgress] = useState<{ current: number; total: number } | null>(null);
   const [syncingItemId, setSyncingItemId] = useState<number | null>(null);
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; itemId: number }>({ isOpen: false, itemId: 0 });
 

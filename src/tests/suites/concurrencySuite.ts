@@ -1,6 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { items, documents, documentItems, workflowInstances, pieceworkLogs, pieceworkPayrolls, personnel, pieceworkTasks, users } from '../../db/schema.js';
+import { items, documents, documentItems, pieceworkLogs, pieceworkPayrolls, personnel, pieceworkTasks, users } from '../../db/schema.js';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
 import { IdempotencyService } from '../../services/idempotency.service.js';
@@ -875,7 +875,6 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   let tempLogId: number | null = null;
   try {
     let [task] = await orm.select({ id: pieceworkTasks.id }).from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0)).limit(1);
-    let tempTaskId: number | null = null;
     if (!task) {
       const [newTask] = await orm.insert(pieceworkTasks).values({
         code: `TASK_${Date.now()}`,
@@ -885,7 +884,6 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
         isDeleted: 0
       }).returning({ id: pieceworkTasks.id });
       task = newTask;
-      tempTaskId = newTask.id;
     }
 
     const [testWorker] = await orm.insert(personnel).values({

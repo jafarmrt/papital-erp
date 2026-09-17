@@ -1,14 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Package, CheckCircle2, RefreshCw, AlertCircle, CheckSquare, 
-  Boxes, Square, Search, DollarSign, Warehouse, ArrowDownRight,
-  Info, Check, Tag, Lock
-} from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Package, CheckCircle2, RefreshCw, AlertCircle, CheckSquare, Boxes, Square, Search, DollarSign, Warehouse, ArrowDownRight, Tag, Lock } from 'lucide-react';
 import { ProductionProject, ProjectProductItem, Item } from '../../types';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import toast from 'react-hot-toast';
-import { toPersianDigits, formatPersianPrice } from '../../utils';
+import { toPersianDigits } from '../../utils';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -309,9 +305,6 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   };
 
   // Summary Metrics
-  const totalPlannedQty = useMemo(() => {
-    return products.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
-  }, [products]);
 
   const totalDeliveredQty = useMemo(() => {
     return products.reduce((sum, p) => sum + (Number(producedQuantities[p.id]) || Number(p.quantity) || 0), 0);

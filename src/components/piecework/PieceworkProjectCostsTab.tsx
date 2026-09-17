@@ -1,5 +1,4 @@
-import React from 'react';
-import { FolderKanban, Users, CheckCircle2 } from 'lucide-react';
+import { FolderKanban } from 'lucide-react';
 import { formatPersianNumber, formatPersianPrice } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 

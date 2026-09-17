@@ -1,9 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, ArrowLeft, Building2, Store, Check
-} from 'lucide-react';
+import React , { useState, useMemo } from 'react';
+import { ShoppingCart, FileText, CheckCircle2, AlertCircle, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { ProductionProject, PurchaseListItem, Item, Customer } from '../../types';
+import { ProductionProject, PurchaseListItem, Item } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
@@ -49,7 +47,7 @@ export function CreatePurchaseOrderModal({
     `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { options: supplierOptions, isLoading: isLoadingSuppliers } = useSupplierSelectOptions();
+  const { options: supplierOptions } = useSupplierSelectOptions();
 
   // Filter items that actually have shortfalls
   const initialRows = useMemo(() => {

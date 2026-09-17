@@ -1,9 +1,7 @@
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../../api';
-import { Item, Category } from '../../../types';
 import { compressTo300KB } from '../../../utils/imageCompression';
 import { toEnglishDigits, parseMultiValue, formatMultiValue } from '../../../utils';
-import { ItemFormData } from './types';
 
 export function parseItemStocks(rawStocks: any): Record<string, number> {
   if (!rawStocks) return {};

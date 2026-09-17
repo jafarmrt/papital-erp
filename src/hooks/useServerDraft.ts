@@ -18,7 +18,6 @@ export function useServerDraft<T extends Record<string, any>>(
   const {
     entityType,
     draftKey = 'default',
-    autoSaveIntervalMs = 15000,
     debounceMs = 2500,
     onDraftLoaded,
     enabled = true

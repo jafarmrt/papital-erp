@@ -1,11 +1,11 @@
-import React, { FormEvent } from 'react';
+import { FormEvent } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { X, FileText } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianNumber, formatPersianPrice, toEnglishDigits, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianNumber, formatPersianPrice, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 
 interface PieceworkPayrollModalProps {

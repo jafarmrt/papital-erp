@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import toast from 'react-hot-toast';
 import { 
   ShieldAlert, History, Search, Filter, RefreshCw, Calendar, Eye, X, 
   ChevronLeft, ChevronRight, PlusCircle, Edit3, Trash2, KeyRound, Settings as SettingsIcon,
-  Download, UserCheck, CheckCircle2, Clock, ArrowRightLeft, FileCode, Check, AlertCircle, LogOut,
+  Download, UserCheck, CheckCircle2, Clock, ArrowRightLeft, FileCode, AlertCircle, LogOut,
   Printer, FileSpreadsheet, Layers, ShieldCheck, DollarSign, Package, Laptop
 } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";

@@ -1,10 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  ShoppingBag, ShoppingCart, Clock, CheckCircle2, AlertTriangle, 
-  Search, Filter, Plus, Layers, RefreshCw, Eye, Trash2, ArrowUpDown, 
-  Building2, UserCheck, Ban, Check, FileText, ChevronDown, ChevronUp, AlertCircle,
-  Truck, PackageCheck, ArrowRight, ArrowLeft
-} from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { ShoppingBag, ShoppingCart, Clock, CheckCircle2, Search, Plus, Layers, RefreshCw, Eye, Trash2, Building2, Ban, Check, FileText, Truck, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
@@ -603,7 +598,6 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                       const isSelected = selectedIds.includes(req.id);
                       const linkedOrders = orders.filter(o => o.requisitionId === req.id || o.requisitionCode === req.code);
                       const pendingOrdersCount = linkedOrders.filter(o => o.status !== 'final').length;
-                      const deliveredOrdersCount = linkedOrders.filter(o => o.status === 'final').length;
 
                       return (
                         <tr key={req.id} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-amber-50/40' : ''}`}>

@@ -1,22 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  X,
-  History,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  User,
-  Search,
-  FileSpreadsheet,
-  AlertCircle,
-  RotateCcw,
-  CheckCircle2,
-  Trash2,
-  Filter,
-  RefreshCw
-} from 'lucide-react';
+import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice } from '../../utils';
 import { fetchJson } from '../../api';
 import { toast as hotToast } from 'react-hot-toast';
 

@@ -1,5 +1,5 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { appSettings, accounts } from '../../db/schema.js';
+import { appSettings } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { logger } from '../../middleware/logger.js';

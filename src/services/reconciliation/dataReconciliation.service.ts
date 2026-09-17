@@ -1,13 +1,10 @@
 import { pool, orm } from '../../db/drizzle.js';
 import { 
-  items, documents, journalVouchers, journalVoucherItems, 
-  transactions, workflowInstances, workflowTasks, outboxEvents, 
-  woocommerceOrderLogs, accounts 
+  transactions
 } from '../../db/schema.js';
-import { eq, sql, and, ilike } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { KardexWacRecalculatorService } from '../inventory/kardexWacRecalculator.service.js';
-import { fin, FinancialMath } from '../../utils/financialMath.js';
 import { logActivity } from '../../lib/auditLogger.js';
 
 export interface ReconciliationAnomaly {

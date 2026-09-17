@@ -142,7 +142,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
   const t5Start = Date.now();
   try {
     // Verify check constraints and unique indexes on business identifiers
-    const [constraintsRes, indexesRes] = await Promise.all([
+    await Promise.all([
       orm.execute(sql`
         SELECT conname, contype 
         FROM pg_constraint 
@@ -154,9 +154,6 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         WHERE indexname IN ('idx_uniq_accounts_code_active', 'idx_uniq_bank_code_active', 'idx_uniq_doc_type_ref_active', 'idx_uniq_jv_number_active')
       `)
     ]);
-
-    const constraintsCount = (constraintsRes as any)?.rows?.length || 0;
-    const indexesCount = (indexesRes as any)?.rows?.length || 0;
 
     results.push(makeTestCase({
       id: 'db_constraints_indexes_validation',
@@ -516,15 +513,12 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     }
 
     // 2. Execute EXPLAIN query on Kardex lookup to verify optimizer plan
-    const explainResult = await orm.execute(sql`
+    await orm.execute(sql`
       EXPLAIN (FORMAT JSON)
       SELECT * FROM transactions 
       WHERE item_id = 1 AND is_deleted = 0 
       ORDER BY date ASC, id ASC;
     `);
-
-    const planJson = explainResult.rows?.[0];
-    const planText = JSON.stringify(planJson || {});
 
     // 3. Performance Benchmark on Kardex Retrieval
     const benchStart = performance.now();

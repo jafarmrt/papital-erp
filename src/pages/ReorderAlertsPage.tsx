@@ -5,9 +5,8 @@ import { User } from '../types';
 import { 
   AlertTriangle, Search, RefreshCw, Printer, CheckCircle2, 
   AlertCircle, ShoppingCart, Box, Hammer, CheckSquare, Square, 
-  Layers, Package, Sparkles
+  Package
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { formatPersianPrice, formatPersianNumber } from '../utils';
 import { SafeImage } from '../components/SafeImage';
 import { useSearch } from '../SearchContext';
@@ -36,7 +35,6 @@ export interface ReorderItem {
 }
 
 export default function ReorderAlertsPage({ user }: { user: User }) {
-  const navigate = useNavigate();
   const [items, setItems] = useState<ReorderItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +145,6 @@ export default function ReorderAlertsPage({ user }: { user: User }) {
   const productsCount = safeItemsForStats.filter(i => i.type === 'product').length;
   const materialsCount = safeItemsForStats.filter(i => i.type === 'raw_material').length;
   
-  const totalDeficitQuantity = filteredItems.reduce((sum, i) => sum + i.deficit, 0);
   const totalDeficitCost = filteredItems.reduce((sum, i) => sum + i.deficit_value, 0);
 
   const materialsDeficitCost = rawMaterialItems.reduce((sum, i) => sum + i.deficit_value, 0);

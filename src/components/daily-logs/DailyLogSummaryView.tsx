@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   Calendar as CalendarIcon, Clock, UserCheck, TrendingUp, FileText, 
   Users, FileSpreadsheet, Printer, ChevronLeft, CalendarDays, X 

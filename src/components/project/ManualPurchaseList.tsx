@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
-import { 
-  ShoppingCart, Plus, Printer, CheckCircle2, Trash2, FilePlus, ExternalLink, CheckSquare
-} from 'lucide-react';
+import { useState } from 'react';
+import { ShoppingCart, Plus, Printer, CheckCircle2, Trash2, FilePlus, ExternalLink } from 'lucide-react';
 import { ProductionProject, PurchaseListItem, Item } from '../../types';
-import { COMMON_UNITS, roundToOneDecimal } from './projectInventoryUtils';
+import { COMMON_UNITS } from './projectInventoryUtils';
 import { formatPersianNumber } from '../../utils';
 import { CreatePurchaseOrderModal } from './CreatePurchaseOrderModal';
 

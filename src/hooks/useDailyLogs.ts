@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User, ProductionProject } from '../types';
 import { toast } from 'react-hot-toast';
-import { formatPersianNumber, getTodayJalaliDate, extractDateString } from '../utils';
+import { getTodayJalaliDate, extractDateString } from '../utils';
 import { confirmAction } from '../components/ConfirmDialogHost';
 
 export interface SimpleUserOption {

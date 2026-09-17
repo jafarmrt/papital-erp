@@ -4,11 +4,11 @@ import { orm } from '../db/drizzle.js';
 import { items, itemPrices } from '../db/schema.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { ItemsService } from '../services/items.service.js';
-import { normalizeStrategyTitle, getStrategyCanonicalKey, formatStrategyDisplayTitle } from '../utils.js';
+import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../utils.js';
 
 const router = Router();
 
@@ -20,13 +20,6 @@ export const itemPriceSchema = z.object({
   }),
   params: z.object({
     id: numericIdString
-  })
-});
-
-const itemPriceDeleteSchema = z.object({
-  params: z.object({
-    id: numericIdString,
-    priceId: numericIdString
   })
 });
 
@@ -143,46 +136,8 @@ router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_pr
   }
 });
 
-// DELETE /items/:id/prices/:priceId
-router.delete('/items/:id/prices/:priceId', authorize('admin', 'manager', 'products.edit_price'), validate(itemPriceDeleteSchema), async (req, res) => {
-  try {
-    const itemId = Number(req.params.id);
-    const priceId = Number(req.params.priceId);
-
-    const [targetItem] = await orm.select({ id: items.id, name: items.name, code: items.code })
-      .from(items)
-      .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)));
-
-    const [existingPrice] = await orm.select()
-      .from(itemPrices)
-      .where(and(eq(itemPrices.id, priceId), eq(itemPrices.itemId, itemId)));
-
-    await orm.update(itemPrices)
-      .set({ isDeleted: 1, updatedAt: new Date().toISOString() })
-      .where(and(eq(itemPrices.id, priceId), eq(itemPrices.itemId, itemId)));
-
-    if (existingPrice) {
-      await logActivity({
-        req,
-        action: 'DELETE',
-        entity: 'قیمت کالا',
-        entityId: itemId,
-        description: `حذف قیمت سطح "${existingPrice.title}" برای کالای "${targetItem?.name || itemId}"`,
-        details: {
-          itemId,
-          itemCode: targetItem?.code,
-          itemName: targetItem?.name,
-          title: existingPrice.title,
-          before: { price: existingPrice.price, currency: existingPrice.currency }
-        }
-      });
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    throw err;
-  }
-});
+// DELETE /items/:id/prices/:priceId — حذف شد (v4.0.29): هیچ فراخوانی frontend ندارد؛
+// حذف قیمت‌ها از طریق batch-update انجام می‌شود.
 
 // POST /items/prices/batch-update
 router.post('/items/prices/batch-update', authorize('admin', 'manager', 'products.edit_price'), validate(batchPriceUpdateSchema), async (req, res) => {

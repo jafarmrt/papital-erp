@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { 
-  ShoppingCart, Package, ArrowRight, Layers, RefreshCw, 
-  CheckCircle2, AlertTriangle, Search, ExternalLink, Box,
-  Clock, ShieldAlert, BarChart2
+  ShoppingCart, ArrowRight, Layers, RefreshCw,
+  Search, Box,
+  BarChart2
 } from 'lucide-react';
 import { ProductionProject, Item, User } from '../types';
 import { fetchJson } from '../api';
@@ -13,7 +13,6 @@ import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
 
 export default function ProjectInventoryPage({ user }: { user?: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   
   const queryProjectId = searchParams.get('projectId');
   const [projects, setProjects] = useState<ProductionProject[]>([]);

@@ -1,4 +1,4 @@
-import { ProductionProject, Customer, Item, FinancialAttachment } from '../../types';
+import { ProductionProject, Customer, FinancialAttachment } from '../../types';
 import { WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage } from './types';
 import { extractDateString } from '../../utils';

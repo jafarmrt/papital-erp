@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { RefreshCw, Save, ShieldCheck, Info, Check } from 'lucide-react';

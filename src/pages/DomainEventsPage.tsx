@@ -1,4 +1,3 @@
-import React from 'react';
 import { Zap, ShieldCheck } from 'lucide-react';
 import { User } from '../types';
 import { DomainEventsTab } from '../components/settings/DomainEventsTab';

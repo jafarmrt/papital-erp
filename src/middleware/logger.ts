@@ -3,7 +3,6 @@ import morgan from 'morgan';
 import fs from 'fs';
 import path from 'path';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { sanitizeSensitiveData } from '../lib/auditLogger.js';
 import { getRequestContext } from '../lib/requestContext.js';
 
 const { combine, timestamp, printf, colorize } = winston.format;

@@ -1,5 +1,5 @@
-import { orm, pool } from '../../db/drizzle.js';
-import { formDrafts, users } from '../../db/schema.js';
+import { orm } from '../../db/drizzle.js';
+import { formDrafts } from '../../db/schema.js';
 import { eq, and, sql, desc, lt } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 

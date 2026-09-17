@@ -1,8 +1,5 @@
-import React, { useState } from 'react';
-import {
-  Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save,
-  Layers, FolderTree, AlertCircle, Printer, ArrowLeft, Plus
-} from 'lucide-react';
+import { useState } from 'react';
+import { Boxes, ShoppingCart, CheckCircle2, Lock, Unlock, Save, FolderTree, Printer, ArrowLeft } from 'lucide-react';
 import { Item, ProjectInventoryControlSectionData, PurchaseListItem } from '../../types';
 import { useProjectInventory } from '../../hooks/useProjectInventory';
 import { ProductTreeInventoryCards } from './ProductTreeInventoryCards';
@@ -33,7 +30,6 @@ export function ProjectInventoryTab({
   const {
     saving,
     isFinalized,
-    finalizedAt,
     reservedItems,
     isUnitConversionModalOpen,
     setIsUnitConversionModalOpen,

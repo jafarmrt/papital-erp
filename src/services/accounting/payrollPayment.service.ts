@@ -10,7 +10,7 @@ import { eq, and } from 'drizzle-orm';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
-import { validateLockOrder, LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
+import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';

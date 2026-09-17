@@ -1,7 +1,7 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
-import { fin, FinancialMath, FinancialDecimal } from '../../lib/financialDecimal.js';
+import { fin } from '../../lib/financialDecimal.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';

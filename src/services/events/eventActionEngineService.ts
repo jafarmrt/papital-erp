@@ -71,24 +71,6 @@ export interface CreateRuleInput {
 
 export class EventActionEngineService {
   /**
-   * Alias method for backwards compatibility
-   */
-  public static evaluateRuleConditions(ruleConditionsJson: unknown, payload: unknown): boolean {
-    if (!ruleConditionsJson || (Array.isArray(ruleConditionsJson) && ruleConditionsJson.length === 0)) {
-      return true;
-    }
-    const dummyEvent = { payload } as unknown as BaseDomainEvent;
-    return this.evaluateConditions(ruleConditionsJson, dummyEvent);
-  }
-
-  /**
-   * Alias method for backwards compatibility
-   */
-  public static async processEventActions(event: BaseDomainEvent): Promise<void> {
-    return this.processEvent(event);
-  }
-
-  /**
    * Helper to resolve nested dot-notated property paths using RuleEngineService
    */
   public static resolveField(path: string, obj: unknown): unknown {

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Target, PhoneCall, Plus, Briefcase, TrendingUp, CheckCircle2, Clock, Sparkles } from 'lucide-react';
+import { Target, Plus, Briefcase, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 

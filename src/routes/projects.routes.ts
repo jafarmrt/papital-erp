@@ -7,11 +7,10 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource, withOrderedLocks } from '../lib/lockOrder.js';
+import { withOrderedLocks } from '../lib/lockOrder.js';
 import { businessNowIsoDateTime } from '../lib/businessClock.js';
 import { DocumentService } from '../services/document.service.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
-import { inArray } from 'drizzle-orm';
 
 const router = Router();
 router.use(authenticateToken);

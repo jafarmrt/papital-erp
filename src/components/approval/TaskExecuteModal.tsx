@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShieldCheck, X, Printer, CheckCircle2, XCircle, MessageSquare, Send
 } from 'lucide-react';

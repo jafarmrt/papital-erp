@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { fetchJson } from '../api';
-import { Customer, ContactPerson, User, CRMLead, CRMActivity } from '../types';
-import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, UserPlus, Phone, Building2, UserCheck, Briefcase, Truck, Users, ArrowUpRight, ArrowDownLeft, CreditCard, FileText, CheckCircle2, FileSpreadsheet } from 'lucide-react';
+import { Customer, User, CRMLead, CRMActivity } from '../types';
+import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, Phone, Building2, Briefcase, Truck, Users, FileText, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
 import { CustomerDossierDrawer } from '../components/crm/CustomerDossierDrawer';
@@ -14,16 +14,15 @@ import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../utils';
+import { formatPersianPrice, formatCurrencyLabel } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
 
 export default function CustomersPage({ user }: { user: User }) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
   const location = useLocation();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
 
   // Tab filter: 'all' | 'customer' | 'supplier'
   const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier'>('all');

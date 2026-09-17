@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { ProductionProject, Customer, Item, FinancialAttachment } from '../../types';
+import { Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
 import { getTodayJalaliDate } from '../../utils';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../../constants/presets';

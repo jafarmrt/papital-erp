@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore, Check, AlertCircle } from 'lucide-react';
+import { Layers, Plus, Trash2, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { WorkflowPreset } from '../../constants/presets';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
@@ -33,7 +33,7 @@ export function WorkflowPresetsTab({
   const curLbl = formatCurrencyLabel(appCurrency);
 
   const [availableTasks, setAvailableTasks] = useState<PieceworkTask[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState<boolean>(true);
+  const [, setLoadingTasks] = useState<boolean>(true);
   const [showArchived, setShowArchived] = useState<boolean>(false);
 
   // Load piecework tasks from payroll/piecework section

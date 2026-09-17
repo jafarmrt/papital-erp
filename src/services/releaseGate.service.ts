@@ -1,10 +1,10 @@
-import { pool, orm } from '../db/drizzle.js';
-import { sql, eq } from 'drizzle-orm';
+import { pool } from '../db/drizzle.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { DataReconciliationService } from './reconciliation/dataReconciliation.service.js';
 import { SystemRecoveryService } from './recovery/systemRecovery.service.js';
 import { BUILD_INFO } from '../lib/version.js';
+import { SYSTEM_UPDATES } from '../data/appInfoAndChangelog.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -62,7 +62,6 @@ export class ReleaseGateService {
    */
   static async evaluateReleaseGate(): Promise<ReleaseGateReport> {
     const criteria: ReleaseGateCriteria[] = [];
-    const tStart = Date.now();
 
     // 1. Check Database Connectivity & Metrics
     const t0 = Date.now();
@@ -177,15 +176,14 @@ export class ReleaseGateService {
       evidence: `بیش از ${totalAuditLogs} لاگ حسابرسی فعال با اسنپ‌شات‌های تغییرات ثبت شده است. اندپوینت سلامت ۳۶۰ درجه وضعیت HEALTHY را گزارش می‌کند.`
     });
 
-    // 8. Pillar 8: Changelog & Version Traceability — مشتق از داده واقعی
-    const changelogRes = await pool.query(`SELECT count(*) as count FROM changelogs`);
-    const totalChangelogEntries = Number(changelogRes.rows[0]?.count || 0);
+    // 8. Pillar 8: Changelog & Version Traceability — منبع حقیقت یگانه: SYSTEM_UPDATES (v4.0.29)
+    const totalChangelogEntries = Array.isArray(SYSTEM_UPDATES) ? SYSTEM_UPDATES.length : 0;
     criteria.push({
       id: 'pillar_changelog_traceability',
       category: 'changelog',
       title: 'مستندسازی جامع تاریخچه تغییرات و انطباق کامل با نقشه راه V8 Master Blueprint',
       status: totalChangelogEntries > 0 ? 'passed' : 'failed',
-      evidence: `اندازه‌گیری زنده: ${totalChangelogEntries} مدخل چنج‌لاگ در پایگاه‌داده ثبت شده است (نسخه جاری: ${BUILD_INFO.version}).`
+      evidence: `اندازه‌گیری زنده: ${totalChangelogEntries} مدخل چنج‌لاگ در منبع حقیقت واحد (SYSTEM_UPDATES) موجود است (نسخه جاری: ${BUILD_INFO.version}).`
     });
 
     // Compute Overall Status

@@ -6,13 +6,13 @@ import {
   warehouses,
   transactions
 } from '../../db/schema.js';
-import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
 import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
-import { validateLockOrder, sortIdsForLocking, LockHierarchyLevel, LockableResource, withOrderedLocks } from '../../lib/lockOrder.js';
+import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ConflictError, InsufficientStockError } from '../../errors/customErrors.js';
 
@@ -421,7 +421,6 @@ export class ProjectBomAllocationService {
     allocationId: number,
     opts?: { userId?: number; username?: string }
   ): Promise<ProjectBomAllocationRecord> {
-    const operatorName = opts?.username || 'سیستم';
 
     return await orm.transaction(async (txEngine) => {
       const [alloc] = await txEngine
@@ -469,7 +468,6 @@ export class ProjectBomAllocationService {
     opts?: { reason?: string; userId?: number; username?: string }
   ): Promise<ProjectBomAllocationRecord> {
     const operatorName = opts?.username || 'سیستم';
-    const operatorId = opts?.userId || null;
     const reason = opts?.reason || 'آزادسازی تخصیص مواد اولیه پروژه';
 
     return await orm.transaction(async (txEngine) => {

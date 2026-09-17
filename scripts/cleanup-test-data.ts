@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { orm } from '../src/db/drizzle.js';
 import { sql } from 'drizzle-orm';
-import { logger } from '../src/middleware/logger.js';
 import { DataReconciliationService } from '../src/services/reconciliation/dataReconciliation.service.js';
 
 /**
@@ -15,7 +14,6 @@ import { DataReconciliationService } from '../src/services/reconciliation/dataRe
 
 async function main() {
   const isDryRun = process.argv.includes('--dry-run');
-  const isForce = process.argv.includes('--force') || process.argv.includes('-f') || !isDryRun;
 
   console.log('=====================================================');
   console.log('🧹 TD-036: Scoped Test Data Cleanup & Recalibration');

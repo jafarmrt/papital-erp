@@ -6,7 +6,7 @@ import { Calculator, X, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { PieceworkLog, PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { BatchLogRow } from '../../hooks/usePiecework';
-import { formatPersianPrice, formatQuantityOrTime, parseQuantityOrTime, toEnglishDigits, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 
 interface PieceworkLogModalProps {

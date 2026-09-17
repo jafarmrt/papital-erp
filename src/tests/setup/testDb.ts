@@ -1,5 +1,4 @@
 import { pool } from '../../db/drizzle.js';
-import { sql } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { runMigrations } from '../../db/migrator.js';
 

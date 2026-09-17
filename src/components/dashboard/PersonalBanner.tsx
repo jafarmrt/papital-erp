@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, Sun, Sunrise, Sunset, Moon, RefreshCw, ShieldCheck, Scale, Leaf, HeartHandshake, Eye, Award, Users, HardHat, GraduationCap, Megaphone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sun, Sunrise, Sunset, Moon, RefreshCw, ShieldCheck, Scale, Leaf, HeartHandshake, Eye, Award, Users, HardHat, GraduationCap, Megaphone } from 'lucide-react';
 import { toPersianDigits, getTodayJalaliDate } from '../../utils';
 import { User, FairTradePrinciple } from '../../types';
 

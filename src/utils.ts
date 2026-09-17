@@ -228,48 +228,34 @@ function tzOptions(base: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions
   return { ...base, timeZone: _displayTimezone };
 }
 
-export function getTodayJalaliDate(): string {
+/** پیاده‌سازی واحد برای هر سه تابع تاریخ جلالی (v4.0.29 — حذف بدنه‌های تکراری) */
+function getShiftedJalaliDate(dayOffset: number, fallback: string = ''): string {
   try {
-    const today = new Date();
+    const date = new Date();
+    if (dayOffset !== 0) {
+      date.setDate(date.getDate() + dayOffset);
+    }
     const formatted = new Intl.DateTimeFormat('fa-IR-u-ca-persian', tzOptions({
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
-    })).format(today);
+    })).format(date);
     return toEnglishDigits(formatted);
   } catch (e) {
-    return '1405/06/06';
+    return fallback;
   }
+}
+
+export function getTodayJalaliDate(): string {
+  return getShiftedJalaliDate(0, '1405/06/06');
 }
 
 export function getPastJalaliDate(daysAgo: number = 30): string {
-  try {
-    const past = new Date();
-    past.setDate(past.getDate() - daysAgo);
-    const formatted = new Intl.DateTimeFormat('fa-IR-u-ca-persian', tzOptions({
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    })).format(past);
-    return toEnglishDigits(formatted);
-  } catch (e) {
-    return '';
-  }
+  return getShiftedJalaliDate(-daysAgo);
 }
 
 export function getFutureJalaliDate(daysAhead: number = 30): string {
-  try {
-    const future = new Date();
-    future.setDate(future.getDate() + daysAhead);
-    const formatted = new Intl.DateTimeFormat('fa-IR-u-ca-persian', tzOptions({
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    })).format(future);
-    return toEnglishDigits(formatted);
-  } catch (e) {
-    return '';
-  }
+  return getShiftedJalaliDate(daysAhead);
 }
 
 export function cleanDecimalString(val: number | string | null | undefined, maxDecimals: number = 2): string {

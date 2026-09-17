@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
@@ -74,7 +74,6 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
   const {
     hasServerDraft,
-    serverDraftData,
     draftStatusText,
     discardDraft,
     restoreDraft

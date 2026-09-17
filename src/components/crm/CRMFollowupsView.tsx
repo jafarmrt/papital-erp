@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { PhoneCall, Plus, Check, Clock, Calendar, Video, MessageSquare, Mail, FileText, Search, ChevronRight, ChevronLeft, Filter, UserCheck, User, Briefcase } from 'lucide-react';
+import { useState } from 'react';
+import { PhoneCall, Plus, Check, Clock, Calendar, Video, MessageSquare, Mail, FileText, Search, ChevronRight, ChevronLeft, UserCheck, User, Briefcase } from 'lucide-react';
 import { CRMActivity, CRMLead } from '../../types';
 import { formatPersianNumber } from '../../utils';
 

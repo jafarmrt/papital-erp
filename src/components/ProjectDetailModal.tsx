@@ -1,11 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  X, Check, Plus, Trash2, Calendar, User, Package, Users, ShieldAlert,
-  Layers, ArrowUp, ArrowDown, Clock, CheckCircle2, AlertCircle, PlayCircle,
-  Edit3, RefreshCw, ChevronRight, UserPlus, Wrench, MessageSquare, Tag,
-  ShoppingCart, BarChart2, CheckSquare, FileText, Maximize2, Minimize2, Sparkles,
-  Paperclip
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Check, Calendar, User, Package, Users, Layers, CheckCircle2, Edit3, RefreshCw, ShoppingCart, BarChart2, CheckSquare, FileText, Maximize2, Minimize2, Sparkles, Paperclip } from 'lucide-react';
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
@@ -73,8 +67,8 @@ export default function ProjectDetailModal({
   const [itemsList, setItemsList] = useState<Item[]>([]);
   const [personnelList, setPersonnelList] = useState<any[]>([]);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>([]);
-  const [pricesMap, setPricesMap] = useState<Record<number, any[]>>({});
-  const [pieceworkLogs, setPieceworkLogs] = useState<any[]>([]);
+  const [, setPricesMap] = useState<Record<number, any[]>>({});
+  const [, setPieceworkLogs] = useState<any[]>([]);
 
   // Stage editing inline state
   const [editingStageId, setEditingStageId] = useState<number | null>(null);

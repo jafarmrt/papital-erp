@@ -13,10 +13,8 @@ import {
   workflowDefinitions,
   workflowStates,
   workflowTransitions,
-  workflowInstances,
-  accounts
+  workflowInstances
 } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
 
 /**
  * TST-008: Canonical test password & its real bcrypt hash so factory users can

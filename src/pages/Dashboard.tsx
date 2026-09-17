@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCRMData } from '../hooks/useCRMData';
@@ -8,7 +8,7 @@ import { CustomizableShortcuts } from '../components/dashboard/CustomizableShort
 import { InteractiveJalaliCalendar, CalendarEventItem } from '../components/dashboard/InteractiveJalaliCalendar';
 import { CRMTasksWidget } from '../components/dashboard/CRMTasksWidget';
 import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentionsWidget';
-import { Warehouse, ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { Warehouse, ArrowLeft, Sparkles } from 'lucide-react';
 import { toEnglishDigits } from '../utils';
 
 export default function Dashboard() {
@@ -28,13 +28,7 @@ export default function Dashboard() {
     logs: dailyLogs,
     stats: dailyStats,
     loading: logsLoading,
-    loadLogsAndStats: fetchDailyLogs
   } = useDailyLogs(user as any);
-
-  const handleRefreshAll = () => {
-    if (fetchCRMData) fetchCRMData();
-    if (fetchDailyLogs) fetchDailyLogs();
-  };
 
   const hasCrmPermission = Boolean(
     userPermissions?.isAdmin ||

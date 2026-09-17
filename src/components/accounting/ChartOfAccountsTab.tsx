@@ -1,23 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { 
-  FolderTree, 
-  Plus, 
-  Search, 
-  Filter, 
-  ChevronRight, 
-  ChevronDown, 
-  Edit3, 
-  Trash2, 
-  RefreshCw, 
-  CheckCircle2, 
-  Layers, 
-  Folder, 
-  FileText,
-  AlertCircle,
-  Hash
-} from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { FolderTree, Plus, Search, ChevronRight, ChevronDown, Edit3, Trash2, RefreshCw } from 'lucide-react';
+import { formatPersianPrice } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
 

@@ -1,10 +1,10 @@
 import React from 'react';
-import { PhoneCall, Video, MessageSquare, Mail, FileText, AtSign, Clock, CheckCircle2 } from 'lucide-react';
+import { PhoneCall, Video, MessageSquare, Mail, FileText, Clock, CheckCircle2 } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead, CRMActivity } from '../../types';
-import { getTodayJalaliDate, toEnglishDigits, extractDateString } from '../../utils';
+import { getTodayJalaliDate, extractDateString } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
 
 interface CRMInteractionModalProps {

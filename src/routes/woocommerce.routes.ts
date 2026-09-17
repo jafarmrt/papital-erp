@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, desc, like, and } from 'drizzle-orm';
-import { appSettings, items, customers, documents, documentItems, woocommerceOrderLogs, warehouses } from '../db/schema.js';
+import { appSettings, items, customers, documents, woocommerceOrderLogs, warehouses } from '../db/schema.js';
 import axios from 'axios';
 import https from 'https';
 import crypto from 'crypto';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardCheck, Search } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 import { fetchJson } from '../../api';

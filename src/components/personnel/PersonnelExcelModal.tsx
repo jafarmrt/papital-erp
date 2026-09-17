@@ -1,21 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import {
-  X,
-  Upload,
-  Download,
-  FileSpreadsheet,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  Info,
-  Sparkles,
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  Users,
-  Search,
-  RefreshCw
-} from 'lucide-react';
+import { X, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader2, Info, AlertTriangle, ArrowRight, Check, Users, Search } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';

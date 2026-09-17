@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { getDisplayTimezoneClient } from '../utils';
-import {
-  Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Lock,
-  Send, FileText, GitPullRequest, Wrench, Play, Activity, Layers, CheckSquare
-} from 'lucide-react';
+import { Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Send, FileText, GitPullRequest, Wrench, Play, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface HealthData {

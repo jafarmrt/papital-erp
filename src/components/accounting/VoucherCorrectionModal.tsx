@@ -1,20 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  AlertCircle, 
-  FileText, 
-  Calendar, 
-  Save, 
-  X,
-  Scale,
-  Sparkles,
-  ArrowRightLeft,
-  AlertTriangle,
-  History
-} from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { Plus, Trash2, CheckCircle2, AlertCircle, FileText, Calendar, Save, X, Scale, Sparkles, AlertTriangle, History } from 'lucide-react';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { Account, Customer, Personnel, JournalVoucher } from '../../types';
 import { AccountSearchSelect } from './AccountSearchSelect';

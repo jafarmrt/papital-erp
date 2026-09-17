@@ -1,4 +1,3 @@
-import React from 'react';
 import { Item, User } from '../../types';
 import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2 } from 'lucide-react';
 import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';

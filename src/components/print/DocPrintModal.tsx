@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Printer, X } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 
 // V10-3.2: مودال پیش‌نمایش چاپ یکدست (الگوی PieceworkPayslipModal)

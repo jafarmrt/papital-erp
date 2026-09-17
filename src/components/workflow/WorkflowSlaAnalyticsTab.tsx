@@ -1,15 +1,5 @@
 import React from 'react';
-import { 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Activity, 
-  TrendingDown, 
-  Layers, 
-  UserCheck, 
-  ShieldAlert,
-  ArrowUpRight
-} from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle2, Activity, TrendingDown, ShieldAlert } from 'lucide-react';
 import { useWorkflowSlaAnalyticsQuery } from '../../hooks/queries/useWorkflowQueries';
 
 export const WorkflowSlaAnalyticsTab: React.FC = () => {

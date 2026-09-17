@@ -331,12 +331,9 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', accountingRoutes);
   app.use('/api/workflow', workflowRoutes);
   app.use('/api/inventory', inventoryRoutes);
-  app.use('/api/inventory-integrity', inventoryRoutes);
   app.use('/api/events', eventsRoutes);
-  app.use('/api/system', eventsRoutes);
   app.use('/api', draftsRoutes);
   app.use('/api/procurement', procurementRoutes);
-  app.use('/api', procurementRoutes);
 
   const uploadsStatic = express.static(path.join(process.cwd(), 'public', 'uploads'));
   app.use('/uploads', (req, res, next) => {

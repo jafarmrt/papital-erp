@@ -1,5 +1,3 @@
-import React from 'react';
-import { FileText } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { PrintModal } from '../common/PrintModal';
 import type { JournalVoucher } from '../../types';

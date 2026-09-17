@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { FormDraftService } from '../services/drafts/formDraft.service.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema } from '../middleware/validate.js';
+import { validate } from '../middleware/validate.js';
 import { logger } from '../middleware/logger.js';
 
 const router = Router();
@@ -77,39 +77,6 @@ router.get('/drafts', async (req, res) => {
     res.json({ drafts, data: drafts });
   } catch (error) {
     logger.error('Error listing form drafts:', error);
-    throw error;
-  }
-});
-
-// Discard / Delete a draft by entityType and draftKey
-router.delete('/drafts/:entityType', validate(entityTypeParamSchema), async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const sessionId = (req.headers['x-session-id'] as string) || '';
-    const entityType = req.params.entityType;
-    const draftKey = (req.query.draftKey as string) || 'default';
-
-    const result = await FormDraftService.deleteDraft(entityType, draftKey, userId, sessionId);
-    res.json(result);
-  } catch (error) {
-    logger.error('Error deleting form draft:', error);
-    throw error;
-  }
-});
-
-// Discard a draft by ID
-router.delete('/drafts/id/:id', validate(paramsIdSchema), async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const draftId = parseInt(req.params.id, 10);
-    if (isNaN(draftId)) {
-      return res.status(400).json({ error: 'شناسه پیش‌نویس نامعتبر است' });
-    }
-
-    const result = await FormDraftService.deleteDraftById(draftId, userId);
-    res.json(result);
-  } catch (error) {
-    logger.error('Error deleting form draft by ID:', error);
     throw error;
   }
 });

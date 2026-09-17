@@ -8,20 +8,7 @@ import {
 } from '../../hooks/queries/useWorkflowQueries';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { 
-  UserCheck, 
-  Plus, 
-  Search, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  Trash2, 
-  ShieldAlert, 
-  Calendar,
-  Layers,
-  ArrowRightLeft
-} from 'lucide-react';
+import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar, Layers, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface UserItem {
@@ -32,7 +19,7 @@ interface UserItem {
 }
 
 export function WorkflowDelegationTab() {
-  const { data: delegations = [], isLoading, refetch } = useDelegationsQuery();
+  const { data: delegations = [], isLoading } = useDelegationsQuery();
   const { data: definitions = [] } = useWorkflowDefinitionsQuery();
   const createMutation = useCreateDelegationMutation();
   const revokeMutation = useRevokeDelegationMutation();

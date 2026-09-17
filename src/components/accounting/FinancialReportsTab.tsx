@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   BarChart3, 
@@ -85,12 +85,12 @@ export function FinancialReportsTab({
   const [trialCols, setTrialCols] = useState<'2' | '4' | '6' | '8'>('4');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [asOfDate, setAsOfDate] = useState('');
+  const [asOfDate] = useState('');
   const [tableSearch, setTableSearch] = useState('');
   const [selectedLedgerAccountId, setSelectedLedgerAccountId] = useState<number | ''>('');
 
   // Expand / Collapse state for tree view
-  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const [, setExpandedNodes] = useState<Record<string, boolean>>({});
 
   // Journal Book State
   const [journalBookData, setJournalBookData] = useState<any>(null);
@@ -98,7 +98,7 @@ export function FinancialReportsTab({
 
   // Financial Ratios State
   const [ratiosData, setRatiosData] = useState<any>(null);
-  const [ratiosLoading, setRatiosLoading] = useState(false);
+  const [, setRatiosLoading] = useState(false);
 
   // Initial fetch of trial balance and ratios
   useEffect(() => {

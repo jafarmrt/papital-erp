@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, FileSpreadsheet, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { UnifiedExcelModalProps } from './excel/types';
 import { useUnifiedExcelImport } from './excel/useUnifiedExcelImport';

@@ -1,25 +1,12 @@
 import { Router } from 'express';
 import { orm } from '../db/drizzle.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize } from '../middleware/authorize.js';
 import { transactions, items, users } from '../db/schema.js';
 import { eq, desc, sql, and, gte, lte, or, ilike } from 'drizzle-orm';
-import { z } from 'zod';
-import { validate, numericIdString } from '../middleware/validate.js';
-import { logActivity } from '../lib/auditLogger.js';
-import { DocumentService } from '../services/document.service.js';
-import { NotFoundError } from '../errors/customErrors.js';
 import { parsePagination } from '../lib/pagination.js';
-import { businessNowIsoDateTime } from '../lib/businessClock.js';
 
 const router = Router();
 router.use(authenticateToken);
-
-const deleteTxSchema = z.object({
-  params: z.object({
-    id: numericIdString
-  })
-});
 
 router.get('/transactions', async (req, res) => {
   try {
@@ -148,115 +135,6 @@ router.get('/transactions', async (req, res) => {
       limit,
       totalPages: Math.ceil(total / limit)
     });
-  } catch (err) {
-    throw err;
-  }
-});
-
-router.delete('/transactions/:id', authorize('admin'), validate(deleteTxSchema), async (req, res) => {
-  try {
-    const txId = parseInt(req.params.id);
-    const [existingTx] = await orm.select().from(transactions).where(eq(transactions.id, txId));
-    if (!existingTx) {
-      return res.status(404).json({ error: 'تراکنش یافت نشد.' });
-    }
-
-    if (existingTx.isDeleted) {
-      return res.status(400).json({ error: 'این تراکنش قبلاً حذف شده است.' });
-    }
-
-    if (existingTx.documentId) {
-      return res.status(400).json({ error: 'این تراکنش به یک سند متصل است و امکان حذف مستقیم آن وجود ندارد. لطفاً سند مربوطه را حذف یا ویرایش نمایید.' });
-    }
-
-    let auditDetail: Record<string, unknown> | null = null;
-
-    await orm.transaction(async (tx) => {
-      // ۱. خواندن تراکنش اصلی
-      const [original] = await tx.select()
-        .from(transactions)
-        .where(eq(transactions.id, txId))
-        .for('update');
-      
-      if (!original) throw new NotFoundError(`Transaction ${txId} not found`);
-      if (original.isDeleted) throw new Error('Transaction already deleted');
-      
-      const loc = original.location || 'main';
-      const qty = Number(original.quantity);
-      const itemId = original.itemId;
-      const reversalType = original.type === 'in' ? 'out' : 'in';
-
-      // ۲. soft-delete تراکنش اصلی
-      await tx.update(transactions)
-        .set({ 
-          isDeleted: 1,
-          notes: `${original.notes || ''} [Soft-deleted by admin at ${new Date().toISOString()}]`.trim()
-        })
-        .where(eq(transactions.id, txId));
-
-      const origUnitPrice = Number(original.unitPrice) || 0;
-      const origTotalPrice = Number(original.totalPrice) || (origUnitPrice * qty);
-
-      // ۳. اعمال حرکت انبار معکوس و ثبت تراکنش بازگشتی از طریق DocumentService.applyStockMovement
-      const username = req.user?.username || original.createdBy || 'admin';
-      const bizNow = await businessNowIsoDateTime();
-
-      await DocumentService.applyStockMovement(tx, {
-        itemId: original.itemId,
-        documentId: original.documentId || 0,
-        inOut: reversalType as 'in' | 'out',
-        quantity: qty,
-        price: origUnitPrice,
-        date: bizNow,
-        documentType: original.documentType || 'reversal',
-        documentRef: original.documentRef ? `REVERSAL-${original.documentRef}` : `REVERSAL-${txId}`,
-        user: username,
-        targetLoc: loc,
-      });
-
-      // اتصال reversalOfId به آخرین تراکنش درج‌شده برای حفظ audit trail
-      const [latestTx] = await tx.select({ id: transactions.id })
-        .from(transactions)
-        .where(eq(transactions.itemId, original.itemId))
-        .orderBy(desc(transactions.id))
-        .limit(1);
-
-      if (latestTx?.id) {
-        await tx.update(transactions)
-          .set({ 
-            reversalOfId: txId,
-            notes: `Reversal of transaction ${txId}`
-          })
-          .where(eq(transactions.id, latestTx.id));
-      }
-
-      const [itemData] = await tx.select({ name: items.name, code: items.code, currentStock: items.currentStock }).from(items).where(eq(items.id, itemId));
-      auditDetail = {
-        transactionId: txId,
-        reversalTransactionId: latestTx?.id,
-        itemId: itemId,
-        itemName: itemData?.name || '',
-        itemCode: itemData?.code || '',
-        type: original.type,
-        reversalType: reversalType,
-        quantity: qty,
-        location: loc,
-        afterStock: itemData?.currentStock || 0
-      };
-    });
-
-    if (auditDetail) {
-      await logActivity({
-        req,
-        action: 'DELETE',
-        entity: 'موجودی انبار',
-        entityId: Number(auditDetail.itemId),
-        description: `ابطال و حذف نرم تراکنش انبارداری #${txId} و ایجاد تراکنش برگشتی #${auditDetail.reversalTransactionId} برای کالای "${auditDetail.itemName}"`,
-        details: auditDetail
-      });
-    }
-
-    res.json({ success: true, reversalId: auditDetail?.reversalTransactionId });
   } catch (err) {
     throw err;
   }

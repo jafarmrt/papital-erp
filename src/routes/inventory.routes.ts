@@ -275,16 +275,6 @@ router.put(
   })
 );
 
-// GET /api/inventory/negative-stock-violations
-router.get(
-  '/negative-stock-violations',
-  authorizePermission('warehouse.view', 'inventory.reconcile', 'audit.view'),
-  asyncHandler(async (req, res) => {
-    const violations = await InventoryIntegrityService.getNegativeStockViolations();
-    res.json({ violations, totalViolations: violations.length });
-  })
-);
-
 // GET /api/inventory/allocations
 router.get(
   '/allocations',
@@ -303,22 +293,6 @@ router.get(
       search
     });
 
-    res.json({ allocations, total: allocations.length });
-  })
-);
-
-// GET /api/inventory/allocations/project/:projectId
-router.get(
-  '/allocations/project/:projectId',
-  authorizePermission('warehouse.view', 'projects.view'),
-  validate(paramsProjectIdSchema),
-  asyncHandler(async (req, res) => {
-    const projectId = parseInt(req.params.projectId, 10);
-    if (isNaN(projectId)) {
-      throw new BadRequestError('شناسه پروژه نامعتبر است.');
-    }
-
-    const allocations = await InventoryIntegrityService.getProjectAllocations(projectId);
     res.json({ allocations, total: allocations.length });
   })
 );
@@ -351,39 +325,6 @@ router.post(
     res.json({
       success: true,
       message: `${result.allocatedCount} قلم مواد اولیه با موفقیت از انبار کسر و به پروژه تخصیص یافت.`,
-      data: result
-    });
-  })
-);
-
-// POST /api/inventory/allocations/receipt-allocate - Link receiving transactions to project BOM items
-router.post(
-  '/allocations/receipt-allocate',
-  authorizePermission('warehouse.view', 'projects.view'),
-  idempotency({ scope: 'inventory' }),
-  validate(projectReceiptAllocateSchema),
-  asyncHandler(async (req, res) => {
-    const { projectId, allocations } = req.body;
-    const user = (req as any).user;
-    const result = await InventoryIntegrityService.allocateReceiptItemsForProjectBom({
-      projectId: Number(projectId),
-      allocations,
-      userId: user?.id,
-      username: user?.name || user?.username || 'مدیر سیستم'
-    });
-
-    await logActivity({
-      req,
-      action: 'CREATE',
-      entity: 'تخصیص رسید انبار به BOM پروژه',
-      entityId: String(projectId),
-      description: `تخصیص مستقیم ${result.allocatedCount} قلم مواد از محل رسید انبار/خرید به پروژه شناسه ${projectId}`,
-      details: result
-    });
-
-    res.json({
-      success: true,
-      message: `${result.allocatedCount} قلم مواد اولیه با موفقیت از رسید انبار به پروژه تخصیص یافت.`,
       data: result
     });
   })

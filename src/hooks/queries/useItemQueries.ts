@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { Item, Category } from '../../types';
+import { Item } from '../../types';
 import { toast } from 'react-hot-toast';
 import { QUERY_KEYS, itemKeys } from '../../lib/queryKeys';
 import { invalidateDomain, invalidatePreset } from '../../lib/queryInvalidation';
@@ -51,22 +51,6 @@ export function useItemsQuery(type: 'product' | 'raw_material', page: number = 1
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: true,
-  });
-}
-
-/**
- * Hook to query a single item detail
- */
-export function useItemDetailQuery(id?: number | null) {
-  return useQuery<Item | null>({
-    queryKey: id ? QUERY_KEYS.items.detail(id) : ['items', 'detail', 'null'],
-    queryFn: async () => {
-      if (!id) return null;
-      return fetchJson(`/items/${id}`);
-    },
-    enabled: Boolean(id),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
   });
 }
 

@@ -3,7 +3,7 @@ import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.
 import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-orm';
 import type { JournalVoucher, JournalVoucherItem } from '../../types.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
-import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { fin } from '../../lib/financialDecimal.js';
 import { getTodayJalaliDate } from '../../utils.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError } from '../../errors/customErrors.js';
 
@@ -450,19 +450,15 @@ export class VoucherService {
    * Inverts all debit and credit rows to completely neutralize the financial impact of a voucher.
    */
   static async reverseVoucher(
-    paramsOrId: number | {
+    params: {
       voucherId: number;
       date?: string;
       reason?: string;
       userId?: number;
       username?: string;
       externalTx?: DbExecutor;
-    },
-    legacyOptions?: { date?: string; reason?: string; userId?: number; username?: string }
+    }
   ): Promise<JournalVoucher> {
-    const params = typeof paramsOrId === 'number'
-      ? { voucherId: paramsOrId, ...legacyOptions }
-      : paramsOrId;
 
     const execute = async (tx: DbExecutor): Promise<number> => {
       // V3.0.7 (TD-061): سند اصلی باید «داخل تراکنش اجرایی» خوانده شود؛
@@ -535,7 +531,7 @@ export class VoucherService {
    * Issues a reversal voucher for the previous voucher and creates the new corrected voucher atomically.
    */
   static async correctVoucher(
-    paramsOrId: number | {
+    params: {
       voucherId: number;
       date?: string;
       reason: string;
@@ -553,48 +549,8 @@ export class VoucherService {
       newDescription?: string;
       userId?: number;
       username?: string;
-    },
-    legacyOptions?: {
-      date?: string;
-      reason: string;
-      newItems: Array<{
-        accountId: number;
-        detailedType?: string;
-        detailedId?: number | null;
-        detailedName?: string;
-        debit: number;
-        credit: number;
-        currency?: string;
-        exchangeRate?: number;
-        description?: string;
-      }>;
-      newDescription?: string;
-      userId?: number;
-      username?: string;
     }
   ): Promise<{ reversalVoucher: JournalVoucher; correctedVoucher: JournalVoucher; message: string }> {
-    const params = (typeof paramsOrId === 'number'
-      ? { voucherId: paramsOrId, ...legacyOptions }
-      : paramsOrId) as {
-        voucherId: number;
-        date?: string;
-        reason: string;
-        newItems: Array<{
-          accountId: number;
-          detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
-          detailedId?: number | null;
-          detailedName?: string;
-          debit: number;
-          credit: number;
-          currency?: string;
-          exchangeRate?: number;
-          description?: string;
-        }>;
-        newDescription?: string;
-        userId?: number;
-        username?: string;
-      };
-
     if (!params.reason || !params.reason.trim()) {
       throw new Error('ثبت علت اصلاح سند الزامی است');
     }

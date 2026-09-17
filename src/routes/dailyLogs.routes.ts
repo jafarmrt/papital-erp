@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, desc, and, or, sql } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { dailyWorkLogs, notifications, users, roles } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -278,9 +278,6 @@ router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHan
 // GET aggregated management summary report (Daily & Monthly performance of all staff)
 // گارد دسترسی: فقط ادمین یا نقش دارای مجوز daily_logs.manage_all (قابل تخصیص از مدیریت نقش‌ها)
 router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_all'), asyncHandler(async (req, res) => {
-  const currentUserId = req.user?.id;
-  const currentUserRole = req.user?.role;
-
   const { report_type = 'daily', date, year_month, user_id } = req.query;
 
   const allLogs = await orm

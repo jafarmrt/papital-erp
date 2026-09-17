@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, Package, Box, UsersRound, ClipboardList, Layers, ArrowLeft, Loader2 } from 'lucide-react';
 import { useSearch } from '../SearchContext';

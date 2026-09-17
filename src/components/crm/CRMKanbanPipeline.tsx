@@ -1,4 +1,3 @@
-import React from 'react';
 import { Plus, PhoneCall, Edit3, Trash2, FileText } from 'lucide-react';
 import { CRMLead } from '../../types';
 import { STAGES } from '../../hooks/useCRMData';

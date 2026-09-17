@@ -51,13 +51,8 @@ export const migrationsLog = pgTable('migrations_log', {
   appliedAt: timestamp('applied_at', { mode: 'string' }).defaultNow()
 });
 
-export const changelogs = pgTable('changelogs', {
-  id: serial('id').primaryKey(),
-  version: text('version').notNull(),
-  date: timestamp('date', { withTimezone: false, mode: 'string' }).notNull(),
-  features: text('features').notNull(),
-  fixes: text('fixes').notNull()
-});
+// (v4.0.29) جدول changelogs حذف شد — dual-storage زیان‌بار با منبع حقیقت واحد
+// (src/data/changelogs/*.ts) جایگزین شد؛ مهاجرت 0008 جدول را از DB برمی‌دارد.
 
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: serial('id').primaryKey(),

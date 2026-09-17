@@ -15,21 +15,6 @@ export interface DLQQueryFilters {
 }
 
 export class DeadLetterQueueService {
-  /**
-   * Alias methods for backwards compatibility
-   */
-  static async getDLQItems(status?: string) {
-    const res = await this.getEvents({ status, limit: 100 });
-    return res.data;
-  }
-
-  static async replayItem(id: number, adjustedPayload?: unknown) {
-    return this.replayEvent(id, adjustedPayload);
-  }
-
-  static async dismissItem(id: number) {
-    return this.dismissEvent(id);
-  }
 
   /**
    * Quarantines an event into Dead Letter Queue (DLQ) with detailed diagnostic info.

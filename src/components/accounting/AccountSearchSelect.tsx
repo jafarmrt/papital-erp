@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, ChevronDown, Check, X, Hash } from 'lucide-react';
-import { normalizePersianText, toPersianDigits } from '../../utils';
+import { ChevronDown, Check, X } from 'lucide-react';
+import { normalizePersianText } from '../../utils';
 import type { Account } from '../../types';
+import { useClickOutside } from '../../hooks/useClickOutside';
 
 interface AccountSearchSelectProps {
   accounts: Account[];
@@ -65,20 +66,14 @@ export function AccountSearchSelect({
   }, [filteredAccounts]);
 
   // Click outside listener
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        if (selectedAccount) {
-          setSearchQuery(`${selectedAccount.code} - ${selectedAccount.name}`);
-        } else {
-          setSearchQuery('');
-        }
-      }
+  useClickOutside([containerRef], () => {
+    setIsOpen(false);
+    if (selectedAccount) {
+      setSearchQuery(`${selectedAccount.code} - ${selectedAccount.name}`);
+    } else {
+      setSearchQuery('');
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [selectedAccount]);
+  });
 
   const handleSelect = (account: Account) => {
     onChange(account.id);

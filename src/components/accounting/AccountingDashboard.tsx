@@ -1,19 +1,4 @@
-import React from 'react';
-import { 
-  DollarSign, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Wallet, 
-  Building2, 
-  CreditCard, 
-  FileText, 
-  TrendingUp, 
-  TrendingDown, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle,
-  PlusCircle
-} from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Wallet, Building2, CreditCard, FileText, TrendingUp, TrendingDown, PlusCircle } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import type { FinancialSummaryStats, JournalVoucher, Cheque } from '../../types';
 

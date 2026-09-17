@@ -4,18 +4,18 @@ import { toast } from 'react-hot-toast';
 import { User } from '../types';
 import {
   Layers, Search, Upload, Image as ImageIcon, Plus, RefreshCw,
-  Package, AlertCircle, Edit3, X, Check, Eye, Trash2, Sparkles, Filter,
+  Package, AlertCircle, Edit3, X, Check, Eye, Trash2, Filter,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Printer,
-  Download, ZoomIn
+  Download
 } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice } from '../utils';
+import { formatPersianNumber } from '../utils';
 import { compressTo300KB } from '../utils/imageCompression';
 import { DocPrintModal } from '../components/print/DocPrintModal';
 import { SafeImage } from '../components/SafeImage';
 import { useTransfersQuery, useSaveTransferMutation, useDeleteTransferMutation, TransferItem } from '../hooks/queries';
 
 export default function TransfersPage({ user }: { user?: User }) {
-  const { data: transfers = [], isLoading: loading, isFetching, refetch } = useTransfersQuery();
+  const { data: transfers = [], isLoading: loading, refetch } = useTransfersQuery();
   const saveMutation = useSaveTransferMutation();
   const deleteMutation = useDeleteTransferMutation();
 

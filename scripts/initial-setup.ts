@@ -3,7 +3,7 @@ import readline from 'readline';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { pool, orm } from '../src/db/drizzle.js';
-import { users, warehouses, appSettings, roles } from '../src/db/schema.js';
+import { users, warehouses, appSettings } from '../src/db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { runSeed } from '../src/db/seed.js';
 

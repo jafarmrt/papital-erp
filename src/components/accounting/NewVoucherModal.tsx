@@ -1,29 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  AlertCircle, 
-  FileText, 
-  Calendar, 
-  DollarSign, 
-  Save, 
-  X,
-  Hash,
-  Scale,
-  Zap,
-  ArrowRightLeft,
-  Copy,
-  Keyboard,
-  HelpCircle,
-  Sparkles,
-  ChevronRight,
-  Info
-} from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { Plus, CheckCircle2, AlertCircle, FileText, Save, X, Scale, Zap, Copy, Keyboard, Sparkles } from 'lucide-react';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import type { Account, Customer, Personnel, JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types';
-import { AccountSearchSelect } from './AccountSearchSelect';
+import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
 import VoucherItemsTable, { VoucherItemDraft } from './VoucherItemsTable';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
@@ -97,8 +76,6 @@ export function NewVoucherModal({
 
   const {
     hasServerDraft,
-    serverDraftData,
-    draftUpdatedAt,
     draftStatusText,
     discardDraft,
     restoreDraft

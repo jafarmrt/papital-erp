@@ -1,4 +1,3 @@
-import React from 'react';
 import { Building2, List, Download, Database, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';

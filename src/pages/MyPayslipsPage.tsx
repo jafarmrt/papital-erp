@@ -15,7 +15,6 @@ const statusMeta: Record<string, { label: string; cls: string; icon: typeof Badg
 export default function MyPayslipsPage() {
   const [payslips, setPayslips] = useState<PieceworkPayroll[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isLinked, setIsLinked] = useState(true);
   const [viewingPayroll, setViewingPayroll] = useState<PieceworkPayroll | null>(null);
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);

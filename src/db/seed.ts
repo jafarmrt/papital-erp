@@ -1,9 +1,8 @@
 import { orm } from './drizzle.js';
 import { runMigrations } from './migrator.js';
-import { users, categories, warehouses, appSettings, changelogs, roles, pieceworkTasks, taskCategories } from './schema.js';
+import { categories, appSettings, roles, pieceworkTasks } from './schema.js';
 import { eq, sql, inArray } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
-import { SYSTEM_UPDATES } from '../data/appInfoAndChangelog.js';
 import { INITIAL_PIECEWORK_TASKS } from '../data/pieceworkTasksData.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowDefinitionService } from '../services/workflow/workflowDefinitionService.js';
@@ -361,28 +360,8 @@ export async function runSeed(): Promise<{ success: boolean; message: string }> 
     logger.error('[Seeder] Error seeding app settings:', err);
   }
 
-  // 6. Sync changelogs directly from source of truth (SYSTEM_UPDATES)
-  try {
-    const initialChangelogs = SYSTEM_UPDATES.map(u => ({
-      version: u.version,
-      date: new Date().toISOString(),
-      features: `${u.title}\n${u.summary}\n${Array.isArray(u.changes) ? u.changes.join('\n') : ''}`,
-      fixes: Array.isArray(u.fixes) ? u.fixes.join('\n') : ''
-    }));
-
-    const existingLogs = await orm.select().from(changelogs);
-    const existingVersions = new Set(existingLogs.map(l => l.version));
-    const newLogs = initialChangelogs.filter(l => !existingVersions.has(l.version));
-    if (newLogs.length > 0) {
-      const chunkSize = 10;
-      for (let i = 0; i < newLogs.length; i += chunkSize) {
-        const chunk = newLogs.slice(i, i + chunkSize);
-        await orm.insert(changelogs).values(chunk);
-      }
-    }
-  } catch (err) {
-    logger.error('[Seeder] Error seeding changelogs:', err);
-  }
+  // (v4.0.29) همگام‌سازی جدول changelogs حذف شد — dual-storage مذموم؛ منبع حقیقت
+  // یگانه، فایل‌های src/data/changelogs/*.ts هستند و releaseGate مستقیم می‌خواند.
 
   // 7. Task categories: No hardcoded defaults seeded as per user configuration (managed from scratch)
   logger.info('[Seeder] Task categories: skipped default seed (user defined from zero).');

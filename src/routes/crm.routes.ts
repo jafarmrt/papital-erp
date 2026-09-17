@@ -261,7 +261,6 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
 router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
   const { stage, status, assignedTo, assignedPersonnelId, source, search, customerId, customerName, fromDate, toDate } = req.query;
   const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
   const isPaginated = req.query.paginate === 'true' || page !== undefined;
 
   const conditions = [eq(crmLeads.isDeleted, 0)];

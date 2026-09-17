@@ -1,4 +1,3 @@
-import React from 'react';
 import InvoicePrintView from '../InvoicePrintView';
 import { PrintModal } from '../common/PrintModal';
 import type { ApprovalDocumentDetails } from './DocumentDetailsPreview';

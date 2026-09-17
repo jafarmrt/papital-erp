@@ -1,4 +1,3 @@
-import React from 'react';
 import { Lock, AlertTriangle, Trash2, Package, ShoppingCart, Edit3 } from 'lucide-react';
 import { formatPersianPrice } from '../../utils';
 import { Item } from '../../types';

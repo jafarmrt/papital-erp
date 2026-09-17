@@ -8,6 +8,44 @@ import { AIUpdateLog } from './types';
  */
 export const v4Updates: AIUpdateLog[] = [
   {
+    version: 'v4.0.29',
+    date: '۲۷ شهریور ۱۴۰۵',
+    title: 'ممیزی جامع کد مرده و پاکسازی ساختاری: حذف ۳۲ روت مرده، ۷۴۴ ایمپورت بلااستفاده، کد مرده سرویس‌ها و یکپارچه‌سازی dual-storage چنج‌لاگ',
+    summary: 'بر اساس ممیزی مستقل هفت‌بخشی (unused exports/imports، dead routes، duplicate services، duplicate helpers، legacy compatibility، منطق چنج‌لاگ قدیمی و unused components)، پاکسازی ساختاری گسترده‌ای انجام شد. ۳۲ روت Backend بدون هیچ فراخوانی frontend به‌همراه ۳ mount مستعار بلااستفاده حذف شدند؛ ۷۴۴ ایمپورت/متغیر بلااستفاده در ۲۳۲ فایل پاکسازی و فلگ noUnusedLocals در tsconfig فعال شد تا بازگشت کد مرده مسدود گردد. باگ‌های کشف‌شده حین ممیزی (دکمه seed-standard با مسیر اشتباه، روت تکراری /workflow/rules/evaluate با سایه‌اندازی امنیتی، دو فراخوانی 404 در useProjectInventory) اصلاح شدند. کپی ~۵۰۰ خطی WorkflowApprovalRules (TD-083)، ۶ alias legacy سرویس‌های رویداد، امضای قدیمی reverseVoucher/correctVoucher، اسکریپت ممنوع db:push و ۴ فایل مرده حذف شدند. storage دوم چنج‌لاگ (جدول DB) با مهاجرت 0008 حذف و ReleaseGate به منبع حقیقت واحد (SYSTEM_UPDATES) متصل شد. هوک مشترک useClickOutside جایگزین ۴ کپی تکراری و مقایسه امن توکن‌ها به یک lib واحد تلفیق شد.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🛠️ فیکس ۴ باگ ممیزی: مسیر دکمه seed-standard، حذف ثبت تکراری POST /workflow/rules/evaluate (سایه‌اندازی امنیتی)، اتصال useProjectInventory به endpoint واقعی /items/next-code و /settings، حذف هوک مرده useItemDetailQuery',
+      '🧹 حذف ۳۲ روت مرده در ۱۰ فایل روتینگ (system، accounting، workflow، documents، inventory، transactions، users، categories، items.prices، drafts، piecework، events) و ۳ mount مستعار در app.ts',
+      '🗑️ حذف فایل‌های مرده: InventoryIntegritySettingsTab، useCustomers، useItems، barrelهای auth/invoices',
+      '✂️ تقلیل WorkflowApprovalRules به alias خالص و حذف ~۵۰۰ خط کپی مرده (بستن TD-083)',
+      '🔧 فعال‌سازی noUnusedLocals در tsconfig و پاکسازی ۷۴۴ unused import/local در ۲۳۲ فایل',
+      '🪝 هوک مشترک useClickOutside جایگزین ۴ کپی handleClickOutside؛ ادغام بدنه سه تابع تاریخ جلالی در utils.ts',
+      '🔐 تلفیق دو پیاده‌سازی safeCompareTokens در lib/timingSafeCompare.ts واحد',
+      '🗄️ حذف dual-storage چنج‌لاگ: مهاجرت 0008 (drop جدول changelogs)، حذف sync از seed و اتصال ReleaseGate به SYSTEM_UPDATES',
+      '📝 فاصله‌گذاری UI تب پیکربندی سیستمی: حذف toggle بی‌عملکرد اندپوینت‌های تست (خلوت‌سازی)'
+    ],
+    fixes: [
+      'باگ دکمه «بارگذاری کدینگ استاندارد» حسابداری که با مسیر اشتباه همیشه 404 می‌داد؛ باگ روت امنیتی سایه‌شده؛ باگ‌های 404 ساکت پیش‌فرض‌های کنترل موجودی پروژه و تولید کد کالا؛ حذف اسکریپت ممنوع db:push و امضای legacy سرویس‌های برگشت/اصلاح سند'
+    ]
+  },
+  {
+    version: 'v4.0.28',
+    date: '۲۷ شهریور ۱۴۰۵',
+    title: 'بازسازی حاکمیت دفتر بدهی‌های فنی: تفکیک رجیستری فعال از آرشیو و ثبت یافته‌های ارزیابی مستقل',
+    summary: 'فایل TECH_DEBT.md پس از تکمیل ۱۰۰٪ فاز ۷ به ۱۱۰ ردیف (۱۰۵ ردیف resolved) رسیده و تمرکز برنامه‌ریزی را از دست داده بود. در این نسخه، کلیه ردیف‌های حل‌شده عیناً و بدون حذف به فایل آرشیو جدید TECH_DEBT_ARCHIVE.md منتقل شدند و رجیستری اصلی صرفاً ۹ ردیف فعال (open / scheduled / in_progress) را نگه می‌دارد. هم‌زمان، ارزیابی مستقل کد انجام شد که صحت نمونه‌گیری‌شده ادعاهای resolved را تأیید و ۴ بدهی ثبت‌نشده جدید را کشف کرد: نقض کلاسیک Business Clock در دامنه‌های ثانویه (TD-104)، ساخت تاریخ خزانه‌داری از ساعت مرورگر کلاینت (TD-105)، فرسایش Type Safety با ~۸۵۷ نقطه any در برابر ادعای قدیمی TD-033 (TD-106) و باقی‌مانده الگوی ILIKE در cleanup تستی (TD-107). سلامت runtime پایگاه‌داده نیز راستی‌آزمایی شد (صفر سند حسابداری نامتوازن، صفر outbox معوق، صفر DLQ حل‌نشده).',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '📦 ایجاد فایل آرشیو TECH_DEBT_ARCHIVE.md و انتقال عیناً ۱۰۵ ردیف resolved با حفظ کامل متن و شواهد',
+      '🗃️ بازنویسی TECH_DEBT.md به رجیستری متمرکز اقلام فعال (۹ ردیف) با بخش آمار و قاعده فضای ID مشترک دو فایل',
+      '🔍 ارزیابی مستقل کد: اعتبارسنجی ادعاهای resolved (mockPool، CSRF-via-GET، Raw SQL، forUpdate، console.drop، localStorage، تریگر CI) — همگی تأیید',
+      '🩺 راستی‌آزمایی سلامت زنده DB: ۰ سند حسابداری نامتوازن، ۰ outbox معوق، ۰ DLQ حل‌نشده، ۱۹۳ رکورد مایگریشن',
+      '🚀 ارتقای نسخه سامانه به v4.0.28 در package.json'
+    ],
+    fixes: [
+      'ثبت ۴ بدهی فنی کشف‌شده و ثبت‌نشده: TD-104 (Business Clock در dailyLogs/crm/transfers/woocommerce/notifications/payrollPayment/inventoryStockRepair)، TD-105 (تاریخ خزانه از ساعت مرورگر)، TD-106 (فرسایش Type Safety ~۸۵۷ نقطه any)، TD-107 (ILIKE واژگان عمومی در cleanup تستی purchase_requisitions)'
+    ]
+  },
+  {
     version: 'v4.0.27',
     date: '۲۷ شهریور ۱۴۰۵',
     title: 'تکمیل فاز ۷.۴ و تحقق ۱۰۰٪ نقشه راه جامع نگارش ۴: انتشار رسمی معماری و حاکمیت نوین سامانه ERP',

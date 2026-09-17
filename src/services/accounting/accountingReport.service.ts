@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions, customers, personnel } from '../../db/schema.js';
-import { eq, asc, and, or, sql, like, gte, lte, lt, desc, SQL } from 'drizzle-orm';
+import { eq, asc, and, or, sql, like, gte, lte, lt, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import type { 
@@ -656,7 +656,6 @@ export class AccountingReportService {
     // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
     let openingBalance = 0;
     if (params.startDate) {
-      const priorConditions = periodConditions.filter(c => c !== undefined);
       // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
       const priorConds: (SQL | undefined)[] = [
         eq(journalVouchers.isDeleted, 0),

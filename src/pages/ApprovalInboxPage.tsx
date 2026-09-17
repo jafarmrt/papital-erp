@@ -12,36 +12,25 @@ import {
 import { 
   Inbox, 
   CheckCircle2, 
-  XCircle, 
   Clock, 
-  Filter, 
   FileText, 
   FolderKanban, 
   Package, 
-  Send, 
-  MessageSquare,
   Search,
   RefreshCw,
   ShieldCheck,
   AlertTriangle,
-  Users,
   CheckSquare,
   UserCheck,
   User,
   Banknote,
-  Flag,
   Layers,
-  Printer,
-  X,
-  ExternalLink,
-  MapPin,
-  Phone
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
-import TaskExecuteModal, { ApprovalTaskAction } from '../components/approval/TaskExecuteModal';
+import TaskExecuteModal, {} from '../components/approval/TaskExecuteModal';
 import TransitionExecuteModal from '../components/approval/TransitionExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';

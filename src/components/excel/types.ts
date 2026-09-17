@@ -1,5 +1,3 @@
-import { Category, Item } from '../../types';
-
 export interface UnifiedExcelModalProps {
   isOpen: boolean;
   onClose: () => void;

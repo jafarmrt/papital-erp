@@ -8,10 +8,10 @@ import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
+import { NotFoundError } from '../errors/customErrors.js';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, and } from 'drizzle-orm';
-import { documents, journalVouchers, productionProjects, workflowInstances, workflowHistoryLogs, workflowStates } from '../db/schema.js';
+import { workflowInstances, workflowHistoryLogs, workflowStates } from '../db/schema.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all accounting routes
@@ -396,60 +396,8 @@ router.post('/accounting/vouchers/:id/correct', authorizePermission('accounting.
   res.status(201).json(result);
 }));
 
-// Repost Voucher Route (سند ابطال و بازثبت / Repost)
-export const repostVoucherSchema = z.object({
-  params: z.object({
-    id: z.string().regex(/^\d+$/, 'شناسه سند باید عددی باشد')
-  }),
-  body: z.object({
-    date: z.string().min(1, 'تاریخ سند الزامی است').optional(),
-    reason: z.string().min(1, 'علت ابطال و بازثبت سند الزامی است'),
-    newDescription: z.string().optional(),
-    newManualVoucherNumber: z.string().optional(),
-    newItems: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند جدید الزامی است')
-  }).refine((data) => {
-    const totalDebit = data.newItems.reduce((s, it) => s + (it.debit || 0), 0);
-    const totalCredit = data.newItems.reduce((s, it) => s + (it.credit || 0), 0);
-    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
-  }, {
-    message: 'سند جدید تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
-    path: ['newItems']
-  })
-});
-
-router.post('/accounting/vouchers/:id/repost', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(repostVoucherSchema), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { date, reason, newItems, newDescription, newManualVoucherNumber } = req.body;
-  const result = await AccountingService.repostVoucher({
-    voucherId: id,
-    date,
-    reason,
-    newItems,
-    newDescription,
-    newManualVoucherNumber,
-    userId: req.user?.id,
-    username: req.user?.fullName || req.user?.username,
-  });
-
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: 'UPDATE',
-    entity: 'journal_voucher',
-    entityId: String(id),
-    description: `ابطال و بازثبت سند شماره #${id} با صدور سند ابطال #${result.voidVoucher.voucherNumber} و سند جدید #${result.repostedVoucher.voucherNumber} (علت: ${reason})`,
-    details: {
-      originalVoucherId: id,
-      voidVoucherId: result.voidVoucher.id,
-      repostedVoucherId: result.repostedVoucher.id,
-      reason
-    },
-    ipAddress: req.ip || '',
-  });
-
-  res.status(201).json(result);
-}));
+// repostVoucherSchema + POST /accounting/vouchers/:id/repost — حذف شدند (v4.0.29):
+// هیچ فراخوانی frontend ندارند؛ سرویس AccountingService.repostVoucher برای تست باقی است.
 
 // Finalize Voucher Route (قطعی‌سازی و تبدیل به دائم)
 router.post('/accounting/vouchers/:id/finalize', authorizePermission('accounting.vouchers'), idempotency({ scope: 'accounting_voucher' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
@@ -552,25 +500,9 @@ router.put('/accounting/vouchers/:id/status', authorizePermission('accounting.vo
   res.json(updated);
 }));
 
-
-// Auto-voucher manual triggers
-router.post('/accounting/vouchers/auto/invoice/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const docId = Number(req.params.id);
-  const v = await AccountingService.autoCreateVoucherForInvoice(docId, req.user?.id, req.user?.fullName || req.user?.username, undefined, { strict: true });
-  if (!v) {
-    throw new BadRequestError('امکان صدور خودکار سند برای این فاکتور وجود ندارد (یا قبلاً صادر شده یا نهایی نیست)');
-  }
-  res.json({ message: `سند شماره ${v.voucherNumber} با موفقیت صادر شد`, voucher: v });
-}));
-
-router.post('/accounting/vouchers/auto/payroll/:id', authorizePermission('accounting.vouchers'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const payrollId = Number(req.params.id);
-  const v = await AccountingService.autoCreateVoucherForPayroll(payrollId, req.user?.id, req.user?.fullName || req.user?.username, undefined, { strict: true });
-  if (!v) {
-    throw new BadRequestError('امکان صدور سند خودکار برای این فیش حقوقی وجود ندارد');
-  }
-  res.json({ message: `سند حقوق شماره ${v.voucherNumber} با موفقیت صادر شد`, voucher: v });
-}));
+// Auto-voucher manual triggers (POST /accounting/vouchers/auto/invoice/:id و
+// POST /accounting/vouchers/auto/payroll/:id) — حذف شدند (v4.0.29): هیچ فراخوانی
+// frontend ندارند؛ صدور سند خودکار درون تراکنش سرویس‌ها انجام می‌شود.
 
 // ==========================================
 // 4. BANK ACCOUNTS & TREASURY
@@ -1250,15 +1182,6 @@ router.get('/accounting/reports/balance-sheet', authorizePermission('accounting.
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/multi-currency-summary', authorizePermission('accounting.reports', 'accounting.view'), validate(dateRangeQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate } = (req.query as any) || {};
-  const data = await AccountingService.getMultiCurrencySummary({
-    startDate: startDate as string,
-    endDate: endDate as string,
-  });
-  res.json({ report: data, ...data });
-}));
-
 // V3 PHASE 5: بازرس هوشمند سلامت مالی و ممیزی دفاتر (Financial Health Inspector)
 router.get('/accounting/reports/health-check', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
   const report = await AccountingService.runFinancialHealthCheck();
@@ -1526,30 +1449,8 @@ router.post('/accounting/fiscal-closing/execute', authorize('admin'), validate(f
   res.json(result);
 }));
 
-export const invoiceSyncVoucherSchema = z.object({
-  params: z.object({
-    id: z.string().regex(/^\d+$/, 'شناسه فاکتور باید عددی باشد')
-  }),
-  body: z.object({
-    vatPercent: z.coerce.number().min(0).max(100).optional(),
-    vatAmount: z.coerce.number().min(0).optional(),
-  }).optional()
-});
-
-router.post('/accounting/invoices/:id/sync-voucher', authorizePermission('accounting.vouchers'), validate(invoiceSyncVoucherSchema), asyncHandler(async (req, res) => {
-  const docId = Number(req.params.id);
-  const { vatPercent, vatAmount } = req.body || {};
-  const voucher = await AccountingService.syncSalesInvoiceVoucher(docId, {
-    vatPercent,
-    vatAmount,
-    userId: req.user?.id,
-    username: req.user?.fullName || req.user?.username,
-  });
-  if (!voucher) {
-    throw new BadRequestError('فاکتور یافت نشد یا در وضعیت تایید نهایی نیست');
-  }
-  res.json({ message: 'سند دوبل فاکتور فروش با موفقیت صادر و همگام شد', voucher });
-}));
+// invoiceSyncVoucherSchema + POST /accounting/invoices/:id/sync-voucher — حذف شدند
+// (v4.0.29): هیچ فراخوانی frontend ندارد؛ نسخه piecework همین مسیر در UI فعال است.
 
 export default router;
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { Transaction } from '../types';
-import { Search, ArrowDownRight, ArrowUpRight, Download, ChevronRight, ChevronLeft, Eye, Layers } from 'lucide-react';
+import { Search, ArrowDownRight, ArrowUpRight, Download, ChevronRight, ChevronLeft, Eye } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";

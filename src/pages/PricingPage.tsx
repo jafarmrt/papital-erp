@@ -4,16 +4,13 @@ import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 import { Item, ItemPrice, User } from '../types';
 import { 
-  Search, Save, History, X, LayoutGrid, List, 
-  Download, Upload, AlertCircle, Check, RefreshCw, FileSpreadsheet, Clock, Tag, Filter 
+  Search, Save, LayoutGrid, List,
+  Download, Upload, AlertCircle, Check, RefreshCw, FileSpreadsheet, Tag
 } from 'lucide-react';
 import { 
   cn, 
   formatPersianNumber, 
-  formatPersianPrice, 
   formatPersianDateTime, 
-  formatCurrencyLabel, 
-  normalizeStrategyTitle,
   normalizePersianText,
   getStrategyCanonicalKey,
   formatStrategyDisplayTitle,
@@ -29,7 +26,7 @@ import UnifiedExcelModal from '../components/UnifiedExcelModal';
 
 export default function PricingPage({ user }: { user: User }) {
   const appCurrency = useAppCurrency();
-  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [tab, setTab] = useState<'product'|'raw_material'>('product');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [priceFilter, setPriceFilter] = useState<'all' | 'missing_price' | 'has_price'>('all');

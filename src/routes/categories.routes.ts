@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
-import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -134,15 +133,6 @@ router.delete('/categories/:id', authorize('admin', 'products.delete'), validate
 
   await orm.delete(categories).where(eq(categories.id, catId));
   res.json({ success: true });
-}));
-
-router.get('/categories/next-code', asyncHandler(async (req, res) => {
-  const { prefix } = req.query as Record<string, string>;
-  if (!prefix) return res.json({ nextCode: '' });
-
-  // V10-2.1: مسیر یتیم به سرویس اتمیک next-code متصل شد (حذف الگوی ممنوع MAX()+1 / DB-001)
-  const result = await ItemCatalogService.peekNextItemCode({ type: 'raw_material', prefix });
-  res.json({ nextCode: result.code });
 }));
 
 export default router;

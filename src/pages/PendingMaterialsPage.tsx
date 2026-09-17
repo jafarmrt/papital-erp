@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
-import { toast } from 'react-hot-toast';
 import { PendingMaterial, User } from '../types';
 import { formatPersianNumber } from '../utils';
 import {
@@ -8,9 +7,6 @@ import {
   CheckCircle2,
   XCircle,
   Search,
-  Filter,
-  Layers,
-  FileText,
   User as UserIcon,
   Check,
   X,
@@ -19,9 +15,7 @@ import {
   AlertCircle,
   Box,
   Building2,
-  ArrowRight,
   ShieldCheck,
-  RefreshCw
 } from 'lucide-react';
 import {
   usePendingMaterialsQuery,
@@ -38,7 +32,7 @@ const COMMON_UNITS = [
 ];
 
 export default function PendingMaterialsPage({ user }: { user: User }) {
-  const { data, isLoading: loading, isFetching, refetch } = usePendingMaterialsQuery();
+  const { data, isLoading: loading, refetch } = usePendingMaterialsQuery();
   const items = data?.items || [];
   const categories = data?.categories || [];
 

@@ -178,7 +178,6 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
   // Test 3: Deleting a FINAL document reverses its accounting voucher
   // ------------------------------------------------------------------
   const t3Start = Date.now();
-  let reversalDocIdForCleanup = 0;
   try {
     const item = await createTestItem({
       name: 'کالای برگشت حسابداری V9',
@@ -197,7 +196,6 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       status: 'final',
       items: [{ itemId: item.id, quantity: 3, unit_price: 250000 }]
     });
-    reversalDocIdForCleanup = docId;
 
     // سند حسابداری متصل باید وجود داشته باشد
     const [originalVoucher] = await orm.select()

@@ -1,19 +1,4 @@
-import React from 'react';
-import { 
-  ShieldCheck, 
-  Layers, 
-  AlertTriangle, 
-  TrendingDown, 
-  DollarSign, 
-  Warehouse, 
-  Search, 
-  Download, 
-  RefreshCw, 
-  RotateCcw,
-  CheckCircle2,
-  XCircle,
-  Eye
-} from 'lucide-react';
+import { ShieldCheck, Layers, AlertTriangle, TrendingDown, DollarSign, Warehouse, Search, Download, RefreshCw, RotateCcw, CheckCircle2, Eye } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 

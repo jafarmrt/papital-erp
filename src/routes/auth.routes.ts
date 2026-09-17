@@ -1,26 +1,17 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, appSettings } from '../db/schema.js';
 import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, invalidateUserAuthCache } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { uploadBase64ToStorage } from '../lib/storage.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { UnauthorizedError, BadRequestError, ConflictError, ValidationError, AppError } from '../errors/customErrors.js';
-
-function safeCompareTokens(provided: string, expected: string): boolean {
-  if (!provided || !expected) return false;
-  const bufProvided = Buffer.from(provided);
-  const bufExpected = Buffer.from(expected);
-  if (bufProvided.length !== bufExpected.length) return false;
-  return crypto.timingSafeEqual(bufProvided, bufExpected);
-}
+import { UnauthorizedError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
+import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 
 const router = Router();
 

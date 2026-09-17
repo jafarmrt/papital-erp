@@ -2,7 +2,7 @@ import { orm } from '../db/drizzle.js';
 import { activityLogs } from '../db/schema.js';
 import { logger } from '../middleware/logger.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
-import { sql, lt, and, notInArray, count, desc, type SQL } from 'drizzle-orm';
+import { sql, lt, and, notInArray, count, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
 import { ValidationError } from '../errors/customErrors.js';
 

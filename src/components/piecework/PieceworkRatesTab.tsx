@@ -1,4 +1,3 @@
-import React from 'react';
 import { DollarSign, Save } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';

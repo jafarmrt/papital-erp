@@ -1,33 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { 
-  Zap, 
-  Plus, 
-  RefreshCw, 
-  Search, 
-  Filter, 
-  Globe, 
-  Bell, 
-  Smartphone, 
-  GitBranch, 
-  ShieldCheck, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  Play, 
-  Edit3, 
-  Trash2, 
-  ToggleLeft, 
-  ToggleRight, 
-  Clock, 
-  Activity, 
-  Layers, 
-  ArrowUpRight, 
-  Code,
-  FileText,
-  ChevronDown,
-  ChevronUp
-} from 'lucide-react';
+import { Zap, Plus, RefreshCw, Search, Globe, Bell, Smartphone, GitBranch, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Play, Edit3, Trash2, ToggleLeft, ToggleRight, Clock, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { fetchJson } from '../../api';
 import { RuleEditorModal, RuleFormData } from './RuleEditorModal';

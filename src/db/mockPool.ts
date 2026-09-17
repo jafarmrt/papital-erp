@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
-import { logger } from '../middleware/logger.js';
 
 function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);

@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, FolderKanban, Loader2 } from 'lucide-react';
 import { ProjectModalProps } from './project-modal/types';
 import { useProjectForm } from './project-modal/useProjectForm';

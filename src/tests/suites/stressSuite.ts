@@ -12,7 +12,7 @@ import {
   treasuryTransactions,
   outboxEvents
 } from '../../db/schema.js';
-import { eq, sql, and, or, ilike, inArray } from 'drizzle-orm';
+import { eq, and, or, ilike, inArray } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
 import { OutboxService } from '../../services/events/outboxService.js';
 

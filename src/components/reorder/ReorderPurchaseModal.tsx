@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  X, ShoppingCart, CheckCircle2, AlertCircle, Loader2, 
-  Building2, Calendar, FileText, Trash2, Package
-} from 'lucide-react';
+import { X, ShoppingCart, CheckCircle2, Loader2, Building2, FileText, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { Customer } from '../../types';
@@ -43,12 +40,12 @@ export function ReorderPurchaseModal({
   const [requiredDate, setRequiredDate] = useState(() => getTodayJalaliDate());
   const [supplierName, setSupplierName] = useState('');
   const [docStatus, setDocStatus] = useState<'draft' | 'final'>('draft');
-  const [targetWarehouse, setTargetWarehouse] = useState('انبار اصلی');
+  const [targetWarehouse] = useState('انبار اصلی');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [suppliers, setSuppliers] = useState<Customer[]>([]);
-  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+  const [, setIsLoadingSuppliers] = useState(false);
 
   // Sync items when modal opens or selection changes
   useEffect(() => {
@@ -152,7 +149,7 @@ export function ReorderPurchaseModal({
           return;
         }
 
-        const res = await fetchJson<{ success: boolean; data?: any; message?: string }>('/documents', {
+        await fetchJson<{ success: boolean; data?: any; message?: string }>('/documents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

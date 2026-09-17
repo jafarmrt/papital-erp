@@ -1,23 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import toast from 'react-hot-toast';
-import {
-  Boxes,
-  Plus,
-  Search,
-  RefreshCw,
-  CheckCircle2,
-  Clock,
-  RotateCcw,
-  ArrowUpRight,
-  User,
-  Calendar,
-  Warehouse,
-  FileText,
-  AlertCircle,
-  ExternalLink,
-  Download
-} from 'lucide-react';
+import { Boxes, Plus, Search, RefreshCw, CheckCircle2, Clock, RotateCcw, User, Warehouse, FileText, AlertCircle, Download } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
@@ -51,7 +35,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   const [allocateNotes, setAllocateNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [, setSuccessMsg] = useState<string | null>(null);
 
   // Traceability Modal
   const [selectedAllocForTrace, setSelectedAllocForTrace] = useState<any | null>(null);

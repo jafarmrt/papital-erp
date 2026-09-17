@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import {
   Package, Box, AlertTriangle, TrendingUp, DollarSign,
-  Warehouse, AlertCircle, RefreshCw, ArrowLeft, ShoppingCart,
+  Warehouse, RefreshCw, ArrowLeft, ShoppingCart,
   PlusCircle, FileText, Layers, Sparkles, LayoutDashboard
 } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../utils';

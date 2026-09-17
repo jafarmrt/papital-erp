@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, CheckCheck, Trash2, CalendarCheck, AtSign, CheckCircle2, MessageSquare, ExternalLink } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Bell, CheckCheck, Trash2, AtSign, CheckCircle2, MessageSquare, ExternalLink } from 'lucide-react';
 import { AppNotification } from '../types';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -9,6 +9,7 @@ import {
   useMarkAllNotificationsReadMutation,
   useDeleteNotificationMutation
 } from '../hooks/queries';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -23,15 +24,7 @@ export default function NotificationBell() {
   const deleteNotifMutation = useDeleteNotificationMutation();
 
   // Click outside to close dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside([menuRef], () => setIsOpen(false));
 
   const handleMarkAsRead = (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

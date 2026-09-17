@@ -1,18 +1,11 @@
 import { Router } from 'express';
-import { WorkflowEngineService, WorkflowRuleEngine } from '../services/workflow/workflowEngineService';
-import { RuleEngineService } from '../services/ruleEngine.service.js';
+import { WorkflowEngineService } from '../services/workflow/workflowEngineService';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { getErrorMessage } from '../utils.js';
 import { z } from 'zod';
-
-const instanceIdParamSchema = z.object({
-  params: z.object({
-    instanceId: numericIdString,
-  })
-});
 
 const taskIdParamSchema = z.object({
   params: z.object({
@@ -124,22 +117,6 @@ router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approv
 });
 
 /**
- * GET /api/workflow/tasks/instance/:instanceId
- * Get all tasks generated for a workflow instance
- */
-router.get('/tasks/instance/:instanceId', authorizePermission('workflow.view', 'workflow.manage', 'workflow.admin'), validate(instanceIdParamSchema), async (req: AuthenticatedRequest, res) => {
-  try {
-    const instanceId = Number(req.params.instanceId);
-    const tasks = await WorkflowEngineService.getTasksForInstance(instanceId);
-    res.json(tasks);
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /tasks/instance/:instanceId] Error: ${errMsg}`);
-    throw err;
-  }
-});
-
-/**
  * POST /api/workflow/tasks/:taskId/execute
  * Execute a workflow task directly by task ID
  */
@@ -171,38 +148,6 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route /tasks/:taskId/execute] Error: ${errMsg}`);
-    throw err;
-  }
-});
-
-/**
- * POST /api/workflow/tasks/:taskId/delegate
- * Delegate a workflow task to another user
- */
-router.post('/tasks/:taskId/delegate', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(taskIdParamSchema), async (req: AuthenticatedRequest, res) => {
-  try {
-    const taskId = Number(req.params.taskId);
-    const { toUserId, reason } = req.body;
-    const fromUserId = req.user?.id;
-
-    if (!fromUserId) {
-      return res.status(401).json({ error: 'کاربر معتبر نیست' });
-    }
-    if (!toUserId) {
-      return res.status(400).json({ error: 'کاربر مقصد تفویض الزامی است' });
-    }
-
-    const result = await WorkflowEngineService.delegateTask({
-      taskId,
-      fromUserId,
-      toUserId: Number(toUserId),
-      reason
-    });
-
-    res.json({ success: true, message: 'وظیفه با موفقیت تفویض گردید', data: result });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /tasks/:taskId/delegate] Error: ${errMsg}`);
     throw err;
   }
 });
@@ -451,54 +396,6 @@ router.post('/definitions/seed-default', authorizePermission('workflow.admin'), 
 });
 
 /**
- * POST /api/workflow/rules/validate
- * Validate syntax of condition rules
- */
-router.post('/rules/validate', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { rules } = req.body;
-    const result = WorkflowRuleEngine.validateRuleSyntax(rules);
-    if (!result.valid) {
-      return res.status(400).json({ success: false, error: result.error });
-    }
-    res.json({ success: true, message: 'ساختار قوانین شرطی معتبر است' });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /rules/validate] Error: ${errMsg}`);
-    throw err;
-  }
-});
-
-/**
- * POST /api/workflow/rules/evaluate
- * Evaluate condition rules against mock context or live entity context
- */
-router.post('/rules/evaluate', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { rules, context, entityType, entityId } = req.body;
-    let evalContext = context || {};
-
-    if (entityType && entityId) {
-      const fetchedContext = await WorkflowEngineService.getEntityContext(entityType, entityId);
-      evalContext = { ...fetchedContext, ...evalContext };
-    }
-
-    const evaluation = WorkflowRuleEngine.evaluateRuleBreakdown(rules, evalContext);
-    res.json({
-      success: true,
-      passed: evaluation.passed,
-      matchType: evaluation.matchType,
-      context: evalContext,
-      breakdown: evaluation.breakdown
-    });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /rules/evaluate] Error: ${errMsg}`);
-    throw err;
-  }
-});
-
-/**
  * GET /api/workflow/analytics/sla
  * SLA analytics and bottleneck reports
  */
@@ -539,22 +436,6 @@ router.get('/analytics/compliance', authorizePermission('workflow.manage', 'work
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route /analytics/compliance] Error: ${errMsg}`);
-    throw err;
-  }
-});
-
-/**
- * GET /api/workflow/instance/:instanceId/sla
- * Evaluate SLA status for a specific workflow instance
- */
-router.get('/instance/:instanceId/sla', authorizePermission('workflow.view', 'workflow.manage', 'workflow.admin'), validate(instanceIdParamSchema), async (req: AuthenticatedRequest, res) => {
-  try {
-    const instanceId = Number(req.params.instanceId);
-    const slaStatus = await WorkflowEngineService.evaluateSlaStatus(instanceId);
-    res.json({ success: true, instanceId, isOverdue: !!slaStatus, details: slaStatus });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /instance/:instanceId/sla] Error: ${errMsg}`);
     throw err;
   }
 });
@@ -640,33 +521,6 @@ router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', '
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route POST /delegations/:id/revoke] Error: ${errMsg}`);
-    throw err;
-  }
-});
-
-/**
- * POST /api/workflow/rules/evaluate
- * Evaluate rule condition expression with detailed evaluation trace
- */
-router.post('/rules/evaluate', authorizePermission('workflow.view', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { expression, context } = req.body;
-
-    const validation = RuleEngineService.validateExpression(expression);
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error || 'ساختار قانون نا معتبر است' });
-    }
-
-    const evaluationTrace = RuleEngineService.evaluateWithTrace(expression, context || {});
-    res.json({
-      passed: evaluationTrace.passed,
-      durationMs: evaluationTrace.durationMs,
-      traceTree: evaluationTrace.traceTree,
-      flatTrace: evaluationTrace.flatTrace
-    });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route POST /rules/evaluate] Error: ${errMsg}`);
     throw err;
   }
 });

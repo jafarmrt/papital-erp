@@ -1,21 +1,5 @@
-import React, { useState } from 'react';
-import { 
-  Activity, 
-  Coins, 
-  DollarSign, 
-  TrendingUp, 
-  ShieldCheck, 
-  Layers, 
-  PieChart, 
-  CheckCircle2, 
-  AlertTriangle,
-  RefreshCw,
-  BarChart2,
-  Percent,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight
-} from 'lucide-react';
+import { useState } from 'react';
+import { Activity, Coins, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, RefreshCw, BarChart2, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../../utils';
 import type { FinancialRatiosReport } from '../../../types';
 

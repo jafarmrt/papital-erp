@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Calendar, Briefcase, PhoneCall, Clock, Building2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';

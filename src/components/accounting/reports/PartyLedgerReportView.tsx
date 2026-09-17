@@ -1,23 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Users, 
-  Search, 
-  Calendar, 
-  Printer, 
-  Download, 
-  RefreshCw, 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  CheckCircle2, 
-  AlertCircle, 
-  User, 
-  Building, 
-  Briefcase, 
-  Clock, 
-  SlidersHorizontal,
-  ChevronDown,
-  X
-} from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
 import { 
   formatPersianPrice, 
   formatPersianNumber, 
@@ -26,7 +8,7 @@ import {
 } from '../../../utils';
 import { fetchJson } from '../../../api';
 import toast from 'react-hot-toast';
-import type { DetailedPartyLedgerResult, DetailedPartyLedgerItem, PartyOption } from '../../../types';
+import type { DetailedPartyLedgerResult, PartyOption } from '../../../types';
 
 interface PartyLedgerReportViewProps {
   initialPartyId?: number;
@@ -41,7 +23,7 @@ export function PartyLedgerReportView({
 }: PartyLedgerReportViewProps) {
   // Party selection states
   const [parties, setParties] = useState<PartyOption[]>([]);
-  const [loadingParties, setLoadingParties] = useState(false);
+  const [, setLoadingParties] = useState(false);
   const [partyTypeFilter, setPartyTypeFilter] = useState<'all' | 'customer' | 'supplier' | 'personnel'>(() => {
     if (initialPartyType && ['customer', 'supplier', 'personnel'].includes(initialPartyType)) {
       return initialPartyType as any;
@@ -65,7 +47,7 @@ export function PartyLedgerReportView({
 
   // Currency & options
   const [currency, setCurrency] = useState<'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP'>('all');
-  const [includeDrafts, setIncludeDrafts] = useState(false);
+  const [includeDrafts] = useState(false);
 
   // Report data & loading
   const [reportData, setReportData] = useState<DetailedPartyLedgerResult | null>(null);

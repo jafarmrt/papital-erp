@@ -1,11 +1,10 @@
-import React from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { Search, Plus, Calendar, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, CheckCircle2, Clock, FolderKanban } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianNumber, formatPersianPrice, formatQuantityOrTime, toEnglishDigits, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatQuantityOrTime, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 
 interface PieceworkLogsTabProps {

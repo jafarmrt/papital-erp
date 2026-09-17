@@ -150,7 +150,7 @@ export function useProjectInventory(
         const [itemsRes, catRes, settingsRes] = await Promise.all([
           fetchJson<any>('/api/items', { signal: controller.signal }),
           fetchJson<any>('/api/categories', { signal: controller.signal }),
-          fetchJson<any>('/api/settings/inventory-presets', { signal: controller.signal }).catch((err) => {
+          fetchJson<any>('/api/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;
             return null;
           })
@@ -168,10 +168,18 @@ export function useProjectInventory(
           setAllCategories(catRes);
         }
 
-        if (settingsRes?.data?.sections && Array.isArray(settingsRes.data.sections)) {
-          setPresetSections(settingsRes.data.sections);
-          if (!project.inventory_control?.sections || project.inventory_control.sections.length === 0) {
-            setSections(settingsRes.data.sections);
+        if (settingsRes && Array.isArray(settingsRes)) {
+          const invCtrlSetting = settingsRes.find((s: any) => s?.key === 'inventory_control_preset_sections');
+          if (invCtrlSetting?.value) {
+            try {
+              const parsed = JSON.parse(invCtrlSetting.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setPresetSections(parsed);
+                if (!project.inventory_control?.sections || project.inventory_control.sections.length === 0) {
+                  setSections(parsed);
+                }
+              }
+            } catch { /* تنظیمات خراب → پیش‌فرض‌ها باقی می‌مانند */ }
           }
         }
       } catch (err: any) {
@@ -204,14 +212,13 @@ export function useProjectInventory(
     setCodePrefix(prefix);
 
     try {
-      const res = await fetchJson<any>(`/api/items/generate-code?prefix=${prefix}`);
-      if (res?.data?.codeNumber || res?.codeNumber) {
-        const numStr = String(res?.data?.codeNumber || res?.codeNumber).padStart(3, '0');
-        setCodeNumber(numStr);
+      const res = await fetchJson<any>(`/api/items/next-code?type=raw_material&prefix=${encodeURIComponent(prefix)}`);
+      if (res?.code && res?.serial) {
+        setCodeNumber(res.serial);
         setCustomMaterialForm(prev => ({
           ...prev,
           category: catName,
-          itemCode: `${prefix}${numStr}`
+          itemCode: res.code
         }));
       } else {
         setCustomMaterialForm(prev => ({ ...prev, category: catName, itemCode: `${prefix}001` }));

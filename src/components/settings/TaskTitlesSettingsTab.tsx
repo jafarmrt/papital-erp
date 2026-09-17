@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, Check, X } from 'lucide-react';
+import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';

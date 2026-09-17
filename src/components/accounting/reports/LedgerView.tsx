@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../../utils';
 import type { Account, AccountLedgerReport } from '../../../types';
 

@@ -2,17 +2,16 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
-import { Item, User, Customer, Personnel, FinancialAttachment } from '../types';
+import { Item, User, Customer, FinancialAttachment } from '../types';
 import { 
-  Plus, Trash2, FileInput, FileOutput, Lock, Unlock, 
-  Package, CheckCircle2, AlertTriangle, Users, Building2, 
-  Calendar, FileText, UserCheck, Layers, Info, RefreshCw,
-  DollarSign, ShoppingCart, CreditCard, Check, Truck, ArrowDownLeft
+  Plus, FileInput, FileOutput, Lock,
+  Package, CheckCircle2, Users, Building2,
+  Calendar, UserCheck, RefreshCw,
 } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
+import { formatPersianNumber, extractDateString, getTodayJalaliDate } from '../utils';
 
 import { SearchableSelect } from '../components/SearchableSelect';
 import {
@@ -1170,7 +1169,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                     <span className="font-bold text-slate-900">{selectedItemObj.name}</span>
                   </div>
                   {(() => {
-                    const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, maxAllowedForExit } = getItemReservationSummary(selectedItemObj);
+                    const { reservedForOtherProjects, reservedForSelectedProject, maxAllowedForExit } = getItemReservationSummary(selectedItemObj);
                     return (
                       <div className="flex flex-wrap items-center gap-2 font-mono">
                         <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 border">موجودی کل: {formatPersianNumber(selectedItemObj.current_stock)} {selectedItemObj.unit}</span>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   CheckCircle2, 
   AlertCircle, 
@@ -10,7 +9,7 @@ import {
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, toEnglishDigits, formatPersianDate, extractDateString } from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString } from '../../../utils';
 import type { TrialBalanceRow } from '../../../types';
 
 interface TrialBalanceViewProps {

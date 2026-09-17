@@ -1,4 +1,3 @@
-import React from 'react';
 import { Calendar, Award, DollarSign, FileText, FolderKanban } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 

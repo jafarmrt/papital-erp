@@ -1,10 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Calendar, Clock, CheckCircle2, AlertCircle, PlayCircle, 
-  Tag, Filter, Search, ChevronRight, Layers, ArrowRight,
-  TrendingUp, BarChart3, AlertTriangle, ShieldCheck, Check,
-  Sparkles, SlidersHorizontal, Eye
-} from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Calendar, Clock, CheckCircle2, PlayCircle, Tag, BarChart3 } from 'lucide-react';
 import { ProductionProject, ProjectStage, ProjectProductItem } from '../../types';
 import { toPersianDigits } from '../../utils';
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Settings, Menu, X } from 'lucide-react';
 import { User } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
@@ -274,12 +274,7 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
 
         {/* V1.1.1: تب پیکربندی سیستمی جایگزین تب اجرای تست شد — اجرای درون‌برنامه‌ای تست‌ها به‌دلیل آلودگی دیتابیس زنده حذف شد */}
         {s.activeTab === 'system_config' && currentUser.role === 'admin' && (
-          <SystemConfigTab
-            enableTestEndpoints={s.enableTestEndpoints}
-            setEnableTestEndpoints={s.setEnableTestEndpoints}
-            isSaving={s.isSaving}
-            onSave={s.handleSaveSettings}
-          />
+          <SystemConfigTab />
         )}
 
         {s.activeTab === 'system' && currentUser.role === 'admin' && (

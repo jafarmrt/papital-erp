@@ -1,5 +1,3 @@
-import { logger } from '../../middleware/logger';
-
 export interface SignatureEntry {
   userId: number;
   userName?: string;

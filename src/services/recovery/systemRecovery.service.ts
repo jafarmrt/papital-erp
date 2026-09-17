@@ -236,7 +236,7 @@ export class SystemRecoveryService {
    */
   static async testMigrationFailureRecovery(): Promise<RecoveryCheckResult> {
     try {
-      const validationBefore = await validateDbSchema();
+      await validateDbSchema();
       const migrationResult = await runMigrations();
       const validationAfter = await validateDbSchema();
 

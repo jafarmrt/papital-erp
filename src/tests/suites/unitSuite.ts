@@ -453,8 +453,8 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   // Test 10: FinancialDecimal & decimal.js High Precision Calculations (DB-007)
   const t10Start = Date.now();
   try {
-    const { fin: finLib, FinancialDecimal: FDLib, FinancialMath: FMLib } = await import('../../lib/financialDecimal.js');
-    const { fin: finUtils, FinancialDecimal: FDUtils, FinancialMath: FMUtils } = await import('../../utils/financialMath.js');
+    const { fin: finLib, FinancialMath: FMLib } = await import('../../lib/financialDecimal.js');
+    const { fin: finUtils, FinancialMath: FMUtils } = await import('../../utils/financialMath.js');
 
     // 1. Acceptance Criteria verification: fin(1_000_000_000).multiply(0.1).divide(3).round(4)
     const testResult1 = finLib(1_000_000_000).multiply(0.1).divide(3).round(4);

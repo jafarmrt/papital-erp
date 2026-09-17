@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
 import { Item, User } from '../types';
-import { Search, X, Image as ImageIcon, Sparkles, Filter } from 'lucide-react';
+import { Search, X, Image as ImageIcon } from 'lucide-react';
 import { cn, formatPersianNumber, formatPersianPrice } from '../utils';
 import { SafeImage } from '../components/SafeImage';
 import { useSearch } from '../SearchContext';

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Sliders, Check, ShieldAlert, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { fetchJson } from '../../api';
 
 export function NegativeStockPolicySettingsTab() {
   const [currentPolicy, setCurrentPolicy] = useState<string>('forbidden');
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

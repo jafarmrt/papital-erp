@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { ProcurementService } from '../services/procurement.service.js';
-import { ValidationError, NotFoundError } from '../errors/customErrors.js';
+import { ValidationError } from '../errors/customErrors.js';
 
 const router = Router();
 router.use(authenticateToken);

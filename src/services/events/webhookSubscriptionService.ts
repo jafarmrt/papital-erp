@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { webhookSubscriptions, webhookDeliveries, users } from '../../db/schema.js';
-import { eq, and, sql, desc, count } from 'drizzle-orm';
+import { eq, desc, count } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent } from './domainEvents.js';
 import { assertSafeExternalUrl } from '../../lib/ssrfGuard.js';
@@ -18,13 +18,6 @@ export interface CreateWebhookSubDTO {
 }
 
 export class WebhookSubscriptionService {
-  /**
-   * Alias method for backwards compatibility
-   */
-  static async dispatchToSubscribers(event: BaseDomainEvent): Promise<void> {
-    return this.dispatchDomainEventToSubscribers(event);
-  }
-
   /**
    * Computes an HMAC-SHA256 hex digest signature for payload verification.
    */

@@ -1,21 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  Eye,
-  EyeOff,
-  Save,
-  RotateCcw,
-  Lock,
-  LayoutGrid,
-  CheckCircle2,
-  Users,
-  Search,
-  Filter,
-  ShieldCheck,
-  HelpCircle,
-  Ban,
-  Check
-} from 'lucide-react';
+import { EyeOff, Save, RotateCcw, Lock, LayoutGrid, CheckCircle2, Users, Search, Check } from 'lucide-react';
 import { Role } from '../../types';
 import { fetchJson } from '../../api';
 import { cn } from '../../utils';
@@ -135,12 +120,6 @@ export const MenuVisibilityPanel: React.FC = () => {
   };
 
   // آیا آیتم بر اساس ماتریس دسترسی و تنظیمات دید در منوی این نقش ظاهر می‌شود؟
-  const isDisplayedInMenu = (roleCode: string, path: string) => {
-    if (roleCode === 'admin') return true;
-    const permitted = rolePermissionsMap.get(roleCode)?.has(path);
-    if (!permitted) return false;
-    return !isExplicitlyHidden(roleCode, path);
-  };
 
   const toggle = (roleCode: string, path: string, hasPerm: boolean) => {
     if (roleCode === 'admin') return;

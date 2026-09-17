@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, Clock, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { toPersianDigits, toEnglishDigits, getTodayJalaliDate } from '../../utils';
 
 export interface CalendarEventItem {
@@ -28,7 +28,6 @@ const JALALI_MONTH_NAMES = [
 ];
 
 const WEEKDAY_NAMES = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
-const FULL_WEEKDAY_NAMES = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
 
 // Helper to determine days in Jalali month
 function getJalaliMonthDaysCount(year: number, month: number): number {

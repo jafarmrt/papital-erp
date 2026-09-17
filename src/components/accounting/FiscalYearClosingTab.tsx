@@ -1,26 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Lock, 
-  CheckCircle2, 
-  AlertTriangle, 
-  FileText, 
-  ArrowLeftRight, 
-  TrendingUp, 
-  TrendingDown, 
-  Scale, 
-  Calendar, 
-  RefreshCw, 
-  ShieldCheck, 
-  Check, 
-  Layers, 
-  Eye, 
-  Printer, 
-  Info,
-  ChevronDown,
-  ChevronUp
-} from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, toEnglishDigits, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
 import toast from 'react-hot-toast';

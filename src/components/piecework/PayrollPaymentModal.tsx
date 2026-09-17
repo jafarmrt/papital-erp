@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { X, Landmark, BanknoteArrowUp } from 'lucide-react';
+import { Landmark, BanknoteArrowUp } from 'lucide-react';
 import { fetchJson } from '../../api';
 import { getTodayJalaliDate, extractDateString } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';

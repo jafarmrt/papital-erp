@@ -1,23 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
-import { 
-  Plus, 
-  Save, 
-  Trash2, 
-  Clock, 
-  ArrowRight, 
-  Settings2, 
-  Layers, 
-  ShieldAlert, 
-  CheckCircle2, 
-  XCircle, 
-  Move,
-  SlidersHorizontal,
-  Code2,
-  FileSpreadsheet,
-  AlertCircle
-} from 'lucide-react';
+import { Plus, Save, Trash2, Clock, ArrowRight, Move, SlidersHorizontal } from 'lucide-react';
 import { 
   useWorkflowDefinitionDetailQuery, 
   useSaveWorkflowDefinitionMutation,

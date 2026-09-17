@@ -1,29 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
-import {
-  Globe,
-  Plus,
-  RefreshCw,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Send,
-  Key,
-  Copy,
-  Check,
-  Clock,
-  Trash2,
-  Edit3,
-  ToggleLeft,
-  ToggleRight,
-  Shield,
-  Activity,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Sliders,
-  ExternalLink
-} from 'lucide-react';
+import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Copy, Check, Trash2, Edit3, Shield, Activity } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { fetchJson } from '../../api';
 
@@ -109,7 +86,7 @@ export function WebhookManagementSubTab() {
 
   // Ping Test State
   const [pingTestingId, setPingTestingId] = useState<number | null>(null);
-  const [pingResult, setPingResult] = useState<any | null>(null);
+  const [, setPingResult] = useState<any | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);

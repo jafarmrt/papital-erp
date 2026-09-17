@@ -2,15 +2,15 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { orm } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, users, taskCategories, productionProjects, journalVouchers } from '../db/schema.js';
-import { eq, and, desc, like, or, sql, inArray } from 'drizzle-orm';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, taskCategories, productionProjects, journalVouchers } from '../db/schema.js';
+import { eq, and, desc, or, sql, inArray } from 'drizzle-orm';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
 import { VoucherSyncService } from '../services/accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
-import { ConflictError, BusinessLogicError, ValidationError, NotFoundError } from '../errors/customErrors.js';
-import { fin, FinancialMath } from '../lib/financialDecimal.js';
+import { ConflictError } from '../errors/customErrors.js';
+import { fin } from '../lib/financialDecimal.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -1043,92 +1043,6 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
   } catch (err) {
     logger.error({ message: 'Error logging piecework', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
-    throw err;
-  }
-});
-
-// POST /api/piecework/logs/batch - Alias for legacy batch logging
-router.post('/piecework/logs/batch', authorize('personnel.manage', 'daily_logs.create', 'admin'), async (req, res, next) => {
-  if (Array.isArray(req.body.logs) && !req.body.items) {
-    req.body.items = req.body.logs;
-  }
-  next();
-}, validate(createPieceworkLogsSchema), async (req, res) => {
-  try {
-    const currentUserId = req.user?.id;
-    const currentUsername = req.user?.username || 'سیستم';
-
-    const items = Array.isArray(req.body.items) ? req.body.items : (Array.isArray(req.body.logs) ? req.body.logs : [req.body]);
-
-    if (items.length === 0) {
-      return res.status(400).json({ error: 'حداقل یک ردیف کارکرد انتخاب کنید' });
-    }
-
-    const insertedIds = [];
-
-    for (const item of items) {
-      const { personnelId, taskId, projectId, date, quantity, unitRate, notes } = item;
-
-      if (!personnelId || !taskId || !date || quantity === undefined) {
-        continue;
-      }
-
-      let finalRate = Number(unitRate);
-      if (isNaN(finalRate) || finalRate < 0) {
-        const [custom] = await orm.select()
-          .from(pieceworkPersonnelRates)
-          .where(and(
-            eq(pieceworkPersonnelRates.personnelId, Number(personnelId)),
-            eq(pieceworkPersonnelRates.taskId, Number(taskId)),
-            eq(pieceworkPersonnelRates.isDeleted, 0)
-          ));
-
-        if (custom) {
-          finalRate = custom.customRate;
-        } else {
-          const [taskDef] = await orm.select()
-            .from(pieceworkTasks)
-            .where(eq(pieceworkTasks.id, Number(taskId)));
-          finalRate = taskDef ? taskDef.defaultRate : 0;
-        }
-      }
-
-      const qty = parseQuantityOrTime(quantity);
-      const totalAmt = qty * finalRate;
-      const normDate = normalizePersianDate(String(date));
-      const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
-
-      const [inserted] = await orm.insert(pieceworkLogs).values({
-        personnelId: Number(personnelId),
-        taskId: Number(taskId),
-        projectId: projectId ? Number(projectId) : null,
-        date: normDate,
-        dateIso: isoDate,
-        quantity: qty,
-        unitRate: finalRate,
-        totalAmount: totalAmt,
-        notes: notes ? String(notes).trim() : '',
-        status: 'pending',
-        createdById: currentUserId,
-        createdByUsername: currentUsername,
-        isDeleted: 0
-      }).returning();
-
-      insertedIds.push(inserted.id);
-    }
-
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'CREATE',
-      entity: 'کارکرد پرکیسی',
-      description: `ثبت ${insertedIds.length} ردیف کارکرد پرکیسی جدید`
-    });
-
-    res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
-  } catch (err) {
-    logger.error({ message: 'Error logging piecework batch', error: err });
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }

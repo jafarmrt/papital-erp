@@ -1,20 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Plus, 
-  Trash2, 
-  Globe, 
-  Bell, 
-  Smartphone, 
-  GitBranch, 
-  ShieldCheck, 
-  HelpCircle, 
-  Play, 
-  CheckCircle2, 
-  AlertCircle,
-  XCircle,
-  Code
-} from 'lucide-react';
+import { X, Plus, Trash2, Globe, Bell, Smartphone, GitBranch, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, Code } from 'lucide-react';
 import { fetchJson } from '../../api';
 
 export interface RuleCondition {
@@ -55,17 +40,6 @@ const EVENT_TYPE_OPTIONS = [
   { value: 'ProjectStageCompleted', label: 'ProjectStageCompleted (تکمیل مرحله پروژه تولید)', category: 'تولید' },
   { value: 'CustomerCreated', label: 'CustomerCreated (تعریف طرف‌حساب/مشتری جدید)', category: 'مشتریان و CRM' },
   { value: '*', label: '* (کلیه رویدادهای سامانه)', category: 'عمومی' }
-];
-
-const SUGGESTED_FIELDS = [
-  { value: 'payload.totalAmount', label: 'payload.totalAmount (مبلغ کل فاکتور/تراکنش)' },
-  { value: 'payload.newStock', label: 'payload.newStock (موجودی جدید کالا در انبار)' },
-  { value: 'payload.reorderPoint', label: 'payload.reorderPoint (نقطه سفارش کالا)' },
-  { value: 'payload.toStateKey', label: 'payload.toStateKey (کلید وضعیت مقصد در گردش کار)' },
-  { value: 'payload.currency', label: 'payload.currency (ارز: IRR, USD, ...)' },
-  { value: 'payload.warehouseLocation', label: 'payload.warehouseLocation (نام انبار)' },
-  { value: 'metadata.userRole', label: 'metadata.userRole (نقش کاربر ثبت‌کننده)' },
-  { value: 'aggregateType', label: 'aggregateType (نوع موجودیت اصلی)' }
 ];
 
 export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEditorModalProps) {

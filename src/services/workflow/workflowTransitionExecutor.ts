@@ -9,13 +9,12 @@ import {
   workflowHistoryLogs,
   workflowTasks
 } from '../../db/schema';
-import { eq, and, or, inArray, desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { workflowEventBus } from './workflowEventBus';
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors';
 import { domainEventBus } from '../events/domainEventBus';
 import { DomainEventType, AggregateType } from '../events/domainEvents';
 import { OutboxService } from '../events/outboxService';
-import { logger } from '../../middleware/logger';
 import { updateRequestContext } from '../../lib/requestContext.js';
 import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';

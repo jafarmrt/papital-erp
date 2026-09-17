@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, X, ShieldAlert, Calendar, User, FileText } from 'lucide-react';
+import { Printer, X, ShieldAlert } from 'lucide-react';
 import { formatPersianDateTime, formatPersianNumber } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
 

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
-import { Link } from 'react-router-dom';
 import { 
-  Plus, Search, Filter, Layers, LayoutGrid, List, Calendar, CheckCircle2, 
-  Clock, AlertCircle, PlayCircle, ShieldAlert, Edit3, Trash2, Eye,
-  ArrowRight, Users, Wrench, ChevronLeft, ChevronRight, RefreshCw, Sparkles, Building, ShoppingCart,
+  Plus, Search, Layers, LayoutGrid, List, Calendar, CheckCircle2,
+  Clock, PlayCircle, Edit3, Trash2,
+  ChevronLeft, RefreshCw, Building, ShoppingCart,
   Paperclip
 } from 'lucide-react';
 import { ProductionProject, Customer, Item } from '../types';
@@ -23,7 +22,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState<boolean>(true);
 
   // Filters
-  const { searchQuery, debouncedSearchQuery, setSearchQuery, clearSearch } = useSearch();
+  const { searchQuery, debouncedSearchQuery, setSearchQuery } = useSearch();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'gantt'>('kanban');

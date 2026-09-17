@@ -1,9 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Target, Clock, AlertCircle, CheckCircle2, Phone, Calendar,
-  UserCheck, ArrowLeft, Plus, ExternalLink, Sparkles, Filter, Search, X
-} from 'lucide-react';
+import { Target, Clock, CheckCircle2, ArrowLeft, Sparkles, Search, X } from 'lucide-react';
 import { toPersianDigits, formatPersianPrice, getTodayJalaliDate } from '../../utils';
 import { CRMLead, CRMActivity } from '../../types';
 

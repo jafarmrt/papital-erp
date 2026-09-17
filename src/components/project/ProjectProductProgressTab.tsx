@@ -1,9 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, 
-  Save, Info, Search, CheckSquare, Square, Filter, ChevronRight,
-  RotateCcw, Sparkles, Lock
-} from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { RefreshCw, Layers, Package, CheckCircle2, Circle, Clock, Ban, Save, Info, Search, CheckSquare, Square, RotateCcw, Lock } from 'lucide-react';
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { toPersianDigits } from '../../utils';
@@ -202,18 +198,6 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   };
 
   // Bulk operation: Complete a specific stage for selected SKUs only
-  const setStageForSelectedSkus = (order: number, status: ProductProgressRow['status']) => {
-    if (selectedSkuIds.size === 0) return;
-    setDirty(prev => {
-      const m = new Map(prev);
-      for (const p of products) {
-        if (p.item_id && selectedSkuIds.has(p.item_id) && p.applicable_stage_orders.includes(order)) {
-          m.set(`${p.item_id}|${order}`, status);
-        }
-      }
-      return m;
-    });
-  };
 
   // Reset unsaved changes
   const resetDirty = () => {

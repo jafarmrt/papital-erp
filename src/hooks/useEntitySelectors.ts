@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { usePersonnelListQuery } from './queries/usePersonnelQueries';
-import { QUERY_KEYS } from '../lib/queryKeys';
-import type { Customer, Personnel } from '../types';
+import type { Customer } from '../types';
 
 export interface EntitySelectOption<T = string | number> {
   value: T;

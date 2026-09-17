@@ -5,14 +5,13 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
-import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
 import { ItemStockReservationService } from '../services/items/itemStockReservation.service.js';
 import { logger } from '../middleware/logger.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
-import { crmLeads, crmActivities, productionProjects, items, customers, documents } from '../db/schema.js';
+import { crmLeads, crmActivities, productionProjects, items, documents } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { getTodayJalaliDate } from '../utils.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -494,15 +493,6 @@ router.get('/documents/audit-items', validate(auditItemsQuerySchema), asyncHandl
   res.json(formatted);
 }));
 
-router.get('/documents/:id/settlement-status', validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const docId = Number(req.params.id);
-  if (isNaN(docId) || docId <= 0) {
-    throw new ValidationError('شناسه سند نامعتبر است');
-  }
-  const status = await DocumentService.getInvoiceSettlementStatus(docId);
-  res.json(status);
-}));
-
 router.get('/documents/:id', validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
   const rawId = req.params.id;
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);
@@ -649,26 +639,6 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
   });
 
   res.json({ success: true });
-}));
-
-router.post('/documents/reconcile-stock', authorize('admin', 'manager', 'warehouse_keeper'), validate(reconcileStockSchema), asyncHandler(async (req, res) => {
-  const targetItemId = req.body?.itemId ? Number(req.body.itemId) : undefined;
-  const result = await DocumentService.reconcileAndRebuildStock(targetItemId);
-
-  await logActivity({
-    req,
-    action: 'UPDATE',
-    entity: 'انبارداری و موجودی',
-    entityId: targetItemId ? String(targetItemId) : 'ALL',
-    description: `انبارگردانی و تطبیق ریاضی موجودی کالاها بر پایه کاردکس اسناد (اقلام بررسی‌شده: ${result.reconciledCount}، مغایرت‌های اصلاح‌شده: ${result.discrepanciesFixed})`,
-    details: result
-  });
-
-  res.json({
-    success: true,
-    message: `انبارگردانی و تطبیق کاردکس با موفقیت انجام شد. ${result.discrepanciesFixed} مغایرت اصلاح گردید.`,
-    ...result
-  });
 }));
 
 export default router;

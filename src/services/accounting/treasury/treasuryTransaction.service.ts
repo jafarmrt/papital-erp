@@ -2,7 +2,6 @@ import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { bankAccounts, treasuryTransactions, users, accounts } from '../../../db/schema.js';
 import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
-import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';

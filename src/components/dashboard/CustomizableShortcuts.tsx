@@ -1,11 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Plus, Settings2, Package, Box, FileText, Target, CalendarCheck, Layers,
-  CheckSquare, FileInput, Warehouse, UsersRound, DollarSign, Sparkles,
-  AlertTriangle, Users, Calculator, Landmark, ClipboardList, Check, X,
-  ArrowUpRight, ShoppingBag
-} from 'lucide-react';
+import { Settings2, Package, Box, FileText, Target, CalendarCheck, Layers, CheckSquare, FileInput, Warehouse, UsersRound, DollarSign, Sparkles, AlertTriangle, Users, Calculator, Landmark, ClipboardList, Check, X, ArrowUpRight, ShoppingBag } from 'lucide-react';
 import { User } from '../../types';
 
 export interface ShortcutItemDef {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { desc, sql, eq, and, or, ilike, SQL } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import {
-  appSettings, changelogs, transactions, documentItems, documents, items,
+  appSettings, transactions, documentItems, documents, items,
   warehouses, itemPrices, customers, activityLogs, productionProjects, categories,
   projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities,
   users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
@@ -25,7 +25,7 @@ import { ValidationError, ForbiddenError } from '../errors/customErrors.js';
 import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity } from '../lib/auditLogger.js';
 import { isTestEndpointsEnabled, getTestEndpointsSource } from '../lib/runtimeFlags.js';
 import { runSeed } from '../db/seed.js';
-import { runMigrations, validateDbSchema } from '../db/migrator.js';
+import { validateDbSchema } from '../db/migrator.js';
 import { appSettingsCache, invalidateSettingsCache } from '../lib/memoryCache.js';
 import { BUILD_INFO } from '../lib/version.js';
 
@@ -79,47 +79,6 @@ router.get('/system/env', authorize('admin'), async (req, res) => {
   });
 });
 
-router.get('/system/schema-check', authorize('admin'), async (req, res) => {
-  try {
-    const report = await validateDbSchema();
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'admin',
-      userFullName: req.user?.full_name || '',
-      action: 'AUDIT',
-      entity: 'سیستم:بررسی_ساختار_دیتابیس',
-      description: `اجرای ارزیابی ساختار اسکیما و ایندکس‌های پایگاه داده - وضعیت: ${report.valid ? 'معتبر' : 'دارای مغایرت'}`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
-    });
-    res.json(report);
-  } catch (e) {
-    throw e;
-  }
-});
-
-// V3.0.7 (TD-056): عملیات state-changing فقط با POST — نسخه GET با کوکی
-// SameSite=None از سایت دیگر (مثلاً <img src>) قابل trigger بود و csrfProtection
-// روی GET اعمال نمی‌شد. اکنون گارد CSRF استاندارد روی این مسیرها فعال است.
-router.post('/system/run-seed', authorize('admin'), async (req, res) => {
-  try {
-    const migrationRes = await runMigrations();
-    const seedRes = await runSeed();
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'admin',
-      userFullName: req.user?.full_name || '',
-      action: 'SEED',
-      entity: 'سیستم:مایگریشن_و_سید',
-      description: 'اجرای دستی مایگریشن و سید مجدد داده‌های پیش‌فرض سیستم',
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
-    });
-    res.json({ message: 'Migration and seed executed successfully', migration: migrationRes, seed: seedRes });
-  } catch (e) {
-    logger.error({ message: 'Migration and seed error', error: e });
-    throw e;
-  }
-});
-
 // App Settings
 // V3.0.6 (SEC): مقادیر حساس (secret/token/password) فقط برای ادمین برگردانده می‌شود؛
 // سایر کاربران احراز هویت‌شده مقدار ماسک‌شده دریافت می‌کنند تا از افشای
@@ -166,8 +125,6 @@ router.get('/menu-visibility', async (req, res) => {
     throw err;
   }
 });
-
-import { uploadBase64ToStorage } from '../lib/storage.js';
 
 router.post('/settings', authorize('admin', 'manager'), validate(settingsSchema), async (req, res) => {
   try {
@@ -378,16 +335,6 @@ router.get('/activity-logs/integrity', authorize('admin', 'manager'), async (req
   }
 });
 
-// Changelogs
-router.get('/changelogs', async (req, res) => {
-  try {
-    const logs = await orm.select().from(changelogs).orderBy(desc(changelogs.id));
-    res.json(logs);
-  } catch (err) {
-    throw err;
-  }
-});
-
 // Admin clear data (Wipe & Reset all system operational data and users to trigger initial setup scenario)
 router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), async (req, res) => {
   try {
@@ -493,7 +440,6 @@ import path from 'path';
 
 // V3.0.7 (TD-065): اطلاعات زیرساخت (مسیر uploads، حافظه، پروتکل) فقط برای ادمین
 router.get('/system/health', authorize('admin'), async (req, res) => {
-  const startTime = Date.now();
   let dbStatus = { status: 'ok', latencyMs: 0, message: 'پایگاه‌داده PostgreSQL متصل و آماده است' };
   
   // 1. Check DB Connection & Latency
@@ -712,7 +658,7 @@ router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) =
     }
 
     if (action === 'clear_stuck_outbox') {
-      const result = await orm.update(outboxEvents)
+      await orm.update(outboxEvents)
         .set({ status: 'pending', retryCount: 0 })
         .where(and(eq(outboxEvents.status, 'processing'), sql`occurred_at < now() - interval '5 minutes'`));
 
@@ -725,84 +671,9 @@ router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) =
   }
 });
 
-// V1.1.1 — Test Endpoints (runtime-gated)
-// مسیرها همیشه ثبت می‌شوند و مجوز در زمانِ «درخواست» بررسی می‌شود تا فلگ از
-// تب «پیکربندی سیستمی» بدون ری‌استارت قابل کنترل باشد:
-//   1) NODE_ENV=production → ممنوع همیشگی (کلید ایمنی؛ از UI قابل بازکردن نیست)
-//   2) فلگ runtime_enable_test_endpoints خاموش → Forbidden با پیام راهنما
-// پیش‌فرض پس از seed: خاموش. روش امن اجرای تست‌ها: `npm run test` از خط فرمان.
-function assertTestEndpointsAllowed(): void {
-  if (process.env.NODE_ENV === 'production') {
-    throw new ForbiddenError('اندپوینت‌های تست در محیط production همیشه مسدود است.');
-  }
-}
-
-async function assertTestEndpointsEnabled(): Promise<void> {
-  assertTestEndpointsAllowed();
-  if (!(await isTestEndpointsEnabled())) {
-    throw new ForbiddenError(
-      'اندپوینت‌های تست خاموش است. مدیر سیستم می‌تواند آن را از تنظیمات ← «پیکربندی سیستمی» فعال کند. ' +
-      'توجه: اجرای تست از داخل برنامه روی دیتابیس زنده داده می‌نویسد؛ روش امن اجرا دستور `npm run test` است.'
-    );
-  }
-}
-
-// Phase 21 Test Suite Runner API
-// V3.0.7 (TD-056): از GET به POST — اجرای تست داده می‌نویسد و نباید از تگ‌های
-// cross-site (img/script) با کوکی ادمین قابل فراخوانی باشد.
-router.post('/system/tests/run', authorize('admin'), async (req, res) => {
-  try {
-    await assertTestEndpointsEnabled();
-    // TST-001: computed specifiers keep src/tests out of the production bundle
-    const runnerSpec = ['..', 'tests', 'testRunner.js'].join('/');
-    const stressSpec = ['..', 'tests', 'suites', 'stressSuite.js'].join('/');
-    const { Phase21TestRunner } = await import(/* @vite-ignore */ runnerSpec);
-    const { cleanupStressTestArtifacts } = await import(/* @vite-ignore */ stressSpec);
-    const layer = req.query.layer as any;
-    const report = await Phase21TestRunner.runAllTests(layer);
-
-    // Ensure all test and stress artifacts are wiped immediately after test execution
-    await cleanupStressTestArtifacts().catch(err => logger.warn({ message: 'TestRunner post-run cleanup warning', error: err }));
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      userFullName: req.user?.full_name || '',
-      action: 'AUDIT_APPLY',
-      entity: 'آزمون‌های یکپارچگی و سلامت سیستم',
-      description: `اجرای آزمون‌های یکپارچگی و ارزیابی سرتاسری سیستم - وضعیت: ${report.overallStatus.toUpperCase()} (${report.passedCount}/${report.totalTests} مورد موفق)`
-    });
-
-    return res.json(report);
-  } catch (err) {
-    throw err;
-  }
-});
-
-// Purge any lingering test / stress documents & artifacts from system
-router.post('/system/clean-test-data', authorize('admin'), async (req, res) => {
-  try {
-    await assertTestEndpointsEnabled();
-    const { cleanupStressTestArtifacts } = await import('../tests/suites/stressSuite.js');
-    await cleanupStressTestArtifacts();
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'مدیر سیستم',
-      userFullName: req.user?.full_name || '',
-      action: 'DELETE',
-      entity: 'سیستم:پاکسازی_داده‌های_تست',
-      description: 'پاکسازی خودکار و حذف کامل تمامی اسناد و اقلام آزمون‌های استرس و تست‌های سیستم'
-    });
-
-    res.json({
-      success: true,
-      message: 'تمامی اسناد، کالاها و لاگ‌های آزمایشی و تست‌های استرس با موفقیت پاکسازی شدند.'
-    });
-  } catch (err) {
-    throw err;
-  }
-});
+// (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —
+// روت‌های /system/tests/run و /system/clean-test-data حذف شده‌اند و اجرای
+// آزمون‌ها فقط از طریق CLI استاندارد `npm run test` انجام می‌شود.
 
 // Global Multi-Entity Search Route
 router.get('/global-search', async (req, res) => {
@@ -1045,130 +916,6 @@ router.get('/export-backup', authorize('admin'), async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="erp-backup-${new Date().toISOString().split('T')[0]}.json"`);
     res.json(backupData);
-  } catch (error) {
-    throw error;
-  }
-});
-
-// Production Readiness 360-Degree Diagnostics Endpoint
-router.get('/system/health/diagnostics', authorize('admin', 'manager'), async (req, res) => {
-  try {
-    const t0 = Date.now();
-    await orm.execute(sql`SELECT 1`);
-    const dbLatencyMs = Date.now() - t0;
-
-    const [outboxRes] = await orm.select({ count: sql<number>`count(*)` }).from(outboxEvents).where(eq(outboxEvents.status, 'pending'));
-    const [dlqRes] = await orm.select({ count: sql<number>`count(*)` }).from(deadLetterEvents).where(eq(deadLetterEvents.status, 'quarantined'));
-    
-    const [totals] = await orm.select({
-      totalDebit: sql<number>`coalesce(sum(${journalVoucherItems.debit}), 0)`,
-      totalCredit: sql<number>`coalesce(sum(${journalVoucherItems.credit}), 0)`
-    }).from(journalVoucherItems);
-
-    const debit = Number(totals?.totalDebit || 0);
-    const credit = Number(totals?.totalCredit || 0);
-    const voucherIsBalanced = Math.abs(debit - credit) < 0.01;
-
-    const [negativeStockRes] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(sql`${items.currentStock}::numeric < 0`);
-    const [activeInstancesRes] = await orm.select({ count: sql<number>`count(*)` }).from(workflowInstances).where(eq(workflowInstances.status, 'IN_PROGRESS'));
-
-    const pendingOutbox = Number(outboxRes?.count || 0);
-    const dlqCount = Number(dlqRes?.count || 0);
-    const negativeStockCount = Number(negativeStockRes?.count || 0);
-    const activeWorkflows = Number(activeInstancesRes?.count || 0);
-
-    const status = (negativeStockCount === 0 && voucherIsBalanced && dlqCount === 0) ? 'HEALTHY' : 'WARNING';
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'admin',
-      userFullName: req.user?.full_name || '',
-      action: 'VIEW',
-      entity: 'سیستم:پایش_سلامت',
-      description: `استعلام گزارش جامع پایش سلامت سیستم - وضعیت کل: ${status}`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
-    });
-
-    res.json({
-      status,
-      timestamp: new Date().toISOString(),
-      uptimeSeconds: Math.floor(process.uptime()),
-      database: {
-        connected: true,
-        latencyMs: dbLatencyMs
-      },
-      outboxQueue: {
-        pendingEvents: pendingOutbox,
-        quarantinedDlqEvents: dlqCount
-      },
-      accountingIntegrity: {
-        totalDebit: debit,
-        totalCredit: credit,
-        isBalanced: voucherIsBalanced,
-        imbalanceAmount: Math.abs(debit - credit)
-      },
-      inventoryIntegrity: {
-        negativeStockItemsCount: negativeStockCount
-      },
-      workflows: {
-        activeInstances: activeWorkflows
-      }
-    });
-  } catch (error) {
-    throw error;
-  }
-});
-
-// Production Auto-Reconciliation & Self-Healing Endpoint
-router.post('/system/reconciliation/auto-repair', authorize('admin'), async (req, res) => {
-  try {
-    const { OutboxService } = await import('../services/events/outboxService.js');
-    const { AccountingService } = await import('../services/accounting.service.js');
-
-    // Re-process stuck outbox items
-    const batchResult = await OutboxService.processPendingBatch(100);
-    const reprocessedCount = batchResult.processed;
-
-    // Sync missing invoice vouchers
-    const voucherSyncRes = await AccountingService.syncAllInvoiceVouchers();
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'مدیر سیستم',
-      userFullName: req.user?.full_name || '',
-      action: 'RECONCILIATION_EXECUTE',
-      entity: 'سیستم خودترمیمی و بازیابی بحران',
-      description: `اجرای عملیات خودترمیمی؛ پردازش ${reprocessedCount} رویداد Outbox معلق و همگام‌سازی اسناد حسابداری`
-    });
-
-    res.json({
-      success: true,
-      message: 'عملیات خودترمیمی و بازسازی تعادل داده‌ها با موفقیت اجرا گردید.',
-      reprocessedOutboxEvents: reprocessedCount,
-      voucherSync: voucherSyncRes
-    });
-  } catch (error) {
-    throw error;
-  }
-});
-
-// V8 Master Release Gate Audit Endpoint
-router.get('/system/release-gate/status', authorize('admin'), async (req, res) => {
-  try {
-    const { ReleaseGateService } = await import('../services/releaseGate.service.js');
-    const report = await ReleaseGateService.evaluateReleaseGate();
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'admin',
-      userFullName: req.user?.full_name || '',
-      action: 'AUDIT',
-      entity: 'سیستم:ارزیابی_دروازه_انتشار',
-      description: `اجرای ارزیابی رسمی Release Gate نسخه ۸ — وضعیت: ${report.overallStatus} (${report.passedCriteria}/${report.totalCriteria})`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
-    });
-
-    res.json(report);
   } catch (error) {
     throw error;
   }

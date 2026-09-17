@@ -1,12 +1,12 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../api';
 import { 
-  Search, Printer, Edit3, Trash2, ChevronRight, ChevronLeft, Filter, 
+  Search, Printer, Edit3, Trash2, ChevronRight, ChevronLeft,
   FileOutput, ArrowDownLeft, ArrowUpRight, Eye, 
   CheckCircle2, AlertCircle, ShoppingCart, CreditCard, DollarSign, 
-  Package, X, Building2, User, Layers, RefreshCw, FileText, GitBranch, ShieldCheck
+  Package, X, RefreshCw, FileText, GitBranch
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
@@ -38,8 +38,8 @@ export default function InvoicesListPage() {
   const [selectedDocDetails, setSelectedDocDetails] = useState<any>(null);
   const [workflowDoc, setWorkflowDoc] = useState<any | null>(null);
   const [settlementDoc, setSettlementDoc] = useState<any | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [printLoading, setPrintLoading] = useState(false);
+  const [, setDetailsLoading] = useState(false);
+  const [, setPrintLoading] = useState(false);
 
   // V9 Phase 5.1: مهاجرت به React Query — کش، dedupe و حذف loadData/AbortController دستی
   const queryClient = useQueryClient();

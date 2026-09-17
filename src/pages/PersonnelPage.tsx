@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Users, UserPlus, FileSpreadsheet } from 'lucide-react';
 import { usePersonnel } from '../hooks/usePersonnel';
 import { PersonnelStatsCards } from '../components/personnel/PersonnelStatsCards';
@@ -43,7 +43,6 @@ export function PersonnelPage() {
     handleSave,
     handleDelete,
     handleViewDetail,
-    filteredPersonnel,
     stats
   } = usePersonnel();
 

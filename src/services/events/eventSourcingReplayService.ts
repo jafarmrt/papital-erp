@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { outboxEvents, deadLetterEvents, activityLogs, documents, items, customers, treasuryTransactions, productionProjects } from '../../db/schema.js';
-import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
+import { eq, and, desc, or, ilike } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
@@ -23,19 +23,6 @@ export interface TimelineEventItem {
 }
 
 export class EventSourcingReplayService {
-  /**
-   * Alias method for backwards compatibility
-   */
-  static async simulateReplay(eventId: string) {
-    return {
-      eventId,
-      willTriggerActionsCount: 2,
-      willNotifyWebhooksCount: 1,
-      simulationStatus: 'success' as const,
-      simulatedAt: new Date().toISOString()
-    };
-  }
-
   /**
    * Returns list of supported aggregate types with metadata and sample items.
    */

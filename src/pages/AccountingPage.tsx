@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAccounting } from '../hooks/useAccounting';
 import { AccountingDashboard } from '../components/accounting/AccountingDashboard';
@@ -16,14 +16,6 @@ import {
   Calculator, 
   RefreshCw, 
   Plus, 
-  LayoutDashboard, 
-  FolderTree, 
-  FileText, 
-  Building2, 
-  CreditCard, 
-  BarChart3, 
-  Lock,
-  Layers,
   ShieldAlert
 } from 'lucide-react';
 import { User } from '../types';
@@ -53,7 +45,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     treeAccounts,
     vouchers,
     bankAccounts,
-    reconciliationReport,
     cheques,
     treasuryTransactions,
     customers,

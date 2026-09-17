@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
 import { pendingMaterials, items } from '../db/schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';

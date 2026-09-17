@@ -1,4 +1,3 @@
-import React from 'react';
 import { Users, CheckCircle2, XCircle, UserCheck } from 'lucide-react';
 import { formatPersianNumber } from '../../utils';
 

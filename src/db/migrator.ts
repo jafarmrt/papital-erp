@@ -107,7 +107,6 @@ export async function runMigrations(): Promise<MigrationResult> {
     } catch {
       // Keep after = before on query failure
     }
-    const appliedNow = Math.max(after - before, 0);
 
     logger.info(`[Migrator] Drizzle database migrations completed successfully. ${before} → ${after} applied.`);
 
@@ -134,7 +133,7 @@ export async function runMigrations(): Promise<MigrationResult> {
  */
 export async function validateDbSchema(): Promise<{ valid: boolean; tablesCount: number; floatColumns: string[]; missingTables: string[]; details: any }> {
   const expectedTables = [
-    'users', 'roles', 'categories', 'warehouses', 'app_settings', 'changelogs', 'customers',
+    'users', 'roles', 'categories', 'warehouses', 'app_settings', 'customers',
     'items', 'documents', 'document_items', 'transactions', 'item_prices', 'activity_logs',
     'transfers', 'production_projects', 'project_stages', 'daily_work_logs', 'notifications',
     'crm_leads', 'crm_activities', 'personnel', 'task_categories', 'piecework_tasks',

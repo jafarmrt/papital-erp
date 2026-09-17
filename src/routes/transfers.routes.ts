@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
 import { transfers, items, activityLogs } from '../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';

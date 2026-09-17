@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ShieldAlert, AlertTriangle, Trash2, CheckCircle2, RotateCcw, ShieldCheck, History, Calendar, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { ShieldAlert, AlertTriangle, Trash2, CheckCircle2, RotateCcw, ShieldCheck, History, RefreshCw } from 'lucide-react';
 import { useAuditLogIntegrityQuery, useInvalidateActivityLogs } from '../../hooks/queries/useActivityLogQueries';
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';

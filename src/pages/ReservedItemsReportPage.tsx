@@ -12,13 +12,8 @@ import {
   ShoppingCart, 
   ChevronDown, 
   ChevronUp, 
-  FileText, 
   ExternalLink,
-  CheckCircle2,
-  AlertCircle,
-  Building2,
   DollarSign,
-  ArrowUpDown
 } from 'lucide-react';
 import { fetchJson } from '../api';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate, formatCurrencyLabel } from '../utils';

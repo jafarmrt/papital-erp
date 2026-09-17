@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 import { ChartOfAccountsTab } from '../accounting/ChartOfAccountsTab';
@@ -78,7 +78,7 @@ export function ChartOfAccountsSettingsTab() {
 
   const handleSeedStandardAccounts = async () => {
     try {
-      await fetchJson('/accounting/seed-standard', {
+      await fetchJson('/accounting/accounts/seed-standard', {
         method: 'POST'
       });
       toast.success('کدینگ استاندارد با موفقیت بارگذاری شد');

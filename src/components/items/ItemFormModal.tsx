@@ -1,4 +1,3 @@
-import React from 'react';
 import { ItemFormModalProps } from './form/types';
 import { useItemForm } from './form/useItemForm';
 import { ItemBasicForm } from './form/ItemBasicForm';

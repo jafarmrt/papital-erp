@@ -1,4 +1,3 @@
-import React from 'react';
 import { MessageSquare, X, Send } from 'lucide-react';
 import { DailyWorkLog } from '../../types';
 import { MentionTextarea } from '../MentionTextarea';

@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  X, Plus, Trash2, ShoppingCart, Loader2, Check, FileText, Search
-} from 'lucide-react';
+import { X, Plus, Trash2, Loader2, Check, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Item } from '../../types';
 import { fetchJson } from '../../api';

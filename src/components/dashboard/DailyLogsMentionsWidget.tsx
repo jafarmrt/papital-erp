@@ -1,10 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  CalendarCheck, AtSign, Clock, CheckCircle2, User, ArrowLeft,
-  Plus, Tag, Briefcase, Sparkles, MessageSquare, Search, X
-} from 'lucide-react';
-import { toPersianDigits, getTodayJalaliDate } from '../../utils';
+import { AtSign, Clock, User, ArrowLeft, Plus, Tag, Briefcase, MessageSquare, Search, X } from 'lucide-react';
+import { toPersianDigits } from '../../utils';
 import { DailyWorkLog, User as UserModel } from '../../types';
 
 interface DailyLogsMentionsWidgetProps {

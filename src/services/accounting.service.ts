@@ -8,18 +8,6 @@ import {
   AccountMappingService,
   FinancialHealthService
 } from './accounting/index.js';
-import type {
-  Account,
-  JournalVoucher,
-  BankAccount,
-  Cheque,
-  ChequeStatus,
-  TreasuryTransaction,
-  TrialBalanceRow,
-  FinancialSummaryStats,
-  FiscalYearClosingPreview,
-  FiscalYearClosingResult
-} from '../types.js';
 
 export {
   ChartOfAccountsService,

@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchJson } from '../api';
-import { 
-  X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, 
-  CheckCircle2, Layers, Calendar, FileText
-} from 'lucide-react';
+import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 import { formatPersianNumber } from '../utils';
 

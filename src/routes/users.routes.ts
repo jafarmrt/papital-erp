@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc, ne, and, sql } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
@@ -547,37 +547,6 @@ router.get('/users', async (req, res) => {
       avatarUrl: u.avatarUrl || ''
     }));
     res.json(mapped);
-  } catch (err) {
-    throw err;
-  }
-});
-
-router.get('/users/:id', validate(paramsIdSchema), async (req, res) => {
-  try {
-    const targetUserId = Number(req.params.id);
-    const [u] = await orm.select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      role: users.role,
-      avatarUrl: users.avatarUrl
-    })
-    .from(users)
-    .where(eq(users.id, targetUserId));
-
-    if (!u) {
-      return res.status(404).json({ error: 'کاربر یافت نشد' });
-    }
-
-    res.json({
-      id: u.id,
-      username: u.username,
-      full_name: u.fullName || u.username,
-      fullName: u.fullName || u.username,
-      role: u.role,
-      avatar_url: u.avatarUrl || '',
-      avatarUrl: u.avatarUrl || ''
-    });
   } catch (err) {
     throw err;
   }

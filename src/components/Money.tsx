@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatPersianPrice } from '../utils';
 
 export interface MoneyProps {

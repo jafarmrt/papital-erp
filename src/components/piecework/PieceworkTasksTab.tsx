@@ -1,20 +1,4 @@
-import React from 'react';
-import {
-  Search,
-  Plus,
-  Award,
-  Edit2,
-  Trash2,
-  FileSpreadsheet,
-  Download,
-  Upload,
-  History,
-  RotateCcw,
-  Archive,
-  CheckCircle2,
-  TrendingUp,
-  Tag
-} from 'lucide-react';
+import { Search, Plus, Award, Edit2, Trash2, FileSpreadsheet, Download, Upload, History, RotateCcw, Archive, CheckCircle2 } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';

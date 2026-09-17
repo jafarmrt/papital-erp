@@ -1,4 +1,3 @@
-import { eq, and, sql } from 'drizzle-orm';
 import { logger } from '../middleware/logger.js';
 
 export class OptimisticLockError extends Error {

@@ -17,13 +17,6 @@ const eventIdParamSchema = z.object({
   })
 });
 
-const timelineParamSchema = z.object({
-  params: z.object({
-    aggregateType: z.string().min(1),
-    aggregateId: z.string().min(1),
-  })
-});
-
 const router = Router();
 
 // Public Webhook Simulator Echo Endpoint (exempt from auth, but validates signature token)
@@ -386,7 +379,7 @@ router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('
 
 router.post('/action-rules/test-draft', authorizePermission('events.manage'), async (req, res) => {
   try {
-    const { rule, customEvent } = req.body;
+    const { rule } = req.body;
     res.json({
       status: 'success',
       simulated: true,
@@ -463,24 +456,6 @@ router.get('/dlq', authorizePermission('events.view'), async (req, res) => {
     res.json({
       success: true,
       ...result
-    });
-  } catch (error) {
-    throw error;
-  }
-});
-
-router.get('/dlq/:id', authorizePermission('events.view'), validate(paramsIdSchema), async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const item = await DeadLetterQueueService.getById(id);
-
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'رکورد در صف DLQ یافت نشد.' });
-    }
-
-    res.json({
-      success: true,
-      event: item
     });
   } catch (error) {
     throw error;
@@ -648,24 +623,9 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
   }
 });
 
-router.get('/timeline/:aggregateType/:aggregateId', authorizePermission('events.view'), validate(timelineParamSchema), async (req, res) => {
-  try {
-    const { aggregateType, aggregateId } = req.params;
-    const timeline = await EventSourcingReplayService.getAggregateTimeline(aggregateType, aggregateId);
-
-    res.json({
-      success: true,
-      data: timeline,
-      timeline
-    });
-  } catch (error) {
-    throw error;
-  }
-});
-
 router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], authorizePermission('events.manage'), async (req, res) => {
   try {
-    const { event, eventId, eventType, aggregateType, aggregateId, payload, targetState, targetVersion, dryRun } = req.body;
+    const { event, eventId, eventType, aggregateType, aggregateId, payload, dryRun } = req.body;
 
     const simulationResult = await EventSourcingReplayService.simulateEventReplay({
       eventId: eventId || (event?.eventId),

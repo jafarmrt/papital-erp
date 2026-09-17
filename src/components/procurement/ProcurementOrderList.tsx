@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  PackageCheck, Clock, CheckCircle2, Building2, Eye, 
-  Search, Truck, ShoppingCart, FileText, Check, ChevronDown, ChevronUp, AlertCircle
-} from 'lucide-react';
+import { PackageCheck, Clock, CheckCircle2, Building2, Search, Truck, FileText, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProcurementOrder } from '../../types';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 

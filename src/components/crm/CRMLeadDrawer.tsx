@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { PhoneCall, Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';

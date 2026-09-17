@@ -1,9 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchJson } from '../api';
-import { 
-  X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, 
-  Search, Layers, DollarSign, Calendar, Filter, ShieldCheck
-} from 'lucide-react';
+import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';

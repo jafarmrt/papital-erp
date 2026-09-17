@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
 import { fetchJson } from '../api';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 interface Option {
   value: string | number;
@@ -92,18 +93,7 @@ export function SearchableSelect({
     }
   }, [isOpen, updatePosition]);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-      const isInsideWrapper = wrapperRef.current && wrapperRef.current.contains(target);
-      const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target);
-      if (!isInsideWrapper && !isInsideDropdown) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside([wrapperRef, dropdownRef], () => setIsOpen(false));
 
   useEffect(() => {
     if (!fetchUrl) return;

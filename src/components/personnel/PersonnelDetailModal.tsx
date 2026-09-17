@@ -1,18 +1,4 @@
-import React from 'react';
-import {
-  Users,
-  Briefcase,
-  Award,
-  Wallet,
-  X,
-  Edit2,
-  Phone,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  AlertCircle
-} from 'lucide-react';
+import { Briefcase, Award, Wallet, X, Edit2, Phone, Calendar } from 'lucide-react';
 import { Personnel } from '../../types';
 import { formatPersianCode, formatPersianNumber, formatPersianPhone, formatPersianNationalId } from '../../utils';
 

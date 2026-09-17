@@ -10,7 +10,7 @@ import { InsufficientStockError, UnbalancedVoucherError, normalizeError } from '
 import { formatApiError } from '../../utils/errorTranslator.js';
 import { orm } from '../../db/drizzle.js';
 import { items, workflowInstances, workflowHistoryLogs, journalVouchers, journalVoucherItems, outboxEvents, accounts, documents } from '../../db/schema.js';
-import { eq, sql, and, or } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 
 export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -329,7 +329,8 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       ]
     });
 
-    const reversedVoucher = await AccountingService.reverseVoucher(originalVoucher.id, {
+    const reversedVoucher = await AccountingService.reverseVoucher({
+      voucherId: originalVoucher.id,
       date: new Date().toISOString().split('T')[0],
       reason: 'اصلاح ثبت اشتباه'
     });
@@ -707,7 +708,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   const t11Start = Date.now();
   try {
     const { InventoryIntegrityService } = await import('../../services/inventory/inventoryIntegrity.service.js');
-    const { StockReconciliationService } = await import('../../services/inventory/stockReconciliation.service.js');
+    await import('../../services/inventory/stockReconciliation.service.js');
 
     // 1. Audit report generation
     const report = await InventoryIntegrityService.getIntegrityReport();

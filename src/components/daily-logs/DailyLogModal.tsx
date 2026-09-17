@@ -1,5 +1,5 @@
-import React, { FormEvent } from 'react';
-import { Clock, X, Building2, Laptop, AtSign, Eye, Lock, Check } from 'lucide-react';
+import { FormEvent } from 'react';
+import { Clock, X, Building2, Laptop, AtSign, Eye, Lock } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";

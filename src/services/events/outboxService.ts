@@ -1,4 +1,4 @@
-import { orm, pool, type DbExecutor } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { outboxEvents } from '../../db/schema.js';
 import { eq, and, or, lte, lt, sql, desc, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
@@ -23,17 +23,10 @@ export class OutboxService {
   private static readonly MAX_RETRIES = 5;
 
   /**
-   * Alias for saveToOutbox for backwards compatibility
+   * رابط رسمی AGENTS §15 — ثبت رویداد دامنه داخل تراکنش کسب‌وکار
    */
   static async recordEvent<T = unknown>(tx: DbExecutor, event: BaseDomainEvent<T>): Promise<void> {
     return this.saveToOutbox(tx, event);
-  }
-
-  /**
-   * Alias for processPendingBatch for backwards compatibility
-   */
-  static async processPendingEvents(batchSize: number = 25) {
-    return this.processPendingBatch(batchSize);
   }
 
   /**
@@ -435,8 +428,6 @@ export class OutboxService {
     const limit = filters.limit || 50;
     const offset = filters.offset || 0;
 
-    let query = orm.select().from(outboxEvents);
-
     const conditions: (SQL | undefined)[] = [];
     if (filters.status && filters.status !== 'ALL') {
       conditions.push(eq(outboxEvents.status, filters.status));
@@ -478,7 +469,7 @@ export class OutboxService {
    * Reset a failed event for immediate retry.
    */
   static async retryFailedEvent(eventId: string): Promise<boolean> {
-    const result = await orm
+    await orm
       .update(outboxEvents)
       .set({
         status: 'pending',
@@ -495,7 +486,7 @@ export class OutboxService {
    * Reset all failed events for batch retry.
    */
   static async retryAllFailedEvents(): Promise<number> {
-    const result = await orm
+    await orm
       .update(outboxEvents)
       .set({
         status: 'pending',

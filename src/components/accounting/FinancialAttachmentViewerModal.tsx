@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  X,
-  Download,
-  FileText,
-  Calendar,
-  ShieldCheck,
-  ChevronRight,
-  ChevronLeft,
-  Image as ImageIcon,
-  Paperclip,
-  FileSpreadsheet
-} from 'lucide-react';
+import { X, Download, FileText, Calendar, ShieldCheck, ChevronRight, ChevronLeft, FileSpreadsheet } from 'lucide-react';
 import { FinancialAttachment } from '../../types';
 import { formatPersianDate, formatPersianNumber } from '../../utils';
 
