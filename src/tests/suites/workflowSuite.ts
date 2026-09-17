@@ -6,6 +6,8 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { WorkflowRuleEngine, WorkflowQuorumService } from '../../services/workflow/workflowEngineService.js';
 import { WorkflowDelegationService } from '../../services/workflow/workflowDelegationService.js';
 import { WorkflowSlaEvaluator } from '../../services/workflow/workflowSlaEvaluator.js';
+import { WorkflowDefinitionService } from '../../services/workflow/workflowDefinitionService.js';
+import { WorkflowTaskService } from '../../services/workflow/workflowTaskService.js';
 
 export async function runWorkflowTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -538,6 +540,47 @@ export async function runWorkflowTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: false,
       durationMs: Date.now() - t9Start,
+      error: err.message
+    }));
+  }
+
+  // 10. Query Batching & N+1 Elimination (V4 Phase 5.3 / TD-098)
+  const t10Start = Date.now();
+  try {
+    // Test 10.1: getDefinitions batches counts without N+1 loops
+    const definitions = await WorkflowDefinitionService.getDefinitions();
+    if (!Array.isArray(definitions)) {
+      throw new Error('خروجی getDefinitions آرایه نیست');
+    }
+    for (const d of definitions) {
+      if (typeof d.stateCount !== 'number' || typeof d.transitionCount !== 'number' || typeof d.activeInstancesCount !== 'number') {
+        throw new Error(`تعریف فرآیند #${d.id} شامل آمار عددی معتبر نیست`);
+      }
+    }
+
+    // Test 10.2: getTaskStats executes direct counts without entity context N+1 loading
+    const stats = await WorkflowTaskService.getTaskStats({ userId: 1, userRole: 'admin' });
+    if (typeof stats.pendingCount !== 'number' || typeof stats.overdueCount !== 'number') {
+      throw new Error('خروجی getTaskStats ساختار عددی معتبر ندارد');
+    }
+
+    results.push(makeTestCase({
+      id: 'wf_query_batching_n_plus_one_elimination',
+      name: 'بهینه‌سازی کوئری‌های فرآیند کاری و حذف N+1 (Workflow Query Batching & Task Stats)',
+      layer: 'workflow',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t10Start,
+      details: `${definitions.length} فرآیند با شمارش تجمیعی بچ‌شده واکشی شدند و آمار وظایف (pending=${stats.pendingCount}, overdue=${stats.overdueCount}) بدون کوئری‌های N+1 مستقیماً محاسبه گردید.`
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'wf_query_batching_n_plus_one_elimination',
+      name: 'بهینه‌سازی کوئری‌های فرآیند کاری و حذف N+1 (Workflow Query Batching & Task Stats)',
+      layer: 'workflow',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t10Start,
       error: err.message
     }));
   }

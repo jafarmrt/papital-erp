@@ -9,8 +9,10 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { logger, morganMiddleware, errorHandler } from './middleware/logger.js';
 import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics } from './middleware/metrics.js';
+import { metricsAuthMiddleware } from './middleware/metricsAuth.js';
 import promClient from 'prom-client';
 import { requestContextMiddleware } from './lib/requestContext.js';
+import { validateCorsOrigin } from './lib/corsValidator.js';
 import authRoutes from './routes/auth.routes.js';
 import usersRoutes from './routes/users.routes.js';
 import systemRoutes from './routes/system.routes.js';
@@ -138,48 +140,18 @@ export async function createApp(): Promise<express.Express> {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  // Restrict CORS origins dynamically based on request origin / environment (SEC-005)
+  // Restrict CORS origins dynamically based on request origin / environment (SEC-005 / S-1 / TD-088)
   app.use(cors({
     origin: (origin, callback) => {
-      // Allow same-origin requests (no Origin header)
-      if (!origin) return callback(null, true);
-
-      const allowedOrigins = process.env.ALLOWED_ORIGINS
-        ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-        : [];
-
-      // In Production, check against explicit allowlist, APP_URL, and verified Cloud Run / AI Studio preview domains
-      const isCloudRunOrAiStudio = /^https:\/\/([a-zA-Z0-9-]+\.)*(run\.app|google\.com|aistudio\.google\.com|googleusercontent\.com)$/.test(origin);
-      const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-
-      let isAppUrl = false;
-      if (process.env.APP_URL) {
-        try {
-          const appOrigin = new URL(process.env.APP_URL).origin;
-          if (origin === appOrigin) isAppUrl = true;
-        } catch {
-          // ignore invalid APP_URL
+      const result = validateCorsOrigin(origin);
+      if (result.allowed) {
+        if (result.devMode && result.reason) {
+          logger.warn(`[DEV CORS] ${result.reason}`);
         }
-      }
-
-      // Check explicit allowed list or wildcard
-      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*') || isAppUrl) {
         return callback(null, true);
       }
 
-      // Allow AI Studio preview and dev domains
-      if (isCloudRunOrAiStudio || isLocalhost) {
-        return callback(null, true);
-      }
-
-      // Non-production fallback
-      if (process.env.NODE_ENV !== 'production') {
-        logger.warn(`[DEV CORS] Allowed non-listed origin in development: ${origin}`);
-        return callback(null, true);
-      }
-
-      // In production, reject unauthorized origin
-      logger.warn(`[CORS] Rejected origin in production: ${origin}`);
+      logger.warn(`[CORS] Rejected unauthorized origin in production: ${origin} (Reason: ${result.reason})`);
       return callback(null, false);
     },
     credentials: true
@@ -259,23 +231,8 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api', csrfProtection);
   app.post(['/api/login', '/api/auth/login'], loginLimiter);
 
-  // Prometheus Metrics Endpoint (V9-2.2: محافظت با METRICS_TOKEN یا احراز هویت ادمین)
-  app.get(['/metrics', '/api/metrics'], async (req, res) => {
-    const metricsToken = process.env.METRICS_TOKEN;
-    if (metricsToken) {
-      const authHeader = req.headers['authorization'] || '';
-      if (authHeader !== `Bearer ${metricsToken}`) {
-        return res.status(401).json({ error: 'دسترسی به متریک‌ها نیازمند توکن معتبر (METRICS_TOKEN) یا احراز هویت مدیر است.' });
-      }
-    } else {
-      // بدون توکن اختصاصی، تنها کاربران احراز‌هویت‌شده دسترسی دارند
-      const cookieToken = (req as any).cookies?.['auth_token'] || (req as any).cookies?.['token'];
-      const authHeader = req.headers['authorization'];
-      if (!cookieToken && !(authHeader && String(authHeader).startsWith('Bearer '))) {
-        return res.status(401).json({ error: 'دسترسی به متریک‌ها نیازمند احراز هویت است. برای اسکرپ عمومی Prometheus متغیر METRICS_TOKEN را تنظیم کنید.' });
-      }
-    }
-
+  // Prometheus Metrics Endpoint (V9-2.2 & V4 Subphase 2.3 / S-3: محافظت قطعی با METRICS_TOKEN یا احراز هویت ادمین)
+  app.get(['/metrics', '/api/metrics'], metricsAuthMiddleware, async (_req, res) => {
     updateDbPoolMetrics();
     await updateOutboxMetrics();
     res.set('Content-Type', promClient.register.contentType);

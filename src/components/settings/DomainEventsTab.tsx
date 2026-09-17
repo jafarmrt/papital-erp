@@ -520,15 +520,15 @@ export function DomainEventsTab() {
                   className="text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none"
                 >
                   <option value="ALL">همه وضعیت‌ها</option>
-                  <option value="pending">در صف انتظار (Pending)</option>
-                  <option value="processing">در حال پردازش (Processing)</option>
-                  <option value="completed">پردازش‌شده (Completed)</option>
-                  <option value="failed">ناموفق (Failed)</option>
+                  <option value="pending">در صف انتظار پردازش</option>
+                  <option value="processing">در حال ارسال و پردازش</option>
+                  <option value="completed">با موفقیت پردازش‌شده</option>
+                  <option value="failed">ناموفق (خطا در پردازش)</option>
                 </select>
               </div>
 
               <button
-                onClick={fetchOutbox}
+                onClick={() => fetchOutbox()}
                 disabled={isLoadingOutbox}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition-all"
               >
@@ -740,7 +740,7 @@ export function DomainEventsTab() {
               </div>
 
               <button
-                onClick={fetchEvents}
+                onClick={() => fetchEvents()}
                 disabled={isLoadingEvents}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition-all"
               >

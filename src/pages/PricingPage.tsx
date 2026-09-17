@@ -29,7 +29,7 @@ import UnifiedExcelModal from '../components/UnifiedExcelModal';
 
 export default function PricingPage({ user }: { user: User }) {
   const appCurrency = useAppCurrency();
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
   const [tab, setTab] = useState<'product'|'raw_material'>('product');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [priceFilter, setPriceFilter] = useState<'all' | 'missing_price' | 'has_price'>('all');
@@ -44,9 +44,10 @@ export default function PricingPage({ user }: { user: User }) {
   // V9 Phase 5.1: مهاجرت به React Query — چهار منبع داده در کوئری‌های مستقل با کش
   const queryClient = useQueryClient();
 
+  // V4 Phase 6.2 (U-1): ریست صفحه با debouncedSearchQuery
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, tab, selectedCategory, priceFilter]);
+  }, [debouncedSearchQuery, tab, selectedCategory, priceFilter]);
   
   const [historyItem, setHistoryItem] = useState<Item | null>(null);
   const [historyData, setHistoryData] = useState<any[]>([]);
@@ -508,35 +509,39 @@ export default function PricingPage({ user }: { user: User }) {
   };
 
   const safeItems = Array.isArray(items) ? items : [];
-  const filtered = safeItems.filter(item => {
-    // Text search
-    const matchesSearch = 
-      item.name.includes(search) || 
-      item.code.includes(search) || 
-      (item.category && item.category.includes(search));
+  // V4 Phase 6.2 (U-1): فیلتر محصولات قیمت‌گذاری با useMemo و debouncedSearchQuery
+  const filtered = React.useMemo(() => {
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    return safeItems.filter(item => {
+      // Text search
+      const matchesSearch = !q ||
+        item.name.toLowerCase().includes(q) || 
+        item.code.toLowerCase().includes(q) || 
+        (item.category && item.category.toLowerCase().includes(q));
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    // Category filter
-    if (selectedCategory && item.category !== selectedCategory) return false;
+      // Category filter
+      if (selectedCategory && item.category !== selectedCategory) return false;
 
-    // Price completeness filter
-    if (priceFilter === 'missing_price') {
-      const hasAllStrategies = strategies.every(st => {
-        const val = getFieldValue(item.id, st);
-        return val.price !== '' && Number(val.price) > 0;
-      });
-      return !hasAllStrategies;
-    } else if (priceFilter === 'has_price') {
-      const hasAllStrategies = strategies.every(st => {
-        const val = getFieldValue(item.id, st);
-        return val.price !== '' && Number(val.price) > 0;
-      });
-      return hasAllStrategies;
-    }
+      // Price completeness filter
+      if (priceFilter === 'missing_price') {
+        const hasAllStrategies = strategies.every(st => {
+          const val = getFieldValue(item.id, st);
+          return val.price !== '' && Number(val.price) > 0;
+        });
+        return !hasAllStrategies;
+      } else if (priceFilter === 'has_price') {
+        const hasAllStrategies = strategies.every(st => {
+          const val = getFieldValue(item.id, st);
+          return val.price !== '' && Number(val.price) > 0;
+        });
+        return hasAllStrategies;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [safeItems, debouncedSearchQuery, selectedCategory, priceFilter, strategies, prices, localEdits]);
   
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);

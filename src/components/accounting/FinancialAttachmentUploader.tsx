@@ -11,6 +11,7 @@ interface Props {
   readOnly?: boolean;
   title?: string;
   helperText?: string;
+  description?: string;
   maxFiles?: number;
   accept?: string;
 }
@@ -20,7 +21,8 @@ export const FinancialAttachmentUploader: React.FC<Props> = ({
   onChange,
   readOnly = false,
   title = 'ضمائم و اسناد مثبته (تصویر فاکتور، رسید بانکی، تصویر چک)',
-  helperText = 'تصاویر به صورت خودکار بهینه‌سازی و فشرده می‌شوند (حداکثر سقف ۳۰۰ کیلوبایت برای هر تصویر).',
+  helperText,
+  description,
   maxFiles = 10,
   accept = 'image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
 }) => {
@@ -115,7 +117,7 @@ export const FinancialAttachmentUploader: React.FC<Props> = ({
           </div>
           <div>
             <h4 className="text-xs font-bold text-slate-800">{title}</h4>
-            <p className="text-[11px] text-slate-500">{helperText}</p>
+            <p className="text-[11px] text-slate-500">{description || helperText || 'تصاویر به صورت خودکار بهینه‌سازی و فشرده می‌شوند (حداکثر سقف ۳۰۰ کیلوبایت برای هر تصویر).'}</p>
           </div>
         </div>
 

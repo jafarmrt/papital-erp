@@ -75,7 +75,11 @@ export class WorkflowTaskService {
     // Consolidate per instance: Ensure at most ONE task card is returned per workflow instance.
     // If an instance has multiple tasks (e.g. positive approval and rejection), keep only the positive review task.
     const seenInstances = new Set<number>();
-    const filteredTasks = [];
+    const matchedItems: Array<{
+      task: typeof workflowTasks.$inferSelect;
+      instance: typeof workflowInstances.$inferSelect;
+      delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null;
+    }> = [];
     
     // Sort so forward tasks are processed before negative tasks
     const sortedTasks = [...allTasks].sort((a, b) => {
@@ -124,8 +128,21 @@ export class WorkflowTaskService {
 
       if (isAssigned) {
         seenInstances.add(task.instanceId);
+        matchedItems.push({ task, instance, delegationInfo });
+      }
+    }
+
+    const page = params.page || 1;
+    const limit = params.limit || 50;
+    const offset = (page - 1) * limit;
+    const total = matchedItems.length;
+    const pagedSlice = matchedItems.slice(offset, offset + limit);
+
+    // V4 Phase 5.3 (A-2): بارگذاری موازی کانتکست موجودیت فقط برای ردیف‌های صفحه فعلی
+    const filteredTasks = await Promise.all(
+      pagedSlice.map(async ({ task, instance, delegationInfo }) => {
         const context = await getEntityContext(instance.entityType, instance.entityId);
-        filteredTasks.push({
+        return {
           ...task,
           entityType: instance.entityType,
           entityId: instance.entityId,
@@ -143,29 +160,93 @@ export class WorkflowTaskService {
           buyerName: context.buyerName || '',
           amount: context.amount || context.totalAmount || 0,
           delegationInfo
-        });
-      }
-    }
+        };
+      })
+    );
 
     return {
       data: filteredTasks,
-      total: filteredTasks.length,
-      page: params.page || 1,
-      limit: params.limit || 50
+      total,
+      page,
+      limit
     };
   }
 
   /**
    * Get Task Stats
+   * V4 Phase 5.3 (A-2): کوئری مستقیم سبک شمارش تسک‌های منتظر و منقضی بدون فراخوانی getMyTasks و بارگذاری N+1 کانتکست موجودیت‌ها
    */
   static async getTaskStats(params: { userId: number; userRole?: string }) {
-    const tasksRes = await this.getMyTasks({ userId: params.userId, userRole: params.userRole, status: 'pending' });
-    const tasks = tasksRes.data || [];
+    const userId = Number(params.userId);
+    const userRole = (params.userRole || '').trim().toLowerCase();
+    const isAdmin = userRole === 'admin';
     const nowIso = new Date().toISOString();
 
-    const overdueCount = tasks.filter(t => t.dueAt && t.dueAt < nowIso).length;
+    const activeDelegations = await orm.select({ fromUserId: workflowDelegations.fromUserId })
+      .from(workflowDelegations)
+      .where(and(
+        eq(workflowDelegations.toUserId, userId),
+        eq(workflowDelegations.isActive, 1),
+        sql`${workflowDelegations.startDate} <= ${nowIso}`,
+        sql`${workflowDelegations.endDate} >= ${nowIso}`
+      ));
+
+    const delegatedFromUserIds = activeDelegations.map(d => d.fromUserId);
+
+    const pendingTasks = await orm.select({
+      id: workflowTasks.id,
+      instanceId: workflowTasks.instanceId,
+      assignedUserId: workflowTasks.assignedUserId,
+      assignedRole: workflowTasks.assignedRole,
+      candidateUsers: workflowTasks.candidateUsers,
+      candidateRoles: workflowTasks.candidateRoles,
+      dueAt: workflowTasks.dueAt,
+      title: workflowTasks.title,
+    })
+    .from(workflowTasks)
+    .where(eq(workflowTasks.status, 'pending'))
+    .orderBy(desc(workflowTasks.createdAt));
+
+    const seenInstances = new Set<number>();
+    let pendingCount = 0;
+    let overdueCount = 0;
+
+    for (const task of pendingTasks) {
+      if (seenInstances.has(task.instanceId)) {
+        continue;
+      }
+
+      let isAssigned = false;
+      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
+      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
+
+      if (isAdmin) {
+        isAssigned = true;
+      } else if (task.assignedUserId === userId || candidateUserIds.includes(userId)) {
+        isAssigned = true;
+      } else if (
+        (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId)) ||
+        candidateUserIds.some(cId => delegatedFromUserIds.includes(cId))
+      ) {
+        isAssigned = true;
+      } else {
+        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
+        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
+          isAssigned = true;
+        }
+      }
+
+      if (isAssigned) {
+        seenInstances.add(task.instanceId);
+        pendingCount++;
+        if (task.dueAt && task.dueAt < nowIso) {
+          overdueCount++;
+        }
+      }
+    }
+
     return {
-      pendingCount: tasks.length,
+      pendingCount,
       overdueCount,
       completedTodayCount: 0
     };

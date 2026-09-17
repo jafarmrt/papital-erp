@@ -4,6 +4,7 @@ export interface Item {
   name: string;
   code: string;
   current_stock: number;
+  currentStock?: number;
   unit: string;
   category?: string;
   image?: string;
@@ -13,6 +14,10 @@ export interface Item {
   weighted_average_cost?: number;
   purchase_price?: number;
   sell_price?: number;
+  sales_price?: number;
+  costPrice?: number;
+  cost_price?: number;
+  stocks?: any;
   color?: string;
   weight?: number;
   material?: string;

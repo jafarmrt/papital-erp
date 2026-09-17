@@ -19,6 +19,15 @@ going forward.
 
 ## Version 4.x Series (Active)
 
+### v4.0.27 — Official Milestone Completion of Version 4 Architecture & Governance
+- **Phase 1 (Database & Domain Schema):** Modular schema split across 8 domain files, `numeric(..., { mode: 'number' })` type consistency (D-1), soft-delete `isDeleted` standard (D-2), and strict foreign key integrity.
+- **Phase 2 (Security Hardening):** Strict production CORS lockdown (S-1), IPv6/IPv4-mapped comprehensive SSRF normalization guard (S-2), authenticated Prometheus `/metrics` protection (S-3), elimination of default secrets in production (S-4), and PII data masking for personnel bank details (S-5).
+- **Phase 3 (Financial & Payroll Integrity):** Transactional piecework payroll pipeline with `FinancialDecimal` (F-1, F-2), atomic sequence numbering (`piecework_payroll_number_seq`), strict voucher validation eliminating log-and-continue (F-3), and 3-step atomic document finalization (DB-008).
+- **Phase 4 (Runtime Zod Contracts):** Sanitized payload replacement in Express `validate` middleware (S-6), strict mutation permission verification, and runtime validation across documents, inventory, transfers, BOM, vouchers, and treasury.
+- **Phase 5 (Idempotency & Concurrency):** Triple-key composite idempotency (`user_id + scope + key`) (F-4), deadlock prevention via table priority lock ordering (`withOrderedLocks`) (A-1), auth caching, N+1 query elimination, and paginated transfers (A-2).
+- **Phase 6 (Frontend Optimization & UX):** Refactored 1,875-line `BankAndTreasuryTab` into 9 modular components and `useTreasuryCalculations` hook (Q-1), debounce hooks across all search inputs (U-1), base `Modal` & `PrintModal` components (Q-2), and unified `ErrorBoundary`.
+- **Phase 7 (CI/CD, Testing & Modular Scaffold):** Multi-stage GitHub Actions CI with live PostgreSQL 16 container (T-1), unified lockfile & test runner metrics (T-2), standardized domain module scaffold in `src/modules/_template/`, and 100% resolution of all 17 independent audit items (TD-088..TD-103).
+
 ### v4.0.0 — Official Launch of Version 4 & Version 3 Closure
 - **Version 3 Closure:** Officially concluded and archived the comprehensive v3.x series (`v3.0.0` through `v3.3.22`) covering financial core automation, 4-level trial balance, multi-warehouse management, workflow FSM, domain event bus, and Iranian identifier normalization.
 - **Version 4 Mission:** Initiated Version 4 series focusing on architectural optimization, codebase simplification, and targeted UI/UX refinements following the principles of visual decluttering, simplicity, and full Persian terminology.

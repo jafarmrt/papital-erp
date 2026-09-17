@@ -177,13 +177,14 @@ export const ApprovalInboxPage: React.FC = () => {
       setIsLoadingDoc(true);
 
       // Prepopulate with cached context from task/item if available
+      const itemAny = itemObj as any;
       const cachedContext = itemObj?.entityContext;
       if (cachedContext && (cachedContext.buyerName || cachedContext.refNumber || cachedContext.amount)) {
         setDocDetails({
-          ref_number: cachedContext.refNumber || itemObj?.refNumber || String(entityId),
-          buyer_name: cachedContext.buyerName || itemObj?.buyerName || '',
+          ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
+          buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
           buyer_city: cachedContext.buyerCity || '',
-          total_amount: cachedContext.amount || cachedContext.totalAmount || itemObj?.amount || 0,
+          total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
           currency: cachedContext.currency || 'IRR',
           notes: cachedContext.notes || '',
           items: []
@@ -197,10 +198,10 @@ export const ApprovalInboxPage: React.FC = () => {
             setDocDetails(doc);
           } else if (cachedContext && (cachedContext.buyerName || cachedContext.amount)) {
             setDocDetails({
-              ref_number: cachedContext.refNumber || itemObj?.refNumber || String(entityId),
-              buyer_name: cachedContext.buyerName || itemObj?.buyerName || '',
+              ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
+              buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
               buyer_city: cachedContext.buyerCity || '',
-              total_amount: cachedContext.amount || cachedContext.totalAmount || itemObj?.amount || 0,
+              total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
               currency: cachedContext.currency || 'IRR',
               items: []
             });
@@ -210,10 +211,10 @@ export const ApprovalInboxPage: React.FC = () => {
           console.error('Could not load document details:', err);
           if (cachedContext && (cachedContext.buyerName || cachedContext.amount)) {
             setDocDetails({
-              ref_number: cachedContext.refNumber || itemObj?.refNumber || String(entityId),
-              buyer_name: cachedContext.buyerName || itemObj?.buyerName || '',
+              ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
+              buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
               buyer_city: cachedContext.buyerCity || '',
-              total_amount: cachedContext.amount || cachedContext.totalAmount || itemObj?.amount || 0,
+              total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
               currency: cachedContext.currency || 'IRR',
               items: []
             });

@@ -18,9 +18,9 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
   const [setupToken, setSetupToken] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      return params.get('token') || params.get('setupToken') || 'papital_erp_setup_token_2026';
+      return params.get('token') || params.get('setupToken') || '';
     } catch {
-      return 'papital_erp_setup_token_2026';
+      return '';
     }
   });
   const [fullName, setFullName] = useState('');

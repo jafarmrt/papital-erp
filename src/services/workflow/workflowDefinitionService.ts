@@ -6,7 +6,7 @@ import {
   workflowTransitions,
   workflowInstances
 } from '../../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { 
   CreateWorkflowDefinitionInput, 
@@ -93,21 +93,57 @@ export class WorkflowDefinitionService {
       ? await orm.select().from(workflowDefinitions).where(and(...conditions))
       : await orm.select().from(workflowDefinitions);
 
-    const results: WorkflowDefinitionWithStats[] = [];
-    for (const def of defs) {
-      const [statesRes] = await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));
-      const [transRes] = await orm.select({ count: sql<number>`count(*)` }).from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, def.id));
-      const [instancesRes] = await orm.select({ count: sql<number>`count(*)` }).from(workflowInstances).where(and(eq(workflowInstances.workflowDefinitionId, def.id), eq(workflowInstances.status, 'IN_PROGRESS')));
+    if (defs.length === 0) return [];
 
-      results.push({
-        ...def,
-        stateCount: Number(statesRes?.count || 0),
-        transitionCount: Number(transRes?.count || 0),
-        activeInstancesCount: Number(instancesRes?.count || 0)
-      });
-    }
+    const defIds = defs.map(d => d.id);
 
-    return results;
+    // V4 Phase 5.3 (A-2): بهینه‌سازی ۳×N به ۳ کوئری تجمیعی با groupBy جهت حذف کامل N+1
+    const [statesCounts, transCounts, instancesCounts] = await Promise.all([
+      orm
+        .select({
+          workflowDefinitionId: workflowStates.workflowDefinitionId,
+          count: sql<number>`count(*)::int`
+        })
+        .from(workflowStates)
+        .where(inArray(workflowStates.workflowDefinitionId, defIds))
+        .groupBy(workflowStates.workflowDefinitionId),
+      orm
+        .select({
+          workflowDefinitionId: workflowTransitions.workflowDefinitionId,
+          count: sql<number>`count(*)::int`
+        })
+        .from(workflowTransitions)
+        .where(inArray(workflowTransitions.workflowDefinitionId, defIds))
+        .groupBy(workflowTransitions.workflowDefinitionId),
+      orm
+        .select({
+          workflowDefinitionId: workflowInstances.workflowDefinitionId,
+          count: sql<number>`count(*)::int`
+        })
+        .from(workflowInstances)
+        .where(and(
+          inArray(workflowInstances.workflowDefinitionId, defIds),
+          eq(workflowInstances.status, 'IN_PROGRESS')
+        ))
+        .groupBy(workflowInstances.workflowDefinitionId)
+    ]);
+
+    const statesMap = new Map<number, number>(
+      statesCounts.map(s => [Number(s.workflowDefinitionId), Number(s.count || 0)])
+    );
+    const transMap = new Map<number, number>(
+      transCounts.map(t => [Number(t.workflowDefinitionId), Number(t.count || 0)])
+    );
+    const instancesMap = new Map<number, number>(
+      instancesCounts.map(i => [Number(i.workflowDefinitionId), Number(i.count || 0)])
+    );
+
+    return defs.map(def => ({
+      ...def,
+      stateCount: statesMap.get(def.id) || 0,
+      transitionCount: transMap.get(def.id) || 0,
+      activeInstancesCount: instancesMap.get(def.id) || 0
+    }));
   }
 
   /**

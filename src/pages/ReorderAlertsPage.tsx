@@ -14,6 +14,7 @@ import { useSearch } from '../SearchContext';
 import MovementAnalysisSection from './reorder/MovementAnalysisSection';
 import { ReorderPurchaseModal, ReorderModalItem } from '../components/reorder/ReorderPurchaseModal';
 import ProjectModal from '../components/ProjectModal';
+import { ErrorStateView } from '../components/common/ErrorStateView';
 
 export interface ReorderItem {
   id: number;
@@ -333,10 +334,13 @@ export default function ReorderAlertsPage({ user }: { user: User }) {
       </div>
 
       {error && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl flex items-center gap-2 print:hidden">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
+        <ErrorStateView
+          title="خطا در واکشی داده‌های نقطه سفارش"
+          description="در ارتباط با سرور برای دریافت فهرست کالاهای نیازمند سفارش مجدد خطایی رخ داده است."
+          onRetry={() => loadData()}
+          compact
+          className="print:hidden"
+        />
       )}
 
       {/* ========================================================================= */}

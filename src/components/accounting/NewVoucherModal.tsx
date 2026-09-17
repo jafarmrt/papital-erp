@@ -143,7 +143,7 @@ export function NewVoucherModal({
         setItems(editingVoucher.items.map(it => ({
           id: it.id,
           accountId: it.accountId,
-          detailedType: it.detailedType || 'none',
+          detailedType: (it.detailedType || 'none') as any,
           detailedId: it.detailedId || null,
           detailedName: it.detailedName || '',
           debit: it.debit || 0,

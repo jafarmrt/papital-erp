@@ -20,7 +20,7 @@ import {
 } from '../hooks/queries';
 
 export default function ItemsPage({ user }: { user: User }) {
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
   const [page, setPage] = useState(1);
 
   // V10-2.2: تب دوتایی محصول/مواد اولیه در یک صفحه واحد — منبع حقیقت = کوئری‌پارام URL برای deep-link
@@ -48,8 +48,8 @@ export default function ItemsPage({ user }: { user: User }) {
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
-  // React Query Hooks
-  const { data: itemsResponse, isLoading: loading, refetch: loadItems } = useItemsQuery(type, page, 50, search);
+  // React Query Hooks (V4 Phase 6.2 U-1: اتصال به debouncedSearchQuery برای حذف بار شبکه غیرضروری)
+  const { data: itemsResponse, isLoading: loading, refetch: loadItems } = useItemsQuery(type, page, 50, debouncedSearchQuery);
   const { data: allCategories = [] } = useCategoriesQuery(type);
   const { data: warehouses = [] } = useWarehousesQuery();
 
@@ -60,10 +60,10 @@ export default function ItemsPage({ user }: { user: User }) {
   const totalPages = itemsResponse?.totalPages || 1;
   const totalItems = itemsResponse?.total || 0;
 
-  // Reset to page 1 on filter change
+  // Reset to page 1 on debounced search change
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [debouncedSearchQuery]);
 
   const sortedItems = React.useMemo(() => {
     let sortableItems = [...items];

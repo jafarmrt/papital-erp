@@ -9,6 +9,7 @@ import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { normalizePhoneNumber, normalizeNationalId } from '../utils.js';
+import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -83,7 +84,7 @@ const updatePersonnelSchema = z.object({
 });
 
 // GET /api/personnel/export - Export all personnel for Excel
-router.get('/personnel/export', async (req, res) => {
+router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage', 'payroll.view_sensitive'), async (req, res) => {
   try {
     const list = await orm
       .select({
@@ -392,7 +393,10 @@ router.get('/personnel', async (req, res) => {
       );
     }
 
-    res.json(filtered);
+    const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
+    const sanitizedList = filtered.map(p => sanitizePersonnelRecord(p, canViewSensitive));
+
+    res.json(sanitizedList);
   } catch (err) {
     logger.error({ message: 'Error fetching personnel', error: err });
     throw err;
@@ -448,7 +452,8 @@ router.get('/personnel/:id', validate(paramsIdSchema), async (req, res) => {
       return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
     }
 
-    res.json(record);
+    const canViewSensitive = await canAccessSensitivePersonnelData(req.user, record.userId);
+    res.json(sanitizePersonnelRecord(record, canViewSensitive));
   } catch (err) {
     throw err;
   }

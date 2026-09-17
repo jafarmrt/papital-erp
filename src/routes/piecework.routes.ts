@@ -14,6 +14,7 @@ import { fin, FinancialMath } from '../lib/financialDecimal.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { canAccessSensitivePersonnelData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 
 const router = Router();
 
@@ -1287,10 +1288,13 @@ router.get('/piecework/payrolls', async (req, res) => {
       };
     });
 
-    res.json(enhancedRows);
+    const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
+    const sanitizedRows = enhancedRows.map(r => sanitizePayrollRecord(r, canViewSensitive));
+
+    res.json(sanitizedRows);
   } catch (err) {
     logger.error({ message: 'Error fetching payrolls', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
+    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
@@ -1386,6 +1390,7 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
       id: pieceworkPayrolls.id,
       payrollNumber: pieceworkPayrolls.payrollNumber,
       personnelId: pieceworkPayrolls.personnelId,
+      personnelUserId: personnel.userId,
       personnelName: personnel.fullName,
       personnelCode: personnel.personnelCode,
       jobTitle: personnel.jobTitle,
@@ -1454,8 +1459,11 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
     ))
     .limit(1);
 
+    const canViewSensitive = await canAccessSensitivePersonnelData(req.user, pay.personnelUserId);
+    const sanitizedPay = sanitizePayrollRecord(pay, canViewSensitive);
+
     res.json({
-      ...pay,
+      ...sanitizedPay,
       items,
       voucherId: linkedVoucher ? linkedVoucher.id : null,
       voucherNumber: linkedVoucher ? linkedVoucher.voucherNumber : null,

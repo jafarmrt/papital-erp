@@ -11,6 +11,7 @@ interface SetupOptions {
   adminFullName?: string;
   adminUsername?: string;
   adminPassword?: string;
+  setupToken?: string;
   companyName?: string;
   companyPhone?: string;
   companyAddress?: string;
@@ -21,6 +22,14 @@ interface SetupOptions {
   nonInteractive?: boolean;
 }
 
+function safeCompareTokens(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const bufProvided = Buffer.from(provided);
+  const bufExpected = Buffer.from(expected);
+  if (bufProvided.length !== bufExpected.length) return false;
+  return crypto.timingSafeEqual(bufProvided, bufExpected);
+}
+
 function parseCliArgs(): SetupOptions {
   const args = process.argv.slice(2);
   const options: SetupOptions = {};
@@ -29,6 +38,10 @@ function parseCliArgs(): SetupOptions {
     const arg = args[i];
     if (arg === '--non-interactive' || arg === '-y') {
       options.nonInteractive = true;
+    } else if (arg.startsWith('--setup-token=')) {
+      options.setupToken = arg.split('=')[1];
+    } else if (arg === '--setup-token' && args[i + 1]) {
+      options.setupToken = args[++i];
     } else if (arg.startsWith('--admin-name=')) {
       options.adminFullName = arg.split('=')[1];
     } else if (arg === '--admin-name' && args[i + 1]) {
@@ -141,11 +154,39 @@ async function main() {
   console.log('This protocol initializes the core database tables, default roles,');
   console.log('first administrator account, default warehouse, and company details.');
 
-  const effectiveSetupToken = process.env.ERP_SETUP_TOKEN || crypto.randomBytes(24).toString('hex');
-  console.log(`\n\x1b[1m\x1b[35m[SECURITY] Web Setup Token (ERP_SETUP_TOKEN): ${effectiveSetupToken}\x1b[0m`);
-  console.log('\x1b[90m(Provide this token in X-Setup-Token header or the Web Setup UI to authorize setup)\x1b[0m\n');
-
+  const isProduction = process.env.NODE_ENV === 'production';
   const cliOptions = parseCliArgs();
+
+  // Production Execution Guard (S-4)
+  if (isProduction) {
+    const envSetupToken = process.env.ERP_SETUP_TOKEN;
+    if (!envSetupToken || envSetupToken.trim() === 'papital_erp_setup_token_2026' || envSetupToken.trim().length < 16) {
+      console.error('\n\x1b[31m[SECURITY ERROR] Running initial-setup in production requires a valid, secure ERP_SETUP_TOKEN in environment (minimum 16 characters, non-default).\x1b[0m\n');
+      process.exit(1);
+    }
+
+    const providedToken = cliOptions.setupToken || process.env.SETUP_CLI_TOKEN;
+    if (!providedToken || !safeCompareTokens(providedToken.trim(), envSetupToken.trim())) {
+      console.error('\n\x1b[31m[SECURITY ERROR] Unauthorized setup execution in production. You must provide --setup-token=<token> matching the server ERP_SETUP_TOKEN.\x1b[0m\n');
+      process.exit(1);
+    }
+
+    const prodPassword = cliOptions.adminPassword || process.env.ADMIN_INITIAL_PASSWORD;
+    if (!prodPassword || prodPassword.trim() === 'admin123456' || prodPassword.trim().length < 8) {
+      console.error('\n\x1b[31m[SECURITY ERROR] In production, administrator password must be specified via --admin-pass (or ADMIN_INITIAL_PASSWORD), at least 8 characters, and cannot be "admin123456".\x1b[0m\n');
+      process.exit(1);
+    }
+  }
+
+  const configuredToken = process.env.ERP_SETUP_TOKEN;
+  const effectiveSetupToken = isProduction 
+    ? (configuredToken || '') 
+    : (configuredToken || crypto.randomBytes(24).toString('hex'));
+
+  if (!isProduction && effectiveSetupToken) {
+    console.log(`\n\x1b[1m\x1b[35m[SECURITY] Web Setup Token (ERP_SETUP_TOKEN): ${effectiveSetupToken}\x1b[0m`);
+    console.log('\x1b[90m(Provide this token in X-Setup-Token header or the Web Setup UI to authorize setup)\x1b[0m\n');
+  }
 
   // Test Database Connection
   process.stdout.write('\x1b[33m[1/4] Verifying database connection...\x1b[0m ');
@@ -213,10 +254,13 @@ async function main() {
       if (!adminUsername) {
         adminUsername = await promptQuestion(rl, '  Enter Admin Username', 'admin');
       }
-      while (!adminPassword || adminPassword.length < 6) {
-        adminPassword = await promptQuestion(rl, '  Enter Admin Password (min 6 chars)', '', true);
-        if (adminPassword.length < 6) {
-          console.log('  \x1b[31mPassword must be at least 6 characters long.\x1b[0m');
+      const minPassLen = isProduction ? 8 : 6;
+      while (!adminPassword || adminPassword.length < minPassLen || (isProduction && adminPassword === 'admin123456')) {
+        adminPassword = await promptQuestion(rl, `  Enter Admin Password (min ${minPassLen} chars)`, '', true);
+        if (adminPassword.length < minPassLen) {
+          console.log(`  \x1b[31mPassword must be at least ${minPassLen} characters long.\x1b[0m`);
+        } else if (isProduction && adminPassword === 'admin123456') {
+          console.log('  \x1b[31mDefault password "admin123456" is not permitted in production.\x1b[0m');
         }
       }
 
@@ -249,10 +293,20 @@ async function main() {
       rl.close();
     }
   } else {
-    // Default fallback values for non-interactive mode
+    // Non-interactive mode (S-4)
     adminFullName = adminFullName || 'System Administrator';
     adminUsername = adminUsername || 'admin';
-    adminPassword = adminPassword || 'admin123456';
+    if (!adminPassword && process.env.ADMIN_INITIAL_PASSWORD) {
+      adminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    }
+    if (!adminPassword) {
+      if (isProduction) {
+        console.error('\n\x1b[31m[SECURITY ERROR] In production non-interactive mode, --admin-pass or ADMIN_INITIAL_PASSWORD is required.\x1b[0m\n');
+        process.exit(1);
+      }
+      adminPassword = crypto.randomBytes(12).toString('base64url');
+      console.log(`\n\x1b[33m[SECURITY] Non-interactive mode without password. Generated secure admin password: \x1b[32m${adminPassword}\x1b[0m\n`);
+    }
     companyName = companyName || 'Workshop ERP & Inventory';
     companyPhone = companyPhone || '';
     companyAddress = companyAddress || '';
@@ -266,6 +320,13 @@ async function main() {
   adminFullName = (adminFullName || 'System Administrator').trim();
   adminUsername = (adminUsername || 'admin').trim();
   adminPassword = (adminPassword || '').trim();
+
+  if (isProduction) {
+    if (!adminPassword || adminPassword.length < 8 || adminPassword === 'admin123456') {
+      console.error('\n\x1b[31m[SECURITY ERROR] Administrator password in production cannot be "admin123456" and must be at least 8 characters.\x1b[0m\n');
+      process.exit(1);
+    }
+  }
   companyName = (companyName || 'Workshop ERP & Inventory').trim();
   companyPhone = (companyPhone || '').trim();
   companyAddress = (companyAddress || '').trim();

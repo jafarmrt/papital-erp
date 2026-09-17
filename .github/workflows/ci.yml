@@ -1,23 +1,55 @@
-# .github/workflows/ci.yml — PHASE 9 (14.5) CI/CD Pipeline Skeleton
-# test → build → deploy-staging → smoke-test-staging
+# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v4.0.24 / Sub-phase 7.1 / TD-102)
+# Multi-stage CI: lint-and-typecheck → database-integration-tests → client-server-build → docker-build-gate
 #
-# Required repository secrets:
-#   REGISTRY_USER / REGISTRY_TOKEN  — container registry credentials (once a Dockerfile exists)
-#   STAGING_ADMIN_TOKEN             — auth_token cookie value for staging smoke tests
+# Environment & Secrets:
+#   DATABASE_URL: Service container PostgreSQL 16
+#   JWT_SECRET, ERP_SETUP_TOKEN, METRICS_TOKEN: Test credentials
+#   REGISTRY_USER / REGISTRY_TOKEN: Optional container registry credentials
+
 name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, master, staging]
+    branches: [main, master, staging, 'release/**']
   pull_request:
-    branches: [main, master]
+    branches: [main, master, staging]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: TypeScript Static Type Checking & Linting
+        run: npm run lint
+
   test:
+    name: Database & Domain Test Suites
+    needs: lint-and-typecheck
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: erp_test
@@ -28,95 +60,127 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    - name: Install dependencies
-      run: |
-        if [ -f package-lock.json ]; then
-          npm ci
-        else
-          npm install --no-audit --no-fund
-        fi
-    - name: Lint & type check (tsc --noEmit)
-      run: npm run lint
-    - name: Run tests
-      env:
-        DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
-        JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
-        NODE_ENV: test
-        ERP_ALLOW_TEST_CLEANUP: '1'
-      run: npm test
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Execute Full 21-Suite Test Matrix
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
+          ERP_SETUP_TOKEN: test_setup_token_at_least_16_chars_long
+          METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
+          NODE_ENV: test
+          ERP_ALLOW_TEST_CLEANUP: '1'
+          PORT: 3000
+        run: npm test
+
+      - name: Publish Test Job Summary
+        if: always()
+        run: |
+          echo "### 🧪 ERP Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Outcome:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database Engine:** PostgreSQL 16 Service Container" >> $GITHUB_STEP_SUMMARY
 
   build:
+    name: Client & Server Production Build
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    - name: Install dependencies
-      run: |
-        if [ -f package-lock.json ]; then
-          npm ci
-        else
-          npm install --no-audit --no-fund
-        fi
-    - name: Build (vite client + esbuild server bundle)
-      run: npm run build
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dist-${{ github.sha }}
-        path: dist/
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-  # V3.0.8 (TD-058): Docker build/push — the image is built on every master push as a
-  # build verification gate; it is pushed only when registry secrets are configured.
-  docker:
-    needs: test
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build Application (Vite Client + CJS Server Bundle + Drizzle Migrations)
+        run: npm run build
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+
+  docker-gate:
+    name: Docker Container Build Verification
+    needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     steps:
-    - uses: actions/checkout@v4
-    - name: Set image version
-      run: echo "IMAGE_TAG=v$(node -p "require('./package.json').version")" >> $GITHUB_ENV
-    - name: Build Docker image
-      run: docker build -t papital-erp:${IMAGE_TAG} .
-    - name: Push to registry (only when secrets are configured)
-      if: ${{ secrets.REGISTRY_TOKEN != '' }}
-      env:
-        REGISTRY: ${{ vars.DOCKER_REGISTRY || 'registry.example.com' }}
-        REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-        REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-      run: |
-        echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
-        docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
-        docker push "${REGISTRY}/erp:${IMAGE_TAG}"
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Resolve Application Version
+        run: |
+          APP_VERSION=$(node -p "require('./package.json').version")
+          echo "IMAGE_TAG=v${APP_VERSION}" >> $GITHUB_ENV
+
+      - name: Verify Docker Image Build
+        run: docker build -t papital-erp:${IMAGE_TAG} .
+
+      - name: Push Container Image (Conditional on Registry Secrets)
+        if: ${{ secrets.REGISTRY_TOKEN != '' && secrets.REGISTRY_USER != '' }}
+        env:
+          REGISTRY: ${{ vars.DOCKER_REGISTRY || 'registry.example.com' }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+        run: |
+          echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+          docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
+          docker push "${REGISTRY}/erp:${IMAGE_TAG}"
 
   deploy-staging:
+    name: Deploy to Staging Environment
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/staging'
     environment: staging
     steps:
-    - name: Deploy to staging
-      run: |
-        # trigger deployment to staging
-        # e.g., kubectl set image deployment/erp erp=registry.example.com/erp:${{ github.sha }}
-        echo "Deploy to staging"
+      - name: Trigger Staging Deployment
+        run: |
+          echo "Triggering automated staging deployment for commit ${{ github.sha }}..."
 
   smoke-test-staging:
+    name: Staging Post-Deployment Smoke Tests
     needs: deploy-staging
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/staging' && secrets.STAGING_ADMIN_TOKEN != ''
     steps:
-    - uses: actions/checkout@v4
-    - name: Run smoke tests
-      env:
-        ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
-      run: |
-        bash scripts/smoke-test.sh https://staging.erp.example.com
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Smoke Tests Against Staging Cluster
+        env:
+          ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+        run: |
+          bash scripts/smoke-test.sh https://staging.erp.example.com

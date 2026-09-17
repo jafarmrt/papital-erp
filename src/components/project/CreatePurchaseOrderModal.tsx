@@ -7,6 +7,7 @@ import { ProductionProject, PurchaseListItem, Item, Customer } from '../../types
 import { fetchJson } from '../../api';
 import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
+import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -48,28 +49,7 @@ export function CreatePurchaseOrderModal({
     `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [suppliers, setSuppliers] = useState<Customer[]>([]);
-  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setIsLoadingSuppliers(true);
-    fetchJson('/customers?limit=1000')
-      .then(res => {
-        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        setSuppliers(list);
-      })
-      .catch(err => console.error('Error fetching suppliers:', err))
-      .finally(() => setIsLoadingSuppliers(false));
-  }, [isOpen]);
-
-  const supplierOptions = useMemo(() => {
-    return suppliers.map(s => ({
-      value: s.name,
-      label: `${s.partyType === 'supplier' ? '🏭 تامین‌کننده' : s.partyType === 'customer' ? '👤 مشتری' : '🤝 طرف‌حساب'}: ${s.name} ${s.supplierCategory ? `(${s.supplierCategory})` : ''} ${s.phone ? `- ${s.phone}` : ''}`,
-      _raw: s
-    }));
-  }, [suppliers]);
+  const { options: supplierOptions, isLoading: isLoadingSuppliers } = useSupplierSelectOptions();
 
   // Filter items that actually have shortfalls
   const initialRows = useMemo(() => {

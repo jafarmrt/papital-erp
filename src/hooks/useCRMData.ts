@@ -83,7 +83,9 @@ export function useCRMData(user: any) {
     nextFollowUpTask: '',
     assignedTo: currentLoggedInUser,
     assignedPersonnelId: null as number | null,
-    mentions: [] as number[]
+    mentions: [] as number[],
+    customerName: '',
+    customerId: null as number | null
   });
 
   const [isSavingLead, setIsSavingLead] = useState<boolean>(false);

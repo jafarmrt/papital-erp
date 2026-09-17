@@ -6,6 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
+import { parsePagination } from '../lib/pagination.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -43,9 +44,13 @@ function extractTransferCode(code: string): string | null {
   return null;
 }
 
-// GET /api/transfers - Get all transfer codes and their linked products
+// GET /api/transfers - Get all transfer codes and their linked products with pagination & search
 router.get('/transfers', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
+    const isAll = req.query.all === 'true' || limit === 0;
+    const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+
     // 1. Fetch saved transfer details
     const savedTransfers = await orm.select().from(transfers);
     const savedMap = new Map<string, any>();
@@ -91,7 +96,7 @@ router.get('/transfers', authenticateToken, async (req: Request, res: Response) 
       ...Array.from(transferProductsMap.keys())
     ]);
 
-    const resultList: Array<Record<string, unknown>> = [];
+    let resultList: Array<Record<string, unknown>> = [];
     for (const code of Array.from(allTransferCodes)) {
       const saved = savedMap.get(code);
       const linkedProds = transferProductsMap.get(code) || [];
@@ -110,10 +115,30 @@ router.get('/transfers', authenticateToken, async (req: Request, res: Response) 
       });
     }
 
+    // Filter by search query if provided
+    if (search) {
+      resultList = resultList.filter(t =>
+        String(t.code || '').toLowerCase().includes(search) ||
+        String(t.title || '').toLowerCase().includes(search) ||
+        String(t.notes || '').toLowerCase().includes(search)
+      );
+    }
+
     // Sort transfer codes naturally (e.g. 001, 002, 003...)
     resultList.sort((a, b) => (a.code as string).localeCompare(b.code as string, undefined, { numeric: true, sensitivity: 'base' }));
 
-    res.json({ data: resultList });
+    const total = resultList.length;
+    const effectiveLimit = limit || 50;
+    const totalPages = Math.ceil(total / effectiveLimit) || 1;
+    const pagedList = isAll ? resultList.slice(0, 1000) : resultList.slice(offset, offset + effectiveLimit);
+
+    res.json({
+      data: pagedList,
+      total,
+      page: isAll ? 1 : page,
+      limit: isAll ? total : effectiveLimit,
+      totalPages
+    });
   } catch (error) {
     logger.error({ message: 'Error fetching transfers', error });
     throw error;
@@ -126,8 +151,26 @@ router.get('/transfers/:code', authenticateToken, validate(deleteTransferSchema)
     const code = req.params.code;
     const [saved] = await orm.select().from(transfers).where(eq(transfers.code, code)).limit(1);
 
-    // Fetch linked products
-    const allProducts = await orm.select().from(items).where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
+    // Fetch linked products with light projection
+    const allProducts = await orm.select({
+      id: items.id,
+      name: items.name,
+      code: items.code,
+      type: items.type,
+      category: items.category,
+      unit: items.unit,
+      currentStock: items.currentStock,
+      image: items.image,
+      thumbnail: items.thumbnail,
+      weightedAverageCost: items.weightedAverageCost,
+      color: items.color,
+      weight: items.weight,
+      material: items.material,
+      size: items.size
+    })
+    .from(items)
+    .where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
+
     const linkedProds = allProducts.filter(p => extractTransferCode(p.code) === code);
 
     res.json({

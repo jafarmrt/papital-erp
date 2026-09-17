@@ -23,7 +23,7 @@ import { useDocumentsQuery } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
 
 export default function InvoicesListPage() {
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
   const [startDate, setStartDate] = useState<any>('');
   const [endDate, setEndDate] = useState<any>('');
   const [filterType, setFilterType] = useState<string>('all');
@@ -45,10 +45,11 @@ export default function InvoicesListPage() {
   const queryClient = useQueryClient();
   const formatToGregorian = (d: any): string => extractDateString(d);
 
+  // V4 Phase 6.2 (یافته U-1): تغذیه کوئری سرور با debouncedSearchQuery به جای کی‌استروک‌های خام
   const docsQuery = useDocumentsQuery({
     page,
     limit: pageSize,
-    search,
+    search: debouncedSearchQuery,
     type: filterType,
     status: filterStatus,
     startDate: formatToGregorian(startDate) || undefined,
@@ -60,10 +61,10 @@ export default function InvoicesListPage() {
   const totalItems = docsQuery.data?.total || (Array.isArray(docs) ? docs.length : 0);
   const loading = docsQuery.isFetching;
 
-  // Reset page to 1 on filter or search change
+  // Reset page to 1 on filter or debounced search change
   useEffect(() => {
     setPage(1);
-  }, [search, filterType, filterStatus, startDate, endDate, pageSize]);
+  }, [debouncedSearchQuery, filterType, filterStatus, startDate, endDate, pageSize]);
 
   const loadData = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });
@@ -392,7 +393,7 @@ export default function InvoicesListPage() {
                 onClick={() => { 
                   setStartDate(''); 
                   setEndDate(''); 
-                  setSearch(''); 
+                  clearSearch(); 
                   setFilterType('all');
                   setFilterStatus('all');
                 }} 

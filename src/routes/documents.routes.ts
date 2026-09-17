@@ -13,7 +13,7 @@ import { NotFoundError, ForbiddenError, ValidationError } from '../errors/custom
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
 import { crmLeads, crmActivities, productionProjects, items, customers, documents } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { getTodayJalaliDate } from '../utils.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -298,11 +298,20 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
             : await ItemStockReservationService.getProjectReservedItems(targetProj);
           let changed = false;
 
-          for (const docLine of req.body.items || []) {
-            const lineQty = Number(docLine.quantity || 0);
-            if (lineQty <= 0) continue;
+          const rawDocItems = (req.body.items || []).filter((l: any) => Number(l.quantity || 0) > 0);
+          const rawItemIds = Array.from(new Set(
+            rawDocItems.map((l: any) => Number(l.itemId)).filter((id: number) => !isNaN(id) && id > 0)
+          )) as number[];
 
-            const [itemData] = await orm.select().from(items).where(eq(items.id, Number(docLine.itemId)));
+          let itemDataMap = new Map<number, typeof items.$inferSelect>();
+          if (rawItemIds.length > 0) {
+            const fetchedItems = await orm.select().from(items).where(inArray(items.id, rawItemIds));
+            itemDataMap = new Map(fetchedItems.map(it => [it.id, it]));
+          }
+
+          for (const docLine of rawDocItems) {
+            const lineQty = Number(docLine.quantity || 0);
+            const itemData = itemDataMap.get(Number(docLine.itemId));
             if (!itemData) continue;
 
             const resIdx = reservedList.findIndex((r: { itemId?: unknown; itemCode?: unknown; itemName?: unknown }) =>

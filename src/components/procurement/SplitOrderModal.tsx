@@ -9,6 +9,7 @@ import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
+import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -56,8 +57,7 @@ export function SplitOrderModal({
   onSuccess
 }: SplitOrderModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [suppliers, setSuppliers] = useState<Customer[]>([]);
-  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+  const { options: supplierOptions, isLoading: isLoadingSuppliers } = useSupplierSelectOptions();
 
   // Dynamic warehouses query
   const { data: warehouses = [] } = useWarehousesQuery();
@@ -67,27 +67,6 @@ export function SplitOrderModal({
   const [closeRequisition, setCloseRequisition] = useState(true);
   const [closureReasonType, setClosureReasonType] = useState('complete');
   const [closureNotes, setClosureNotes] = useState('');
-
-  // Fetch suppliers list from customers endpoint
-  useEffect(() => {
-    if (!isOpen) return;
-    setIsLoadingSuppliers(true);
-    fetchJson('/customers?limit=1000')
-      .then(res => {
-        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        setSuppliers(list);
-      })
-      .catch(err => console.error('Error fetching suppliers:', err))
-      .finally(() => setIsLoadingSuppliers(false));
-  }, [isOpen]);
-
-  const supplierOptions = useMemo(() => {
-    return suppliers.map(s => ({
-      value: s.name,
-      label: `${s.partyType === 'supplier' ? '🏭 تامین‌کننده' : s.partyType === 'customer' ? '👤 مشتری' : '🤝 طرف‌حساب'}: ${s.name} ${s.supplierCategory ? `(${s.supplierCategory})` : ''} ${s.phone ? `- ${s.phone}` : ''}`,
-      _raw: s
-    }));
-  }, [suppliers]);
 
   // Initial calculation of active items with remaining quantity
   const requisitionItems = useMemo(() => {

@@ -239,7 +239,7 @@ export function useProjectInventory(
     const sec = { ...updated[secIdx] };
     const perRes = { ...(sec.perItemResults || {}) };
     const prodRes = { ...(perRes[prodId] || {}) };
-    const itemRes = { ...(prodRes[itemId] || { itemId, status: 'available' }) };
+    const itemRes = { ...(prodRes[itemId] || { itemId, status: 'available' }) } as any;
 
     itemRes[field] = value;
     prodRes[itemId] = itemRes;
@@ -302,7 +302,7 @@ export function useProjectInventory(
         if (sec.checkType === 'per_item' && changingItemTarget.prodId) {
           const perRes = { ...(sec.perItemResults || {}) };
           const prodRes = { ...(perRes[changingItemTarget.prodId] || {}) };
-          const itemRes = { ...(prodRes[changingItemTarget.itemId] || { itemId: changingItemTarget.itemId }) };
+          const itemRes: any = { ...(prodRes[changingItemTarget.itemId] || { itemId: changingItemTarget.itemId }) };
 
           itemRes.itemCode = whItem.code;
           itemRes.name = whItem.name;
@@ -813,7 +813,7 @@ export function useProjectInventory(
     if (currentModalSection && currentModalSection.filterType && currentModalSection.filterType !== 'all') {
       if (currentModalSection.filterType === 'category' && currentModalSection.allowedCategories && currentModalSection.allowedCategories.length > 0) {
         result = result.filter(i => i.category && currentModalSection.allowedCategories?.includes(i.category));
-      } else if (currentModalSection.filterType === 'item_codes' && currentModalSection.allowedItemCodes && currentModalSection.allowedItemCodes.length > 0) {
+      } else if (currentModalSection.filterType === 'item_code' && currentModalSection.allowedItemCodes && currentModalSection.allowedItemCodes.length > 0) {
         result = result.filter(i => i.code && currentModalSection.allowedItemCodes?.includes(i.code));
       }
     }

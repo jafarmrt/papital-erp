@@ -12,7 +12,7 @@ import RunningKardexModal from '../components/RunningKardexModal';
 import { useTransactionsQuery } from '../hooks/queries';
 
 export default function TransactionsPage() {
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
   const [startDate, setStartDate] = useState<any>('');
   const [endDate, setEndDate] = useState<any>('');
   const [filterType, setFilterType] = useState<string>('all');
@@ -23,10 +23,11 @@ export default function TransactionsPage() {
   // V9 Phase 5.1: مهاجرت به React Query
   const formatToGregorian = (d: any): string => extractDateString(d);
 
+  // V4 Phase 6.2 (U-1): اتصال کوئری تراکنش‌ها به debouncedSearchQuery
   const txsQuery = useTransactionsQuery({
     page,
     limit: pageSize,
-    search,
+    search: debouncedSearchQuery,
     type: filterType,
     startDate: formatToGregorian(startDate) || undefined,
     endDate: formatToGregorian(endDate) || undefined,
@@ -40,7 +41,7 @@ export default function TransactionsPage() {
   // Reset to page 1 on filter change
   useEffect(() => {
     setPage(1);
-  }, [search, filterType, startDate, endDate, pageSize]);
+  }, [debouncedSearchQuery, filterType, startDate, endDate, pageSize]);
 
   const handleExport = async () => {
     try {
@@ -159,7 +160,7 @@ export default function TransactionsPage() {
              </div>
              {(startDate || endDate || search || filterType !== 'all') && (
                 <button 
-                  onClick={() => { setStartDate(''); setEndDate(''); setSearch(''); setFilterType('all'); }} 
+                  onClick={() => { setStartDate(''); setEndDate(''); clearSearch(); setFilterType('all'); }} 
                   className="text-xs text-rose-600 hover:text-rose-800 font-medium px-2 py-1 cursor-pointer"
                 >
                   پاک کردن فیلترها

@@ -6,17 +6,24 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 interface Props {
   attachments?: FinancialAttachment[] | null;
   compact?: boolean;
+  count?: number;
+  onClick?: () => void;
 }
 
-export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact = false }) => {
+export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact = false, count, onClick }) => {
   const [selectedAtt, setSelectedAtt] = useState<FinancialAttachment | null>(null);
   const [showPicker, setShowPicker] = useState(false);
 
   const safeList = Array.isArray(attachments) ? attachments.filter(a => a && a.url) : [];
-  if (safeList.length === 0) return null;
+  const displayCount = typeof count === 'number' ? count : safeList.length;
+  if (displayCount === 0 && safeList.length === 0) return null;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (onClick) {
+      onClick();
+      return;
+    }
     if (safeList.length === 1) {
       setSelectedAtt(safeList[0]);
     } else {
@@ -34,10 +41,10 @@ export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact
             ? 'px-1.5 py-0.5 text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
             : 'px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-xs'
         }`}
-        title={`${safeList.length} سند ضمیمه شده - کلیک برای مشاهده`}
+        title={`${displayCount} سند ضمیمه شده - کلیک برای مشاهده`}
       >
         <Paperclip size={compact ? 11 : 13} className="text-blue-600" />
-        <span>{safeList.length} ضمیمه</span>
+        <span>{displayCount} ضمیمه</span>
       </button>
 
       {/* Multiple attachments picker popup */}

@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { useAccountingReports } from './useAccountingReports';
 
 export function useAccounting() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing' | 'explorer'>('dashboard');
   const [loading, setLoading] = useState(false);
   const [isSyncingBanks, setIsSyncingBanks] = useState(false);
 

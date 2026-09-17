@@ -84,9 +84,11 @@ export interface ProcurementOrderItem {
 export interface ProcurementOrder {
   id: number;
   refNumber: string;
+  orderNumber?: string;
   docType: string;
   status: 'draft' | 'final';
   date: string;
+  orderDate?: string;
   supplierName: string;
   notes: string;
   requisitionId?: number | null;

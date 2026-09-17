@@ -12,6 +12,7 @@ import { fetchJson } from '../api';
 import { formatPersianNumber } from '../utils';
 import ProjectModal from '../components/ProjectModal';
 import ProjectDetailModal from '../components/ProjectDetailModal';
+import { SectionErrorBoundary } from '../components/common';
 import toast from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
 
@@ -22,7 +23,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState<boolean>(true);
 
   // Filters
-  const { searchQuery, setSearchQuery } = useSearch();
+  const { searchQuery, debouncedSearchQuery, setSearchQuery, clearSearch } = useSearch();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'gantt'>('kanban');
@@ -98,20 +99,21 @@ export default function ProjectsPage() {
   };
 
   // Filter calculation
-  // V3.2.3 (Playbook Scenario 5): فیلتر و گروه‌بندی وضعیت‌ها یک‌بار با useMemo — حذف ۶ بار filter در هر رندر
+  // V3.2.3 (Playbook Scenario 5) & V4 Phase 6.2 (U-1): فیلتر با debouncedSearchQuery — حذف محاسبات مکرر در هر کی‌استروک
   const filteredProjects = React.useMemo(() => projects.filter(p => {
-    const matchesSearch =
-      p.project_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.customer_name && p.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.item_name && p.item_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (p.item_code && p.item_code.toLowerCase().includes(searchQuery.toLowerCase()));
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    const matchesSearch = !q ||
+      p.project_code.toLowerCase().includes(q) ||
+      p.title.toLowerCase().includes(q) ||
+      (p.customer_name && p.customer_name.toLowerCase().includes(q)) ||
+      (p.item_name && p.item_name.toLowerCase().includes(q)) ||
+      (p.item_code && p.item_code.toLowerCase().includes(q));
 
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
 
     return matchesSearch && matchesStatus && matchesPriority;
-  }), [projects, searchQuery, statusFilter, priorityFilter]);
+  }), [projects, debouncedSearchQuery, statusFilter, priorityFilter]);
 
   // Summary Statistics
   const totalCount = projects.length;
@@ -253,10 +255,10 @@ export default function ProjectsPage() {
             className="px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 font-bold text-slate-700 text-xs focus:outline-none"
           >
             <option value="all">همه اولویت‌ها</option>
-            <option value="urgent">فوری (Urgent)</option>
-            <option value="high">مهم (High)</option>
-            <option value="medium">متوسط (Medium)</option>
-            <option value="low">عادی (Low)</option>
+            <option value="urgent">فوری و اضطراری</option>
+            <option value="high">اولویت بالا</option>
+            <option value="medium">اولویت متوسط</option>
+            <option value="low">عادی و استاندارد</option>
           </select>
         </div>
 
@@ -301,7 +303,13 @@ export default function ProjectsPage() {
       </div>
 
       {/* Main Content Area Based on View Mode */}
-      {loading ? (
+      <SectionErrorBoundary
+        resetKeys={[viewMode]}
+        onReset={() => loadInitialData()}
+        title="خطا در نمایش نمای پروژه‌های تولید"
+        description="در پردازش و ترسیم کارت‌ها یا گانت‌پروژه‌ها مشکلی رخ داده است. می‌توانید دوباره تلاش کنید."
+      >
+        {loading ? (
         <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center text-slate-500 flex flex-col items-center gap-2">
           <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
           <span>در حال دریافت اطلاعات پروژه‌های تولید...</span>
@@ -566,6 +574,7 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+      </SectionErrorBoundary>
 
       {/* Project Create/Edit Modal */}
       <ProjectModal

@@ -225,7 +225,7 @@ export default function ReservedItemsReportPage() {
 
         <div className="flex items-center gap-2 print:hidden">
           <button
-            onClick={loadReport}
+            onClick={() => loadReport()}
             disabled={loading}
             className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all cursor-pointer"
             title="به‌روزرسانی اطلاعات"

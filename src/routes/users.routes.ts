@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { eq, desc, ne, and, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -290,6 +290,7 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
 
     if (Object.keys(updateData).length > 0) {
       await orm.update(users).set(updateData).where(eq(users.id, userId));
+      invalidateUserAuthCache(userId);
     }
 
     const [updatedUser] = await orm.select().from(users).where(eq(users.id, userId));
@@ -651,6 +652,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     }
 
     await orm.update(users).set(updateData).where(eq(users.id, targetUserId));
+    invalidateUserAuthCache(targetUserId);
 
     const { diff, hasChanges } = computeAuditDiff(
       { fullName: prevUser.fullName, role: prevUser.role },
@@ -717,6 +719,8 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
 
       deletedUserInfo = { fullName: delUser.fullName, username: delUser.username, role: delUser.role };
     });
+
+    invalidateUserAuthCache(targetUserId);
 
     const finalInfo = deletedUserInfo as { fullName: string | null; username: string; role: string };
     await logActivity({

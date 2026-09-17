@@ -11,6 +11,7 @@ import { FiscalYearClosingTab } from '../components/accounting/FiscalYearClosing
 import { AccountExplorerTab } from '../components/accounting/AccountExplorerTab';
 import { NewVoucherModal } from '../components/accounting/NewVoucherModal';
 import { VoucherPrintModal } from '../components/accounting/VoucherPrintModal';
+import { SectionErrorBoundary } from '../components/common';
 import { 
   Calculator, 
   RefreshCw, 
@@ -28,7 +29,7 @@ import {
 import { User } from '../types';
 
 interface AccountingPageProps {
-  userPermissions?: { role: string; permissions: string[]; isAdmin: boolean };
+  userPermissions?: { role?: string; roleName?: string; permissions: string[]; isAdmin: boolean };
   user?: User | null;
 }
 
@@ -200,7 +201,12 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           </p>
         </div>
       ) : (
-        <>
+        <SectionErrorBoundary
+          resetKeys={[currentTab]}
+          onReset={refreshAll}
+          title="خطا در بارگذاری محتوای این تب مالی"
+          description="در پردازش یا نمایش اطلاعات این بخش خطایی رخ داده است. می‌توانید با استفاده از دکمه زیر مجدداً تلاش نمایید."
+        >
           {/* Main Content Area */}
           {currentTab === 'dashboard' && (
             <AccountingDashboard
@@ -333,7 +339,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onPrintVoucher={v => setPrintingVoucher(v)}
             />
           )}
-        </>
+        </SectionErrorBoundary>
       )}
 
       {/* New / Edit Voucher Modal */}

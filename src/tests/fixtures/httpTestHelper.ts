@@ -5,6 +5,7 @@ import { users } from '../../db/schema.js';
 import { eq, and, like } from 'drizzle-orm';
 import { createApp } from '../../app.js';
 import { TEST_PASSWORD, TEST_PASSWORD_HASH } from './factories.js';
+import { invalidateUserAuthCache } from '../../middleware/auth.js';
 
 export type TestApp = any;
 
@@ -34,6 +35,7 @@ export async function ensureAdminTestUser(username = 'pen_admin'): Promise<{ id:
   if (existing) {
     // Keep password deterministic for the current run and ensure active
     await orm.update(users).set({ password: TEST_PASSWORD_HASH, isDeleted: 0 }).where(eq(users.id, existing.id));
+    invalidateUserAuthCache(existing.id);
     return { id: existing.id, username: existing.username };
   }
 
@@ -48,6 +50,7 @@ export async function ensureAdminTestUser(username = 'pen_admin'): Promise<{ id:
     })
     .returning();
 
+  invalidateUserAuthCache(created.id);
   return { id: created.id, username: created.username };
 }
 
@@ -115,11 +118,20 @@ export async function getAdminCookie(): Promise<string> {
 
 export async function getAdminSession(): Promise<AdminSession> {
   if (cachedAdminSession) {
+    let cachedId: number | undefined;
+    try {
+      const jwtRaw = cachedAdminSession.cookie.replace(/^auth_token=/, '').split(';')[0];
+      const decoded = jwt.decode(jwtRaw) as any;
+      cachedId = Number(decoded?.id);
+    } catch {
+      // ignore decode failure
+    }
+
     const [live] = await orm
       .select({ id: users.id })
       .from(users)
       .where(and(eq(users.username, 'pen_admin'), eq(users.isDeleted, 0)));
-    if (live) {
+    if (live && cachedId && live.id === cachedId) {
       return cachedAdminSession;
     }
     cachedAdminSession = null;
@@ -133,6 +145,7 @@ export async function getAdminSession(): Promise<AdminSession> {
 /** Removes all users created by the penetration/critical suites */
 export async function cleanupHttpTestUsers(): Promise<void> {
   cachedAdminSession = null;
+  invalidateUserAuthCache();
   try {
     await orm.delete(users).where(like(users.username, 'pen_admin%'));
   } catch {

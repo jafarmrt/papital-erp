@@ -9,6 +9,7 @@ export interface ContactPerson {
 export interface Customer {
   id: number;
   name: string;
+  code?: string;
   contactName?: string;
   country?: string;
   province?: string;

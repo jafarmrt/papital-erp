@@ -384,6 +384,7 @@ export function ChequesTab({
               payeeName: '',
               bankAccountId: null,
               description: '',
+              attachments: [],
             });
             setIsNewModalOpen(true);
           }}

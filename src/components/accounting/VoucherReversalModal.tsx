@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { RotateCcw, X, AlertTriangle, ArrowRightLeft, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
+import { RotateCcw, AlertTriangle, ArrowRightLeft, Calendar, FileText, CheckCircle2, Sparkles } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { Modal } from '../common/Modal';
 import type { JournalVoucher } from '../../types';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -57,44 +58,28 @@ export function VoucherReversalModal({
   const safeItems = Array.isArray(voucher.items) ? voucher.items : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-slate-850 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden">
-        
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-amber-50/60 dark:bg-amber-950/30">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-              <RotateCcw className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>صدور سند برگشتی (ابطال سند)</span>
-                <span className="text-xs font-mono bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                  سند شماره #{formatPersianNumber(voucher.voucherNumber)}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                بی‌اثر کردن سند در دفاتر کل و حفظ سلامت حساب‌ها با صدور خودکار سند معکوس
-              </p>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="صدور سند برگشتی (ابطال سند)"
+      subtitle="بی‌اثر کردن سند در دفاتر کل و حفظ سلامت حساب‌ها با صدور خودکار سند معکوس"
+      badge={
+        <span className="text-xs font-mono bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold">
+          سند شماره #{formatPersianNumber(voucher.voucherNumber)}
+        </span>
+      }
+      icon={<RotateCcw className="w-5 h-5" />}
+      size="lg"
+      headerClassName="bg-amber-50/60 dark:bg-amber-950/30"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Explanation Banner */}
+        <div className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-900 dark:text-amber-200">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <span className="font-bold">حفظ سلامت دفاتر مالی:</span> بر اساس استانداردهای رسمی حسابداری، اسناد تاییدشده برای پیشگیری از ناهماهنگی دفاتر، مستقیماً حذف نمی‌شوند؛ بلکه با صدور یک سند برگشتی متوازن، ردیف‌های بدهکار و بستانکار خنثی شده و سند اصلی بدون ایجاد مغایرت، ابطال می‌گردد.
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
-
-        {/* Modal Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Explanation Banner */}
-          <div className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-900 dark:text-amber-200">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="leading-relaxed">
-              <span className="font-bold">حفظ سلامت دفاتر مالی:</span> بر اساس استانداردهای رسمی حسابداری، اسناد تاییدشده برای پیشگیری از ناهماهنگی دفاتر، مستقیماً حذف نمی‌شوند؛ بلکه با صدور یک سند برگشتی متوازن، ردیف‌های بدهکار و بستانکار خنثی شده و سند اصلی بدون ایجاد مغایرت، ابطال می‌گردد.
-            </div>
-          </div>
 
           {/* Details & Inputs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -239,8 +224,6 @@ export function VoucherReversalModal({
             </button>
           </div>
         </form>
-
-      </div>
-    </div>
+    </Modal>
   );
 }

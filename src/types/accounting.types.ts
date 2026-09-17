@@ -175,6 +175,7 @@ export interface ChequeStatusHistory {
   status: ChequeStatus;
   user: string;
   notes?: string;
+  description?: string;
   voucherNumber?: number;
 }
 
@@ -258,6 +259,7 @@ export interface TreasuryTransaction {
   reconciled?: number;
   reconciledAt?: string;
   reconciledBatch?: string;
+  purpose?: string;
   description?: string;
   status?: 'completed' | 'voided' | 'cancelled';
   attachments?: FinancialAttachment[];

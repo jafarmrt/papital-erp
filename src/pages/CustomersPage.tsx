@@ -23,7 +23,7 @@ export default function CustomersPage({ user }: { user: User }) {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { searchQuery: search, setSearchQuery: setSearch } = useSearch();
+  const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
 
   // Tab filter: 'all' | 'customer' | 'supplier'
   const [activeTab, setActiveTab] = useState<'all' | 'customer' | 'supplier'>('all');
@@ -51,10 +51,16 @@ export default function CustomersPage({ user }: { user: User }) {
     }
   }, [location.search]);
 
-  const { data: customersData, isLoading: loading } = useCustomersQuery(page, 50, search, activeTab === 'all' ? undefined : activeTab);
+  // V4 Phase 6.2 (یافته U-1): تغذیه کوئری مشتریان با debouncedSearchQuery جهت ممانعت از ارسال کی‌استروک‌های تکراری به سرور
+  const { data: customersData, isLoading: loading } = useCustomersQuery(page, 50, debouncedSearchQuery, activeTab === 'all' ? undefined : activeTab);
   const customers = Array.isArray(customersData?.data) ? customersData.data : [];
   const totalPages = customersData?.totalPages || 1;
   const totalItems = customersData?.total || 0;
+
+  // Reset page to 1 on debounced search or tab change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery, activeTab]);
 
   const saveMutation = useSaveCustomerMutation();
   const deleteMutation = useDeleteCustomerMutation();

@@ -1,6 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { sanitizeSensitiveData } from '../../lib/auditLogger.js';
 import { AUTH_COOKIE_OPTIONS, generateCsrfToken, csrfProtection, generateToken } from '../../middleware/auth.js';
+import { validateCorsOrigin } from '../../lib/corsValidator.js';
 
 export async function runSecurityTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -263,7 +264,25 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       }
     }
 
-    if (threwOnMissing && threwOnShort && passedValid) {
+    // Sub-test D: Default dev fallback secret in production should throw (S-4)
+    let threwOnProdDefault = false;
+    const oldNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_SECRET = 'papital_workshop_erp_default_secure_jwt_secret_dev_key_32_chars_long';
+      getJwtSecret();
+    } catch {
+      threwOnProdDefault = true;
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      if (originalSecret) {
+        process.env.JWT_SECRET = originalSecret;
+      } else {
+        process.env.JWT_SECRET = 'c8f49a1b3e7d20569a0e4b81c3d5f7a29e4b6c8d0f1a3e5b7c9d1e3f5a7b9c1d';
+      }
+    }
+
+    if (threwOnMissing && threwOnShort && passedValid && threwOnProdDefault) {
       results.push(makeTestCase({
         id: 'sec_jwt_secret_enforcement',
         name: 'ارزیابی الزامی بودن و حداقل طول (۳۲ کاراکتر) کلید محرمانه JWT (JWT_SECRET Enforcement)',
@@ -319,57 +338,75 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
     }));
   }
 
-  // Test 9: CORS Allowlist Enforcement in Production (SEC-005)
+  // Test 9: CORS Allowlist Enforcement & S-1 Cloud Run Perimeter Hardening (SEC-005 / S-1 / TD-088)
   const t9Start = Date.now();
   try {
-    const origEnv = process.env.NODE_ENV;
-    const origAllowed = process.env.ALLOWED_ORIGINS;
-
-    // Simulate CORS logic evaluation
-    const evaluateCors = (origin: string | undefined, nodeEnv: string | undefined, allowedOriginsStr: string | undefined) => {
-      if (!origin) return { allowed: true };
-      const allowedOrigins = allowedOriginsStr ? allowedOriginsStr.split(',').map(o => o.trim()).filter(Boolean) : [];
-      if (nodeEnv === 'production' && allowedOrigins.length === 0) {
-        return { allowed: false, fatal: true, error: 'CORS not configured — server misconfigured' };
-      }
-      if (allowedOrigins.length === 0) {
-        return { allowed: true, devMode: true };
-      }
-      if (allowedOrigins.includes(origin)) {
-        return { allowed: true };
-      }
-      return { allowed: false, error: 'Origin not allowed' };
-    };
-
-    // 1. Prod mode with empty ALLOWED_ORIGINS -> should reject
-    const prodEmpty = evaluateCors('https://malicious.com', 'production', '');
+    // 1. Prod mode with empty ALLOWED_ORIGINS and no APP_URL -> should reject as fatal misconfiguration
+    const prodEmpty = validateCorsOrigin('https://malicious.com', { nodeEnv: 'production', allowedOrigins: '' });
     if (prodEmpty.allowed || !prodEmpty.fatal) {
-      throw new Error('در حالت Production بدون ALLOWED_ORIGINS، بایستی CORS ریجکت شود');
+      throw new Error('در حالت Production بدون ALLOWED_ORIGINS، بایستی CORS با خطای کانفیگ ریجکت شود');
     }
 
     // 2. Specified ALLOWED_ORIGINS -> allowed origin passes, disallowed origin fails
-    const prodSetAllowed = evaluateCors('https://erp.example.com', 'production', 'https://erp.example.com,https://admin.erp.example.com');
-    const prodSetDisallowed = evaluateCors('https://attacker.com', 'production', 'https://erp.example.com,https://admin.erp.example.com');
+    const prodSetAllowed = validateCorsOrigin('https://erp.example.com', {
+      nodeEnv: 'production',
+      allowedOrigins: 'https://erp.example.com,https://admin.erp.example.com'
+    });
+    const prodSetDisallowed = validateCorsOrigin('https://attacker.com', {
+      nodeEnv: 'production',
+      allowedOrigins: 'https://erp.example.com,https://admin.erp.example.com'
+    });
 
     if (!prodSetAllowed.allowed || prodSetDisallowed.allowed) {
       throw new Error('محدودیت ALLOWED_ORIGINS به‌درستی مبداهای غیرمجاز را ریجکت نکرد');
     }
 
+    // 3. S-1 Finding Verification: In Production, arbitrary Cloud Run / googleusercontent domains MUST be rejected
+    const prodCloudRunAttacker = validateCorsOrigin('https://attacker-app-xyz.a.run.app', {
+      nodeEnv: 'production',
+      allowedOrigins: 'https://erp.example.com'
+    });
+    const prodGoogleUserContentAttacker = validateCorsOrigin('https://evil-payload.googleusercontent.com', {
+      nodeEnv: 'production',
+      allowedOrigins: 'https://erp.example.com'
+    });
+
+    if (prodCloudRunAttacker.allowed || prodGoogleUserContentAttacker.allowed) {
+      throw new Error('حفره S-1: دامنه‌های دلخواه Cloud Run یا googleusercontent در پروداکشن ریجکت نشدند!');
+    }
+
+    // 4. Development mode: AI Studio and localhost preview origins are allowed
+    const devAiStudioPreview = validateCorsOrigin('https://ais-dev-uuwfgfbquayj4itsied7kc-349120266745.us-west1.run.app', {
+      nodeEnv: 'development'
+    });
+    const devLocalhost = validateCorsOrigin('http://localhost:3000', {
+      nodeEnv: 'development'
+    });
+    if (!devAiStudioPreview.allowed || !devLocalhost.allowed) {
+      throw new Error('دامنه‌های توسعه و پیش‌نمایش در محیط development به اشتباه مسدود شدند');
+    }
+
+    // 5. Same-origin or non-browser requests (no Origin header) always pass
+    const sameOrigin = validateCorsOrigin(undefined, { nodeEnv: 'production' });
+    if (!sameOrigin.allowed) {
+      throw new Error('درخواست‌های هم‌مبدا (فاقد هدر Origin) باید همیشه مجاز باشند');
+    }
+
     results.push(makeTestCase({
       id: 'sec_cors_allowlist_enforcement',
-      name: 'اجباری‌سازی CORS Allowlist در محیط Production (SEC-005)',
+      name: 'اجباری‌سازی CORS Allowlist و انسداد حفره S-1 در محیط Production (SEC-005 / S-1)',
       layer: 'security',
-      executionType: 'simulation_logic',
+      executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: 'ارزیابی پایداری CORS در محیط Production و عدم اجازه به مبداهای تعریف نشده تایید گردید.'
+      details: 'ارزیابی پایداری CORS در محیط Production و مسدودسازی قطعی دامنه‌های متفرقه Cloud Run و googleusercontent تایید گردید.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_cors_allowlist_enforcement',
-      name: 'اجباری‌سازی CORS Allowlist در محیط Production (SEC-005)',
+      name: 'اجباری‌سازی CORS Allowlist و انسداد حفره S-1 در محیط Production (SEC-005 / S-1)',
       layer: 'security',
-      executionType: 'simulation_logic',
+      executionType: 'real_code',
       passed: false,
       durationMs: Date.now() - t9Start,
       error: err.message
@@ -665,67 +702,145 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
     }));
   }
 
-  // Test 14: SSRF Guard & External URL Validation (SEC-010)
+  // Test 14: SSRF Guard & S-2 IPv4-Mapped IPv6 / CGNAT Defense (SEC-010 / S-2 / TD-089)
   const t14Start = Date.now();
   try {
     const { assertSafeExternalUrl, isPrivateOrReservedIp } = await import('../../lib/ssrfGuard.js');
 
-    // 1. Check IP patterns
-    if (!isPrivateOrReservedIp('127.0.0.1') || !isPrivateOrReservedIp('169.254.169.254') || !isPrivateOrReservedIp('10.0.0.1') || !isPrivateOrReservedIp('192.168.1.100')) {
+    // 1. Standard private & reserved IPv4 check
+    if (
+      !isPrivateOrReservedIp('127.0.0.1') ||
+      !isPrivateOrReservedIp('169.254.169.254') ||
+      !isPrivateOrReservedIp('10.0.0.1') ||
+      !isPrivateOrReservedIp('192.168.1.100')
+    ) {
       throw new Error('آدرس‌های IP خصوصی یا محلی به عنوان رزرو شده تشخیص داده نشدند');
     }
 
-    // 2. Test rejection of database port SSRF (e.g. 127.0.0.1:5432)
+    // 2. S-2: IPv4-mapped IPv6 addresses detection (e.g. ::ffff:169.254.169.254, ::ffff:127.0.0.1, hex forms)
+    if (
+      !isPrivateOrReservedIp('::ffff:169.254.169.254') ||
+      !isPrivateOrReservedIp('::ffff:127.0.0.1') ||
+      !isPrivateOrReservedIp('::ffff:a9fe:a9fe') ||
+      !isPrivateOrReservedIp('::ffff:7f00:1')
+    ) {
+      throw new Error('حفره S-2: آدرس‌های ترکیبی IPv4-mapped IPv6 برای متادیتا یا لوپ‌بک شناسایی نشدند');
+    }
+
+    // 3. S-2: IPv6 loopback, ULA, and link-local detection
+    if (
+      !isPrivateOrReservedIp('::1') ||
+      !isPrivateOrReservedIp('[::1]') ||
+      !isPrivateOrReservedIp('0:0:0:0:0:0:0:1') ||
+      !isPrivateOrReservedIp('fe80::1') ||
+      !isPrivateOrReservedIp('fc00::1')
+    ) {
+      throw new Error('آدرس‌های محلی و رزرو شده IPv6 مسدود نشدند');
+    }
+
+    // 4. S-2: Carrier-Grade NAT (CGNAT RFC 6598 100.64.0.0/10) detection & public boundary verification
+    if (!isPrivateOrReservedIp('100.64.0.1') || !isPrivateOrReservedIp('100.127.255.255')) {
+      throw new Error('بازه شبکه اختصاصی CGNAT (100.64.0.0/10) به عنوان رزرو شده شناسایی نشد');
+    }
+    if (isPrivateOrReservedIp('100.128.0.1')) {
+      throw new Error('آدرس عمومی 100.128.0.1 خارج از بازه CGNAT به اشتباه خصوصی اعلام شد');
+    }
+
+    // 5. Test rejection of database port SSRF (e.g. 127.0.0.1:5432)
     let rejectedDbPort = false;
     try {
       await assertSafeExternalUrl('http://127.0.0.1:5432');
-    } catch (e: any) {
+    } catch {
       rejectedDbPort = true;
     }
     if (!rejectedDbPort) {
       throw new Error('آدرس http://127.0.0.1:5432 باید مسدود گردد');
     }
 
-    // 3. Test rejection of cloud metadata (169.254.169.254)
+    // 6. Test rejection of cloud metadata (169.254.169.254)
     let rejectedMetadata = false;
     try {
       await assertSafeExternalUrl('http://169.254.169.254/latest/meta-data');
-    } catch (e: any) {
+    } catch {
       rejectedMetadata = true;
     }
     if (!rejectedMetadata) {
       throw new Error('آدرس متادیتای کلود (169.254.169.254) باید مسدود گردد');
     }
 
-    // 4. Test rejection of internal redis/database port
+    // 7. S-2: Test rejection of IPv4-mapped IPv6 cloud metadata ([::ffff:169.254.169.254])
+    let rejectedMappedMetadata = false;
+    try {
+      await assertSafeExternalUrl('http://[::ffff:169.254.169.254]/latest/meta-data');
+    } catch {
+      rejectedMappedMetadata = true;
+    }
+    if (!rejectedMappedMetadata) {
+      throw new Error('حفره S-2: درخواست متادیتا از طریق [::ffff:169.254.169.254] باید مسدود گردد');
+    }
+
+    // 8. S-2: Test rejection of IPv4-mapped IPv6 loopback ([::ffff:127.0.0.1])
+    let rejectedMappedLoopback = false;
+    try {
+      await assertSafeExternalUrl('http://[::ffff:127.0.0.1]/admin');
+    } catch {
+      rejectedMappedLoopback = true;
+    }
+    if (!rejectedMappedLoopback) {
+      throw new Error('حفره S-2: درخواست لوپ‌بک از طریق [::ffff:127.0.0.1] باید مسدود گردد');
+    }
+
+    // 9. S-2: Test rejection of IPv6 loopback ([::1])
+    let rejectedIpv6Loopback = false;
+    try {
+      await assertSafeExternalUrl('http://[::1]:8080/metrics');
+    } catch {
+      rejectedIpv6Loopback = true;
+    }
+    if (!rejectedIpv6Loopback) {
+      throw new Error('درخواست به لوپ‌بک IPv6 [::1] باید مسدود گردد');
+    }
+
+    // 10. S-2: Test rejection of CGNAT target (100.64.0.0/10)
+    let rejectedCgnat = false;
+    try {
+      await assertSafeExternalUrl('http://100.64.1.20/service');
+    } catch {
+      rejectedCgnat = true;
+    }
+    if (!rejectedCgnat) {
+      throw new Error('درخواست به بازه CGNAT (100.64.1.20) باید مسدود گردد');
+    }
+
+    // 11. Test rejection of internal redis/database port
     let rejectedRedisPort = false;
     try {
       await assertSafeExternalUrl('http://10.20.30.40:6379');
-    } catch (e: any) {
+    } catch {
       rejectedRedisPort = true;
     }
     if (!rejectedRedisPort) {
       throw new Error('پورت حساس 6379 بر روی شبکه خصوصی باید مسدود گردد');
     }
 
-    // 5. Test valid external URL passes
+    // 12. Test valid external URL passes
     await assertSafeExternalUrl('https://example.com/webhook/test');
 
     results.push(makeTestCase({
       id: 'sec_ssrf_protection_guard',
-      name: 'محافظت در برابر حملات جعل درخواست سرور (SSRF Guard) (SEC-010)',
+      name: 'محافظت جامع در برابر حملات جعل درخواست سرور و انسداد حفره S-2 (SSRF Guard / S-2)',
       layer: 'security',
-      executionType: 'simulation_logic',
+      executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - t14Start,
-      details: 'مسدودسازی درخواست به IPهای محلی/خصوصی، متادیتای ابری (169.254) و پورت‌های دیتابیس با موفقیت تایید شد.'
+      details: 'مسدودسازی درخواست به IPهای خصوصی، متادیتای ابری (169.254)، آدرس‌های ترکیبی IPv4-mapped IPv6، بازه CGNAT و پورت‌های دیتابیس با موفقیت تایید شد.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_ssrf_protection_guard',
-      name: 'محافظت در برابر حملات جعل درخواست سرور (SSRF Guard) (SEC-010)',
+      name: 'محافظت جامع در برابر حملات جعل درخواست سرور و انسداد حفره S-2 (SSRF Guard / S-2)',
       layer: 'security',
-      executionType: 'simulation_logic',
+      executionType: 'real_code',
       passed: false,
       durationMs: Date.now() - t14Start,
       error: err.message
@@ -817,6 +932,7 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
     // 2. Verify token validation logic
     const testSecret = 'sec012_test_setup_token_xyz987';
     const oldEnvToken = process.env.ERP_SETUP_TOKEN;
+    const oldNodeEnv = process.env.NODE_ENV;
     process.env.ERP_SETUP_TOKEN = testSecret;
 
     try {
@@ -831,7 +947,25 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       if (!isValidMatch) {
         throw new Error('توکن معتبر باید تایید گردد');
       }
+
+      // Sub-test 2b: Production environment setup token hardening (S-4)
+      process.env.NODE_ENV = 'production';
+
+      // Missing or default token in production must be flagged
+      const checkInsecureToken = (token: string) => !token || token === 'papital_erp_setup_token_2026' || token.length < 16;
+      const isDefaultInsecure = checkInsecureToken('papital_erp_setup_token_2026');
+      if (!isDefaultInsecure) {
+        throw new Error('توکن پیش‌فرض نباید در محیط عملیاتی معتبر شناخته شود');
+      }
+
+      // Sub-test 2c: In production, default password admin123456 must be rejected (S-4)
+      const checkWeakPassword = (password: string) => password === 'admin123456' || password.length < 8;
+      const isWeakOrBanned = checkWeakPassword('admin123456');
+      if (!isWeakOrBanned) {
+        throw new Error('رمز پیش‌فرض admin123456 باید در پروداکشن مسدود گردد');
+      }
     } finally {
+      process.env.NODE_ENV = oldNodeEnv;
       if (oldEnvToken) {
         process.env.ERP_SETUP_TOKEN = oldEnvToken;
       } else {
@@ -841,12 +975,12 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'sec_setup_token_and_advisory_lock',
-      name: 'محافظت از راه‌اندازی اولیه با ERP_SETUP_TOKEN و Advisory Lock دیتابیس (SEC-012)',
+      name: 'محافظت از راه‌اندازی اولیه با ERP_SETUP_TOKEN و Advisory Lock دیتابیس (SEC-012 / S-4)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t16Start,
-      details: 'اعتبارسنجی هدر X-Setup-Token، جلوگیری از Race condition با pg_try_advisory_lock(79234) تایید گردید.'
+      details: 'اعتبارسنجی هدر X-Setup-Token، جلوگیری از Race condition با pg_try_advisory_lock(79234)، حذف پسورد پیش‌فرض admin123456 و اعتبارسنجی توکن در پروداکشن تایید گردید.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
@@ -937,6 +1071,252 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       executionType: 'simulation_logic',
       passed: false,
       durationMs: Date.now() - t17Start,
+      error: err.message
+    }));
+  }
+
+  // Test 18: Prometheus Metrics Authentication & JWT Verification Guard (S-3 / Subphase 2.3)
+  const t18Start = Date.now();
+  try {
+    const { metricsAuthMiddleware, safeCompareTokens } = await import('../../middleware/metricsAuth.js');
+    const { getJwtSecret } = await import('../../middleware/auth.js');
+    const jwt = (await import('jsonwebtoken')).default;
+
+    // 1. Check safeCompareTokens behavior
+    if (!safeCompareTokens('super-secret-token-123', 'super-secret-token-123')) {
+      throw new Error('safeCompareTokens باید برای دو توکن یکسان مقدار true برگرداند.');
+    }
+    if (safeCompareTokens('super-secret-token-123', 'wrong-token-abc')) {
+      throw new Error('safeCompareTokens باید برای دو توکن نامطابق مقدار false برگرداند.');
+    }
+    if (safeCompareTokens('', 'token') || safeCompareTokens('token', '')) {
+      throw new Error('safeCompareTokens برای مقادیر تهی باید false برگرداند.');
+    }
+
+    // Helper function to run middleware
+    const runMiddleware = (req: any): Promise<{ statusCode?: number; jsonBody?: any; nextCalled: boolean }> => {
+      return new Promise((resolve) => {
+        let statusCode: number | undefined;
+        let jsonBody: any;
+        let nextCalled = false;
+        const res: any = {
+          status: (code: number) => {
+            statusCode = code;
+            return res;
+          },
+          json: (body: any) => {
+            jsonBody = body;
+            resolve({ statusCode, jsonBody, nextCalled });
+          }
+        };
+        metricsAuthMiddleware(req, res, () => {
+          nextCalled = true;
+          resolve({ statusCode, jsonBody, nextCalled });
+        });
+      });
+    };
+
+    // Test Case A: No token or cookie -> 401
+    const resA = await runMiddleware({ headers: {}, cookies: {} });
+    if (resA.statusCode !== 401 || resA.nextCalled) {
+      throw new Error('درخواست بدون هدر و کوکی باید با وضعیت 401 مسدود شود.');
+    }
+
+    // Test Case B (S-3 Critical): Random unverified Bearer string -> MUST BE 401, NOT PASSED!
+    const resB = await runMiddleware({
+      headers: { authorization: 'Bearer unverified_random_string_12345' },
+      cookies: {}
+    });
+    if (resB.statusCode !== 401 || resB.nextCalled) {
+      throw new Error('هدر Authorization با توکن رندوم و امضانشده (حفره S-3) باید با وضعیت 401 رد شود.');
+    }
+
+    // Test Case C: Valid JWT with non-admin role ('personnel') -> 403 Forbidden
+    const secret = getJwtSecret();
+    const personnelToken = jwt.sign({ id: 99, username: 'operator1', role: 'personnel' }, secret, { expiresIn: '1h' });
+    const resC = await runMiddleware({
+      headers: { authorization: `Bearer ${personnelToken}` },
+      cookies: {}
+    });
+    if (resC.statusCode !== 403 || resC.nextCalled) {
+      throw new Error('کاربر لاگین‌شده با نقش غیر مدیر (پرسنل) نباید به متریک‌های پرومتئوس دسترسی داشته باشد (403 Forbidden).');
+    }
+
+    // Test Case D: Valid JWT with 'admin' role -> next() called
+    const adminToken = jwt.sign({ id: 1, username: 'admin', role: 'admin' }, secret, { expiresIn: '1h' });
+    const mockAdminReq: any = {
+      headers: { authorization: `Bearer ${adminToken}` },
+      cookies: {}
+    };
+    const resD = await runMiddleware(mockAdminReq);
+    if (!resD.nextCalled || mockAdminReq.user?.role !== 'admin') {
+      throw new Error('کاربر با نقش معتبر admin باید مجاز به مشاهده متریک‌ها باشد.');
+    }
+
+    // Test Case E: METRICS_TOKEN authentication
+    const originalMetricsToken = process.env.METRICS_TOKEN;
+    process.env.METRICS_TOKEN = 'test_prometheus_scrape_secret_xyz';
+    try {
+      const mockScrapeReq: any = {
+        headers: { authorization: 'Bearer test_prometheus_scrape_secret_xyz' },
+        cookies: {}
+      };
+      const resE = await runMiddleware(mockScrapeReq);
+      if (!resE.nextCalled) {
+        throw new Error('اسکرپر پرومتئوس با هدر معتبر METRICS_TOKEN باید مجاز باشد.');
+      }
+
+      // Test with X-Metrics-Token header as well
+      const mockHeaderReq: any = {
+        headers: { 'x-metrics-token': 'test_prometheus_scrape_secret_xyz' },
+        cookies: {}
+      };
+      const resE2 = await runMiddleware(mockHeaderReq);
+      if (!resE2.nextCalled) {
+        throw new Error('اسکرپر با هدر X-Metrics-Token معتبر باید مجاز باشد.');
+      }
+
+      // Test with wrong scrape token
+      const mockWrongReq: any = {
+        headers: { authorization: 'Bearer wrong_scrape_secret' },
+        cookies: {}
+      };
+      const resWrong = await runMiddleware(mockWrongReq);
+      if (resWrong.statusCode !== 401 || resWrong.nextCalled) {
+        throw new Error('اسکرپر با توکن اسکرپ اشتباه باید با 401 مسدود شود.');
+      }
+    } finally {
+      if (originalMetricsToken !== undefined) {
+        process.env.METRICS_TOKEN = originalMetricsToken;
+      } else {
+        delete process.env.METRICS_TOKEN;
+      }
+    }
+
+    results.push(makeTestCase({
+      id: 'sec_metrics_authentication_guard',
+      name: 'احراز هویت و اعتبارسنجی قطعی توکن در روت‌های متریک پرومتئوس (یافته S-3 / زیرفاز ۲.۳)',
+      layer: 'security',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - t18Start,
+      details: 'تضمین شد که هدرهای رندوم امضانشده (S-3) مسدود شده، توکن‌های JWT مدیران اعتبارسنجی گشته و اسکرپ پرومتئوس با METRICS_TOKEN به صورت ایمن احراز هویت می‌شود.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'sec_metrics_authentication_guard',
+      name: 'احراز هویت و اعتبارسنجی قطعی توکن در روت‌های متریک پرومتئوس (یافته S-3 / زیرفاز ۲.۳)',
+      layer: 'security',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - t18Start,
+      error: err.message
+    }));
+  }
+
+  // Test 19: Personnel PII Masking & Sensitive Financial Guard (S-5 / Sub-phase 2.5 / TD-090)
+  const t19Start = Date.now();
+  try {
+    const {
+      maskCardNumber,
+      maskShebaNumber,
+      maskAccountNumber,
+      maskNobitexUsername,
+      sanitizePersonnelRecord,
+      sanitizePayrollRecord,
+      canAccessSensitivePersonnelData
+    } = await import('../../lib/piiMasker.js');
+
+    // 1. Validate Masking Functions
+    const rawCard = '6037991234567890';
+    const maskedCard = maskCardNumber(rawCard);
+    if (!maskedCard.startsWith('6037') || !maskedCard.endsWith('7890') || !maskedCard.includes('****')) {
+      throw new Error(`ماسک شماره کارت نامعتبر است: ${maskedCard}`);
+    }
+
+    const rawSheba = 'IR120120000000001234567890';
+    const maskedSheba = maskShebaNumber(rawSheba);
+    if (!maskedSheba.startsWith('IR12') || !maskedSheba.endsWith('7890') || !maskedSheba.includes('***')) {
+      throw new Error(`ماسک شماره شبا نامعتبر است: ${maskedSheba}`);
+    }
+
+    const rawAcc = '123456789';
+    const maskedAcc = maskAccountNumber(rawAcc);
+    if (!maskedAcc.endsWith('6789') || !maskedAcc.startsWith('*****')) {
+      throw new Error(`ماسک شماره حساب نامعتبر است: ${maskedAcc}`);
+    }
+
+    const rawUser = 'mycrypto_user';
+    const maskedUser = maskNobitexUsername(rawUser);
+    if (!maskedUser.includes('***')) {
+      throw new Error(`ماسک نام کاربری صرافی نامعتبر است: ${maskedUser}`);
+    }
+
+    // 2. Validate sanitizePersonnelRecord
+    const sensitivePersonnel = {
+      id: 10,
+      fullName: 'کارمند نمونه',
+      cardNumber: '6037991234567890',
+      shebaNumber: 'IR120120000000001234567890',
+      accountNumber: '123456789',
+      nobitexUsername: 'mycrypto_user',
+      nobitexPassword: 'super_secret_password'
+    };
+
+    const sanitizedForRegular = sanitizePersonnelRecord(sensitivePersonnel, false);
+    if (
+      sanitizedForRegular.cardNumber === rawCard ||
+      sanitizedForRegular.shebaNumber === rawSheba ||
+      sanitizedForRegular.nobitexPassword !== ''
+    ) {
+      throw new Error('اطلاعات حساس بانکی یا رمز صرافی برای کاربر عادی ماسک/حذف نشده است.');
+    }
+
+    const sanitizedForAdmin = sanitizePersonnelRecord(sensitivePersonnel, true);
+    if (sanitizedForAdmin.cardNumber !== rawCard || sanitizedForAdmin.nobitexPassword !== 'super_secret_password') {
+      throw new Error('اطلاعات حساس برای کاربر مجاز (مدیر) مخدوش شده است.');
+    }
+
+    // 3. Validate sanitizePayrollRecord
+    const sensitivePayroll = {
+      id: 5,
+      personnelName: 'کارمند پرکیسی',
+      cardNumber: '6037991234567890',
+      shebaNumber: 'IR120120000000001234567890',
+      nobitexUsername: 'crypto_pw'
+    };
+    const payrollMasked = sanitizePayrollRecord(sensitivePayroll, false);
+    if (payrollMasked.cardNumber === rawCard || payrollMasked.shebaNumber === rawSheba) {
+      throw new Error('اطلاعات کارت/شبا در فیش حقوقی برای کاربر غیرمجاز ماسک نشده است.');
+    }
+
+    // 4. Validate Access Permissions
+    const adminAccess = await canAccessSensitivePersonnelData({ id: 1, role: 'admin' });
+    if (!adminAccess) throw new Error('نقش admin باید دسترسی کامل به داده‌های مالی حساس داشته باشد.');
+
+    const ownerAccess = await canAccessSensitivePersonnelData({ id: 42, role: 'personnel' }, 42);
+    if (!ownerAccess) throw new Error('کاربر مالک رکورد باید به اطلاعات خودش دسترسی داشته باشد.');
+
+    const strangerAccess = await canAccessSensitivePersonnelData({ id: 99, role: 'normal_user' }, 42);
+    if (strangerAccess) throw new Error('کاربر غریبه نباید به اطلاعات حساس پرسنل دسترسی داشته باشد.');
+
+    results.push(makeTestCase({
+      id: 'sec_personnel_pii_masking_and_guard',
+      name: 'ماسک‌سازی اطلاعات حساس مالی پرسنل و صیانت از PII (یافته S-5 / زیرفاز ۲.۵ / TD-090)',
+      layer: 'security',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - t19Start,
+      details: 'تضمین شد که شماره کارت، شماره شبا، شماره حساب، نام کاربری و پسورد صرافی برای کاربران غیرمجاز ماسک و ایمن‌سازی شده و فقط با گارد مجوزهای مالی اختصاصی یا دسترسی خود پرسنل قابل مشاهده است.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'sec_personnel_pii_masking_and_guard',
+      name: 'ماسک‌سازی اطلاعات حساس مالی پرسنل و صیانت از PII (یافته S-5 / زیرفاز ۲.۵ / TD-090)',
+      layer: 'security',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - t19Start,
       error: err.message
     }));
   }

@@ -49,13 +49,13 @@ export default function Dashboard() {
     // CRM Follow-ups (Only if user has CRM permission)
     if (hasCrmPermission && Array.isArray(activities)) {
       activities.forEach((act) => {
-        if (act.nextFollowUpDate && act.isDeleted !== 1) {
+        if (act.nextFollowUpDate) {
           items.push({
             id: `crm-act-${act.id}`,
             title: act.title || 'پیگیری CRM',
             date: toEnglishDigits(act.nextFollowUpDate).replace(/-/g, '/'),
             type: 'crm_followup',
-            customerName: act.customerName || act.leadCustomerName || '',
+            customerName: act.customerName || '',
             assignedTo: act.assignedTo || '',
             raw: act
           });
@@ -83,14 +83,14 @@ export default function Dashboard() {
     // Daily work logs
     if (Array.isArray(dailyLogs)) {
       dailyLogs.slice(0, 50).forEach((log) => {
-        const d = log.logDate || log.date;
+        const d = log.date;
         if (d && typeof d === 'string') {
           items.push({
             id: `log-${log.id}`,
-            title: `گزارش کار: ${log.userName || log.userFullName || 'همکار'}`,
+            title: `گزارش کار: ${log.userFullName || log.username || 'همکار'}`,
             date: toEnglishDigits(d).replace(/-/g, '/'),
             type: 'daily_log',
-            assignedTo: log.userName || '',
+            assignedTo: log.userFullName || log.username || '',
             raw: log
           });
         }

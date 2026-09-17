@@ -1,17 +1,26 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret } from '../middleware/auth.js';
+import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, invalidateUserAuthCache } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { UnauthorizedError, BadRequestError, ConflictError, AppError } from '../errors/customErrors.js';
+import { UnauthorizedError, BadRequestError, ConflictError, ValidationError, AppError } from '../errors/customErrors.js';
+
+function safeCompareTokens(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const bufProvided = Buffer.from(provided);
+  const bufExpected = Buffer.from(expected);
+  if (bufProvided.length !== bufExpected.length) return false;
+  return crypto.timingSafeEqual(bufProvided, bufExpected);
+}
 
 const router = Router();
 
@@ -173,16 +182,25 @@ const setupSchema = z.object({
 });
 
 router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
-  // 1. Enforce setup token (SEC-012)
-  const setupToken = process.env.ERP_SETUP_TOKEN || 'papital_erp_setup_token_2026';
+  // 1. Enforce setup token (SEC-012 / S-4)
+  const isProduction = process.env.NODE_ENV === 'production';
+  const configuredSetupToken = process.env.ERP_SETUP_TOKEN;
 
-  const headerToken = req.headers['x-setup-token'] as string;
-  const bodyToken = req.body?.setupToken as string;
-  const providedToken = (headerToken || bodyToken || '').trim();
+  if (isProduction) {
+    if (!configuredSetupToken || configuredSetupToken.trim() === 'papital_erp_setup_token_2026' || configuredSetupToken.trim().length < 16) {
+      logger.error(`[Setup] ERP_SETUP_TOKEN is not securely configured in production environment (IP: ${req.ip})`);
+      throw new UnauthorizedError('راه‌اندازی اولیه در محیط عملیاتی مستلزم پیکربندی متغیر محیطی امن ERP_SETUP_TOKEN (حداقل ۱۶ کاراکتر) است');
+    }
+  }
 
-  if (!providedToken || providedToken !== setupToken.trim()) {
+  const effectiveSetupToken = (configuredSetupToken || 'papital_erp_setup_token_2026').trim();
+  const headerToken = (req.headers['x-setup-token'] as string || '').trim();
+  const bodyToken = (req.body?.setupToken as string || '').trim();
+  const providedToken = headerToken || bodyToken;
+
+  if (!providedToken || !safeCompareTokens(providedToken, effectiveSetupToken)) {
     logger.warn(`[Setup] Unauthorized setup attempt with invalid or missing token from IP: ${req.ip}`);
-    throw new UnauthorizedError('Invalid setup token');
+    throw new UnauthorizedError('توکن راه‌اندازی نامعتبر است');
   }
 
   // 2. PostgreSQL advisory lock (79234) to prevent race conditions (SEC-012)
@@ -216,6 +234,9 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     }
 
     const { username, password, fullName, companyName, warehouseName, phone, address, logo, currency } = req.body;
+    if (isProduction && (password === 'admin123456' || password.length < 8)) {
+      throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
+    }
     const tUsername = (username || '').trim();
     const hash = bcrypt.hashSync(password, 10);
 
@@ -474,6 +495,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
           await orm.update(users)
             .set({ tokenVersion: (row.tokenVersion || 0) + 1 })
             .where(eq(users.id, targetUserId));
+          invalidateUserAuthCache(targetUserId);
         }
       }
     }

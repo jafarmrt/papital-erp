@@ -20,22 +20,32 @@ export interface AuthenticatedRequest extends Request {
   user: AuthUserPayload;
 }
 
+export const DEFAULT_DEV_JWT_SECRET = 'papital_workshop_erp_default_secure_jwt_secret_dev_key_32_chars_long';
+
+export const INSECURE_DEFAULT_SECRETS = new Set([
+  DEFAULT_DEV_JWT_SECRET,
+  'short_secret_key_123',
+  '12345678901234567890123456789012',
+  'secretsecretsecretsecretsecret32',
+  'default_secret_key_change_me_in_prod'
+]);
+
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Strictly enforce presence and minimum 32 characters in all environments
   if (!secret || secret.length < 32) {
-    if (
-      process.env.NODE_ENV === 'production' ||
-      process.env.NODE_ENV === 'test' ||
-      process.env.ERP_ALLOW_TEST_CLEANUP === '1' ||
-      secret === 'short_secret_key_123'
-    ) {
-      throw new Error('JWT_SECRET environment variable is missing or shorter than 32 characters');
-    }
-    // In development or when unconfigured, use a safe 64-char fallback secret to allow dev server to run smoothly
-    return secret && secret.length >= 8 
-      ? secret.padEnd(32, '0') 
-      : 'papital_workshop_erp_default_secure_jwt_secret_dev_key_32_chars_long';
+    throw new Error('JWT_SECRET environment variable is missing or shorter than 32 characters');
   }
+
+  // In production, strictly reject known default or weak fallback secrets (S-4)
+  if (isProduction && INSECURE_DEFAULT_SECRETS.has(secret)) {
+    throw new Error(
+      'SECURITY ERROR: JWT_SECRET environment variable is using an insecure default secret in production. A cryptographically random secret of at least 32 characters is required.'
+    );
+  }
+
   return secret;
 }
 
@@ -100,6 +110,31 @@ const PUBLIC_WEBHOOK_PATHS = new Set([
 
 const isPublicWebhookPath = (path: string): boolean => PUBLIC_WEBHOOK_PATHS.has(path);
 
+interface CachedUserAuth {
+  id: number;
+  role: string;
+  isDeleted: number;
+  tokenVersion: number;
+  fullName: string | null;
+  cachedAt: number;
+}
+
+const USER_AUTH_CACHE_TTL_MS = 30_000; // 30 seconds TTL (A-2 / Phase 5.3)
+const MAX_USER_AUTH_CACHE_SIZE = 1000;
+const userAuthCache = new Map<number, CachedUserAuth>();
+
+export function invalidateUserAuthCache(userId?: number): void {
+  if (typeof userId === 'number') {
+    userAuthCache.delete(userId);
+  } else {
+    userAuthCache.clear();
+  }
+}
+
+export function getUserAuthCacheStats(): { size: number; maxSize: number } {
+  return { size: userAuthCache.size, maxSize: MAX_USER_AUTH_CACHE_SIZE };
+}
+
 export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
   const normalizedPath = req.path.replace(/\/+$/, '');
   const originalPath = (req.originalUrl || '').split('?')[0].replace(/\/+$/, '');
@@ -130,25 +165,52 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     }
     const payload = decoded as AuthUserPayload;
 
-    // V9-2.2: اعتبارسنجی زنده وضعیت کاربر — حذف نرم و ابطال نشست (tokenVersion)
+    // V9-2.2 & Phase 5.3 (A-2): اعتبارسنجی زنده وضعیت کاربر با لایه کش سبک TTL (30s) جهت پیشگیری از N+1 در هر درخواست
     try {
-      const [liveUser] = await orm
-        .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName })
-        .from(users)
-        .where(eq(users.id, Number(payload.id)))
-        .limit(1);
+      const userIdNum = Number(payload.id);
+      const now = Date.now();
+      let liveUser: CachedUserAuth | undefined;
+
+      const cached = userAuthCache.get(userIdNum);
+      if (cached && (now - cached.cachedAt < USER_AUTH_CACHE_TTL_MS)) {
+        liveUser = cached;
+      } else {
+        const [dbUser] = await orm
+          .select({ id: users.id, role: users.role, isDeleted: users.isDeleted, tokenVersion: users.tokenVersion, fullName: users.fullName })
+          .from(users)
+          .where(eq(users.id, userIdNum))
+          .limit(1);
+
+        if (dbUser) {
+          liveUser = {
+            id: dbUser.id,
+            role: dbUser.role,
+            isDeleted: dbUser.isDeleted ?? 0,
+            tokenVersion: dbUser.tokenVersion ?? 0,
+            fullName: dbUser.fullName,
+            cachedAt: now,
+          };
+          if (userAuthCache.size >= MAX_USER_AUTH_CACHE_SIZE) {
+            const firstKey = userAuthCache.keys().next().value;
+            if (firstKey !== undefined) userAuthCache.delete(firstKey);
+          }
+          userAuthCache.set(userIdNum, liveUser);
+        }
+      }
 
       if (!liveUser || liveUser.isDeleted === 1) {
+        userAuthCache.delete(userIdNum);
         return res.status(401).json({ error: 'حساب کاربری حذف یا غیرفعال شده است. لطفاً مجدداً وارد شوید.' });
       }
 
       const claimVersion = Number((payload as any).tokenVersion ?? 0);
       const dbVersion = Number(liveUser.tokenVersion ?? 0);
       if (claimVersion !== dbVersion) {
+        userAuthCache.delete(userIdNum);
         return res.status(401).json({ error: 'نشست شما به دلیل تغییر نقش یا اطلاعات کاربری منقضی شده است. لطفاً مجدداً وارد شوید.' });
       }
 
-      // نقش، نام کامل و توکن CSRF همیشه از وضعیت زنده دیتابیس بازخوانی می‌شوند
+      // نقش، نام کامل و توکن CSRF همیشه از وضعیت معتبر دیتابیس/کش بازخوانی می‌شوند
       // یک موجودیت هویت کاربر: full_name همیشه در req.user موجود است
       req.user = { ...payload, role: liveUser.role, full_name: liveUser.fullName || (payload as any).full_name || payload.username };
     } catch (dbErr) {

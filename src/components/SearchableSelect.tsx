@@ -5,7 +5,7 @@ import { cn } from '../utils';
 import { fetchJson } from '../api';
 
 interface Option {
-  value: string;
+  value: string | number;
   label: string;
   disabled?: boolean;
   _raw?: any;
@@ -13,7 +13,7 @@ interface Option {
 
 interface SearchableSelectProps {
   options?: Option[];
-  value: string;
+  value: string | number;
   onChange: (value: string, raw?: any) => void;
   placeholder?: string;
   className?: string;
@@ -108,12 +108,14 @@ export function SearchableSelect({
   useEffect(() => {
     if (!fetchUrl) return;
 
+    const controller = new AbortController();
     const delayDebounceFn = setTimeout(() => {
       setLoading(true);
       const limit = maxResults || 4;
       const url = `${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}search=${encodeURIComponent(search)}&limit=${limit}`;
-      fetchJson(url)
+      fetchJson(url, { signal: controller.signal })
         .then((res: any) => {
+          if (controller.signal.aborted) return;
           const data = res.data || res;
           if (Array.isArray(data) && mapResultToOption) {
             setAsyncOptions(data.slice(0, limit).map((item: any) => {
@@ -123,11 +125,21 @@ export function SearchableSelect({
             }));
           }
         })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+        .catch(err => {
+          if (err?.name === 'AbortError') return;
+          console.error('SearchableSelect fetch error:', err);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setLoading(false);
+          }
+        });
     }, 300);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      clearTimeout(delayDebounceFn);
+      controller.abort();
+    };
   }, [search, fetchUrl, mapResultToOption, maxResults]);
 
   const limit = maxResults || 4;
@@ -241,7 +253,7 @@ export function SearchableSelect({
                   )}
                   onClick={() => {
                     if (opt.disabled) return;
-                    onChange(opt.value, opt._raw);
+                    onChange(String(opt.value), opt._raw);
                     setSelectedLabel(opt.label);
                     setIsOpen(false);
                     setSearch('');

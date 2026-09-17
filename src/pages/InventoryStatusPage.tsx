@@ -7,6 +7,7 @@ import {
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../utils';
 import { useDashboardStatsQuery, useDashboardBIStatsQuery } from '../hooks/queries';
 import { useAppCurrency } from '../hooks/useAppCurrency';
+import { ErrorStateView } from '../components/common/ErrorStateView';
 
 export default function InventoryStatusPage() {
   const navigate = useNavigate();
@@ -135,10 +136,12 @@ export default function InventoryStatusPage() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl">
-          <AlertCircle size={16} />
-          <span>{error}</span>
-        </div>
+        <ErrorStateView
+          title="خطا در دریافت اطلاعات داشبورد تحلیلی انبار"
+          description="در واکشی اطلاعات آماری انبار مشکلی رخ داده است. برای تلاش مجدد روی دکمه زیر کلیک نمایید."
+          onRetry={loadData}
+          compact
+        />
       )}
 
       {loading ? (
