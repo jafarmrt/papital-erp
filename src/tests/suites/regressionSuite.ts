@@ -1,6 +1,8 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
+import { eq } from 'drizzle-orm';
 import { categories } from '../../db/schema.js';
+import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
 import {
   createVoucherSchema,
   createChequeSchema,
@@ -327,6 +329,210 @@ export async function runRegressionTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // ------------------------------------------------------------------
+  // Test 5 (TD-081 / TD-104): سرویس یگانه آزادسازی رزروهای پروژه با OCC + Audit
+  // ------------------------------------------------------------------
+  const t5Start = Date.now();
+  const td081Suffix = `${Date.now()}`;
+  try {
+    const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
+    const { productionProjects } = await import('../../db/schema.js');
+    const { createTestItem } = await import('../fixtures/factories.js');
+
+    // ۱. فیکسچر مارک‌دار (TD-107): کالا و پروژه با مارکر مرکزی
+    const item = await createTestItem({
+      name: `ERP-TEST-MARKER کالای آزادسازی TD-081 ${td081Suffix}`,
+      code: `ITEM_TD081_${td081Suffix}`
+    });
+    const projectCode = `PROJ_TD081_${td081Suffix}`;
+    const [project] = await orm.insert(productionProjects).values({
+      projectCode,
+      title: `ERP-TEST-MARKER پروژه آزادسازی TD-081 ${td081Suffix}`,
+      status: 'in_progress',
+      version: 1,
+      inventoryControl: {
+        isReserved: true,
+        reservedItems: [
+          { itemId: item.id, itemCode: item.code, itemName: item.name, reservedQty: 10, unit: 'عدد' }
+        ]
+      }
+    }).returning();
+
+    // ۲. آزادسازی رسمی — کسر ۴ عدد از ۱۰ رزرو
+    const releaseResult = await ItemStockReservationService.releaseProjectReservations(orm, {
+      projectId: project.id,
+      docItems: [{ itemId: item.id, quantity: 4 }],
+      expectedVersion: project.version,
+      userId: undefined,
+      username: 'test_runner'
+    });
+
+    if (!releaseResult.changed || releaseResult.releasedItemIds.length !== 1) {
+      throw new Error('نتیجه آزادسازی باید changed=true با یک قلم آزادشده باشد.');
+    }
+
+    // ۳. راستی‌آزمایی jsonb: رزرو از ۱۰ به ۶ کاهش یافته و version بامپ شده است
+    const [afterProj] = await orm.select().from(productionProjects).where(eq(productionProjects.id, project.id));
+    const invControl: any = (afterProj.inventoryControl as any) || {};
+    const reservedListAfter = Array.isArray(invControl.reservedItems) ? invControl.reservedItems : [];
+    const remainingQty = reservedListAfter.length > 0 ? Number(reservedListAfter[0].reservedQty || 0) : 0;
+    if (remainingQty !== 6) {
+      throw new Error(`رزرو باقی‌مانده باید ۱۰-۴=۶ باشد؛ مقدار واقعی: ${remainingQty}`);
+    }
+    if (Number(afterProj.version) !== 2) {
+      throw new Error(`نسخه پروژه پس از آزادسازی باید ۲ باشد؛ واقعی: ${afterProj.version}`);
+    }
+
+    // ۴. OCC: فراخوانی با نسخه کهنه باید OptimisticLockError بدهد
+    let occThrew = false;
+    try {
+      await ItemStockReservationService.releaseProjectReservations(orm, {
+        projectId: project.id,
+        docItems: [{ itemId: item.id, quantity: 1 }],
+        expectedVersion: 1 // نسخه قدیمی — هم‌اکنون ۲ است
+      });
+    } catch (err: any) {
+      occThrew = err?.name === 'OptimisticLockError' || err?.name === 'ConflictError' || /version/i.test(String(err?.message || ''));
+    }
+    if (!occThrew) {
+      throw new Error('آزادسازی با نسخه OCC کهنه باید رد شود.');
+    }
+
+    results.push(makeTestCase({
+      id: 'td081_project_reservation_release_service_guard',
+      scenarioId: 'v4_project_reservation_release_guard',
+      name: 'V4.0.31 Regression: سرویس یگانه آزادسازی رزروهای پروژه با OCC و Audit (TD-081)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t5Start,
+      details: `کسر رزرو (۱۰→۶ واحد باقی‌مانده = ${remainingQty})، بامپ نسخه OCC و رد فراخوانی با نسخه کهنه تأیید شد.`
+    }));
+
+    // پاکسازی فیکسچر مارک‌دار
+    await cleanTestTableData('production_projects', 'id', [project.id]);
+    await cleanTestTableData('items', 'id', [item.id]);
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'td081_project_reservation_release_service_guard',
+      scenarioId: 'v4_project_reservation_release_guard',
+      name: 'V4.0.31 Regression: سرویس یگانه آزادسازی رزروهای پروژه با OCC و Audit (TD-081)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t5Start,
+      error: err.message
+    }));
+  }
+
+  // ------------------------------------------------------------------
+  // Test 6 (TD-105): تاریخ سرور-authoritative خزانه — پیش‌فرض، نرمال‌سازی و بازه
+  // ------------------------------------------------------------------
+  const t6Start = Date.now();
+  try {
+    const { resolveTreasuryBusinessDate } = await import('../../services/accounting/treasury/treasuryTransaction.service.js');
+    const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+
+    const today = await businessTodayIsoDate();
+
+    // 1) مقدار خالی → پیش‌فرض businessTodayIsoDate
+    const defaulted = await resolveTreasuryBusinessDate('');
+    if (defaulted !== today) {
+      throw new Error(`پیش‌فرض تاریخ خالی باید «${today}» باشد؛ واقعی: «${defaulted}»`);
+    }
+
+    // 2) نرمال‌سازی ورودی جلالی به ISO
+    const [gy, gm, gd] = today.split('-').map(Number);
+    const normalized = await resolveTreasuryBusinessDate('1405/01/15');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      throw new Error(`نرمال‌سازی جلالی به ISO انجام نشد: «${normalized}»`);
+    }
+
+    // 3) تاریخ آینده باید رد شود (بازه مجاز: گذشته تا امروز کسب‌وکار)
+    const future = `${gy + 2}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
+    let futureThrew = false;
+    try {
+      await resolveTreasuryBusinessDate(future);
+    } catch {
+      futureThrew = true;
+    }
+    if (!futureThrew) {
+      throw new Error(`تاریخ آینده «${future}» باید رد شود.`);
+    }
+
+    // 4) فرمت نامعتبر باید رد شود
+    let invalidFormatThrew = false;
+    try {
+      await resolveTreasuryBusinessDate('not-a-date');
+    } catch {
+      invalidFormatThrew = true;
+    }
+    if (!invalidFormatThrew) {
+      throw new Error('فرمت نامعتبر تاریخ باید رد شود.');
+    }
+
+    results.push(makeTestCase({
+      id: 'td105_treasury_server_authoritative_date',
+      scenarioId: 'v4_treasury_server_authoritative_date_guard',
+      name: 'V4.0.31 Regression: تاریخ سرور-authoritative خزانه و اعتبارسنجی بازه (TD-105)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t6Start,
+      details: 'پیش‌فرض businessTodayIsoDate، نرمال‌سازی جلالی→ISO، رد تاریخ آینده و رد فرمت نامعتبر تأیید شد.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'td105_treasury_server_authoritative_date',
+      scenarioId: 'v4_treasury_server_authoritative_date_guard',
+      name: 'V4.0.31 Regression: تاریخ سرور-authoritative خزانه و اعتبارسنجی بازه (TD-105)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t6Start,
+      error: err.message
+    }));
+  }
+
+  // ------------------------------------------------------------------
+  // Test 7 (TD-107): مارکر محوری پاکسازی تستی — فیکسچرهای factory مارک‌دار
+  // ------------------------------------------------------------------
+  const t7Start = Date.now();
+  try {
+    const { TEST_MARKER } = await import('../fixtures/testMarker.js');
+    const { createTestItem } = await import('../fixtures/factories.js');
+
+    const item = await createTestItem({ code: `ITEM_MARKER_${Date.now()}` });
+    if (!String(item.name || '').includes(TEST_MARKER)) {
+      throw new Error(`نام فیکسچر factory باید مارکر «${TEST_MARKER}» را داشته باشد؛ واقعی: «${item.name}»`);
+    }
+
+    await cleanTestTableData('items', 'id', [item.id]);
+
+    results.push(makeTestCase({
+      id: 'td107_test_cleanup_marker_only',
+      scenarioId: 'v4_test_cleanup_marker_only_guard',
+      name: 'V4.0.31 Regression: مارکر محوری پاکسازی تستی — فیکسچرها مارک‌دار (TD-107)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: true,
+      durationMs: Date.now() - t7Start,
+      details: `فیکسچر factory با مارکر مرکزی «${TEST_MARKER}» علامت‌گذاری می‌شود و پاکسازی فقط رکوردهای حامل مارکر/شناسه ساختاریافته را هدف می‌گیرد.`
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'td107_test_cleanup_marker_only',
+      scenarioId: 'v4_test_cleanup_marker_only_guard',
+      name: 'V4.0.31 Regression: مارکر محوری پاکسازی تستی — فیکسچرها مارک‌دار (TD-107)',
+      layer: 'regression',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - t7Start,
+      error: err.message
+    }));
+  }
+
   return results;
 }
+
 

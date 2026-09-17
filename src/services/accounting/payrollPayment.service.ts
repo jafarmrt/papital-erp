@@ -15,6 +15,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { businessTodayJalaliDash } from '../../lib/businessClock.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
 // V10-4.4: سرویس واحد ثبت پرداخت حقوق — منبع یگانه گذار status='paid'
@@ -37,17 +38,6 @@ export interface RegisterPayrollPaymentResult {
   transactionId: number;
   voucherId: number | null;
   voucherNumber: number | string | null;
-}
-
-function toJalaliToday(): string {
-  try {
-    const formatted = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-      year: 'numeric', month: '2-digit', day: '2-digit'
-    }).format(new Date());
-    return formatted.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-  } catch {
-    return new Date().toISOString().split('T')[0];
-  }
 }
 
 export class PayrollPaymentService {
@@ -143,7 +133,7 @@ export class PayrollPaymentService {
         throw new ValidationError('جمع کسر مساعده و سایر کسورات از ناخالص فیش بیشتر است — مقادیر فیش را بررسی کنید');
       }
 
-      const payDate = (input.paymentDate && input.paymentDate.trim()) || toJalaliToday();
+      const payDate = (input.paymentDate && input.paymentDate.trim()) || await businessTodayJalaliDash();
       const descText = `تسویه ${input.method === 'cash' ? 'نقدی' : input.method === 'pos' ? 'کارتخوان' : 'بانکی'} حقوق ${pers?.fullName || ''} فیش ${payroll.payrollNumber}`;
 
       const voucherItems: {

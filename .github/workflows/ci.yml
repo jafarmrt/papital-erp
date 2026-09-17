@@ -1,5 +1,5 @@
-# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v4.0.24 / Sub-phase 7.1 / TD-102)
-# Multi-stage CI: lint-and-typecheck → database-integration-tests → client-server-build → docker-build-gate
+# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v4.0.31 / TD-111 + Soft Coverage Gate)
+# Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) → client-server-build → docker-build-gate
 #
 # Environment & Secrets:
 #   DATABASE_URL: Service container PostgreSQL 16
@@ -39,6 +39,9 @@ jobs:
           else
             npm install --no-audit --no-fund
           fi
+
+      - name: TD-111 Version Sync Gate (fail-fast)
+        run: npm run check:version
 
       - name: TypeScript Static Type Checking & Linting
         run: npm run lint
@@ -97,6 +100,81 @@ jobs:
           echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Database Engine:** PostgreSQL 16 Service Container" >> $GITHUB_STEP_SUMMARY
+
+  coverage-soft-gate:
+    name: Soft Coverage Gate (Baseline — Non-Blocking)
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: erp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Execute Test Matrix Under c8 Coverage (Soft Threshold)
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
+          ERP_SETUP_TOKEN: test_setup_token_at_least_16_chars_long
+          METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
+          NODE_ENV: test
+          ERP_ALLOW_TEST_CLEANUP: '1'
+          PORT: 3000
+        run: npm run test:coverage
+
+      - name: Publish Coverage Baseline to Step Summary
+        if: always()
+        run: |
+          echo "### 📊 Coverage Baseline (Soft Gate — آستانه سخت پس از خط مبنا)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const s = require('./coverage/coverage-summary.json')['total'];
+              const pct = (k) => s[k] ? s[k].pct + '%' : 'n/a';
+              console.log('Lines      : ' + pct('lines'));
+              console.log('Statements : ' + pct('statements'));
+              console.log('Functions  : ' + pct('functions'));
+              console.log('Branches   : ' + pct('branches'));
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "coverage-summary.json not produced — review c8 run logs." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode:** Soft (continue-on-error) — این استیج سبب شکست CI نمی‌شود؛ خط مبنا برای فعال‌سازی آستانه سخت بعدی ثبت می‌شود." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Coverage Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-baseline-${{ github.sha }}
+          path: coverage/
+          retention-days: 7
 
   build:
     name: Client & Server Production Build

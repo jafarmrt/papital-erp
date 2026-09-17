@@ -7,6 +7,7 @@ import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { parsePagination } from '../lib/pagination.js';
+import { systemNowUtcIso } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -225,7 +226,7 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
 
     const existing = await orm.select().from(transfers).where(eq(transfers.code, cleanCode)).limit(1);
 
-    const now = new Date().toISOString();
+    const now = systemNowUtcIso();
     let savedRecord: typeof transfers.$inferSelect | null = null;
 
     if (existing.length > 0) {

@@ -11,6 +11,45 @@ import { fin } from '../../../lib/financialDecimal.js';
 import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
+import { jalaliToIsoDate } from '../../../utils.js';
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const JALALI_DATE_PATTERN = /^(1[345]\d{2})[-/](\d{1,2})[-/](\d{1,2})$/;
+
+/**
+ * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است.
+ * - مقدار خالی → پیش‌فرض businessTodayIsoDate (ساعت توافقی، نه ساعت مرورگر کلاینت)
+ * - ورودی جلالی → نرمال‌سازی به ISO ذخیره‌سازی
+ * - فرمت/روز نامعتبر یا تاریخ آینده → ValidationError (بازه مجاز: گذشته تا امروز کسب‌وکار)
+ */
+export async function resolveTreasuryBusinessDate(rawDate?: string | null): Promise<string> {
+  const trimmed = String(rawDate || '').trim();
+  if (!trimmed) {
+    return await businessTodayIsoDate();
+  }
+
+  let isoDate = trimmed;
+  const jalaliMatch = trimmed.match(JALALI_DATE_PATTERN);
+  if (jalaliMatch) {
+    isoDate = jalaliToIsoDate(trimmed);
+    if (!isoDate) {
+      throw new ValidationError(`تاریخ جلالی «${trimmed}» قابل تبدیل به تقویم معتبر نیست`);
+    }
+  } else if (ISO_DATE_PATTERN.test(trimmed)) {
+    const parsed = new Date(`${trimmed}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== trimmed) {
+      throw new ValidationError(`تاریخ «${trimmed}» یک روز تقویمی معتبر نیست`);
+    }
+  } else {
+    throw new ValidationError(`فرمت تاریخ تراکنش نامعتبر است («${trimmed}»). فرمت‌های مجاز: YYYY-MM-DD میلادی یا 14xx/xx/xx جلالی`);
+  }
+
+  const businessToday = await businessTodayIsoDate();
+  if (isoDate > businessToday) {
+    throw new ValidationError(`تاریخ تراکنش («${trimmed}») نمی‌تواند در آینده باشد؛ تاریخ امروز کسب‌وکار «${businessToday}» است`);
+  }
+  return isoDate;
+}
 
 export class TreasuryTransactionService {
   static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: DbExecutor): Promise<string> {
@@ -220,7 +259,7 @@ export class TreasuryTransactionService {
 
   static async createTreasuryTransaction(data: {
     type: 'receipt' | 'payment';
-    date: string;
+    date?: string;
     method: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
     amount: number;
     currency?: string;
@@ -241,6 +280,8 @@ export class TreasuryTransactionService {
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
+    // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
+    const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
     return await orm.transaction(async (txEngine) => {
       validateLockOrder([
@@ -291,7 +332,7 @@ export class TreasuryTransactionService {
         const creditAccountId = data.type === 'receipt' ? contraAccountId : bank.accountId;
 
         const v = await VoucherService.createJournalVoucher({
-          date: data.date,
+          date: resolvedDate,
           voucherType: 'treasury',
           description: descText,
           referenceModule: 'treasury',
@@ -328,7 +369,7 @@ export class TreasuryTransactionService {
       const [tx] = await txEngine.insert(treasuryTransactions).values({
         transactionNumber: txNum,
         type: data.type,
-        date: data.date.trim(),
+        date: resolvedDate,
         method: data.method,
         amount,
         currency: txCurrency,
@@ -509,7 +550,7 @@ export class TreasuryTransactionService {
    * هر دو حساب هم‌ارز باید باشند و مانده مبدأ منفی نمی‌شود.
    */
   static async createTreasuryTransfer(data: {
-    date: string;
+    date?: string;
     amount: number;
     currency?: string;
     fromBankAccountId: number;
@@ -525,6 +566,8 @@ export class TreasuryTransactionService {
     if (data.fromBankAccountId === data.toBankAccountId) {
       throw new ValidationError('حساب مبدأ و مقصد باید متفاوت باشند');
     }
+    // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
+    const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
     return await orm.transaction(async (txEngine) => {
       // قفل هر دو حساب در ترتیب id صعودی (جلوگیری از deadlock در همان سطح سلسله‌مراتب)
@@ -566,7 +609,7 @@ export class TreasuryTransactionService {
         }
         const descText = data.description?.trim() || `انتقال وجه از ${from.title} به ${to.title}`;
         const v = await VoucherService.createJournalVoucher({
-          date: data.date,
+          date: resolvedDate,
           voucherType: 'treasury',
           description: descText,
           referenceModule: 'treasury',
@@ -605,7 +648,7 @@ export class TreasuryTransactionService {
       const [payTx] = await txEngine.insert(treasuryTransactions).values({
         transactionNumber: payNum,
         type: 'payment',
-        date: data.date.trim(),
+        date: resolvedDate,
         method: 'bank_transfer',
         amount,
         currency,
@@ -624,7 +667,7 @@ export class TreasuryTransactionService {
       const [recTx] = await txEngine.insert(treasuryTransactions).values({
         transactionNumber: recNum,
         type: 'receipt',
-        date: data.date.trim(),
+        date: resolvedDate,
         method: 'bank_transfer',
         amount,
         currency,

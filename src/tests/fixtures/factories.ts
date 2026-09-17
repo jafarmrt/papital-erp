@@ -15,6 +15,7 @@ import {
   workflowTransitions,
   workflowInstances
 } from '../../db/schema.js';
+import { withTestMarker } from './testMarker.js';
 
 /**
  * TST-008: Canonical test password & its real bcrypt hash so factory users can
@@ -38,7 +39,7 @@ export async function createTestUser(overrides: Partial<typeof users.$inferInser
   const userData = {
     username: overrides.username || `testuser_${suffix}`,
     password: overrides.password || TEST_PASSWORD_HASH,
-    fullName: overrides.fullName || `کاربر آزمایشی ${suffix}`,
+    fullName: overrides.fullName || withTestMarker(`کاربر آزمایشی ${suffix}`),
     role: overrides.role || 'admin',
     avatarUrl: overrides.avatarUrl || '',
     ...overrides
@@ -54,9 +55,9 @@ export async function createTestUser(overrides: Partial<typeof users.$inferInser
 export async function createTestRole(overrides: Partial<typeof roles.$inferInsert> = {}, db: any = orm) {
   const suffix = uniqueSuffix();
   const roleData = {
-    name: overrides.name || `نقش آزمایشی ${suffix}`,
+    name: overrides.name || withTestMarker(`نقش آزمایشی ${suffix}`),
     code: overrides.code || `ROLE_${suffix}`,
-    description: overrides.description || 'توضیحات نقش آزمایشی',
+    description: overrides.description || withTestMarker('توضیحات نقش آزمایشی'),
     permissions: overrides.permissions || ['workflow.view', 'workflow.execute', 'documents.manage'],
     isSystem: overrides.isSystem ?? 0,
     ...overrides
@@ -72,8 +73,8 @@ export async function createTestRole(overrides: Partial<typeof roles.$inferInser
 export async function createTestCustomer(overrides: Partial<typeof customers.$inferInsert> = {}, db: any = orm) {
   const suffix = uniqueSuffix();
   const customerData = {
-    name: overrides.name || `طرف حساب آزمایشی ${suffix}`,
-    contactName: overrides.contactName || 'آقای آزمایشی',
+    name: overrides.name || withTestMarker(`طرف حساب آزمایشی ${suffix}`),
+    contactName: overrides.contactName || withTestMarker('آقای آزمایشی'),
     phone: overrides.phone || '09120000000',
     partyType: overrides.partyType || 'customer',
     version: overrides.version ?? 1,
@@ -92,7 +93,7 @@ export async function createTestItem(overrides: Partial<typeof items.$inferInser
   const suffix = uniqueSuffix();
   const itemData = {
     type: overrides.type || 'product',
-    name: overrides.name || `کالای آزمایشی ${suffix}`,
+    name: overrides.name || withTestMarker(`کالای آزمایشی ${suffix}`),
     code: overrides.code || `ITEM_${suffix}`,
     unit: overrides.unit || 'عدد',
     category: overrides.category || 'دستبند',
@@ -115,7 +116,7 @@ export async function createTestItem(overrides: Partial<typeof items.$inferInser
 export async function createTestWarehouse(overrides: Partial<typeof warehouses.$inferInsert> = {}, db: any = orm) {
   const suffix = uniqueSuffix();
   const warehouseData = {
-    name: overrides.name || `انبار آزمایشی ${suffix}`,
+    name: overrides.name || withTestMarker(`انبار آزمایشی ${suffix}`),
     code: overrides.code || `WH_${suffix}`,
     isActive: overrides.isActive ?? 1,
     ...overrides
@@ -140,7 +141,7 @@ export async function createTestDocument(
     date: docOverrides.date || new Date().toISOString().split('T')[0],
     user: docOverrides.user || 'admin',
     status: docOverrides.status || 'final',
-    buyerName: docOverrides.buyerName || 'خریدار آزمایشی',
+    buyerName: docOverrides.buyerName || withTestMarker('خریدار آزمایشی'),
     version: docOverrides.version ?? 1,
     isDeleted: 0,
     ...docOverrides
@@ -190,7 +191,7 @@ export async function createTestVoucher(
     status: voucherOverrides.status || 'approved',
     totalDebit: voucherOverrides.totalDebit ?? totalDebit,
     totalCredit: voucherOverrides.totalCredit ?? totalCredit,
-    description: voucherOverrides.description || `سند حسابداری آزمایشی ${suffix}`,
+    description: voucherOverrides.description || withTestMarker(`سند حسابداری آزمایشی ${suffix}`),
     version: voucherOverrides.version ?? 1,
     isDeleted: 0,
     ...voucherOverrides
@@ -210,7 +211,7 @@ export async function createTestVoucher(
           rowOrder: idx + 1,
           debit: item.debit || 0,
           credit: item.credit || 0,
-          description: item.description || 'سطر سند آزمایشی'
+          description: item.description || withTestMarker('سطر سند آزمایشی')
         })
         .returning();
       insertedItems.push(itemRow);
@@ -231,7 +232,7 @@ export async function createTestWorkflow(overrides: {
   const suffix = uniqueSuffix();
   const defData = {
     code: overrides.definition?.code || `WF_${suffix}`,
-    title: overrides.definition?.title || `گردش کار آزمایشی ${suffix}`,
+    title: overrides.definition?.title || withTestMarker(`گردش کار آزمایشی ${suffix}`),
     entityType: overrides.definition?.entityType || 'document',
     version: overrides.definition?.version ?? 1,
     isActive: 1,

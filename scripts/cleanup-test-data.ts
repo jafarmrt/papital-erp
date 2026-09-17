@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { orm } from '../src/db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { DataReconciliationService } from '../src/services/reconciliation/dataReconciliation.service.js';
+import { TEST_MARKER } from '../src/tests/fixtures/testMarker.js';
 
 /**
  * TD-036 Scoped Test Data Cleanup & Sequence Recalibration Script
@@ -10,7 +11,13 @@ import { DataReconciliationService } from '../src/services/reconciliation/dataRe
  * in-app test runs, E2E suites, concurrency benchmarks, and penetration tests.
  * Safely preserves authentic configuration, chart of accounts, master data,
  * real users, and production business records.
+ *
+ * TD-107 (v4.0.31): پاکسازی مارک‌محور شد — الگوهای واژگانی عمومی
+ * (ILIKE '%آزمایشی%' / '%تستی%' / '%تست%' / '%استرس%' و ...) حذف و به
+ * مارکر مرکزی TEST_MARKER محدود شدند؛ فیکسچرهای جدید در testMarker.ts علامت‌گذاری می‌شوند.
  */
+
+const MARKER_PAT = sql.raw(`'%${TEST_MARKER}%'`);
 
 async function main() {
   const isDryRun = process.argv.includes('--dry-run');
@@ -27,8 +34,8 @@ async function main() {
     OR ref_number ILIKE 'DOC_RACE%' OR ref_number ILIKE 'PURCHASE-E2E-%' OR ref_number ILIKE 'INV-E2E-%'
     OR ref_number ILIKE 'WOO-ORDER-%' OR ref_number ILIKE 'E2E-%' OR ref_number ILIKE 'TEST-%'
     OR ref_number ILIKE 'V9-%' OR ref_number ILIKE 'V9\\_%' OR ref_number ILIKE 'DIAG-%'
-    OR notes ILIKE '%آزمایشی%' OR notes ILIKE '%E2E%' OR notes ILIKE '%تست%'
-    OR buyer_name ILIKE '%آزمایشی%' OR buyer_name ILIKE '%استرس%' OR buyer_name ILIKE '%مسابقه نهاییسازی%'
+    OR notes ILIKE ${MARKER_PAT} OR notes ILIKE '%E2E%'
+    OR buyer_name ILIKE ${MARKER_PAT} OR buyer_name ILIKE '%مسابقه نهاییسازی%'
     OR buyer_name ILIKE '%مشتری سازمانی تست%'
   )`;
 
@@ -36,12 +43,11 @@ async function main() {
     code ILIKE 'ITEM\\_%' OR code ILIKE 'STRESS-%' OR code ILIKE 'SILVER-%' OR code ILIKE 'NECKLACE-%'
     OR code ILIKE 'WOO-%' OR code ILIKE 'DIAG\\_%' OR code ILIKE 'V9\\_%' OR code ILIKE 'V9-%'
     OR code ILIKE '1405-N-101-%' OR code ILIKE 'V10-CANARY-%'
-    OR name ILIKE '%آزمایشی%' OR name ILIKE '%استرس%' OR name ILIKE '%فاز ۱۴%' OR name ILIKE '%فاز 14%'
-    OR name ILIKE '%تستی%'
+    OR name ILIKE ${MARKER_PAT}
   )`;
 
   const TEST_VOUCHER_COND = sql`(
-    description ILIKE '%آزمایشی%' OR description ILIKE '%E2E%' OR description ILIKE '%تست%'
+    description ILIKE ${MARKER_PAT} OR description ILIKE '%E2E%'
     OR description ILIKE '%مسابقه نهاییسازی%' OR description ILIKE '%آزمون تغییرناپذیری%'
     OR description ILIKE '%سند ابطال و برگشت جهت بازثبت%' OR description ILIKE '%سند بازثبت‌شده (Repost)%'
     OR description ILIKE '%سند اولیه جهت تست برگشت%' OR description ILIKE '%سند آزمایشی متوازن%'
@@ -50,28 +56,26 @@ async function main() {
     OR reference_number ILIKE 'CP-FIN-%' OR reference_number ILIKE 'VOID-REPOST-%'
     OR reference_number ILIKE 'REPOST-%' OR reference_number ILIKE 'REV-V%' OR reference_number ILIKE 'TEST-%'
     OR (reference_module = 'invoice' AND reference_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}))
-    OR (reference_module = 'payroll' AND reference_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE '%آزمایشی%'))
+    OR (reference_module = 'payroll' AND reference_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE ${MARKER_PAT}))
   )`;
 
   const TEST_CUSTOMER_COND = sql`(
-    name ILIKE '%آزمایشی%' OR name ILIKE '%طرف حساب آزمایشی%' OR name ILIKE 'مشتری سازمانی تست%'
-    OR name ILIKE '%تست برگشت حسابداری%' OR notes ILIKE '%آزمایشی%'
+    name ILIKE ${MARKER_PAT} OR notes ILIKE ${MARKER_PAT}
   )`;
 
   const TEST_PERSONNEL_COND = sql`(
-    full_name ILIKE '%آزمایشی%' OR full_name ILIKE '%فاز ۱۴%' OR full_name ILIKE '%فاز 14%'
-    OR full_name ILIKE '%پرسنل تستی%' OR full_name ILIKE '%پرسنل تستی کارمزدی%'
+    full_name ILIKE ${MARKER_PAT}
   )`;
 
   const TEST_USER_COND = sql`(
     username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%'
     OR username ILIKE 'user_%' OR username ILIKE 'pen_admin%' OR username ILIKE 'sec009_%'
-    OR username ILIKE 'v9_%' OR full_name ILIKE '%کاربر آزمایشی%'
+    OR username ILIKE 'v9_%' OR full_name ILIKE ${MARKER_PAT}
   )`;
 
   const TEST_CRM_LEAD_COND = sql`(
-    title ILIKE '%آزمایشی%' OR title ILIKE '%تست%' OR company ILIKE '%آزمایشی%'
-    OR customer_name ILIKE '%آزمایشی%' OR customer_name ILIKE '%مشتری سازمانی تست%'
+    title ILIKE ${MARKER_PAT} OR company ILIKE ${MARKER_PAT}
+    OR customer_name ILIKE ${MARKER_PAT}
   )`;
 
   // 1. Audit counts
@@ -85,16 +89,16 @@ async function main() {
     testVouchers: await countQuery(sql`SELECT count(*)::int as c FROM journal_vouchers WHERE ${TEST_VOUCHER_COND}`),
     testDocItems: await countQuery(sql`SELECT count(*)::int as c FROM document_items WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND})`),
     testTransactions: await countQuery(sql`SELECT count(*)::int as c FROM transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR document_ref ILIKE 'V9-%' OR document_ref ILIKE 'DIAG-%' OR document_ref ILIKE 'REVERSAL-%'`),
-    testTreasury: await countQuery(sql`SELECT count(*)::int as c FROM treasury_transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR party_name ILIKE '%آزمایشی%' OR party_name ILIKE '%استرس%'`),
+    testTreasury: await countQuery(sql`SELECT count(*)::int as c FROM treasury_transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR party_name ILIKE ${MARKER_PAT}`),
     testDocuments: await countQuery(sql`SELECT count(*)::int as c FROM documents WHERE ${TEST_DOC_COND}`),
     testItemPrices: await countQuery(sql`SELECT count(*)::int as c FROM item_prices WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND})`),
     testItems: await countQuery(sql`SELECT count(*)::int as c FROM items WHERE ${TEST_ITEM_COND}`),
     testCustomers: await countQuery(sql`SELECT count(*)::int as c FROM customers WHERE ${TEST_CUSTOMER_COND}`),
     testPersonnel: await countQuery(sql`SELECT count(*)::int as c FROM personnel WHERE ${TEST_PERSONNEL_COND}`),
-    testPieceworkLogs: await countQuery(sql`SELECT count(*)::int as c FROM piecework_logs WHERE notes ILIKE '%آزمایشی%' OR notes ILIKE '%تست%' OR personnel_id IN (SELECT id FROM personnel WHERE ${TEST_PERSONNEL_COND})`),
-    testPayrolls: await countQuery(sql`SELECT count(*)::int as c FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%تست%'`),
-    testDailyLogs: await countQuery(sql`SELECT count(*)::int as c FROM daily_work_logs WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%تست%' OR content ILIKE '%آزمایشی%'`),
-    testCrmActivities: await countQuery(sql`SELECT count(*)::int as c FROM crm_activities WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%تست%'`),
+    testPieceworkLogs: await countQuery(sql`SELECT count(*)::int as c FROM piecework_logs WHERE notes ILIKE ${MARKER_PAT} OR personnel_id IN (SELECT id FROM personnel WHERE ${TEST_PERSONNEL_COND})`),
+    testPayrolls: await countQuery(sql`SELECT count(*)::int as c FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE ${MARKER_PAT}`),
+    testDailyLogs: await countQuery(sql`SELECT count(*)::int as c FROM daily_work_logs WHERE title ILIKE ${MARKER_PAT} OR content ILIKE ${MARKER_PAT}`),
+    testCrmActivities: await countQuery(sql`SELECT count(*)::int as c FROM crm_activities WHERE title ILIKE ${MARKER_PAT}`),
     testCrmLeads: await countQuery(sql`SELECT count(*)::int as c FROM crm_leads WHERE ${TEST_CRM_LEAD_COND}`),
     testUsers: await countQuery(sql`SELECT count(*)::int as c FROM users WHERE ${TEST_USER_COND}`),
     testWorkflowInstances: await countQuery(sql`SELECT count(*)::int as c FROM workflow_instances`),
@@ -126,30 +130,30 @@ async function main() {
       await tx.execute(sql`DELETE FROM workflow_pending_approvals`);
       await tx.execute(sql`DELETE FROM workflow_instances`);
       await tx.execute(sql`DELETE FROM workflow_delegations`);
-      await tx.execute(sql`DELETE FROM workflow_transitions WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE '%آزمایشی%')`);
-      await tx.execute(sql`DELETE FROM workflow_states WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE '%آزمایشی%')`);
-      await tx.execute(sql`DELETE FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE '%آزمایشی%'`);
+      await tx.execute(sql`DELETE FROM workflow_transitions WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT})`);
+      await tx.execute(sql`DELETE FROM workflow_states WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT})`);
+      await tx.execute(sql`DELETE FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT}`);
 
       // 2. Piecework & Payroll
-      await tx.execute(sql`DELETE FROM piecework_logs WHERE notes ILIKE '%آزمایشی%' OR notes ILIKE '%تست%' OR personnel_id IN (SELECT id FROM personnel WHERE ${TEST_PERSONNEL_COND}) OR payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE '%آزمایشی%')`);
-      await tx.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%تست%'`);
+      await tx.execute(sql`DELETE FROM piecework_logs WHERE notes ILIKE ${MARKER_PAT} OR personnel_id IN (SELECT id FROM personnel WHERE ${TEST_PERSONNEL_COND}) OR payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE ${MARKER_PAT})`);
+      await tx.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE ${MARKER_PAT}`);
       await tx.execute(sql`DELETE FROM personnel WHERE ${TEST_PERSONNEL_COND}`);
 
       // 3. Projects & Daily logs
-      await tx.execute(sql`DELETE FROM daily_work_logs WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%تست%' OR content ILIKE '%آزمایشی%' OR user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND})`);
-      await tx.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR title ILIKE '%آزمایشی%')`);
-      await tx.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR title ILIKE '%آزمایشی%')`);
-      await tx.execute(sql`DELETE FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR title ILIKE '%آزمایشی%'`);
+      await tx.execute(sql`DELETE FROM daily_work_logs WHERE title ILIKE ${MARKER_PAT} OR content ILIKE ${MARKER_PAT} OR user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND})`);
+      await tx.execute(sql`DELETE FROM project_bom_allocations WHERE item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR title ILIKE ${MARKER_PAT})`);
+      await tx.execute(sql`DELETE FROM project_stages WHERE project_id IN (SELECT id FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR title ILIKE ${MARKER_PAT})`);
+      await tx.execute(sql`DELETE FROM production_projects WHERE project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR title ILIKE ${MARKER_PAT}`);
 
       // 4. CRM & Proforma references
       await tx.execute(sql`UPDATE crm_leads SET proforma_id = NULL WHERE proforma_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND})`);
-      await tx.execute(sql`DELETE FROM crm_activities WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%تست%' OR lead_id IN (SELECT id FROM crm_leads WHERE ${TEST_CRM_LEAD_COND})`);
+      await tx.execute(sql`DELETE FROM crm_activities WHERE title ILIKE ${MARKER_PAT} OR lead_id IN (SELECT id FROM crm_leads WHERE ${TEST_CRM_LEAD_COND})`);
       await tx.execute(sql`DELETE FROM crm_leads WHERE ${TEST_CRM_LEAD_COND}`);
 
       // 5. Treasury & Cheques references to vouchers/documents
       await tx.execute(sql`UPDATE cheques SET voucher_id = NULL WHERE voucher_id IN (SELECT id FROM journal_vouchers WHERE ${TEST_VOUCHER_COND})`);
-      await tx.execute(sql`DELETE FROM cheques WHERE drawer_name ILIKE '%آزمایشی%' OR payee_name ILIKE '%آزمایشی%' OR description ILIKE '%آزمایشی%'`);
-      await tx.execute(sql`DELETE FROM treasury_transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR party_name ILIKE '%آزمایشی%' OR party_name ILIKE '%استرس%' OR voucher_id IN (SELECT id FROM journal_vouchers WHERE ${TEST_VOUCHER_COND})`);
+      await tx.execute(sql`DELETE FROM cheques WHERE drawer_name ILIKE ${MARKER_PAT} OR payee_name ILIKE ${MARKER_PAT} OR description ILIKE ${MARKER_PAT}`);
+      await tx.execute(sql`DELETE FROM treasury_transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR party_name ILIKE ${MARKER_PAT} OR voucher_id IN (SELECT id FROM journal_vouchers WHERE ${TEST_VOUCHER_COND})`);
 
       // 6. Accounting Vouchers
       await tx.execute(sql`DELETE FROM journal_voucher_items WHERE voucher_id IN (SELECT id FROM journal_vouchers WHERE ${TEST_VOUCHER_COND})`);
@@ -176,7 +180,7 @@ async function main() {
       // 11. Users (test only)
       await tx.execute(sql`DELETE FROM form_drafts WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND})`);
       await tx.execute(sql`DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND}) OR sender_id IN (SELECT id FROM users WHERE ${TEST_USER_COND})`);
-      await tx.execute(sql`DELETE FROM activity_logs WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND}) OR action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE '%آزمایشی%'`);
+      await tx.execute(sql`DELETE FROM activity_logs WHERE user_id IN (SELECT id FROM users WHERE ${TEST_USER_COND}) OR action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE ${MARKER_PAT}`);
       await tx.execute(sql`DELETE FROM users WHERE ${TEST_USER_COND}`);
 
       console.log('✅ Purge completed inside transaction.');

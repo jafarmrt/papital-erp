@@ -4,6 +4,7 @@ import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import { formatPersianPrice, extractDateString } from '../../../utils';
+import { fetchJson } from '../../../api';
 import type { BankAccount } from '../../../types';
 
 interface TreasuryTransferModalProps {
@@ -24,11 +25,31 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
     fromBankAccountId: null as number | null,
     toBankAccountId: null as number | null,
     amount: 0,
-    date: new Date().toISOString().slice(0, 10),
+    date: '',
     trackingNumber: '',
     description: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+
+  // TD-105: تاریخ پیش‌فرض از سرور (ساعت توافقی) — نه ساعت مرورگر کلاینت
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetchJson<{ success: boolean; data: { today: string } }>('/api/system/business-date')
+      .then(res => {
+        const today = res?.data?.today;
+        if (!cancelled && today) {
+          setFormData(p => ({ ...p, date: today }));
+        }
+      })
+      .catch(() => {
+        // fallback: تاریخ مرورگر فقط در خطای شبکه (رفتار قدیمی)
+        if (!cancelled) {
+          setFormData(p => (p.date ? p : { ...p, date: new Date().toISOString().slice(0, 10) }));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -36,7 +57,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
         fromBankAccountId: null,
         toBankAccountId: null,
         amount: 0,
-        date: new Date().toISOString().slice(0, 10),
+        date: '',
         trackingNumber: '',
         description: '',
       });

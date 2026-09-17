@@ -211,11 +211,11 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
         type: 'received',
         chequeNumber: `CP-CHQ-${stamp}`,
         sayadNumber: `${stamp}`,
-        bankName: 'بانک آزمایشی',
+        bankName: 'ERP-TEST-MARKER بانک آزمایشی',
         issueDate: new Date().toISOString().split('T')[0],
         dueDate: new Date().toISOString().split('T')[0],
         amount: 500000,
-        partyName: 'طرف حساب چک آزمایشی',
+        partyName: 'ERP-TEST-MARKER طرف حساب چک آزمایشی',
         status: 'received'
       }).returning();
 

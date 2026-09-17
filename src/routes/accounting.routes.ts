@@ -713,7 +713,8 @@ router.get('/accounting/treasury', authorizePermission('accounting.treasury', 'a
 export const createTreasuryTxSchema = z.object({
   body: z.object({
     type: z.enum(['receipt', 'payment'], { message: 'نوع عملیات باید دریافت یا پرداخت باشد' }),
-    date: z.string().min(1, 'تاریخ تراکنش الزامی است'),
+    // TD-105: تاریخ اختیاری است — مقدار خالی با businessTodayIsoDate سرور پر می‌شود و بازه در سرویس اعتبارسنجی می‌شود
+    date: z.string().optional(),
     method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque'], { message: 'روش پرداخت نامعتبر است' }),
     amount: z.coerce.number().positive('مبلغ تراکنش باید بزرگتر از صفر باشد'),
     currency: z.string().optional().default('IRR'),
@@ -772,7 +773,8 @@ router.post('/accounting/treasury/preview-voucher', authorizePermission('account
 
 export const transferSchema = z.object({
   body: z.object({
-    date: z.string().min(1, 'تاریخ انتقال وجه الزامی است'),
+    // TD-105: تاریخ اختیاری است — مقدار خالی با businessTodayIsoDate سرور پر می‌شود و بازه در سرویس اعتبارسنجی می‌شود
+    date: z.string().optional(),
     amount: z.coerce.number().positive('مبلغ انتقال باید بزرگتر از صفر باشد'),
     currency: z.string().optional().default('IRR'),
     fromBankAccountId: z.coerce.number().int().positive('حساب مبدا الزامی است'),

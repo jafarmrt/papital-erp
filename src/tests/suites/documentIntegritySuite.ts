@@ -191,7 +191,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
       refNumber: `V9-REVAL-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       user: 'v9_regression',
-      buyerName: 'مشتری تست برگشت حسابداری',
+      buyerName: 'ERP-TEST-MARKER مشتری تست برگشت حسابداری',
       inOut: 'out',
       status: 'final',
       items: [{ itemId: item.id, quantity: 3, unit_price: 250000 }]
@@ -509,7 +509,7 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
         docType: 'invoice',
         refNumber: 'INV-TEST-402',
         date: '1405/06/25',
-        buyer_name: 'شرکت آزمایشی',
+        buyer_name: 'ERP-TEST-MARKER شرکت آزمایشی',
         currency: 'IRR',
         items: [
           { itemId: '10', quantity: '5', unit_price: '150000', discount: '5000' }

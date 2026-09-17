@@ -255,7 +255,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     // Valid balanced voucher
     const createdVoucher = await AccountingService.createJournalVoucher({
       date: new Date().toISOString().split('T')[0],
-      description: 'سند آزمایشی متوازن PostgreSQL',
+      description: 'ERP-TEST-MARKER سند آزمایشی متوازن PostgreSQL',
       items: [
         { accountId: accA.id, debit: 250000, credit: 0, description: 'ردیف بدهکار' },
         { accountId: accB.id, debit: 0, credit: 250000, description: 'ردیف بستانکار' }
@@ -270,7 +270,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     try {
       await AccountingService.createJournalVoucher({
         date: new Date().toISOString().split('T')[0],
-        description: 'سند آزمایشی ناهمتراز',
+        description: 'ERP-TEST-MARKER سند آزمایشی ناهمتراز',
         items: [
           { accountId: accA.id, debit: 250000, credit: 0 },
           { accountId: accB.id, debit: 0, credit: 100000 }
@@ -1016,7 +1016,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
 
     // Verify CRM Customer Accounting Read Model
     const [testCust] = await orm.insert(customers).values({
-      name: `مشتری سازمانی تست ${Date.now()}`,
+      name: `ERP-TEST-MARKER مشتری سازمانی تست ${Date.now()}`,
       phone: '09120000000',
       isDeleted: 0
     }).returning();
@@ -1153,7 +1153,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       entityType: 'voucher',
       draftKey: 'test_voucher_draft_01',
       payload: draftPayload,
-      summary: 'سند دوبل فروش آزمایشی'
+      summary: 'ERP-TEST-MARKER سند دوبل فروش آزمایشی'
     });
 
     if (!saveRes?.success || !saveRes.draft?.id) {

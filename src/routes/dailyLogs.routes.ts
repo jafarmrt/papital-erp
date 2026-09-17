@@ -6,6 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { jalaliToIsoDate } from '../utils.js';
+import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -247,7 +248,7 @@ router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHan
   const myLogs = allLogs.filter(l => l.userId === currentUserId);
   
   // Calculate total hours today for current user
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = await businessTodayIsoDate();
   const myTodayLogs = myLogs.filter(l => l.date === todayStr || l.createdAt?.startsWith(todayStr));
   const todayHours = myTodayLogs.reduce((acc, curr) => acc + (curr.workHours || 0), 0);
 
@@ -462,7 +463,7 @@ router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(cr
   const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : [];
   const tagsList = Array.isArray(tags) ? tags : [];
 
-  const rawDate = date || new Date().toISOString().slice(0, 10);
+  const rawDate = date || await businessTodayIsoDate();
   const computedDateIso = jalaliToIsoDate(rawDate) || rawDate.slice(0, 10);
 
   const [newLog] = await orm

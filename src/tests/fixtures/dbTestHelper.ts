@@ -6,6 +6,15 @@ import {
 } from '../../db/schema.js';
 import { sql, ilike, eq, and } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
+import { TEST_MARKER } from './testMarker.js';
+
+/**
+ * TD-107 (v4.0.31) — مارکر محوری به‌جای واژگان عمومی
+ * الگوهای واژگانی عمومی (ILIKE '%آزمایشی%' / '%تستی%' / '%TEST%' / '%استرس%' /
+ * '%فاز ۱۴%' / 'پرسنل تستی%' و ...) حذف شدند؛ رکوردهای تستی باید یا
+ * شناسه ساختاریافته (پیشوند کد) یا مارکر مرکزی TEST_MARKER داشته باشند.
+ */
+const MARKER_PAT = sql.raw(`'%${TEST_MARKER}%'`);
 
 export interface DbIsolationOptions {
   autoRollback?: boolean;
@@ -125,8 +134,8 @@ const TEST_DOC_COND = sql`(
   OR ref_number ILIKE 'DOC_RACE%' OR ref_number ILIKE 'PURCHASE-E2E-%' OR ref_number ILIKE 'INV-E2E-%'
   OR ref_number ILIKE 'WOO-ORDER-%' OR ref_number ILIKE 'E2E-%' OR ref_number ILIKE 'TEST-%'
   OR ref_number ILIKE 'V9-%' OR ref_number ILIKE 'V9\\_%' OR ref_number ILIKE 'DIAG-%'
-  OR notes ILIKE 'تست%' OR notes ILIKE '%آزمایشی%' OR notes ILIKE '%E2E%'
-  OR buyer_name ILIKE '%آزمایشی%' OR buyer_name ILIKE '%استرس%' OR buyer_name ILIKE '%مسابقه نهاییسازی%'
+  OR notes ILIKE ${MARKER_PAT} OR notes ILIKE '%E2E%'
+  OR buyer_name ILIKE ${MARKER_PAT} OR buyer_name ILIKE '%مسابقه نهاییسازی%'
   OR buyer_name ILIKE '%مشتری سازمانی تست%'
 )`;
 
@@ -135,8 +144,7 @@ const TEST_ITEM_COND = sql`(
   code ILIKE 'ITEM\\_%' OR code ILIKE 'STRESS-%' OR code ILIKE 'SILVER-%' OR code ILIKE 'NECKLACE-%'
   OR code ILIKE 'WOO-%' OR code ILIKE 'DIAG\\_%' OR code ILIKE 'V9\\_%' OR code ILIKE 'V9-%'
   OR code ILIKE '1405-N-101-%' OR code ILIKE 'V10-CANARY-%'
-  OR name ILIKE '%آزمایشی%' OR name ILIKE '%استرس%' OR name ILIKE '%فاز ۱۴%' OR name ILIKE '%فاز 14%'
-  OR name ILIKE '%تستی%'
+  OR name ILIKE ${MARKER_PAT}
 )`;
 
 export async function cleanupAllTestFixtures(): Promise<void> {
@@ -152,16 +160,16 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 1. Clear workflow dependencies & instances
   try {
-    await orm.execute(sql`DELETE FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%TEST%' OR title ILIKE '%E2E%'`);
+    await orm.execute(sql`DELETE FROM purchase_requisitions WHERE code ILIKE 'PR-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%'`);
     await orm.execute(sql`UPDATE purchase_requisitions SET workflow_instance_id = NULL`);
     await orm.execute(sql`DELETE FROM workflow_history_logs`);
     await orm.execute(sql`DELETE FROM workflow_tasks`);
     await orm.execute(sql`DELETE FROM workflow_pending_approvals`);
     await orm.execute(sql`DELETE FROM workflow_instances`);
     await orm.execute(sql`DELETE FROM workflow_delegations`);
-    await orm.execute(sql`DELETE FROM workflow_transitions WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE '%آزمایشی%')`);
-    await orm.execute(sql`DELETE FROM workflow_states WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE '%آزمایشی%')`);
-    await orm.execute(sql`DELETE FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM workflow_transitions WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT})`);
+    await orm.execute(sql`DELETE FROM workflow_states WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT})`);
+    await orm.execute(sql`DELETE FROM workflow_definitions WHERE code ILIKE 'WF_%' OR title ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning workflow fixtures: ${err.message}`);
   }
@@ -170,18 +178,18 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   try {
     // V3.0.7: تراکنش‌های خزانه‌ای ارجاع‌دهنده به فیش‌های تستی باید «قبل از» والد حذف شوند
     // (FK treasury_transactions.payroll_id در DBهایی که از db:pushschema کامل گرفته‌اند)
-    await orm.execute(sql`DELETE FROM treasury_transactions WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%')`);
-    await orm.execute(sql`DELETE FROM piecework_logs WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%') OR created_by_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR personnel_id IN (SELECT id FROM personnel WHERE full_name ILIKE '%آزمایشی%') OR notes ILIKE '%آزمایشی%'`);
-    await orm.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%'`);
-    // Personnel: only synthetic names (real workshop staff names like طلاساز/استادکار/جعفر/ناهید are NEVER matched)
-    await orm.execute(sql`DELETE FROM personnel WHERE full_name ILIKE '%آزمایشی%' OR full_name ILIKE '%فاز ۱۴%' OR full_name ILIKE '%فاز 14%' OR full_name ILIKE 'پرسنل تستی%'`);
+    await orm.execute(sql`DELETE FROM treasury_transactions WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`);
+    await orm.execute(sql`DELETE FROM piecework_logs WHERE payroll_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%') OR created_by_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%') OR personnel_id IN (SELECT id FROM personnel WHERE full_name ILIKE ${MARKER_PAT}) OR notes ILIKE ${MARKER_PAT}`);
+    await orm.execute(sql`DELETE FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR payroll_number ILIKE 'PAYROLL-E2E-%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%'`);
+    // Personnel: only marker-carried or synthetic-structured names (real workshop staff names like طلاساز/استادکار/جعفر/ناهید are NEVER matched)
+    await orm.execute(sql`DELETE FROM personnel WHERE full_name ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning piecework fixtures: ${err.message}`);
   }
 
   // 3. Clear project dependencies & production projects (scoped)
   try {
-    const TEST_PROJ_COND = sql`(project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE '%آزمایشی%' OR title ILIKE '%E2E%' OR title ILIKE '%فاز ۱۴%' OR title ILIKE '%فاز 14%')`;
+    const TEST_PROJ_COND = sql`(project_code ILIKE 'PROJ_%' OR project_code ILIKE 'E2E_%' OR project_code ILIKE 'PRJ_%' OR project_code ILIKE 'TEST_%' OR title ILIKE ${MARKER_PAT} OR title ILIKE '%E2E%')`;
     // V3.0.7 (TD-064): شرط user-scoped کافی است؛ الگوهای واژه‌ای روی title/content
     // گزارش واقعی روزانه حاوی واژه «تست» را نیز حذف می‌کردند.
     await orm.execute(sql`DELETE FROM daily_work_logs WHERE user_id IN (SELECT id FROM users WHERE username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%')`);
@@ -198,8 +206,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   // V3.0.7 (TD-064): الگوی وسیع '%تست%' روی عنوان سرنخ حذف شد؛ سرنخ‌های تستی
   // با پیشوند Lead_ یا واژه آزمایشی/شرکت آزمایشی پوشش داده می‌شوند.
   try {
-    await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR company ILIKE '%آزمایشی%')`);
-    await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE '%آزمایشی%' OR title ILIKE '%Lead_%' OR company ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM crm_activities WHERE lead_id IN (SELECT id FROM crm_leads WHERE title ILIKE ${MARKER_PAT} OR title ILIKE '%Lead_%' OR company ILIKE ${MARKER_PAT})`);
+    await orm.execute(sql`DELETE FROM crm_leads WHERE title ILIKE ${MARKER_PAT} OR title ILIKE '%Lead_%' OR company ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning CRM fixtures: ${err.message}`);
   }
@@ -208,8 +216,8 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   // Synthetic-voucher condition (aliased as "v"): includes reversals of synthetic originals,
   // but NEVER a legit manual reversal referencing a real voucher.
   const TEST_VOUCHER_COND = sql`(
-      v.description ILIKE '%آزمایشی%' OR v.description ILIKE '%E2E%' OR v.description ILIKE '%تست%'
-      OR v.description ILIKE '%مسابقه نهاییسازی%' OR v.description ILIKE '%آزمون تغییرناپذیری%'
+      v.description ILIKE ${MARKER_PAT} OR v.description ILIKE '%E2E%' OR v.description ILIKE '%مسابقه نهاییسازی%'
+      OR v.description ILIKE '%آزمون تغییرناپذیری%'
       OR v.description ILIKE '%سند ابطال و برگشت جهت بازثبت%' OR v.description ILIKE '%سند بازثبت‌شده (Repost)%'
       OR v.description ILIKE '%سند اولیه جهت تست برگشت%' OR v.description ILIKE '%سند آزمایشی متوازن%'
       OR v.reference_number ILIKE 'WOO-ORDER-%' OR v.reference_number ILIKE 'PURCHASE-E2E-%'
@@ -217,10 +225,10 @@ export async function cleanupAllTestFixtures(): Promise<void> {
       OR v.reference_number ILIKE 'CP-FIN-%' OR v.reference_number ILIKE 'VOID-REPOST-%'
       OR v.reference_number ILIKE 'REPOST-%' OR v.reference_number ILIKE 'REV-V%' OR v.reference_number ILIKE 'TEST-%'
       OR (v.reference_module = 'invoice' AND v.reference_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}))
-      OR (v.reference_module = 'payroll' AND v.reference_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE '%آزمایشی%'))
+      OR (v.reference_module = 'payroll' AND v.reference_id IN (SELECT id FROM piecework_payrolls WHERE payroll_number ILIKE 'PAY-%' OR title ILIKE ${MARKER_PAT}))
       OR (v.voucher_type = 'adjustment' AND v.reference_id IN (
         SELECT o.id FROM journal_vouchers o
-        WHERE o.description ILIKE '%آزمایشی%' OR o.description ILIKE '%E2E%' OR o.description ILIKE '%تست%'
+        WHERE o.description ILIKE ${MARKER_PAT} OR o.description ILIKE '%E2E%'
           OR o.reference_number ILIKE 'WOO-ORDER-%' OR o.reference_number ILIKE 'PURCHASE-E2E-%'
           OR o.reference_number ILIKE 'INV-E2E-%' OR o.reference_number ILIKE 'PAY-%' OR o.reference_number ILIKE 'V9-%'
           OR o.reference_number ILIKE 'CP-FIN-%' OR o.reference_number ILIKE 'REV-V%'
@@ -238,7 +246,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
   }
 
   try {
-    await orm.execute(sql`DELETE FROM treasury_transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR party_name ILIKE '%آزمایشی%' OR party_name ILIKE '%استرس%'`);
+    await orm.execute(sql`DELETE FROM treasury_transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR party_name ILIKE ${MARKER_PAT}`);
     await orm.execute(sql`DELETE FROM document_items WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND})`);
     await orm.execute(sql`DELETE FROM transactions WHERE document_id IN (SELECT id FROM documents WHERE ${TEST_DOC_COND}) OR item_id IN (SELECT id FROM items WHERE ${TEST_ITEM_COND}) OR document_ref ILIKE 'V9-%' OR document_ref ILIKE 'DIAG-%' OR document_ref ILIKE 'REVERSAL-%'`);
     await orm.execute(sql`DELETE FROM documents WHERE ${TEST_DOC_COND}`);
@@ -259,7 +267,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 7. Clear synthetic customers only
   try {
-    await orm.execute(sql`DELETE FROM customers WHERE name ILIKE '%آزمایشی%' OR name ILIKE '%طرف حساب آزمایشی%' OR name ILIKE 'مشتری سازمانی تست%' OR name ILIKE '%تست برگشت حسابداری%' OR notes ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM customers WHERE name ILIKE ${MARKER_PAT} OR notes ILIKE ${MARKER_PAT}`);
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Error cleaning customer fixtures: ${err.message}`);
   }
@@ -270,7 +278,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
     await orm.execute(sql`DELETE FROM dead_letter_events`);
     await orm.execute(sql`DELETE FROM idempotency_keys`);
     await orm.execute(sql`DELETE FROM event_action_logs`);
-    await orm.execute(sql`DELETE FROM activity_logs WHERE action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE '%آزمایشی%'`);
+    await orm.execute(sql`DELETE FROM activity_logs WHERE action ILIKE 'TEST%' OR details::text ILIKE '%E2E%' OR details::text ILIKE ${MARKER_PAT}`);
     await orm.delete(roles).where(and(ilike(roles.code, 'ROLE_%'), eq(roles.isSystem, 0)));
     await orm.delete(warehouses).where(ilike(warehouses.code, 'WH_%'));
   } catch (err: any) {
@@ -279,7 +287,7 @@ export async function cleanupAllTestFixtures(): Promise<void> {
 
   // 9. Clear test users (keep 'admin' and system users; bare %تست% on full_name removed)
   try {
-    const testUserCond = sql`(username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%' OR username ILIKE 'user_%' OR username ILIKE 'pen_admin%' OR username ILIKE 'sec009_%' OR username ILIKE 'v9_%' OR full_name ILIKE '%کاربر آزمایشی%')`;
+    const testUserCond = sql`(username ILIKE 'testuser_%' OR username ILIKE 'test_%' OR username ILIKE 'e2e_%' OR username ILIKE 'user_%' OR username ILIKE 'pen_admin%' OR username ILIKE 'sec009_%' OR username ILIKE 'v9_%' OR full_name ILIKE ${MARKER_PAT})`;
 
     await orm.execute(sql`DELETE FROM form_drafts WHERE user_id IN (SELECT id FROM users WHERE ${testUserCond})`);
     await orm.execute(sql`DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE ${testUserCond}) OR sender_id IN (SELECT id FROM users WHERE ${testUserCond})`);

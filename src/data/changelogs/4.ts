@@ -8,6 +8,27 @@ import { AIUpdateLog } from './types';
  */
 export const v4Updates: AIUpdateLog[] = [
   {
+    version: 'v4.0.31',
+    date: '۲۶ شهریور ۱۴۰۵',
+    title: 'بسته‌شدن فاز ۵ بدهی فنی: Business Clock در ۷ دامنه ثانویه، تاریخ سرور-authoritative خزانه، سرویس یگانه آزادسازی رزرو پروژه با OCC، پاکسازی تستی مارک‌محور و گیت‌های CI نسخه/کاورج',
+    summary: 'پنج بدهی رجیستری فعال در یک فاز منسجم بسته شد. (TD-104) هر ۷ دامنه ثانویه (گزارش روزانه، CRM، ترنسفرها، ووکامرس، اعلان‌ها، پرداخت حقوق و ترمیم موجودی) به businessClock مسیریابی شدند و fallback ناهمگون toJalaliToday (پاسخ ISO میلادی در مسیر جلالی) حذف گردید. (TD-105) تاریخ تراکنش‌های خزانه سرور-authoritative شد: سرویس resolveTreasuryBusinessDate با پیش‌فرض businessTodayIsoDate، نرمال‌سازی جلالی→ISO و رد تاریخ آینده/فرمت نامعتبر، مودال‌ها از اندپوینت جدید /system/business-date تغذیه می‌شوند. (TD-081) آزادسازی رزروهای پروژه از بلوک jsonb موازی در documents.routes به سرویس یگانه releaseProjectReservations با قفل سطری، OCC نسخه‌محور و audit با snapshot منتقل و با تست رگرسیون real-database تثبیت شد. (TD-107) پاکسازی تستی مارک‌محور شد: مارکر مرکزی TEST_MARKER جایگزین کلیه ILIKE واژگان عمومی (آزمایشی/تستی/TEST/استرس و...) در dbTestHelper و اسکریپت cleanup شد و فیکسچرهای factory مارک‌دار گردیدند. (TD-111) گیت fail-fast همگام‌سازی نسخه (check-version-sync.ts) در CI مستقر و گیت کاورج نرم (c8 + Step Summary، غیرمسدودکننده تا ثبت خط مبنا) افزوده شد.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🕐 TD-104: مسیریابی ۷ دامنه ثانویه به Business Clock — dailyLogs (۲ نقطه)، crm (activityDate‌ها + todayIso آمار + تایم‌استمپ‌ها)، transfers، woocommerce، notifications، inventoryStockRepair به businessTodayIsoDate/systemNowUtcIso',
+      '🩹 TD-104: حذف تابع toJalaliToday با fallback ناهمگون ISO در payrollPayment.service و جایگزینی با businessTodayJalaliDash (تاریخ پرداخت حقوق همیشه جلالی ساعت توافقی)',
+      '🏦 TD-105: helper سرور resolveTreasuryBusinessDate در سرویس خزانه — پیش‌فرض businessTodayIsoDate، نرمال‌سازی جلالی به ISO ذخیره‌سازی، رد تاریخ آینده و فرمت نامعتبر (بازه: گذشته تا امروز کسب‌وکار)',
+      '📡 TD-105: اندپوینت جدید GET /api/system/business-date (تاریخ و منطقه توافقی سرور) و تغذیه مودال‌های TreasuryTransaction/TreasuryTransfer از آن با fallback تاریخ مرورگر فقط در خطای شبکه',
+      '🔓 TD-081: سرویس یگانه ItemStockReservationService.releaseProjectReservations(tx, ...) — قفل سطری production_projects، OCC (checkOccVersion + بامپ اتمیک version در شرط UPDATE)، logActivity با snapshot قبل/بعد داخل همان tx',
+      '🧹 TD-081: حذف ~۷۰ خط کتابداری موازی jsonb از documents.routes.ts — نوشتن inventoryControl.reservedItems فقط از مسیر سرویس',
+      '🏷️ TD-107: مارکر مرکزی TEST_MARKER (src/tests/fixtures/testMarker.ts) و بازطراحی مارک‌محور پاکسازی — حذف کلیه ILIKE واژگان عمومی از dbTestHelper.ts و scripts/cleanup-test-data.ts و مارک‌دار کردن فیکسچرهای factories و ۷ سوییت',
+      '⚖️ TD-111: اسکریپت fail-fast scripts/check-version-sync.ts (npm run check:version) — همگامی package.json با SYSTEM_UPDATES[0] + گارد نسخه تکراری در سری فعال v4؛ مستقر در استیج CI پیش از typecheck',
+      '📊 گیت کاورج نرم: devDependency c8 + اسکریپت test:coverage و استیج CI غیرمسدودکننده (continue-on-error) با انتشار خط مبنا در Step Summary و آرتیفکت coverage'
+    ],
+    fixes: [
+      'پیشگیری از ثبت رکوردهای نیمه‌شب تا ۰۳:۳۰ با تاریخ روز قبل در ۷ دامنه ثانویه (شیفت UTC مرورگر)؛ پیشگیری از ثبت اسناد خزانه با تاریخ آینده/ناهمگون؛ بستن مسیر نوشتن موازی رزروهای پروژه که سبب drift سه‌گانه موجودی می‌شد؛ حذف ریسک حذف داده واقعی در پاکسازی تستی بر اساس واژگان عمومی؛ کشف خودکار واگرایی نسخه دو منبع حقیقت پیش از رسیدن به پروداکشن'
+    ]
+  },
+  {
     version: 'v4.0.30',
     date: '۲۷ شهریور ۱۴۰۵',
     title: 'لاغرسازی باندل و بهداشت وابستگی‌ها: حذف ~۵۰MB پکیج زائد، تفکیک باندل حسابداری از ۷۸۹ به ۵۰ کیلوبایت و اصلاح بوت پروداکشن',

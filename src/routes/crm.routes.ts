@@ -7,6 +7,7 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { parsePagination } from '../lib/pagination.js';
 import { getTodayJalaliDate, jalaliToIsoDate } from '../utils.js';
+import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -217,7 +218,7 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
   .where(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.stage, 'won')));
 
   // Followups due today or overdue
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = await businessTodayIsoDate();
   const pendingFollowups = await orm.select({
     count: sql<number>`count(*)`
   })
@@ -508,7 +509,7 @@ async function syncCustomerFromCRMLead(
   }
 
   // 3. Otherwise, create a new customer record in customers (طرفین حساب)
-  const createdAt = new Date().toISOString();
+  const createdAt = systemNowUtcIso();
   const [newCust] = await orm.insert(customers).values({
     name: primaryCustomerName,
     contactName: contactPersonName || cName,
@@ -587,7 +588,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
   );
 
-  const nowIso = new Date().toISOString();
+  const nowIso = systemNowUtcIso();
 
   const [newLead] = await orm.insert(crmLeads).values({
     title: title.trim(),
@@ -624,7 +625,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     title: 'ایجاد فرصت فروش',
     description: `پرونده فروش "${newLead.title}" توسط ${authorName} ایجاد شد.`,
     loggedBy: authorName,
-    activityDate: new Date().toISOString().split('T')[0],
+    activityDate: await businessTodayIsoDate(),
     createdAt: nowIso,
     isDeleted: 0
   });
@@ -697,7 +698,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
   );
 
-  const nowIso = new Date().toISOString();
+  const nowIso = systemNowUtcIso();
   
   // VALIDATION: Prevent moving to 'won' if no proforma exists
   if (stage === 'won' && existing.stage !== 'won') {
@@ -751,7 +752,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
       title: 'تغییر مرحله فروش',
       description: `مرحله فروش از "${stageLabels[existing.stage] || existing.stage}" به "${stageLabels[stage] || stage}" تغییر یافت.`,
       loggedBy: authorName,
-      activityDate: new Date().toISOString().split('T')[0],
+      activityDate: await businessTodayIsoDate(),
       createdAt: nowIso,
       isDeleted: 0
     });
@@ -792,7 +793,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
     { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
   );
 
-  const nowIso = new Date().toISOString();
+  const nowIso = systemNowUtcIso();
   // V10-4.3: قانون نرم — تبدیل به مشتری هرگز وضعیت «موفق» را از بین نمی‌برد (بدون تقدم اجباری proposal/active)
   const preserveWonState = lead.stage === 'won' || lead.status === 'won';
   const [updated] = await orm.update(crmLeads).set({
@@ -817,7 +818,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
     title: 'تبدیل لید به مشتری و صدور پیش‌فاکتور',
     description: `پرونده فروش CRM "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
     loggedBy: authorName,
-    activityDate: new Date().toISOString().split('T')[0],
+    activityDate: await businessTodayIsoDate(),
     createdAt: nowIso,
     isDeleted: 0
   });
@@ -937,8 +938,8 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
 
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
-  const nowIso = new Date().toISOString();
-  const todayStr = activityDate || nowIso.split('T')[0];
+  const nowIso = systemNowUtcIso();
+  const todayStr = activityDate || await businessTodayIsoDate();
   const actDateIso = jalaliToIsoDate(todayStr) || (todayStr.includes('-') ? todayStr.slice(0, 10) : nowIso.slice(0, 10));
   const nextFollowIso = nextFollowUpDate ? (jalaliToIsoDate(nextFollowUpDate) || (nextFollowUpDate.includes('-') ? nextFollowUpDate.slice(0, 10) : null)) : null;
 

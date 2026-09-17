@@ -2,6 +2,9 @@ import { sql, eq, and, or, inArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, productionProjects, documents, documentItems } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
+import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { systemNowUtcIso } from '../../lib/businessClock.js';
 
 export interface ReservedItemDetail {
   id: string;
@@ -282,6 +285,156 @@ export class ItemStockReservationService {
     }
 
     return ItemStockReservationService.deriveProjectReservedItems(invControl, itemsByCodeMap, itemsByNameMap, itemsByIdMap);
+  }
+
+  /**
+   * TD-081 (v4.0.31): مسیر رسمی و یگانه آزادسازی رزروهای پروژه هنگام حواله خروج.
+   * - jsonb `inventory_control.reservedItems` فقط از همین سرویس نوشته می‌شود (read-model نه write-path موازی)
+   * - OCC: قفل سطری + کنترل نسخه (expectedVersion) + بامپ اتمیک version
+   * - Audit: logActivity با snapshot قبل/بعد داخل همان executor (tx)
+   */
+  static async releaseProjectReservations(
+    tx: { select: Function; update: Function },
+    params: {
+      projectId: number;
+      docItems: Array<{ itemId?: unknown; itemCode?: unknown; itemName?: unknown; quantity: number }>;
+      expectedVersion?: number;
+      docId?: number | null;
+      userId?: number;
+      username?: string;
+    }
+  ): Promise<{
+    changed: boolean;
+    releasedItemIds: number[];
+    remainingReservedCount: number;
+    projectVersion: number;
+  }> {
+    const projId = Number(params.projectId);
+    if (!projId || Number.isNaN(projId)) {
+      throw new OptimisticLockError({
+        entityType: 'production_project',
+        entityId: projId,
+        expectedVersion: 0,
+        message: 'شناسه پروژه برای آزادسازی رزرو معتبر نیست'
+      });
+    }
+
+    // 1. قفل سطری پروژه (ترتیب قفل: production_projects سطح پروژه، مطابق سلسله‌مراتب)
+    const [proj] = await (tx as any).select()
+      .from(productionProjects)
+      .where(and(eq(productionProjects.id, projId), eq(productionProjects.isDeleted, 0)))
+      .for('update');
+
+    if (!proj) {
+      throw new OptimisticLockError({
+        entityType: 'production_project',
+        entityId: projId,
+        expectedVersion: params.expectedVersion ?? 1,
+        message: `پروژه #${projId} برای آزادسازی رزرو یافت نشد`
+      });
+    }
+
+    // 2. OCC — نسخه خوانده‌شده توسط فراخواننده باید با نسخه تحت قفل برابر باشد
+    checkOccVersion(proj, {
+      entityType: 'production_project',
+      entityId: proj.id,
+      expectedVersion: params.expectedVersion ?? proj.version
+    });
+
+    const invControl = (proj.inventoryControl as InventoryControlData) || {};
+    let reservedList: InventoryControlItem[] = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
+      ? [...invControl.reservedItems]
+      : (await ItemStockReservationService.getProjectReservedItems(proj)) as InventoryControlItem[];
+
+    // 3. مپینگ اقلام سند
+    const rawItemIds = Array.from(new Set(
+      params.docItems
+        .map(l => Number(l.itemId))
+        .filter((id: number) => !isNaN(id) && id > 0)
+    )) as number[];
+
+    let itemDataMap = new Map<number, typeof items.$inferSelect>();
+    if (rawItemIds.length > 0) {
+      const fetchedItems = await (tx as any).select().from(items).where(inArray(items.id, rawItemIds));
+      itemDataMap = new Map(fetchedItems.map((it: typeof items.$inferSelect) => [it.id, it]));
+    }
+
+    // 4. کسر رزرو هر ردیف سند (تطبیق id/code/name — منطق انتقال‌یافته از documents.routes)
+    const releasedItemIds: number[] = [];
+    for (const docLine of params.docItems) {
+      const lineQty = Number(docLine.quantity || 0);
+      if (lineQty <= 0) continue;
+      const itemData = itemDataMap.get(Number(docLine.itemId));
+      if (!itemData) continue;
+
+      const resIdx = reservedList.findIndex((r: { itemId?: unknown; itemCode?: unknown; itemName?: unknown }) =>
+        (r.itemId && itemData.id && Number(r.itemId) === Number(itemData.id)) ||
+        (r.itemCode && itemData.code && String(r.itemCode).trim().toLowerCase() === String(itemData.code).trim().toLowerCase()) ||
+        (r.itemName && itemData.name && String(r.itemName).trim().toLowerCase() === String(itemData.name).trim().toLowerCase())
+      );
+
+      if (resIdx !== -1) {
+        const currentResQty = Number(reservedList[resIdx].reservedQty || 0);
+        const newResQty = Math.max(0, currentResQty - lineQty);
+        if (newResQty > 0) {
+          reservedList[resIdx] = { ...reservedList[resIdx], reservedQty: newResQty };
+        } else {
+          reservedList.splice(resIdx, 1);
+        }
+        releasedItemIds.push(itemData.id);
+      }
+    }
+
+    const changed = releasedItemIds.length > 0;
+    if (changed) {
+      const updatedInvControl = {
+        ...invControl,
+        reservedItems: reservedList,
+        isReserved: reservedList.length > 0,
+        lastUpdated: systemNowUtcIso()
+      };
+
+      // 5. بامپ اتمیک version در شرط UPDATE (دفاع دوم OCC در سطح SQL)
+      const [updatedRow] = await (tx as any).update(productionProjects)
+        .set({
+          inventoryControl: updatedInvControl,
+          version: nextVersion(proj.version)
+        })
+        .where(and(eq(productionProjects.id, proj.id), eq(productionProjects.version, proj.version)))
+        .returning({ id: productionProjects.id });
+
+      if (!updatedRow) {
+        throw new OptimisticLockError({
+          entityType: 'production_project',
+          entityId: proj.id,
+          expectedVersion: proj.version,
+          message: `به‌روزرسانی رزروهای پروژه #${proj.id} به دلیل تغییر همزمان نسخه انجام نشد`
+        });
+      }
+
+      await logActivity({
+        userId: params.userId,
+        username: params.username || 'سیستم',
+        action: 'UPDATE',
+        entity: 'کنترل موجودی پروژه',
+        entityId: String(proj.id),
+        description: `آزادسازی رزرو ${releasedItemIds.length} قلم کالای پروژه «${proj.title || proj.projectCode || proj.id}» بابت حواله خروج${params.docId ? ` سند #${params.docId}` : ''}`,
+        details: {
+          before: { reservedItems: invControl.reservedItems || [], version: proj.version },
+          after: { reservedItems: reservedList, version: nextVersion(proj.version) },
+          releasedItemIds,
+          documentId: params.docId ?? null
+        },
+        tx
+      });
+    }
+
+    return {
+      changed,
+      releasedItemIds,
+      remainingReservedCount: reservedList.length,
+      projectVersion: nextVersion(proj.version)
+    };
   }
 
   /**

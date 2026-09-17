@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "4.0.30",
+  "version": "4.0.31",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -21,7 +21,9 @@
     "db:baseline": "tsx scripts/build-baseline.ts",
     "db:cleanup-test": "tsx scripts/cleanup-test-data.ts",
     "lint": "tsc --noEmit",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "check:version": "tsx scripts/check-version-sync.ts",
+    "test:coverage": "c8 --reporter=text --reporter=text-summary --reporter=json-summary --include=src --include=server.ts --exclude=src/tests/** tsx scripts/run-tests.ts"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.3.0",
@@ -72,6 +74,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
+    "c8": "^12.0.0",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.25.0",
     "rollup-plugin-visualizer": "^7.1.1",

@@ -4,6 +4,7 @@ import { orm } from '../db/drizzle.js';
 import { notifications, crmActivities, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { getTodayJalaliDate } from '../utils.js';
+import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -28,7 +29,7 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
     const username = (u.username || '').trim();
 
     const todayJalali = getTodayJalaliDate();
-    const todayGregorian = new Date().toISOString().split('T')[0];
+    const todayGregorian = await businessTodayIsoDate();
 
     const pendingActs = await orm
       .select()

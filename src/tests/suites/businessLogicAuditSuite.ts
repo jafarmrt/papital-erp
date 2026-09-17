@@ -871,7 +871,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       action: 'CREATE',
       entity: 'آزمون ممیزی',
       entityId: 'test_strict_1',
-      description: 'ثبت آزمایشی ممیزی با strict=true',
+      description: 'ERP-TEST-MARKER ثبت آزمایشی ممیزی با strict=true',
       details: { token: 'secret_jwt_token', password: '123', safeField: 'ok' },
       strict: true,
       username: 'test_runner'
@@ -912,7 +912,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     // A: Routine non-critical log (should be purged)
     const [routineLog] = await orm.insert(activityLogs).values({
       action: 'VIEW',
-      entity: 'گزارش آزمایشی',
+      entity: 'ERP-TEST-MARKER گزارش آزمایشی',
       entityId: 'test_view_1',
       description: 'مشاهده گزارش عادی تاریخی',
       timestamp: pastTimestamp,

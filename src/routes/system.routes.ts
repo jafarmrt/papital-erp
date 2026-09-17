@@ -48,6 +48,19 @@ const clearDataSchema = z.object({
 
 router.use(authenticateToken);
 
+// TD-105 (v4.0.31): تاریخ امروز کسب‌وکار از ساعت توافقی سرور — مرجع پیش‌فرض
+// مودال‌های خزانه‌داری به‌جای new Date().toISOString() مرورگر کلاینت
+router.get('/system/business-date', async (req, res) => {
+  const { businessTodayIsoDate, getDisplayTimezone } = await import('../lib/businessClock.js');
+  res.json({
+    success: true,
+    data: {
+      today: await businessTodayIsoDate(),
+      timezone: await getDisplayTimezone()
+    }
+  });
+});
+
 // V1.1.1: وضعیت محیط و فلگ‌های سیستمی — فقط set/not-set؛ هرگز مقدار secret ها
 router.get('/system/env', authorize('admin'), async (req, res) => {
   await logActivity({

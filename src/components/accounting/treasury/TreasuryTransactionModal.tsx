@@ -32,7 +32,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
 }) => {
   const [formData, setFormData] = useState({
     type,
-    date: new Date().toISOString().slice(0, 10),
+    date: '',
     bankAccountId: null as number | null,
     partyType: 'customer' as 'customer' | 'supplier' | 'personnel' | 'other',
     partyId: null as number | null,
@@ -50,13 +50,32 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   const [voucherPreview, setVoucherPreview] = useState<any>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
+  // TD-105: تاریخ پیش‌فرض از سرور (ساعت توافقی) — نه ساعت مرورگر کلاینت
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetchJson<{ success: boolean; data: { today: string } }>('/api/system/business-date')
+      .then(res => {
+        const today = res?.data?.today;
+        if (!cancelled && today) {
+          setFormData(prev => ({ ...prev, date: today }));
+        }
+      })
+      .catch(() => {
+        // fallback: تاریخ مرورگر فقط در خطای شبکه (رفتار قدیمی)
+        if (!cancelled) {
+          setFormData(prev => (prev.date ? prev : { ...prev, date: new Date().toISOString().slice(0, 10) }));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   // Sync type when modal opens
   useEffect(() => {
     if (isOpen) {
       setFormData(prev => ({
         ...prev,
         type,
-        date: new Date().toISOString().slice(0, 10),
         amount: 0,
         trackingNumber: '',
         description: '',

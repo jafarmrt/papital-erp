@@ -3,6 +3,7 @@ import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
 
 export class InventoryStockRepairService {
   /**
@@ -33,7 +34,7 @@ export class InventoryStockRepairService {
       throw new Error('مبداء و مقصد انتقال نمی‌توانند یکسان باشند.');
     }
 
-    const txDate = params.date || new Date().toISOString().split('T')[0];
+    const txDate = params.date || await businessTodayIsoDate();
     const operatorName = params.user || params.createdBy || 'سیستم';
 
     return await orm.transaction(async (txEngine) => {

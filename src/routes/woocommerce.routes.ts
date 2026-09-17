@@ -15,6 +15,7 @@ import { OutboxService } from '../services/events/outboxService.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
+import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 
 const router = Router();
 
@@ -309,7 +310,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
       
       if (existingLogs.length > 0) {
         await tx.update(woocommerceOrderLogs)
-          .set({ status: 'failed', errorMessage: errMessage, updatedAt: new Date().toISOString() })
+          .set({ status: 'failed', errorMessage: errMessage, updatedAt: systemNowUtcIso() })
           .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId));
       } else {
         try {
@@ -328,7 +329,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
       throw new Error(errMessage);
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = await businessTodayIsoDate();
     // V9-P0: refNumber و سند فاکتور هر دو داخل همان تراکنش اتمیک پردازش سفارش تولید می‌شوند
     const nextRef = await DocumentService.getNextRef('invoice', todayStr, tx);
 
@@ -365,7 +366,7 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
           totalAmount: orderTotalNumeric,
           payload: wcOrder,
           errorMessage: '',
-          updatedAt: new Date().toISOString()
+          updatedAt: systemNowUtcIso()
         })
         .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId));
     } else {

@@ -11,8 +11,8 @@ import { logger } from '../middleware/logger.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
-import { crmLeads, crmActivities, productionProjects, items, documents } from '../db/schema.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { crmLeads, crmActivities, items, documents } from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 import { getTodayJalaliDate } from '../utils.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -280,73 +280,19 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
     await orm.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, newDocId));
   }
 
-  // If exit remittance document for a project, deduct/clear reserved items from project inventory control
+  // If exit remittance document for a project, release reserved items via the official service (TD-081)
   if (req.body.inOut === 'out' && req.body.projectId) {
     try {
       const targetProjId = Number(req.body.projectId);
-      if (targetProjId && !isNaN(targetProjId)) {
-        const [targetProj] = await orm
-          .select()
-          .from(productionProjects)
-          .where(and(eq(productionProjects.id, targetProjId), eq(productionProjects.isDeleted, 0)));
-
-        if (targetProj) {
-          const invControl = (targetProj.inventoryControl as any) || {};
-          let reservedList = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
-            ? [...invControl.reservedItems]
-            : await ItemStockReservationService.getProjectReservedItems(targetProj);
-          let changed = false;
-
-          const rawDocItems = (req.body.items || []).filter((l: any) => Number(l.quantity || 0) > 0);
-          const rawItemIds = Array.from(new Set(
-            rawDocItems.map((l: any) => Number(l.itemId)).filter((id: number) => !isNaN(id) && id > 0)
-          )) as number[];
-
-          let itemDataMap = new Map<number, typeof items.$inferSelect>();
-          if (rawItemIds.length > 0) {
-            const fetchedItems = await orm.select().from(items).where(inArray(items.id, rawItemIds));
-            itemDataMap = new Map(fetchedItems.map(it => [it.id, it]));
-          }
-
-          for (const docLine of rawDocItems) {
-            const lineQty = Number(docLine.quantity || 0);
-            const itemData = itemDataMap.get(Number(docLine.itemId));
-            if (!itemData) continue;
-
-            const resIdx = reservedList.findIndex((r: { itemId?: unknown; itemCode?: unknown; itemName?: unknown }) =>
-              (r.itemId && itemData.id && Number(r.itemId) === Number(itemData.id)) ||
-              (r.itemCode && itemData.code && String(r.itemCode).trim().toLowerCase() === String(itemData.code).trim().toLowerCase()) ||
-              (r.itemName && itemData.name && String(r.itemName).trim().toLowerCase() === String(itemData.name).trim().toLowerCase())
-            );
-
-            if (resIdx !== -1) {
-              changed = true;
-              const currentResQty = Number(reservedList[resIdx].reservedQty || 0);
-              const newResQty = Math.max(0, currentResQty - lineQty);
-              if (newResQty > 0) {
-                reservedList[resIdx] = {
-                  ...reservedList[resIdx],
-                  reservedQty: newResQty
-                };
-              } else {
-                reservedList.splice(resIdx, 1);
-              }
-            }
-          }
-
-          if (changed) {
-            const updatedInvControl = {
-              ...invControl,
-              reservedItems: reservedList,
-              isReserved: reservedList.length > 0,
-              lastUpdated: new Date().toISOString()
-            };
-
-            await orm.update(productionProjects).set({
-              inventoryControl: updatedInvControl
-            }).where(eq(productionProjects.id, targetProjId));
-          }
-        }
+      const rawDocItems = (req.body.items || []).filter((l: any) => Number(l.quantity || 0) > 0);
+      if (targetProjId && !isNaN(targetProjId) && rawDocItems.length > 0) {
+        await ItemStockReservationService.releaseProjectReservations(orm, {
+          projectId: targetProjId,
+          docItems: rawDocItems.map((l: any) => ({ itemId: l.itemId, quantity: Number(l.quantity || 0) })),
+          docId: newDocId,
+          userId: req.user?.id,
+          username: req.user?.username || req.user?.full_name
+        });
       }
     } catch (projDeductErr) {
       logger.error({ message: 'Error deducting project reservation on document create', error: projDeductErr });

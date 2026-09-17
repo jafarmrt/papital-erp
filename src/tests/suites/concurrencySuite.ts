@@ -878,7 +878,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     if (!task) {
       const [newTask] = await orm.insert(pieceworkTasks).values({
         code: `TASK_${Date.now()}`,
-        title: 'تسک آزمایشی همزمانی',
+        title: 'ERP-TEST-MARKER تسک آزمایشی همزمانی',
         defaultRate: 50000,
         unit: 'عدد',
         isDeleted: 0
@@ -942,7 +942,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
             personnelId: testWorker.id,
             startDate: '1405/01/01',
             endDate: '1405/01/30',
-            title: 'فیش آزمایشی همزمانی',
+            title: 'ERP-TEST-MARKER فیش آزمایشی همزمانی',
             totalPieceworkAmount: 500000,
             totalFixedAmount: 0,
             totalBonuses: 0,
