@@ -2,11 +2,17 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production' || process.env.NODE_ENV === 'production';
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // v4.0.30: آنالیز ترکیب باندل فقط با VISUALIZE=1 → خروجی dist/bundle-stats.html
+      ...(process.env.VISUALIZE === '1' ? [visualizer({ filename: 'dist/bundle-stats.html', gzipSize: true, brotliSize: true })] : []),
+    ],
     esbuild: {
       drop: isProd ? ['console', 'debugger'] : [],
     },
@@ -44,14 +50,8 @@ export default defineConfig(({ mode }) => {
               if (id.includes('@tanstack/react-query')) {
                 return 'vendor-query';
               }
-              if (id.includes('firebase')) {
-                return 'vendor-firebase';
-              }
               if (id.includes('xlsx')) {
                 return 'vendor-excel';
-              }
-              if (id.includes('motion')) {
-                return 'vendor-motion';
               }
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';

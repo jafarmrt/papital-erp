@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import 'dotenv/config';
 
 import { logger } from './src/middleware/logger.js';
@@ -76,7 +75,11 @@ async function startServer() {
   app.use(express.static(path.join(process.cwd(), 'public')));
 
   // ======== Vite Middleware ========
+  // v4.0.30: import استاتیک vite حذف شد — باندل پروداکشن (--packages=external)
+  // هنگام بوت require('vite') می‌کند که در image بدون devDependencies کرش می‌دهد.
+  // حالا فقط در حالت توسعه به‌صورت dynamic import بارگذاری می‌شود.
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

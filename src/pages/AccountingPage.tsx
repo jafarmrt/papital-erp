@@ -1,24 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAccounting } from '../hooks/useAccounting';
 import { AccountingDashboard } from '../components/accounting/AccountingDashboard';
-import { ChartOfAccountsTab } from '../components/accounting/ChartOfAccountsTab';
-import { JournalVouchersTab } from '../components/accounting/JournalVouchersTab';
-import { BankAndTreasuryTab } from '../components/accounting/BankAndTreasuryTab';
-import { ChequesTab } from '../components/accounting/ChequesTab';
-import { FinancialReportsTab } from '../components/accounting/FinancialReportsTab';
-import { FiscalYearClosingTab } from '../components/accounting/FiscalYearClosingTab';
-import { AccountExplorerTab } from '../components/accounting/AccountExplorerTab';
-import { NewVoucherModal } from '../components/accounting/NewVoucherModal';
-import { VoucherPrintModal } from '../components/accounting/VoucherPrintModal';
 import { SectionErrorBoundary } from '../components/common';
-import { 
-  Calculator, 
-  RefreshCw, 
-  Plus, 
-  ShieldAlert
+import {
+  Calculator,
+  RefreshCw,
+  Plus,
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { User } from '../types';
+
+// v4.0.30: تفکیک chunk تب‌های سنگین حسابداری — هر تب هنگام کلیک بارگذاری می‌شود
+const ChartOfAccountsTab = lazy(() => import('../components/accounting/ChartOfAccountsTab').then(m => ({ default: m.ChartOfAccountsTab })));
+const JournalVouchersTab = lazy(() => import('../components/accounting/JournalVouchersTab').then(m => ({ default: m.JournalVouchersTab })));
+const BankAndTreasuryTab = lazy(() => import('../components/accounting/BankAndTreasuryTab').then(m => ({ default: m.BankAndTreasuryTab })));
+const ChequesTab = lazy(() => import('../components/accounting/ChequesTab').then(m => ({ default: m.ChequesTab })));
+const FinancialReportsTab = lazy(() => import('../components/accounting/FinancialReportsTab').then(m => ({ default: m.FinancialReportsTab })));
+const FiscalYearClosingTab = lazy(() => import('../components/accounting/FiscalYearClosingTab').then(m => ({ default: m.FiscalYearClosingTab })));
+const AccountExplorerTab = lazy(() => import('../components/accounting/AccountExplorerTab').then(m => ({ default: m.AccountExplorerTab })));
+const NewVoucherModal = lazy(() => import('../components/accounting/NewVoucherModal').then(m => ({ default: m.NewVoucherModal })));
+const VoucherPrintModal = lazy(() => import('../components/accounting/VoucherPrintModal').then(m => ({ default: m.VoucherPrintModal })));
 
 interface AccountingPageProps {
   userPermissions?: { role?: string; roleName?: string; permissions: string[]; isAdmin: boolean };
@@ -199,6 +202,14 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
           description="در پردازش یا نمایش اطلاعات این بخش خطایی رخ داده است. می‌توانید با استفاده از دکمه زیر مجدداً تلاش نمایید."
         >
           {/* Main Content Area */}
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                در حال بارگذاری بخش مالی...
+              </div>
+            }
+          >
           {currentTab === 'dashboard' && (
             <AccountingDashboard
               stats={stats}
@@ -330,29 +341,34 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onPrintVoucher={v => setPrintingVoucher(v)}
             />
           )}
+          </Suspense>
         </SectionErrorBoundary>
       )}
 
-      {/* New / Edit Voucher Modal */}
-      <NewVoucherModal
-        isOpen={isNewVoucherModalOpen}
-        onClose={() => {
-          setIsNewVoucherModalOpen(false);
-          setEditingVoucher(null);
-        }}
-        accounts={accounts}
-        customers={customers}
-        personnelList={personnelList}
-        onSave={handleSaveVoucher}
-        editingVoucher={editingVoucher}
-      />
+      {/* New / Edit Voucher Modal — فقط هنگام باز بودن mount می‌شود تا chunk آن defer شود */}
+      {isNewVoucherModalOpen && (
+        <NewVoucherModal
+          isOpen
+          onClose={() => {
+            setIsNewVoucherModalOpen(false);
+            setEditingVoucher(null);
+          }}
+          accounts={accounts}
+          customers={customers}
+          personnelList={personnelList}
+          onSave={handleSaveVoucher}
+          editingVoucher={editingVoucher}
+        />
+      )}
 
       {/* Print Voucher Modal */}
-      <VoucherPrintModal
-        isOpen={!!printingVoucher}
-        voucher={printingVoucher}
-        onClose={() => setPrintingVoucher(null)}
-      />
+      {printingVoucher && (
+        <VoucherPrintModal
+          isOpen
+          voucher={printingVoucher}
+          onClose={() => setPrintingVoucher(null)}
+        />
+      )}
     </div>
   );
 }

@@ -8,6 +8,24 @@ import { AIUpdateLog } from './types';
  */
 export const v4Updates: AIUpdateLog[] = [
   {
+    version: 'v4.0.30',
+    date: '۲۷ شهریور ۱۴۰۵',
+    title: 'لاغرسازی باندل و بهداشت وابستگی‌ها: حذف ~۵۰MB پکیج زائد، تفکیک باندل حسابداری از ۷۸۹ به ۵۰ کیلوبایت و اصلاح بوت پروداکشن',
+    summary: 'ممیزی اندازه‌گیری‌شده حجم نشان داد ۵ پکیج (firebase، firebase-admin، @google/genai، motion، @woocommerce/woocommerce-rest-api) بدون هیچ ارجاعی در کد، حدود ۵۰ مگابایت از node_modules و تصویر استقرار را مصرف می‌کنند — همگی حذف شدند. وابستگی‌های build-time (vite، پلاگین‌ها، supertest) به devDependencies منتقل شدند و برای پشتیبانی از image پروداکشن بدون toolchain، فراخوانی استاتیک vite در server.ts به dynamic import شرطی حالت توسعه تبدیل و با smoke-test بوت NODE_ENV=production (پاسخ 200 از /health/live بدون vite) اعتبارسنجی گردید. در همین راستا یک phantom dependency واقعی کشف شد: axios بدون اعلام صریح مصرف می‌شد (وابسته گذرای پکیج حذف‌شده بود) که اکنون به‌صورت صریح اعلان شد. خروجی Client Bundle نیز تفکیک شد: صفحه حسابداری (بزرگ‌ترین chunk با ۷۸۹KB) با lazy-split هشت تب، به ورودی ۵۰KB رسید و هر تب به chunk مستقل تبدیل شد. قواعد manualChunks منسوخ (firebase/motion) حذف و ابزار آنالیز VISUALIZE=1 مستقر گردید.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🧨 حذف ۵ پکیج زائد از dependencies: firebase (34.9MB)، @google/genai (10.8MB)، firebase-admin (1.3MB)، motion و @woocommerce/woocommerce-rest-api — صفر ارجاع در کل کد',
+      '📦 انتقال vite، @vitejs/plugin-react، @tailwindcss/vite و supertest به devDependencies برای image پروداکشن بدون toolchain',
+      '🧵 اصلاح server.ts: import استاتیک vite به await import شرطی حالت توسعه تبدیل شد (پیشگیری از کرش require("vite") در بوت پروداکشن) و با smoke-test تایید شد',
+      '🩹 اعلان صریح axios (phantom dependency کشف‌شده حین حذف پکیج‌ها که در woocommerce.routes مصرف واقعی دارد)',
+      '✂️ تفکیک AccountingPage از ۷۸۹KB به ورودی ۵۰KB با lazy-load ۹ تب/مودال سنگین (FinancialReports ۲۴۵KB، BankAndTreasury ۱۷۳KB و...) با Suspense و لودر اختصاصی',
+      '📊 افزودن rollup-plugin-visualizer با فعال‌سازی شرطی VISUALIZE=1 (خروجی dist/bundle-stats.html) و حذف manualChunks منسوخ firebase/motion'
+    ],
+    fixes: [
+      'پیشگیری از کرش بوت سرور پروداکشن بدون devDependencies (require("vite"))؛ فیکس وابستگی ظاهری axios؛ ورودی صفحه حسابداری ۹۴٪ سبک‌تر شد و بار اول کلیک کاربر روی هر تب مالی به chunk مستقل منتقل شد'
+    ]
+  },
+  {
     version: 'v4.0.29',
     date: '۲۷ شهریور ۱۴۰۵',
     title: 'ممیزی جامع کد مرده و پاکسازی ساختاری: حذف ۳۲ روت مرده، ۷۴۴ ایمپورت بلااستفاده، کد مرده سرویس‌ها و یکپارچه‌سازی dual-storage چنج‌لاگ',
