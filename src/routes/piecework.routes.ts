@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { orm } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, taskCategories, productionProjects, journalVouchers } from '../db/schema.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, taskCategories, productionProjects, journalVouchers, treasuryTransactions, bankAccounts } from '../db/schema.js';
 import { eq, and, desc, or, sql, inArray } from 'drizzle-orm';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
@@ -1139,6 +1139,7 @@ router.get('/piecework/payrolls', async (req, res) => {
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
+      paidAmount: pieceworkPayrolls.paidAmount,
       status: pieceworkPayrolls.status,
       paymentDate: pieceworkPayrolls.paymentDate,
       paymentMethod: pieceworkPayrolls.paymentMethod,
@@ -1322,6 +1323,7 @@ router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res)
       totalBonuses: pieceworkPayrolls.totalBonuses,
       totalDeductions: pieceworkPayrolls.totalDeductions,
       netPayable: pieceworkPayrolls.netPayable,
+      paidAmount: pieceworkPayrolls.paidAmount,
       status: pieceworkPayrolls.status,
       paymentDate: pieceworkPayrolls.paymentDate,
       paymentMethod: pieceworkPayrolls.paymentMethod,
@@ -1689,11 +1691,61 @@ router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.man
 
     res.json({
       success: true,
-      message: `پرداخت فیش ${result.payroll.payrollNumber} ثبت شد؛ تراکنش خزانه ${result.transactionNumber} و سند تسویه صادر گردید.`,
+      message: result.isFullyPaid
+        ? `پرداخت فیش ${result.payroll.payrollNumber} با موفقیت تسویه کامل شد؛ تراکنش خزانه ${result.transactionNumber} و سند تسویه صادر گردید.`
+        : `پرداخت مرحله‌ای فیش ${result.payroll.payrollNumber} ثبت شد (مانده: ${result.remainingAmount.toLocaleString('fa-IR')} ریال)؛ تراکنش خزانه ${result.transactionNumber} صادر گردید.`,
       ...result
     });
   } catch (err) {
     logger.error({ message: 'Error registering payroll payment', error: err });
+    throw err;
+  }
+});
+
+// GET /api/piecework/payrolls/:id/payments — V4.0.33: دریافت سابقه اقساط و پرداخت‌های خزانه‌ای متصل به یک فیش
+router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const txs = await orm.select({
+      id: treasuryTransactions.id,
+      transactionNumber: treasuryTransactions.transactionNumber,
+      date: treasuryTransactions.date,
+      method: treasuryTransactions.method,
+      amount: treasuryTransactions.amount,
+      currency: treasuryTransactions.currency,
+      bankAccountId: treasuryTransactions.bankAccountId,
+      bankAccountTitle: bankAccounts.title,
+      trackingNumber: treasuryTransactions.trackingNumber,
+      voucherId: treasuryTransactions.voucherId,
+      description: treasuryTransactions.description,
+      status: treasuryTransactions.status,
+      createdAt: treasuryTransactions.createdAt
+    })
+    .from(treasuryTransactions)
+    .leftJoin(bankAccounts, eq(treasuryTransactions.bankAccountId, bankAccounts.id))
+    .where(and(
+      eq(treasuryTransactions.payrollId, id),
+      eq(treasuryTransactions.type, 'payment'),
+      eq(treasuryTransactions.isDeleted, 0)
+    ))
+    .orderBy(desc(treasuryTransactions.id));
+
+    res.json(txs);
+  } catch (err) {
+    logger.error({ message: 'Error fetching payroll payments', error: err });
+    throw err;
+  }
+});
+
+// GET /api/piecework/personnel/:id/advance-balance — V4.0.33: استعلام سیستمی مانده مساعده تسویه‌نشده پرسنل
+router.get('/piecework/personnel/:id/advance-balance', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(id);
+    res.json(balance);
+  } catch (err) {
+    logger.error({ message: 'Error getting personnel advance balance', error: err });
     throw err;
   }
 });
@@ -1748,6 +1800,14 @@ router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'),
       const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
       if (!pay) {
         return { status: 404, error: 'فیش حقوقی یافت نشد' };
+      }
+
+      // V4.0.33: گارد عدم ابطال فیش‌های دارای پرداخت خزانه‌ای (کامل یا جزئی)
+      if (['paid', 'partially_paid'].includes(pay.status || '')) {
+        return {
+          status: 400,
+          error: 'این فیش حقوقی دارای تراکنش پرداخت خزانه‌ای ثبت‌شده است؛ ابطال آن مجاز نیست مگر اینکه ابتدا تراکنش‌های پرداخت آن در بخش خزانه ابطال گردند.'
+        };
       }
 
       // Check linked voucher

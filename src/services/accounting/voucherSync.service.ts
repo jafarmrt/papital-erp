@@ -858,17 +858,67 @@ export class VoucherSyncService {
         description: `هزینه حقوق و دستمزد ثابت فیش ${pay.payrollNumber}${bonuses > 0 ? ' (شامل پاداش/اضافه‌کار)' : ''}`
       });
     }
-    // بستانکاری حقوق پرداختنی (ناخالص)
-    items.push({
-      accountId: payableAcc.id,
-      detailedType: 'personnel',
-      detailedId: pay.personnelId,
-      detailedName: pers?.fullName || 'پرسنل',
-      debit: 0,
-      credit: grossAmount,
-      currency: 'IRR',
-      description: `بستانکاری حقوق و دستمزد ${pers?.fullName || ''} بابت دوره ${pay.startDate} تا ${pay.endDate}`
-    });
+
+    // V4.0.33: تفکیک دقیق طرف بستانکار بر مبنای استاندارد حسابداری دوطرفه:
+    // ۱. کسر از مساعده پرسنلی (بستانکار حساب 1301 مساعده)
+    // ۲. سایر کسورات پرداختنی (بستانکار حساب 3202 کسورات)
+    // ۳. خالص حقوق پرداختنی (بستانکار حساب 3201 حقوق پرداختنی)
+    const advanceDeduction = Math.max(0, Number(pay.advanceDeduction) || 0);
+    const otherDeductions = Math.max(0, Number(pay.totalDeductions) || 0);
+    let allocatedCredits = 0;
+
+    if (advanceDeduction > 0) {
+      const advanceAcc = await AccountMappingService.getEmployeeAdvanceAccount(tx);
+      if (advanceAcc) {
+        items.push({
+          accountId: advanceAcc.id,
+          detailedType: 'personnel',
+          detailedId: pay.personnelId,
+          detailedName: pers?.fullName || 'پرسنل',
+          debit: 0,
+          credit: advanceDeduction,
+          currency: 'IRR',
+          description: `کسر مساعده/وام پرسنلی ${pers?.fullName || ''} در فیش ${pay.payrollNumber}`
+        });
+        allocatedCredits += advanceDeduction;
+      } else if (isStrict) {
+        throw new ValidationError(`حساب معین مساعده پرسنلی (1301) جهت کسر مساعده فیش ${pay.payrollNumber} یافت نشد.`);
+      }
+    }
+
+    if (otherDeductions > 0) {
+      const deductionsAcc = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
+      if (deductionsAcc) {
+        items.push({
+          accountId: deductionsAcc.id,
+          detailedType: 'personnel',
+          detailedId: pay.personnelId,
+          detailedName: pers?.fullName || 'پرسنل',
+          debit: 0,
+          credit: otherDeductions,
+          currency: 'IRR',
+          description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`
+        });
+        allocatedCredits += otherDeductions;
+      } else if (isStrict) {
+        throw new ValidationError(`حساب معین سایر کسورات پرداختنی (3202) جهت ثبت کسورات فیش ${pay.payrollNumber} یافت نشد.`);
+      }
+    }
+
+    // بستانکاری خالص حقوق پرداختنی به پرسنل (تضمین موازنه ۱۰۰٪ بدهکار و بستانکار)
+    const payableCredit = Math.max(0, grossAmount - allocatedCredits);
+    if (payableCredit > 0) {
+      items.push({
+        accountId: payableAcc.id,
+        detailedType: 'personnel',
+        detailedId: pay.personnelId,
+        detailedName: pers?.fullName || 'پرسنل',
+        debit: 0,
+        credit: payableCredit,
+        currency: 'IRR',
+        description: `خالص حقوق و دستمزد پرداختنی به ${pers?.fullName || ''} بابت دوره ${pay.startDate} تا ${pay.endDate}`
+      });
+    }
 
     const createdVoucher = await VoucherService.createJournalVoucher({
       // V3.0.7 (TD-062): فال‌بک تاریخ از ساعت توافقی کسب‌وکار (نه UTC خام)

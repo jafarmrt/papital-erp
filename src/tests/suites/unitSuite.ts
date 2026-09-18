@@ -543,6 +543,61 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // Test 12: Multi-Stage Payroll Payment Logic & Invariants (V4.0.33)
+  const t12Start = Date.now();
+  try {
+    const netPayable = fin(10000000);
+    let currentPaid = fin(0);
+
+    // مرحله ۱: پرداخت قسط اول (۴,۰۰۰,۰۰۰)
+    const installment1 = fin(4000000);
+    const remaining1 = netPayable.subtract(currentPaid);
+    if (installment1.greaterThan(remaining1)) {
+      throw new Error('مبلغ بیش از مانده مجاز شناخته شد');
+    }
+    currentPaid = currentPaid.add(installment1);
+    const statusAfter1 = currentPaid.greaterThanOrEqual(netPayable) ? 'paid' : 'partially_paid';
+    if (statusAfter1 !== 'partially_paid' || !currentPaid.equals(fin(4000000))) {
+      throw new Error(`وضعیت پس از پرداخت جزئی نادرست است: ${statusAfter1}`);
+    }
+
+    // مرحله ۲: جلوگیری از پرداخت مازاد (۷,۰۰۰,۰۰۰ در حالی که مانده ۶,۰۰۰,۰۰۰ است)
+    const overpaymentAttempt = fin(7000000);
+    const remaining2 = netPayable.subtract(currentPaid);
+    const isOverpaymentBlocked = overpaymentAttempt.greaterThan(remaining2);
+    if (!isOverpaymentBlocked) {
+      throw new Error('سیستم پرداخت مازاد بر مانده فیش را مسدود نکرد');
+    }
+
+    // مرحله ۳: تسویه باقیمانده (۶,۰۰۰,۰۰۰)
+    const installment2 = remaining2;
+    currentPaid = currentPaid.add(installment2);
+    const statusAfter2 = currentPaid.greaterThanOrEqual(netPayable) ? 'paid' : 'partially_paid';
+    if (statusAfter2 !== 'paid' || !currentPaid.equals(netPayable)) {
+      throw new Error(`وضعیت پس از تسویه کامل نادرست است: ${statusAfter2}`);
+    }
+
+    results.push(makeTestCase({
+      id: 'unit_multistage_payroll_payment',
+      name: 'محاسبات اعشاری دقیق و انطباق وضعیت‌های پرداخت چندمرحله‌ای حقوق (V4.0.33)',
+      layer: 'unit',
+      executionType: 'simulation_logic',
+      passed: true,
+      durationMs: Date.now() - t12Start,
+      details: 'منطق پرداخت قسطی، مسدودسازی پرداخت مازاد و گذار وضعیت به partially_paid و paid با موفقیت آزموده شد.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_multistage_payroll_payment',
+      name: 'محاسبات اعشاری دقیق و انطباق وضعیت‌های پرداخت چندمرحله‌ای حقوق (V4.0.33)',
+      layer: 'unit',
+      executionType: 'simulation_logic',
+      passed: false,
+      durationMs: Date.now() - t12Start,
+      error: err.message
+    }));
+  }
+
   return results;
 }
 

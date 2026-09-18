@@ -124,7 +124,11 @@ export interface PieceworkPayroll {
   totalBonuses: number;
   totalDeductions: number;
   netPayable: number;
-  status: 'draft' | 'approved' | 'paid';
+  // V4.0.33: پرداخت چندمرحله‌ای حقوق
+  paidAmount?: number;
+  paid_amount?: number;
+  remainingAmount?: number;
+  status: 'draft' | 'approved' | 'partially_paid' | 'paid';
   paymentDate?: string;
   paymentMethod?: string;
   paymentReference?: string;

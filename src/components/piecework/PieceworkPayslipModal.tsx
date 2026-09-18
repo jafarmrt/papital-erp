@@ -87,6 +87,21 @@ export function PieceworkPayslipModal({
               <div>شماره فیش: <span className="font-bold">{formatPersianNumber(viewingPayroll.payrollNumber)}</span></div>
               <div>تاریخ صدور: <span className="font-bold">{formatPersianDate(viewingPayroll.createdAt)}</span></div>
               <div>بازه کارکرد: <span className="font-bold">{formatPersianDate(viewingPayroll.startDate)} تا {formatPersianDate(viewingPayroll.endDate)}</span></div>
+              <div className="pt-1">
+                {viewingPayroll.status === 'paid' ? (
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-sans font-bold text-[10px]">
+                    ✓ پرداخت‌شده و تسویه کامل
+                  </span>
+                ) : viewingPayroll.status === 'partially_paid' ? (
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-sans font-bold text-[10px]">
+                    ⏳ پرداخت مرحله‌ای (مانده‌دار)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-sans font-bold text-[10px]">
+                    آماده پرداخت
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -197,9 +212,21 @@ export function PieceworkPayslipModal({
                 </div>
               )}
               <div className="pt-2 border-t border-slate-300 flex justify-between font-black text-sm text-slate-900">
-                <span>مبلغ خالص قابل پرداخت:</span>
+                <span>مبلغ خالص کل فیش:</span>
                 <span className="font-mono text-blue-800">{formatPersianPrice(viewingPayroll.netPayable, appCurrency)}</span>
               </div>
+              {Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0) > 0 && (
+                <div className="flex justify-between font-bold text-emerald-700 pt-1">
+                  <span>پرداخت‌شده تاکنون:</span>
+                  <span className="font-mono">+{formatPersianPrice(Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0), appCurrency)}</span>
+                </div>
+              )}
+              {viewingPayroll.status !== 'paid' && (
+                <div className="flex justify-between font-black text-sm text-amber-800 pt-1 border-t border-dashed border-slate-200">
+                  <span>مانده قابل پرداخت:</span>
+                  <span className="font-mono">{formatPersianPrice(Math.max(0, Number(viewingPayroll.netPayable || 0) - Number(viewingPayroll.paidAmount ?? (viewingPayroll as any).paid_amount ?? 0)), appCurrency)}</span>
+                </div>
+              )}
             </div>
 
             {/* Signatures */}

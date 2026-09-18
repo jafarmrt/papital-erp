@@ -100,6 +100,16 @@ export async function runMigrations(): Promise<MigrationResult> {
       logger.warn(`[Migrator] piecework_payroll_number_seq check: ${e.message}`);
     }
 
+    // V4.0.33: Ensure paid_amount column exists on piecework_payrolls for partial payments and backfill past paid payrolls
+    try {
+      await pool.query(`
+        ALTER TABLE piecework_payrolls ADD COLUMN IF NOT EXISTS paid_amount numeric(18, 4) DEFAULT 0;
+        UPDATE piecework_payrolls SET paid_amount = net_payable WHERE status = 'paid' AND (paid_amount IS NULL OR paid_amount = 0);
+      `);
+    } catch (e: any) {
+      logger.warn(`[Migrator] piecework_payrolls paid_amount column check: ${e.message}`);
+    }
+
     let after = before;
     try {
       const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');

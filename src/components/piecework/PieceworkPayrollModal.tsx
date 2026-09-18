@@ -1,12 +1,13 @@
-import { FormEvent } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { X, FileText } from 'lucide-react';
+import { X, FileText, Landmark, AlertCircle } from 'lucide-react';
 import { PieceworkLog } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { formatPersianNumber, formatPersianPrice, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { fetchJson } from '../../api';
 
 interface PieceworkPayrollModalProps {
   isOpen: boolean;
@@ -62,6 +63,31 @@ export function PieceworkPayrollModal({
 }: PieceworkPayrollModalProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
+
+  const [advanceBalance, setAdvanceBalance] = useState<{ outstandingAdvance: number; totalAdvances: number; totalDeducted: number } | null>(null);
+
+  useEffect(() => {
+    if (!payrollPersonnelId) {
+      setAdvanceBalance(null);
+      return;
+    }
+    let active = true;
+    fetchJson(`/piecework/personnel/${payrollPersonnelId}/advance-balance`)
+      .then((data: any) => {
+        if (active && data) {
+          setAdvanceBalance({
+            outstandingAdvance: Number(data.outstandingAdvance || 0),
+            totalAdvances: Number(data.totalAdvances || 0),
+            totalDeducted: Number(data.totalDeducted || 0)
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setAdvanceBalance(null);
+      });
+    return () => { active = false; };
+  }, [payrollPersonnelId]);
+
   if (!isOpen) return null;
 
   return (
@@ -171,7 +197,18 @@ export function PieceworkPayrollModal({
 
           {/* V1.9.0: کسر از مساعده/وام پرسنلی */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">کسر از مساعده/وام پرسنلی (اختیاری)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700">کسر از مساعده/وام پرسنلی (اختیاری)</label>
+              {advanceBalance && advanceBalance.outstandingAdvance > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAdvanceDeduction?.(advanceBalance.outstandingAdvance)}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                >
+                  اعمال کل مانده مساعده ({formatPersianPrice(advanceBalance.outstandingAdvance)})
+                </button>
+              )}
+            </div>
             <input
               type="number"
               min="0"
@@ -180,6 +217,21 @@ export function PieceworkPayrollModal({
               placeholder="مبلغی که از مساعده قبلی پرسنل کسر می‌شود"
               className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
             />
+            {advanceBalance && advanceBalance.outstandingAdvance > 0 && (
+              <div className="mt-1.5 p-2 bg-indigo-50/70 border border-indigo-100 rounded-lg text-[11px] text-indigo-900 font-bold flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Landmark size={13} className="text-indigo-600" />
+                  مانده مساعده تسویه‌نشده پرسنل در سیستم:
+                </span>
+                <span className="font-mono font-black">{formatPersianPrice(advanceBalance.outstandingAdvance)}</span>
+              </div>
+            )}
+            {advanceBalance && advanceBalance.outstandingAdvance > 0 && (advanceDeduction || 0) > advanceBalance.outstandingAdvance && (
+              <p className="text-[10px] text-amber-700 mt-1 font-bold flex items-center gap-1">
+                <AlertCircle size={12} />
+                هشدار: مبلغ واردشده از کل مانده بدهی مساعده پرسنل بیشتر است.
+              </p>
+            )}
             {(advanceDeduction || 0) > 0 && (
               <p className="text-[10px] text-indigo-700 dark:text-indigo-300 mt-1 font-bold leading-5">
                 در سند تسویه، این مبلغ از حساب «مساعده و وام پرسنل» بستانکار می‌شود (تسویه بدهی پرسنلی) و از وجه نقدی پرداختی کسر می‌گردد.

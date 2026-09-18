@@ -95,6 +95,9 @@ export function PieceworkPayrollsTab({
               ) : (
                 payrollsList.map((payroll) => {
                   const isPaid = payroll.status === 'paid';
+                  const isPartiallyPaid = payroll.status === 'partially_paid';
+                  const paidAmount = Number(payroll.paidAmount ?? (payroll as any).paid_amount ?? 0);
+                  const remainingAmount = Math.max(0, Number(payroll.netPayable || 0) - paidAmount);
                   const isSyncing = syncingId === payroll.id;
                   // V1.3.4: ردیف توضیحی حقوق ثابت در خود لیست
                   const fixedAmount = Number((payroll as any).totalFixedAmount || 0);
@@ -125,14 +128,28 @@ export function PieceworkPayrollsTab({
                       </td>
                       <td className="p-3 text-center">
                         {isPaid ? (
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1">
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-bold">
                             <CheckCircle2 size={12} />
                             پرداخت‌شده
                           </span>
+                        ) : isPartiallyPaid ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[10px] inline-flex items-center gap-1 font-bold font-mono">
+                              <Clock size={11} className="text-amber-600" />
+                              جزئی: {formatPersianPrice(paidAmount)}
+                            </span>
+                            <button
+                              onClick={() => setPaymentTarget(payroll)}
+                              className="px-2 py-0.5 bg-amber-600 hover:bg-emerald-600 text-white rounded-md text-[10px] font-bold cursor-pointer transition-all shadow-xs"
+                              title={`مانده: ${formatPersianPrice(remainingAmount)} ریال — ثبت قسط بعدی`}
+                            >
+                              پرداخت مانده
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={() => setPaymentTarget(payroll)}
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-emerald-50 text-amber-700 hover:text-emerald-700 border border-amber-200 hover:border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all"
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-emerald-50 text-amber-700 hover:text-emerald-700 border border-amber-200 hover:border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all font-bold"
                             title="ثبت پرداخت از طریق خزانه‌داری (تراکنش + سند تسویه اتمیک)"
                           >
                             <Clock size={12} />
@@ -172,8 +189,9 @@ export function PieceworkPayrollsTab({
                           </button>
                           <button
                             onClick={() => onDeletePayroll(payroll.id)}
-                            title="ابطال فیش"
-                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                            disabled={isPaid || isPartiallyPaid}
+                            title={isPaid || isPartiallyPaid ? "فیش‌های دارای پرداخت خزانه‌ای قابل حذف نیستند (ابتدا تراکنش پرداخت را در خزانه ابطال کنید)" : "ابطال فیش"}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg cursor-pointer transition-colors"
                           >
                             <Trash2 size={16} />
                           </button>
