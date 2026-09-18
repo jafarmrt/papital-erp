@@ -119,8 +119,11 @@ else
 fi
 
 # ---------- 3) Install & build ----------
-log "[3/6] Installing dependencies (npm ci)..."
-npm ci
+# NOTE: .env (sourced above for the backup) exports NODE_ENV=production which makes
+# npm omit devDependencies — but the build (vite/esbuild) REQUIRES them (v4.0.30 split).
+# Force full install for the build step only; runtime keeps NODE_ENV=production.
+log "[3/6] Installing dependencies (npm ci --include=dev)..."
+NODE_ENV=development npm ci --include=dev
 log "[4/6] Building application..."
 npm run build
 success "Build completed."
