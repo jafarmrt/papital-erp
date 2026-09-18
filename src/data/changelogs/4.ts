@@ -8,6 +8,21 @@ import { AIUpdateLog } from './types';
  */
 export const v4Updates: AIUpdateLog[] = [
   {
+    version: 'v4.0.32',
+    date: '۲۷ شهریور ۱۴۰۵',
+    title: 'بازگردانی پکیج‌های اکوسیستم گوگل (firebase، firebase-admin) جهت سازگاری pull در Google AI Studio',
+    summary: 'پس از گزارش ناتوانی در pull کردن برنامه در محیط Google AI Studio، پکیج‌های اکوسیستم گوگل که در v4.0.30 به‌عنوان کد مرده حذف شده بودند به dependencies برگشت داده شدند: firebase، firebase-admin (و پیش‌تر @google/genai در همان روز) به‌همراه فایل‌های هویتی GEMINI.md. این تغییر صرفاً وابستگی‌های بی‌استفاده از منظر runtime را به جریان پشتی می‌گذارد تا تحلیل وابستگی سمت AI Studio خطا ندهد؛ هیچ تغییری در کد، رفتار برنامه یا باندل تولیدی ایجاد نشده است (firebase در هیچ ماژولی import نمی‌شود و مشمول باندل نمی‌گردد).',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '♻️ بازگردانی firebase ^12.17.1 و firebase-admin ^14.2.0 به dependencies (حذف‌شده در v4.0.30)',
+      '📦 همگام‌سازی package-lock.json پس از افزوده‌شدن پکیج‌ها',
+      '🧪 typecheck سبز پس از تغییر — بدون هرگونه تغییر کد'
+    ],
+    fixes: [
+      'سازگاری pull در Google AI Studio که به‌دلیل حذف پکیج‌های اکوسیستم گوگل در v4.0.30 مختل شده بود؛ باندل و ران‌تایم بدون تغییر (پکیج‌های بازگردانی‌شده بدون هیچ import در کد، خارج از باندل تولیدی باقی می‌مانند)'
+    ]
+  },
+  {
     version: 'v4.0.31',
     date: '۲۶ شهریور ۱۴۰۵',
     title: 'بسته‌شدن فاز ۵ بدهی فنی: Business Clock در ۷ دامنه ثانویه، تاریخ سرور-authoritative خزانه، سرویس یگانه آزادسازی رزرو پروژه با OCC، پاکسازی تستی مارک‌محور و گیت‌های CI نسخه/کاورج',
