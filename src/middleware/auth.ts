@@ -31,7 +31,7 @@ export const INSECURE_DEFAULT_SECRETS = new Set([
 ]);
 
 export function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? DEFAULT_DEV_JWT_SECRET : '');
   const isProduction = process.env.NODE_ENV === 'production';
 
   // Strictly enforce presence and minimum 32 characters in all environments
