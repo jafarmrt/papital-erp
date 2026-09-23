@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   useWorkflowInboxQuery, 
   useExecuteTransitionMutation,
@@ -30,7 +30,7 @@ import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../u
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
-import TaskExecuteModal, {} from '../components/approval/TaskExecuteModal';
+import TaskExecuteModal from '../components/approval/TaskExecuteModal';
 import TransitionExecuteModal from '../components/approval/TransitionExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
@@ -116,7 +116,7 @@ const getPriorityBadge = (priority?: string) => {
   }
 };
 
-export const ApprovalInboxPage: React.FC = () => {
+export function ApprovalInboxPage() {
   const [inboxView, setInboxView] = useState<'tasks' | 'instances'>('tasks');
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>('pending');
   const [activeTab, setActiveTab] = useState<string>('all');

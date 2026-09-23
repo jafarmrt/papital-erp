@@ -1,12 +1,28 @@
 import { AIUpdateLog } from './types';
 
 /**
- * V4 — فایل فعال سری 4.x.y
- * مدخل‌های نسخه ۴ با تمرکز بر بهبود معماری، بهینه‌سازی ساختار برنامه و
- * اصلاحات جزئی تجربه کاربری و UI (بر مبنای سادگی، خلوت‌سازی و حذف اصطلاحات فنی و لاتین)
- * در این فایل قرار می‌گیرند.
+ * V4 — فایل آرشیو نهایی سری 4.x.y (v4.0.0 تا v4.0.42)
+ * این سری با تمرکز بر بهبود معماری، بهینه‌سازی ساختار برنامه، ارتقای دقت مالی
+ * و اصلاحات خلوت‌سازی رابط کاربری به پایان رسید و در نسخه v4.0.42 تثبیت و بسته شد.
  */
 export const v4Updates: AIUpdateLog[] = [
+  {
+    version: 'v4.0.42',
+    date: '۳۱ شهریور ۱۴۰۵',
+    title: 'تثبیت تک‌نمونه‌ای هوک‌های React، رفع خطای resolveDispatcher در کارتابل تاییدات و ارتقای تاب‌آوری لود چانک‌ها',
+    summary: 'در پی رخداد خطای "Invalid hook call / can\'t access property useState, resolveDispatcher() is null" هنگام ناوبری به صفحه کارتابل تاییدات (ApprovalInboxPage) در اثر ناهماهنگی نسخه‌های کش‌شده ماژول‌ها پس از بارگذاری مجدد سرور، راهکارهای چندلایه‌ای اعمال شد: ۱) ثبت صریح الیاس‌های فیزیکی یکتای react و react-dom و پیش‌کامپایل runtimeهای JSX در vite.config.ts جهت تضمین ۱۰۰٪ تک‌نمونه‌ای بودن هسته هوک‌ها، ۲) استانداردسازی ساختار کامپوننت و ایمپورت‌های ApprovalInboxPage، و ۳) تقویت بازخوانی خودکار و لایه خطایاب در ErrorBoundary و lazyWithRetry برای همگام‌سازی بی‌درنگ چانک‌های کلاینت با سرور.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🔒 ثبت صریح مسیر قطعی فیزیکی react و react-dom در resolve.alias فایل vite.config.ts جهت جلوگیری از چندنسخگی پکیج در بارگذاری تنبل',
+      '⚡ افزودن react/jsx-runtime و react/jsx-dev-runtime به optimizeDeps.include در Vite',
+      '🛡️ ارتقای مکانیزم بازیابی و بازنشانی خودکار بسته‌های قدیمی در ErrorBoundary و کاهش تاخیر بازیابی به ۳ ثانیه به همراه fallback امن تغییر مکان مرورگر',
+      '✨ اصلاح ایمپورت‌های ماژول کارتابل و استانداردسازی تعریف تابعی کامپوننت ApprovalInboxPage',
+      '📦 بهبود هندلینگ بارگذاری با تاخیر در lazyWithRetry داخل AppRoutes.tsx'
+    ],
+    fixes: [
+      'رفع خطای Invalid hook call و resolveDispatcher() is null در کامپوننت ApprovalInboxPage هنگام ناوبری پس از به‌روزرسانی سرور'
+    ]
+  },
   {
     version: 'v4.0.41',
     date: '۳۱ شهریور ۱۴۰۵',

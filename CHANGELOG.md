@@ -12,12 +12,26 @@ going forward.
 | Client-bundled update center | `src/data/changelogs/1.ts` | `1.x.y` release series |
 | Client-bundled update center | `src/data/changelogs/2.ts` | `2.x.y` release series |
 | Client-bundled update center (archive) | `src/data/changelogs/3.ts` | completed `3.x.y` release series (`v3.0.0` - `v3.3.22`) |
-| Client-bundled update center (active) | `src/data/changelogs/4.ts` | current `4.x.y` release series (`v4.0.0` onward) |
+| Client-bundled update center (archive) | `src/data/changelogs/4.ts` | completed `4.x.y` release series (`v4.0.0` - `v4.0.42`) |
+| Client-bundled update center (active) | `src/data/changelogs/5.ts` | current `5.x.y` release series (`v5.0.0` onward) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 4.x Series (Active)
+## Version 5.x Series (Active)
+
+### v5.0.0 — Official Launch of Version 5 & Version 4 Closure
+- **Version 4 Closure:** Officially concluded and archived the v4.x series (`v4.0.0` through `v4.0.42`) encompassing major architectural refactorings, strict financial decimal precision, runtime contract hardening with Zod, frontend decluttering, and chunk error resilience.
+- **Version 5 Mission:** Initiated Version 5 series with full continuity of Version 4 architectural rules and UI decluttering principles, focusing on deep cross-module integration (Inter-Module Workflows), end-to-end testing, error correction, and cross-functional performance optimization across Inventory, Accounting, Treasury, Production, Procurement, and Orders.
+- **Governance Alignment:** Synchronized `AGENTS.md`, `package.json` (`5.0.0`), `check-version-sync`, active roadmap `V5_MASTER_ROADMAP.md`, and activated `src/data/changelogs/5.ts`.
+
+---
+
+## Version 4.x Series (Archived / Finalized)
+
+### v4.0.42 — Final Release & Stabilization of Version 4
+- **React Singleton & Chunk Resilience:** Resolved hook dispatch collision across lazy-loaded routes by pinning physical React/ReactDOM resolution in Vite, optimizing JSX runtimes, and hardening ErrorBoundary automated reload logic.
+- **Final v4 Milestone:** Successfully delivered 42 iterative releases across architecture, security, financial calculation integrity, and UI/UX decluttering.
 
 ### v4.0.27 — Official Milestone Completion of Version 4 Architecture & Governance
 - **Phase 1 (Database & Domain Schema):** Modular schema split across 8 domain files, `numeric(..., { mode: 'number' })` type consistency (D-1), soft-delete `isDeleted` standard (D-2), and strict foreign key integrity.

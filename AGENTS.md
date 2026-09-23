@@ -1,6 +1,6 @@
 # AI Agent Instructions (AGENTS.md)
 
-> **Documentation Map (Version 4.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/4.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
+> **Documentation Map (Version 5.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/5.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
 
 هر ایجنت هوش مصنوعی برای حفظ پایداری سیستم ملزم به رعایت دقیق این قواعد است:
 
@@ -148,11 +148,12 @@
 - **Production Seed Gating (DB-014):** Seeding disabled in production unless `ALLOW_SEED_IN_PRODUCTION=true`, protected by advisory lock (`pg_try_advisory_lock(89345)`).
 - **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 30000` ms. Bulk tasks use `withLongQueryTimeout(fn)`.
 
-## 23. V4 Governance — Active Series, Architecture Optimization & UI/UX Principles
-- **Active Series (v4.x.y):** The active changelog file is `src/data/changelogs/4.ts` (`v4.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), and `3.ts` (`v3.x.y` - finalized and archived). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/4.ts` and bump `package.json` `"version"`.
-- **Core Mission of Version 4:**
-  1. **Architecture Optimization (بهبود معماری):** Refactoring, simplifying code paths, reducing cognitive complexity, and optimizing server/client state management without introducing breaking changes or unnecessary layers.
-  2. **Decluttering & UI/UX Simplicity (سادگی و خلوت‌سازی):** Minor, targeted user interface improvements adhering to the decluttering principle (minimal button clusters, action menus), eliminating technical and Latin jargon, and ensuring natural, fluent Persian terminology.
+## 23. V5 Governance — Active Series, Inter-Module Integration, Testing & Architecture Optimization
+- **Active Series (v5.x.y):** The active changelog file is `src/data/changelogs/5.ts` (`v5.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), and `4.ts` (`v4.x.y` - finalized and archived at `v4.0.42`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/5.ts` and bump `package.json` `"version"`.
+- **Core Mission of Version 5:**
+  1. **Inter-Module Integration & End-to-End Workflows (ارتباط و یکپارچگی بین ماژول‌ها):** Ensuring seamless data flow, state consistency, and proper cross-domain interactions among Inventory, Accounting/Vouchers, Treasury, Production/Projects, Procurement/Requisitions, CRM/Orders, and Personnel.
+  2. **Verification, Testing & Correction (تست، اصلاح و بهینه‌سازی کارکرد):** Comprehensive testing and hardening of cross-module transactions, eliminating discrepancies, edge-case race conditions, and circular dependencies.
+  3. **Continuity of Version 4 Architecture & UI Simplicity (پیوستگی اصول معماری و خلوت‌سازی v4):** Full adherence to Drizzle ORM rules, FinancialDecimal precision, zero-float policy, atomic database transactions, UI decluttering, and natural Persian terminology without technical jargon.
 - **CHANGELOG.md Archive:** Condensed markdown archive of major series milestones lives in root `CHANGELOG.md`.
 - **Technical Debt Registry (TECH_DEBT.md):** ANY shortcut, workaround, or known issue must be registered with unique `TD-###` in `TECH_DEBT.md`. Resolving a debt requires updating its status in the same change-set.
 - **Data-Safety Invariant:** Test cleanup gated on `NODE_ENV ∈ {test,development}` AND `ERP_ALLOW_TEST_CLEANUP=1`, scoped to synthetic test IDs only. `db:push` is BANNED; migrations come exclusively from the atomic migrator.
@@ -162,7 +163,7 @@
   - DBHub read-only MCP configuration: see `docs/LOCAL_MCP_TOOLING.md`.
 - **Release Version Bump = 2 Synced Locations:**
   1. `"version"` in `package.json` (single source of truth; dynamically resolved by `src/lib/version.ts` and `/health`).
-  2. Top entry in active changelog `src/data/changelogs/4.ts`.
+  2. Top entry in active changelog `src/data/changelogs/5.ts`.
 
 ## 24. GitHub Sync Policy
 - **Commit & Push:** In local development or environments with configured Git credentials/SSH keys, commit with descriptive messages and push to `origin/master`.

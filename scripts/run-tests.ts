@@ -38,6 +38,10 @@ async function main() {
     process.env.ERP_ALLOW_TEST_CLEANUP = '1';
   }
 
+  if (!process.env.JWT_SECRET) {
+    process.env.JWT_SECRET = 'c8f49a1b3e7d20569a0e4b81c3d5f7a29e4b6c8d0f1a3e5b7c9d1e3f5a7b9c1d';
+  }
+
   if (!isJsonOutput) {
     console.log('======================================================================');
     console.log(`🚀 Papital ERP Test Runner Matrix (Phase 8/21 Suite Engine)`);

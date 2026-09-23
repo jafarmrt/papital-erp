@@ -24,9 +24,13 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
           const key = 'chunk_reload_ts';
           const last = Number(sessionStorage.getItem(key) || '0');
           const now = Date.now();
-          if (now - last > 8000) {
+          if (now - last > 3000) {
             sessionStorage.setItem(key, String(now));
-            window.location.reload();
+            try {
+              window.location.reload();
+            } catch {
+              window.location.href = window.location.href;
+            }
             return new Promise(() => {});
           }
         }

@@ -62,13 +62,9 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
     }
 
     realPool.on('connect', (client: pkg.PoolClient) => {
-      client.query(`SET statement_timeout = ${statementTimeoutMs}`).catch((err: unknown) => {
+      client.query(`SET statement_timeout = ${statementTimeoutMs}; SET idle_in_transaction_session_timeout = ${idleInTxTimeoutMs};`).catch((err: unknown) => {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.warn({ message: `Failed to set statement_timeout: ${errorMsg}` });
-      });
-      client.query(`SET idle_in_transaction_session_timeout = ${idleInTxTimeoutMs}`).catch((err: unknown) => {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.warn({ message: `Failed to set idle_in_transaction_session_timeout: ${errorMsg}` });
+        logger.warn({ message: `Failed to set session timeouts: ${errorMsg}` });
       });
 
       client.on('error', (err: unknown) => {
@@ -127,7 +123,13 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
   useMock = true;
 }
 
-const pool: pkg.Pool = new Proxy({} as pkg.Pool, {
+if (useMock && mockPool) {
+  Object.setPrototypeOf(mockPool, Pool.prototype);
+}
+
+const activeTarget = (!useMock && realPool) ? realPool : (mockPool as unknown as pkg.Pool);
+
+const pool: pkg.Pool = new Proxy(activeTarget, {
   get: (_target, prop: string | symbol) => {
     const active = (!useMock && realPool) ? realPool : mockPool;
     const val = (active as unknown as Record<string | symbol, unknown>)[prop];

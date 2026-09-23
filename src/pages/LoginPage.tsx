@@ -4,6 +4,7 @@ import { fetchJson } from '../api';
 import { User } from '../types';
 import { Lock, User as UserIcon, Shield, AlertTriangle, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 import SetupPage from './SetupPage';
+import { getLatestAppVersion } from '../data/appInfoAndChangelog';
 
 export default function LoginPage({ onLogin }: { onLogin: (user: User, token: string) => void }) {
   const [username, setUsername] = useState('');
@@ -95,8 +96,8 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
   const isLocked = lockoutSecondsLeft !== null && lockoutSecondsLeft > 0;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans" dir="rtl">
-      <div className="bg-white p-8 rounded-xl shadow-sm border w-full max-w-md">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 font-sans p-4" dir="rtl">
+      <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-md">
         <div className="text-center mb-8">
           {companyLogo ? (
             <div className="w-16 h-16 bg-white border border-slate-200 rounded-2xl p-1.5 mx-auto mb-4 flex items-center justify-center shadow-sm">
@@ -193,6 +194,11 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User, token: st
             {isSaving ? 'در حال ورود...' : isLocked ? 'حساب قفل است — در انتظار فعال‌سازی' : 'ورود به سیستم'}
           </button>
         </form>
+      </div>
+
+      <div className="mt-4 text-center text-xs text-slate-400 select-none flex items-center justify-center gap-1.5" aria-label="شماره نسخه سامانه">
+        <span>نسخه</span>
+        <span dir="ltr" className="font-mono font-medium text-slate-500">{getLatestAppVersion()}</span>
       </div>
     </div>
   );

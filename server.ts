@@ -33,6 +33,11 @@ async function startServer() {
     }
   }
 
+  // Initialize dev JWT_SECRET in non-production if not explicitly provided
+  if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'production') {
+    process.env.JWT_SECRET = 'papital_workshop_erp_default_secure_jwt_secret_dev_key_32_chars_long';
+  }
+
   const PORT = 3000;
 
   // Build the shared Express application (security middleware + API routes)

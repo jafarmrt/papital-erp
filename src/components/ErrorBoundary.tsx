@@ -46,9 +46,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (isStaleBundleError && typeof window !== 'undefined') {
       const lastReload = Number(sessionStorage.getItem('eb_chunk_reload_ts') || '0');
       const now = Date.now();
-      if (now - lastReload > 8000) {
+      if (now - lastReload > 3000) {
         sessionStorage.setItem('eb_chunk_reload_ts', String(now));
-        window.location.reload();
+        setTimeout(() => {
+          try {
+            window.location.reload();
+          } catch {
+            window.location.href = window.location.href;
+          }
+        }, 150);
       }
     }
   }
@@ -58,7 +64,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   };
 
   private handleReload = () => {
-    window.location.reload();
+    try {
+      window.location.reload();
+    } catch {
+      window.location.href = window.location.href;
+    }
   };
 
   private handleGoHome = () => {
