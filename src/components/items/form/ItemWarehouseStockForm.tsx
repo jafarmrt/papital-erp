@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import { ItemFormData } from './types';
 
@@ -15,6 +16,17 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
 }) => {
   return (
     <div className="space-y-4">
+      {/* باکس هشدار و راهنمای فرآیند تولید */}
+      <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 text-amber-950 shadow-xs">
+        <div className="flex items-center gap-2 mb-1.5 font-bold text-xs text-amber-900">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>توجه بسیار مهم: ثبت موجودی افتتاحیه / اول دوره کارگاه</span>
+        </div>
+        <p className="text-2xs leading-relaxed text-amber-900/90 font-medium">
+          این بخش صرفاً برای ورود موجودی اولیه (قبل از شروع به کار با سیستم) است. اگر این کالا در کارگاه و در طول فرآیند تولید ساخته میشود، نباید موجودی آن را از اینجا ثبت کنید؛ موجودی محصولات تولیدی باید از طریق بخش تولید و پروژهها / ثبت خروجی تولید به انبار اضافه گردد.
+        </p>
+      </div>
+
       {warehouses.length > 0 ? (
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1.5">

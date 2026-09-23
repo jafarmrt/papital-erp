@@ -338,6 +338,7 @@ export class FiscalYearService {
         const v1 = await VoucherService.createJournalVoucher({
           date: data.closingDate,
           voucherType: 'closing',
+          status: 'approved',
           description: `بستن حساب‌های موقت (درآمدها، بهای تمام شده و هزینه‌ها) به حساب خلاصه سود و زیان سال مالی ${data.year}`,
           referenceModule: 'manual',
           referenceNumber: `CLOSE-TEMP-${data.year}`,
@@ -393,6 +394,7 @@ export class FiscalYearService {
       const v2 = await VoucherService.createJournalVoucher({
         date: data.closingDate,
         voucherType: 'closing',
+        status: 'approved',
         description: `انتقال ${profit > 0 ? 'سود' : 'زیان'} خالص سال مالی ${data.year} به حساب سود (زیان) انباشته سنواتی`,
         referenceModule: 'manual',
         referenceNumber: `CLOSE-PROFIT-${data.year}`,
@@ -467,6 +469,7 @@ export class FiscalYearService {
       const v3 = await VoucherService.createJournalVoucher({
         date: data.closingDate,
         voucherType: 'closing',
+        status: 'approved',
         description: `سند اختتامیه سال مالی ${data.year} (بستن کلیه حساب‌های ترازنامه‌ای، دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام)`,
         referenceModule: 'manual',
         referenceNumber: `CLOSING-${data.year}`,
@@ -492,6 +495,7 @@ export class FiscalYearService {
       const v4 = await VoucherService.createJournalVoucher({
         date: newYearDate,
         voucherType: 'opening',
+        status: 'approved',
         description: `سند افتتاحیه سال مالی ${Number(data.year) + 1} (انتقال مانده‌های ابتدای دوره دارایی‌ها، بدهی‌ها و سرمایه از سال مالی ${data.year})`,
         referenceModule: 'manual',
         referenceNumber: `OPENING-${Number(data.year) + 1}`,

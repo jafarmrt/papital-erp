@@ -188,6 +188,7 @@ export class VoucherSyncService {
       resultVoucher = await VoucherService.createJournalVoucher({
         date: docDate,
         voucherType: 'sales',
+        status: 'draft',
         description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum > 0 ? ' (همراه با تخفیف)' : ''}${vatAmount > 0 ? ' (شامل ارزش‌افزوده)' : ''}`,
         referenceModule: 'invoice',
         referenceId: docId,
@@ -416,6 +417,7 @@ export class VoucherSyncService {
       resultVoucher = await VoucherService.createJournalVoucher({
         date: docDate,
         voucherType,
+        status: 'draft',
         description: voucherDesc,
         referenceModule: 'invoice',
         referenceId: docId,
@@ -706,6 +708,7 @@ export class VoucherSyncService {
       resultVoucher = await VoucherService.createJournalVoucher({
         date: docDate,
         voucherType,
+        status: 'draft',
         description: voucherDescription,
         referenceModule: 'invoice',
         referenceId: docId,
@@ -924,6 +927,7 @@ export class VoucherSyncService {
       // V3.0.7 (TD-062): فال‌بک تاریخ از ساعت توافقی کسب‌وکار (نه UTC خام)
       date: pay.endDate || await businessTodayIsoDate(),
       voucherType: 'payroll',
+      status: 'draft',
       description: `ثبت هزینه و محاسبه حقوق و کارمزد پرکیسی ${pay.title} - پرسنل: ${pers?.fullName || 'پرسنل'} (${pay.payrollNumber})`,
       referenceModule: 'payroll',
       referenceId: pay.id,

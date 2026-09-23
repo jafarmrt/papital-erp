@@ -616,6 +616,111 @@ export class WorkflowDefinitionService {
         });
         logger.info('[WorkflowDefinitionService] Seeded simplified 3-stage PURCHASE_REQUISITION_WORKFLOW successfully.');
       }
+
+      // Seed JOURNAL_VOUCHER_WORKFLOW (گردش‌کار تایید و ثبت اسناد حسابداری کارگاه)
+      const existingJvWf = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, 'JOURNAL_VOUCHER_WORKFLOW'));
+      const jvStatesCount = existingJvWf.length > 0
+        ? await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existingJvWf[0].id))
+        : [{ count: 0 }];
+
+      const needsJvUpdate = existingJvWf.length === 0 || Number(jvStatesCount[0]?.count || 0) <= 1;
+
+      if (needsJvUpdate) {
+        await this.saveWorkflowDefinition({
+          id: existingJvWf[0]?.id,
+          code: 'JOURNAL_VOUCHER_WORKFLOW',
+          title: 'گردش کار تایید اسناد حسابداری کارگاه (پیش‌نویس -> تایید و ثبت دفاتر -> قطعی‌سازی)',
+          entityType: 'journal_voucher',
+          description: 'فرآیند سبک و متناسب کارگاه جهت تایید اسناد حسابداری: ثبت پیش‌نویس توسط کاربران/سیستم -> بررسی و تایید واحد حسابداری -> قطعی‌سازی دفاتر رسمی',
+          version: 1,
+          isActive: 1,
+          states: [
+            {
+              stateKey: 'draft',
+              title: 'پیش‌نویس سند',
+              stateType: 'initial',
+              color: 'slate',
+              stepOrder: 1,
+              slaHours: 24,
+              positionX: 100,
+              positionY: 160
+            },
+            {
+              stateKey: 'approved',
+              title: 'تایید و ثبت دفاتر رسمی',
+              stateType: 'intermediate',
+              color: 'blue',
+              stepOrder: 2,
+              slaHours: 48,
+              positionX: 450,
+              positionY: 160
+            },
+            {
+              stateKey: 'permanent',
+              title: 'قطعی و قفل دفاتر',
+              stateType: 'terminal',
+              color: 'emerald',
+              stepOrder: 3,
+              slaHours: 72,
+              positionX: 800,
+              positionY: 160
+            },
+            {
+              stateKey: 'rejected',
+              title: 'رد شده / نیازمند بازبینی',
+              stateType: 'intermediate',
+              color: 'rose',
+              stepOrder: 4,
+              slaHours: 24,
+              positionX: 450,
+              positionY: 340
+            }
+          ],
+          transitions: [
+            {
+              from: 'draft',
+              to: 'approved',
+              actionKey: 'approve_voucher',
+              title: 'تایید حسابداری و ثبت در دفاتر',
+              requiredRole: 'accountant',
+              requiredPermission: 'accounting.vouchers'
+            },
+            {
+              from: 'approved',
+              to: 'permanent',
+              actionKey: 'finalize_voucher',
+              title: 'قطعی‌سازی و قفل سند',
+              requiredRole: 'accountant',
+              requiredPermission: 'accounting.vouchers'
+            },
+            {
+              from: 'draft',
+              to: 'rejected',
+              actionKey: 'reject_voucher',
+              title: 'رد پیش‌نویس جهت اصلاح',
+              requiredRole: 'accountant',
+              requiredPermission: 'accounting.vouchers'
+            },
+            {
+              from: 'approved',
+              to: 'draft',
+              actionKey: 'revert_to_draft',
+              title: 'بازگشت به پیش‌نویس',
+              requiredRole: 'accountant',
+              requiredPermission: 'accounting.vouchers'
+            },
+            {
+              from: 'rejected',
+              to: 'draft',
+              actionKey: 'reopen_voucher',
+              title: 'بازگشایی و اصلاح سند',
+              requiredRole: '',
+              requiredPermission: ''
+            }
+          ]
+        });
+        logger.info('[WorkflowDefinitionService] Seeded simplified JOURNAL_VOUCHER_WORKFLOW successfully.');
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.warn(`[WorkflowDefinitionService] Seed default workflows warning: ${errMsg}`);

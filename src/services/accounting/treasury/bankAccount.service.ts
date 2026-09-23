@@ -212,8 +212,34 @@ export class BankAccountService {
     };
   }
 
+  /**
+   * V4.0.37: تولید خودکار کد یکتا و استاندارد حساب خزانه بر اساس نوع (BANK-01, CASH-01, POS-01)
+   */
+  static async generateNextAccountCode(type: 'bank' | 'cash' | 'pos' | 'petty_cash', tx?: DbExecutor): Promise<string> {
+    const executor = tx || orm;
+    const existing = await executor
+      .select({ code: bankAccounts.code })
+      .from(bankAccounts);
+
+    const prefix = type === 'cash' || type === 'petty_cash' ? 'CASH' : type === 'pos' ? 'POS' : 'BANK';
+    let maxNum = 0;
+    const regex = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+
+    for (const row of existing) {
+      if (!row.code) continue;
+      const match = row.code.trim().match(regex);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+
+    const nextNum = maxNum + 1;
+    return `${prefix}-${String(nextNum).padStart(2, '0')}`;
+  }
+
   static async createBankAccount(data: {
-    code: string;
+    code?: string;
     title: string;
     type: 'bank' | 'cash' | 'pos' | 'petty_cash';
     bankName?: string;
@@ -238,8 +264,13 @@ export class BankAccountService {
     }
 
     const run = async (tx: DbExecutor) => {
+      let finalCode = data.code?.trim();
+      if (!finalCode) {
+        finalCode = await BankAccountService.generateNextAccountCode(data.type, tx);
+      }
+
       const [inserted] = await tx.insert(bankAccounts).values({
-        code: data.code.trim(),
+        code: finalCode,
         title: data.title.trim(),
         type: data.type,
         bankName: data.bankName?.trim() || '',
@@ -335,6 +366,7 @@ export class BankAccountService {
     const created = await VoucherService.createJournalVoucher({
       date: await businessTodayJalaliDash(),
       voucherType: 'opening',
+      status: 'draft',
       description: `سند افتتاحیه موجودی اولیه ${bank.title} (${bank.type === 'bank' ? 'حساب بانکی' : 'صندوق'})`,
       referenceModule: 'treasury_opening',
       referenceId: bankId,
@@ -442,6 +474,7 @@ export class BankAccountService {
               const adjVoucher = await VoucherService.createJournalVoucher({
                 date: await businessTodayJalaliDash(),
                 voucherType: 'adjustment',
+                status: 'draft',
                 description: `اصلاح موجودی اولیه ${updated.title} (${delta > 0 ? '+' : ''}${delta})`,
                 referenceModule: 'treasury_opening',
                 referenceId: id,

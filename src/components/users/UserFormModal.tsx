@@ -52,23 +52,30 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     e.preventDefault();
     setIsSaving(true);
     try {
+      const payload = {
+        username: userForm.username.trim(),
+        password: userForm.password,
+        full_name: userForm.full_name.trim(),
+        role: userForm.role,
+      };
+
       if (isEditing) {
         await fetchJson(`/users/${editingUser.id}`, {
           method: 'PUT',
-          body: JSON.stringify(userForm),
+          body: JSON.stringify(payload),
         });
         toast.success('اطلاعات کاربر با موفقیت ویرایش شد');
       } else {
         await fetchJson('/users', {
           method: 'POST',
-          body: JSON.stringify(userForm),
+          body: JSON.stringify(payload),
         });
         toast.success('کاربر جدید با موفقیت ایجاد شد');
       }
       onSuccess();
       onClose();
-    } catch (err) {
-      toast.error(err.message || 'خطا در ثبت کاربر');
+    } catch (err: any) {
+      toast.error(err?.message || err?.error || 'خطا در ثبت کاربر');
     } finally {
       setIsSaving(false);
     }
@@ -131,11 +138,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="admin">مدیر سیستم</option>
-                {rolesList.map((r) => (
-                  <option key={r.id} value={r.code}>
-                    {r.name}
-                  </option>
-                ))}
+                {rolesList
+                  .filter((r) => r.code !== 'admin')
+                  .map((r) => (
+                    <option key={r.id} value={r.code}>
+                      {r.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>

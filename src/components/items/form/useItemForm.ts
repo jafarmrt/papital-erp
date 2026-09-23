@@ -228,7 +228,8 @@ export function useItemForm({
       }
 
       let calculatedStock = form.current_stock;
-      if (!item && Object.keys(form.stocks).length > 0) {
+      const canSetOpening = !item || Boolean(item.canSetOpeningBalance ?? (item as any).can_set_opening_balance);
+      if (canSetOpening && Object.keys(form.stocks).length > 0) {
         calculatedStock = Object.values(form.stocks).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
       }
 

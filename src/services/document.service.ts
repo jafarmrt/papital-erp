@@ -1,7 +1,7 @@
 import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
-import { roundFinancial, getTodayJalaliDate } from '../utils.js';
+import { roundFinancial, getTodayJalaliDate, normalizeDateToDbTimestamp } from '../utils.js';
 import { resolveJalaliFiscalYear, businessNowIsoDateTime } from '../lib/businessClock.js';
 import { fin, FinancialMath } from '../lib/financialDecimal.js';
 import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
@@ -218,7 +218,7 @@ export class DocumentService {
     await orm.transaction(async (tx) => {
       await tx.update(documents).set({
         refNumber: refNumber ? String(refNumber) : existingDoc.refNumber,
-        date: date || existingDoc.date,
+        date: date ? normalizeDateToDbTimestamp(date) : existingDoc.date,
         user: user || existingDoc.user,
         notes: notes !== undefined ? notes : existingDoc.notes,
         buyerName: buyer_name !== undefined ? buyer_name : existingDoc.buyerName,
@@ -494,10 +494,12 @@ export class DocumentService {
         }
       }
 
+      const normalizedDocDate = normalizeDateToDbTimestamp(date);
+
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
         refNumber: String(finalRefNumber),
-        date,
+        date: normalizedDocDate,
         user,
         notes: notes || '',
         buyerName: finalBuyerName,
@@ -1128,6 +1130,8 @@ export class DocumentService {
       }
     }
 
+    const normalizedTxDate = normalizeDateToDbTimestamp(date);
+
     await tx.insert(transactions).values({
       itemId,
       documentId: documentId ?? undefined,
@@ -1135,7 +1139,7 @@ export class DocumentService {
       quantity: qty,
       unitPrice: price,
       totalPrice: fin(price).multiply(qty).round(4).toNumber(),
-      date,
+      date: normalizedTxDate,
       documentType,
       documentRef: String(documentRef),
       createdBy: user,

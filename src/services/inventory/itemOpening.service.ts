@@ -53,6 +53,7 @@ export class ItemOpeningService {
     const voucher = await VoucherService.createJournalVoucher({
       date: await businessTodayJalaliDash(),
       voucherType: 'opening',
+      status: 'draft',
       description: `سند افتتاحیه موجودی اولیه کالا «${item.name}» (${item.code})`,
       referenceModule: 'item_opening',
       referenceId: itemId,

@@ -288,7 +288,7 @@ export class VoucherService {
         voucherNumber: voucherNum,
         date: data.date.trim(),
         voucherType: data.voucherType || 'general',
-        status: data.status || 'approved',
+        status: data.status || 'draft',
         totalDebit: sumDebit.toNumber(),
         totalCredit: sumCredit.toNumber(),
         description: data.description.trim(),
@@ -878,6 +878,34 @@ export class VoucherService {
     });
 
     return { finalizedCount: sortedIds.length, ids: sortedIds };
+  }
+
+  /**
+   * Batch Approve Vouchers (draft -> approved)
+   * تایید حسابداری گروهی اسناد پیش‌نویس جهت اثرگذاری در تراز آزمایشی و دفاتر رسمی
+   */
+  static async approveJournalVouchers(ids: number[], userId?: number, username?: string): Promise<{ approvedCount: number; ids: number[] }> {
+    if (!ids || ids.length === 0) return { approvedCount: 0, ids: [] };
+
+    // Deadlock Prevention: Always sort IDs in ascending order before row-level locking
+    const sortedIds = Array.from(new Set(ids.map(Number))).filter(id => !isNaN(id) && id > 0).sort((a, b) => a - b);
+    let count = 0;
+
+    await orm.transaction(async (tx) => {
+      for (const id of sortedIds) {
+        const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
+        if (existing && existing.isDeleted === 0 && existing.status === 'draft') {
+          await this.checkFiscalPeriodOpen(existing.date, tx);
+          await tx.update(journalVouchers).set({
+            status: 'approved',
+            approvedById: userId || null,
+          }).where(eq(journalVouchers.id, id));
+          count++;
+        }
+      }
+    });
+
+    return { approvedCount: count, ids: sortedIds };
   }
 
   /**

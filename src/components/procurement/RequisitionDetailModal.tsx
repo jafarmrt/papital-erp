@@ -194,9 +194,8 @@ export function RequisitionDetailModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* 3-Stage Workflow Tracker */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
-            <div className="flex items-center justify-between text-xs font-bold mb-2">
-              <span className="text-slate-600">گردش‌کار ۳ مرحله‌ای تدارکات کارگاه:</span>
-              <span className="text-slate-400 font-normal">ساده‌شده برای عملیات سریع و بدون پیچیدگی</span>
+            <div className="text-xs font-bold text-slate-700 mb-2">
+              گردش‌کار ۳ مرحله‌ای تدارکات:
             </div>
             <div className="grid grid-cols-3 gap-2">
               {/* Step 1 */}

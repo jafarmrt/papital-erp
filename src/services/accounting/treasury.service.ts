@@ -14,8 +14,12 @@ export class TreasuryService {
     return BankAccountService.recalculateAndSyncBankBalances();
   }
 
+  static async generateNextAccountCode(type: 'bank' | 'cash' | 'pos' | 'petty_cash', tx?: DbExecutor): Promise<string> {
+    return BankAccountService.generateNextAccountCode(type, tx);
+  }
+
   static async createBankAccount(data: {
-    code: string;
+    code?: string;
     title: string;
     type: 'bank' | 'cash' | 'pos' | 'petty_cash';
     bankName?: string;

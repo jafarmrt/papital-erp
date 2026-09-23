@@ -50,6 +50,7 @@ export class AccountingService {
   static repostVoucher = VoucherService.repostVoucher.bind(VoucherService);
   static finalizeJournalVoucher = VoucherService.finalizeJournalVoucher.bind(VoucherService);
   static finalizeJournalVouchers = VoucherService.finalizeJournalVouchers.bind(VoucherService);
+  static approveJournalVouchers = VoucherService.approveJournalVouchers.bind(VoucherService);
   static setVoucherStatus = VoucherService.setVoucherStatus.bind(VoucherService);
   static checkFiscalPeriodOpen = VoucherService.checkFiscalPeriodOpen.bind(VoucherService);
   static isPeriodClosed = VoucherService.isPeriodClosed.bind(VoucherService);
@@ -57,6 +58,7 @@ export class AccountingService {
   // ================= Treasury & Bank Accounts =================
   static getBankAccounts = TreasuryService.getBankAccounts.bind(TreasuryService);
   static recalculateAndSyncBankBalances = TreasuryService.recalculateAndSyncBankBalances.bind(TreasuryService);
+  static generateNextAccountCode = TreasuryService.generateNextAccountCode.bind(TreasuryService);
   static createBankAccount = TreasuryService.createBankAccount.bind(TreasuryService);
   static updateBankAccount = TreasuryService.updateBankAccount.bind(TreasuryService);
   static deleteBankAccount = TreasuryService.deleteBankAccount.bind(TreasuryService);

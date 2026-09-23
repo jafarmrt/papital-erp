@@ -83,7 +83,7 @@ export function ItemFormModal(props: ItemFormModalProps) {
               rawSerialReserved={rawSerialReserved}
             />
 
-            {!item && (
+            {(!item || Boolean(item.canSetOpeningBalance ?? (item as any).can_set_opening_balance)) && (
               <ItemWarehouseStockForm
                 warehouses={warehouses}
                 form={form}

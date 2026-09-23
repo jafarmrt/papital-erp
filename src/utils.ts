@@ -118,7 +118,42 @@ export function normalizePersianDate(str: string | null | undefined): string {
 }
 
 /**
- * تبدیل رشته تاریخ جلالی (مثلاً '1403/05/12') یا رشته‌های مختلف به تاریخ استاندارد میلادی ISO (YYYY-MM-DD).
+ * تبدیل مستقیم سال، ماه و روز جلالی به میلادی با الگوریتم استاندارد و دقیق تقویم جلالی (Kazimierz M. Borkowski)
+ */
+export function jalaliToGregorian(jy: number, jm: number, jd: number): [number, number, number] {
+  let gy = jy > 979 ? 1600 : 621;
+  let jYear = jy > 979 ? jy - 979 : jy;
+
+  let days = (365 * jYear) + (Math.floor(jYear / 33) * 8) + Math.floor(((jYear % 33) + 3) / 4) + 78 + jd + ((jm < 7) ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
+  gy += 400 * Math.floor(days / 146097);
+  days %= 146097;
+
+  if (days > 36524) {
+    gy += 100 * Math.floor(--days / 36524);
+    days %= 36524;
+    if (days >= 365) days++;
+  }
+
+  gy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+
+  if (days > 365) {
+    gy += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+
+  let gd = days + 1;
+  const sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let gm = 0;
+  while (gm < 13 && gd > sal_a[gm]) {
+    gd -= sal_a[gm];
+    gm++;
+  }
+  return [gy, gm, gd];
+}
+
+/**
+ * تبدیل رشته تاریخ جلالی (مثلاً '1405/06/31' یا '1403-05-12') یا رشته‌های مختلف به تاریخ استاندارد میلادی ISO (YYYY-MM-DD).
  * از الگوریتم دقیق تقویم جلالی برای تبدیل قطعی استفاده می‌کند.
  */
 export function jalaliToIsoDate(str: string | null | undefined): string {
@@ -144,52 +179,51 @@ export function jalaliToIsoDate(str: string | null | undefined): string {
     const jm = parseInt(jMatch[2], 10);
     const jd = parseInt(jMatch[3], 10);
 
-    // الگوریتم تبدیل جلالی به میلادی
-    let gy = jy + 621;
-    let leapJ = -14;
-    let jp = -61;
-    let jumpL = 0;
-    const breaks = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
-
-    for (let i = 0; i < breaks.length - 1; i++) {
-      const jmBreak = breaks[i];
-      jumpL = jmBreak - jp;
-      if (jy < jmBreak) break;
-      leapJ = leapJ + Math.floor(jumpL / 33) * 8 + Math.floor((jumpL % 33) / 4);
-      jp = jmBreak;
-    }
-
-    let n = jy - jp;
-    leapJ = leapJ + Math.floor(n / 33) * 8 + Math.floor(((n % 33) + 3) / 4);
-    if ((jumpL % 33) === 4 && (jumpL - n) === 4) leapJ += 1;
-
-    const leapG = Math.floor(gy / 4) - Math.floor(((Math.floor(gy / 100) + 1) * 3) / 4) - 150;
-    const march = 20 + leapJ - leapG;
-    if ((jumpL - n) < 6) n = n - jumpL + Math.floor((jumpL + 4) / 33) * 33;
-
-    // محاسبه Julian Day Number
-    const g2d = (gY: number, gM: number, gD: number) => {
-      let d = Math.floor(((gY + Math.floor((gM - 8) / 6) + 100100) * 1461) / 4)
-        + Math.floor((153 * ((gM + 9) % 12) + 2) / 5)
-        + gD - 34840408;
-      d = d - Math.floor((Math.floor((gY + 100100 + Math.floor((gM - 8) / 6)) / 100) * 3) / 4) + 752;
-      return d;
-    };
-
-    const jdn = g2d(gy, 3, march) + (jm - 1) * 31 - Math.floor(jm / 7) * (jm - 7) + jd - 1;
-
-    // تبدیل JDN به تقویم میلادی
-    let j = 4 * jdn + 139361631;
-    j = j + Math.floor((Math.floor((4 * jdn + 183187720) / 146097) * 3) / 4) * 4 - 3908;
-    const iVal = Math.floor((j % 1461) / 4) * 5 + 308;
-    const gdOut = Math.floor((iVal % 153) / 5) + 1;
-    const gmOut = (Math.floor(iVal / 153) % 12) + 1;
-    const gyOut = Math.floor(j / 1461) - 100100 + Math.floor((8 - gmOut) / 6);
-
-    return `${gyOut}-${String(gmOut).padStart(2, '0')}-${String(gdOut).padStart(2, '0')}`;
+    const [gy, gm, gd] = jalaliToGregorian(jy, jm, jd);
+    return `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
   } catch {
     return '';
   }
+}
+
+/**
+ * نرمال‌سازی قطعی انواع تاریخ ورودی (رشته جلالی، تاریخ میلادی، رشته ISO یا شیء Date)
+ * به فرمت استاندارد timestamp پایگاه‌داده PostgreSQL (YYYY-MM-DD HH:mm:ss).
+ * این تابع از وقوع خطای datetime out of range هنگام ذخیره تاریخ‌های جلالی در ستون‌های timestamp جلوگیری می‌کند.
+ */
+export function normalizeDateToDbTimestamp(dateInput?: string | Date | null): string {
+  if (!dateInput) {
+    return new Date().toISOString().replace('T', ' ').slice(0, 19);
+  }
+  if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    return dateInput.toISOString().replace('T', ' ').slice(0, 19);
+  }
+  const s = String(dateInput).trim();
+  if (!s) {
+    return new Date().toISOString().replace('T', ' ').slice(0, 19);
+  }
+  // اگر قبلاً ISO با زمان است (مثلاً 2026-09-22T06:19:46.000Z)
+  if (s.includes('T') && /^\d{4}-\d{2}-\d{2}/.test(s) && !s.startsWith('13') && !s.startsWith('14') && !s.startsWith('15')) {
+    return s.replace('T', ' ').slice(0, 19);
+  }
+  // اگر تاریخ میلادی استاندارد YYYY-MM-DD یا YYYY/MM/DD است
+  const gMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(.*)$/);
+  if (gMatch && parseInt(gMatch[1], 10) >= 1900 && parseInt(gMatch[1], 10) <= 2200) {
+    const y = gMatch[1];
+    const m = gMatch[2].padStart(2, '0');
+    const d = gMatch[3].padStart(2, '0');
+    const timePart = gMatch[4]?.trim() || '00:00:00';
+    const cleanTime = timePart.includes(':') ? timePart : '00:00:00';
+    return `${y}-${m}-${d} ${cleanTime}`.slice(0, 19);
+  }
+  // اگر تاریخ جلالی است (مثلاً 1405/06/31 یا 1405-06-31)
+  const isoDate = jalaliToIsoDate(s);
+  if (isoDate) {
+    const timeMatch = s.match(/(\d{2}:\d{2}(?::\d{2})?)/);
+    const timePart = timeMatch ? (timeMatch[1].length === 5 ? `${timeMatch[1]}:00` : timeMatch[1]) : '00:00:00';
+    return `${isoDate} ${timePart}`;
+  }
+  return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
 /**

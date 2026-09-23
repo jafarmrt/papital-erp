@@ -6,6 +6,7 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { DocumentService } from '../document.service.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { BankAccountService } from '../accounting/treasury/bankAccount.service.js';
+import { VoucherService } from '../accounting/voucher.service.js';
 import { orm } from '../../db/drizzle.js';
 import { purchaseRequisitions, documents } from '../../db/schema.js';
 import { eq, and, ilike } from 'drizzle-orm';
@@ -206,6 +207,21 @@ export function registerWorkflowListeners() {
             }
           }
           logger.info(`[WorkflowEventBus AutoAction] Purchase requisition #${reqId} status synced to '${mappedStatus}'.`);
+        }
+      } else if (payload.entityType === 'journal_voucher' || payload.entityType === 'voucher') {
+        const voucherId = Number(payload.entityId);
+        if (!isNaN(voucherId) && voucherId > 0) {
+          logger.info(`[WorkflowEventBus AutoAction] Syncing journal voucher #${voucherId} to state '${payload.toStateKey}'...`);
+          if (payload.toStateKey === 'approved') {
+            await VoucherService.setVoucherStatus(voucherId, 'approved', payload.performedBy);
+            logger.info(`[WorkflowEventBus AutoAction] Voucher #${voucherId} approved.`);
+          } else if (payload.toStateKey === 'permanent') {
+            await VoucherService.setVoucherStatus(voucherId, 'permanent', payload.performedBy);
+            logger.info(`[WorkflowEventBus AutoAction] Voucher #${voucherId} finalized to permanent.`);
+          } else if (payload.toStateKey === 'draft') {
+            await VoucherService.setVoucherStatus(voucherId, 'draft', payload.performedBy);
+            logger.info(`[WorkflowEventBus AutoAction] Voucher #${voucherId} reverted to draft.`);
+          }
         }
       } else if (payload.autoActionKey) {
         logger.info(`[WorkflowEventBus AutoAction] Executing auto action '${payload.autoActionKey}' for ${payload.entityType}:${payload.entityId}`);

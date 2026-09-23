@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, Sparkles, Filter } from 'lucide-react';
 import { AccountSearchSelect } from '../AccountSearchSelect';
 import { formatCurrencyLabel } from '../../../utils';
+import { fetchJson } from '../../../api';
 import type { BankAccount, Account } from '../../../types';
 
 interface BankAccountModalProps {
@@ -33,6 +35,28 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     accountId: null as number | null,
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingCode, setIsLoadingCode] = useState(false);
+  const [autoCodeGenerated, setAutoCodeGenerated] = useState(false);
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
+
+  // واکشی کد خودکار پیشنهادی برای حساب جدید بر اساس نوع
+  const fetchNextCode = useCallback(async (accountType: 'bank' | 'cash' | 'pos') => {
+    try {
+      setIsLoadingCode(true);
+      const res = await fetchJson<{ code: string }>(`/accounting/banks/next-code?type=${accountType}`);
+      if (res && res.code) {
+        setFormData(prev => ({ ...prev, code: res.code }));
+        setAutoCodeGenerated(true);
+      }
+    } catch {
+      // در صورت بروز خطا در شبکه، تولید کد محلی بر اساس پیشوند
+      const prefix = accountType === 'cash' ? 'CASH' : accountType === 'pos' ? 'POS' : 'BANK';
+      setFormData(prev => ({ ...prev, code: `${prefix}-01` }));
+      setAutoCodeGenerated(true);
+    } finally {
+      setIsLoadingCode(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (editingBank) {
@@ -48,7 +72,9 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         initialBalance: editingBank.initialBalance || 0,
         accountId: editingBank.accountId || null,
       });
-    } else {
+      setAutoCodeGenerated(false);
+      setShowAllAccounts(false);
+    } else if (isOpen) {
       setFormData({
         code: '',
         title: '',
@@ -61,8 +87,19 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         initialBalance: 0,
         accountId: null,
       });
+      setAutoCodeGenerated(false);
+      setShowAllAccounts(false);
+      fetchNextCode('bank');
     }
-  }, [editingBank, isOpen]);
+  }, [editingBank, isOpen, fetchNextCode]);
+
+  // هر بار که کاربر نوع حساب را تغییر داد و در حالت ایجاد بود، کد جدید متناسب واکشی شود
+  const handleTypeChange = (newType: 'bank' | 'cash' | 'pos') => {
+    setFormData(prev => ({ ...prev, type: newType }));
+    if (!editingBank) {
+      fetchNextCode(newType);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -82,24 +119,72 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
   const curLbl = formatCurrencyLabel(appCurrency);
 
+  // فیلتر هوشمند سرفصل‌های معین حسابداری متناسب با نوع حساب خزانه
+  const treasuryAccountFilter = (acc: Account): boolean => {
+    if (showAllAccounts) return true;
+    const c = String(acc.code || '').trim();
+
+    // اگر حساب انتخابی فعلی باشد، همیشه نمایش داده شود تا انتخاب کاربر حفظ شود
+    if (formData.accountId && acc.id === formData.accountId) {
+      return true;
+    }
+
+    if (formData.type === 'cash') {
+      // سرفصل‌های صندوق و تنخواه‌گردان (1001، 1002، 1006) یا هر معینی زیر کل 10 که نام صندوق/نقد داشته باشد
+      return c.startsWith('1001') || c.startsWith('1002') || c.startsWith('1006') || 
+        (c.startsWith('10') && (acc.name.includes('صندوق') || acc.name.includes('نقد') || acc.name.includes('تنخواه')));
+    } else if (formData.type === 'pos') {
+      // دستگاه‌های کارتخوان (1005) یا زیرمجموعه کل 10 مرتبط با کارتخوان یا بانک
+      return c.startsWith('1005') || c.startsWith('1003') || 
+        (c.startsWith('10') && (acc.name.includes('کارتخوان') || acc.name.includes('POS') || acc.name.includes('بانک')));
+    } else {
+      // حساب‌های بانکی ریالی و ارزی (1003، 1004) یا زیرمجموعه کل 10 مرتبط با بانک
+      return c.startsWith('1003') || c.startsWith('1004') || 
+        (c.startsWith('10') && (acc.name.includes('بانک') || acc.name.includes('جاری') || acc.name.includes('سپرده')));
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-        <h3 className="font-bold text-slate-900 dark:text-white text-base mb-4">
-          {editingBank ? `ویرایش ${editingBank.title}` : 'تعریف حساب بانکی یا صندوق جدید'}
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-slate-900 dark:text-white text-base">
+            {editingBank ? `ویرایش ${editingBank.title}` : 'تعریف حساب بانکی یا صندوق جدید'}
+          </h3>
+          {!editingBank && autoCodeGenerated && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <Sparkles className="w-3 h-3" />
+              کدگذاری خودکار
+            </span>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                کد حساب *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  کد حساب *
+                </label>
+                {!editingBank && (
+                  <button
+                    type="button"
+                    onClick={() => fetchNextCode(formData.type)}
+                    disabled={isLoadingCode}
+                    title="تولید مجدد کد خودکار"
+                    className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${isLoadingCode ? 'animate-spin' : ''}`} />
+                    کد جدید
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 value={formData.code}
                 onChange={e => setFormData({ ...formData, code: e.target.value })}
+                placeholder={isLoadingCode ? 'در حال دریافت...' : 'مثال: BANK-01'}
                 className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
               />
             </div>
@@ -110,7 +195,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               </label>
               <select
                 value={formData.type}
-                onChange={e => setFormData({ ...formData, type: e.target.value as any })}
+                onChange={e => handleTypeChange(e.target.value as any)}
                 className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
               >
                 <option value="bank">حساب بانکی</option>
@@ -135,17 +220,40 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              اتصال به سرفصل کدینگ حسابداری (معین)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                اتصال به سرفصل کدینگ حسابداری (معین)
+                {formData.initialBalance !== 0 && (
+                  <span className="text-rose-500 mr-1">* (الزامی برای موجودی اولیه)</span>
+                )}
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAllAccounts(!showAllAccounts)}
+                className="text-[10px] text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
+                title="تغییر محدوده نمایش حساب‌ها"
+              >
+                <Filter className="w-2.5 h-2.5" />
+                {showAllAccounts ? 'فیلتر حساب‌های مرتبط خزانه' : 'نمایش همه سرفصل‌ها'}
+              </button>
+            </div>
             <AccountSearchSelect
               accounts={safeAccounts}
               value={formData.accountId || ''}
               onChange={(val) => setFormData({ ...formData, accountId: val ? Number(val) : null })}
-              placeholder="جستجو و انتخاب سرفصل معین حسابداری..."
+              filterFn={treasuryAccountFilter}
+              placeholder={
+                formData.type === 'cash'
+                  ? 'جستجو در سرفصل‌های صندوق و نقد (کد ۱۰)...'
+                  : formData.type === 'pos'
+                  ? 'جستجو در سرفصل‌های پوز و کارتخوان (کد ۱۰)...'
+                  : 'جستجو در سرفصل‌های بانک‌های ریالی/ارزی (کد ۱۰)...'
+              }
             />
             <p className="text-[10px] text-slate-400 mt-1">
-              با اتصال حساب به کد معین، تمامی گردش‌های اسناد دوبل به صورت لحظه‌ای با این حساب تراز می‌شوند.
+              {showAllAccounts
+                ? 'در حال حاضر همه سرفصل‌های کدینگ نمایش داده می‌شوند.'
+                : `لیست به سرفصل‌های مرتبط با ${formData.type === 'cash' ? 'صندوق و نقد' : formData.type === 'pos' ? 'کارتخوان' : 'بانک'} (کل ۱۰) محدود شده است.`}
             </p>
           </div>
 

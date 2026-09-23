@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { sql, eq, and, desc, ilike, or, gt } from 'drizzle-orm';
+import { sql, eq, and, desc, ilike, or, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { items, warehouses, transactions, documentItems } from '../db/schema.js';
+import { items, warehouses, transactions, documentItems, journalVouchers } from '../db/schema.js';
 import { authorize } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
@@ -23,11 +23,6 @@ export const itemCreateUpdateSchema = z.object({
   body: z.preprocess((val: unknown) => {
     if (val && typeof val === 'object') {
       const copy = { ...(val as Record<string, unknown>) };
-      for (const k of Object.keys(copy)) {
-        if (k.startsWith('stock_')) {
-          delete copy[k];
-        }
-      }
       // V2.0.0: alias — فرم کالا initial_cost می‌فرستد؛ به weighted_average_cost نگاشت شود
       if (copy.initial_cost !== undefined && copy.weighted_average_cost === undefined) {
         copy.weighted_average_cost = copy.initial_cost;
@@ -56,11 +51,13 @@ export const itemCreateUpdateSchema = z.object({
     reorder_point: z.union([z.string(), z.number()]).optional(),
     weighted_average_cost: z.union([z.string(), z.number()]).optional(),
     initial_cost: z.union([z.string(), z.number()]).optional(),
+    current_stock: z.union([z.string(), z.number()]).optional(),
+    stocks: z.record(z.string(), z.any()).optional(),
     color: z.string().optional(),
     weight: z.union([z.string(), z.number()]).optional(),
     material: z.string().optional(),
     size: z.string().optional()
-  }))
+  }).passthrough())
 });
 
 export const itemUpdateSchema = z.object({
@@ -174,12 +171,47 @@ router.get('/items', async (req, res) => {
     const fetchedItems = await query;
     const reservedMap = await ItemsService.getReservedStocksMap();
 
+    const itemIds = fetchedItems.map(it => it.id);
+    let txItemSet = new Set<number>();
+    let docItemSet = new Set<number>();
+    let voucherItemSet = new Set<number>();
+
+    if (itemIds.length > 0) {
+      const [txRows, docRows, voucherRows] = await Promise.all([
+        orm.select({ itemId: transactions.itemId })
+          .from(transactions)
+          .where(and(inArray(transactions.itemId, itemIds), eq(transactions.isDeleted, 0)))
+          .groupBy(transactions.itemId),
+        orm.select({ itemId: documentItems.itemId })
+          .from(documentItems)
+          .where(and(inArray(documentItems.itemId, itemIds), eq(documentItems.isDeleted, 0)))
+          .groupBy(documentItems.itemId),
+        orm.select({ referenceId: journalVouchers.referenceId })
+          .from(journalVouchers)
+          .where(and(
+            eq(journalVouchers.referenceModule, 'item_opening'),
+            inArray(journalVouchers.referenceId, itemIds),
+            eq(journalVouchers.isDeleted, 0)
+          ))
+          .groupBy(journalVouchers.referenceId)
+      ]);
+
+      txItemSet = new Set(txRows.map(r => r.itemId));
+      docItemSet = new Set(docRows.map(r => r.itemId));
+      voucherItemSet = new Set(voucherRows.map(r => r.referenceId));
+    }
+
     const mapped = fetchedItems.map(it => {
       const codeUpper = (it.code || '').trim().toUpperCase();
       const resInfo = reservedMap[codeUpper] || { totalReserved: 0, reservations: [] };
       const curStock = Number(it.currentStock || 0);
       const reservedStock = Number(resInfo.totalReserved || 0);
       const availableStock = Math.max(0, curStock - reservedStock);
+
+      const hasTx = txItemSet.has(it.id);
+      const hasDoc = docItemSet.has(it.id);
+      const hasOpeningVoucher = voucherItemSet.has(it.id);
+      const canSetOpening = curStock <= 0 && !hasTx && !hasDoc && !hasOpeningVoucher;
 
       const obj: Record<string, unknown> = {
         ...it,
@@ -188,7 +220,9 @@ router.get('/items', async (req, res) => {
         weighted_average_cost: it.weightedAverageCost,
         reserved_stock: reservedStock,
         available_stock: availableStock,
-        reservations: resInfo.reservations
+        reservations: resInfo.reservations,
+        canSetOpeningBalance: canSetOpening,
+        can_set_opening_balance: canSetOpening
       };
       const st = it.stocks as Record<string, unknown> | null;
       if (st) {
@@ -385,14 +419,62 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
     const imageUrl = image ? await uploadBase64ToStorage(image, 'image') : undefined;
     const thumbnailUrl = thumbnail ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : undefined;
 
+    // بررسی واجد شرایط بودن کالا برای ثبت موجودی افتتاحیه
+    const [txRow] = await orm.select({ id: transactions.id })
+      .from(transactions)
+      .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0)))
+      .limit(1);
+    const [docRow] = await orm.select({ id: documentItems.id })
+      .from(documentItems)
+      .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
+      .limit(1);
+    const [voucherRow] = await orm.select({ id: journalVouchers.id })
+      .from(journalVouchers)
+      .where(and(
+        eq(journalVouchers.referenceModule, 'item_opening'),
+        eq(journalVouchers.referenceId, itemId),
+        eq(journalVouchers.isDeleted, 0)
+      ))
+      .limit(1);
+
+    const canSetOpening = Number(prevItem.currentStock || 0) <= 0 && !txRow && !docRow && !voucherRow;
+
+    const whs = await orm.select({ code: warehouses.code }).from(warehouses);
+    let computedStock = 0;
+    const stockValues: Record<string, number> = {};
+
+    if (canSetOpening) {
+      if (req.body.stocks && typeof req.body.stocks === 'object') {
+        for (const wh of whs) {
+          const val = Number(req.body.stocks[wh.code] ?? req.body.stocks[wh.code.toLowerCase()] ?? 0);
+          stockValues[wh.code] = val > 0 ? val : 0;
+          computedStock += stockValues[wh.code];
+        }
+      } else {
+        for (const wh of whs) {
+          const bodyKey = `stock_${wh.code}`;
+          const val = req.body[bodyKey] !== undefined ? Number(req.body[bodyKey]) : 0;
+          stockValues[wh.code] = val > 0 ? val : 0;
+          computedStock += stockValues[wh.code];
+        }
+      }
+
+      const currentStockBody = Number(req.body.current_stock || 0);
+      if (computedStock === 0 && currentStockBody > 0 && whs.length > 0) {
+        const defaultWh = whs[0].code;
+        stockValues[defaultWh] = currentStockBody;
+        computedStock = currentStockBody;
+      }
+    }
+
+    const effectiveWac = weighted_average_cost !== undefined && weighted_average_cost !== ''
+      ? Number(weighted_average_cost) || 0
+      : (req.body.initial_cost !== undefined && req.body.initial_cost !== '' ? Number(req.body.initial_cost) || 0 : Number(prevItem.weightedAverageCost || 0));
+
     const updateData: Partial<typeof items.$inferInsert> = {
       name, code, unit, category: category || '',
       reorderPoint: Number(reorder_point || 0),
-      // V2.0.0: محافظت از WAC — فقط اگر مقدار جدید ارائه شده باشد به‌روزرسانی شود
-      // (قبلاً هر ویرایش فرم WAC موجود را صفر می‌کرد)
-      weightedAverageCost: weighted_average_cost !== undefined && weighted_average_cost !== ''
-        ? Number(weighted_average_cost) || 0
-        : Number(prevItem.weightedAverageCost || 0),
+      weightedAverageCost: effectiveWac,
       color: color || null, weight: weight ? Number(weight) : null, material: material || null, size: size || null,
       version: nextVersion(prevItem.version)
     };
@@ -400,7 +482,53 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
     if (imageUrl !== undefined) updateData.image = imageUrl;
     if (thumbnailUrl !== undefined) updateData.thumbnail = thumbnailUrl;
 
-    await orm.update(items).set(updateData).where(eq(items.id, itemId));
+    if (canSetOpening && computedStock > 0) {
+      updateData.currentStock = computedStock;
+      updateData.stocks = stockValues;
+    }
+
+    let openingVoucherId: number | null = null;
+
+    await orm.transaction(async (tx) => {
+      await tx.update(items).set(updateData).where(eq(items.id, itemId));
+
+      if (canSetOpening && computedStock > 0) {
+        for (const whCode of Object.keys(stockValues)) {
+          const qty = stockValues[whCode];
+          if (qty > 0) {
+            await tx.insert(transactions).values({
+              itemId: itemId,
+              type: 'in',
+              quantity: qty,
+              unitPrice: effectiveWac,
+              totalPrice: Math.round(qty * effectiveWac * 10000) / 10000,
+              date: await businessTodayIsoDate(),
+              documentType: 'audit',
+              documentRef: 'ثبت موجودی افتتاحیه',
+              location: whCode,
+              notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)',
+              createdBy: req.user?.username || 'admin',
+              isDeleted: 0
+            });
+          }
+        }
+
+        const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+          entityType: 'item',
+          entityId: String(itemId),
+          userId: req.user?.id,
+          userName: req.user?.fullName || req.user?.username
+        });
+        if (!wfInstance) {
+          const opening = await ItemOpeningService.issueItemOpeningVoucher(itemId, {
+            userId: req.user?.id,
+            username: req.user?.fullName || req.user?.username,
+            tx
+          });
+          openingVoucherId = opening?.id || null;
+        }
+      }
+    });
 
     const { diff, hasChanges } = computeAuditDiff(prevItem, { ...prevItem, ...updateData }, ['image', 'thumbnail', 'updatedAt', 'stocks']);
 
@@ -409,13 +537,14 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
       action: 'UPDATE',
       entity: 'کالا',
       entityId: itemId,
-      description: `ویرایش اطلاعات کالای "${name}" (کد: ${code})`,
+      description: `ویرایش اطلاعات کالای "${name}" (کد: ${code})${canSetOpening && computedStock > 0 ? ` همراه با ثبت موجودی افتتاحیه (${computedStock} ${unit})` : ''}`,
       details: {
         before: {
           name: prevItem.name,
           code: prevItem.code,
           category: prevItem.category,
           unit: prevItem.unit,
+          currentStock: prevItem.currentStock,
           reorderPoint: prevItem.reorderPoint,
           weightedAverageCost: prevItem.weightedAverageCost,
           color: prevItem.color,
@@ -428,8 +557,9 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
           code,
           category: category || '',
           unit,
+          currentStock: canSetOpening && computedStock > 0 ? computedStock : prevItem.currentStock,
           reorderPoint: Number(reorder_point || 0),
-          weightedAverageCost: Number(weighted_average_cost || 0),
+          weightedAverageCost: effectiveWac,
           color: color || null,
           weight: weight ? Number(weight) : null,
           material: material || null,
@@ -440,7 +570,7 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
       }
     });
 
-    res.json({ success: true });
+    res.json({ success: true, opening_voucher_id: openingVoucherId });
   } catch (err) {
     const errorObj = err as { name?: string; code?: string; expectedVersion?: number; currentVersion?: number } | null;
     if (errorObj?.name === 'OptimisticLockError') {

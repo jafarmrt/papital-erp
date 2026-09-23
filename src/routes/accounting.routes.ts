@@ -208,6 +208,7 @@ export const createVoucherSchema = z.object({
   body: z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است'),
     voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement']).optional().default('general'),
+    status: z.enum(['draft', 'approved']).optional(),
     manualVoucherNumber: z.string().optional(),
     description: z.string().min(1, 'شرح کلی سند الزامی است'),
     referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory']).optional().default('manual'),
@@ -453,6 +454,36 @@ router.post('/accounting/vouchers/batch-finalize', authorizePermission('accounti
   res.json({ message: `${result.finalizedCount} سند با موفقیت قطعی و دائم شدند.`, ...result });
 }));
 
+// Batch Approve Vouchers (تایید گروهی اسناد پیش‌نویس توسط حسابدار/مدیر مالی)
+export const batchApproveVouchersSchema = z.object({
+  body: z.object({
+    ids: z.array(z.coerce.number().int().positive('شناسه سند نامعتبر است')).min(1, 'حداقل یک سند باید انتخاب شود')
+  })
+});
+
+router.post('/accounting/vouchers/batch-approve', authorizePermission('accounting.vouchers'), validate(batchApproveVouchersSchema), asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  const result = await AccountingService.approveJournalVouchers(
+    ids,
+    req.user?.id,
+    req.user?.fullName || req.user?.username
+  );
+
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'journal_voucher',
+    entityId: ids.join(','),
+    description: `تایید حسابداری گروهی ${result.approvedCount} سند پیش‌نویس`,
+    details: { ids, count: result.approvedCount },
+    ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || '',
+  });
+
+  res.json({ message: `${result.approvedCount} سند پیش‌نویس با موفقیت تایید حسابداری شدند.`, ...result });
+}));
+
 // Status change route (تغییر وضعیت سند حسابداری: پیش‌نویس، تایید شده، دائم و قطعی)
 export const setVoucherStatusSchema = z.object({
   params: z.object({
@@ -583,18 +614,31 @@ const reportBanksHandler = asyncHandler(async (req, res) => {
 router.get('/accounting/banks/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 router.get('/accounting/bank-accounts/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 
+// V4.0.37: تولید کد خودکار حساب خزانه بر اساس نوع
+const getNextBankCodeHandler = asyncHandler(async (req, res) => {
+  const type = (req.query.type as any) || 'bank';
+  const nextCode = await AccountingService.generateNextAccountCode(type);
+  res.json({ code: nextCode });
+});
+router.get('/accounting/banks/next-code', authorizePermission('accounting.treasury'), getNextBankCodeHandler);
+router.get('/accounting/bank-accounts/next-code', authorizePermission('accounting.treasury'), getNextBankCodeHandler);
+
 export const createBankAccountSchema = z.object({
   body: z.object({
+    code: z.string().optional(),
     title: z.string().min(1, 'عنوان حساب بانکی/صندوق الزامی است'),
-    type: z.enum(['bank', 'cash', 'petty_cash'], {
-      message: 'نوع حساب باید bank، cash یا petty_cash باشد'
+    type: z.enum(['bank', 'cash', 'pos', 'petty_cash'], {
+      message: 'نوع حساب باید bank، cash، pos یا petty_cash باشد'
     }).optional().default('bank'),
+    bankName: z.string().optional(),
     accountNumber: z.string().optional(),
     shabaNumber: z.string().optional(),
+    shebaNumber: z.string().optional(),
     cardNumber: z.string().optional(),
     branch: z.string().optional(),
     currency: z.string().optional().default('IRR'),
     initialBalance: z.coerce.number().default(0),
+    accountId: z.coerce.number().nullable().optional(),
     accountCode: z.string().optional(),
     accountName: z.string().optional(),
     notes: z.string().optional(),
@@ -606,14 +650,18 @@ export const updateBankAccountSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه حساب باید عددی باشد')
   }),
   body: z.object({
+    code: z.string().optional(),
     title: z.string().min(1, 'عنوان حساب الزامی است').optional(),
-    type: z.enum(['bank', 'cash', 'petty_cash']).optional(),
+    type: z.enum(['bank', 'cash', 'pos', 'petty_cash']).optional(),
+    bankName: z.string().optional(),
     accountNumber: z.string().optional(),
     shabaNumber: z.string().optional(),
+    shebaNumber: z.string().optional(),
     cardNumber: z.string().optional(),
     branch: z.string().optional(),
     currency: z.string().optional(),
     initialBalance: z.coerce.number().optional(),
+    accountId: z.coerce.number().nullable().optional(),
     accountCode: z.string().optional(),
     accountName: z.string().optional(),
     notes: z.string().optional(),
@@ -623,6 +671,7 @@ export const updateBankAccountSchema = z.object({
 const createBankHandler = asyncHandler(async (req, res) => {
   const bank = await AccountingService.createBankAccount({
     ...req.body,
+    shebaNumber: req.body.shebaNumber || req.body.shabaNumber,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
   });
@@ -648,6 +697,7 @@ const updateBankHandler = asyncHandler(async (req, res) => {
   const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
   const updated = await AccountingService.updateBankAccount(id, {
     ...req.body,
+    ...(req.body.shebaNumber || req.body.shabaNumber ? { shebaNumber: req.body.shebaNumber || req.body.shabaNumber } : {}),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
   });
@@ -977,17 +1027,19 @@ export const updateChequeStatusSchema = z.object({
     }),
     actionDate: z.string().optional(),
     bankAccountId: z.coerce.number().int().positive().optional(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    description: z.string().optional()
   })
 });
 
 const updateChequeStatusHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  const notes = req.body.notes || req.body.description;
   const chq = await AccountingService.updateChequeStatus(id, {
     status: req.body.status,
     actionDate: req.body.actionDate,
     bankAccountId: req.body.bankAccountId,
-    notes: req.body.notes,
+    notes,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
   });

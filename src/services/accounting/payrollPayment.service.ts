@@ -238,6 +238,7 @@ export class PayrollPaymentService {
       const voucher = await VoucherService.createJournalVoucher({
         date: payDate,
         voucherType: 'treasury',
+        status: 'draft',
         description: descText,
         referenceModule: 'payroll_payment',
         referenceId: payroll.id,

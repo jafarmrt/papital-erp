@@ -77,6 +77,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     handleCorrectVoucher,
     handleFinalizeVoucher,
     handleBatchFinalizeVouchers,
+    handleBatchApproveVouchers,
     handleSetVoucherStatus,
     handleCreateBankAccount,
     handleUpdateBankAccount,
@@ -262,6 +263,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onApproveVoucher={(id) => handleSetVoucherStatus(id, 'approved')}
               onSetVoucherStatus={handleSetVoucherStatus}
               onBatchFinalizeVouchers={handleBatchFinalizeVouchers}
+              onBatchApproveVouchers={handleBatchApproveVouchers}
             />
           )}
 

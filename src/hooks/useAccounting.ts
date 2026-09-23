@@ -309,6 +309,17 @@ export function useAccounting() {
     return res;
   };
 
+  const handleBatchApproveVouchers = async (ids: number[]) => {
+    const res = await fetchJson('/accounting/vouchers/batch-approve', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    toast.success(res?.message || 'اسناد پیش‌نویس با موفقیت تایید حسابداری شدند');
+    await loadVouchers();
+    await loadStats();
+    return res;
+  };
+
   const handleSetVoucherStatus = async (voucherId: number, status: 'draft' | 'approved' | 'permanent', reason?: string) => {
     const res = await fetchJson(`/accounting/vouchers/${voucherId}/status`, {
       method: 'PUT',
@@ -432,7 +443,7 @@ export function useAccounting() {
   ) => {
     await fetchJson(`/accounting/cheques/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, description, bankAccountId }),
+      body: JSON.stringify({ status, description, notes: description, bankAccountId }),
     });
     await loadCheques();
     await loadVouchers();
@@ -530,6 +541,7 @@ export function useAccounting() {
     handleCorrectVoucher,
     handleFinalizeVoucher,
     handleBatchFinalizeVouchers,
+    handleBatchApproveVouchers,
     handleSetVoucherStatus,
     handleCreateBankAccount,
     handleUpdateBankAccount,

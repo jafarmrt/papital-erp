@@ -22,6 +22,8 @@ export interface Item {
   weight?: number;
   material?: string;
   size?: string;
+  canSetOpeningBalance?: boolean;
+  can_set_opening_balance?: boolean;
 }
 
 export interface PendingMaterial {

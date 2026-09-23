@@ -22,6 +22,7 @@ function toAggregateType(entityType?: string): AggregateType {
     case 'customer':
       return 'Customer';
     case 'voucher':
+    case 'journal_voucher':
       return 'Voucher';
     case 'woocommerce':
       return 'WooCommerce';

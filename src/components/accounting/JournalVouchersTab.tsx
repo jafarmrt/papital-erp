@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { FileText, Plus, Search, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical } from 'lucide-react';
+import { FileText, Plus, Search, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
@@ -7,6 +7,7 @@ import { VoucherReversalModal } from './VoucherReversalModal';
 import { VoucherCorrectionModal } from './VoucherCorrectionModal';
 import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
+import { WorkflowStepperWidget } from '../workflow/WorkflowStepperWidget';
 import ConfirmModal from '../ConfirmModal';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
@@ -30,6 +31,7 @@ interface JournalVouchersTabProps {
   onApproveVoucher?: (voucherId: number) => Promise<any>;
   onSetVoucherStatus?: (voucherId: number, status: 'draft' | 'approved' | 'permanent', reason?: string) => Promise<any>;
   onBatchFinalizeVouchers?: (ids: number[]) => Promise<any>;
+  onBatchApproveVouchers?: (ids: number[]) => Promise<any>;
 }
 
 export function JournalVouchersTab({
@@ -49,6 +51,7 @@ export function JournalVouchersTab({
   onApproveVoucher,
   onSetVoucherStatus,
   onBatchFinalizeVouchers,
+  onBatchApproveVouchers,
 }: JournalVouchersTabProps) {
   const appCurrency = useAppCurrency();
   const safeVouchers = Array.isArray(vouchers) ? vouchers : [];
@@ -74,6 +77,7 @@ export function JournalVouchersTab({
   // Reversal & Correction modal state
   const [reversalTargetVoucher, setReversalTargetVoucher] = useState<JournalVoucher | null>(null);
   const [correctionTargetVoucher, setCorrectionTargetVoucher] = useState<JournalVoucher | null>(null);
+  const [workflowTargetVoucher, setWorkflowTargetVoucher] = useState<JournalVoucher | null>(null);
   const [viewingAttachments, setViewingAttachments] = useState<{ title: string; attachments: FinancialAttachment[] } | null>(null);
 
   // Status counters for Subphase 2.1 segmented control
@@ -81,6 +85,65 @@ export function JournalVouchersTab({
   const approvedCount = useMemo(() => safeVouchers.filter(v => v.status === 'approved').length, [safeVouchers]);
   const permanentCount = useMemo(() => safeVouchers.filter(v => v.status === 'permanent').length, [safeVouchers]);
   const totalCount = safeVouchers.length;
+
+  // Multi-select & Batch Operations
+  const [selectedVoucherIds, setSelectedVoucherIds] = useState<number[]>([]);
+  const [isBatchOperating, setIsBatchOperating] = useState(false);
+
+  // Selected vouchers analysis
+  const selectedVouchers = useMemo(() => {
+    return safeVouchers.filter(v => selectedVoucherIds.includes(v.id));
+  }, [safeVouchers, selectedVoucherIds]);
+
+  const selectedDrafts = useMemo(() => {
+    return selectedVouchers.filter(v => v.status === 'draft');
+  }, [selectedVouchers]);
+
+  const selectedApproved = useMemo(() => {
+    return selectedVouchers.filter(v => v.status === 'approved');
+  }, [selectedVouchers]);
+
+  const handleSelectAllVisible = (checked: boolean) => {
+    if (checked) {
+      const visibleIds = filteredVouchers.map(v => v.id);
+      setSelectedVoucherIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    } else {
+      const visibleIdsSet = new Set(filteredVouchers.map(v => v.id));
+      setSelectedVoucherIds(prev => prev.filter(id => !visibleIdsSet.has(id)));
+    }
+  };
+
+  const handleToggleSelectOne = (id: number) => {
+    setSelectedVoucherIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchApprove = async () => {
+    if (selectedDrafts.length === 0 || !onBatchApproveVouchers || isBatchOperating) return;
+    setIsBatchOperating(true);
+    try {
+      await onBatchApproveVouchers(selectedDrafts.map(v => v.id));
+      setSelectedVoucherIds([]);
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در تایید گروهی اسناد پیش‌نویس');
+    } finally {
+      setIsBatchOperating(false);
+    }
+  };
+
+  const handleBatchFinalize = async () => {
+    if (selectedApproved.length === 0 || !onBatchFinalizeVouchers || isBatchOperating) return;
+    setIsBatchOperating(true);
+    try {
+      await onBatchFinalizeVouchers(selectedApproved.map(v => v.id));
+      setSelectedVoucherIds([]);
+    } catch (err: any) {
+      toast.error(err?.message || 'خطا در قطعی‌سازی گروهی اسناد');
+    } finally {
+      setIsBatchOperating(false);
+    }
+  };
 
   // دیالوگ تایید یکدست — ConfirmModal استاندارد
   type ConfirmAction = { kind: 'finalize' | 'approve' | 'revert_to_draft' | 'delete'; voucher: JournalVoucher } | null;
@@ -367,12 +430,64 @@ export function JournalVouchersTab({
         </div>
       </div>
 
+      {/* Batch Operations Bar */}
+      {selectedVoucherIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-indigo-50/90 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/80 rounded-xl shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span className="text-xs font-bold text-indigo-950 dark:text-indigo-100">
+              {formatPersianNumber(selectedVoucherIds.length)} سند انتخاب شده است
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {selectedDrafts.length > 0 && onBatchApproveVouchers && (
+              <button
+                disabled={isBatchOperating}
+                onClick={handleBatchApprove}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>تایید حسابداری ({formatPersianNumber(selectedDrafts.length)} سند پیش‌نویس)</span>
+              </button>
+            )}
+
+            {selectedApproved.length > 0 && onBatchFinalizeVouchers && (
+              <button
+                disabled={isBatchOperating}
+                onClick={handleBatchFinalize}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>قطعی‌سازی دفاتر ({formatPersianNumber(selectedApproved.length)} سند تاییدشده)</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setSelectedVoucherIds([])}
+              className="px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+            >
+              لغو انتخاب
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Vouchers Table */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-visible">
         <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full text-right border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold">
+                <th className="py-3.5 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredVouchers.length > 0 && filteredVouchers.every(v => selectedVoucherIds.includes(v.id))}
+                    onChange={(e) => handleSelectAllVisible(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    title="انتخاب همه اسناد این صفحه"
+                  />
+                </th>
                 <th className="py-3.5 px-3 w-10 text-center">#</th>
                 <th className="py-3.5 px-3 w-28 text-center">شماره سند</th>
                 <th className="py-3.5 px-3 w-28 text-center">تاریخ</th>
@@ -387,7 +502,7 @@ export function JournalVouchersTab({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
               {filteredVouchers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-400">
+                  <td colSpan={10} className="text-center py-10 text-slate-400">
                     {loading ? 'در حال بارگذاری اسناد...' : 'سندی با این مشخصات یافت نشد'}
                   </td>
                 </tr>
@@ -399,7 +514,16 @@ export function JournalVouchersTab({
 
                   return (
                     <React.Fragment key={voucher.id}>
-                      <tr className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition ${isPermanent ? 'bg-emerald-50/20 dark:bg-emerald-950/10' : ''}`}>
+                      <tr className={`hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition ${isPermanent ? 'bg-emerald-50/20 dark:bg-emerald-950/10' : ''} ${selectedVoucherIds.includes(voucher.id) ? 'bg-indigo-50/30 dark:bg-indigo-950/20' : ''}`}>
+                        <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedVoucherIds.includes(voucher.id)}
+                            onChange={() => handleToggleSelectOne(voucher.id)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </td>
+
                         <td className="py-3 px-3 text-center">
                           <button
                             onClick={() => toggleExpand(voucher.id)}
@@ -609,6 +733,19 @@ export function JournalVouchersTab({
                                       </button>
                                     </>
                                   )}
+
+                                  {/* چرخه تاییدات و گردش‌کار سند */}
+                                  <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                                  <button
+                                    onClick={() => {
+                                      setOpenMenuVoucherId(null);
+                                      setWorkflowTargetVoucher(voucher);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition cursor-pointer"
+                                  >
+                                    <GitFork className="w-3.5 h-3.5 text-indigo-500" />
+                                    <span>چرخه تاییدات سند (ورکفلو)</span>
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -619,7 +756,7 @@ export function JournalVouchersTab({
                       {/* Nested Expanded Articles */}
                       {isExpanded && voucher.items && (
                         <tr className="bg-slate-50/50 dark:bg-slate-850">
-                          <td colSpan={9} className="p-3 pr-12">
+                          <td colSpan={10} className="p-3 pr-12">
                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-inner">
                               <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
                                 آرتیکل‌های تفکیکی سند شماره #{formatPersianNumber(voucher.voucherNumber)}:
@@ -785,6 +922,56 @@ export function JournalVouchersTab({
           title={viewingAttachments?.title || 'اسناد و مدارک پیوست'}
           attachments={viewingAttachments?.attachments || []}
         />
+      )}
+
+      {/* مدال تعاملی چرخه تاییدات و گردش‌کار سند حسابداری */}
+      {workflowTargetVoucher && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
+          onClick={() => setWorkflowTargetVoucher(null)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <GitFork className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    گردش کار و چرخه تاییدات سند شماره #{formatPersianNumber(workflowTargetVoucher.voucherNumber)}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {workflowTargetVoucher.description}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWorkflowTargetVoucher(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Stepper Widget Body */}
+            <div className="p-5 max-h-[75vh] overflow-y-auto">
+              <WorkflowStepperWidget
+                entityType="journal_voucher"
+                entityId={workflowTargetVoucher.id}
+                workflowCode="JOURNAL_VOUCHER_WORKFLOW"
+                title="مراحل تایید و گذار سند در کارگاه"
+                onStateChange={() => {
+                  onRefresh();
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

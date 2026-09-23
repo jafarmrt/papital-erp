@@ -13,6 +13,7 @@ interface AccountSearchSelectProps {
   className?: string;
   autoFocus?: boolean;
   inputRef?: React.RefObject<HTMLInputElement>;
+  filterFn?: (account: Account) => boolean;
 }
 
 export function AccountSearchSelect({
@@ -24,6 +25,7 @@ export function AccountSearchSelect({
   className = '',
   autoFocus = false,
   inputRef: externalInputRef,
+  filterFn,
 }: AccountSearchSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +36,10 @@ export function AccountSearchSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
+  const baseAccounts = useMemo(() => {
+    return filterFn ? accounts.filter(filterFn) : accounts;
+  }, [accounts, filterFn]);
+
   const selectedAccount = useMemo(() => {
     return accounts.find(a => a.id === Number(value)) || null;
   }, [accounts, value]);
@@ -42,16 +48,16 @@ export function AccountSearchSelect({
   const filteredAccounts = useMemo(() => {
     const query = normalizePersianText(searchQuery);
     if (!query) {
-      return accounts.slice(0, 100);
+      return baseAccounts.slice(0, 100);
     }
-    return accounts.filter(acc => {
+    return baseAccounts.filter(acc => {
       const matchCode = acc.code.toLowerCase().includes(query);
       const matchName = normalizePersianText(acc.name).includes(query);
       const matchType = acc.accountType ? normalizePersianText(acc.accountType).includes(query) : false;
       const matchDesc = acc.description ? normalizePersianText(acc.description).includes(query) : false;
       return matchCode || matchName || matchType || matchDesc;
     }).slice(0, 100);
-  }, [accounts, searchQuery]);
+  }, [baseAccounts, searchQuery]);
 
   useEffect(() => {
     if (selectedAccount && !isOpen) {

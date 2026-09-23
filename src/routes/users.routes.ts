@@ -474,18 +474,18 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
 // USERS MANAGEMENT ROUTES
 const userCreateSchema = z.object({
   body: z.object({
-    username: z.string().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
+    username: z.string().trim().min(3, 'نام کاربری باید حداقل ۳ کاراکتر باشد'),
     password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد'),
-    full_name: z.string().optional(),
-    role: z.string().min(1, 'انتخاب نقش الزامی است'),
+    full_name: z.string().trim().optional().default(''),
+    role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   })
 });
 
 const userUpdateSchema = z.object({
   body: z.object({
     password: z.string().min(6, 'رمز عبور باید حداقل ۶ کاراکتر باشد').optional().or(z.literal('')),
-    full_name: z.string().optional(),
-    role: z.string().min(1, 'انتخاب نقش الزامی است'),
+    full_name: z.string().trim().optional().default(''),
+    role: z.string().trim().min(1, 'انتخاب نقش الزامی است'),
   }),
   params: z.object({
     id: numericIdString
@@ -556,14 +556,65 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
   try {
     const { username, password, full_name, role } = req.body;
     const tUsername = (username || '').trim();
-    
+    const tFullName = (full_name && String(full_name).trim()) ? String(full_name).trim() : tUsername;
+
+    // ۱. بررسی تکراری نبودن نام کاربری در دیتابیس
+    const [existingUser] = await orm.select().from(users).where(eq(users.username, tUsername)).limit(1);
+    if (existingUser) {
+      if (existingUser.isDeleted === 1) {
+        // حساب کاربری قبلاً حذف نرم شده بوده — فعال‌سازی مجدد با مشخصات جدید بدون خطای یکتایی
+        const salt = bcrypt.genSaltSync(10);
+        const hashedPassword = bcrypt.hashSync(password, salt);
+
+        await orm.update(users).set({
+          password: hashedPassword,
+          fullName: tFullName,
+          role: role,
+          isDeleted: 0,
+          mustResetPassword: 0,
+          failedLoginCount: 0,
+          lockedUntil: null,
+          tokenVersion: (existingUser.tokenVersion || 0) + 1,
+        }).where(eq(users.id, existingUser.id));
+
+        invalidateUserAuthCache(existingUser.id);
+
+        await logActivity({
+          req,
+          action: 'CREATE',
+          entity: 'کاربران سیستم',
+          entityId: existingUser.id,
+          description: `فعال‌سازی و بازتعریف کاربر جدید "${tFullName}" با نام کاربری "${tUsername}" (نقش: ${role})`,
+          details: {
+            after: {
+              id: existingUser.id,
+              username: tUsername,
+              fullName: tFullName,
+              role: role
+            }
+          }
+        });
+
+        return res.json({ id: existingUser.id, username: tUsername, full_name: tFullName, role });
+      }
+      return res.status(400).json({ error: 'نام کاربری تکراری است' });
+    }
+
+    // ۲. اعتبارسنجی نقش انتخابی
+    if (role !== 'admin') {
+      const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
+      if (!roleRecord) {
+        return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
+      }
+    }
+
     const salt = bcrypt.genSaltSync(10);
     const hashedPassword = bcrypt.hashSync(password, salt);
 
     const [info] = await orm.insert(users).values({
       username: tUsername,
       password: hashedPassword,
-      fullName: full_name,
+      fullName: tFullName,
       role: role
     }).returning({ id: users.id });
 
@@ -573,25 +624,33 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
       action: 'CREATE',
       entity: 'کاربران سیستم',
       entityId: info.id,
-      description: `تعریف کاربر جدید "${full_name || tUsername}" با نام کاربری "${tUsername}" (نقش: ${role})`,
+      description: `تعریف کاربر جدید "${tFullName}" با نام کاربری "${tUsername}" (نقش: ${role})`,
       details: {
         after: {
           id: info.id,
           username: tUsername,
-          fullName: full_name,
+          fullName: tFullName,
           role: role
         }
       }
     });
 
-    res.json({ id: info.id, username: tUsername, full_name, role });
-  } catch (err) {
+    res.json({ id: info.id, username: tUsername, full_name: tFullName, role });
+  } catch (err: any) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    if (errMsg.includes('unique constraint') || errMsg.includes('UNIQUE')) {
-      res.status(400).json({ error: 'نام کاربری تکراری است' });
-    } else {
-      throw err;
+    const causeMsg = err?.cause?.message || '';
+    const causeCode = err?.cause?.code || err?.code;
+
+    if (
+      causeCode === '23505' ||
+      errMsg.includes('unique constraint') ||
+      errMsg.includes('UNIQUE') ||
+      causeMsg.includes('unique constraint') ||
+      causeMsg.includes('duplicate key')
+    ) {
+      return res.status(400).json({ error: 'نام کاربری تکراری است' });
     }
+    throw err;
   }
 });
 
@@ -605,7 +664,19 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
       return res.status(404).json({ error: 'کاربر یافت نشد' });
     }
 
-    const updateData: Partial<typeof users.$inferInsert> = { fullName: full_name, role };
+    const tFullName = (full_name !== undefined && full_name !== null && String(full_name).trim())
+      ? String(full_name).trim()
+      : (prevUser.fullName || prevUser.username);
+
+    // اعتبارسنجی نقش
+    if (role && role !== 'admin') {
+      const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
+      if (!roleRecord) {
+        return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
+      }
+    }
+
+    const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
     const passwordChanged = Boolean(password && password.trim());
     const roleChanged = Boolean(role && role !== prevUser.role);
 
@@ -625,7 +696,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
 
     const { diff, hasChanges } = computeAuditDiff(
       { fullName: prevUser.fullName, role: prevUser.role },
-      { fullName: full_name, role: role }
+      { fullName: tFullName, role: role }
     );
 
     await logActivity({
@@ -638,7 +709,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
         userId: targetUserId,
         username: prevUser.username,
         before: { fullName: prevUser.fullName, role: prevUser.role },
-        after: { fullName: full_name, role: role },
+        after: { fullName: tFullName, role: role },
         changes: diff,
         hasChanges,
         passwordChanged
@@ -646,7 +717,19 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     });
 
     res.json({ success: true });
-  } catch (err) {
+  } catch (err: any) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const causeMsg = err?.cause?.message || '';
+    const causeCode = err?.cause?.code || err?.code;
+
+    if (
+      causeCode === '23505' ||
+      errMsg.includes('unique constraint') ||
+      errMsg.includes('UNIQUE') ||
+      causeMsg.includes('unique constraint')
+    ) {
+      return res.status(400).json({ error: 'اطلاعات یکتا با حساب کاربری دیگری تداخل دارد' });
+    }
     throw err;
   }
 });
