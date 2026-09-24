@@ -123,7 +123,18 @@ fi
 # npm omit devDependencies — but the build (vite/esbuild) REQUIRES them (v4.0.30 split).
 # Force full install for the build step only; runtime keeps NODE_ENV=production.
 log "[3/6] Installing dependencies (npm ci --include=dev)..."
-NODE_ENV=development npm ci --include=dev
+# AI Studio pulls delete package-lock.json; npm ci cannot run without it.
+if [ ! -f package-lock.json ]; then
+  warn "package-lock.json missing — regenerating from package.json (npm install --package-lock-only)..."
+  NODE_ENV=development npm install --include=dev --package-lock-only --no-audit --no-fund \
+    || die "Lockfile regeneration failed."
+fi
+NODE_ENV=development npm ci --include=dev || {
+  warn "npm ci failed — lockfile is likely out of sync with package.json. Regenerating and retrying..."
+  NODE_ENV=development npm install --include=dev --package-lock-only --no-audit --no-fund \
+    || die "Lockfile regeneration failed."
+  NODE_ENV=development npm ci --include=dev || die "npm ci failed even after lockfile regeneration."
+}
 log "[4/6] Building application..."
 npm run build
 success "Build completed."
