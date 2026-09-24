@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Building2, Users, Briefcase, Plus, PhoneCall, FileText, X, Edit2, TrendingUp, Award, ExternalLink, BookOpen, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react';
 import { Customer, CRMLead, CRMActivity } from '../../types';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPersianDate, formatPersianPhone } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { STAGES } from '../../hooks/useCRMData';
 import { fetchJson } from '../../api';
@@ -617,7 +617,9 @@ export function CustomerDossierDrawer({
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px]">شماره تماس اصلی:</span>
-                  <span className="font-bold font-mono text-slate-800" dir="ltr">{customer.phone || '-'}</span>
+                  <span className="font-bold font-mono text-slate-800" dir="ltr">
+                    {customer.phone ? formatPersianPhone(customer.phone) : '-'}
+                  </span>
                 </div>
               </div>
               <div>
@@ -651,7 +653,9 @@ export function CustomerDossierDrawer({
                     </div>
                     <div className="text-xs text-slate-600 flex items-center gap-2">
                       <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">{contact.role || 'مدیر خرید'}</span>
-                      <span dir="ltr" className="font-mono font-bold text-slate-800">{contact.phone || '-'}</span>
+                      <span dir="ltr" className="font-mono font-bold text-slate-800">
+                        {contact.phone ? formatPersianPhone(contact.phone) : '-'}
+                      </span>
                     </div>
                   </div>
                 ))}

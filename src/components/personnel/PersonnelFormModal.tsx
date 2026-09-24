@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
-import { toEnglishDigits, extractDateString, normalizeNationalId, normalizePhoneNumber } from '../../utils';
+import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba } from '../../utils';
+import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 
 interface PersonnelFormModalProps {
   isOpen: boolean;
@@ -127,31 +128,11 @@ export function PersonnelFormModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  کد ملی <span className="text-[10px] text-slate-400 font-normal">(۱۰ رقم عددی)</span>
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={10}
-                  autoComplete="off"
-                  value={formData.nationalId}
-                  onChange={(e) => {
-                    // فیلتر آنی: تبدیل ارقام فارسی و حذف کاراکترهای غیرعددی با سقف ۱۰ رقم
-                    const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 10);
-                    setFormData((prev) => ({ ...prev, nationalId: digits }));
-                  }}
-                  onBlur={() => {
-                    if (formData.nationalId) {
-                      setFormData((prev) => ({ ...prev, nationalId: normalizeNationalId(prev.nationalId) }));
-                    }
-                  }}
-                  placeholder="۱۰ رقم عددی"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono tracking-widest text-left"
-                  dir="ltr"
-                />
-              </div>
+              <NationalIdInput
+                value={formData.nationalId}
+                onChange={(digits) => setFormData((prev) => ({ ...prev, nationalId: digits }))}
+                placeholder="۱۰ رقم عددی"
+              />
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">جنسیت</label>
@@ -192,31 +173,11 @@ export function PersonnelFormModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  شماره تماس <span className="text-[10px] text-slate-400 font-normal">(۱۱ رقم شروع با ۰)</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={11}
-                  autoComplete="off"
-                  placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-                  value={formData.phone}
-                  onChange={(e) => {
-                    // فیلتر آنی: تبدیل ارقام فارسی و حذف کاراکترهای غیرعددی با سقف ۱۱ رقم
-                    const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 11);
-                    setFormData((prev) => ({ ...prev, phone: digits }));
-                  }}
-                  onBlur={() => {
-                    if (formData.phone) {
-                      setFormData((prev) => ({ ...prev, phone: normalizePhoneNumber(prev.phone) }));
-                    }
-                  }}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono tracking-widest text-left"
-                  dir="ltr"
-                />
-              </div>
+              <IranianPhoneInput
+                value={formData.phone}
+                onChange={(digits) => setFormData((prev) => ({ ...prev, phone: digits }))}
+                placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+              />
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">آخرین مدرک تحصیلی</label>
@@ -438,13 +399,20 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">شماره کارت بانک</label>
-                <input
-                  type="text"
-                  placeholder="۶۰۳۷..."
+                <BankCardInput
+                  label="شماره کارت بانک"
                   value={formData.cardNumber}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, cardNumber: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
+                  onChange={(val) => {
+                    setFormData((prev) => {
+                      const updates: Partial<PersonnelFormData> = { cardNumber: val };
+                      if (!prev.bankName) {
+                        const detected = getIranianBankFromCard(val);
+                        if (detected) updates.bankName = detected.name;
+                      }
+                      return { ...prev, ...updates };
+                    });
+                  }}
+                  inputClassName="!py-2 !text-xs"
                 />
               </div>
 
@@ -459,13 +427,20 @@ export function PersonnelFormModal({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">شماره شبا (IBAN)</label>
-                <input
-                  type="text"
-                  placeholder="IR0000..."
+                <ShebaInput
+                  label="شماره شبا (IBAN)"
                   value={formData.shebaNumber}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, shebaNumber: e.target.value }))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 font-mono"
+                  onChange={(val) => {
+                    setFormData((prev) => {
+                      const updates: Partial<PersonnelFormData> = { shebaNumber: val };
+                      if (!prev.bankName) {
+                        const detected = getIranianBankFromSheba(val);
+                        if (detected) updates.bankName = detected.name;
+                      }
+                      return { ...prev, ...updates };
+                    });
+                  }}
+                  inputClassName="!py-2 !text-xs"
                 />
               </div>
 

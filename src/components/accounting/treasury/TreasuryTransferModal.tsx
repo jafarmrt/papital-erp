@@ -4,6 +4,8 @@ import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import { formatPersianPrice, extractDateString } from '../../../utils';
+import { FinancialAmountInput } from '../../common/FinancialAmountInput';
+import { HelpBadge } from '../../common/HelpBadge';
 import { fetchJson } from '../../../api';
 import type { BankAccount } from '../../../types';
 
@@ -19,6 +21,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
   isOpen,
   onClose,
   bankAccounts,
+  appCurrency,
   onSave,
 }) => {
   const [formData, setFormData] = useState({
@@ -67,6 +70,7 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
   if (!isOpen) return null;
 
   const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
+  const selectedFrom = safeBankAccounts.find(b => b.id === formData.fromBankAccountId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,8 +116,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              از حساب / صندوق (مبدأ) *
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              <span>از حساب / صندوق (مبدأ) *</span>
+              <HelpBadge text="حساب یا صندوقی که وجه از آن کسر می‌گردد (بستانکار می‌شود)." />
             </label>
             <select
               required
@@ -131,8 +136,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              به حساب / صندوق (مقصد) *
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              <span>به حساب / صندوق (مقصد) *</span>
+              <HelpBadge text="حساب یا صندوقی که وجه به آن اضافه می‌گردد (بدهکار می‌شود)." />
             </label>
             <select
               required
@@ -151,17 +157,18 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 items-start">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">مبلغ *</label>
-              <input
-                type="number"
-                min="1"
+              <FinancialAmountInput
+                label="مبلغ انتقال"
                 required
-                value={formData.amount || ''}
-                onChange={e => setFormData(p => ({ ...p, amount: Number(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 text-xs font-mono text-left bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
-                dir="ltr"
+                min={1}
+                value={formData.amount}
+                currency={selectedFrom?.currency || appCurrency || 'IRR'}
+                onChange={val => setFormData(p => ({ ...p, amount: val }))}
+                placeholder="1000000"
+                showWordsBadge={true}
+                showTomanEquivalent={true}
               />
             </div>
             <div>

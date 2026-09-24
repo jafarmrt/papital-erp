@@ -14,7 +14,7 @@ import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPrice, formatCurrencyLabel } from '../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
 
 export default function CustomersPage({ user }: { user: User }) {
@@ -151,16 +151,20 @@ export default function CustomersPage({ user }: { user: User }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate phone numbers
-    const phoneRegex = /^[0-9+\-\s(),]+$/;
+    // Validate phone numbers with standard Iranian phone validation
     for (const c of contacts) {
-      if (c.phone.trim() && !phoneRegex.test(c.phone.trim())) {
-        toast.error(`فرمت شماره تلفن «${c.phone}» مربوط به «${c.name || 'شخص رابط'}» معتبر نیست. لطفاً فقط عدد و کاراکترهای مجاز وارد کنید.`);
-        return;
+      if (c.phone && c.phone.trim()) {
+        const valRes = validateIranianPhoneNumber(c.phone);
+        if (!valRes.isValid) {
+          toast.error(`فرمت شماره تلفن «${c.phone}» مربوط به «${c.name || 'شخص رابط'}» نامعتبر است: ${valRes.error}`);
+          return;
+        }
       }
     }
     
-    const activeContacts = contacts.filter(c => c.name.trim() || c.phone.trim());
+    const activeContacts = contacts
+      .filter(c => c.name.trim() || c.phone.trim())
+      .map(c => ({ ...c, phone: normalizePhoneNumber(c.phone) }));
 
     const finalPayload = {
       name: form.name.trim(),
@@ -507,13 +511,13 @@ export default function CustomersPage({ user }: { user: User }) {
                         {contactsList.slice(0, 2).map((contact, i) => (
                           <div key={i} className="flex items-center gap-1 text-[11px]">
                             <Phone size={11} className="text-slate-400 shrink-0" />
-                            <span dir="ltr" className="text-slate-800 font-semibold">{contact.phone || '-'}</span>
+                            <span dir="ltr" className="text-slate-800 font-semibold">{contact.phone ? formatPersianPhone(contact.phone) : '-'}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
                       <span dir="ltr" className="font-mono text-slate-800 text-[11px]">
-                        {c.phone ? c.phone.split(',').map((p, i) => <span key={i} className="block">{p.trim()}</span>) : '-'}
+                        {c.phone ? c.phone.split(',').map((p, i) => <span key={i} className="block">{formatPersianPhone(p.trim())}</span>) : '-'}
                       </span>
                     )}
                   </td>

@@ -66,7 +66,29 @@ export default function App() {
 
   return (
     <Router>
-      <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm', duration: 4000 }} />
+      <Toaster 
+        position="bottom-right" 
+        toastOptions={{ 
+          className: 'font-sans text-xs font-medium rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100', 
+          duration: 4000,
+          style: {
+            direction: 'rtl',
+            textAlign: 'right',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#ffffff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#ffffff',
+            },
+          }
+        }} 
+      />
       <AppLayout
         user={user}
         userPermissions={userPermissions}

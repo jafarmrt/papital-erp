@@ -12,7 +12,7 @@ import {
   CheckCircle2, 
   Layers 
 } from 'lucide-react';
-import { formatPersianPrice, formatCurrencyLabel } from '../../../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatBankCard, formatIranianSheba } from '../../../utils';
 import { ActionMenu } from '../../ActionMenu';
 import type { BankAccount } from '../../../types';
 
@@ -185,10 +185,11 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
             <div className="flex items-center justify-between bg-slate-50/60 dark:bg-slate-700/20 px-2 py-1 rounded">
               <span className="text-slate-400 text-[11px]">شماره کارت:</span>
               <div className="flex items-center gap-1.5 font-mono">
-                <span>{bank.cardNumber}</span>
+                <span dir="ltr">{formatBankCard(bank.cardNumber)}</span>
                 <button
                   onClick={() => onCopy(bank.cardNumber || '', `card-${bank.id}`)}
                   className="text-slate-400 hover:text-indigo-600 cursor-pointer"
+                  title="کپی شماره کارت"
                 >
                   {copiedId === `card-${bank.id}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                 </button>
@@ -200,10 +201,11 @@ export const BankAccountCard: React.FC<BankAccountCardProps> = React.memo(({
             <div className="flex items-center justify-between bg-slate-50/60 dark:bg-slate-700/20 px-2 py-1 rounded">
               <span className="text-slate-400 text-[11px]">شماره شبا:</span>
               <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                <span>{bank.shebaNumber}</span>
+                <span dir="ltr">{formatIranianSheba(bank.shebaNumber)}</span>
                 <button
                   onClick={() => onCopy(bank.shebaNumber || '', `sheba-${bank.id}`)}
                   className="text-slate-400 hover:text-indigo-600 cursor-pointer"
+                  title="کپی شماره شبا"
                 >
                   {copiedId === `sheba-${bank.id}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                 </button>

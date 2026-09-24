@@ -22,6 +22,7 @@ import {
   toPersianDigits, 
   toEnglishDigits 
 } from '../../utils';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 interface BankAccount {
   id: number;
@@ -301,24 +302,15 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
               )}
             </div>
 
-            <div className="relative">
-              <input
-                type="text"
-                value={amountStr ? toPersianDigits(Number(toEnglishDigits(amountStr).replace(/,/g, '')).toLocaleString('en-US')) : ''}
-                onChange={(e) => {
-                  const raw = toEnglishDigits(e.target.value).replace(/,/g, '');
-                  if (/^\d*$/.test(raw)) {
-                    setAmountStr(raw);
-                  }
-                }}
-                placeholder="مبلغ را وارد کنید..."
-                className="w-full text-base font-bold text-slate-800 bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all placeholder:text-slate-300 placeholder:font-normal"
-                required
-              />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                {currency === 'IRR' ? 'ریال' : currency}
-              </span>
-            </div>
+            <FinancialAmountInput
+              value={amountStr}
+              currency={currency}
+              onChange={(val) => setAmountStr(val > 0 ? String(val) : '')}
+              placeholder="مبلغ را وارد کنید..."
+              required
+              showWordsBadge={true}
+              showTomanEquivalent={true}
+            />
             
             {parsedAmount > remainingAmount && remainingAmount > 0 && (
               <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">

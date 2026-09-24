@@ -1,5 +1,7 @@
 import React from 'react';
 import { Users, Building2, Truck, UserPlus, UserCheck, Trash2, Plus, CreditCard, X } from 'lucide-react';
+import { IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
+import { getIranianBankFromCard, getIranianBankFromSheba } from '../../utils';
 
 export const IRAN_PROVINCES = [
   'آذربایجان شرقی', 'آذربایجان غربی', 'اردبیل', 'اصفهان', 'البرز', 'ایلام',
@@ -299,14 +301,12 @@ export function CustomerFormModal({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-medium mb-1 text-slate-600">شماره(های) تماس</label>
-                        <input 
-                          type="text" 
-                          value={contact.phone} 
-                          onChange={e => updateContactPerson(contact.id, 'phone', e.target.value)} 
-                          placeholder="09121234567"
-                          dir="ltr"
-                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:ring-2 focus:ring-blue-500 outline-none text-left" 
+                        <IranianPhoneInput
+                          value={contact.phone}
+                          onChange={val => updateContactPerson(contact.id, 'phone', val)}
+                          placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+                          label="شماره تماس"
+                          inputClassName="rounded-lg px-2.5 py-1.5 text-xs"
                         />
                       </div>
                     </div>
@@ -343,29 +343,38 @@ export function CustomerFormModal({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-medium mb-1 text-slate-600">شماره شبا (بدون IR)</label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      value={form.bankInfo.shaba} 
-                      onChange={e => setForm({ ...form, bankInfo: { ...form.bankInfo, shaba: e.target.value } })} 
-                      placeholder="012345678901234567890123"
-                      dir="ltr"
-                      className="w-full border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-xs font-mono bg-white focus:ring-2 focus:ring-blue-500 outline-none text-left" 
-                    />
-                    <span className="absolute left-2.5 top-1.5 font-bold text-slate-400 font-mono text-[11px]">IR</span>
-                  </div>
+                  <ShebaInput
+                    label="شماره شبا (IR)"
+                    value={form.bankInfo.shaba}
+                    onChange={val => {
+                      setForm(prev => {
+                        const newBankInfo = { ...prev.bankInfo, shaba: val };
+                        if (!prev.bankInfo.bankName) {
+                          const detected = getIranianBankFromSheba(val);
+                          if (detected) newBankInfo.bankName = detected.name;
+                        }
+                        return { ...prev, bankInfo: newBankInfo };
+                      });
+                    }}
+                    inputClassName="!py-1.5 !text-xs"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-medium mb-1 text-slate-600">شماره کارت بانکی</label>
-                  <input 
-                    type="text" 
-                    value={form.bankInfo.cardNumber} 
-                    onChange={e => setForm({ ...form, bankInfo: { ...form.bankInfo, cardNumber: e.target.value } })} 
-                    placeholder="6037-xxxx-xxxx-xxxx"
-                    dir="ltr"
-                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:ring-2 focus:ring-blue-500 outline-none text-left" 
+                  <BankCardInput
+                    label="شماره کارت بانکی"
+                    value={form.bankInfo.cardNumber}
+                    onChange={val => {
+                      setForm(prev => {
+                        const newBankInfo = { ...prev.bankInfo, cardNumber: val };
+                        if (!prev.bankInfo.bankName) {
+                          const detected = getIranianBankFromCard(val);
+                          if (detected) newBankInfo.bankName = detected.name;
+                        }
+                        return { ...prev, bankInfo: newBankInfo };
+                      });
+                    }}
+                    inputClassName="!py-1.5 !text-xs"
                   />
                 </div>
 

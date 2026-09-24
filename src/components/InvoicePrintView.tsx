@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, formatPersianDate } from '../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, formatPersianDate, financialAmountToPersianWords } from '../utils';
 import { fetchJson } from '../api';
 
 export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
@@ -259,6 +259,22 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                 }}
               >
                 {formatPersianPrice(totalNetAmount)} {currencyLabel}
+              </td>
+            </tr>
+          )}
+          {hasMonetaryValues && totalNetAmount > 0 && (
+            <tr>
+              <td 
+                className="border p-2 text-xs font-bold text-slate-700 bg-slate-50"
+                style={{ backgroundColor: '#f9fafb', printColorAdjust: 'exact' }}
+              >
+                مبلغ کل به حروف:
+              </td>
+              <td 
+                className="border p-2 text-right text-xs font-bold text-slate-900"
+                style={{ backgroundColor: '#ffffff', printColorAdjust: 'exact' }}
+              >
+                {financialAmountToPersianWords(totalNetAmount, printedDoc?.currency || 'IRR').fullDescription}
               </td>
             </tr>
           )}

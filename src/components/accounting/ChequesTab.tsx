@@ -15,6 +15,7 @@ import DateObject from "react-date-object";
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -876,17 +877,16 @@ export function ChequesTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    {`مبلغ چک (${curLbl}) *`}
-                  </label>
-                  <input
-                    type="number"
+                  <FinancialAmountInput
+                    label="مبلغ چک"
                     required
-                    min="1"
+                    min={1}
+                    value={newFormData.amount}
+                    currency={curLbl}
+                    onChange={val => setNewFormData({ ...newFormData, amount: val })}
                     placeholder="50000000"
-                    value={newFormData.amount || ''}
-                    onChange={e => setNewFormData({ ...newFormData, amount: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono font-black text-left"
+                    showWordsBadge={true}
+                    showTomanEquivalent={true}
                   />
                 </div>
 

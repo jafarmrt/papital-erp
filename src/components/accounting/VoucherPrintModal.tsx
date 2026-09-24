@@ -1,4 +1,4 @@
-import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, financialAmountToPersianWords } from '../../utils';
 import { PrintModal } from '../common/PrintModal';
 import type { JournalVoucher } from '../../types';
 
@@ -122,6 +122,16 @@ export function VoucherPrintModal({
                   {formatPersianPrice(totalCredit)}
                 </td>
               </tr>
+              {totalDebit > 0 && (
+                <tr className="bg-slate-50/70 border-t border-slate-300">
+                  <td colSpan={5} className="border border-slate-300 p-2 text-right text-xs">
+                    <span className="font-bold text-slate-700">مبلغ سند به حروف: </span>
+                    <span className="font-bold text-indigo-900">
+                      {financialAmountToPersianWords(totalDebit, voucher.currency || 'IRR').fullDescription}
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tfoot>
           </table>
         </div>

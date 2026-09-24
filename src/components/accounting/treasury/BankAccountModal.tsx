@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Sparkles, Filter } from 'lucide-react';
 import { AccountSearchSelect } from '../AccountSearchSelect';
-import { formatCurrencyLabel } from '../../../utils';
+import { formatCurrencyLabel, getIranianBankFromCard, getIranianBankFromSheba } from '../../../utils';
+import { BankCardInput, ShebaInput, FinancialAmountInput } from '../../common';
 import { fetchJson } from '../../../api';
 import type { BankAccount, Account } from '../../../types';
 
@@ -287,42 +288,53 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  شماره کارت ۱۶ رقمی
-                </label>
-                <input
-                  type="text"
-                  placeholder="6037-xxxx-xxxx-xxxx"
+                <BankCardInput
+                  label="شماره کارت ۱۶ رقمی"
                   value={formData.cardNumber}
-                  onChange={e => setFormData({ ...formData, cardNumber: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono text-left"
+                  onChange={val => {
+                    setFormData(prev => {
+                      const updates: any = { cardNumber: val };
+                      if (!prev.bankName) {
+                        const detected = getIranianBankFromCard(val);
+                        if (detected) updates.bankName = detected.name;
+                      }
+                      return { ...prev, ...updates };
+                    });
+                  }}
+                  inputClassName="!py-1.5 !text-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  شماره شبا (IR)
-                </label>
-                <input
-                  type="text"
-                  placeholder="IR000000000000000000000000"
+                <ShebaInput
+                  label="شماره شبا (IR)"
                   value={formData.shebaNumber}
-                  onChange={e => setFormData({ ...formData, shebaNumber: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono text-left"
+                  onChange={val => {
+                    setFormData(prev => {
+                      const updates: any = { shebaNumber: val };
+                      if (!prev.bankName) {
+                        const detected = getIranianBankFromSheba(val);
+                        if (detected) updates.bankName = detected.name;
+                      }
+                      return { ...prev, ...updates };
+                    });
+                  }}
+                  inputClassName="!py-1.5 !text-xs"
                 />
               </div>
             </>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              {`موجودی اولیه (${curLbl})`}
-            </label>
-            <input
-              type="number"
+            <FinancialAmountInput
+              label="موجودی اولیه"
               value={formData.initialBalance}
-              onChange={e => setFormData({ ...formData, initialBalance: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
+              currency={curLbl}
+              onChange={val => setFormData({ ...formData, initialBalance: val })}
+              placeholder="0"
+              showWordsBadge={true}
+              showTomanEquivalent={true}
+              inputClassName="!py-1.5 !text-xs"
             />
           </div>
 

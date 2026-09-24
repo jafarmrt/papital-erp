@@ -7,6 +7,7 @@ import { CRMLead } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
 import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString } from '../../utils';
+import { IranianPhoneInput } from '../common';
 
 interface CRMLeadModalProps {
   isLeadModalOpen: boolean;
@@ -113,16 +114,12 @@ export function CRMLeadModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">شماره تلفن تماس</label>
-              <input
-                type="text"
-                placeholder="09123456789"
-                value={leadForm.phone}
-                onChange={(e) => setLeadForm({ ...leadForm, phone: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white transition-all dir-ltr text-right"
-              />
-            </div>
+            <IranianPhoneInput
+              label="شماره تلفن تماس"
+              placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+              value={leadForm.phone}
+              onChange={(val) => setLeadForm({ ...leadForm, phone: val })}
+            />
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">نام شرکت / مجموعه</label>
@@ -194,15 +191,16 @@ export function CRMLeadModal({
                         />
                       </div>
                       <div className="sm:col-span-4">
-                        <input
-                          type="text"
-                          placeholder="شماره مستقیم"
+                        <IranianPhoneInput
+                          placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+                          label=""
+                          showFeedback={false}
+                          inputClassName="rounded-lg px-2.5 py-1.5 text-xs"
                           value={contact.phone || ''}
-                          onChange={(e) => {
-                            const updated = leadForm.contacts.map((c: any) => c.id === contact.id ? { ...c, phone: e.target.value } : c);
+                          onChange={(val) => {
+                            const updated = leadForm.contacts.map((c: any) => c.id === contact.id ? { ...c, phone: val } : c);
                             setLeadForm({ ...leadForm, contacts: updated });
                           }}
-                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 font-medium dir-ltr text-right"
                         />
                       </div>
                       <div className="sm:col-span-1 flex justify-end">

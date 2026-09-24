@@ -5,6 +5,8 @@ import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import { SearchableSelect } from '../../SearchableSelect';
 import { FinancialAttachmentUploader } from '../FinancialAttachmentUploader';
+import { FinancialAmountInput } from '../../common/FinancialAmountInput';
+import { HelpBadge } from '../../common/HelpBadge';
 import { formatPersianPrice, formatCurrencyLabel, extractDateString } from '../../../utils';
 import { fetchJson } from '../../../api';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
@@ -231,8 +233,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  روش پرداخت
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <span>روش پرداخت</span>
+                  <HelpBadge text="روش جابجایی وجه: حواله بین‌بانکی، کارتخوان فروشگاهی، نقد صندوق یا چک." />
                 </label>
                 <select
                   value={formData.method}
@@ -248,8 +251,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                حساب بانکی / صندوق مرتبط *
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                <span>حساب بانکی / صندوق مرتبط *</span>
+                <HelpBadge text="حساب یا صندوقی که وجه از آن کسر یا به آن واریز می‌شود. برای صدور سند دوبل باید به حساب معین چارت متصل باشد." />
               </label>
               <select
                 required
@@ -373,19 +377,18 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 items-start">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  {`مبلغ (${curLbl}) *`}
-                </label>
-                <input
-                  type="number"
+                <FinancialAmountInput
+                  label="مبلغ تراکنش"
                   required
-                  min="1"
-                  value={formData.amount || ''}
-                  onChange={e => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                  min={1}
+                  value={formData.amount}
+                  currency={curLbl}
+                  onChange={val => setFormData({ ...formData, amount: val })}
                   placeholder="1000000"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono text-left font-bold"
+                  showWordsBadge={true}
+                  showTomanEquivalent={true}
                 />
                 {/* Overdraft warning */}
                 {!isReceipt && selectedBank && formData.amount > Number(selectedBank.currentBalance) && (
@@ -430,8 +433,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 onChange={e => setFormData({ ...formData, createVoucher: e.target.checked })}
                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
               />
-              <label htmlFor="createVoucher" className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer">
-                صدور خودکار سند حسابداری دوبل برای این تراکنش
+              <label htmlFor="createVoucher" className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer flex items-center gap-1.5">
+                <span>صدور خودکار سند حسابداری دوبل برای این تراکنش</span>
+                <HelpBadge text="با فعال بودن این گزینه، یک سند دوبل حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد." />
               </label>
             </div>
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianPhone } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
@@ -131,7 +131,9 @@ export function CRMLeadDrawer({
             </div>
             <div>
               <span className="text-slate-400 block text-[10px]">تلفن تماس:</span>
-              <span className="font-bold text-slate-800 dir-ltr text-right block mt-0.5">{selectedLeadDrawer.phone || '-'}</span>
+              <span className="font-bold text-slate-800 dir-ltr text-right block mt-0.5">
+                {selectedLeadDrawer.phone ? formatPersianPhone(selectedLeadDrawer.phone) : '-'}
+              </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px]">ارزش تخمینی:</span>
