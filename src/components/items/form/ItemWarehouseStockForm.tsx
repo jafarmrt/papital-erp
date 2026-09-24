@@ -1,6 +1,8 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
+import { FinancialAmountInput } from '../../common/FinancialAmountInput';
+import { HelpBadge } from '../../common/HelpBadge';
 import { ItemFormData } from './types';
 
 interface ItemWarehouseStockFormProps {
@@ -81,18 +83,19 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
 
       {/* Initial cost */}
       <div>
-        <label className="block text-xs font-bold text-slate-700 mb-1">
-          بهای تمام‌شده اولیه (WAC / خرید)
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
+          <span>بهای تمام‌شده اولیه (WAC / خرید)</span>
+          <HelpBadge text="ارزش دفتری و بهای تمام‌شده هر واحد کالا به ریال در زمان ورود اولیه به انبار. معادل تومانی و حروفی آن در زیر کادر به‌طور خودکار محاسبه و درج می‌شود." />
         </label>
-        <input
-          type="number"
-          min="0"
-          step="any"
+        <FinancialAmountInput
+          currency="IRR"
           value={form.initial_cost}
-          onChange={e => setForm({ ...form, initial_cost: parseFloat(e.target.value) || 0 })}
-          className="w-full border border-slate-300/80 rounded-xl px-3 py-2 text-left font-mono text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
-          dir="ltr"
+          onChange={val => setForm({ ...form, initial_cost: val })}
+          showTomanEquivalent={true}
+          showWordsBadge={true}
+          allowCopyWords={false}
           placeholder="0"
+          className="w-full"
         />
       </div>
     </div>
