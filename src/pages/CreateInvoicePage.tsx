@@ -301,10 +301,23 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     const it = selectedItemObj;
 
     if (status === 'final' && docType === 'invoice') {
-      const locationStock = (it as any)[`stock_${location}`] || 0;
-      if (locationStock < Number(quantity)) {
-        const whName = warehouses.find(w => w.code === location)?.name || location;
-        toast.error(`عدم موجودی کافی در انبار انتخابی! موجودی ${whName}: ${locationStock} ${it.unit}`);
+      const locKey = location ? `stock_${location}` : '';
+      let availableLocationStock = 0;
+      if (locKey && (it as any)[locKey] !== undefined) {
+        availableLocationStock = Number((it as any)[locKey]) || 0;
+      } else if (it.stocks && typeof it.stocks === 'object' && location && it.stocks[location] !== undefined) {
+        availableLocationStock = Number(it.stocks[location]) || 0;
+      } else {
+        availableLocationStock = Number(it.current_stock ?? (it as any).currentStock ?? 0);
+      }
+
+      const existingInList = docItems.find(p => p.item.id === it.id);
+      const currentListQty = existingInList ? existingInList.quantity : 0;
+      const totalRequestedQty = currentListQty + Number(quantity);
+
+      if (availableLocationStock < totalRequestedQty) {
+        const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
+        toast.error(`عدم موجودی کافی در انبار انتخابی! موجودی ${whName}: ${availableLocationStock} ${it.unit} (مجموع درخواستی: ${totalRequestedQty} ${it.unit})`);
         return;
       }
     }
@@ -341,6 +354,30 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     if (status === 'final' && warehouses.length === 0) {
       toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
       return;
+    }
+
+    // Pre-flight check: validate that each line item has sufficient stock in the selected warehouse for final invoices
+    if (status === 'final' && docType === 'invoice') {
+      const targetWh = warehouses.find(w => w.code === location);
+      const whName = targetWh?.name || location || 'انبار انتخابی';
+
+      for (const d of docItems) {
+        const it = d.item;
+        const locKey = location ? `stock_${location}` : '';
+        let availableStock = 0;
+        if (locKey && (it as any)[locKey] !== undefined) {
+          availableStock = Number((it as any)[locKey]) || 0;
+        } else if (it.stocks && typeof it.stocks === 'object' && location && it.stocks[location] !== undefined) {
+          availableStock = Number(it.stocks[location]) || 0;
+        } else {
+          availableStock = Number(it.current_stock ?? (it as any).currentStock ?? 0);
+        }
+
+        if (availableStock < d.quantity) {
+          toast.error(`موجودی کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی: ${availableStock} ${it.unit}، درخواستی: ${d.quantity} ${it.unit}`);
+          return;
+        }
+      }
     }
 
     setIsSaving(true);
@@ -419,7 +456,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       fetchNextRef();
       loadProformas();
     } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت سند');
+      const errMsg = err?.message || err?.error || 'خطا در ثبت سند';
+      toast.error(errMsg, { duration: 5000 });
     } finally {
       setIsSaving(false);
     }
@@ -618,13 +656,32 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs mb-1 text-slate-500">انتخاب کالا</label>
                 <SearchableSelect
+                  key={`item-select-${location}-${status}`}
                   className="w-full shadow-sm rounded"
                   fetchUrl="/items"
-                  mapResultToOption={(it: any) => ({
-                    value: it.id.toString(),
-                    label: `${it.code} - ${it.name} (موجودی: ${it.current_stock} ${it.unit})`,
-                    disabled: status === 'final' && it.current_stock <= 0
-                  })}
+                  mapResultToOption={(it: any) => {
+                    const locKey = location ? `stock_${location}` : '';
+                    let itemLocStock = 0;
+                    if (locKey && it[locKey] !== undefined) {
+                      itemLocStock = Number(it[locKey]) || 0;
+                    } else if (it.stocks && typeof it.stocks === 'object' && location && it.stocks[location] !== undefined) {
+                      itemLocStock = Number(it.stocks[location]) || 0;
+                    } else {
+                      itemLocStock = Number(it.current_stock ?? it.currentStock ?? 0);
+                    }
+                    const totalStock = Number(it.current_stock ?? it.currentStock ?? 0);
+                    const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
+
+                    const stockLabel = location 
+                      ? `موجودی ${whName}: ${itemLocStock} ${it.unit} | کل: ${totalStock}` 
+                      : `موجودی کل: ${totalStock} ${it.unit}`;
+
+                    return {
+                      value: it.id.toString(),
+                      label: `${it.code} - ${it.name} (${stockLabel})`,
+                      disabled: status === 'final' && itemLocStock <= 0
+                    };
+                  }}
                   value={selectedItem}
                   onChange={handleItemSelect}
                   placeholder="انتخاب کالا / ماده اولیه"
