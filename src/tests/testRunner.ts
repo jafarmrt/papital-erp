@@ -122,7 +122,8 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v4_inventory_runtime_contracts_guard: 'Data Integrity: Runtime Contracts & Zod Validation for Inventory, Transfers & BOM (Sub-phase 4.3)',
   v4_accounting_treasury_runtime_contracts_guard: 'Data Integrity: Runtime Contracts & Zod Validation for Double-Entry Accounting and Treasury (Sub-phase 4.4)',
   v5_warehouse_resolution_guard: 'Inventory: Warehouse Code Resolution, Invalid Guard & Stock Parity (V5 Phase 1 / TD-114..117)',
-  v5_sellable_stock_reservation_gate: 'Inventory & Sales: Unified Sellable Stock & Reservation Gate (V5 Phase 2 / TD-118, TD-126)'
+  v5_sellable_stock_reservation_gate: 'Inventory & Sales: Unified Sellable Stock & Reservation Gate (V5 Phase 2 / TD-118, TD-126)',
+  v5_jalali_timestamp_normalization: 'Data Safety: Jalali Timestamps Stored as Gregorian Normalization (V5 Phase 3 / TD-119)'
 };
 
 

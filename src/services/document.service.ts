@@ -1,7 +1,7 @@
 import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { documents, documentItems, items, transactions, appSettings, documentRefCounters, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
-import { roundFinancial, getTodayJalaliDate, normalizeDateToDbTimestamp } from '../utils.js';
+import { roundFinancial, normalizeDateToDbTimestamp } from '../utils.js';
 import { resolveJalaliFiscalYear, businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { fin, FinancialMath } from '../lib/financialDecimal.js';
 import { checkOccVersion, nextVersion } from '../lib/occHelper.js';

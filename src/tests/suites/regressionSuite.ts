@@ -1,7 +1,7 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { eq, sql } from 'drizzle-orm';
-import { categories, documents, transactions } from '../../db/schema.js';
+import { categories } from '../../db/schema.js';
 import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
 import { normalizeDateToDbTimestamp, jalaliToIsoDate } from '../../utils.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
