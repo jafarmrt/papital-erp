@@ -6,6 +6,8 @@ import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occ
 import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 
+import { fin } from '../../lib/financialDecimal.js';
+
 export interface ReservedItemDetail {
   id: string;
   sourceType: 'proforma' | 'project';
@@ -25,6 +27,12 @@ export interface ReservedItemDetail {
   date: string;
 }
 
+export interface SellableStockContext {
+  location: string;            // کد انبار (پس از resolveWarehouseCode)
+  excludeDocumentId?: number;  // سندی که در حال نهایی‌شدن است (رزرو خودش حساب نشود)
+  projectId?: number | null;   // رزرو همین پروژه آزاد است
+}
+
 export interface ItemReservedReportSummary {
   itemId?: number;
   itemCode: string;
@@ -32,6 +40,7 @@ export interface ItemReservedReportSummary {
   category: string;
   unit: string;
   currentStock: number;
+  stocks?: Record<string, number>;
   buyPrice: number;
   sellPrice: number;
   proformaReservedQty: number;
@@ -479,7 +488,11 @@ export class ItemStockReservationService {
           })
           .from(documentItems)
           .innerJoin(items, eq(documentItems.itemId, items.id))
-          .where(inArray(documentItems.documentId, proformaIds));
+          .where(and(
+            inArray(documentItems.documentId, proformaIds),
+            eq(documentItems.isDeleted, 0),
+            eq(items.isDeleted, 0)
+          ));
 
         const proformaMap = new Map(activeProformas.map(p => [p.id, p]));
 
@@ -535,6 +548,7 @@ export class ItemStockReservationService {
           unit: items.unit,
           currentStock: items.currentStock,
           weightedAverageCost: items.weightedAverageCost,
+          stocks: items.stocks,
         })
         .from(items)
         .where(eq(items.isDeleted, 0));
@@ -598,6 +612,7 @@ export class ItemStockReservationService {
           category: it.category || 'عمومی',
           unit: it.unit || 'عدد',
           currentStock: Number(it.currentStock || 0),
+          stocks: (it.stocks as Record<string, number>) || {},
           buyPrice: Number(it.weightedAverageCost || 0),
           sellPrice: Number(it.weightedAverageCost || 0),
           proformaReservedQty: 0,
@@ -714,4 +729,28 @@ export class ItemStockReservationService {
       return {};
     }
   }
+
+  /**
+   * قابل‌فروش = min(موجودی انبار مقصد، موجودی کل − رزرو دیگران)
+   * V5 Phase 2 (TD-118): Calculates sellable quantity for a specific warehouse location
+   * taking other active reservations into account while excluding self-reservations.
+   */
+  static computeSellable(
+    summary: ItemReservedReportSummary | undefined,
+    stocks: Record<string, number> | null | undefined,
+    ctx: SellableStockContext
+  ): { locationStock: number; reservedForOthers: number; sellable: number } {
+    const rawStocks = (stocks || summary?.stocks || {}) as Record<string, number>;
+    const locKey = ctx.location ? ctx.location.trim() : 'main';
+    const locationStock = fin(rawStocks[locKey] || 0).toNumber();
+    const total = Object.values(rawStocks).reduce((s, v) => fin(s).add(Number(v) || 0).toNumber(), 0);
+    const reservedForOthers = (summary?.reservations || [])
+      .filter(r => !(r.sourceType === 'proforma' && ctx.excludeDocumentId && Number(r.sourceId) === ctx.excludeDocumentId))
+      .filter(r => !(r.sourceType === 'project' && ctx.projectId && Number(r.sourceId) === ctx.projectId))
+      .reduce((s, r) => fin(s).add(Number(r.reservedQty) || 0).toNumber(), 0);
+    const availableFromTotal = Math.max(0, fin(total).subtract(reservedForOthers).toNumber());
+    const sellable = Math.max(0, Math.min(locationStock, availableFromTotal));
+    return { locationStock, reservedForOthers, sellable };
+  }
 }
+

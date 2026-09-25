@@ -16,6 +16,7 @@ import { ItemOpeningService } from '../services/inventory/itemOpening.service.js
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
 import { logger } from '../middleware/logger.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
+import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 
 const router = Router();
 
@@ -134,8 +135,6 @@ router.get('/items/reorder-alerts', async (req, res) => {
 // GET /items
 router.get('/items', async (req, res) => {
   try {
-    await ItemsService.syncMissingWarehouseStocks();
-
     const type = req.query.type as string;
     // V9-1.3: صفحه‌بندی NaN-safe با سقف (limit=0 به معنای «بدون سقف» برای خروجی باقی می‌ماند)
     const page = parseInt(req.query.page as string) || 1;
@@ -201,12 +200,31 @@ router.get('/items', async (req, res) => {
       voucherItemSet = new Set(voucherRows.map(r => r.referenceId));
     }
 
+    const rawLocQuery = req.query.location ? String(req.query.location).trim() : (req.query.warehouse ? String(req.query.warehouse).trim() : '');
+    let resolvedQueryLoc: string | null = null;
+    if (rawLocQuery) {
+      try {
+        resolvedQueryLoc = await resolveWarehouseCode(orm, rawLocQuery);
+      } catch {
+        resolvedQueryLoc = null;
+      }
+    }
+
     const mapped = fetchedItems.map(it => {
       const codeUpper = (it.code || '').trim().toUpperCase();
       const resInfo = reservedMap[codeUpper] || { totalReserved: 0, reservations: [] };
       const curStock = Number(it.currentStock || 0);
       const reservedStock = Number(resInfo.totalReserved || 0);
-      const availableStock = Math.max(0, curStock - reservedStock);
+      const st = (it.stocks as Record<string, unknown> | null) || {};
+
+      let locStock: number | null = null;
+      if (resolvedQueryLoc) {
+        locStock = Number(st[resolvedQueryLoc] || 0);
+      }
+
+      const availableStock = resolvedQueryLoc !== null
+        ? Math.max(0, Math.min(locStock ?? 0, curStock - reservedStock))
+        : Math.max(0, curStock - reservedStock);
 
       const hasTx = txItemSet.has(it.id);
       const hasDoc = docItemSet.has(it.id);
@@ -220,11 +238,11 @@ router.get('/items', async (req, res) => {
         weighted_average_cost: it.weightedAverageCost,
         reserved_stock: reservedStock,
         available_stock: availableStock,
+        location_stock: locStock,
         reservations: resInfo.reservations,
         canSetOpeningBalance: canSetOpening,
         can_set_opening_balance: canSetOpening
       };
-      const st = it.stocks as Record<string, unknown> | null;
       if (st) {
         for (const k of Object.keys(st)) {
           obj[`stock_${k}`] = Number(st[k]);

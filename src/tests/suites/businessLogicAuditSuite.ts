@@ -634,6 +634,9 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
   let orchVoucherId: number | null = null;
 
   try {
+    const { resolveWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+    const orchWh = await resolveWarehouseCode(orm, '');
+
     // Setup test item with stock = 5
     const [insertedItem] = await orm.insert(items).values({
       code: 'ORCH-ITM-' + Date.now(),
@@ -642,7 +645,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       category: 'گردنبند',
       unit: 'عدد',
       currentStock: 5,
-      stocks: { default: 5 },
+      stocks: { [orchWh]: 5 },
       weightedAverageCost: 100000,
       isDeleted: 0,
     }).returning({ id: items.id });
@@ -683,7 +686,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         itemId: orchItemId,
         quantity: 20, // available is 5
         unitPrice: 150000,
-        location: 'default',
+        location: orchWh,
       }],
       user: 'تست ارکستراسیون',
       skipVoucherSync: true,
@@ -722,7 +725,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         itemId: orchItemId,
         quantity: 2,
         unitPrice: 150000,
-        location: 'default',
+        location: orchWh,
       }],
       user: 'تست ارکستراسیون',
       skipVoucherSync: true,
@@ -743,8 +746,8 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       throw new Error(`Inventory deduction failed: stock=${itemFinalStock?.currentStock}, expected=3`);
     }
     const locStocks = (itemFinalStock?.stocks as Record<string, number>) || {};
-    if (Number(locStocks.default) !== 3) {
-      throw new Error(`Location stock breakdown mismatch: default=${locStocks.default}, expected=3`);
+    if (Number(locStocks[orchWh]) !== 3) {
+      throw new Error(`Location stock breakdown mismatch: ${orchWh}=${locStocks[orchWh]}, expected=3`);
     }
 
     // Verify Step 3: Journal voucher exists and is balanced (DB-008)
@@ -777,7 +780,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         itemId: orchItemId,
         quantity: 1,
         unitPrice: 150000,
-        location: 'default',
+        location: orchWh,
       }],
       user: 'تست ارکستراسیون',
       skipVoucherSync: true,

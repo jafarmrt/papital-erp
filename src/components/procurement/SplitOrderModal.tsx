@@ -58,7 +58,7 @@ export function SplitOrderModal({
 
   // Dynamic warehouses query
   const { data: warehouses = [] } = useWarehousesQuery();
-  const defaultWarehouseCode = warehouses[0]?.code || 'انبار اصلی';
+  const defaultWarehouseCode = warehouses[0]?.code || '';
 
   // Requisition closure options
   const [closeRequisition, setCloseRequisition] = useState(true);
@@ -122,7 +122,7 @@ export function SplitOrderModal({
   useEffect(() => {
     if (warehouses.length > 0) {
       setPackages(prev => prev.map(p => {
-        if (!p.targetWarehouse || p.targetWarehouse === 'انبار اصلی') {
+        if (!p.targetWarehouse) {
           return { ...p, targetWarehouse: warehouses[0].code };
         }
         return p;

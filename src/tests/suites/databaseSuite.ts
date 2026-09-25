@@ -792,6 +792,52 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // Test 14: هر جدولی که در ON CONFLICT(target) به کار می‌رود باید ایندکس یکتای کامل روی همان ستون‌ها داشته باشد (TD-113)
+  const REQUIRED_CONFLICT_TARGETS: Array<{ table: string; columns: string[] }> = [
+    { table: 'document_ref_counters', columns: ['doc_type', 'fiscal_year'] },
+    { table: 'item_code_counters', columns: ['prefix_key', 'scope'] },
+    { table: 'app_settings', columns: ['key'] },
+    { table: 'idempotency_keys', columns: ['created_by_id', 'key', 'scope'] },
+    { table: 'project_product_stage_progress', columns: ['item_id', 'project_id', 'stage_order'] },
+  ];
+  const tConflictStart = Date.now();
+  try {
+    const missing: string[] = [];
+    for (const t of REQUIRED_CONFLICT_TARGETS) {
+      const r = await orm.execute(sql`
+        SELECT array_agg(a.attname::text ORDER BY a.attname) AS cols
+        FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indrelid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
+        WHERE c.relname = ${t.table}::text AND i.indisunique AND i.indpred IS NULL
+        GROUP BY i.indexrelid`);
+      const ok = (r.rows as Array<{ cols: string[] }>)
+        .some(row => JSON.stringify(row.cols) === JSON.stringify([...t.columns].sort()));
+      if (!ok) missing.push(`${t.table}(${t.columns.join(',')})`);
+    }
+    results.push(makeTestCase({
+      id: 'db_on_conflict_targets_have_unique_index',
+      scenarioId: 'db_readiness',
+      name: 'ایندکس یکتای متناظر برای همه اهداف ON CONFLICT',
+      layer: 'database',
+      executionType: 'real_database',
+      passed: missing.length === 0,
+      durationMs: Date.now() - tConflictStart,
+      ...(missing.length ? { error: `بدون ایندکس یکتا: ${missing.join('، ')}` } : { details: 'همه اهداف پوشش دارند' })
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'db_on_conflict_targets_have_unique_index',
+      scenarioId: 'db_readiness',
+      name: 'ایندکس یکتای متناظر برای همه اهداف ON CONFLICT',
+      layer: 'database',
+      executionType: 'real_database',
+      passed: false,
+      durationMs: Date.now() - tConflictStart,
+      error: err.message
+    }));
+  }
+
   return results;
 }
 

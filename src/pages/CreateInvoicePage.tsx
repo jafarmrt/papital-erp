@@ -12,6 +12,7 @@ import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
 import { useServerDraft } from '../hooks/useServerDraft';
+import { getSellableStock } from '../lib/stockAvailability';
 import { Sparkles } from 'lucide-react';
 
 // Print styles are added globally or inline
@@ -301,23 +302,14 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     const it = selectedItemObj;
 
     if (status === 'final' && docType === 'invoice') {
-      const locKey = location ? `stock_${location}` : '';
-      let availableLocationStock = 0;
-      if (locKey && (it as any)[locKey] !== undefined) {
-        availableLocationStock = Number((it as any)[locKey]) || 0;
-      } else if (it.stocks && typeof it.stocks === 'object' && location && it.stocks[location] !== undefined) {
-        availableLocationStock = Number(it.stocks[location]) || 0;
-      } else {
-        availableLocationStock = Number(it.current_stock ?? (it as any).currentStock ?? 0);
-      }
-
+      const { loc, reserved, sellable } = getSellableStock(it, location);
       const existingInList = docItems.find(p => p.item.id === it.id);
       const currentListQty = existingInList ? existingInList.quantity : 0;
       const totalRequestedQty = currentListQty + Number(quantity);
 
-      if (availableLocationStock < totalRequestedQty) {
+      if (sellable < totalRequestedQty) {
         const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
-        toast.error(`عدم موجودی کافی در انبار انتخابی! موجودی ${whName}: ${availableLocationStock} ${it.unit} (مجموع درخواستی: ${totalRequestedQty} ${it.unit})`);
+        toast.error(`عدم موجودی کافی قابل فروش! موجودی ${whName}: ${loc}، رزرو سایر مصارف: ${reserved}، قابل فروش: ${sellable} ${it.unit} (مجموع درخواستی: ${totalRequestedQty} ${it.unit})`);
         return;
       }
     }
@@ -356,25 +348,17 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
 
-    // Pre-flight check: validate that each line item has sufficient stock in the selected warehouse for final invoices
+    // Pre-flight check: validate that each line item has sufficient sellable stock in the selected warehouse for final invoices
     if (status === 'final' && docType === 'invoice') {
       const targetWh = warehouses.find(w => w.code === location);
       const whName = targetWh?.name || location || 'انبار انتخابی';
 
       for (const d of docItems) {
         const it = d.item;
-        const locKey = location ? `stock_${location}` : '';
-        let availableStock = 0;
-        if (locKey && (it as any)[locKey] !== undefined) {
-          availableStock = Number((it as any)[locKey]) || 0;
-        } else if (it.stocks && typeof it.stocks === 'object' && location && it.stocks[location] !== undefined) {
-          availableStock = Number(it.stocks[location]) || 0;
-        } else {
-          availableStock = Number(it.current_stock ?? (it as any).currentStock ?? 0);
-        }
+        const { loc, reserved, sellable } = getSellableStock(it, location);
 
-        if (availableStock < d.quantity) {
-          toast.error(`موجودی کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی: ${availableStock} ${it.unit}، درخواستی: ${d.quantity} ${it.unit}`);
+        if (sellable < d.quantity) {
+          toast.error(`موجودی قابل فروش کالا «${it.name}» (${it.code}) در «${whName}» کافی نیست! موجودی انبار: ${loc}، رزرو سایر مصارف: ${reserved}، قابل فروش: ${sellable} ${it.unit}، درخواستی: ${d.quantity} ${it.unit}`);
           return;
         }
       }
@@ -660,26 +644,17 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   className="w-full shadow-sm rounded"
                   fetchUrl="/items"
                   mapResultToOption={(it: any) => {
-                    const locKey = location ? `stock_${location}` : '';
-                    let itemLocStock = 0;
-                    if (locKey && it[locKey] !== undefined) {
-                      itemLocStock = Number(it[locKey]) || 0;
-                    } else if (it.stocks && typeof it.stocks === 'object' && location && it.stocks[location] !== undefined) {
-                      itemLocStock = Number(it.stocks[location]) || 0;
-                    } else {
-                      itemLocStock = Number(it.current_stock ?? it.currentStock ?? 0);
-                    }
-                    const totalStock = Number(it.current_stock ?? it.currentStock ?? 0);
+                    const { loc, total, reserved, sellable } = getSellableStock(it, location);
                     const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
 
                     const stockLabel = location 
-                      ? `موجودی ${whName}: ${itemLocStock} ${it.unit} | کل: ${totalStock}` 
-                      : `موجودی کل: ${totalStock} ${it.unit}`;
+                      ? `${whName}: ${loc} | رزرو: ${reserved} | قابل فروش: ${sellable} ${it.unit}` 
+                      : `کل: ${total} | رزرو: ${reserved} | قابل فروش: ${sellable} ${it.unit}`;
 
                     return {
                       value: it.id.toString(),
                       label: `${it.code} - ${it.name} (${stockLabel})`,
-                      disabled: status === 'final' && itemLocStock <= 0
+                      disabled: status === 'final' && sellable <= 0
                     };
                   }}
                   value={selectedItem}

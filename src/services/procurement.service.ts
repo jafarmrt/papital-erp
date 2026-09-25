@@ -1,7 +1,7 @@
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
-import { resolveJalaliFiscalYear } from '../lib/businessClock.js';
+import { resolveJalaliFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
 import { getTodayJalaliDate } from '../utils.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
@@ -567,16 +567,16 @@ export class ProcurementService {
             quantity: Number(i.requestedQty),
             unit_price: Number(i.unitPriceEstimate || 0),
             discount: 0,
-            location: 'انبار اصلی'
+            location: ''
           }));
 
           const newDocId = await DocumentService.createDocument({
             docType: 'receipt',
-            date: getTodayJalaliDate(),
+            date: await businessTodayIsoDate(),
             status: 'final',
             buyer_name: 'تامین‌کننده تدارکات',
             notes: `[تدارکات: تحویل مستقیم به انبار] درخواست ${req.code} ${req.projectName ? `[پروژه: ${req.projectName}]` : ''}`.trim(),
-            location: 'انبار اصلی',
+            location: '',
             inOut: 'in',
             currency: 'IRR',
             user: user.username || 'کارشناس تدارکات',
@@ -659,7 +659,7 @@ export class ProcurementService {
       const supplierName = group.supplierName?.trim() || 'تامین‌کننده تدارکات';
       const docType = group.docType === 'proforma' ? 'proforma' : 'receipt';
       const docStatus = group.status || 'draft';
-      const warehouseLoc = group.targetWarehouse || 'انبار اصلی';
+      const warehouseLoc = group.targetWarehouse || '';
 
       // Format items for DocumentService
       const docLines = group.items.map(i => ({
@@ -674,7 +674,7 @@ export class ProcurementService {
 
       const createdDocId = await DocumentService.createDocument({
         docType,
-        date: getTodayJalaliDate(),
+        date: await businessTodayIsoDate(),
         status: docStatus,
         buyer_name: supplierName,
         notes: docNotes,
@@ -980,7 +980,7 @@ export class ProcurementService {
           quantity: lineQty,
           unitPrice: linePrice,
           totalPrice: lineTotal,
-          location: l.location || docLines[0]?.location || 'انبار اصلی'
+          location: l.location || docLines[0]?.location || ''
         };
       });
 
@@ -995,7 +995,7 @@ export class ProcurementService {
         requisitionId: matchedReq?.id || null,
         requisitionCode: requisitionC,
         projectName: projectN,
-        location: docLines[0]?.location || 'انبار اصلی',
+        location: docLines[0]?.location || '',
         totalAmount: totalAmt,
         itemsCount: mappedItems.length,
         items: mappedItems,

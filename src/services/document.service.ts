@@ -1,8 +1,8 @@
 import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { documents, documentItems, items, transactions, appSettings, documentRefCounters, warehouses, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
+import { documents, documentItems, items, transactions, appSettings, documentRefCounters, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
 import { roundFinancial, getTodayJalaliDate, normalizeDateToDbTimestamp } from '../utils.js';
-import { resolveJalaliFiscalYear, businessNowIsoDateTime } from '../lib/businessClock.js';
+import { resolveJalaliFiscalYear, businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { fin, FinancialMath } from '../lib/financialDecimal.js';
 import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
 import { MAX_PAGE_LIMIT } from '../lib/pagination.js';
@@ -13,10 +13,12 @@ import { OutboxService } from './events/outboxService.js';
 import { VoucherSyncService } from './accounting/voucherSync.service.js';
 import { VoucherService } from './accounting/voucher.service.js';
 import { NegativeStockPolicyService } from './inventory/negativeStockPolicy.service.js';
+import { resolveWarehouseCode } from './inventory/warehouseResolver.js';
+import { ItemStockReservationService } from './items/itemStockReservation.service.js';
 import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 
-type DbClient = DbExecutor;
+export type DbClient = DbExecutor;
 
 export interface GetDocumentsFilter {
   type?: string;
@@ -241,7 +243,7 @@ export class DocumentService {
           const price = unit_price ?? unitPrice ?? 0;
           const disc = discount || 0;
           const qty = Number(quantity);
-          const targetLoc = itemLoc || docLocation || '';
+          const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
 
           if (!Number.isFinite(qty) || qty <= 0) {
             throw new ValidationError(`مقدار/تعداد برای کالای با شناسه ${itemId} باید عددی بزرگ‌تر از صفر باشد.`);
@@ -515,16 +517,9 @@ export class DocumentService {
       const docId = insertedDoc.id;
 
       if (docType === 'audit') {
-        const activeWhs = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1));
         for (const item of docLines) {
           const { itemId, system_stock, physical_stock, location: itemLoc } = item;
-          let targetLoc = itemLoc || docLocation || '';
-          if (!targetLoc) {
-            if (activeWhs.length === 0) {
-              throw new ValidationError('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا در بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
-            }
-            targetLoc = activeWhs[0].code;
-          }
+          const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
           const variance = Number(physical_stock) - Number(system_stock);
 
           await tx.insert(documentItems).values({
@@ -546,7 +541,7 @@ export class DocumentService {
               documentId: docId,
               type: txType,
               quantity: absVariance,
-              date,
+              date: normalizedDocDate,
               documentType: 'audit',
               documentRef: String(finalRefNumber),
               createdBy: user,
@@ -581,7 +576,7 @@ export class DocumentService {
           const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
           const disc = discount || 0;
           const qty = Number(quantity);
-          const targetLoc = itemLoc || docLocation || '';
+          const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
 
           if (docStatus === 'final') {
             await DocumentService.applyStockMovement(tx, {
@@ -1055,14 +1050,7 @@ export class DocumentService {
     const qty = Number(quantity);
     const priceNum = Number(price);
 
-    let finalTargetLoc = targetLoc ? String(targetLoc).trim() : '';
-    if (!finalTargetLoc) {
-      const [firstWh] = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).limit(1);
-      if (!firstWh) {
-        throw new ValidationError('هیچ انبار فعالی در سیستم تعریف نشده است. لطفاً ابتدا در بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
-      }
-      finalTargetLoc = firstWh.code;
-    }
+    const finalTargetLoc = await resolveWarehouseCode(tx, targetLoc);
 
     // V9-P0: گارد دفاعی — مقدار منفی/نامعتبر جهت in/out را برعکس می‌کند و WAC را خراب می‌کند
     if (!Number.isFinite(qty) || qty <= 0) {
@@ -1188,7 +1176,7 @@ export class DocumentService {
             movementType: inOut,
             quantity: qty,
             unitPrice: price,
-            warehouseLocation: targetLoc,
+            warehouseLocation: finalTargetLoc,
             previousStock: oldTotalStock,
             newStock: newTotalStock,
             referenceDocType: documentType,
@@ -1314,9 +1302,48 @@ export class DocumentService {
       const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
       const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
 
+      // Pre-flight stock availability & reservation check for exit documents (TD-118)
+      if (inOut === 'out') {
+        const reservationReport = await ItemStockReservationService.getReservedStockDetails();
+        for (const item of docLines) {
+          const qty = fin(item.quantity).toNumber();
+          const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
+
+          const [dbItem] = await tx.select({
+            id: items.id,
+            code: items.code,
+            name: items.name,
+            unit: items.unit,
+            stocks: items.stocks,
+            currentStock: items.currentStock,
+          }).from(items).where(eq(items.id, item.itemId)).for('update');
+
+          if (!dbItem) {
+            throw new NotFoundError(`کالا با شناسه ${item.itemId} یافت نشد`);
+          }
+
+          const summary = reservationReport.itemSummaries.find(s => s.itemId === item.itemId);
+          const sellableInfo = ItemStockReservationService.computeSellable(
+            summary,
+            (dbItem.stocks as Record<string, number>) || {},
+            {
+              location: targetLoc,
+              excludeDocumentId: id,
+              projectId: doc.projectId ? Number(doc.projectId) : null,
+            }
+          );
+
+          if (qty > sellableInfo.sellable) {
+            throw new InsufficientStockError(
+              `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem.unit || 'عدد'} برای کالا «${dbItem.name}» (${dbItem.code}) وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}، قابل فروش: ${sellableInfo.sellable}.`
+            );
+          }
+        }
+      }
+
       // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
       for (const item of docLines) {
-        const targetLoc = item.location ? String(item.location).trim() : '';
+        const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
         const qty = Number(item.quantity);
         const price = Number(item.unitPrice || 0);
 
@@ -1496,7 +1523,7 @@ export class DocumentService {
         for (const lv of linkedVouchers) {
           await VoucherService.reverseVoucher({
             voucherId: lv.id,
-            date: getTodayJalaliDate(),
+            date: await businessTodayIsoDate(),
             reason: `حذف سند انبار شماره ${doc.refNumber || id} (${doc.type || ''})`,
             username: deletedByUser,
             externalTx: tx,

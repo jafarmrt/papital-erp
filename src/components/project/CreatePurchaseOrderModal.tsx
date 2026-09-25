@@ -42,7 +42,7 @@ export function CreatePurchaseOrderModal({
   const [orderDate, setOrderDate] = useState<string>(() => getTodayJalaliDate());
   const [refNumber, setRefNumber] = useState<string>(() => `PO-${project.project_code || project.id || 'PRJ'}-${Math.floor(1000 + Math.random() * 9000)}`);
   const [supplierName, setSupplierName] = useState('');
-  const [targetWarehouse, setTargetWarehouse] = useState('انبار اصلی');
+  const [targetWarehouse, setTargetWarehouse] = useState('');
   const [notes, setNotes] = useState(
     `کسری‌های مواد اولیه پروژه ${project.project_code || project.title}`
   );
@@ -186,7 +186,7 @@ export function CreatePurchaseOrderModal({
         status: docStatus, // 'draft', 'proforma', 'final'
         buyer_name: supplierName.trim() || 'تامین‌کننده تدارکات',
         notes: notes.trim(),
-        location: targetWarehouse || 'انبار اصلی',
+        location: targetWarehouse.trim() || undefined,
         inOut: 'in',
         projectId: project.id,
         items: selectedRows.map(r => ({
@@ -194,7 +194,7 @@ export function CreatePurchaseOrderModal({
           quantity: Number(r.quantity),
           unit_price: Number(r.unitPrice || 0),
           discount: 0,
-          location: targetWarehouse || 'انبار اصلی'
+          location: targetWarehouse.trim() || undefined
         }))
       };
 
@@ -375,7 +375,7 @@ export function CreatePurchaseOrderModal({
                 <label className="block font-bold text-slate-700 mb-1">انبار مقصد ورود کالا:</label>
                 <input
                   type="text"
-                  placeholder="انبار اصلی"
+                  placeholder="انبار پیش‌فرض سیستم"
                   value={targetWarehouse}
                   onChange={e => setTargetWarehouse(e.target.value)}
                   className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"

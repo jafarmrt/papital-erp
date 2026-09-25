@@ -17,11 +17,21 @@
 | TD-002 | Data Safety | اسکریپت `clean-install.sh` هنوز `DROP DATABASE/DROP USER` اختیاری دارد؛ تولید خودکار backup پیشنهادی قبل از migrationها بررسی شود | clean-install.sh:36+ | resolved (v3.2.0) — double confirmation (y + تایپ 'DROP-DATA')، pg_dump خودکار پیش از drop (شکست backup = abort) و گارد نبودن pg_dump-client |
 | TD-003 | Tests | دو سوییت e2e/integration همچنان cleanup را در finally صدا می‌زنند — اکنون gated داخل خود تابع است ولی برای شفافیت، گیت صریح هم داشته باشند | e2eSuite.ts:529, integrationSuite.ts:1234 | resolved (Phase 2) |
 | TD-004 | Deploy | جریان deployment فعلاً به PM2 متکی است؛ Dockerfile در CI کامنت است (قبولی عملیاتی در V8 مانده) | .github/workflows/ci.yml | resolved (v3.2.0) — ردیف کهن‌داده بود: گیت docker build/push از v3.0.8 (TD-058) فعال است؛ deploy-staging همچنان placeholder و منوط به زیرساخت واقعی |
+| TD-113 | DB Integrity / Counters (P0) | نبود PRIMARY KEY روی جدول‌های `document_ref_counters` و `item_code_counters` در مهاجرت پایه که منجر به خطای ۵۰۰ در ON CONFLICT می‌شد | drizzle/0000_v3_baseline.sql:154-163, drizzle/0009_counter_primary_keys.sql | resolved (v5.0.13) — ایجاد کلیدهای اصلی کامپوزیت با ادغام رکوردهای تکراری در مهاجرت 0009 و تست خودکار ایندکس یکتا برای تمام اهداف ON CONFLICT |
+| TD-114 | Inventory / Warehouse Resolution | پذیرش رشته‌های نامعتبر برای انبار و ایجاد کلیدهای شبح در `items.stocks` | document.service.ts:1058-1065 | resolved (v5.0.14) — ایجاد سرویس مرکزی `resolveWarehouseCode` جهت تفکیک و تبدیل نام به کد و اعتبارسنجی انبار فعال با خطای ۴۲۲ |
+| TD-116 | DB Data Repair | وجود کلیدهای شبح نام انبار در JSON موجودی کالا و مغایرت موجودی کل با مجموع انبارها | items.stocks, transactions.location, document_items.location | resolved (v5.0.14) — مهاجرت 0010 جهت تهیه پشتیبان، ادغام کلیدهای شبح در کد انبار و هم‌ترازی قطعی current_stock با مجموع انبارها |
+| TD-117 | Warehouses Route Guard | امکان غیرفعال‌سازی انبار دارای موجودی و عدم ثبت لاگ ممیزی در مسیرهای انبار | warehouses.routes.ts:57-70 | resolved (v5.0.14) — گارد بررسی مانده موجودی کالا در انبار پیش از غیرفعال‌سازی (ConflictError) و ثبت ممیزی کامل logActivity در POST/PUT/DELETE |
+| TD-118 | Sales Reservation Gate | گیت رزرو فقط در POST /documents بود و finalizeDocument بررسی نداشت؛ خود-رزروی در تبدیل پیش‌فاکتور و ترکیب نادرست رزرو کل با انبار مقصد؛ UI فقط موجودی خام نشان می‌داد | documents.routes.ts, document.service.ts, CreateInvoicePage.tsx, itemStockReservation.service.ts | resolved (v5.0.15) — متد متمرکز ItemStockReservationService.computeSellable، اعتبارسنجی در نهایی‌سازی با استثناکردن خود-سند، محاسبه سه‌گانه انبار/رزرو/فروش و نمایش شفاف در UI فاکتور |
+| TD-126 | Proforma Reservation Deleted Items | محاسبه رزرو پیش‌فاکتور اقلام نرم‌حذف‌شده را هم حساب می‌کرد (بدون فیلتر isDeleted) | itemStockReservation.service.ts:469-482 | resolved (v5.0.15) — افزودن شروط eq(documentItems.isDeleted, 0) و eq(items.isDeleted, 0) به کوئری استخراج خطوط پیش‌فاکتورهای فعال |
+| TD-119 | Jalali-as-Gregorian Dates | ذخیره‌سازی تاریخ شمسی به عنوان سال میلادی در اسناد و گردش‌ها، استفاده از رشته خام در تدارکات/انبارگردانی و شمارنده‌های ۲۰۲۶ | document.service.ts:549, procurement.service.ts:677, drizzle/0011_repair_jalali_timestamps.sql | resolved (v5.0.16) — مهاجرت 0011 جهت تبدیل الگوریتمی رکوردهای با سال ۱۴۰۰..۱۴۹۹ به میلادی، گاردهای CHECK دیتابیسی، هماهنگی businessTodayIsoDate و ادغام شمارنده‌ها |
 
 ## 🟠 مهم — آرشیو
 
 | ID | حوزه | شرح | منبع | وضعیت |
 |----|------|-----|------|-------|
+| TD-115 | Inventory / Hardcoded Warehouse | پیش‌فرض‌های ثابت «انبار اصلی»/«انبار مرکزی» در تدارکات، سفارش خرید و تخصیص پروژه | SplitOrderModal.tsx, procurement.service.ts, CreatePurchaseOrderModal.tsx, ReorderPurchaseModal.tsx | resolved (v5.0.14) — حذف مقادیر هاردکدشده فارسی و سپردن به resolveWarehouseCode سرور |
+| TD-123 | GET-یی که می‌نویسد | فراخوانی جهشی `syncMissingWarehouseStocks` در مسیر خواندنی GET /items | items.crud.routes.ts:137 | resolved (v5.0.14) — حذف جهش دیتابیسی پنهان از روت‌های صرفاً خواندنی |
+| TD-125 | Stock Event Location | ثبت مقدار خام targetLoc (احتمالاً خالی یا نام انبار) در رویداد outbox موجودی به‌جای کد نهایی | document.service.ts:1191 | resolved (v5.0.14) — ثبت کد اعتبارسنجی‌شده نهایی finalTargetLoc در payload رویداد دامنه |
 | TD-010 | Items Coding | فرانت فرم کالا endpoint ناموجود `/items/next-code` را صدا می‌زند (fallback ساکت)؛ backend واقعی `/items/next-product-code` الگوی MAX()+1 دارد و یتیم مانده. فاز V10-2.1 endpoint اتمیک next-code + UI segment-wise تحویل می‌دهد | itemFormHelpers.ts:32,42; items.crud.routes.ts:473 | resolved (V10-2.1) |
 | TD-011 | Items Coding | prefixهای تکراری seed (۵ دسته = N) و دوخط‌تیره مواد اولیه (`B-H--101`) نیاز بازطراحی seed دارند | src/db/seed.ts:46-72; useItemForm.ts:157,180 | resolved (V10-2.1 + تصمیم کاربر در v1.0.4): گوشواره آویز بزرگ/دو تکه → E، میخی → S، گردنبندها همه N؛ دوخط‌تیره با prefix بدون-dash رفع شد |
 | TD-012 | UI Copy | متن «حداکثر ۱۰۰ کیلوبایت» در ItemSpecificationsForm با گیت واقعی 1MB ناسازگار؛ استاندارد نهایی 300KB فاز ۲ اعمال می‌شود | ItemSpecificationsForm.tsx:201, itemFormHelpers.ts:54 | resolved (V10-2.3) |
@@ -128,4 +138,4 @@
   Business Clock در دامنه‌های ثانویه زنده است) — ادامه در رجیستری فعال
   (TD-106، TD-104) پیگیری می‌شود.
 
-*آخرین بازبینی آرشیو: v4.0.31*
+*آخرین بازبینی آرشیو: v5.0.13*

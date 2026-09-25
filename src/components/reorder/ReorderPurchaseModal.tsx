@@ -40,7 +40,7 @@ export function ReorderPurchaseModal({
   const [requiredDate, setRequiredDate] = useState(() => getTodayJalaliDate());
   const [supplierName, setSupplierName] = useState('');
   const [docStatus, setDocStatus] = useState<'draft' | 'final'>('draft');
-  const [targetWarehouse] = useState('انبار اصلی');
+  const [targetWarehouse] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -156,7 +156,7 @@ export function ReorderPurchaseModal({
             docType: 'receipt',
             status: docStatus,
             partyName: supplierName.trim(),
-            targetWarehouse: targetWarehouse || 'انبار اصلی',
+            location: targetWarehouse.trim() || undefined,
             date: requiredDate || getTodayJalaliDate(),
             notes: notes.trim() || `تامین کسری نقطه سفارش انبار`,
             items: items.map(it => ({

@@ -9,6 +9,85 @@ import { AIUpdateLog } from './types';
  */
 export const v5Updates: AIUpdateLog[] = [
   {
+    version: 'v5.0.16',
+    date: '۴ مهر ۱۴۰۵',
+    title: 'اجرای فاز ۳ برنامه اصلاحی: اصلاح ریشه‌ای تاریخ‌های شمسی در پایگاه‌داده، ساعت کسب‌وکار و گارد اعتبارسنجی میلادی (TD-119)',
+    summary: 'حل ریشه‌ای مشکل ذخیره‌سازی تاریخ‌های شمسی به عنوان سال میلادی (مانند 1405-06-20) در پایگاه‌داده: اجرای مهاجرت 0011 با ایجاد جدول پشتیبان و تبدیل رکوردهای قدیمی به میلادی معتبر، اصلاح مقادیر تاریخ در ماژول‌های تدارکات و انبارگردانی به ساعت رسمی کسب‌وکار (businessTodayIsoDate)، ادغام شمارنده‌های مالیاتی 2026 در سال شمسی 1405، و ایجاد قیدهای اعتبارسنجی CHECK در سطح دیتابیس برای تضمین تاریخ‌های میلادی معتبر.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🗄️ ایجاد مهاجرت پایگاه‌داده `drizzle/0011_repair_jalali_timestamps.sql` با جدول پشتیبان `_repair_0011_timestamps_backup` جهت تبدیل الگوریتمی رکوردهای با سال ۱۴۰۰..۱۴۹۹ به تاریخ‌های میلادی واقعی در جدول‌های `documents`، `transactions`، `journal_vouchers` و `crm_activities` (TD-119)',
+      '🛡️ تعریف قیدهای اعتبارسنجی دیتابیسی `chk_documents_date_gregorian` و `chk_transactions_date_gregorian` جهت ممانعت قاطع از ورود رشته‌های سال شمسی به ستون‌های timestamp',
+      '⏰ اصلاح ماژول تدارکات (`src/services/procurement.service.ts`) جهت استفاده از ساعت رسمی کسب‌وکار `businessTodayIsoDate()` به‌جای رشته شمسی خام در صدور رسید و اسناد انبار',
+      '📦 تصحیح شاخه انبارگردانی (`audit`) در `DocumentService.createDocument` جهت استفاده از `normalizedDocDate` به‌جای رشته خام ورودی، و به‌روزرسانی تاریخ برگشت سند به `businessTodayIsoDate()`',
+      '🔢 ادغام و تصحیح رکوردهای جدول شمارنده `document_ref_counters` با سال اشتباه ۲۰۲۶ در سال مالی شمسی ۱۴۰۵',
+      '🧪 افزودن آزمون رگرسیون شماره ۱۰ (`reg_jalali_timestamp_normalization_and_gregorian_guard`) در `regressionSuite.ts` جهت راستی‌آزمایی نرمال‌سازی تاریخ‌های شمسی و عملکرد گارد پایگاه‌داده',
+      '📦 تسویه و انتقال بدهی فنی TD-119 به `TECH_DEBT_ARCHIVE.md` و به‌روزرسانی آمار رجیستری در `TECH_DEBT.md`'
+    ],
+    fixes: [
+      '🐛 رفع خطای ذخیره‌سازی سال‌های شمسی (مانند سال ۱۴۰۵) به عنوان سال میلادی قرن ۱۵ در ستون‌های timestamp اسناد و گردش‌های انبار',
+      '🐛 رفع ایجاد سال‌های میلادی نامعتبر در شمارنده شماره سریال اسناد (`document_ref_counters`)'
+    ]
+  },
+  {
+    version: 'v5.0.15',
+    date: '۴ مهر ۱۴۰۵',
+    title: 'اجرای فاز ۲ برنامه اصلاحی: یکپارچه‌سازی گیت رزرو پیش‌فاکتور و فروش، سقف قابل‌فروش و حذف خود-رزروی',
+    summary: 'حل کامل محدودیت‌های رزرو پنهان پیش‌فاکتورها و پروژه‌ها (TD-118 و TD-126): ایجاد متد متمرکز ItemStockReservationService.computeSellable، پیاده‌سازی گیت پیش از خروج در finalizeDocument و POST /documents با استثناکردن خود-سند در حال تبدیل، فیلتر اقلام نرم‌حذف‌شده در پیش‌فاکتورها و اصلاح UI صدور فاکتور جهت نمایش سه‌گانه انبار، رزرو و قابل‌فروش.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '⚙️ ایجاد متد محاسباتی متمرکز `ItemStockReservationService.computeSellable` جهت محاسبه دقیق سقف قابل‌فروش به تفکیک انبار بر مبنای `min(موجودی انبار مقصد، موجودی کل − رزرو دیگران)` با استفاده از FinancialDecimal (TD-118)',
+      '🛡️ پیاده‌سازی گیت اعتبارسنجی رزرو پیش از اعمال گردش در `finalizeDocument` (`document.service.ts`) به همراه مستثنی‌سازی شناسه همان سند (`excludeDocumentId: id`) جهت جلوگیری از مسدود شدن خود-سند هنگام تبدیل پیش‌فاکتور به فاکتور',
+      '🔍 ارتقای گیت اعتبارسنجی خروج در `POST /documents` (`documents.routes.ts`) با استفاده از `computeSellable` و پیام خطای شفاف شامل موجودی انبار، رزرو سایرین و سقف قابل‌فروش',
+      '🧹 اصلاح کوئری رزرو پیش‌فاکتورها در `itemStockReservation.service.ts` با افزودن فیلتر اقلام نرم‌حذف‌شده (`isDeleted = 0`) برای اسناد و کالاها (TD-126)',
+      '📦 افزودن فیلد `location_stock` و محاسبه بر مبنای انبار انتخابی در `GET /items` (`items.crud.routes.ts`)',
+      '🖥️ ایجاد هلپر مشترک `src/lib/stockAvailability.ts` (`getSellableStock`) و اصلاح فرم صدور فاکتور (`CreateInvoicePage.tsx`) با حذف فالبک اشتباه موجودی کل و نمایش برچسب شفاف «انبار: X | رزرو: Y | قابل فروش: Z»',
+      '🧪 افزودن آزمون رگرسیون شماره ۹ (`reg_sellable_stock_and_reservation_gate`) در `src/tests/suites/regressionSuite.ts` جهت سنجش خودکار محاسبات سقف فروش، حذف خود-رزروی و هلپر فرانت‌اند',
+      '📦 تسویه و انتقال ۲ بدهی فنی TD-118 و TD-126 به `TECH_DEBT_ARCHIVE.md` و به‌روزرسانی آمار رجیستری در `TECH_DEBT.md`'
+    ],
+    fixes: [
+      '🐛 رفع خطای غیرمنتظره کمبود موجودی («فقط ۲ از ۳») ناشی از رزرو پنهان پیش‌فاکتورهای باز و پروژه‌ها بدون اطلاع کاربر در فرم فاکتور',
+      '🐛 رفع خطای خود-مسدودسازی پیش‌فاکتورها هنگام تایید یا تبدیل به فاکتور ناشی از کسر رزرو خودِ همان سند از سقف مجاز',
+      '🐛 رفع احتساب اقلام نرم‌حذف‌شده در محاسبه رزروهای فعال پیش‌فاکتور'
+    ]
+  },
+  {
+    version: 'v5.0.14',
+    date: '۴ مهر ۱۴۰۵',
+    title: 'اجرای فاز ۱ برنامه اصلاحی: حل ریشه‌ای کلیدهای شبح موجودی انبار، تفکیک مرکزی انبار و هم‌ترازی موجودی کل',
+    summary: 'حل کامل اختلاف موجودی کل کالاها با مجموع انبارهای قابل‌مشاهده ناشی از کلیدهای شبح (نام فارسی انبار به‌جای کد): ایجاد سرویس مرکزی resolveWarehouseCode، حذف نام‌های هاردکدشده انبار در سراسر فرانت و بک‌اند، مهاجرت 0010 جهت پشتیبان‌گیری و ادغام کلیدهای شبح، گارد ممانعت از غیرفعال‌سازی انبار دارای موجودی و حذف جهش دیتابیسی از متد خواندنی GET /items.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🏢 ایجاد سرویس مرکزی `src/services/inventory/warehouseResolver.ts` (`resolveWarehouseCode`) جهت تبدیل خودکار هرگونه ورودی (کد، نام فارسی یا مقدار خالی) به کد انبار فعال یا بازگرداندن خطای صلب ۴۲۲ (TD-114)',
+      '📦 اتصال `resolveWarehouseCode` به متدهای `applyStockMovement`، `createDocument`، `updateDocument` و `finalizeDocument` در `DocumentService` و ثبت کد نهایی انبار در رویداد دامنه Outbox (TD-125)',
+      '🧹 حذف نام‌ها و مقادیر هاردکد «انبار اصلی» و «انبار مرکزی» از فرم‌های تدارکات، تفکیک سفارش خرید و پروژه (`SplitOrderModal`، `procurement.service`، `CreatePurchaseOrderModal`، `ReorderPurchaseModal`) (TD-115)',
+      '🗄️ ایجاد مهاجرت `drizzle/0010_repair_phantom_stock_keys.sql` با جدول پشتیبان `_repair_0010_items_stocks_backup`، ادغام کلیدهای شبح در کد انبار فعال و هم‌ترازی قطعی `current_stock = Σ stocks` (TD-116)',
+      '🛡️ افزودن گارد ممانعت از غیرفعال‌سازی انبار دارای موجودی با خطای ۴۰۹ (ConflictError) و ثبت ممیزی کامل `logActivity` در مسیرهای انبار (`warehouses.routes.ts`) (TD-117)',
+      '🚀 حذف جهش دیتابیسی پنهان `syncMissingWarehouseStocks` از مسیر صرفاً خواندنی `GET /items` (TD-123)',
+      '🧪 افزودن آزمون رگرسیون شماره ۸ (`reg_warehouse_resolution_and_stock_parity`) در `src/tests/suites/regressionSuite.ts` جهت سنجش مداوم تبدیل کد انبار، خطای ۴۲۲ و عدم مغایرت موجودی کل',
+      '📦 تسویه و انتقال ۶ بدهی فنی (TD-114, TD-115, TD-116, TD-117, TD-123, TD-125) به `TECH_DEBT_ARCHIVE.md` و به‌روزرسانی دفتر بدهی فنی'
+    ],
+    fixes: [
+      '🐛 رفع مغایرت موجودی کل کالا (`current_stock`) با مجموع انبارهای فعال (`stocks`) ناشی از ورود کلیدهای فارسی و نام‌های هاردکد',
+      '🐛 رفع خطای ۵۰۰/۴۰۰ و رد غیرمجاز خروج کالا به دلیل نادیده‌ماندن موجودی محبوس‌شده در کلیدهای شبح'
+    ]
+  },
+  {
+    version: 'v5.0.13',
+    date: '۴ مهر ۱۴۰۵',
+    title: 'اجرای فاز ۰ برنامه اصلاحی: ایجاد کلیدهای اصلی جدول‌های شمارنده و پایدارسازی ON CONFLICT (TD-113)',
+    summary: 'حل قطعی و ریشه‌ای خطای ۵۰۰ ثبت فاکتور در نصب‌های تازه و پایگاه‌داده پروداکشن: ایجاد کلید اصلی (PRIMARY KEY) برای جدول‌های شمارنده اسناد و کالاها در مهاجرت 0009 به همراه آزمون اعتبارسنجی خودکار کلیه اهداف ON CONFLICT.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🗄️ ایجاد مهاجرت `drizzle/0009_counter_primary_keys.sql` جهت افزودن کلید اصلی دوگانه (doc_type, fiscal_year) به `document_ref_counters` و (scope, prefix_key) به `item_code_counters` پس از ادغام اتمیک رکوردهای تکراری (TD-113)',
+      '📑 ثبت مهاجرت 0009 در فایل فراداده ژورنال دریزل (`drizzle/meta/_journal.json`)',
+      '🧪 افزودن آزمون جامع `db_on_conflict_targets_have_unique_index` در `src/tests/suites/databaseSuite.ts` جهت راستی‌آزمایی وجود ایندکس یکتا برای تمام جداول مشمول ON CONFLICT',
+      '📦 تسویه بدهی فنی بحرانی TD-113، انتقال به `TECH_DEBT_ARCHIVE.md` و به‌روزرسانی شمارنده‌ها در `TECH_DEBT.md`'
+    ],
+    fixes: [
+      '🐛 رفع خطای خام ۵۰۰ پایگاه داده هنگام درج یا به‌روزرسانی فاکتور ناشی از نبود ایندکس یکتا بر روی هدف ON CONFLICT (doc_type, fiscal_year)'
+    ]
+  },
+  {
     version: 'v5.0.12',
     date: '۴ مهر ۱۴۰۵',
     title: 'ممیزی ریشه‌ای خطای ثبت فاکتور پروداکشن و تدوین برنامه اصلاحی پنج‌فازی',

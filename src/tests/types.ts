@@ -107,7 +107,9 @@ export type CriticalScenarioId =
   | 'v4_accounting_treasury_runtime_contracts_guard'
   | 'v4_treasury_server_authoritative_date_guard'
   | 'v4_test_cleanup_marker_only_guard'
-  | 'v4_project_reservation_release_guard';
+  | 'v4_project_reservation_release_guard'
+  | 'v5_warehouse_resolution_guard'
+  | 'v5_sellable_stock_reservation_gate';
 
 
 export interface TestCaseResult {

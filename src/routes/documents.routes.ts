@@ -12,7 +12,9 @@ import { NotFoundError, ForbiddenError, ValidationError } from '../errors/custom
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
 import { crmLeads, crmActivities, items, documents } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
+import { fin } from '../lib/financialDecimal.js';
 import { getTodayJalaliDate } from '../utils.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -235,39 +237,56 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
     }
   }
 
-  // Validate stock reservations on exit remittance (inOut === 'out')
+  // Validate stock reservations on exit remittance (inOut === 'out') (TD-118)
   if (req.body.inOut === 'out') {
     const reservationReport = await ItemStockReservationService.getReservedStockDetails();
     const targetProjId = req.body.projectId ? Number(req.body.projectId) : null;
+    const excludeDocId = req.body.excludeDocumentId ? Number(req.body.excludeDocumentId) : undefined;
+
+    const lineItemIds = (req.body.items || []).map((it: any) => Number(it.itemId)).filter(Boolean);
+    const dbItems = lineItemIds.length > 0
+      ? await orm.select({
+          id: items.id,
+          code: items.code,
+          name: items.name,
+          unit: items.unit,
+          stocks: items.stocks,
+          currentStock: items.currentStock,
+        }).from(items).where(and(inArray(items.id, lineItemIds), eq(items.isDeleted, 0)))
+      : [];
+    const dbItemsMap = new Map(dbItems.map(it => [it.id, it]));
 
     for (const docLine of req.body.items || []) {
       const itId = Number(docLine.itemId);
-      const reqQty = Number(docLine.quantity || 0);
+      const reqQty = fin(docLine.quantity || 0).toNumber();
       if (reqQty <= 0) continue;
 
+      const dbItem = dbItemsMap.get(itId);
+      const targetLoc = await resolveWarehouseCode(orm, docLine.location ? String(docLine.location).trim() : (req.body.location ? String(req.body.location).trim() : ''));
       const summary = reservationReport.itemSummaries.find(s => s.itemId === itId);
-      if (summary && summary.totalReservedQty > 0) {
-        let reservedForSelectedProject = 0;
-        if (targetProjId) {
-          const projReservations = summary.reservations.filter(
-            r => r.sourceType === 'project' && Number(r.sourceId) === targetProjId
-          );
-          reservedForSelectedProject = projReservations.reduce((acc, r) => acc + r.reservedQty, 0);
+
+      const sellableInfo = ItemStockReservationService.computeSellable(
+        summary,
+        (dbItem?.stocks as Record<string, number>) || {},
+        {
+          location: targetLoc,
+          excludeDocumentId: excludeDocId,
+          projectId: targetProjId,
         }
+      );
 
-        const reservedForOther = summary.totalReservedQty - reservedForSelectedProject;
-        const maxAllowed = Math.max(0, summary.currentStock - reservedForOther);
+      if (reqQty > sellableInfo.sellable) {
+        const otherReservations = (summary?.reservations || []).filter(
+          r => !(r.sourceType === 'proforma' && excludeDocId && Number(r.sourceId) === excludeDocId) &&
+               !(r.sourceType === 'project' && targetProjId && Number(r.sourceId) === targetProjId)
+        );
+        const otherNames = otherReservations.length > 0
+          ? ` (${otherReservations.map(r => `«${r.sourceRef || r.sourceTitle}» [${r.reservedQty} ${r.unit}]`).join('، ')})`
+          : '';
 
-        if (reqQty > maxAllowed) {
-          const otherNames = summary.reservations
-            .filter(r => !(targetProjId && r.sourceType === 'project' && Number(r.sourceId) === targetProjId))
-            .map(r => `«${r.sourceRef || r.sourceTitle}» (${r.reservedQty} ${r.unit})`)
-            .join('، ');
-
-          throw new ValidationError(
-            `امکان خروج بیش از ${maxAllowed} ${summary.unit} برای کالا «${summary.itemName}» وجود ندارد. تعداد ${reservedForOther} ${summary.unit} برای سایر مصارف (${otherNames}) رزرو شده است.`
-          );
-        }
+        throw new ValidationError(
+          `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem?.unit || summary?.unit || 'عدد'} برای کالا «${dbItem?.name || summary?.itemName || itId}» وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}${otherNames}، قابل فروش: ${sellableInfo.sellable}.`
+        );
       }
     }
   }
