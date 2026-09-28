@@ -6,6 +6,7 @@ import { VoucherService } from './voucher.service.js';
 import { AccountingReportService } from './accountingReport.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { ConflictError } from '../../errors/customErrors.js';
+import { normalizeDateToIso } from '../../lib/businessClock.js';
 import type { 
   FiscalYearClosingPreview, 
   FiscalYearClosingResult, 
@@ -29,9 +30,11 @@ export class FiscalYearService {
     const closingDate = params.closingDate || `${currentYear}-12-29`;
     const openingDateNewYear = params.openingDateNewYear || `${Number(currentYear) + 1}-01-01`;
 
+    const normClosingDate = normalizeDateToIso(closingDate) || closingDate;
+
     const trial = await AccountingReportService.getTrialBalance({
       level: 'subsidiary',
-      endDate: closingDate
+      endDate: normClosingDate
     });
 
     const temporaryAccounts: FiscalClosingAccountRow[] = [];
@@ -210,10 +213,13 @@ export class FiscalYearService {
     userId?: number;
     username?: string;
   }): Promise<FiscalYearClosingResult> {
+    const normClosingDate = normalizeDateToIso(data.closingDate) || data.closingDate;
+    const normOpeningDate = normalizeDateToIso(data.openingDateNewYear || `${Number(data.year) + 1}-01-01`) || `${Number(data.year) + 1}-01-01`;
+
     const preview = await this.getFiscalYearClosingPreview({
       year: data.year,
-      closingDate: data.closingDate,
-      openingDateNewYear: data.openingDateNewYear
+      closingDate: normClosingDate,
+      openingDateNewYear: normOpeningDate
     });
 
     // Conceptual Account Resolution (Subphase 9.2: Summary Profit/Loss and Retained Earnings)
@@ -266,11 +272,10 @@ export class FiscalYearService {
     const createdVouchers: JournalVoucher[] = [];
     type VoucherItemInput = Parameters<typeof VoucherService.createJournalVoucher>[0]['items'][number];
 
-    // V3.0.6 (BUG-03): کل فرایند بستن سال اکنون در «یک تراکنش اتمیک» اجرا می‌شود؛
-    // قفل Advisory تراکنشی از اجرای همزمان دو بستن‌سال جلوگیری می‌کند و
-    // خطای وسط کار (مثلاً در سند ۳ یا ۴) کل عملیات را Rollback می‌کند.
-    // توجه: getTrialBalance روی اتصال جداگانه می‌خواند و فقط مانده‌های قبل از
-    // بستن را می‌بیند — دقیقاً همان رفتار قبلی (وضعیت Committed قبل از شروع).
+    // V6.0.3 (TD-141): کل فرایند بستن سال در یک تراکنش اتمیک اجرا می‌شود؛
+    // قفل Advisory تراکنشی از اجرای همزمان جلوگیری می‌کند.
+    // getTrialBalance به تراکنش جاری (tx) متصل می‌شود تا اسناد موقت صادرشده (سند ۱ و ۲)
+    // در محاسبه مانده سود انباشته و بستن حساب‌های ترازنامه‌ای دیده شده و سند اختتامیه تراز باشد.
     await orm.transaction(async (tx) => {
       const lockRes = await tx.execute(
         sql`SELECT pg_try_advisory_xact_lock(${FISCAL_CLOSING_LOCK_NAMESPACE}, ${Number(data.year)}) AS acquired`
@@ -284,227 +289,227 @@ export class FiscalYearService {
       }
 
       // VOUCHER 1: بستن حساب‌های موقت به خلاصه سود و زیان
-    if (preview.temporaryAccounts.length > 0) {
-      const v1Items: VoucherItemInput[] = [];
-      let debitSum = 0;
-      let creditSum = 0;
+      if (preview.temporaryAccounts.length > 0) {
+        const v1Items: VoucherItemInput[] = [];
+        let debitSum = 0;
+        let creditSum = 0;
 
-      for (const t of preview.temporaryAccounts) {
-        if (t.action === 'debit') {
+        for (const t of preview.temporaryAccounts) {
+          if (t.action === 'debit') {
+            v1Items.push({
+              accountId: t.accountId,
+              detailedType: 'other',
+              detailedName: t.accountName,
+              debit: t.amount,
+              credit: 0,
+              description: `بستن حساب درآمد/فروش ${t.accountName} به خلاصه سود و زیان`
+            });
+            debitSum += t.amount;
+          } else {
+            v1Items.push({
+              accountId: t.accountId,
+              detailedType: 'other',
+              detailedName: t.accountName,
+              debit: 0,
+              credit: t.amount,
+              description: `بستن حساب هزینه/بهای تمام شده ${t.accountName} به خلاصه سود و زیان`
+            });
+            creditSum += t.amount;
+          }
+        }
+
+        const diff = debitSum - creditSum;
+        if (diff > 0) {
           v1Items.push({
-            accountId: t.accountId,
+            accountId: summaryProfitAcc.id,
             detailedType: 'other',
-            detailedName: t.accountName,
-            debit: t.amount,
-            credit: 0,
-            description: `بستن حساب درآمد/فروش ${t.accountName} به خلاصه سود و زیان`
-          });
-          debitSum += t.amount;
-        } else {
-          v1Items.push({
-            accountId: t.accountId,
-            detailedType: 'other',
-            detailedName: t.accountName,
+            detailedName: 'خلاصه سود و زیان',
             debit: 0,
-            credit: t.amount,
-            description: `بستن حساب هزینه/بهای تمام شده ${t.accountName} به خلاصه سود و زیان`
+            credit: diff,
+            description: `سود ویژه سال مالی ${data.year} منتقل‌شده به خلاصه سود و زیان`
           });
-          creditSum += t.amount;
+        } else if (diff < 0) {
+          v1Items.push({
+            accountId: summaryProfitAcc.id,
+            detailedType: 'other',
+            detailedName: 'خلاصه سود و زیان',
+            debit: Math.abs(diff),
+            credit: 0,
+            description: `زیان ویژه سال مالی ${data.year} منتقل‌شده به خلاصه سود و زیان`
+          });
+        }
+
+        if (v1Items.length >= 2) {
+          const v1 = await VoucherService.createJournalVoucher({
+            date: normClosingDate,
+            voucherType: 'closing',
+            status: 'approved',
+            description: `بستن حساب‌های موقت (درآمدها، بهای تمام شده و هزینه‌ها) به حساب خلاصه سود و زیان سال مالی ${data.year}`,
+            referenceModule: 'manual',
+            referenceNumber: `CLOSE-TEMP-${data.year}`,
+            userId: data.userId,
+            username: data.username,
+            items: v1Items
+          }, tx);
+          createdVouchers.push(v1);
         }
       }
 
-      const diff = debitSum - creditSum;
-      if (diff > 0) {
-        v1Items.push({
-          accountId: summaryProfitAcc.id,
-          detailedType: 'other',
-          detailedName: 'خلاصه سود و زیان',
-          debit: 0,
-          credit: diff,
-          description: `سود ویژه سال مالی ${data.year} منتقل‌شده به خلاصه سود و زیان`
-        });
-      } else if (diff < 0) {
-        v1Items.push({
-          accountId: summaryProfitAcc.id,
-          detailedType: 'other',
-          detailedName: 'خلاصه سود و زیان',
-          debit: Math.abs(diff),
-          credit: 0,
-          description: `زیان ویژه سال مالی ${data.year} منتقل‌شده به خلاصه سود و زیان`
-        });
-      }
+      // VOUCHER 2: انتقال سود/زیان سال از خلاصه به سود انباشته
+      const profit = preview.netProfit;
+      if (profit !== 0) {
+        const v2Items: VoucherItemInput[] = [];
+        if (profit > 0) {
+          v2Items.push({
+            accountId: summaryProfitAcc.id,
+            detailedType: 'other',
+            detailedName: 'خلاصه سود و زیان',
+            debit: profit,
+            credit: 0,
+            description: `بستن حساب خلاصه سود و زیان سال مالی ${data.year}`
+          });
+          v2Items.push({
+            accountId: retainedEarningsAcc.id,
+            detailedType: 'other',
+            detailedName: 'سود انباشته',
+            debit: 0,
+            credit: profit,
+            description: `انتقال سود خالص سال مالی ${data.year} به سود انباشته سنواتی`
+          });
+        } else {
+          const loss = Math.abs(profit);
+          v2Items.push({
+            accountId: retainedEarningsAcc.id,
+            detailedType: 'other',
+            detailedName: 'زیان انباشته',
+            debit: loss,
+            credit: 0,
+            description: `انتقال زیان سال مالی ${data.year} به سود (زیان) انباشته سنواتی`
+          });
+          v2Items.push({
+            accountId: summaryProfitAcc.id,
+            detailedType: 'other',
+            detailedName: 'خلاصه سود و زیان',
+            debit: 0,
+            credit: loss,
+            description: `بستن حساب خلاصه سود و زیان سال مالی ${data.year}`
+          });
+        }
 
-      if (v1Items.length >= 2) {
-        const v1 = await VoucherService.createJournalVoucher({
-          date: data.closingDate,
+        const v2 = await VoucherService.createJournalVoucher({
+          date: normClosingDate,
           voucherType: 'closing',
           status: 'approved',
-          description: `بستن حساب‌های موقت (درآمدها، بهای تمام شده و هزینه‌ها) به حساب خلاصه سود و زیان سال مالی ${data.year}`,
+          description: `انتقال ${profit > 0 ? 'سود' : 'زیان'} خالص سال مالی ${data.year} به حساب سود (زیان) انباشته سنواتی`,
           referenceModule: 'manual',
-          referenceNumber: `CLOSE-TEMP-${data.year}`,
+          referenceNumber: `CLOSE-PROFIT-${data.year}`,
           userId: data.userId,
           username: data.username,
-          items: v1Items
+          items: v2Items
         }, tx);
-        createdVouchers.push(v1);
-      }
-    }
-
-    // VOUCHER 2: انتقال سود/زیان سال از خلاصه به سود انباشته
-    const profit = preview.netProfit;
-    if (profit !== 0) {
-      const v2Items: VoucherItemInput[] = [];
-      if (profit > 0) {
-        v2Items.push({
-          accountId: summaryProfitAcc.id,
-          detailedType: 'other',
-          detailedName: 'خلاصه سود و زیان',
-          debit: profit,
-          credit: 0,
-          description: `بستن حساب خلاصه سود و زیان سال مالی ${data.year}`
-        });
-        v2Items.push({
-          accountId: retainedEarningsAcc.id,
-          detailedType: 'other',
-          detailedName: 'سود انباشته',
-          debit: 0,
-          credit: profit,
-          description: `انتقال سود خالص سال مالی ${data.year} به سود انباشته سنواتی`
-        });
-      } else {
-        const loss = Math.abs(profit);
-        v2Items.push({
-          accountId: retainedEarningsAcc.id,
-          detailedType: 'other',
-          detailedName: 'زیان انباشته',
-          debit: loss,
-          credit: 0,
-          description: `انتقال زیان سال مالی ${data.year} به سود (زیان) انباشته سنواتی`
-        });
-        v2Items.push({
-          accountId: summaryProfitAcc.id,
-          detailedType: 'other',
-          detailedName: 'خلاصه سود و زیان',
-          debit: 0,
-          credit: loss,
-          description: `بستن حساب خلاصه سود و زیان سال مالی ${data.year}`
-        });
+        createdVouchers.push(v2);
       }
 
-      const v2 = await VoucherService.createJournalVoucher({
-        date: data.closingDate,
-        voucherType: 'closing',
-        status: 'approved',
-        description: `انتقال ${profit > 0 ? 'سود' : 'زیان'} خالص سال مالی ${data.year} به حساب سود (زیان) انباشته سنواتی`,
-        referenceModule: 'manual',
-        referenceNumber: `CLOSE-PROFIT-${data.year}`,
-        userId: data.userId,
-        username: data.username,
-        items: v2Items
+      // VOUCHER 3: سند اختتامیه حساب‌های دائمی (ترازنامه‌ای)
+      // V6.0.3 (TD-141): ارسال tx جهت خواندن مانده‌های به‌روزرسانی شده سود انباشته داخل همین تراکنش
+      const postTrial = await AccountingReportService.getTrialBalance({
+        level: 'subsidiary',
+        endDate: normClosingDate
       }, tx);
-      createdVouchers.push(v2);
-    }
 
-    // VOUCHER 3: سند اختتامیه حساب‌های دائمی (ترازنامه‌ای)
-    const postTrial = await AccountingReportService.getTrialBalance({
-      level: 'subsidiary',
-      endDate: data.closingDate
-    });
+      const v3Items: VoucherItemInput[] = [];
+      let closingDebitSum = 0;
+      let closingCreditSum = 0;
 
-    const v3Items: VoucherItemInput[] = [];
-    let closingDebitSum = 0;
-    let closingCreditSum = 0;
-
-    for (const r of postTrial) {
-      if (r.accountType === 'asset') {
-        const bal = Number(r.debitBalance || 0) - Number(r.creditBalance || 0);
-        if (bal > 0) {
-          v3Items.push({
-            accountId: r.accountId,
-            detailedType: 'other',
-            detailedName: r.name,
-            debit: 0,
-            credit: bal,
-            description: `بستن مانده بدهکار دارایی ${r.name} در سند اختتامیه`
-          });
-          closingCreditSum += bal;
-        } else if (bal < 0) {
-          v3Items.push({
-            accountId: r.accountId,
-            detailedType: 'other',
-            detailedName: r.name,
-            debit: Math.abs(bal),
-            credit: 0,
-            description: `بستن مانده بستانکار دارایی ${r.name} در سند اختتامیه`
-          });
-          closingDebitSum += Math.abs(bal);
-        }
-      } else if (r.accountType === 'liability' || r.accountType === 'equity') {
-        const bal = Number(r.creditBalance || 0) - Number(r.debitBalance || 0);
-        if (bal > 0) {
-          v3Items.push({
-            accountId: r.accountId,
-            detailedType: 'other',
-            detailedName: r.name,
-            debit: bal,
-            credit: 0,
-            description: `بستن مانده بستانکار بدهی/حقوق صاحبان سهام ${r.name} در سند اختتامیه`
-          });
-          closingDebitSum += bal;
-        } else if (bal < 0) {
-          v3Items.push({
-            accountId: r.accountId,
-            detailedType: 'other',
-            detailedName: r.name,
-            debit: 0,
-            credit: Math.abs(bal),
-            description: `بستن مانده بدهکار ${r.name} در سند اختتامیه`
-          });
-          closingCreditSum += Math.abs(bal);
+      for (const r of postTrial) {
+        if (r.accountType === 'asset') {
+          const bal = Number(r.debitBalance || 0) - Number(r.creditBalance || 0);
+          if (bal > 0) {
+            v3Items.push({
+              accountId: r.accountId,
+              detailedType: 'other',
+              detailedName: r.name,
+              debit: 0,
+              credit: bal,
+              description: `بستن مانده بدهکار دارایی ${r.name} در سند اختتامیه`
+            });
+            closingCreditSum += bal;
+          } else if (bal < 0) {
+            v3Items.push({
+              accountId: r.accountId,
+              detailedType: 'other',
+              detailedName: r.name,
+              debit: Math.abs(bal),
+              credit: 0,
+              description: `بستن مانده بستانکار دارایی ${r.name} در سند اختتامیه`
+            });
+            closingDebitSum += Math.abs(bal);
+          }
+        } else if (r.accountType === 'liability' || r.accountType === 'equity') {
+          const bal = Number(r.creditBalance || 0) - Number(r.debitBalance || 0);
+          if (bal > 0) {
+            v3Items.push({
+              accountId: r.accountId,
+              detailedType: 'other',
+              detailedName: r.name,
+              debit: bal,
+              credit: 0,
+              description: `بستن مانده بستانکار بدهی/حقوق صاحبان سهام ${r.name} در سند اختتامیه`
+            });
+            closingDebitSum += bal;
+          } else if (bal < 0) {
+            v3Items.push({
+              accountId: r.accountId,
+              detailedType: 'other',
+              detailedName: r.name,
+              debit: 0,
+              credit: Math.abs(bal),
+              description: `بستن مانده بدهکار ${r.name} در سند اختتامیه`
+            });
+            closingCreditSum += Math.abs(bal);
+          }
         }
       }
-    }
 
-    if (v3Items.length >= 2) {
-      const v3 = await VoucherService.createJournalVoucher({
-        date: data.closingDate,
-        voucherType: 'closing',
-        status: 'approved',
-        description: `سند اختتامیه سال مالی ${data.year} (بستن کلیه حساب‌های ترازنامه‌ای، دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام)`,
-        referenceModule: 'manual',
-        referenceNumber: `CLOSING-${data.year}`,
-        userId: data.userId,
-        username: data.username,
-        items: v3Items
-      }, tx);
-      createdVouchers.push(v3);
-    }
+      if (v3Items.length >= 2) {
+        const v3 = await VoucherService.createJournalVoucher({
+          date: normClosingDate,
+          voucherType: 'closing',
+          status: 'approved',
+          description: `سند اختتامیه سال مالی ${data.year} (بستن کلیه حساب‌های ترازنامه‌ای، دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام)`,
+          referenceModule: 'manual',
+          referenceNumber: `CLOSING-${data.year}`,
+          userId: data.userId,
+          username: data.username,
+          items: v3Items
+        }, tx);
+        createdVouchers.push(v3);
+      }
 
-    // VOUCHER 4: سند افتتاحیه سال مالی جدید (معکوس اختتامیه)
-    if (data.createOpeningVoucher !== false && v3Items.length >= 2) {
-      const newYearDate = data.openingDateNewYear || `${Number(data.year) + 1}-01-01`;
-      const v4Items = v3Items.map(it => ({
-        accountId: it.accountId,
-        detailedType: it.detailedType,
-        detailedName: it.detailedName,
-        debit: it.credit,
-        credit: it.debit,
-        description: `ثبت افتتاحیه مانده اول دوره ${it.detailedName} در سال مالی ${Number(data.year) + 1}`
-      }));
+      // VOUCHER 4: سند افتتاحیه سال مالی جدید (معکوس اختتامیه)
+      if (data.createOpeningVoucher !== false && v3Items.length >= 2) {
+        const v4Items = v3Items.map(it => ({
+          accountId: it.accountId,
+          detailedType: it.detailedType,
+          detailedName: it.detailedName,
+          debit: it.credit,
+          credit: it.debit,
+          description: `ثبت افتتاحیه مانده اول دوره ${it.detailedName} در سال مالی ${Number(data.year) + 1}`
+        }));
 
-      const v4 = await VoucherService.createJournalVoucher({
-        date: newYearDate,
-        voucherType: 'opening',
-        status: 'approved',
-        description: `سند افتتاحیه سال مالی ${Number(data.year) + 1} (انتقال مانده‌های ابتدای دوره دارایی‌ها، بدهی‌ها و سرمایه از سال مالی ${data.year})`,
-        referenceModule: 'manual',
-        referenceNumber: `OPENING-${Number(data.year) + 1}`,
-        userId: data.userId,
-        username: data.username,
-        items: v4Items
-      }, tx);
-      createdVouchers.push(v4);
-    }
+        const v4 = await VoucherService.createJournalVoucher({
+          date: normOpeningDate,
+          voucherType: 'opening',
+          status: 'approved',
+          description: `سند افتتاحیه سال مالی ${Number(data.year) + 1} (انتقال مانده‌های ابتدای دوره دارایی‌ها، بدهی‌ها و سرمایه از سال مالی ${data.year})`,
+          referenceModule: 'manual',
+          referenceNumber: `OPENING-${Number(data.year) + 1}`,
+          userId: data.userId,
+          username: data.username,
+          items: v4Items
+        }, tx);
+        createdVouchers.push(v4);
+      }
     }); // پایان تراکنش اتمیک بستن سال
 
     return {
@@ -516,3 +521,4 @@ export class FiscalYearService {
     };
   }
 }
+

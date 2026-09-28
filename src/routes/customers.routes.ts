@@ -5,12 +5,11 @@ import { customers } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
-import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
+import { CustomerService } from '../services/customer.service.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -206,317 +205,103 @@ router.post('/customers/bulk-import', authorize('admin', 'manager', 'sales_manag
     return res.status(400).json({ error: 'لیست طرفین حساب جهت ثبت ارسال نشده است.' });
   }
 
-  let createdCount = 0;
-  let updatedCount = 0;
-  const errors: Array<{ row: number; name?: string; message: string }> = [];
+  const result = await CustomerService.bulkImport(rows, updateIfExists);
 
-  const existingList = await orm.select().from(customers).where(eq(customers.isDeleted, 0));
+  for (const c of result.createdRecords) {
+    await logActivity({
+      req,
+      action: 'CREATE',
+      entity: c.partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+      entityId: c.id,
+      description: `ثبت دسته‌ای طرف حساب جدید "${c.name}" از طریق فایل اکسل`,
+      details: { id: c.id, name: c.name, partyType: c.partyType, phone: c.phone }
+    });
+  }
 
-  const idMap = new Map<number, typeof customers.$inferSelect>();
-  const nameMap = new Map<string, typeof customers.$inferSelect>();
-  const phoneMap = new Map<string, typeof customers.$inferSelect>();
-
-  existingList.forEach(c => {
-    idMap.set(c.id, c);
-    if (c.name && c.name.trim()) {
-      nameMap.set(c.name.trim().toLowerCase(), c);
-    }
-    if (c.phone && c.phone.trim()) {
-      phoneMap.set(c.phone.trim(), c);
-    }
-  });
-
-  for (let i = 0; i < rows.length; i++) {
-    const item = rows[i];
-    const rowIndex = i + 1;
-
-    try {
-      const name = String(item.name || '').trim();
-      if (!name) {
-        errors.push({ row: rowIndex, message: 'نام طرف حساب مشخص نشده است.' });
-        continue;
-      }
-
-      const id = item.id ? Number(item.id) : undefined;
-      const contactName = String(item.contactName || '').trim();
-      const phone = String(item.phone || '').trim();
-      const rawType = String(item.partyType || '').trim().toLowerCase();
-      let partyType: 'customer' | 'supplier' | 'both' = 'customer';
-      if (rawType.includes('تامین') || rawType === 'supplier') {
-        partyType = 'supplier';
-      } else if (rawType.includes('هر دو') || rawType.includes('مشتری و تامین') || rawType === 'both') {
-        partyType = 'both';
-      } else {
-        partyType = 'customer';
-      }
-
-      const supplierCategory = String(item.supplierCategory || '').trim();
-      const country = String(item.country || 'ایران').trim();
-      const province = String(item.province || '').trim();
-      const city = String(item.city || '').trim();
-      const address = String(item.address || '').trim();
-      const notes = String(item.notes || '').trim();
-
-      const bankInfo = {
-        bankName: String(item.bankName || item.bankInfo?.bankName || '').trim(),
-        accountNumber: String(item.accountNumber || item.bankInfo?.accountNumber || '').trim(),
-        shaba: String(item.shaba || item.bankInfo?.shaba || '').trim(),
-        cardNumber: String(item.cardNumber || item.bankInfo?.cardNumber || '').trim(),
-      };
-
-      // Match existing counterparty
-      let matchedCust: typeof customers.$inferSelect | undefined;
-      if (id && idMap.has(id)) {
-        matchedCust = idMap.get(id);
-      } else if (nameMap.has(name.toLowerCase())) {
-        matchedCust = nameMap.get(name.toLowerCase());
-      } else if (phone && phoneMap.has(phone)) {
-        matchedCust = phoneMap.get(phone);
-      }
-
-      if (matchedCust) {
-        if (updateIfExists) {
-          const updatedData: Partial<typeof customers.$inferInsert> = {
-            name,
-            contactName: contactName || matchedCust.contactName,
-            country: country || matchedCust.country,
-            province: province || matchedCust.province,
-            city: city || matchedCust.city,
-            phone: phone || matchedCust.phone,
-            address: address || matchedCust.address,
-            notes: notes || matchedCust.notes,
-            partyType,
-            supplierCategory: supplierCategory || matchedCust.supplierCategory,
-            bankInfo: {
-              ...((matchedCust.bankInfo as any) || {}),
-              ...(bankInfo.bankName ? { bankName: bankInfo.bankName } : {}),
-              ...(bankInfo.accountNumber ? { accountNumber: bankInfo.accountNumber } : {}),
-              ...(bankInfo.shaba ? { shaba: bankInfo.shaba } : {}),
-              ...(bankInfo.cardNumber ? { cardNumber: bankInfo.cardNumber } : {}),
-            },
-            version: nextVersion(matchedCust.version)
-          };
-
-          await orm.update(customers)
-            .set(updatedData)
-            .where(eq(customers.id, matchedCust.id));
-
-          await logActivity({
-            req,
-            action: 'UPDATE',
-            entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
-            entityId: matchedCust.id,
-            description: `به‌روزرسانی دسته‌ای طرف حساب "${name}" از طریق فایل اکسل`,
-            details: { after: updatedData }
-          });
-
-          updatedCount++;
-        } else {
-          errors.push({
-            row: rowIndex,
-            name,
-            message: `طرف حساب "${name}" از قبل در سیستم وجود دارد و گزینه به‌روزرسانی غیرفعال بود.`
-          });
-        }
-      } else {
-        const [newCust] = await orm.insert(customers).values({
-          name,
-          contactName,
-          country,
-          province,
-          city,
-          phone,
-          address,
-          notes,
-          partyType,
-          supplierCategory,
-          bankInfo,
-          contacts: contactName || phone ? [{ id: '1', name: contactName, role: 'رابط اصلی', phone, isPrimary: true }] : [],
-          createdAt: new Date().toISOString()
-        }).returning({ id: customers.id });
-
-        idMap.set(newCust.id, { id: newCust.id, name, phone } as any);
-        nameMap.set(name.toLowerCase(), { id: newCust.id, name, phone } as any);
-        if (phone) phoneMap.set(phone, { id: newCust.id, name, phone } as any);
-
-        await logActivity({
-          req,
-          action: 'CREATE',
-          entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
-          entityId: newCust.id,
-          description: `ثبت دسته‌ای طرف حساب جدید "${name}" از طریق فایل اکسل`,
-          details: { id: newCust.id, name, partyType, phone }
-        });
-
-        createdCount++;
-      }
-    } catch (err: any) {
-      errors.push({
-        row: rowIndex,
-        name: rows[i]?.name,
-        message: err.message || 'خطای ناشناخته در پردازش سطر'
-      });
-    }
+  for (const u of result.updatedRecords) {
+    await logActivity({
+      req,
+      action: 'UPDATE',
+      entity: u.partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
+      entityId: u.id,
+      description: `به‌روزرسانی دسته‌ای طرف حساب "${u.name}" از طریق فایل اکسل`,
+      details: { after: u.updatedData }
+    });
   }
 
   res.json({
     success: true,
-    createdCount,
-    updatedCount,
-    totalProcessed: rows.length,
-    errors
+    createdCount: result.createdCount,
+    updatedCount: result.updatedCount,
+    totalProcessed: result.totalProcessed,
+    errors: result.errors
   });
 }));
 
 router.post('/customers', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(createCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
   const { name, country, province, city, address, notes, contacts } = req.body;
-  let { contactName, phone } = req.body;
+  const { contactName, phone } = req.body;
   const partyType = req.body.partyType || req.body.party_type || 'customer';
   const supplierCategory = req.body.supplierCategory || req.body.supplier_category || '';
   const bankInfo = req.body.bankInfo || req.body.bank_info || {};
 
-  // Auto-derive contactName and phone from contacts if available
-  const activeContacts = ((contacts || []) as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
-  if (activeContacts.length > 0) {
-    const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
-    if (!contactName) {
-      contactName = primary.role ? `${primary.name} (${primary.role})` : primary.name;
-    }
-    if (!phone) {
-      const allPhones = activeContacts.map((c) => c.phone).filter(Boolean);
-      phone = Array.from(new Set(allPhones)).join(', ');
-    }
-  }
-
-  if (name) {
-    const existingName = await orm.select().from(customers).where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
-    if (existingName.length > 0) {
-      throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
-    }
-  }
-  
-  if (phone) {
-    const existingPhone = await orm.select().from(customers).where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
-    if (existingPhone.length > 0) {
-      throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
-    }
-  }
-
-  const createdAt = new Date().toISOString();
-  const [info] = await orm.insert(customers).values({
+  const created = await CustomerService.createCustomer({
     name,
     contactName,
     country,
     province,
-    phone,
     city,
+    phone,
     address,
     notes,
     partyType,
     supplierCategory,
     bankInfo,
-    contacts: activeContacts,
-    createdAt
-  }).returning({ id: customers.id });
+    contacts
+  });
 
   await logActivity({
     req,
     action: 'CREATE',
     entity: partyType === 'supplier' ? 'تامین‌کننده' : 'طرف حساب',
-    entityId: info.id,
-    description: `تعریف طرف حساب جدید (${partyType === 'supplier' ? 'تامین‌کننده' : partyType === 'both' ? 'مشتری و تامین‌کننده' : 'مشتری'}) "${name}" (تلفن: ${phone || 'ثبت نشده'})`,
+    entityId: created.id,
+    description: `تعریف طرف حساب جدید (${partyType === 'supplier' ? 'تامین‌کننده' : partyType === 'both' ? 'مشتری و تامین‌کننده' : 'مشتری'}) "${created.name}" (تلفن: ${created.phone || 'ثبت نشده'})`,
     details: {
-      after: {
-        id: info.id,
-        name,
-        contactName,
-        phone,
-        city,
-        province,
-        country,
-        address,
-        notes,
-        partyType,
-        supplierCategory,
-        bankInfo,
-        contacts: activeContacts
-      }
+      after: created
     }
   });
 
-  res.json({ id: info.id, name, contactName, country, province, phone, city, address, notes, partyType, supplierCategory, bankInfo, contacts: activeContacts, createdAt });
+  res.json(created);
 }));
 
 router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(updateCustomerValidation), asyncHandler(async (req, res) => {
   req.body = sanitizeCustomerPayload(req.body);
+  const customerId = Number(req.params.id);
   const { name, country, province, city, address, notes, contacts } = req.body;
-  let { contactName, phone } = req.body;
+  const { contactName, phone } = req.body;
   const partyType = req.body.partyType || req.body.party_type || 'customer';
   const supplierCategory = req.body.supplierCategory || req.body.supplier_category || '';
   const bankInfo = req.body.bankInfo || req.body.bank_info || {};
-  const customerId = Number(req.params.id);
 
-  const [prevCust] = await orm.select().from(customers).where(eq(customers.id, customerId));
-  if (!prevCust) {
-    throw new NotFoundError('طرف حساب مورد نظر یافت نشد.');
-  }
-
-  if (req.body.version !== undefined || req.body.expectedVersion !== undefined) {
-    checkOccVersion(prevCust, {
-      entityType: 'Customer',
-      entityId: customerId,
-      expectedVersion: Number(req.body.expectedVersion ?? req.body.version)
-    });
-  }
-
-  const activeContacts = ((contacts || []) as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
-  if (activeContacts.length > 0) {
-    const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
-    if (!contactName) {
-      contactName = primary.role ? `${primary.name} (${primary.role})` : primary.name;
-    }
-    if (!phone) {
-      const allPhones = activeContacts.map((c) => c.phone).filter(Boolean);
-      phone = Array.from(new Set(allPhones)).join(', ');
-    }
-  }
-
-  if (name) {
-    const existingName = await orm.select().from(customers).where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
-    if (existingName.length > 0 && existingName[0].id !== customerId) {
-      throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
-    }
-  }
-  
-  if (phone) {
-    const existingPhone = await orm.select().from(customers).where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
-    if (existingPhone.length > 0 && existingPhone[0].id !== customerId) {
-      throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
-    }
-  }
-
-  const updatedData: Partial<typeof customers.$inferInsert> = {
+  const { previous: prevCust, current: currentCust } = await CustomerService.updateCustomer(customerId, {
     name,
     contactName,
     country,
     province,
-    phone,
     city,
+    phone,
     address,
     notes,
     partyType,
     supplierCategory,
     bankInfo,
-    contacts: activeContacts,
-    version: nextVersion(prevCust.version)
-  };
+    contacts,
+    version: req.body.version,
+    expectedVersion: req.body.expectedVersion
+  });
 
-  await orm.update(customers)
-    .set(updatedData)
-    .where(sql`${customers.id} = ${req.params.id}`);
-
-  const { diff, hasChanges } = computeAuditDiff(prevCust, { ...prevCust, ...updatedData });
+  const { diff, hasChanges } = computeAuditDiff(prevCust, currentCust);
 
   await logActivity({
     req,
@@ -526,7 +311,7 @@ router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'cus
     description: `ویرایش اطلاعات طرف حساب "${name}"`,
     details: {
       before: prevCust,
-      after: { ...prevCust, ...updatedData },
+      after: currentCust,
       changes: diff,
       hasChanges
     }
@@ -537,14 +322,7 @@ router.put('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'cus
 
 router.delete('/customers/:id', authorize('admin', 'manager', 'sales_manager', 'customers.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const customerId = Number(req.params.id);
-  const [delCust] = await orm.select().from(customers).where(eq(customers.id, customerId));
-  if (!delCust) {
-    throw new NotFoundError('مشتری یافت نشد.');
-  }
-
-  await orm.update(customers)
-    .set({ isDeleted: 1 })
-    .where(sql`${customers.id} = ${req.params.id}`);
+  const delCust = await CustomerService.deleteCustomer(customerId);
 
   await logActivity({
     req,

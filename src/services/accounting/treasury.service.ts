@@ -137,6 +137,7 @@ export class TreasuryService {
   // V1.8.0: پیش‌نمایش سند دوبل (بدون ذخیره‌سازی)
   static async previewTreasuryVoucher(data: {
     type: 'receipt' | 'payment';
+    method?: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
     amount: number;
     currency?: string;
     bankAccountId: number;
@@ -187,7 +188,10 @@ export class TreasuryService {
     status: ChequeStatus;
     actionDate?: string;
     bankAccountId?: number | null;
+    transfereePartyId?: number;
+    transfereePartyName?: string;
     notes?: string;
+    description?: string;
     userId?: number;
     username?: string;
   }): Promise<Cheque> {

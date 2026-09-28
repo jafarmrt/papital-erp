@@ -29,7 +29,9 @@ const LAYER_LABELS: Record<TestLayer, string> = {
   e2e: 'تست‌های سناریوهای سرتاسری (Subphase 14.1 E2E Journeys)',
   recovery: 'آزمون‌های بازیابی، خودترمیمی و تطبیق داده‌ها (Subphase 14.2 Recovery & Reconciliation)',
   penetration: 'آزمون‌های نفوذ واقعی HTTP (Phase 8 Penetration Suite — TST-004/005)',
-  critical_path: 'آزمون‌های یکپارچگی مسیرهای بحرانی (Phase 8 Critical Path Suite — TST-006)'
+  critical_path: 'آزمون‌های یکپارچگی مسیرهای بحرانی (Phase 8 Critical Path Suite — TST-006)',
+  document_integrity: 'آزمون‌های یکپارچگی اسناد و انبار (Document Integrity Suite)',
+  business_logic: 'آزمون‌های ممیزی منطق کسب‌وکار (Business Logic Audit Suite)'
 };
 
 const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
@@ -123,7 +125,11 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v4_accounting_treasury_runtime_contracts_guard: 'Data Integrity: Runtime Contracts & Zod Validation for Double-Entry Accounting and Treasury (Sub-phase 4.4)',
   v5_warehouse_resolution_guard: 'Inventory: Warehouse Code Resolution, Invalid Guard & Stock Parity (V5 Phase 1 / TD-114..117)',
   v5_sellable_stock_reservation_gate: 'Inventory & Sales: Unified Sellable Stock & Reservation Gate (V5 Phase 2 / TD-118, TD-126)',
-  v5_jalali_timestamp_normalization: 'Data Safety: Jalali Timestamps Stored as Gregorian Normalization (V5 Phase 3 / TD-119)'
+  v5_jalali_timestamp_normalization: 'Dates & DB: Jalali Timestamp Normalization, Business Clock & Gregorian DB Guard (V5 Phase 3 / TD-119)',
+  v5_cogs_and_warehouse_voucher: 'Accounting & Vouchers: Cost of Goods Sold Sync & Warehouse WIP Account Mapping (V5 Phase 4 / TD-120, TD-121)',
+  v5_audit_gateway_and_test_cleanup: 'DB & Inventory: Explicit Test Cleanup Cast & Centralized Audit Movement Gateway (V5 Phase 5 / TD-122, TD-124)',
+  v6_treasury_cheque_isolation: 'Treasury & Cheques: Cheque Method Bank Balance Drain Prevention & Receivable/Payable Isolation (V6 Sub-phase 1.2 / TD-148)',
+  v6_fiscal_year_closing_isolation: 'Accounting & Year Closing: Fiscal Year Closing Transaction Isolation & Trial Balance Calendar Normalization (V6 Sub-phase 1.3 / TD-141, TD-142)'
 };
 
 
@@ -144,33 +150,40 @@ function isTestCleanupAllowed(): boolean {
 }
 
 export class Phase21TestRunner {
-  static async runAllTests(layerFilter?: TestLayer): Promise<TestSuiteReport> {
+  static async runAllTests(layerFilter?: TestLayer, testFilter?: string): Promise<TestSuiteReport> {
     assertRunnerEnvironment();
 
-    // V3.0.9 (TD-063): fail-fast شفاف روی DB جعلی — اجرای سوییت روی mockPool
-    // حافظه‌ای نتیجه گمراه‌کننده می‌دهد (بخشی PASS جعلی). بدون DATABASE_URL واقعی
-    // رانر با پیام صریح شکست می‌خورد.
-    const { isMockDatabase } = await import('../db/drizzle.js');
-    if (isMockDatabase()) {
-      throw new Error(
-        'FATAL: DATABASE_URL is missing/placeholder — test runner would run against the in-memory mock pool ' +
-        'and produce misleading results. Configure a real PostgreSQL DATABASE_URL and re-run.'
-      );
+    // V5.0.19: True Unit Test Isolation — unit tests have zero database dependencies.
+    // They test pure mathematical calculations, regexes, Iranian identity/phone/bank validators,
+    // and in-memory rule engine expressions. Skip DB reachability & fixture checks for unit layer.
+    const isPureUnitRun = layerFilter === 'unit';
+
+    if (!isPureUnitRun) {
+      // V3.0.9 (TD-063): fail-fast شفاف روی DB جعلی — اجرای سوییت روی mockPool
+      // حافظه‌ای نتیجه گمراه‌کننده می‌دهد (بخشی PASS جعلی). بدون DATABASE_URL واقعی
+      // رانر با پیام صریح شکست می‌خورد.
+      const { isMockDatabase } = await import('../db/drizzle.js');
+      if (isMockDatabase()) {
+        throw new Error(
+          'FATAL: DATABASE_URL is missing/placeholder — test runner would run against the in-memory mock pool ' +
+          'and produce misleading results. Configure a real PostgreSQL DATABASE_URL and re-run.'
+        );
+      }
+
+      // Ensure database schema migrations are applied and previous test artifacts are purged
+      try {
+        await ensureTestDatabaseReady();
+        if (isTestCleanupAllowed()) {
+          await cleanupAllTestFixtures();
+        }
+      } catch (dbReadyErr: any) {
+        // V3.0.9 (TD-063): خطای اتصال دیگر بی‌صدا بلعیده نمی‌شود — fail-fast
+        throw new Error(`Test database unreachable: ${dbReadyErr?.message || dbReadyErr}`);
+      }
     }
 
     const startTime = Date.now();
     let allCases: TestCaseResult[] = [];
-
-    // Ensure database schema migrations are applied and previous test artifacts are purged
-    try {
-      await ensureTestDatabaseReady();
-      if (isTestCleanupAllowed()) {
-        await cleanupAllTestFixtures();
-      }
-    } catch (dbReadyErr: any) {
-      // V3.0.9 (TD-063): خطای اتصال دیگر بی‌صدا بلعیده نمی‌شود — fail-fast
-      throw new Error(`Test database unreachable: ${dbReadyErr?.message || dbReadyErr}`);
-    }
 
     try {
       // Execute Suites based on filter or run all
@@ -196,7 +209,7 @@ export class Phase21TestRunner {
         allCases = allCases.concat(await runApiTests());
       }
       if (!layerFilter || layerFilter === 'regression') {
-        allCases = allCases.concat(await runRegressionTests());
+        allCases = allCases.concat(await runRegressionTests(testFilter));
       }
       if (!layerFilter || layerFilter === 'stress') {
         allCases = allCases.concat(await runStressTests());
@@ -207,26 +220,33 @@ export class Phase21TestRunner {
       if (!layerFilter || layerFilter === 'recovery') {
         allCases = allCases.concat(await runRecoveryTests());
       }
-      // Critical path MUST run before penetration: the penetration suite's
-      // rate-limit probe intentionally exhausts the login throttle budget
-      // (5/15min per socket address) shared by both suites' admin login.
+      // Critical path and penetration suites
       if (!layerFilter || layerFilter === 'critical_path') {
         allCases = allCases.concat(await runCriticalPathTests());
       }
-      // آزمون‌های یکپارچگی اسناد و برگشت‌های مالی
-      if (!layerFilter || layerFilter === 'regression') {
+      // آزمون‌های یکپارچگی اسناد و برگشت‌های مالی (فقط در اجرای کامل یا درخواست صریح)
+      if (!testFilter && (!layerFilter || layerFilter === 'regression' || layerFilter === 'document_integrity')) {
         allCases = allCases.concat(await runDocumentIntegrityTests());
       }
-      // آزمون‌های ممیزی منطق کسب‌وکار و رفتارهای سیستمی
-      if (!layerFilter || layerFilter === 'regression') {
+      // آزمون‌های ممیزی منطق کسب‌وکار و رفتارهای سیستمی (فقط در اجرای کامل یا درخواست صریح)
+      if (!testFilter && (!layerFilter || layerFilter === 'regression' || layerFilter === 'business_logic')) {
         allCases = allCases.concat(await runBusinessLogicAuditTests());
       }
       if (!layerFilter || layerFilter === 'penetration') {
         allCases = allCases.concat(await runPenetrationTests());
       }
+
+      // اعمال فیلتر دقیق تکی روی تمام نتایج
+      if (testFilter) {
+        const norm = testFilter.toLowerCase().replace(/[-_]/g, '').trim();
+        allCases = allCases.filter(c => {
+          const hay = `${c.id} ${c.name} ${c.scenarioId || ''} ${c.layer}`.toLowerCase().replace(/[-_]/g, '');
+          return hay.includes(norm);
+        });
+      }
     } finally {
       // Purge test artifacts only when explicitly allowed via ERP_ALLOW_TEST_CLEANUP=1 (TST-003)
-      if (isTestCleanupAllowed()) {
+      if (!isPureUnitRun && isTestCleanupAllowed()) {
         try {
           await cleanupAllTestFixtures();
         } catch {
@@ -258,38 +278,42 @@ export class Phase21TestRunner {
     });
 
     // Build Critical Scenario Summaries (MISSING TESTS NEVER DEFAULT TO PASS)
-    const scenarioSummaries: CriticalScenarioSummary[] = Object.keys(CRITICAL_SCENARIO_TITLES).map(sKey => {
-      const sId = sKey as CriticalScenarioId;
-      const matchedCase = allCases.find(c => c.scenarioId === sId);
-      if (matchedCase) {
-        return {
-          scenarioId: sId,
-          title: CRITICAL_SCENARIO_TITLES[sId],
-          status: matchedCase.status,
-          executionType: matchedCase.executionType,
-          passed: matchedCase.status === 'PASS',
-          durationMs: matchedCase.durationMs,
-          details: matchedCase.details || matchedCase.error || ''
-        };
-      } else {
-        return {
-          scenarioId: sId,
-          title: CRITICAL_SCENARIO_TITLES[sId],
-          status: 'NOT_RUN',
-          executionType: 'simulation_logic',
-          passed: false,
-          durationMs: 0,
-          details: 'این سناریو در اجرای جاری اجرا نگردیده است (NOT_RUN).'
-        };
-      }
-    });
+    const scenarioSummaries: CriticalScenarioSummary[] = Object.keys(CRITICAL_SCENARIO_TITLES)
+      .map(sKey => {
+        const sId = sKey as CriticalScenarioId;
+        const matchedCase = allCases.find(c => c.scenarioId === sId);
+        if (matchedCase) {
+          return {
+            scenarioId: sId,
+            title: CRITICAL_SCENARIO_TITLES[sId],
+            status: matchedCase.status,
+            executionType: matchedCase.executionType,
+            passed: matchedCase.status === 'PASS',
+            durationMs: matchedCase.durationMs,
+            details: matchedCase.details || matchedCase.error || ''
+          };
+        } else if (!layerFilter && !testFilter) {
+          // In a full run, unexecuted scenarios are flagged explicitly
+          return {
+            scenarioId: sId,
+            title: CRITICAL_SCENARIO_TITLES[sId],
+            status: 'NOT_RUN' as const,
+            executionType: 'simulation_logic' as const,
+            passed: false,
+            durationMs: 0,
+            details: 'این سناریو در اجرای جاری اجرا نگردیده است (NOT_RUN).'
+          };
+        }
+        return null;
+      })
+      .filter((s): s is CriticalScenarioSummary => s !== null);
 
     let overallStatus: 'passed' | 'failed' | 'blocked' | 'incomplete' = 'passed';
     if (failedCount > 0) {
       overallStatus = 'failed';
     } else if (blockedCount > 0) {
       overallStatus = 'blocked';
-    } else if (!layerFilter && (notRunCount > 0 || scenarioSummaries.some(s => s.status === 'NOT_RUN'))) {
+    } else if (!layerFilter && !testFilter && (notRunCount > 0 || scenarioSummaries.some(s => s.status === 'NOT_RUN'))) {
       overallStatus = 'incomplete';
     }
 

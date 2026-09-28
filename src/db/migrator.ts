@@ -16,9 +16,17 @@ export interface MigrationResult {
  * Works seamlessly in tsx development (ESM), compiled dist/server.cjs (CJS), and custom cwd environments.
  */
 export function getMigrationsFolder(): string {
-  const currentDir = typeof __dirname !== 'undefined'
-    ? __dirname
-    : path.dirname(fileURLToPath(import.meta.url));
+  let currentDir = process.cwd();
+  if (typeof __dirname !== 'undefined') {
+    currentDir = __dirname;
+  } else {
+    try {
+      const metaUrl = (import.meta as any)?.url;
+      if (metaUrl) currentDir = path.dirname(fileURLToPath(metaUrl));
+    } catch {
+      currentDir = process.cwd();
+    }
+  }
 
   const possiblePaths = [
     path.resolve(process.cwd(), 'drizzle'),
@@ -108,6 +116,17 @@ export async function runMigrations(): Promise<MigrationResult> {
       `);
     } catch (e: any) {
       logger.warn(`[Migrator] piecework_payrolls paid_amount column check: ${e.message}`);
+    }
+
+    // V6.0.21 (TD-157): Ensure is_deleted column exists on document_items and journal_voucher_items for soft-delete compliance (RULE 09)
+    try {
+      await pool.query(`
+        ALTER TABLE document_items ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
+        ALTER TABLE journal_voucher_items ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
+        CREATE INDEX IF NOT EXISTS idx_jvi_deleted ON journal_voucher_items (is_deleted);
+      `);
+    } catch (e: any) {
+      logger.warn(`[Migrator] line items is_deleted column check: ${e.message}`);
     }
 
     let after = before;

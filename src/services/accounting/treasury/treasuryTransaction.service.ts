@@ -115,6 +115,7 @@ export class TreasuryTransactionService {
    */
   static async previewTreasuryVoucher(data: {
     type: 'receipt' | 'payment';
+    method?: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
     amount: number;
     currency?: string;
     bankAccountId: number;
@@ -130,12 +131,13 @@ export class TreasuryTransactionService {
   }> {
     const amount = Number(data.amount) || 0;
     const warnings: string[] = [];
+    const isCheque = data.method === 'cheque';
 
     const [bank] = await orm.select().from(bankAccounts)
       .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)));
     if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
 
-    if (!bank.accountId) {
+    if (!isCheque && !bank.accountId) {
       warnings.push('این حساب بانکی/صندوق به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، کدینگ معین را متصل کنید.');
     }
 
@@ -153,26 +155,48 @@ export class TreasuryTransactionService {
       warnings.push('مبلغ باید بزرگ‌تر از صفر باشد');
     }
 
+    // V6 Sub-phase 1.2 (TD-148): تفکیک پیش‌نمایش سند برای روش چک در برابر نقد/بانک
+    let treasuryAccount: Account | null = null;
+    let treasuryDetailedName = bank.title;
+
+    if (isCheque) {
+      if (data.type === 'receipt') {
+        treasuryAccount = await AccountMappingService.getChequeReceivableAccount();
+        treasuryDetailedName = 'اسناد دریافتنی تجاری (نزد صندوق)';
+      } else {
+        treasuryAccount = await AccountMappingService.getChequePayableAccount();
+        treasuryDetailedName = 'اسناد پرداختنی تجاری';
+      }
+      if (!treasuryAccount) {
+        warnings.push(`حساب معین «${data.type === 'receipt' ? 'اسناد دریافتنی' : 'اسناد پرداختنی'}» برای ثبت چک در چارت حساب‌ها یافت نشد`);
+      }
+    } else if (bank.accountId) {
+      const [acc] = await orm.select().from(accounts).where(and(eq(accounts.id, bank.accountId), eq(accounts.isDeleted, 0)));
+      treasuryAccount = (acc as unknown as Account) || null;
+    }
+
     let debit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null = null;
     let credit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null = null;
-    if (amount > 0 && bank.accountId && contraAccountId) {
+    if (amount > 0 && treasuryAccount && contraAccountId) {
       const accById = new Map((await orm.select().from(accounts).where(eq(accounts.isDeleted, 0))).map(a => [a.id, a]));
-      const debitAcc = accById.get(data.type === 'receipt' ? bank.accountId : contraAccountId);
-      const creditAcc = accById.get(data.type === 'receipt' ? contraAccountId : bank.accountId);
+      const contraAcc = accById.get(contraAccountId);
       const isReceipt = data.type === 'receipt';
+
+      const debitAcc = isReceipt ? treasuryAccount : contraAcc;
+      const creditAcc = isReceipt ? contraAcc : treasuryAccount;
 
       debit = {
         accountId: debitAcc?.id || 0,
         accountCode: debitAcc?.code || '',
         accountName: debitAcc?.name || '',
-        detailedName: isReceipt ? bank.title : (data.partyName || 'طرف حساب'),
+        detailedName: isReceipt ? treasuryDetailedName : (data.partyName || 'طرف حساب'),
         amount,
       };
       credit = {
         accountId: creditAcc?.id || 0,
         accountCode: creditAcc?.code || '',
         accountName: creditAcc?.name || '',
-        detailedName: isReceipt ? (data.partyName || 'طرف حساب') : bank.title,
+        detailedName: isReceipt ? (data.partyName || 'طرف حساب') : treasuryDetailedName,
         amount,
       };
     }
@@ -301,20 +325,27 @@ export class TreasuryTransactionService {
 
       const txNum = await this.generateTransactionNumber(data.type, txEngine);
 
-      // V9-1.3: محاسبه موجودی بانک با FinancialDecimal — حذف خطای شناور float
+      const isCheque = data.method === 'cheque';
       const currentBal = Number(bank.currentBalance) || 0;
-      const newBal = data.type === 'receipt'
-        ? fin(currentBal).add(amount).round(4).toNumber()
-        : fin(currentBal).subtract(amount).round(4).toNumber();
-      // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
-      if (newBal < 0) {
-        throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBal.toLocaleString('fa-IR')})`);
+
+      // V6 Sub-phase 1.2 (TD-148): منع تغییر مستقیم مانده حساب بانکی در روش پرداخت یا دریافت با چک.
+      // وجه چک تا لحظه وصول/پاس شدن در سررسید از حساب جاری بانک کسر یا واریز نمی‌شود.
+      // تغییر مستقیم مانده بانک در ثبت چک موجب ریسک Double-Spend و مغایرت خزانه‌داری با بانک می‌شود.
+      if (!isCheque) {
+        // V9-1.3: محاسبه موجودی بانک با FinancialDecimal — حذف خطای شناور float
+        const newBal = data.type === 'receipt'
+          ? fin(currentBal).add(amount).round(4).toNumber()
+          : fin(currentBal).subtract(amount).round(4).toNumber();
+        // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
+        if (newBal < 0) {
+          throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBal.toLocaleString('fa-IR')})`);
+        }
+        await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, data.bankAccountId));
       }
-      await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, data.bankAccountId));
 
       let voucherId: number | null = null;
       if (data.createVoucher !== false) {
-        if (!bank.accountId) {
+        if (!isCheque && !bank.accountId) {
           throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است');
         }
 
@@ -326,10 +357,42 @@ export class TreasuryTransactionService {
           throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');
         }
 
-        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${data.partyName}`;
+        // V6 Sub-phase 1.2 (TD-148): تفکیک حسابداری نقد و چک:
+        // اگر تراکنش با چک باشد:
+        // - دریافت چک: اسناد دریافتنی نزد صندوق (1101) بدهکار، طرف حساب بستانکار
+        // - پرداخت چک: طرف حساب بدهکار، اسناد پرداختنی تجاری (2101) بستانکار
+        // حساب جاری بانک تنها پس از وصول یا پاس شدن فیزیکی چک در سررسید (passCheque) تحت تاثیر قرار می‌گیرد.
+        let treasuryAccountId: number | null = bank.accountId || null;
+        let treasuryDetailedType = 'bank_account';
+        let treasuryDetailedId: number | null = bank.id;
+        let treasuryDetailedName = bank.title;
+
+        if (isCheque) {
+          if (data.type === 'receipt') {
+            const chqRecAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
+            treasuryAccountId = chqRecAcc?.id || null;
+            treasuryDetailedType = 'cheque_receivable';
+            treasuryDetailedId = null;
+            treasuryDetailedName = 'اسناد دریافتنی تجاری (نزد صندوق)';
+          } else {
+            const chqPayAcc = await AccountMappingService.getChequePayableAccount(txEngine);
+            treasuryAccountId = chqPayAcc?.id || null;
+            treasuryDetailedType = 'cheque_payable';
+            treasuryDetailedId = null;
+            treasuryDetailedName = 'اسناد پرداختنی تجاری';
+          }
+
+          if (!treasuryAccountId) {
+            throw new ValidationError(
+              `حساب معین «${data.type === 'receipt' ? 'اسناد دریافتنی' : 'اسناد پرداختنی'}» برای ثبت چک در چارت حساب‌ها یافت نشد. لطفاً در تنظیمات حسابداری کدینگ را تکمیل کنید.`
+            );
+          }
+        }
+
+        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : data.method === 'cheque' ? 'چک' : 'حواله بانکی'} از/به ${data.partyName}`;
         
-        const debitAccountId = data.type === 'receipt' ? bank.accountId : contraAccountId;
-        const creditAccountId = data.type === 'receipt' ? contraAccountId : bank.accountId;
+        const debitAccountId = data.type === 'receipt' ? treasuryAccountId : contraAccountId;
+        const creditAccountId = data.type === 'receipt' ? contraAccountId : treasuryAccountId;
 
         const v = await VoucherService.createJournalVoucher({
           date: resolvedDate,
@@ -343,9 +406,9 @@ export class TreasuryTransactionService {
           items: [
             {
               accountId: debitAccountId,
-              detailedType: data.type === 'receipt' ? 'bank_account' : (data.partyType || 'other'),
-              detailedId: data.type === 'receipt' ? bank.id : data.partyId,
-              detailedName: data.type === 'receipt' ? bank.title : data.partyName,
+              detailedType: data.type === 'receipt' ? treasuryDetailedType : (data.partyType || 'other'),
+              detailedId: data.type === 'receipt' ? treasuryDetailedId : data.partyId,
+              detailedName: data.type === 'receipt' ? treasuryDetailedName : data.partyName,
               debit: amount,
               credit: 0,
               currency: data.currency || 'IRR',
@@ -353,9 +416,9 @@ export class TreasuryTransactionService {
             },
             {
               accountId: creditAccountId,
-              detailedType: data.type === 'receipt' ? (data.partyType || 'other') : 'bank_account',
-              detailedId: data.type === 'receipt' ? data.partyId : bank.id,
-              detailedName: data.type === 'receipt' ? data.partyName : bank.title,
+              detailedType: data.type === 'receipt' ? (data.partyType || 'other') : treasuryDetailedType,
+              detailedId: data.type === 'receipt' ? data.partyId : treasuryDetailedId,
+              detailedName: data.type === 'receipt' ? data.partyName : treasuryDetailedName,
               debit: 0,
               credit: amount,
               currency: data.currency || 'IRR',
@@ -457,15 +520,19 @@ export class TreasuryTransactionService {
       if (!bank) throw new NotFoundError('حساب بانکی مرتبط با تراکنش یافت نشد');
 
       // 2) اصلاح مانده: معکوس اثر اصل
+      // V6 Sub-phase 1.2 (TD-148): اگر روش تراکنش چک بوده، مانده بانک در ثبت اصل تغییر نکرده بود؛
+      // بنابراین در ابطال نیز مانده حساب بانکی نباید تغییر کند
       const amount = Number(original.amount) || 0;
-      const currentBal = Number(bank.currentBalance) || 0;
-      const newBal = original.type === 'receipt'
-        ? fin(currentBal).subtract(amount).round(4).toNumber()
-        : fin(currentBal).add(amount).round(4).toNumber();
-      if (newBal < 0) {
-        throw new ValidationError(`ابطال ممکن نیست: مانده فعلی «${bank.title}» (${currentBal.toLocaleString('fa-IR')}) برای برگشت این وجه کافی نیست`);
+      if (original.method !== 'cheque') {
+        const currentBal = Number(bank.currentBalance) || 0;
+        const newBal = original.type === 'receipt'
+          ? fin(currentBal).subtract(amount).round(4).toNumber()
+          : fin(currentBal).add(amount).round(4).toNumber();
+        if (newBal < 0) {
+          throw new ValidationError(`ابطال ممکن نیست: مانده فعلی «${bank.title}» (${currentBal.toLocaleString('fa-IR')}) برای برگشت این وجه کافی نیست`);
+        }
+        await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, bank.id));
       }
-      await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, bank.id));
 
       // 3) تراکنش معکوس با شماره سری جدید
       const reversalType = original.type === 'receipt' ? 'payment' : 'receipt';

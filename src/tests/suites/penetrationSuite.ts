@@ -244,6 +244,12 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         }
       } finally {
         await orm.delete(users).where(eq(users.username, rlProbeUser));
+        try {
+          const { resetLoginRateLimiter } = await import('../../app.js');
+          resetLoginRateLimiter();
+        } catch {
+          // Non-blocking in isolated tests
+        }
       }
       const tooMany = responses.filter(r => r.status === 429).length;
       if (tooMany === 0) {

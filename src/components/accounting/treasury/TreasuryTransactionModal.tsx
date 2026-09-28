@@ -103,6 +103,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             method: 'POST',
             body: JSON.stringify({
               type: formData.type,
+              method: formData.method,
               bankAccountId: formData.bankAccountId,
               amount: formData.amount,
               partyType: formData.partyType,
@@ -137,6 +138,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     formData.bankAccountId,
     formData.amount,
     formData.type,
+    formData.method,
     formData.partyType,
     formData.partyId,
     formData.partyName,

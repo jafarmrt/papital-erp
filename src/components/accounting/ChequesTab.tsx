@@ -25,7 +25,7 @@ interface ChequesTabProps {
   loading: boolean;
   onRefresh: () => void;
   onCreateCheque: (data: any) => Promise<void>;
-  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number) => Promise<void>;
+  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyName?: string) => Promise<void>;
   onDeleteCheque: (id: number) => Promise<void>;
   onLoadChequeReconciliation?: () => Promise<any[]>;
 }
@@ -99,6 +99,7 @@ export function ChequesTab({
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
+  const [transfereePartyName, setTransfereePartyName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
@@ -114,11 +115,11 @@ export function ChequesTab({
     spent: { label: 'خرج شده / واگذار به غیر', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
   };
 
-  // V1.4.0: ماشین وضعیت چک — فقط انتقال‌های مجاز (هماهنگ با بک‌اند)
+  // V1.4.0 & V6.0.13: ماشین وضعیت چک — فقط انتقال‌های مجاز (هماهنگ با بک‌اند)
   const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
-    received: ['in_treasury', 'in_collection', 'passed', 'bounced'],
-    in_treasury: ['in_collection', 'passed', 'bounced'],
-    in_safe: ['in_collection', 'passed', 'bounced'],
+    received: ['in_treasury', 'in_collection', 'passed', 'bounced', 'spent'],
+    in_treasury: ['in_collection', 'passed', 'bounced', 'spent'],
+    in_safe: ['in_collection', 'passed', 'bounced', 'spent'],
     in_collection: ['passed', 'bounced'],
     passed: [],
     bounced: ['returned'],
@@ -130,16 +131,19 @@ export function ChequesTab({
       { value: 'in_treasury', label: 'نگهداری نزد صندوق' },
       { value: 'in_collection', label: 'خواباندن به حساب (در جریان وصول)' },
       { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'spent', label: 'واگذاری و خرج چک به غیر (تأمین‌کننده)' },
       { value: 'bounced', label: 'برگشت / واخواست چک' },
     ],
     in_treasury: [
       { value: 'in_collection', label: 'ارسال به بانک (در جریان وصول)' },
       { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'spent', label: 'واگذاری و خرج چک به غیر (تأمین‌کننده)' },
       { value: 'bounced', label: 'برگشت / واخواست چک' },
     ],
     in_safe: [
       { value: 'in_collection', label: 'ارسال به بانک (در جریان وصول)' },
       { value: 'passed', label: 'وصول نهایی (پاس شده)' },
+      { value: 'spent', label: 'واگذاری و خرج چک به غیر (تأمین‌کننده)' },
       { value: 'bounced', label: 'برگشت / واخواست چک' },
     ],
     in_collection: [
@@ -154,7 +158,10 @@ export function ChequesTab({
     spent: [],
   };
   const allowedStatusOptions: { value: ChequeStatus; label: string }[] = statusModalCheque
-    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || [])
+    ? (STATUS_OPTIONS[String(statusModalCheque.status)] || []).filter(o => {
+        if (o.value === 'spent' && statusModalCheque.type === 'paid') return false;
+        return true;
+      })
     : [];
 
   // باز شدن مودال: وضعیت هدف به اولین گزینه مجاز ریست شود
@@ -162,6 +169,7 @@ export function ChequesTab({
     if (statusModalCheque) {
       const opts = CHEQUE_TRANSITIONS[String(statusModalCheque.status)] || [];
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
+      setTransfereePartyName('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusModalCheque?.id]);
@@ -208,7 +216,8 @@ export function ChequesTab({
         statusModalCheque.id, 
         targetStatus, 
         statusDescription, 
-        targetBankAccountId || undefined
+        targetBankAccountId || undefined,
+        targetStatus === 'spent' ? transfereePartyName : undefined
       );
       toast.success('وضعیت چک به‌روزرسانی شد');
       setStatusModalCheque(null);
@@ -986,6 +995,21 @@ export function ChequesTab({
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {targetStatus === 'spent' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    نام تحویل‌گیرنده / تأمین‌کننده (طرف حساب واگذاری)
+                  </label>
+                  <input
+                    type="text"
+                    value={transfereePartyName}
+                    onChange={e => setTransfereePartyName(e.target.value)}
+                    placeholder="مثال: شرکت بازرگانی پارس (تأمین‌کننده)..."
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  />
                 </div>
               )}
 

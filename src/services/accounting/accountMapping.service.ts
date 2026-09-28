@@ -15,6 +15,7 @@ export interface ConceptualAccountMappingConfig {
   salesVatPayableAccountCode: string;       // Default: '3203' (مالیات بر ارزش افزوده)
   inventoryRawMaterialsCode: string;        // Default: '1401' (موجودی مواد اولیه)
   inventoryFinishedGoodsCode: string;       // Default: '1403' (موجودی کالای تولیدشده)
+  workInProgressCode: string;               // Default: '1402' (کالای در جریان ساخت - TD-121)
   costOfGoodsSoldCode: string;              // Default: '6001' (بهای تمام‌شده کالای فروش‌رفته)
   summaryProfitLossCode: string;            // Default: '4301' (خلاصه سود و زیان)
   retainedEarningsCode: string;             // Default: '4201' (سود انباشته)
@@ -43,6 +44,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   salesVatPayableAccountCode: '3203',
   inventoryRawMaterialsCode: '1401',
   inventoryFinishedGoodsCode: '1403',
+  workInProgressCode: '1402',
   costOfGoodsSoldCode: '6001',
   summaryProfitLossCode: '4301',
   retainedEarningsCode: '4201',
@@ -298,5 +300,19 @@ export class AccountMappingService {
    */
   static async getInventoryFinishedGoodsAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('inventoryFinishedGoodsCode', tx);
+  }
+
+  /**
+   * V5.0.17 (TD-120): بهای تمام‌شده کالای فروش‌رفته (6001)
+   */
+  static async getCostOfGoodsSoldAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('costOfGoodsSoldCode', tx);
+  }
+
+  /**
+   * V5.0.17 (TD-121): کالای در جریان ساخت (1402)
+   */
+  static async getWorkInProgressAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('workInProgressCode', tx);
   }
 }

@@ -32,6 +32,7 @@ export class AccountingService {
   static createAccount = ChartOfAccountsService.createAccount.bind(ChartOfAccountsService);
   static updateAccount = ChartOfAccountsService.updateAccount.bind(ChartOfAccountsService);
   static deleteAccount = ChartOfAccountsService.deleteAccount.bind(ChartOfAccountsService);
+  static restoreAccount = ChartOfAccountsService.restoreAccount.bind(ChartOfAccountsService);
 
   // ================= Account Mappings & Concepts =================
   static getAccountMappings = AccountMappingService.getMappings.bind(AccountMappingService);

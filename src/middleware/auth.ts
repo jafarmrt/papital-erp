@@ -32,17 +32,17 @@ export const INSECURE_DEFAULT_SECRETS = new Set([
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET || '';
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
   // Strictly enforce presence and minimum 32 characters in all environments
   if (!secret || secret.length < 32) {
     throw new Error('JWT_SECRET environment variable is missing or shorter than 32 characters');
   }
 
-  // In production, strictly reject known default or weak fallback secrets (S-4)
-  if (isProduction && INSECURE_DEFAULT_SECRETS.has(secret)) {
+  // V5.0.17 (TD-131): strictly reject known default or weak fallback secrets in non-development/non-test environments
+  if (!isDevOrTest && INSECURE_DEFAULT_SECRETS.has(secret)) {
     throw new Error(
-      'SECURITY ERROR: JWT_SECRET environment variable is using an insecure default secret in production. A cryptographically random secret of at least 32 characters is required.'
+      'SECURITY ERROR: JWT_SECRET environment variable is using an insecure default secret. In production or containerized environments, a cryptographically random secret of at least 32 characters is required.'
     );
   }
 

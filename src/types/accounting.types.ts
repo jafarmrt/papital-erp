@@ -17,6 +17,8 @@ export interface Account {
   is_system?: number;
   isActive?: number;
   is_active?: number;
+  isDeleted?: number;
+  is_deleted?: number;
   createdAt?: string;
   // Computed balance for tree/reports
   totalDebit?: number;

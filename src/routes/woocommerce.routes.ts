@@ -10,6 +10,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { DocumentService } from '../services/document.service.js';
+import { IdempotencyService } from '../services/idempotency.service.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
 import { z } from 'zod';
@@ -170,9 +171,41 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
   }
 
   const notesTag = `سفارش ووکامرس #${wcOrderId}`;
+  const idemKey = `wc_order_${wcOrderId}`;
+  const idemScope = 'woocommerce_order_sync';
 
-  // Execute in isolated database transaction with row locks for strict concurrency safety
-  return await orm.transaction(async (tx) => {
+  // TD-155: Acquire idempotency key BEFORE database transaction to prevent first-time order race condition
+  const acquireResult = await IdempotencyService.acquireKey(idemKey, {
+    scope: idemScope,
+    lockTimeoutSeconds: 45,
+    ttlSeconds: 86400 * 7,
+    requestPayload: { wcOrderId, total: wcOrder.total }
+  });
+
+  if (acquireResult.state === 'cached') {
+    logger.info(`[WooCommerce Webhook] Returning cached idempotency response for order #${wcOrderId}`);
+    return acquireResult.responseBody as {
+      success: boolean;
+      alreadyExists?: boolean;
+      docId?: number;
+      refNumber?: string;
+      message: string;
+    };
+  }
+
+  if (acquireResult.state === 'in_flight') {
+    logger.warn(`[WooCommerce Webhook] Order #${wcOrderId} processing already in progress (in-flight concurrency locked until ${acquireResult.lockedUntil})`);
+    return {
+      success: true,
+      alreadyExists: true,
+      inFlight: true,
+      message: `سفارش ووکامرس #${wcOrderId} هم‌اکنون در جریان پردازش موازی قرار دارد و نیازی به صدور فاکتور مجدد نیست.`
+    };
+  }
+
+  try {
+    // Execute in isolated database transaction with row locks for strict concurrency safety
+    const result = await orm.transaction(async (tx) => {
     // 1. Check woocommerceOrderLogs with FOR UPDATE lock
     const existingLogs = await tx.select()
       .from(woocommerceOrderLogs)
@@ -397,13 +430,23 @@ async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
     domainEventBus.emit('woocommerce.order.synced', event);
     await OutboxService.saveToOutbox(tx, event);
 
-    return {
-      success: true,
-      docId: newDocId,
-      refNumber: nextRef,
-      message: `فاکتور فروش شماره ${nextRef} جهت سفارش ووکامرس #${wcOrderId} با موفقیت صادر گردید و موجودی انبار کسر شد.`
-    };
-  });
+      return {
+        success: true,
+        docId: newDocId,
+        refNumber: nextRef,
+        message: `فاکتور فروش شماره ${nextRef} جهت سفارش ووکامرس #${wcOrderId} با موفقیت صادر گردید و موجودی انبار کسر شد.`
+      };
+    });
+
+    // Save final response in idempotency registry so future webhook duplicate retries are instantly answered
+    await IdempotencyService.saveResponse(idemKey, 200, result, { scope: idemScope });
+
+    return result;
+  } catch (error) {
+    // If failure was not already an active in-flight or conflict, mark idempotency as failed so it can be retried later
+    await IdempotencyService.markFailed(idemKey, error, { scope: idemScope });
+    throw error;
+  }
 }
 
 // ==========================================

@@ -9,7 +9,7 @@ import type { Cheque, ChequeStatus } from '../../../types.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 
-import { businessTodayIsoDate, businessTodayJalaliDash } from '../../../lib/businessClock.js';
+import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
 
 /**
  * V1.4.0 — ماشین وضعیت چک صیادی
@@ -17,9 +17,9 @@ import { businessTodayIsoDate, businessTodayJalaliDash } from '../../../lib/busi
  * این مانع از دوبار وصول (دوبار مانده + دوبار سند) و ناسازگاری دفتر/خزانه می‌شود.
  */
 export const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
-  received: ['in_treasury', 'in_collection', 'passed', 'bounced'],
-  in_treasury: ['in_collection', 'passed', 'bounced'],
-  in_safe: ['in_collection', 'passed', 'bounced'],
+  received: ['in_treasury', 'in_collection', 'passed', 'bounced', 'spent'],
+  in_treasury: ['in_collection', 'passed', 'bounced', 'spent'],
+  in_safe: ['in_collection', 'passed', 'bounced', 'spent'],
   in_collection: ['passed', 'bounced'],
   passed: [],        // پایانی
   bounced: ['returned'],
@@ -172,12 +172,14 @@ export class ChequeLifecycleService {
           const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
           const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
 
+        const voucherIssueDate = normalizeDateToIso(data.issueDate) || (await businessTodayIsoDate());
+
         if (data.type === 'received') {
           if (!chequeReceivableAcc || !customerAcc) {
             throw new ValidationError('کدینگ لازم برای ثبت چک دریافتی یافت نشد (حساب‌های 1101 اسناد دریافتنی و 1201 حساب‌های دریافتنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
-            date: data.issueDate,
+            date: voucherIssueDate,
             voucherType: 'treasury',
             description: `دریافت چک شماره ${data.chequeNumber} از ${data.partyName} (سررسید: ${data.dueDate})`,
             referenceModule: 'cheque',
@@ -213,7 +215,7 @@ export class ChequeLifecycleService {
             throw new ValidationError('کدینگ لازم برای ثبت چک پرداختی یافت نشد (حساب‌های 3101 اسناد پرداختنی و 3001 حساب‌های پرداختنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
-            date: data.issueDate,
+            date: voucherIssueDate,
             voucherType: 'treasury',
             description: `صدور چک شماره ${data.chequeNumber} در وجه ${data.partyName} (سررسید: ${data.dueDate})`,
             referenceModule: 'cheque',
@@ -286,7 +288,10 @@ export class ChequeLifecycleService {
     status: ChequeStatus;
     actionDate?: string;
     bankAccountId?: number | null;
+    transfereePartyId?: number;
+    transfereePartyName?: string;
     notes?: string;
+    description?: string;
     userId?: number;
     username?: string;
   }): Promise<Cheque> {
@@ -344,8 +349,12 @@ export class ChequeLifecycleService {
       // V1.4.0: ماشین وضعیت — انتقال مجاز + جلوگیری از تکرار (دوبار وصول = دوبار مانده و سند)
       assertChequeTransition(String(existing.status), data.status);
 
+      if (data.status === 'spent' && existing.type !== 'received') {
+        throw new ValidationError('تنها چک‌های دریافتی از مشتریان قابل واگذاری و خرج کردن به غیر هستند');
+      }
+
       const history = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
-      const actDate = data.actionDate || await businessTodayJalaliDash();
+      const voucherIsoDate = normalizeDateToIso(data.actionDate) || (await businessTodayIsoDate());
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);
@@ -368,7 +377,7 @@ export class ChequeLifecycleService {
             || (await AccountMappingService.getChequeReceivableAccount(txEngine));
           if (inCollectionAcc) {
             await VoucherService.createJournalVoucher({
-              date: actDate,
+              date: voucherIsoDate,
               voucherType: 'treasury',
               description: `وصول چک شماره ${existing.chequeNumber} از ${existing.partyName} و واریز به ${bank.title}`,
               referenceModule: 'cheque',
@@ -401,7 +410,7 @@ export class ChequeLifecycleService {
           const payableChequeAcc = await AccountMappingService.getChequePayableAccount(txEngine);
           if (payableChequeAcc) {
             await VoucherService.createJournalVoucher({
-              date: actDate,
+              date: voucherIsoDate,
               voucherType: 'treasury',
               description: `پاس شدن چک پرداختی شماره ${existing.chequeNumber} در وجه ${existing.partyName} از حساب ${bank.title}`,
               referenceModule: 'cheque',
@@ -436,7 +445,7 @@ export class ChequeLifecycleService {
         const inCollectionAcc = await AccountMappingService.getChequeInCollectionAccount(txEngine);
         if (inTreasuryAcc && inCollectionAcc) {
           await VoucherService.createJournalVoucher({
-            date: actDate,
+            date: voucherIsoDate,
             voucherType: 'treasury',
             description: `ارسال چک شماره ${existing.chequeNumber} به بانک جهت وصول (در جریان وصول)`,
             referenceModule: 'cheque',
@@ -471,7 +480,7 @@ export class ChequeLifecycleService {
           || (await AccountMappingService.getChequeReceivableAccount(txEngine));
         if (bouncedAcc && inCollectionAcc && existing.type === 'received') {
           await VoucherService.createJournalVoucher({
-            date: actDate,
+            date: voucherIsoDate,
             voucherType: 'adjustment',
             description: `واخواست و برگشت چک شماره ${existing.chequeNumber} از ${existing.partyName}`,
             referenceModule: 'cheque',
@@ -500,18 +509,58 @@ export class ChequeLifecycleService {
             ]
           }, txEngine);
         }
+      } else if (data.status === 'spent' && existing.type === 'received') {
+        const tradePayablesAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
+        const inTreasuryAcc = (await AccountMappingService.getChequeReceivableAccount(txEngine))
+          || (await AccountMappingService.getChequeInCollectionAccount(txEngine));
+
+        if (tradePayablesAcc && inTreasuryAcc) {
+          const transferee = data.transfereePartyName || data.notes || data.description || 'طرف حساب واگذاری';
+          await VoucherService.createJournalVoucher({
+            date: voucherIsoDate,
+            voucherType: 'treasury',
+            description: `واگذاری و خرج چک شماره ${existing.chequeNumber} از ${existing.partyName} به ${transferee}`,
+            referenceModule: 'cheque',
+            referenceNumber: existing.chequeNumber,
+            currency: existing.currency || 'IRR',
+            userId: data.userId,
+            username: data.username,
+            items: [
+              {
+                accountId: tradePayablesAcc.id,
+                detailedType: data.transfereePartyId ? 'supplier' : 'other',
+                detailedId: data.transfereePartyId,
+                detailedName: transferee,
+                debit: amount,
+                credit: 0,
+                description: `بدهکار شدن حساب پرداختنی بابت واگذاری چک ${existing.chequeNumber} به ${transferee}`
+              },
+              {
+                accountId: inTreasuryAcc.id,
+                detailedType: 'other',
+                detailedName: `چک ${existing.chequeNumber}`,
+                debit: 0,
+                credit: amount,
+                description: `خروج چک دریافتی ${existing.chequeNumber} از اسناد نزد صندوق بابت واگذاری و خرج چک`
+              }
+            ]
+          }, txEngine);
+        }
       }
 
+      const effectiveNotes = data.notes || data.description || (data.transfereePartyName ? `واگذاری به ${data.transfereePartyName}` : undefined);
+
       history.push({
-        date: actDate,
+        date: voucherIsoDate,
         status: data.status,
         user: data.username || 'سیستم',
-        notes: data.notes || `تغییر وضعیت به ${data.status}`
+        notes: effectiveNotes || `تغییر وضعیت به ${data.status}`
       });
 
       const [updated] = await txEngine.update(cheques).set({
         status: data.status,
         ...(data.bankAccountId !== undefined ? { bankAccountId: data.bankAccountId } : {}),
+        ...(data.transfereePartyName ? { payeeName: data.transfereePartyName } : {}),
         statusHistory: history,
       }).where(eq(cheques.id, id)).returning();
 
@@ -532,8 +581,8 @@ export class ChequeLifecycleService {
       ]);
       const [existing] = await txEngine.select().from(cheques).where(eq(cheques.id, id)).for('update');
       if (!existing) throw new NotFoundError('چک مورد نظر یافت نشد');
-      if (existing.status === 'passed') {
-        throw new BusinessLogicError('چک وصول‌شده قابل حذف نیست — مبلغ آن به حساب بانکی منتقل شده است');
+      if (existing.status === 'passed' || existing.status === 'spent') {
+        throw new BusinessLogicError('چک وصول‌شده یا خرج‌شده قابل حذف نیست — اسناد مالی مربوط به آن صادر گردیده است');
       }
 
       // V1.4.0 (DB-009): حذف چکِ دارای سند، حتماً با سند معکوس در همان تراکنش —

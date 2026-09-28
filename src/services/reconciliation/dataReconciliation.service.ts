@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { KardexWacRecalculatorService } from '../inventory/kardexWacRecalculator.service.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 
 export interface ReconciliationAnomaly {
   category: string;
@@ -64,23 +65,42 @@ export class DataReconciliationService {
       });
     }
 
-    // 2. Scan for Duplicate Document References
+    // 2. Scan for Duplicate Document References (TD-153: partitioned by type & fiscal year)
     const duplicateDocRefsRes = await pool.query(`
-      SELECT ref_number, COUNT(*) as count 
+      SELECT type, ref_number, array_agg(id) as ids, array_agg(date::text) as dates
       FROM documents 
       WHERE is_deleted = 0 AND ref_number IS NOT NULL AND ref_number != ''
-      GROUP BY ref_number 
+      GROUP BY type, ref_number 
       HAVING COUNT(*) > 1
     `);
+
     for (const row of duplicateDocRefsRes.rows) {
-      anomalies.push({
-        category: 'duplicate_doc_refs',
-        severity: 'high',
-        entity: 'documents',
-        entityId: row.ref_number,
-        description: `شماره عطف سند تکراری یافت شد: '${row.ref_number}' به تعداد ${row.count} بار ثبت شده است.`,
-        autoFixable: false
-      });
+      const type = String(row.type || '');
+      const refNumber = String(row.ref_number || '');
+      const ids: number[] = Array.isArray(row.ids) ? row.ids : [];
+      const dates: string[] = Array.isArray(row.dates) ? row.dates : [];
+
+      // تفکیک بر اساس سال مالی جلالی برای جلوگیری از مثبت کاذب میان سال‌های مالی مختلف
+      const byYear = new Map<number, number[]>();
+      for (let i = 0; i < ids.length; i++) {
+        const fy = resolveJalaliFiscalYear(dates[i]);
+        const list = byYear.get(fy) || [];
+        list.push(ids[i]);
+        byYear.set(fy, list);
+      }
+
+      for (const [fy, docIds] of byYear.entries()) {
+        if (docIds.length > 1) {
+          anomalies.push({
+            category: 'duplicate_doc_refs',
+            severity: 'high',
+            entity: 'documents',
+            entityId: `${type}:${fy}:${refNumber}`,
+            description: `شماره عطف تکراری در نوع سند '${type}' و سال مالی ${fy} یافت شد: شماره '${refNumber}' به تعداد ${docIds.length} بار (شناسه‌های اسناد: ${docIds.join(', ')}) ثبت شده است.`,
+            autoFixable: false
+          });
+        }
+      }
     }
 
     // 3. Scan for Negative Stock Levels
@@ -202,7 +222,7 @@ export class DataReconciliationService {
     const criticalCount = anomalies.filter(a => a.severity === 'critical').length;
     const summary = {
       duplicateItemCodes: duplicateCodesRes.rows.length,
-      duplicateDocRefs: duplicateDocRefsRes.rows.length,
+      duplicateDocRefs: anomalies.filter(a => a.category === 'duplicate_doc_refs').length,
       negativeStockCount: negativeStockRes.rows.length,
       orphanStockTransactions: orphanTxRes.rows.length,
       unbalancedVouchersCount: unbalancedVouchersRes.rows.length,

@@ -7,14 +7,13 @@ import {
   transactions
 } from '../../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
-import { fin, FinancialMath } from '../../utils/financialMath.js';
-import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
+import { fin } from '../../utils/financialMath.js';
+import { DocumentService } from '../document.service.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
-import { nextVersion } from '../../lib/occHelper.js';
-import { NotFoundError, ConflictError, InsufficientStockError } from '../../errors/customErrors.js';
+import { NotFoundError, ConflictError } from '../../errors/customErrors.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 export interface BomAllocationItemInput {
@@ -143,26 +142,21 @@ export class ProjectBomAllocationService {
         if (!resolvedTxId) {
           const txDate = await businessTodayIsoDate();
           const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
-          const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
-          const [newTx] = await txEngine
-            .insert(transactions)
-            .values({
-              itemId: item.id,
-              type: 'in',
-              quantity: qty,
-              unitPrice: itemUnitPrice,
-              totalPrice: itemTotalPrice,
-              date: txDate,
-              documentType: 'رسید مستقیم BOM پروژه',
-              documentRef: `پروژه ${project.projectCode}`,
-              location: targetLocation,
-              notes: req.notes || `رسید و تخصیص مستقیم مواد اولیه به پروژه ${project.title} (${project.projectCode})`,
-              createdBy: operatorName,
-              isDeleted: 0,
-            })
-            .returning({ id: transactions.id });
+          const stockResult = await DocumentService.applyStockMovement(txEngine, {
+            itemId: item.id,
+            documentId: req.documentId || null,
+            inOut: 'in',
+            quantity: qty,
+            price: itemUnitPrice,
+            date: txDate,
+            documentType: 'رسید مستقیم BOM پروژه',
+            documentRef: `پروژه ${project.projectCode}`,
+            user: operatorName,
+            targetLoc: targetLocation,
+            notes: req.notes || `رسید و تخصیص مستقیم مواد اولیه به پروژه ${project.title} (${project.projectCode})`,
+          });
 
-          resolvedTxId = newTx.id;
+          resolvedTxId = stockResult.transactionId;
         }
 
         // Insert explicit allocation record linking to the receiving transaction
@@ -297,53 +291,22 @@ export class ProjectBomAllocationService {
           throw new NotFoundError(`کالا با شناسه ${req.itemId} یافت نشد.`);
         }
 
-        const stocksObj = (item.stocks as Record<string, number>) || {};
-        const currentLocStock = fin(stocksObj[targetLocation]).toNumber();
-        const currentTotalStock = fin(item.currentStock).toNumber();
-
-        // Check negative stock policy
-        const policy = await NegativeStockPolicyService.getPolicy();
-        if (policy === 'forbidden' && currentLocStock < qty) {
-          throw new InsufficientStockError(
-            `عدم موجودی کافی جهت تخصیص به پروژه ${project.projectCode}. موجودی انبار '${targetLocation}' کالای '${item.name}' برابر ${currentLocStock} است در حالی که درخواست ${qty} می‌باشد.`
-          );
-        }
-
-        // Deduct from location and total stock
-        const updatedStocks = { ...stocksObj };
-        updatedStocks[targetLocation] = FinancialMath.subtract(currentLocStock, qty);
-        const newTotalStock = FinancialMath.subtract(currentTotalStock, qty);
-
-        await txEngine
-          .update(items)
-          .set({
-            stocks: updatedStocks,
-            currentStock: newTotalStock,
-            version: nextVersion(item.version)
-          })
-          .where(eq(items.id, item.id));
-
-        // Create transaction log
+        // Apply stock movement using centralized DocumentService (ensures locking, negative stock policy, WAC integrity, outbox events)
         const txDate = await businessTodayIsoDate();
         const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
-        const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
-        const [txRecord] = await txEngine
-          .insert(transactions)
-          .values({
-            itemId: item.id,
-            type: 'out',
-            quantity: qty,
-            unitPrice: itemUnitPrice,
-            totalPrice: itemTotalPrice,
-            date: txDate,
-            documentType: 'تخصیص مواد BOM',
-            documentRef: `پروژه ${project.projectCode}`,
-            location: targetLocation,
-            notes: req.notes || `تخصیص به پروژه تولید ${project.title} (${project.projectCode})`,
-            createdBy: operatorName,
-            isDeleted: 0,
-          })
-          .returning({ id: transactions.id });
+
+        const stockResult = await DocumentService.applyStockMovement(txEngine, {
+          itemId: item.id,
+          inOut: 'out',
+          quantity: qty,
+          price: itemUnitPrice,
+          date: txDate,
+          documentType: 'تخصیص مواد BOM',
+          documentRef: `پروژه ${project.projectCode}`,
+          user: operatorName,
+          targetLoc: targetLocation,
+          notes: req.notes || `تخصیص به پروژه تولید ${project.title} (${project.projectCode})`,
+        });
 
         // Insert explicit allocation record
         const [allocRecord] = await txEngine
@@ -356,7 +319,7 @@ export class ProjectBomAllocationService {
             itemName: item.name,
             quantity: qty,
             unit: item.unit || 'عدد',
-            sourceTransactionId: txRecord.id,
+            sourceTransactionId: stockResult.transactionId,
             sourceLocation: targetLocation,
             status: 'allocated',
             userId: operatorId,
@@ -379,7 +342,7 @@ export class ProjectBomAllocationService {
             itemCode: item.code,
             quantity: qty,
             location: targetLocation,
-            sourceTransactionId: txRecord.id,
+            sourceTransactionId: stockResult.transactionId,
             action: 'ALLOCATED',
           },
           { userId: operatorId ?? undefined, userName: operatorName }
@@ -501,7 +464,7 @@ export class ProjectBomAllocationService {
       const qty = fin(alloc.quantity).toNumber();
       const loc = alloc.sourceLocation || 'main';
 
-      // 1. Fetch item with lock and restore stock
+      // 1. Fetch item and restore stock through centralized DocumentService
       const [item] = await txEngine
         .select()
         .from(items)
@@ -509,39 +472,17 @@ export class ProjectBomAllocationService {
         .for('update');
 
       if (item) {
-        const stocksObj = (item.stocks as Record<string, number>) || {};
-        const currentLocStock = fin(stocksObj[loc]).toNumber();
-        const currentTotalStock = fin(item.currentStock).toNumber();
-
-        const updatedStocks = { ...stocksObj };
-        updatedStocks[loc] = FinancialMath.add(currentLocStock, qty);
-        const newTotalStock = FinancialMath.add(currentTotalStock, qty);
-
-        await txEngine
-          .update(items)
-          .set({
-            stocks: updatedStocks,
-            currentStock: newTotalStock,
-            version: nextVersion(item.version)
-          })
-          .where(eq(items.id, item.id));
-
-        // 2. Insert transaction log of type 'in'
-        const itemUnitPrice = Number(item.weightedAverageCost) || 0;
-        const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
-        await txEngine.insert(transactions).values({
+        await DocumentService.applyStockMovement(txEngine, {
           itemId: item.id,
-          type: 'in',
+          inOut: 'in',
           quantity: qty,
-          unitPrice: itemUnitPrice,
-          totalPrice: itemTotalPrice,
+          price: Number(item.weightedAverageCost || 0),
           date: await businessTodayIsoDate(),
           documentType: 'آزادسازی تخصیص BOM',
           documentRef: `پروژه ${alloc.projectCode}`,
-          location: loc,
+          user: operatorName,
+          targetLoc: loc,
           notes: `${reason} (تخصیص شماره ${alloc.id})`,
-          createdBy: operatorName,
-          isDeleted: 0,
         });
       }
 

@@ -11,7 +11,9 @@ export type TestLayer =
   | 'e2e'
   | 'recovery'
   | 'penetration'
-  | 'critical_path';
+  | 'critical_path'
+  | 'document_integrity'
+  | 'business_logic';
 
 export type TestStatus = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN' | 'N/A';
 
@@ -110,7 +112,11 @@ export type CriticalScenarioId =
   | 'v4_project_reservation_release_guard'
   | 'v5_warehouse_resolution_guard'
   | 'v5_sellable_stock_reservation_gate'
-  | 'v5_jalali_timestamp_normalization';
+  | 'v5_jalali_timestamp_normalization'
+  | 'v5_cogs_and_warehouse_voucher'
+  | 'v5_audit_gateway_and_test_cleanup'
+  | 'v6_treasury_cheque_isolation'
+  | 'v6_fiscal_year_closing_isolation';
 
 
 export interface TestCaseResult {

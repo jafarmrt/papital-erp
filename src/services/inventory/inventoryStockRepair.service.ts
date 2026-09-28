@@ -1,13 +1,13 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../utils/financialMath.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 
 export class InventoryStockRepairService {
   /**
-   * Executes inter-warehouse stock transfer with strict transaction safety and row locking.
+   * Executes inter-warehouse stock transfer with strict transaction safety and row locking (TD-138).
    */
   static async executeWarehouseTransfer(params: {
     itemId: number;
@@ -45,7 +45,8 @@ export class InventoryStockRepairService {
       const [item] = await txEngine
         .select()
         .from(items)
-        .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)));
+        .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)))
+        .for('update');
 
       if (!item) {
         throw new Error(`کالا با شناسه ${params.itemId} یافت نشد.`);
@@ -79,7 +80,10 @@ export class InventoryStockRepairService {
 
       await txEngine
         .update(items)
-        .set({ stocks: updatedStocks })
+        .set({
+          stocks: updatedStocks,
+          version: sql`${items.version} + 1`
+        })
         .where(eq(items.id, params.itemId));
 
       const itemUnitPrice = Number(item.weightedAverageCost) || 0;

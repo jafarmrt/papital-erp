@@ -61,7 +61,7 @@ export class KardexWacRecalculatorService {
         .orderBy(asc(transactions.date), asc(transactions.id));
 
       let runningBal = fin(0);
-      let runningWac = fin(0);
+      let runningWac = fin(item.weightedAverageCost || 0);
       const whBreakdown: Record<string, number> = {};
 
       for (const w of activeWHs) {
@@ -80,18 +80,20 @@ export class KardexWacRecalculatorService {
 
         if (tx.type === 'in' || tx.type === 'transfer_in') {
           // محاسبه دقیق میانگین موزون (WAC):
-          // اگر موجودی فعلی مثبت باشد: (runningBal * runningWac + qty * unitPrice) / (runningBal + qty)
-          // اگر موجودی فعلی صفر یا منفی باشد: WAC = unitPrice
-          if (runningBal.greaterThan(0)) {
-            const currentTotalValue = runningBal.multiply(runningWac);
-            const incomingTotalValue = qty.multiply(unitPrice);
-            const newTotalQty = runningBal.add(qty);
-            runningWac = newTotalQty.greaterThan(0)
-              ? currentTotalValue.add(incomingTotalValue).divide(newTotalQty, 4)
-              : unitPrice.round(4);
-          } else {
-            runningWac = unitPrice.round(4);
+          // اگر قیمت ورودی معتبر باشد:
+          if (unitPrice.greaterThan(0)) {
+            if (runningBal.greaterThan(0) && runningWac.greaterThan(0)) {
+              const currentTotalValue = runningBal.multiply(runningWac);
+              const incomingTotalValue = qty.multiply(unitPrice);
+              const newTotalQty = runningBal.add(qty);
+              runningWac = newTotalQty.greaterThan(0)
+                ? currentTotalValue.add(incomingTotalValue).divide(newTotalQty, 4)
+                : unitPrice.round(4);
+            } else {
+              runningWac = unitPrice.round(4);
+            }
           }
+          // اگر قیمت ورودی صفر باشد (مثلاً تعدیل انبارگردانی بدون قیمت)، WAC قبلی حفظ می‌شود (TD-135)
 
           runningBal = runningBal.add(qty);
           whBreakdown[loc] = fin(whBreakdown[loc] || 0).add(qty).toNumber();
@@ -105,9 +107,10 @@ export class KardexWacRecalculatorService {
         }
       }
 
-      // اگر موجودی نهایی صفر یا کمتر باشد، میانگین موزون WAC صفر می‌گردد
-      if (runningBal.lessThanOrEqual(0)) {
-        runningWac = fin(0);
+      // V6 (TD-136): در صورت صفر یا منفی شدن موجودی نهایی، بهای تمام‌شده تاریخی (WAC) نباید صفر شود
+      // آخرین بهای میانگین موزون معتبر کالا حفظ می‌گردد تا در ارزش‌گذاری و معاملات بعدی معتبر بماند.
+      if (runningWac.lessThanOrEqual(0)) {
+        runningWac = fin(item.weightedAverageCost || 0);
       }
 
       const oldStock = fin(item.currentStock).toNumber();

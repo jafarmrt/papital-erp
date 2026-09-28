@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
-import { pendingMaterials, items } from '../db/schema.js';
+import { pendingMaterials } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
@@ -8,6 +8,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { PendingMaterialsService } from '../services/pendingMaterials.service.js';
 
 const router = Router();
 
@@ -133,44 +134,11 @@ router.get('/pending-materials', authenticateToken, async (req: Request, res: Re
 // POST /api/pending-materials - Submit a new pending material (from project inventory control)
 router.post('/pending-materials', authenticateToken, validate(createPendingMaterialSchema), async (req: Request, res: Response) => {
   try {
-    const {
-      code,
-      name,
-      unit,
-      category,
-      projectId,
-      projectTitle,
-      reorderPoint,
-      weightedAverageCost,
-      color,
-      weight,
-      material,
-      size,
-      image,
-      thumbnail
-    } = req.body;
-
     const username = req.user?.username || req.user?.full_name || 'کاربر سیستم';
-
-    const [inserted] = await orm.insert(pendingMaterials).values({
-      code: code ? code.trim() : `TEMP-${Date.now()}`,
-      name: name.trim(),
-      unit: unit ? unit.trim() : 'عدد',
-      category: category ? category.trim() : 'عمومی',
-      type: 'raw_material',
-      projectId: projectId ? Number(projectId) : null,
-      projectTitle: projectTitle ? projectTitle.trim() : '',
-      requestedBy: username,
-      status: 'pending',
-      reorderPoint: Number(reorderPoint) || 0,
-      weightedAverageCost: Number(weightedAverageCost) || 0,
-      color: color || '',
-      weight: Number(weight) || 0,
-      material: material || '',
-      size: size || '',
-      image: image || '',
-      thumbnail: thumbnail || ''
-    }).returning();
+    const inserted = await PendingMaterialsService.submitPendingMaterial({
+      ...req.body,
+      requestedBy: username
+    });
 
     // Log activity
     await logActivity({
@@ -188,7 +156,6 @@ router.post('/pending-materials', authenticateToken, validate(createPendingMater
     });
   } catch (err) {
     logger.error({ message: 'Error creating pending material', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -197,65 +164,7 @@ router.post('/pending-materials', authenticateToken, validate(createPendingMater
 router.put('/pending-materials/:id/approve', authenticateToken, authorizePermission('pending_materials.approve'), validate(approvePendingMaterialSchema), async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
-    const [existing] = await orm.select().from(pendingMaterials).where(and(eq(pendingMaterials.id, pId), eq(pendingMaterials.isDeleted, 0)));
-
-    if (!existing) {
-      return res.status(404).json({ error: 'ماده اولیه مورد نظر یافت نشد' });
-    }
-
-    const {
-      code,
-      name,
-      unit,
-      category,
-      reorderPoint,
-      weightedAverageCost,
-      color,
-      weight,
-      material,
-      size,
-      image,
-      thumbnail
-    } = req.body || {};
-
-    const finalCode = (code || existing.code).trim();
-    const finalName = (name || existing.name).trim();
-    const finalUnit = (unit || existing.unit).trim();
-    const finalCategory = (category || existing.category || 'عمومی').trim();
-
-    // Check code duplication in official items
-    const [codeDup] = await orm.select().from(items).where(and(eq(items.code, finalCode), eq(items.isDeleted, 0)));
-    if (codeDup) {
-      return res.status(400).json({ error: `کد کالا «${finalCode}» قبلاً در انبار ثبت شده است. لطفاً کد دیگری انتخاب کنید.` });
-    }
-
-    // Register into official items table
-    const [newItem] = await orm.insert(items).values({
-      type: 'raw_material',
-      name: finalName,
-      code: finalCode,
-      unit: finalUnit,
-      category: finalCategory,
-      currentStock: 0,
-      stocks: {},
-      reorderPoint: Number(reorderPoint ?? existing.reorderPoint) || 0,
-      weightedAverageCost: Number(weightedAverageCost ?? existing.weightedAverageCost) || 0,
-      color: color ?? existing.color ?? '',
-      weight: Number(weight ?? existing.weight) || 0,
-      material: material ?? existing.material ?? '',
-      size: size ?? existing.size ?? '',
-      image: image ?? existing.image ?? '',
-      thumbnail: thumbnail ?? existing.thumbnail ?? ''
-    }).returning();
-
-    // Update pending_materials status
-    await orm.update(pendingMaterials).set({
-      status: 'approved',
-      code: finalCode,
-      name: finalName,
-      unit: finalUnit,
-      category: finalCategory
-    }).where(eq(pendingMaterials.id, pId));
+    const { officialItem: newItem } = await PendingMaterialsService.approvePendingMaterial(pId, req.body);
 
     const username = req.user?.username || 'انباردار';
     await logActivity({
@@ -273,7 +182,6 @@ router.put('/pending-materials/:id/approve', authenticateToken, authorizePermiss
     });
   } catch (err) {
     logger.error({ message: 'Error approving pending material', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -283,17 +191,7 @@ router.put('/pending-materials/:id/reject', authenticateToken, authorizePermissi
   try {
     const pId = Number(req.params.id);
     const { rejectionReason } = req.body || {};
-
-    const [existing] = await orm.select().from(pendingMaterials).where(and(eq(pendingMaterials.id, pId), eq(pendingMaterials.isDeleted, 0)));
-
-    if (!existing) {
-      return res.status(404).json({ error: 'ماده اولیه مورد نظر یافت نشد' });
-    }
-
-    await orm.update(pendingMaterials).set({
-      status: 'rejected',
-      rejectionReason: rejectionReason ? rejectionReason.trim() : 'عدم تأیید توسط انباردار'
-    }).where(eq(pendingMaterials.id, pId));
+    const rejected = await PendingMaterialsService.rejectPendingMaterial(pId, rejectionReason);
 
     const username = req.user?.username || 'انباردار';
     await logActivity({
@@ -302,7 +200,7 @@ router.put('/pending-materials/:id/reject', authenticateToken, authorizePermissi
       action: 'UPDATE',
       entity: 'ماده اولیه',
       entityId: pId,
-      description: `کد ماده اولیه "${existing.name}" (${existing.code}) رد شد و به انبار اضافه نگردید`
+      description: `کد ماده اولیه "${rejected.name}" (${rejected.code}) رد شد و به انبار اضافه نگردید`
     });
 
     res.json({
@@ -310,7 +208,6 @@ router.put('/pending-materials/:id/reject', authenticateToken, authorizePermissi
     });
   } catch (err) {
     logger.error({ message: 'Error rejecting pending material', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -319,36 +216,10 @@ router.put('/pending-materials/:id/reject', authenticateToken, authorizePermissi
 router.put('/pending-materials/:id', authenticateToken, validate(updatePendingMaterialSchema), async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
-    const {
-      code,
-      name,
-      unit,
-      category,
-      reorderPoint,
-      weightedAverageCost,
-      color,
-      weight,
-      material,
-      size
-    } = req.body;
-
-    await orm.update(pendingMaterials).set({
-      code,
-      name,
-      unit,
-      category,
-      reorderPoint: Number(reorderPoint) || 0,
-      weightedAverageCost: Number(weightedAverageCost) || 0,
-      color,
-      weight: Number(weight) || 0,
-      material,
-      size
-    }).where(eq(pendingMaterials.id, pId));
-
+    await PendingMaterialsService.updatePendingMaterial(pId, req.body);
     res.json({ message: 'مشخصات ماده اولیه به‌روزرسانی شد' });
   } catch (err) {
     logger.error({ message: 'Error updating pending material', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -357,11 +228,10 @@ router.put('/pending-materials/:id', authenticateToken, validate(updatePendingMa
 router.delete('/pending-materials/:id', authenticateToken, authorize('admin', 'manager'), validate(paramsIdSchema), async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
-    await orm.update(pendingMaterials).set({ isDeleted: 1 }).where(eq(pendingMaterials.id, pId));
+    await PendingMaterialsService.deletePendingMaterial(pId);
     res.json({ message: 'ماده اولیه حذف شد' });
   } catch (err) {
     logger.error({ message: 'Error deleting pending material', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });

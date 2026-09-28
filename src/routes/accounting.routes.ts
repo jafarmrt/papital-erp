@@ -118,6 +118,23 @@ router.delete('/accounting/accounts/:id', authorizePermission('accounting.coa'),
   res.json(result);
 }));
 
+router.post('/accounting/accounts/:id/restore', authorizePermission('accounting.coa'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const restored = await AccountingService.restoreAccount(id);
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'account',
+    entityId: String(id),
+    description: `احیای حساب حذف‌شده: ${restored.name} (کد: ${restored.code})`,
+    details: { account: restored },
+    ipAddress: req.ip || '',
+  });
+  res.json(restored);
+}));
+
 // ==========================================
 // 2.1 ACCOUNT MAPPINGS (نگاشت مفهومی سرفصل‌های حسابداری)
 // ==========================================
@@ -806,6 +823,7 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
 export const previewTreasurySchema = z.object({
   body: z.object({
     type: z.enum(['receipt', 'payment']),
+    method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque']).optional(),
     amount: z.coerce.number().positive('مبلغ تراکنش باید مثبت باشد'),
     currency: z.string().optional().default('IRR'),
     bankAccountId: z.coerce.number().int().positive('شناسه حساب بانکی الزامی است'),
@@ -1022,11 +1040,25 @@ export const updateChequeStatusSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه چک باید عددی باشد')
   }),
   body: z.object({
-    status: z.enum(['pending', 'passed', 'cashed', 'returned', 'voided', 'bounced'], {
+    status: z.enum([
+      'received',
+      'in_treasury',
+      'in_collection',
+      'passed',
+      'bounced',
+      'returned',
+      'spent',
+      'in_safe',
+      'pending',
+      'cashed',
+      'voided'
+    ], {
       message: 'وضعیت چک نامعتبر است'
     }),
     actionDate: z.string().optional(),
     bankAccountId: z.coerce.number().int().positive().optional(),
+    transfereePartyId: z.coerce.number().int().positive().optional(),
+    transfereePartyName: z.string().optional(),
     notes: z.string().optional(),
     description: z.string().optional()
   })
@@ -1039,7 +1071,10 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
     status: req.body.status,
     actionDate: req.body.actionDate,
     bankAccountId: req.body.bankAccountId,
+    transfereePartyId: req.body.transfereePartyId,
+    transfereePartyName: req.body.transfereePartyName,
     notes,
+    description: req.body.description,
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
   });

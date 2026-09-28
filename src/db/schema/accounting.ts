@@ -68,10 +68,12 @@ export const journalVoucherItems = pgTable('journal_voucher_items', {
   exchangeRate: numeric('exchange_rate', { precision: 18, scale: 4, mode: 'number' }).default(1),
   description: text('description').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_jvi_voucher: index('idx_jvi_voucher').on(table.voucherId),
   idx_jvi_account: index('idx_jvi_account').on(table.accountId),
   idx_jvi_detailed: index('idx_jvi_detailed').on(table.detailedType, table.detailedId),
+  idx_jvi_deleted: index('idx_jvi_deleted').on(table.isDeleted),
 }));
 
 export const bankAccounts = pgTable('bank_accounts', {

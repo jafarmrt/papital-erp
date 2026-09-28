@@ -1,4 +1,4 @@
-import { toEnglishDigits } from '../../../utils';
+import { toEnglishDigits, jalaliToIsoDate } from '../../../utils';
 
 export interface StatementRow {
   rowNo: number;
@@ -56,26 +56,64 @@ export function parseCleanAmount(raw: unknown): number {
 }
 
 /**
- * تشخیص روزهای فاصله بین دو تاریخ شمسی (یا میلادی) با فرمت YYYY/MM/DD
+ * TD-151 (V6 Sub-phase 4.2):
+ * نرمال‌سازی انواع تاریخ ورودی (شمسی، میلادی، ISO با ساعت، یا پیوسته ۸ رقمی) به تاریخ استاندارد میلادی ISO (YYYY-MM-DD).
+ * این تابع مانع از خطای تفاضل روز نجومی میان تاریخ‌های شمسی اکسل بانک (مثلاً 1405/06/15) و تاریخ‌های میلادی دیتابیس (2026-09-06) می‌شود.
+ */
+export function normalizeDateToIso(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  let clean = toEnglishDigits(String(dateStr)).trim();
+  if (!clean) return null;
+
+  // حذف بخش زمان در صورت وجود (مثلاً "1405/06/15 14:30:00" یا "2026-09-06T12:00:00.000Z")
+  clean = clean.split(/[ T]/)[0].trim();
+
+  // اگر فرمت پیوسته عددی ۸ رقمی باشد مانند 14050615 یا 20260906
+  if (/^\d{8}$/.test(clean)) {
+    const y = parseInt(clean.slice(0, 4), 10);
+    if (y >= 1300 && y <= 1500) {
+      return jalaliToIsoDate(`${clean.slice(0, 4)}/${clean.slice(4, 6)}/${clean.slice(6, 8)}`);
+    } else if (y >= 1900 && y <= 2100) {
+      return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
+    }
+  }
+
+  // اگر تاریخ میلادی استاندارد با خط‌تیره یا اسلش است (مثلاً 2026-09-06 یا 2026/09/06)
+  const gMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (gMatch) {
+    const y = parseInt(gMatch[1], 10);
+    const m = gMatch[2].padStart(2, '0');
+    const d = gMatch[3].padStart(2, '0');
+    if (y >= 1900 && y <= 2100) {
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  // اگر تاریخ جلالی باشد (مثلاً 1405/06/15 یا 1405-06-15 یا 1405/6/5)
+  const iso = jalaliToIsoDate(clean);
+  if (iso) return iso;
+
+  return null;
+}
+
+/**
+ * TD-151 (V6 Sub-phase 4.2):
+ * محاسبه تفاضل دقیق روزهای تقویمی بین دو تاریخ با هر مبنایی (شمسی اکسل بانک یا میلادی دیتابیس)
+ * هر دو تاریخ به تاریخ استاندارد میلادی ISO نرمال‌سازی شده و سپس اختلاف روز آن‌ها بر مبنای نیمه‌شب UTC محاسبه می‌شود.
  */
 export function calculateDateDiffDays(dateStr1: string, dateStr2: string): number {
-  const clean1 = toEnglishDigits(dateStr1).replace(/[^\d]/g, '');
-  const clean2 = toEnglishDigits(dateStr2).replace(/[^\d]/g, '');
-  
-  if (clean1.length < 8 || clean2.length < 8) return 999;
-  
-  const y1 = parseInt(clean1.slice(0, 4), 10);
-  const m1 = parseInt(clean1.slice(4, 6), 10);
-  const d1 = parseInt(clean1.slice(6, 8), 10);
-  
-  const y2 = parseInt(clean2.slice(0, 4), 10);
-  const m2 = parseInt(clean2.slice(4, 6), 10);
-  const d2 = parseInt(clean2.slice(6, 8), 10);
-  
-  const days1 = y1 * 365 + (m1 <= 6 ? (m1 - 1) * 31 : 186 + (m1 - 7) * 30) + d1;
-  const days2 = y2 * 365 + (m2 <= 6 ? (m2 - 1) * 31 : 186 + (m2 - 7) * 30) + d2;
-  
-  return Math.abs(days1 - days2);
+  const iso1 = normalizeDateToIso(dateStr1);
+  const iso2 = normalizeDateToIso(dateStr2);
+
+  if (!iso1 || !iso2) return 999;
+
+  const t1 = Date.parse(iso1 + 'T00:00:00Z');
+  const t2 = Date.parse(iso2 + 'T00:00:00Z');
+
+  if (isNaN(t1) || isNaN(t2)) return 999;
+
+  const diffMs = Math.abs(t1 - t2);
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -264,10 +302,13 @@ export function matchStatementWithTransactions(
           matchQuality = 'amount_date';
           dateDiffDays = minDiff;
         } else if (exactAmountCandidates.length === 1) {
-          // ۳. سطح سوم: تطبیق منحصربه‌فرد بر اساس مبلغ وقتی فقط یک تراکنش با این مبلغ وجود دارد
-          matchedTx = exactAmountCandidates[0];
-          matchQuality = 'amount_only';
-          dateDiffDays = calculateDateDiffDays(row.date, exactAmountCandidates[0].date);
+          // ۳. سطح سوم: تطبیق منحصربه‌فرد بر اساس مبلغ با سقف خطای حداکثر ۳۰ روز (جلوگیری از انطباق اشتباه در دوره‌های مالی مختلف)
+          const singleDiff = calculateDateDiffDays(row.date, exactAmountCandidates[0].date);
+          if (singleDiff <= 30) {
+            matchedTx = exactAmountCandidates[0];
+            matchQuality = 'amount_only';
+            dateDiffDays = singleDiff;
+          }
         }
       }
     }

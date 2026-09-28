@@ -1,16 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
-import { transfers, items, activityLogs } from '../db/schema.js';
+import { transfers, items } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
-import { uploadBase64ToStorage } from '../lib/storage.js';
 import { parsePagination } from '../lib/pagination.js';
-import { systemNowUtcIso } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { TransferService } from '../services/transfer.service.js';
 
 const router = Router();
 
@@ -53,7 +52,7 @@ router.get('/transfers', authenticateToken, async (req: Request, res: Response) 
     const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
 
     // 1. Fetch saved transfer details
-    const savedTransfers = await orm.select().from(transfers);
+    const savedTransfers = await orm.select().from(transfers).where(eq(transfers.isDeleted, 0));
     const savedMap = new Map<string, any>();
     for (const tr of savedTransfers) {
       savedMap.set(tr.code, tr);
@@ -211,65 +210,18 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
     const { title, image, thumbnail, notes } = body;
     const cleanCode = rawCode.trim();
 
-    // Process base64 uploads to storage
-    let imageUrl = image || '';
-    let thumbnailUrl = thumbnail || '';
-
-    if (imageUrl && imageUrl.startsWith('data:image')) {
-      imageUrl = await uploadBase64ToStorage(imageUrl, 'image');
-    }
-    if (thumbnailUrl && thumbnailUrl.startsWith('data:image')) {
-      thumbnailUrl = await uploadBase64ToStorage(thumbnailUrl, 'thumbnail');
-    } else if (!thumbnailUrl && imageUrl) {
-      thumbnailUrl = imageUrl;
-    }
-
-    const existing = await orm.select().from(transfers).where(eq(transfers.code, cleanCode)).limit(1);
-
-    const now = systemNowUtcIso();
-    let savedRecord: typeof transfers.$inferSelect | null = null;
-
-    if (existing.length > 0) {
-      const [updated] = await orm.update(transfers)
-        .set({
-          title: title !== undefined ? title : existing[0].title,
-          image: imageUrl,
-          thumbnail: thumbnailUrl,
-          notes: notes !== undefined ? notes : existing[0].notes,
-          updatedAt: now
-        })
-        .where(eq(transfers.code, cleanCode))
-        .returning();
-      savedRecord = updated;
-    } else {
-      const [inserted] = await orm.insert(transfers)
-        .values({
-          code: cleanCode,
-          title: title || `ترنسفر کد ${cleanCode}`,
-          image: imageUrl,
-          thumbnail: thumbnailUrl,
-          notes: notes || '',
-          createdAt: now,
-          updatedAt: now
-        })
-        .returning();
-      savedRecord = inserted;
-    }
-
-    // Log activity
-    const user = req.user;
-    if (user) {
-      await orm.insert(activityLogs).values({
-        userId: user.id || null,
-        username: user.username || 'سیستم',
-        userFullName: user.full_name || '',
-        action: existing.length > 0 ? 'UPDATE' : 'CREATE',
-        entity: 'ترنسفر',
-        entityId: cleanCode,
-        description: `ثبت/ویرایش تصویر و اطلاعات ترنسفر کد ${cleanCode}`,
-        details: { code: cleanCode, title: savedRecord.title }
-      });
-    }
+    const savedRecord = await TransferService.saveTransfer({
+      code: cleanCode,
+      title,
+      image,
+      thumbnail,
+      notes,
+      user: req.user ? {
+        id: req.user.id,
+        username: req.user.username,
+        full_name: req.user.full_name
+      } : undefined
+    });
 
     res.json({
       message: 'اطلاعات و تصویر ترنسفر با موفقیت ذخیره گردید.',
@@ -290,7 +242,7 @@ router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'wareh
 router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'products.delete'), validate(deleteTransferSchema), async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
-    await orm.delete(transfers).where(eq(transfers.code, code));
+    await TransferService.deleteTransfer(code, req.user);
 
     res.json({ message: `اطلاعات و تصویر ترنسفر کد ${code} با موفقیت پاک شد.` });
   } catch (error) {
@@ -300,3 +252,4 @@ router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager
 });
 
 export default router;
+

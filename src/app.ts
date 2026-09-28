@@ -44,6 +44,26 @@ import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
 
 let isStartupComplete = false;
+let activeLoginLimiter: any = null;
+
+/**
+ * Resets the in-memory login rate limiter store.
+ * Useful in automated test suites (e.g. penetration vs critical path) so probes
+ * do not exhaust the throttle bucket for legitimate admin logins.
+ */
+export function resetLoginRateLimiter(): void {
+  try {
+    if (activeLoginLimiter) {
+      if (typeof activeLoginLimiter.resetAll === 'function') {
+        activeLoginLimiter.resetAll();
+      } else if (activeLoginLimiter.store && typeof activeLoginLimiter.store.resetAll === 'function') {
+        activeLoginLimiter.store.resetAll();
+      }
+    }
+  } catch {
+    // safe ignore in tests
+  }
+}
 
 /**
  * Called by server.ts once background migrations/seeding finish so that
@@ -226,6 +246,7 @@ export async function createApp(): Promise<express.Express> {
       xForwardedForHeader: process.env.NODE_ENV === 'production'
     }
   });
+  activeLoginLimiter = loginLimiter;
 
   app.use('/api', generalLimiter);
   app.use('/api', csrfProtection);

@@ -87,11 +87,10 @@ class TestRollbackSignal extends Error {
 export async function cleanTestTableData(tableName: string, idColumn = 'id', ids: Array<number | string> = []) {
   if (!ids || ids.length === 0) return;
   try {
-    // TST-002: never interpolate values — bind ids as a single typed array param.
-    // sql.raw is used ONLY for trusted internal identifiers (table/column names).
+    // TST-002 & V5.0.17 (TD-122): cast idColumn to text to prevent 'operator does not exist: integer = text'
     const stringIds = ids.map(id => String(id));
     await orm.execute(
-      sql`DELETE FROM ${sql.identifier(tableName)} WHERE ${sql.identifier(idColumn)} = ANY(${sql.param(stringIds)}::text[])`
+      sql`DELETE FROM ${sql.identifier(tableName)} WHERE ${sql.identifier(idColumn)}::text = ANY(${sql.param(stringIds)}::text[])`
     );
   } catch (err: any) {
     logger.warn(`[TestDbHelper] Failed to clean test data from ${tableName}: ${err.message}`);

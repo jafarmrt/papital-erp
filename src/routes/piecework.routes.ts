@@ -6,11 +6,12 @@ import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, piec
 import { eq, and, desc, or, sql, inArray } from 'drizzle-orm';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
-import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
+import { normalizePersianDate, jalaliToIsoDate } from '../utils.js';
 import { VoucherSyncService } from '../services/accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
 import { ConflictError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
+import { PieceworkService } from '../services/piecework.service.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -152,37 +153,6 @@ const registerPayrollPaymentSchema = z.object({
 // 1. Piecework Tasks (عناوین کاری پرکیسی)
 // ==========================================
 
-// Helper to record rate change history
-async function recordTaskRateHistory(data: {
-  taskId: number;
-  taskCode?: string;
-  taskTitle?: string;
-  oldRate?: number;
-  newRate: number;
-  changeType: 'create' | 'rate_change' | 'excel_import' | 'title_change' | 'archived' | 'restored';
-  reason?: string;
-  userId?: number;
-  username?: string;
-}) {
-  try {
-    const today = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    await orm.insert(pieceworkTaskRateHistory).values({
-      taskId: data.taskId,
-      taskCode: data.taskCode || '',
-      taskTitle: data.taskTitle || '',
-      oldRate: Number(data.oldRate || 0),
-      newRate: Number(data.newRate || 0),
-      changeType: data.changeType,
-      reason: data.reason || '',
-      changedByUserId: data.userId || null,
-      changedByUsername: data.username || 'سیستم',
-      effectiveDate: today,
-    });
-  } catch (err) {
-    logger.warn({ message: 'Failed to record piecework rate history', error: err });
-  }
-}
-
 // GET /api/piecework/tasks - List tasks (active, archived, or all)
 router.get('/piecework/tasks', async (req, res) => {
   try {
@@ -258,32 +228,13 @@ router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate
   try {
     const { code, title, category, defaultRate, unit, description } = req.body;
 
-    let taskCode = code ? String(code).trim() : '';
-    if (!taskCode) {
-      const countRes = await orm.select({ count: sql<number>`count(*)` }).from(pieceworkTasks);
-      const nextId = Number(countRes[0]?.count || 0) + 1;
-      taskCode = `PW-${String(nextId).padStart(3, '0')}`;
-    }
-
-    const [newTask] = await orm.insert(pieceworkTasks).values({
-      code: taskCode,
-      title: title.trim(),
-      category: category ? String(category).trim() : 'سایر',
-      defaultRate: Number(defaultRate) || 0,
-      unit: unit ? String(unit).trim() : 'عدد',
-      description: description ? String(description).trim() : '',
-      isActive: 1,
-      isDeleted: 0
-    }).returning();
-
-    await recordTaskRateHistory({
-      taskId: newTask.id,
-      taskCode: newTask.code,
-      taskTitle: newTask.title,
-      oldRate: 0,
-      newRate: Number(newTask.defaultRate) || 0,
-      changeType: 'create',
-      reason: 'تعریف اولیه عنوان کاری',
+    const newTask = await PieceworkService.createTask({
+      code,
+      title,
+      category,
+      defaultRate,
+      unit,
+      description,
       userId: req.user?.id,
       username: req.user?.username
     });
@@ -312,128 +263,27 @@ router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admi
       return res.status(400).json({ error: 'لیست ردیف‌های واردات اکسل خالی است' });
     }
 
-    if (mode === 'replace') {
-      await orm.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.isDeleted, 0));
-    }
-
-    const existingTasks = await orm.select().from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0));
-    const taskByCode = new Map(existingTasks.map(t => [t.code?.trim().toLowerCase(), t]));
-    const taskByTitle = new Map(existingTasks.map(t => [t.title?.trim().toLowerCase(), t]));
-
-    let createdCount = 0;
-    let updatedCount = 0;
-    const addedCategories = new Set<string>();
-
-    let maxSeq = existingTasks.reduce((max, t) => {
-      const m = t.code?.match(/PW-(\d+)/i);
-      if (m) {
-        const num = parseInt(m[1], 10);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const title = String(row.title || row['عنوان'] || row['عنوان کار'] || row['عنوان کاری'] || '').trim();
-      if (!title) continue;
-
-      let code = String(row.code || row['کد'] || row['کد کار'] || row['کد کاری'] || '').trim();
-      const category = String(row.category || row['دسته'] || row['دسته‌بندی'] || row['گروه'] || 'سایر').trim();
-      const defaultRate = Number(row.defaultRate || row['نرخ'] || row['نرخ پایه'] || row['نرخ پیش‌فرض'] || row['دستمزد'] || 0) || 0;
-      const unit = String(row.unit || row['واحد'] || row['واحد سنجش'] || 'عدد').trim();
-      const description = String(row.description || row['توضیحات'] || '').trim();
-
-      if (category && category !== 'سایر') {
-        addedCategories.add(category);
-      }
-
-      if (!code) {
-        maxSeq++;
-        code = `PW-${String(maxSeq).padStart(3, '0')}`;
-      }
-
-      const existing = (code && taskByCode.get(code.toLowerCase())) || taskByTitle.get(title.toLowerCase());
-
-      if (existing && mode !== 'append') {
-        const oldRate = Number(existing.defaultRate) || 0;
-        await orm.update(pieceworkTasks).set({
-          title,
-          category,
-          defaultRate,
-          unit,
-          description: description || existing.description,
-          isActive: 1,
-          isDeleted: 0
-        }).where(eq(pieceworkTasks.id, existing.id));
-        updatedCount++;
-
-        if (oldRate !== defaultRate || existing.title !== title) {
-          await recordTaskRateHistory({
-            taskId: existing.id,
-            taskCode: existing.code,
-            taskTitle: title,
-            oldRate,
-            newRate: defaultRate,
-            changeType: 'excel_import',
-            reason: oldRate !== defaultRate ? `تغییر نرخ پایه از اکسل (${oldRate.toLocaleString()} -> ${defaultRate.toLocaleString()})` : 'به‌روزرسانی عنوان از اکسل',
-            userId: req.user?.id,
-            username: req.user?.username
-          });
-        }
-      } else {
-        const [inserted] = await orm.insert(pieceworkTasks).values({
-          code,
-          title,
-          category,
-          defaultRate,
-          unit,
-          description,
-          isActive: 1,
-          isDeleted: 0
-        }).returning();
-        createdCount++;
-        if (code) taskByCode.set(code.toLowerCase(), inserted);
-        taskByTitle.set(title.toLowerCase(), inserted);
-
-        await recordTaskRateHistory({
-          taskId: inserted.id,
-          taskCode: inserted.code,
-          taskTitle: inserted.title,
-          oldRate: 0,
-          newRate: Number(inserted.defaultRate) || 0,
-          changeType: 'excel_import',
-          reason: 'ورود از فایل اکسل',
-          userId: req.user?.id,
-          username: req.user?.username
-        });
-      }
-    }
-
-    // Auto-create missing task categories
-    for (const catName of addedCategories) {
-      try {
-        await orm.insert(taskCategories).values({
-          name: catName,
-          description: 'دسته‌بندی کاری ایجادشده از طریق واردات اکسل'
-        }).onConflictDoNothing();
-      } catch (_) {}
-    }
+    const result = await PieceworkService.importTasksFromExcel({
+      rows,
+      mode,
+      userId: req.user?.id,
+      username: req.user?.username
+    });
 
     await logActivity({
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
       action: 'IMPORT',
       entity: 'عناوین پرکیسی',
-      description: `واردات اکسل عناوین کاری پرکیسی (${createdCount} عنوان جدید، ${updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
+      description: `واردات اکسل عناوین کاری پرکیسی (${result.createdCount} عنوان جدید، ${result.updatedCount} عنوان ویرایش‌شده، شیوه: ${mode})`
     });
 
     res.json({
       status: 'ok',
-      message: `عملیات واردات با موفقیت انجام شد: ${createdCount} عنوان جدید ایجاد و ${updatedCount} عنوان به‌روزرسانی شدند.`,
-      createdCount,
-      updatedCount,
-      totalProcessed: createdCount + updatedCount
+      message: `عملیات واردات با موفقیت انجام شد: ${result.createdCount} عنوان جدید ایجاد و ${result.updatedCount} عنوان به‌روزرسانی شدند.`,
+      createdCount: result.createdCount,
+      updatedCount: result.updatedCount,
+      totalProcessed: result.totalProcessed
     });
   } catch (err) {
     logger.error({ message: 'Error importing piecework tasks from excel', error: err });
@@ -444,37 +294,23 @@ router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admi
 // POST /api/piecework/tasks/clear-defaults or clear-all
 router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorize('personnel.manage', 'admin'), async (req, res) => {
   try {
-    const deleted = await orm.update(pieceworkTasks)
-      .set({ isDeleted: 1 })
-      .where(eq(pieceworkTasks.isDeleted, 0))
-      .returning({ id: pieceworkTasks.id, title: pieceworkTasks.title, code: pieceworkTasks.code, defaultRate: pieceworkTasks.defaultRate });
-
-    for (const d of deleted) {
-      await recordTaskRateHistory({
-        taskId: d.id,
-        taskCode: d.code,
-        taskTitle: d.title,
-        oldRate: Number(d.defaultRate) || 0,
-        newRate: Number(d.defaultRate) || 0,
-        changeType: 'archived',
-        reason: 'پاکسازی کلی عناوین کاری',
-        userId: req.user?.id,
-        username: req.user?.username
-      });
-    }
+    const count = await PieceworkService.clearAllTasks({
+      userId: req.user?.id,
+      username: req.user?.username
+    });
 
     await logActivity({
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
       action: 'DELETE',
       entity: 'عناوین پرکیسی',
-      description: `پاکسازی کلی عناوین کاری پرکیسی (${deleted.length} مورد حذف شدند)`
+      description: `پاکسازی کلی عناوین کاری پرکیسی (${count} مورد حذف شدند)`
     });
 
     res.json({
       status: 'ok',
-      message: `تمام عناوین کاری (${deleted.length} مورد) با موفقیت حذف شدند.`,
-      count: deleted.length
+      message: `تمام عناوین کاری (${count} مورد) با موفقیت حذف شدند.`,
+      count
     });
   } catch (err) {
     logger.error({ message: 'Error clearing all piecework tasks', error: err });
@@ -488,49 +324,17 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
     const id = Number(req.params.id);
     const { title, category, defaultRate, unit, description, isActive } = req.body;
 
-    const [existing] = await orm.select().from(pieceworkTasks).where(and(eq(pieceworkTasks.id, id), eq(pieceworkTasks.isDeleted, 0)));
-    if (!existing) {
-      return res.status(404).json({ error: 'عنوان کاری یافت نشد' });
-    }
-
-    const oldRate = Number(existing.defaultRate) || 0;
-    const newRate = defaultRate !== undefined ? Number(defaultRate) : oldRate;
-    const newTitle = title !== undefined ? String(title).trim() : existing.title;
-
-    await orm.update(pieceworkTasks).set({
-      title: newTitle,
-      category: category !== undefined ? String(category).trim() : existing.category,
-      defaultRate: newRate,
-      unit: unit !== undefined ? String(unit).trim() : existing.unit,
-      description: description !== undefined ? String(description).trim() : existing.description,
-      isActive: isActive !== undefined ? (isActive ? 1 : 0) : existing.isActive
-    }).where(eq(pieceworkTasks.id, id));
-
-    if (oldRate !== newRate) {
-      await recordTaskRateHistory({
-        taskId: id,
-        taskCode: existing.code,
-        taskTitle: newTitle,
-        oldRate,
-        newRate,
-        changeType: 'rate_change',
-        reason: req.body.reason || `تغییر نرخ پایه از ${oldRate.toLocaleString()} به ${newRate.toLocaleString()}`,
-        userId: req.user?.id,
-        username: req.user?.username
-      });
-    } else if (existing.title !== newTitle) {
-      await recordTaskRateHistory({
-        taskId: id,
-        taskCode: existing.code,
-        taskTitle: newTitle,
-        oldRate,
-        newRate,
-        changeType: 'title_change',
-        reason: `تغییر عنوان از «${existing.title}» به «${newTitle}»`,
-        userId: req.user?.id,
-        username: req.user?.username
-      });
-    }
+    const { previous: existing } = await PieceworkService.updateTask(id, {
+      title,
+      category,
+      defaultRate,
+      unit,
+      description,
+      isActive,
+      reason: req.body.reason,
+      userId: req.user?.id,
+      username: req.user?.username
+    });
 
     await logActivity({
       userId: req.user?.id,
@@ -552,21 +356,7 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
 router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [existing] = await orm.select().from(pieceworkTasks).where(and(eq(pieceworkTasks.id, id), eq(pieceworkTasks.isDeleted, 0)));
-    if (!existing) {
-      return res.status(404).json({ error: 'عنوان کاری یافت نشد' });
-    }
-
-    await orm.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.id, id));
-
-    await recordTaskRateHistory({
-      taskId: id,
-      taskCode: existing.code,
-      taskTitle: existing.title,
-      oldRate: Number(existing.defaultRate) || 0,
-      newRate: Number(existing.defaultRate) || 0,
-      changeType: 'archived',
-      reason: 'حذف/بایگانی عنوان کاری',
+    const existing = await PieceworkService.deleteTask(id, {
       userId: req.user?.id,
       username: req.user?.username
     });
@@ -591,21 +381,7 @@ router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), va
 router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [existing] = await orm.select().from(pieceworkTasks).where(eq(pieceworkTasks.id, id));
-    if (!existing) {
-      return res.status(404).json({ error: 'عنوان کاری یافت نشد' });
-    }
-
-    await orm.update(pieceworkTasks).set({ isDeleted: 0, isActive: 1 }).where(eq(pieceworkTasks.id, id));
-
-    await recordTaskRateHistory({
-      taskId: id,
-      taskCode: existing.code,
-      taskTitle: existing.title,
-      oldRate: Number(existing.defaultRate) || 0,
-      newRate: Number(existing.defaultRate) || 0,
-      changeType: 'restored',
-      reason: 'بازیابی عنوان کاری از بایگانی',
+    const existing = await PieceworkService.restoreTask(id, {
       userId: req.user?.id,
       username: req.user?.username
     });
@@ -683,30 +459,7 @@ router.get('/piecework/categories', async (req, res) => {
 router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'settings.manage'), validate(createTaskCategorySchema), async (req, res) => {
   try {
     const { name, description } = req.body;
-    const catName = String(name).trim();
-
-    // Check if category already exists (active)
-    const [existing] = await orm.select().from(taskCategories).where(and(eq(taskCategories.name, catName), eq(taskCategories.isDeleted, 0)));
-    if (existing) {
-      return res.status(400).json({ error: 'این دسته‌بندی کاری قبلاً ثبت شده است' });
-    }
-
-    // If it was soft-deleted, reactivate it
-    const [deletedExisting] = await orm.select().from(taskCategories).where(and(eq(taskCategories.name, catName), eq(taskCategories.isDeleted, 1)));
-    let inserted;
-    if (deletedExisting) {
-      const [reactivated] = await orm.update(taskCategories).set({
-        isDeleted: 0,
-        description: description ? String(description).trim() : deletedExisting.description
-      }).where(eq(taskCategories.id, deletedExisting.id)).returning();
-      inserted = reactivated;
-    } else {
-      const [newRow] = await orm.insert(taskCategories).values({
-        name: catName,
-        description: description ? String(description).trim() : ''
-      }).returning();
-      inserted = newRow;
-    }
+    const inserted = await PieceworkService.createCategory({ name, description });
 
     await logActivity({
       userId: req.user?.id,
@@ -714,13 +467,12 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
       action: 'CREATE',
       entity: 'دسته‌بندی کاری',
       entityId: inserted.id,
-      description: `تعریف دسته‌بندی کاری جدید «${catName}»`
+      description: `تعریف دسته‌بندی کاری جدید «${inserted.name}»`
     });
 
     res.status(201).json(inserted);
   } catch (err) {
     logger.error({ message: 'Error creating task category', error: err });
-    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
@@ -730,62 +482,21 @@ router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', '
   try {
     const rawId = req.params.id;
     const { name, description } = req.body;
-    const newName = String(name).trim();
 
-    let oldName = '';
-    let targetId: number | null = null;
-
-    if (!isNaN(Number(rawId)) && Number(rawId) > 0) {
-      // It's a numeric ID
-      const numId = Number(rawId);
-      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.id, numId));
-      if (existing) {
-        oldName = existing.name;
-        targetId = existing.id;
-        await orm.update(taskCategories).set({
-          name: newName,
-          description: description !== undefined ? String(description).trim() : existing.description
-        }).where(eq(taskCategories.id, numId));
-      }
-    } else {
-      // It's a string name (e.g. from existing tasks or legacy default)
-      oldName = decodeURIComponent(String(rawId)).trim();
-      // Check if a row with this name already exists in DB
-      const [existingByName] = await orm.select().from(taskCategories).where(eq(taskCategories.name, oldName));
-      if (existingByName) {
-        targetId = existingByName.id;
-        await orm.update(taskCategories).set({
-          name: newName,
-          description: description !== undefined ? String(description).trim() : existingByName.description,
-          isDeleted: 0
-        }).where(eq(taskCategories.id, existingByName.id));
-      } else {
-        const [inserted] = await orm.insert(taskCategories).values({
-          name: newName,
-          description: description ? String(description).trim() : ''
-        }).returning();
-        targetId = inserted.id;
-      }
-    }
-
-    // If the category name was changed, cascade update all tasks using the old category name
-    if (oldName && oldName !== newName) {
-      await orm.update(pieceworkTasks).set({ category: newName }).where(eq(pieceworkTasks.category, oldName));
-    }
+    const result = await PieceworkService.updateCategory(rawId, { name, description });
 
     await logActivity({
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
       action: 'UPDATE',
       entity: 'دسته‌بندی کاری',
-      entityId: targetId || 0,
-      description: `ویرایش دسته‌بندی کاری «${oldName || newName}» به «${newName}»`
+      entityId: result.id || 0,
+      description: `ویرایش دسته‌بندی کاری «${result.name}»`
     });
 
-    res.json({ status: 'ok', id: targetId, name: newName });
+    res.json({ status: 'ok', id: result.id, name: result.name });
   } catch (err) {
     logger.error({ message: 'Error updating task category', error: err });
-    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
@@ -794,43 +505,19 @@ router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', '
 router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), async (req, res) => {
   try {
     const rawId = req.params.id;
-    let deletedName = '';
-
-    if (!isNaN(Number(rawId)) && Number(rawId) > 0) {
-      const numId = Number(rawId);
-      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.id, numId));
-      if (existing) {
-        deletedName = existing.name;
-        await orm.update(taskCategories).set({ isDeleted: 1 }).where(eq(taskCategories.id, numId));
-      }
-    } else {
-      // String ID (e.g. from existing task category or legacy default)
-      deletedName = decodeURIComponent(String(rawId)).trim();
-      const [existing] = await orm.select().from(taskCategories).where(eq(taskCategories.name, deletedName));
-      if (existing) {
-        await orm.update(taskCategories).set({ isDeleted: 1 }).where(eq(taskCategories.id, existing.id));
-      } else {
-        // Insert as soft-deleted record so it doesn't reappear
-        await orm.insert(taskCategories).values({
-          name: deletedName,
-          description: '',
-          isDeleted: 1
-        }).onConflictDoNothing();
-      }
-    }
+    const result = await PieceworkService.deleteCategory(rawId);
 
     await logActivity({
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
       action: 'DELETE',
       entity: 'دسته‌بندی کاری',
-      description: `حذف دسته‌بندی کاری «${deletedName || rawId}»`
+      description: `حذف دسته‌بندی کاری «${result.name}»`
     });
 
-    res.json({ status: 'ok', message: `دسته‌بندی «${deletedName || rawId}» با موفقیت حذف شد` });
+    res.json({ status: 'ok', message: `دسته‌بندی «${result.name}» با موفقیت حذف شد` });
   } catch (err) {
     logger.error({ message: 'Error deleting task category', error: err });
-    // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
 });
@@ -859,32 +546,10 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
 router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('personnel.manage', 'admin'), validate(setPersonnelRateSchema), async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
-
-    const [existing] = await orm.select()
-      .from(pieceworkPersonnelRates)
-      .where(and(
-        eq(pieceworkPersonnelRates.personnelId, Number(personnelId)),
-        eq(pieceworkPersonnelRates.taskId, Number(taskId)),
-        eq(pieceworkPersonnelRates.isDeleted, 0)
-      ));
-
-    if (existing) {
-      await orm.update(pieceworkPersonnelRates)
-        .set({ customRate: Number(customRate), updatedAt: sql`NOW()` })
-        .where(eq(pieceworkPersonnelRates.id, existing.id));
-    } else {
-      await orm.insert(pieceworkPersonnelRates).values({
-        personnelId: Number(personnelId),
-        taskId: Number(taskId),
-        customRate: Number(customRate),
-        isDeleted: 0
-      });
-    }
-
+    await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate });
     res.json({ status: 'ok', message: 'نرخ اختصاصی ثبت شد' });
   } catch (err) {
     logger.error({ message: 'Error setting custom rate', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -961,7 +626,6 @@ router.get('/piecework/logs', async (req, res) => {
     res.json(rows);
   } catch (err) {
     logger.error({ message: 'Error fetching piecework logs', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -978,59 +642,13 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
       return res.status(400).json({ error: 'حداقل یک ردیف کارکرد انتخاب کنید' });
     }
 
-    const insertedIds = [];
-
-    for (const item of items) {
-      const { personnelId, taskId, projectId, date, quantity, unitRate, notes } = item;
-
-      if (!personnelId || !taskId || !date || quantity === undefined) {
-        continue;
-      }
-
-      let finalRate = Number(unitRate);
-      if (isNaN(finalRate) || finalRate < 0) {
-        // Look up custom personnel rate or default task rate
-        const [custom] = await orm.select()
-          .from(pieceworkPersonnelRates)
-          .where(and(
-            eq(pieceworkPersonnelRates.personnelId, Number(personnelId)),
-            eq(pieceworkPersonnelRates.taskId, Number(taskId)),
-            eq(pieceworkPersonnelRates.isDeleted, 0)
-          ));
-
-        if (custom) {
-          finalRate = custom.customRate;
-        } else {
-          const [taskDef] = await orm.select()
-            .from(pieceworkTasks)
-            .where(eq(pieceworkTasks.id, Number(taskId)));
-          finalRate = taskDef ? taskDef.defaultRate : 0;
-        }
-      }
-
-      const qty = parseQuantityOrTime(quantity);
-      const totalAmt = qty * finalRate;
-      const normDate = normalizePersianDate(String(date));
-      const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
-
-      const [inserted] = await orm.insert(pieceworkLogs).values({
-        personnelId: Number(personnelId),
-        taskId: Number(taskId),
-        projectId: projectId ? Number(projectId) : null,
-        date: normDate,
-        dateIso: isoDate,
-        quantity: qty,
-        unitRate: finalRate,
-        totalAmount: totalAmt,
-        notes: notes ? String(notes).trim() : '',
-        status: 'pending',
+    const insertedIds = await PieceworkService.logWorkEntries(
+      items.map(item => ({
+        ...item,
         createdById: currentUserId,
-        createdByUsername: currentUsername,
-        isDeleted: 0
-      }).returning();
-
-      insertedIds.push(inserted.id);
-    }
+        createdByUsername: currentUsername
+      }))
+    );
 
     await logActivity({
       userId: currentUserId,
@@ -1043,7 +661,6 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     res.status(201).json({ status: 'ok', insertedCount: insertedIds.length });
   } catch (err) {
     logger.error({ message: 'Error logging piecework', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -1054,36 +671,11 @@ router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), valida
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
 
-    const [existing] = await orm.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0)));
-    if (!existing) {
-      return res.status(404).json({ error: 'ردیف کارکرد یافت نشد' });
-    }
-
-    if (existing.status === 'paid' || existing.payrollId) {
-      return res.status(400).json({ error: 'کارکردی که در فیش تسویه‌شده درج شده قابل تغییر نیست' });
-    }
-
-    const newDate = date !== undefined ? String(date).trim() : existing.date;
-    const normDate = normalizePersianDate(newDate);
-    const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : existing.dateIso);
-    const newQty = quantity !== undefined ? parseQuantityOrTime(quantity) : existing.quantity;
-    const newRate = unitRate !== undefined ? Number(unitRate) : existing.unitRate;
-    const newTotal = newQty * newRate;
-
-    await orm.update(pieceworkLogs).set({
-      date: normDate,
-      dateIso: isoDate,
-      quantity: newQty,
-      unitRate: newRate,
-      totalAmount: newTotal,
-      projectId: projectId !== undefined ? (projectId ? Number(projectId) : null) : existing.projectId,
-      notes: notes !== undefined ? String(notes).trim() : existing.notes
-    }).where(eq(pieceworkLogs.id, id));
+    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate, notes, projectId });
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
   } catch (err) {
     logger.error({ message: 'Error updating piecework log', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });
@@ -1092,21 +684,11 @@ router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), valida
 router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [existing] = await orm.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0)));
-    if (!existing) {
-      return res.status(404).json({ error: 'ردیف کارکرد یافت نشد' });
-    }
-
-    if (existing.status === 'paid' || existing.payrollId) {
-      return res.status(400).json({ error: 'امکان حذف کارکرد تسویه شده وجود ندارد' });
-    }
-
-    await orm.update(pieceworkLogs).set({ isDeleted: 1 }).where(eq(pieceworkLogs.id, id));
+    await PieceworkService.deleteWorkLog(id);
 
     res.json({ status: 'ok', message: 'کارکرد حذف شد' });
   } catch (err) {
     logger.error({ message: 'Error deleting piecework log', error: err });
-    // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
 });

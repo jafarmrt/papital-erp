@@ -1,8 +1,10 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems, cheques, bankAccounts, treasuryTransactions, customers, personnel } from '../../db/schema.js';
 import { eq, asc, and, or, sql, like, gte, lte, lt, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
+import { normalizeDateToIso } from '../../lib/businessClock.js';
+import { fin } from '../../utils/financialMath.js';
 import type { 
   TrialBalanceRow, 
   FinancialSummaryStats, 
@@ -16,29 +18,32 @@ import type {
 
 export class AccountingReportService {
   /**
-   * Trial Balance (تراز آزمایشی ۲، ۴، ۶ و ۸ ستونی در هر ۴ سطح: گروه، کل، معین، تفصیلی و درختی جامع با پشتیبانی از فیلتر ارز)
+   * Trial Balance (تراز آزمایشی ۲، ۴، ۶ و ۸ ستونی در هر ۴ سطح: گروه، کل، معین، تفصیلی و درختی جامع با پشتیبانی از فیلتر ارز و تراکنش ایزوله)
    */
   static async getTrialBalance(params: {
     level?: 'group' | 'general' | 'subsidiary' | 'detailed' | 'all' | 'tree';
     startDate?: string;
     endDate?: string;
     currency?: string;
-  }): Promise<TrialBalanceRow[]> {
+  }, tx?: DbExecutor): Promise<TrialBalanceRow[]> {
+    const executor = tx || orm;
     const targetLevel = params.level || 'all';
 
     // Base conditions for approved or permanent journal vouchers
     const baseConditions = [
       eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
-    // Fetch all journal items
-    const allItems = await orm.select({
+    // Fetch all journal items using executor (sees uncommitted changes in transactional closing)
+    const allItems = await executor.select({
       voucherId: journalVouchers.id,
       voucherDate: journalVouchers.date,
       voucherNumber: journalVouchers.voucherNumber,
       voucherCurrency: journalVouchers.currency,
       itemCurrency: journalVoucherItems.currency,
+      exchangeRate: journalVoucherItems.exchangeRate,
       accountId: journalVoucherItems.accountId,
       detailedType: journalVoucherItems.detailedType,
       detailedId: journalVoucherItems.detailedId,
@@ -71,22 +76,37 @@ export class AccountingReportService {
     }
     const detailedMap = new Map<string, DetailedAccumulator>();
 
+    // V6.0.3 (TD-142): نرمال‌سازی تاریخ‌های فیلتر به استاندارد ISO جهت پرهیز از عدم تطابق تقویم شمسی/میلادی
+    const normStartDate = normalizeDateToIso(params.startDate);
+    const normEndDate = normalizeDateToIso(params.endDate);
+
     for (const it of allItems) {
+      const rawDebit = Number(it.debit || 0);
+      const rawCredit = Number(it.credit || 0);
+      const itemCur = (it.itemCurrency || it.voucherCurrency || 'IRR').toUpperCase();
+      const rate = Number(it.exchangeRate) || 1;
+
       // Currency filtering if specified
       if (params.currency && params.currency !== 'all') {
-        const itemCur = it.itemCurrency || it.voucherCurrency || 'IRR';
-        if (itemCur !== params.currency) {
+        if (itemCur !== params.currency.toUpperCase()) {
           continue;
         }
       }
 
-      const d = Number(it.debit || 0);
-      const c = Number(it.credit || 0);
-      const accId = it.accountId;
-      const vDate = it.voucherDate;
+      // V6.0.21: If viewing all currencies (consolidated view), convert foreign currencies to base IRR using exchange rate
+      const isBaseView = !params.currency || params.currency === 'all';
+      const d = (isBaseView && itemCur !== 'IRR')
+        ? fin(rawDebit).multiply(rate).round(0).toNumber()
+        : rawDebit;
+      const c = (isBaseView && itemCur !== 'IRR')
+        ? fin(rawCredit).multiply(rate).round(0).toNumber()
+        : rawCredit;
 
-      const isBeforeStart = params.startDate ? vDate < params.startDate : false;
-      const isAfterEnd = params.endDate ? vDate > params.endDate : false;
+      const accId = it.accountId;
+      const vDate = normalizeDateToIso(it.voucherDate) || String(it.voucherDate || '').slice(0, 10);
+
+      const isBeforeStart = normStartDate ? vDate < normStartDate : false;
+      const isAfterEnd = normEndDate ? vDate > normEndDate : false;
 
       if (isAfterEnd) {
         continue; // Skip transactions beyond end date
@@ -127,7 +147,7 @@ export class AccountingReportService {
       }
     }
 
-    const allAccs = await ChartOfAccountsService.getAllAccounts();
+    const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     const accMap = new Map(allAccs.map(a => [a.id, a]));
 
     // Aggregate from subsidiary up to general and group accounts
@@ -330,6 +350,7 @@ export class AccountingReportService {
   }> {
     const conditions = [
       eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
@@ -482,6 +503,7 @@ export class AccountingReportService {
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .where(and(
       eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ));
 
@@ -603,6 +625,7 @@ export class AccountingReportService {
     // V2.0.0: فیلترهای دوره — مانده ابتدای دوره جداگانه محاسبه می‌شود
     const periodConditions = [
       eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
@@ -659,6 +682,7 @@ export class AccountingReportService {
       // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
       const priorConds: (SQL | undefined)[] = [
         eq(journalVouchers.isDeleted, 0),
+        eq(journalVoucherItems.isDeleted, 0),
         or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
       ];
       if (params.accountId) priorConds.push(eq(journalVoucherItems.accountId, params.accountId));
@@ -951,6 +975,7 @@ export class AccountingReportService {
 
     const baseConditions: (SQL | undefined)[] = [
       eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
       voucherStatusCondition,
       ...partyMatchConditions
     ];
@@ -1102,7 +1127,7 @@ export class AccountingReportService {
   /**
    * Income Statement / Profit & Loss (صورت سود و زیان با پشتیبانی از ارز)
    */
-  static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string }): Promise<{
+  static async getIncomeStatement(params: { startDate?: string; endDate?: string; currency?: string }, tx?: DbExecutor): Promise<{
     revenues: { code: string; name: string; amount: number }[];
     totalRevenue: number;
     costOfSales: { code: string; name: string; amount: number }[];
@@ -1113,7 +1138,7 @@ export class AccountingReportService {
     operatingProfit: number;
     netProfit: number;
   }> {
-    const trial = await this.getTrialBalance({ level: 'subsidiary', ...params });
+    const trial = await this.getTrialBalance({ level: 'subsidiary', ...params }, tx);
 
     const revenues: { code: string; name: string; amount: number }[] = [];
     const costOfSales: { code: string; name: string; amount: number }[] = [];
@@ -1165,7 +1190,7 @@ export class AccountingReportService {
   /**
    * Balance Sheet (ترازنامه با پشتیبانی از ارز)
    */
-  static async getBalanceSheet(params: { date?: string; currency?: string }): Promise<{
+  static async getBalanceSheet(params: { date?: string; currency?: string }, tx?: DbExecutor): Promise<{
     currentAssets: { code: string; name: string; amount: number }[];
     totalCurrentAssets: number;
     nonCurrentAssets: { code: string; name: string; amount: number }[];
@@ -1178,7 +1203,7 @@ export class AccountingReportService {
     netProfitPeriod: number;
     totalLiabilitiesAndEquity: number;
   }> {
-    const trial = await this.getTrialBalance({ level: 'subsidiary', endDate: params.date, currency: params.currency });
+    const trial = await this.getTrialBalance({ level: 'subsidiary', endDate: params.date, currency: params.currency }, tx);
 
     const currentAssets: { code: string; name: string; amount: number }[] = [];
     const nonCurrentAssets: { code: string; name: string; amount: number }[] = [];

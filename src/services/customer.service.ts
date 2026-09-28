@@ -1,0 +1,446 @@
+import { eq, and, sql } from 'drizzle-orm';
+import { orm, type DbExecutor } from '../db/drizzle.js';
+import { customers } from '../db/schema.js';
+import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
+import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
+
+export interface ContactPerson {
+  id?: string;
+  name?: string;
+  role?: string;
+  phone?: string;
+  isPrimary?: boolean;
+}
+
+export interface BankInfo {
+  bankName?: string;
+  accountNumber?: string;
+  shaba?: string;
+  cardNumber?: string;
+}
+
+export interface CreateCustomerInput {
+  name: string;
+  contactName?: string;
+  country?: string;
+  province?: string;
+  city?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+  partyType?: 'customer' | 'supplier' | 'both';
+  supplierCategory?: string;
+  bankInfo?: BankInfo;
+  contacts?: ContactPerson[];
+}
+
+export interface UpdateCustomerInput extends CreateCustomerInput {
+  version?: number;
+  expectedVersion?: number;
+}
+
+export interface BulkImportRowInput {
+  id?: number | string;
+  name: string;
+  contactName?: string;
+  phone?: string;
+  partyType?: string;
+  supplierCategory?: string;
+  country?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+  notes?: string;
+  bankName?: string;
+  accountNumber?: string;
+  shaba?: string;
+  cardNumber?: string;
+  bankInfo?: BankInfo;
+}
+
+export interface BulkImportResult {
+  success: boolean;
+  createdCount: number;
+  updatedCount: number;
+  totalProcessed: number;
+  errors: Array<{ row: number; name?: string; message: string }>;
+  createdRecords: Array<{ id: number; name: string; partyType: string; phone?: string }>;
+  updatedRecords: Array<{ id: number; name: string; partyType: string; updatedData: Partial<typeof customers.$inferInsert> }>;
+}
+
+export class CustomerService {
+  /**
+   * Retrieves a customer by ID with soft-delete filter
+   */
+  static async getById(id: number, executor: DbExecutor = orm): Promise<typeof customers.$inferSelect | null> {
+    const [row] = await executor
+      .select()
+      .from(customers)
+      .where(and(eq(customers.id, id), eq(customers.isDeleted, 0)));
+    return row || null;
+  }
+
+  /**
+   * Creates a new customer/supplier with uniqueness validation
+   */
+  static async createCustomer(
+    data: CreateCustomerInput,
+    executor: DbExecutor = orm
+  ): Promise<typeof customers.$inferSelect> {
+    const name = data.name.trim();
+    let contactName = data.contactName?.trim() || '';
+    let phone = data.phone?.trim() || '';
+    const partyType = data.partyType || 'customer';
+    const supplierCategory = data.supplierCategory?.trim() || '';
+    const bankInfo = data.bankInfo || {};
+    const country = data.country?.trim() || 'ایران';
+    const province = data.province?.trim() || '';
+    const city = data.city?.trim() || '';
+    const address = data.address?.trim() || '';
+    const notes = data.notes?.trim() || '';
+    const contacts = data.contacts || [];
+
+    // Auto-derive contactName and phone from contacts if available
+    const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
+    if (activeContacts.length > 0) {
+      const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
+      if (!contactName) {
+        contactName = primary.role ? `${primary.name} (${primary.role})` : (primary.name || '');
+      }
+      if (!phone) {
+        const allPhones = activeContacts.map((c) => c.phone).filter(Boolean);
+        phone = Array.from(new Set(allPhones)).join(', ');
+      }
+    }
+
+    if (name) {
+      const existingName = await executor
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
+      if (existingName.length > 0) {
+        throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
+      }
+    }
+
+    if (phone) {
+      const existingPhone = await executor
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
+      if (existingPhone.length > 0) {
+        throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
+      }
+    }
+
+    const createdAt = new Date().toISOString();
+    const [created] = await executor
+      .insert(customers)
+      .values({
+        name,
+        contactName,
+        country,
+        province,
+        phone,
+        city,
+        address,
+        notes,
+        partyType,
+        supplierCategory,
+        bankInfo,
+        contacts: activeContacts,
+        createdAt,
+        isDeleted: 0,
+        version: 1
+      })
+      .returning();
+
+    return created;
+  }
+
+  /**
+   * Updates an existing customer with OCC verification and row-level safety
+   */
+  static async updateCustomer(
+    id: number,
+    data: UpdateCustomerInput,
+    executor: DbExecutor = orm
+  ): Promise<{ previous: typeof customers.$inferSelect; current: typeof customers.$inferSelect }> {
+    const customerId = Number(id);
+    const [prevCust] = await executor
+      .select()
+      .from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.isDeleted, 0)));
+
+    if (!prevCust) {
+      throw new NotFoundError('طرف حساب مورد نظر یافت نشد.');
+    }
+
+    if (data.version !== undefined || data.expectedVersion !== undefined) {
+      checkOccVersion(prevCust, {
+        entityType: 'Customer',
+        entityId: customerId,
+        expectedVersion: Number(data.expectedVersion ?? data.version)
+      });
+    }
+
+    const name = data.name.trim();
+    let contactName = data.contactName?.trim() || '';
+    let phone = data.phone?.trim() || '';
+    const partyType = data.partyType || 'customer';
+    const supplierCategory = data.supplierCategory?.trim() || '';
+    const bankInfo = data.bankInfo || {};
+    const country = data.country?.trim() || 'ایران';
+    const province = data.province?.trim() || '';
+    const city = data.city?.trim() || '';
+    const address = data.address?.trim() || '';
+    const notes = data.notes?.trim() || '';
+    const contacts = data.contacts || [];
+
+    const activeContacts = (contacts as ContactPerson[]).filter((c) => c.name?.trim() || c.phone?.trim());
+    if (activeContacts.length > 0) {
+      const primary = activeContacts.find((c) => c.isPrimary) || activeContacts[0];
+      if (!contactName) {
+        contactName = primary.role ? `${primary.name} (${primary.role})` : (primary.name || '');
+      }
+      if (!phone) {
+        const allPhones = activeContacts.map((c) => c.phone).filter(Boolean);
+        phone = Array.from(new Set(allPhones)).join(', ');
+      }
+    }
+
+    if (name) {
+      const existingName = await executor
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
+      if (existingName.length > 0 && existingName[0].id !== customerId) {
+        throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
+      }
+    }
+
+    if (phone) {
+      const existingPhone = await executor
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
+      if (existingPhone.length > 0 && existingPhone[0].id !== customerId) {
+        throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
+      }
+    }
+
+    const updatedData: Partial<typeof customers.$inferInsert> = {
+      name,
+      contactName,
+      country,
+      province,
+      phone,
+      city,
+      address,
+      notes,
+      partyType,
+      supplierCategory,
+      bankInfo,
+      contacts: activeContacts,
+      version: nextVersion(prevCust.version)
+    };
+
+    const [current] = await executor
+      .update(customers)
+      .set(updatedData)
+      .where(sql`${customers.id} = ${customerId}`)
+      .returning();
+
+    return { previous: prevCust, current: current || { ...prevCust, ...updatedData } };
+  }
+
+  /**
+   * Soft-deletes a customer (isDeleted = 1)
+   */
+  static async deleteCustomer(
+    id: number,
+    executor: DbExecutor = orm
+  ): Promise<typeof customers.$inferSelect> {
+    const customerId = Number(id);
+    const [delCust] = await executor
+      .select()
+      .from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.isDeleted, 0)));
+
+    if (!delCust) {
+      throw new NotFoundError('مشتری یافت نشد.');
+    }
+
+    await executor
+      .update(customers)
+      .set({ isDeleted: 1 })
+      .where(sql`${customers.id} = ${customerId}`);
+
+    return delCust;
+  }
+
+  /**
+   * Bulk imports or updates counterparties from Excel dataset
+   */
+  static async bulkImport(
+    rows: BulkImportRowInput[],
+    updateIfExists: boolean = true,
+    executor: DbExecutor = orm
+  ): Promise<BulkImportResult> {
+    let createdCount = 0;
+    let updatedCount = 0;
+    const errors: Array<{ row: number; name?: string; message: string }> = [];
+    const createdRecords: Array<{ id: number; name: string; partyType: string; phone?: string }> = [];
+    const updatedRecords: Array<{ id: number; name: string; partyType: string; updatedData: Partial<typeof customers.$inferInsert> }> = [];
+
+    const existingList = await executor.select().from(customers).where(eq(customers.isDeleted, 0));
+
+    const idMap = new Map<number, typeof customers.$inferSelect>();
+    const nameMap = new Map<string, typeof customers.$inferSelect>();
+    const phoneMap = new Map<string, typeof customers.$inferSelect>();
+
+    existingList.forEach((c) => {
+      idMap.set(c.id, c);
+      if (c.name && c.name.trim()) {
+        nameMap.set(c.name.trim().toLowerCase(), c);
+      }
+      if (c.phone && c.phone.trim()) {
+        phoneMap.set(c.phone.trim(), c);
+      }
+    });
+
+    for (let i = 0; i < rows.length; i++) {
+      const item = rows[i];
+      const rowIndex = i + 1;
+
+      try {
+        const name = String(item.name || '').trim();
+        if (!name) {
+          errors.push({ row: rowIndex, message: 'نام طرف حساب مشخص نشده است.' });
+          continue;
+        }
+
+        const id = item.id ? Number(item.id) : undefined;
+        const contactName = String(item.contactName || '').trim();
+        const phone = String(item.phone || '').trim();
+        const rawType = String(item.partyType || '').trim().toLowerCase();
+        let partyType: 'customer' | 'supplier' | 'both' = 'customer';
+        if (rawType.includes('تامین') || rawType === 'supplier') {
+          partyType = 'supplier';
+        } else if (rawType.includes('هر دو') || rawType.includes('مشتری و تامین') || rawType === 'both') {
+          partyType = 'both';
+        } else {
+          partyType = 'customer';
+        }
+
+        const supplierCategory = String(item.supplierCategory || '').trim();
+        const country = String(item.country || 'ایران').trim();
+        const province = String(item.province || '').trim();
+        const city = String(item.city || '').trim();
+        const address = String(item.address || '').trim();
+        const notes = String(item.notes || '').trim();
+
+        const bankInfo = {
+          bankName: String(item.bankName || item.bankInfo?.bankName || '').trim(),
+          accountNumber: String(item.accountNumber || item.bankInfo?.accountNumber || '').trim(),
+          shaba: String(item.shaba || item.bankInfo?.shaba || '').trim(),
+          cardNumber: String(item.cardNumber || item.bankInfo?.cardNumber || '').trim(),
+        };
+
+        // Match existing counterparty
+        let matchedCust: typeof customers.$inferSelect | undefined;
+        if (id && idMap.has(id)) {
+          matchedCust = idMap.get(id);
+        } else if (nameMap.has(name.toLowerCase())) {
+          matchedCust = nameMap.get(name.toLowerCase());
+        } else if (phone && phoneMap.has(phone)) {
+          matchedCust = phoneMap.get(phone);
+        }
+
+        if (matchedCust) {
+          if (updateIfExists) {
+            const updatedData: Partial<typeof customers.$inferInsert> = {
+              name,
+              contactName: contactName || matchedCust.contactName,
+              country: country || matchedCust.country,
+              province: province || matchedCust.province,
+              city: city || matchedCust.city,
+              phone: phone || matchedCust.phone,
+              address: address || matchedCust.address,
+              notes: notes || matchedCust.notes,
+              partyType,
+              supplierCategory: supplierCategory || matchedCust.supplierCategory,
+              bankInfo: {
+                ...((matchedCust.bankInfo as Record<string, unknown>) || {}),
+                ...(bankInfo.bankName ? { bankName: bankInfo.bankName } : {}),
+                ...(bankInfo.accountNumber ? { accountNumber: bankInfo.accountNumber } : {}),
+                ...(bankInfo.shaba ? { shaba: bankInfo.shaba } : {}),
+                ...(bankInfo.cardNumber ? { cardNumber: bankInfo.cardNumber } : {}),
+              },
+              version: nextVersion(matchedCust.version)
+            };
+
+            await executor
+              .update(customers)
+              .set(updatedData)
+              .where(eq(customers.id, matchedCust.id));
+
+            updatedRecords.push({ id: matchedCust.id, name, partyType, updatedData });
+            updatedCount++;
+          } else {
+            errors.push({
+              row: rowIndex,
+              name,
+              message: `طرف حساب "${name}" از قبل در سیستم وجود دارد و گزینه به‌روزرسانی غیرفعال بود.`
+            });
+          }
+        } else {
+          const [newCust] = await executor
+            .insert(customers)
+            .values({
+              name,
+              contactName,
+              country,
+              province,
+              city,
+              phone,
+              address,
+              notes,
+              partyType,
+              supplierCategory,
+              bankInfo,
+              contacts: contactName || phone ? [{ id: '1', name: contactName, role: 'رابط اصلی', phone, isPrimary: true }] : [],
+              createdAt: new Date().toISOString(),
+              isDeleted: 0,
+              version: 1
+            })
+            .returning();
+
+          idMap.set(newCust.id, newCust);
+          nameMap.set(name.toLowerCase(), newCust);
+          if (phone) phoneMap.set(phone, newCust);
+
+          createdRecords.push({ id: newCust.id, name, partyType, phone });
+          createdCount++;
+        }
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : 'خطای ناشناخته در پردازش سطر';
+        errors.push({
+          row: rowIndex,
+          name: rows[i]?.name,
+          message: errorMsg
+        });
+      }
+    }
+
+    return {
+      success: true,
+      createdCount,
+      updatedCount,
+      totalProcessed: rows.length,
+      errors,
+      createdRecords,
+      updatedRecords
+    };
+  }
+}

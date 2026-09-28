@@ -133,7 +133,7 @@ export function resolveJalaliFiscalYear(dateLike?: string | number | null): numb
   if (isoMatch) {
     const [, gy, gm, gd] = isoMatch;
     const gY = parseInt(gy, 10), gM = parseInt(gm, 10), gD = parseInt(gd, 10);
-    let jy = gY - 622;
+    let jy = gY - 621;
     // Nowruz حدود 21 مارس؛ قبل از آن هنوز سال مالی جلالی قبل است
     const beforeNowruz = gM < 3 || (gM === 3 && gD < 21);
     if (beforeNowruz) jy -= 1;
@@ -148,3 +148,90 @@ export function resolveJalaliFiscalYear(dateLike?: string | number | null): numb
   }
   return fallback;
 }
+
+/**
+ * تبدیل تاریخ جلالی به میلادی استاندارد (الگوریتم دقیق سال‌های ۱۳۰۰ تا ۱۵۰۰)
+ */
+export function jalaliToGregorian(jy: number, jm: number, jd: number): { gy: number; gm: number; gd: number } {
+  jy = Math.floor(jy);
+  jm = Math.floor(jm);
+  jd = Math.floor(jd);
+
+  const gy = jy <= 979 ? 621 : 1600;
+  let jYear = jy - (jy <= 979 ? 0 : 979);
+
+  let days =
+    365 * jYear +
+    Math.floor(jYear / 33) * 8 +
+    Math.floor(((jYear % 33) + 3) / 4) +
+    78 +
+    jd +
+    (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
+
+  let gYear = gy + 400 * Math.floor(days / 146097);
+  days %= 146097;
+
+  if (days > 36524) {
+    gYear += 100 * Math.floor(--days / 36524);
+    days %= 36524;
+    if (days >= 365) days++;
+  }
+
+  gYear += 4 * Math.floor(days / 1461);
+  days %= 1461;
+
+  if (days > 365) {
+    gYear += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+
+  let gDay = days + 1;
+  const isLeap = (gYear % 4 === 0 && gYear % 100 !== 0) || gYear % 400 === 0;
+  const salA = [0, 31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let gMonth = 0;
+  while (gMonth < 13 && gDay > salA[gMonth]) {
+    gDay -= salA[gMonth];
+    gMonth++;
+  }
+
+  return { gy: gYear, gm: gMonth, gd: gDay };
+}
+
+/**
+ * نرمال‌سازی هر نوع تاریخ ورودی (جلالی یا میلادی) به فرمت یکپارچه ISO میلادی: `YYYY-MM-DD`
+ */
+export function normalizeDateToIso(dateLike?: string | number | null): string | undefined {
+  if (dateLike === undefined || dateLike === null) return undefined;
+  const s = String(dateLike).trim();
+  if (!s) return undefined;
+
+  // تطبیق با الگوی تاریخ ۳ تکه‌ای: YYYY-MM-DD یا YYYY/MM/DD
+  const partsMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (partsMatch) {
+    const y = parseInt(partsMatch[1], 10);
+    const m = parseInt(partsMatch[2], 10);
+    const d = parseInt(partsMatch[3], 10);
+
+    // اگر سال در بازه جلالی (۱۳۰۰ تا ۱۵۰۰) باشد، به میلادی تبدیل می‌شود
+    if (y >= 1300 && y <= 1500) {
+      const g = jalaliToGregorian(y, m, d);
+      return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+    }
+
+    // تاریخ میلادی
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  // اگر سال ۴ رقمی تنها بود
+  const yearMatch = s.match(/^(\d{4})$/);
+  if (yearMatch) {
+    const y = parseInt(yearMatch[1], 10);
+    if (y >= 1300 && y <= 1500) {
+      const g = jalaliToGregorian(y, 12, 29);
+      return `${g.gy}-${String(g.gm).padStart(2, '0')}-${String(g.gd).padStart(2, '0')}`;
+    }
+  }
+
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+

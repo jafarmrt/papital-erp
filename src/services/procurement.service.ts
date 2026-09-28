@@ -70,22 +70,66 @@ export interface ConvertToOrdersInput {
 export class ProcurementService {
   /**
    * Atomic sequential code generation for Purchase Requisitions (e.g. PR-1405-0001)
+   * V6 Sub-phase 6.4 (TD-158 / RULE 04): Standardized Read-Calculate-Update pattern with row-level lock.
    */
   static async generateRequisitionCode(tx: DbClient = orm): Promise<string> {
     const fiscalYear = resolveJalaliFiscalYear();
     const docType = 'PR';
 
-    // Atomic upsert into documentRefCounters
-    const updated = await tx
-      .insert(documentRefCounters)
-      .values({ docType, fiscalYear, lastRefNumber: 1 })
-      .onConflictDoUpdate({
-        target: [documentRefCounters.docType, documentRefCounters.fiscalYear],
-        set: { lastRefNumber: sql`${documentRefCounters.lastRefNumber} + 1` }
-      })
-      .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
+    // 1. Try to fetch and lock existing counter row
+    const [counter] = await tx
+      .select()
+      .from(documentRefCounters)
+      .where(and(
+        eq(documentRefCounters.docType, docType),
+        eq(documentRefCounters.fiscalYear, fiscalYear)
+      ))
+      .for('update');
 
-    const seq = updated[0]?.lastRefNumber || 1;
+    let seq: number;
+    if (counter) {
+      seq = (counter.lastRefNumber || 0) + 1;
+      await tx
+        .update(documentRefCounters)
+        .set({ lastRefNumber: seq })
+        .where(and(
+          eq(documentRefCounters.docType, docType),
+          eq(documentRefCounters.fiscalYear, fiscalYear)
+        ));
+    } else {
+      // Cold-start seed or concurrency race handling via onConflictDoNothing
+      const inserted = await tx
+        .insert(documentRefCounters)
+        .values({ docType, fiscalYear, lastRefNumber: 1 })
+        .onConflictDoNothing({
+          target: [documentRefCounters.docType, documentRefCounters.fiscalYear]
+        })
+        .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
+
+      if (inserted.length > 0) {
+        seq = 1;
+      } else {
+        // Another concurrent worker inserted the initial seed — lock and increment safely
+        const [retryCounter] = await tx
+          .select()
+          .from(documentRefCounters)
+          .where(and(
+            eq(documentRefCounters.docType, docType),
+            eq(documentRefCounters.fiscalYear, fiscalYear)
+          ))
+          .for('update');
+
+        seq = (retryCounter?.lastRefNumber || 0) + 1;
+        await tx
+          .update(documentRefCounters)
+          .set({ lastRefNumber: seq })
+          .where(and(
+            eq(documentRefCounters.docType, docType),
+            eq(documentRefCounters.fiscalYear, fiscalYear)
+          ));
+      }
+    }
+
     const padded = String(seq).padStart(4, '0');
     return `PR-${fiscalYear}-${padded}`;
   }

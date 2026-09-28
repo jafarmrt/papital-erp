@@ -1,12 +1,17 @@
 import { eq, and, desc, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, itemPrices, warehouses, transactions, itemCodeCounters } from '../../db/schema.js';
+import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, journalVouchers } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { uploadBase64ToStorage } from '../../lib/storage.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../../utils.js';
 import { ItemPricingService } from './itemPricing.service.js';
-import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { ValidationError, NotFoundError, ConflictError } from '../../errors/customErrors.js';
+import { DocumentService } from '../document.service.js';
+import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
+import { nextVersion } from '../../lib/occHelper.js';
+import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
@@ -497,8 +502,9 @@ export class ItemCatalogService {
         if (matchedItem) {
           targetItemId = matchedItem.id;
           const existingStocks = (matchedItem.stocks as Record<string, number>) || {};
-          const mergedStocks = { ...existingStocks, ...stockValues };
-          const finalStock = hasCustomStockInRow ? currentStock : matchedItem.currentStock;
+          const itemWac = !isNaN(weightedAverageCost) && weightedAverageCost > 0
+            ? weightedAverageCost
+            : Number(matchedItem?.weightedAverageCost || 0);
 
           await tx.update(items).set({
             name: name || matchedItem.name,
@@ -507,17 +513,13 @@ export class ItemCatalogService {
             unit: unit || matchedItem.unit,
             category: category || matchedItem.category,
             reorderPoint: isNaN(reorderPoint) ? matchedItem.reorderPoint : reorderPoint,
-            weightedAverageCost: isNaN(weightedAverageCost) ? matchedItem.weightedAverageCost : weightedAverageCost,
+            weightedAverageCost: itemWac,
             color: color || matchedItem.color,
             size: size || matchedItem.size,
             weight: weight !== null && !isNaN(weight) ? weight : matchedItem.weight,
             material: material || matchedItem.material,
             image: image || matchedItem.image,
-            stocks: mergedStocks,
-            currentStock: finalStock
           }).where(eq(items.id, targetItemId));
-
-          const itemWac = isNaN(weightedAverageCost) ? Number(matchedItem?.weightedAverageCost || 0) : weightedAverageCost;
 
           if (hasCustomStockInRow && Object.keys(stockValues).length > 0) {
             for (const whCode of Object.keys(stockValues)) {
@@ -525,72 +527,62 @@ export class ItemCatalogService {
               const newQty = Number(stockValues[whCode] || 0);
               const diff = newQty - oldQty;
               if (diff > 0) {
-                await tx.insert(transactions).values({
+                await DocumentService.applyStockMovement(tx, {
                   itemId: targetItemId,
-                  type: 'in',
+                  inOut: 'in',
                   quantity: diff,
-                  unitPrice: itemWac,
-                  totalPrice: fin(itemWac).multiply(diff).round(4).toNumber(),
+                  price: itemWac,
                   date: todayStr,
                   documentType: 'audit',
                   documentRef: 'درون‌ریزی اکسل',
-                  location: whCode,
-                  notes: 'افزایش موجودی از اکسل',
-                  createdBy: currentUser,
-                  isDeleted: 0
+                  user: currentUser,
+                  targetLoc: whCode,
+                  notes: 'افزایش موجودی از اکسل'
                 });
               } else if (diff < 0) {
-                // V3.0.6 (BUG-02): کاهش موجودی نیز باید در کاردکس ثبت شود؛ در غیر این
-                // صورت Rebuild رویداد-محور (Event Sourcing) موجودی واردشده از اکسل را
-                // به مقدار قدیمی برمی‌گرداند و Three-Way Sync می‌شکند.
-                await tx.insert(transactions).values({
+                await DocumentService.applyStockMovement(tx, {
                   itemId: targetItemId,
-                  type: 'out',
+                  inOut: 'out',
                   quantity: Math.abs(diff),
-                  unitPrice: itemWac,
-                  totalPrice: fin(itemWac).multiply(Math.abs(diff)).round(4).toNumber(),
+                  price: itemWac,
                   date: todayStr,
                   documentType: 'audit',
                   documentRef: 'درون‌ریزی اکسل',
-                  location: whCode,
-                  notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)',
-                  createdBy: currentUser,
-                  isDeleted: 0
+                  user: currentUser,
+                  targetLoc: whCode,
+                  notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)'
                 });
               }
             }
-          } else {
+          } else if (hasCustomStockInRow || currentStock !== undefined) {
+            const finalStock = hasCustomStockInRow ? currentStock : matchedItem.currentStock;
             const diff = finalStock - (matchedItem.currentStock || 0);
+            const defaultLoc = await resolveWarehouseCode(tx, '');
             if (diff > 0) {
-              await tx.insert(transactions).values({
+              await DocumentService.applyStockMovement(tx, {
                 itemId: targetItemId,
-                type: 'in',
+                inOut: 'in',
                 quantity: diff,
-                unitPrice: itemWac,
-                totalPrice: fin(itemWac).multiply(diff).round(4).toNumber(),
+                price: itemWac,
                 date: todayStr,
                 documentType: 'audit',
                 documentRef: 'درون‌ریزی اکسل',
-                location: 'main',
-                notes: 'افزایش موجودی از اکسل',
-                createdBy: currentUser,
-                isDeleted: 0
+                user: currentUser,
+                targetLoc: defaultLoc,
+                notes: 'افزایش موجودی از اکسل'
               });
             } else if (diff < 0) {
-              // V3.0.6 (BUG-02): ثبت کاهش موجودی در کاردکس
-              await tx.insert(transactions).values({
+              await DocumentService.applyStockMovement(tx, {
                 itemId: targetItemId,
-                type: 'out',
+                inOut: 'out',
                 quantity: Math.abs(diff),
-                unitPrice: itemWac,
-                totalPrice: fin(itemWac).multiply(Math.abs(diff)).round(4).toNumber(),
+                price: itemWac,
                 date: todayStr,
                 documentType: 'audit',
                 documentRef: 'درون‌ریزی اکسل',
-                location: 'main',
-                notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)',
-                createdBy: currentUser,
-                isDeleted: 0
+                user: currentUser,
+                targetLoc: defaultLoc,
+                notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)'
               });
             }
           }
@@ -612,8 +604,8 @@ export class ItemCatalogService {
             weight: weight !== null && !isNaN(weight) ? weight : null,
             material: material || null,
             image: image || '',
-            stocks: stockValues,
-            currentStock: currentStock || 0,
+            stocks: {},
+            currentStock: 0,
             isDeleted: 0
           }).returning({ id: items.id });
 
@@ -623,36 +615,33 @@ export class ItemCatalogService {
             for (const whCode of Object.keys(stockValues)) {
               const qty = Number(stockValues[whCode] || 0);
               if (qty > 0) {
-                await tx.insert(transactions).values({
+                await DocumentService.applyStockMovement(tx, {
                   itemId: targetItemId,
-                  type: 'in',
+                  inOut: 'in',
                   quantity: qty,
-                  unitPrice: itemWac,
-                  totalPrice: fin(itemWac).multiply(qty).round(4).toNumber(),
+                  price: itemWac,
                   date: todayStr,
                   documentType: 'audit',
                   documentRef: 'درون‌ریزی اکسل',
-                  location: whCode,
-                  notes: 'موجودی اولیه از فایل اکسل',
-                  createdBy: currentUser,
-                  isDeleted: 0
+                  user: currentUser,
+                  targetLoc: whCode,
+                  notes: 'موجودی اولیه از فایل اکسل'
                 });
               }
             }
           } else if (currentStock > 0) {
-            await tx.insert(transactions).values({
+            const defaultLoc = await resolveWarehouseCode(tx, '');
+            await DocumentService.applyStockMovement(tx, {
               itemId: targetItemId,
-              type: 'in',
+              inOut: 'in',
               quantity: currentStock,
-              unitPrice: itemWac,
-              totalPrice: fin(itemWac).multiply(currentStock).round(4).toNumber(),
+              price: itemWac,
               date: todayStr,
               documentType: 'audit',
               documentRef: 'درون‌ریزی اکسل',
-              location: 'main',
-              notes: 'موجودی اولیه از فایل اکسل',
-              createdBy: currentUser,
-              isDeleted: 0
+              user: currentUser,
+              targetLoc: defaultLoc,
+              notes: 'موجودی اولیه از فایل اکسل'
             });
           }
 
@@ -760,4 +749,332 @@ export class ItemCatalogService {
       errors
     };
   }
+
+  /**
+   * Soft deletes an item after validating that it has no non-zero physical inventory and no active document references
+   */
+  static async deleteItem(id: number, executor: DbExecutor = orm): Promise<typeof items.$inferSelect> {
+    const itemId = Number(id);
+    const [delItem] = await executor.select().from(items).where(eq(items.id, itemId));
+    if (!delItem || delItem.isDeleted === 1) {
+      throw new NotFoundError('کالا یافت نشد.');
+    }
+
+    // V9-2.2: منع حذف کالای دارای موجودی — ارزش موجودی از ارزیابی انبار حذف می‌شود اما ردیف‌های کاردکس باقی می‌مانند
+    const currentStockNum = Number(delItem.currentStock || 0);
+    if (currentStockNum > 0) {
+      throw new ConflictError(
+        `حذف کالای «${delItem.name}» مجاز نیست زیرا دارای ${currentStockNum} ${delItem.unit || 'عدد'} موجودی در انبار است. ابتدا موجودی را از طریق سند انبارگردانی یا حواله به صفر برسانید.`
+      );
+    }
+
+    // V9-2.2: منع حذف کالای دارای ارجاع در اسناد فعال (غیرحذف‌شده)
+    const [activeDocRefsResult] = await executor
+      .select({ id: documentItems.id })
+      .from(documentItems)
+      .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
+      .limit(1);
+
+    if (activeDocRefsResult) {
+      throw new ConflictError(
+        `حذف کالای «${delItem.name}» مجاز نیست زیرا در ردیف‌های اسناد فعال (فاکتور/رسید/حواله) استفاده شده است. برای حفظ یکپارچگی تاریخچه اسناد، ابتدا باید اسناد مرتبط حذف شوند.`
+      );
+    }
+
+    await executor.update(items).set({ isDeleted: 1 }).where(eq(items.id, itemId));
+
+    return delItem;
+  }
+
+  /**
+   * Creates a new item with initial inventory stocks in a domain-level atomic transaction (RULE 01 compliant)
+   */
+  static async createItem(
+    body: Record<string, any>,
+    user?: { id?: number; username?: string; fullName?: string; full_name?: string },
+    externalTx?: DbExecutor
+  ): Promise<{
+    item: typeof items.$inferSelect;
+    insertedId: number;
+    stockValues: Record<string, number>;
+    computedStock: number;
+    imageUrl: string;
+    thumbnailUrl: string;
+  }> {
+    const { type, name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = body;
+
+    const executeWork = async (tx: DbExecutor) => {
+      const [existing] = await tx.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
+      if (existing) {
+        throw new ConflictError('کد کالا تکراری است و مجاز به استفاده مجدد نیستید.');
+      }
+
+      const [existingName] = await tx.select({ id: items.id, code: items.code }).from(items)
+        .where(and(eq(items.name, name), eq(items.isDeleted, 0)));
+      if (existingName) {
+        throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است. ثبت دو محصول با نام مشابه امکان‌پذیر نیست.`);
+      }
+
+      const whs = await tx.select({ code: warehouses.code }).from(warehouses);
+      let computedStock = 0;
+      const stockValues: Record<string, number> = {};
+
+      for (const wh of whs) {
+        const bodyKey = `stock_${wh.code}`;
+        const val = body[bodyKey] !== undefined ? Number(body[bodyKey]) : 0;
+        stockValues[wh.code] = val;
+        computedStock += val;
+      }
+
+      const currentStockBody = Number(body.current_stock || 0);
+      if (computedStock === 0 && currentStockBody > 0 && whs.length > 0) {
+        const defaultWh = whs[0].code;
+        stockValues[defaultWh] = currentStockBody;
+        computedStock = currentStockBody;
+      }
+
+      const imageUrl = image && image.startsWith('data:image') ? await uploadBase64ToStorage(image, 'image') : (image || '');
+      const thumbnailUrl = thumbnail && thumbnail.startsWith('data:image') ? await uploadBase64ToStorage(thumbnail, 'thumbnail') : (thumbnail || '');
+
+      const [inserted] = await tx.insert(items).values({
+        type: type || 'product',
+        name,
+        code,
+        unit,
+        category: category || '',
+        image: imageUrl,
+        thumbnail: thumbnailUrl,
+        reorderPoint: Number(reorder_point || 0),
+        weightedAverageCost: Number(weighted_average_cost || 0),
+        color: color || null,
+        weight: weight ? Number(weight) : null,
+        material: material || null,
+        size: size || null,
+        currentStock: computedStock,
+        stocks: stockValues,
+        isDeleted: 0
+      }).returning();
+
+      if (computedStock > 0) {
+        const txDate = await businessTodayIsoDate();
+        for (const whCode of Object.keys(stockValues)) {
+          const qty = stockValues[whCode];
+          if (qty > 0) {
+            await tx.insert(transactions).values({
+              itemId: inserted.id,
+              type: 'in',
+              quantity: qty,
+              unitPrice: Number(weighted_average_cost) || 0,
+              totalPrice: (Number(weighted_average_cost) || 0) * qty,
+              date: txDate,
+              documentType: 'audit',
+              documentRef: 'ثبت اولیه کالا',
+              location: whCode,
+              notes: 'موجودی اولیه هنگام تعریف کالا',
+              createdBy: user?.username || 'admin',
+              isDeleted: 0
+            });
+          }
+        }
+      }
+
+      return {
+        item: inserted,
+        insertedId: inserted.id,
+        stockValues,
+        computedStock,
+        imageUrl,
+        thumbnailUrl
+      };
+    };
+
+    if (externalTx) {
+      return await executeWork(externalTx);
+    }
+    return await orm.transaction(executeWork);
+  }
+
+  /**
+   * Updates an item's details and manages initial opening stock / voucher issuance if applicable.
+   */
+  static async updateItem(
+    itemId: number,
+    body: Record<string, any>,
+    user?: { id?: number; username?: string; fullName?: string },
+    externalTx?: DbExecutor
+  ): Promise<{
+    item: typeof items.$inferSelect;
+    prevItem: typeof items.$inferSelect;
+    updateData: Partial<typeof items.$inferInsert>;
+    openingVoucherId: number | null;
+    computedStock: number;
+    canSetOpening: boolean;
+  }> {
+    const { name, code, unit, category, image, thumbnail, reorder_point, weighted_average_cost, color, weight, material, size } = body;
+
+    const executeWork = async (tx: DbExecutor) => {
+      const [prevItem] = await tx.select().from(items).where(and(eq(items.id, itemId), eq(items.isDeleted, 0))).for('update');
+      if (!prevItem) {
+        throw new NotFoundError('کالای مورد نظر یافت نشد.');
+      }
+
+      if (code && code !== prevItem.code) {
+        const [existingCode] = await tx.select({ id: items.id }).from(items).where(and(eq(items.code, code), eq(items.isDeleted, 0)));
+        if (existingCode && existingCode.id !== itemId) {
+          throw new ConflictError('کد کالای جدید تکراری است و مجاز به استفاده مجدد نیستید.');
+        }
+      }
+
+      if (name && name !== prevItem.name) {
+        const [existingName] = await tx.select({ id: items.id, code: items.code }).from(items)
+          .where(and(eq(items.name, name), eq(items.isDeleted, 0)));
+        if (existingName && existingName.id !== itemId) {
+          throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است.`);
+        }
+      }
+
+      let imageUrl: string | undefined = undefined;
+      let thumbnailUrl: string | undefined = undefined;
+
+      if (image !== undefined) {
+        if (image && image.startsWith('data:image')) {
+          imageUrl = await uploadBase64ToStorage(image, 'image');
+        } else {
+          imageUrl = image || '';
+        }
+      }
+
+      if (thumbnail !== undefined) {
+        if (thumbnail && thumbnail.startsWith('data:image')) {
+          thumbnailUrl = await uploadBase64ToStorage(thumbnail, 'thumbnail');
+        } else {
+          thumbnailUrl = thumbnail || '';
+        }
+      }
+
+      const [txRow] = await tx.select({ id: transactions.id })
+        .from(transactions)
+        .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0)))
+        .limit(1);
+      const [docRow] = await tx.select({ id: documentItems.id })
+        .from(documentItems)
+        .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
+        .limit(1);
+      const [voucherRow] = await tx.select({ id: journalVouchers.id })
+        .from(journalVouchers)
+        .where(and(
+          eq(journalVouchers.referenceModule, 'item_opening'),
+          eq(journalVouchers.referenceId, itemId),
+          eq(journalVouchers.isDeleted, 0)
+        ))
+        .limit(1);
+
+      const canSetOpening = Number(prevItem.currentStock || 0) <= 0 && !txRow && !docRow && !voucherRow;
+
+      const whs = await tx.select({ code: warehouses.code }).from(warehouses);
+      let computedStock = 0;
+      const stockValues: Record<string, number> = {};
+
+      if (canSetOpening) {
+        if (body.stocks && typeof body.stocks === 'object') {
+          for (const wh of whs) {
+            const val = Number(body.stocks[wh.code] ?? body.stocks[wh.code.toLowerCase()] ?? 0);
+            stockValues[wh.code] = val > 0 ? val : 0;
+            computedStock += stockValues[wh.code];
+          }
+        } else {
+          for (const wh of whs) {
+            const bodyKey = `stock_${wh.code}`;
+            const val = body[bodyKey] !== undefined ? Number(body[bodyKey]) : 0;
+            stockValues[wh.code] = val > 0 ? val : 0;
+            computedStock += stockValues[wh.code];
+          }
+        }
+
+        const currentStockBody = Number(body.current_stock || 0);
+        if (computedStock === 0 && currentStockBody > 0 && whs.length > 0) {
+          const defaultWh = whs[0].code;
+          stockValues[defaultWh] = currentStockBody;
+          computedStock = currentStockBody;
+        }
+      }
+
+      const effectiveWac = weighted_average_cost !== undefined && weighted_average_cost !== ''
+        ? Number(weighted_average_cost) || 0
+        : (body.initial_cost !== undefined && body.initial_cost !== '' ? Number(body.initial_cost) || 0 : Number(prevItem.weightedAverageCost || 0));
+
+      const updateData: Partial<typeof items.$inferInsert> = {
+        name, code, unit, category: category || '',
+        reorderPoint: Number(reorder_point || 0),
+        weightedAverageCost: effectiveWac,
+        color: color || null, weight: weight ? Number(weight) : null, material: material || null, size: size || null,
+        version: nextVersion(prevItem.version)
+      };
+
+      if (imageUrl !== undefined) updateData.image = imageUrl;
+      if (thumbnailUrl !== undefined) updateData.thumbnail = thumbnailUrl;
+
+      if (canSetOpening && computedStock > 0) {
+        updateData.currentStock = computedStock;
+        updateData.stocks = stockValues;
+      }
+
+      let openingVoucherId: number | null = null;
+
+      const [updatedItem] = await tx.update(items).set(updateData).where(eq(items.id, itemId)).returning();
+
+      if (canSetOpening && computedStock > 0) {
+        const txDate = await businessTodayIsoDate();
+        for (const whCode of Object.keys(stockValues)) {
+          const qty = stockValues[whCode];
+          if (qty > 0) {
+            await tx.insert(transactions).values({
+              itemId: itemId,
+              type: 'in',
+              quantity: qty,
+              unitPrice: effectiveWac,
+              totalPrice: Math.round(qty * effectiveWac * 10000) / 10000,
+              date: txDate,
+              documentType: 'audit',
+              documentRef: 'ثبت موجودی افتتاحیه',
+              location: whCode,
+              notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)',
+              createdBy: user?.username || 'admin',
+              isDeleted: 0
+            });
+          }
+        }
+
+        const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+          entityType: 'item',
+          entityId: String(itemId),
+          userId: user?.id,
+          userName: user?.fullName || user?.username
+        });
+        if (!wfInstance) {
+          const opening = await ItemOpeningService.issueItemOpeningVoucher(itemId, {
+            userId: user?.id,
+            username: user?.fullName || user?.username,
+            tx
+          });
+          openingVoucherId = opening?.id || null;
+        }
+      }
+
+      return {
+        item: updatedItem,
+        prevItem,
+        updateData,
+        openingVoucherId,
+        computedStock,
+        canSetOpening
+      };
+    };
+
+    if (externalTx) {
+      return await executeWork(externalTx);
+    }
+    return await orm.transaction(executeWork);
+  }
 }
+

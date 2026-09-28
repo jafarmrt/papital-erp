@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts } from '../../db/schema.js';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and } from 'drizzle-orm';
 import { STANDARD_CHART_OF_ACCOUNTS } from '../../data/standardChartOfAccounts.js';
 import { logger } from '../../middleware/logger.js';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types.js';
@@ -161,6 +161,8 @@ export class ChartOfAccountsService {
         is_system: a.isSystem ?? 0,
         isActive: a.isActive ?? 1,
         is_active: a.isActive ?? 1,
+        isDeleted: a.isDeleted ?? 0,
+        is_deleted: a.isDeleted ?? 0,
         createdAt: a.createdAt || new Date().toISOString()
       };
     });
@@ -222,7 +224,7 @@ export class ChartOfAccountsService {
   }
 
   /**
-   * Create a new custom account
+   * Create a new custom account (TD-147: filter soft-deleted and allow code reuse)
    */
   static async createAccount(data: {
     code: string;
@@ -233,14 +235,36 @@ export class ChartOfAccountsService {
     nature: AccountNature;
     description?: string;
   }): Promise<Account> {
-    const existing = await orm.select().from(accounts)
-      .where(eq(accounts.code, data.code.trim()));
-    if (existing.length > 0) {
+    const code = data.code.trim();
+    const existingActive = await orm.select().from(accounts)
+      .where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
+    if (existingActive.length > 0) {
       throw new Error(`حساب با کد ${data.code} قبلاً تعریف شده است.`);
     }
 
+    // TD-147: اگر سرفصلی قبلاً با این کد به صورت نرم حذف شده، مجدداً احیا و بازتعریف می‌گردد
+    const existingDeleted = await orm.select().from(accounts)
+      .where(and(eq(accounts.code, code), eq(accounts.isDeleted, 1)));
+    if (existingDeleted.length > 0) {
+      const targetId = existingDeleted[0].id;
+      await orm.update(accounts).set({
+        name: data.name.trim(),
+        level: data.level,
+        parentId: data.parentId || null,
+        accountType: data.accountType,
+        nature: data.nature,
+        description: data.description?.trim() || null,
+        isSystem: 0,
+        isActive: 1,
+        isDeleted: 0,
+      }).where(eq(accounts.id, targetId));
+
+      const all = await this.getAllAccounts();
+      return all.find(a => a.id === targetId)!;
+    }
+
     const [inserted] = await orm.insert(accounts).values({
-      code: data.code.trim(),
+      code,
       name: data.name.trim(),
       level: data.level,
       parentId: data.parentId || null,
@@ -249,6 +273,7 @@ export class ChartOfAccountsService {
       description: data.description?.trim() || null,
       isSystem: 0,
       isActive: 1,
+      isDeleted: 0,
     }).returning();
 
     const all = await this.getAllAccounts();
@@ -288,7 +313,43 @@ export class ChartOfAccountsService {
   }
 
   /**
-   * Delete an account
+   * Restore a soft-deleted account (TD-147)
+   */
+  static async restoreAccount(id: number): Promise<Account> {
+    const [existing] = await orm.select().from(accounts).where(eq(accounts.id, id));
+    if (!existing) {
+      throw new Error('حساب مورد نظر یافت نشد.');
+    }
+    if (existing.isDeleted === 0) {
+      throw new Error('این حساب هم‌اکنون فعال است و حذف نشده است.');
+    }
+
+    // بررسی عدم تعارض با حساب فعال دیگر با همین کد
+    const conflicting = await orm.select().from(accounts)
+      .where(and(eq(accounts.code, existing.code), eq(accounts.isDeleted, 0)));
+    if (conflicting.length > 0) {
+      throw new Error(`امکان احیا وجود ندارد؛ حساب فعال دیگری با کد ${existing.code} هم‌اکنون در سیستم وجود دارد.`);
+    }
+
+    // اگر حساب والد دارد، بررسی فعال بودن والد
+    if (existing.parentId) {
+      const [parent] = await orm.select().from(accounts).where(eq(accounts.id, existing.parentId));
+      if (parent && parent.isDeleted === 1) {
+        throw new Error('سرفصل والد این حساب حذف شده است. لطفاً ابتدا حساب والد را احیا نمایید.');
+      }
+    }
+
+    await orm.update(accounts).set({
+      isDeleted: 0,
+      isActive: 1,
+    }).where(eq(accounts.id, id));
+
+    const all = await this.getAllAccounts();
+    return all.find(a => a.id === id)!;
+  }
+
+  /**
+   * Delete an account (soft delete)
    */
   static async deleteAccount(id: number): Promise<{ success: boolean }> {
     const [existing] = await orm.select().from(accounts).where(eq(accounts.id, id));
@@ -300,13 +361,14 @@ export class ChartOfAccountsService {
     }
 
     const children = await orm.select().from(accounts)
-      .where(eq(accounts.parentId, id));
+      .where(and(eq(accounts.parentId, id), eq(accounts.isDeleted, 0)));
     if (children.length > 0) {
-      throw new Error('این حساب دارای زیرمجموعه است و نمی‌توان آن را حذف کرد.');
+      throw new Error('این حساب دارای زیرمجموعه فعال است و نمی‌توان آن را حذف کرد.');
     }
 
     await orm.update(accounts).set({
       isDeleted: 1,
+      isActive: 0,
     }).where(eq(accounts.id, id));
 
     return { success: true };

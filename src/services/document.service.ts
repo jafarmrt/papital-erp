@@ -1,10 +1,10 @@
-import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
+import { sql, eq, and, desc, inArray, gte, lte, lt, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { documents, documentItems, items, transactions, appSettings, documentRefCounters, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
-import { roundFinancial, normalizeDateToDbTimestamp } from '../utils.js';
+import { documents, documentItems, items, itemPrices, transactions, appSettings, documentRefCounters, journalVouchers, treasuryTransactions, productionProjects } from '../db/schema.js';
+import { normalizeDateToDbTimestamp, jalaliToIsoDate } from '../utils.js';
 import { resolveJalaliFiscalYear, businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { fin, FinancialMath } from '../lib/financialDecimal.js';
-import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
+import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
 import { MAX_PAGE_LIMIT } from '../lib/pagination.js';
 import { NotFoundError, ValidationError, InsufficientStockError } from '../errors/customErrors.js';
 import { domainEventBus } from './events/domainEventBus.js';
@@ -15,6 +15,8 @@ import { VoucherService } from './accounting/voucher.service.js';
 import { NegativeStockPolicyService } from './inventory/negativeStockPolicy.service.js';
 import { resolveWarehouseCode } from './inventory/warehouseResolver.js';
 import { ItemStockReservationService } from './items/itemStockReservation.service.js';
+import { KardexWacRecalculatorService } from './inventory/kardexWacRecalculator.service.js';
+import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../lib/lockOrder.js';
 import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 
@@ -77,6 +79,7 @@ export interface CreateDocumentInput {
   attachments?: any[];
   projectId?: number | string | null;
   project_id?: number | string | null;
+  excludeDocumentId?: number | string | null;
 }
 
 export interface UpdateDocumentInput {
@@ -181,7 +184,11 @@ export class DocumentService {
    * Updates the notes of a specific document.
    */
   static async updateDocumentNotes(id: number, notes: string): Promise<void> {
-    await orm.update(documents).set({ notes }).where(eq(documents.id, id));
+    await orm.transaction(async (tx) => {
+      const [doc] = await tx.select().from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0))).for('update');
+      if (!doc) throw new NotFoundError('سند مورد نظر یافت نشد.');
+      await tx.update(documents).set({ notes, version: nextVersion(doc.version) }).where(eq(documents.id, id));
+    });
   }
 
   /**
@@ -194,31 +201,41 @@ export class DocumentService {
       status, notes, location, currency, items: docLines
     } = body;
 
-    const [existingDoc] = await orm.select().from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
-    if (!existingDoc) {
-      throw new NotFoundError('سند مورد نظر یافت نشد.');
-    }
-
-    if (existingDoc.status === 'final') {
-      throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
-    }
-
-    if (status === 'final') {
-      throw new ValidationError(
-        'نهایی‌سازی سند از مسیر ویرایش مجاز نیست؛ عملیات نهایی‌سازی باید از مسیر «نهایی‌سازی و تایید» انجام شود تا کسر موجودی انبار، صدور سند حسابداری و گردش کار به‌درستی اجرا گردند.'
-      );
-    }
-
-    if (body.expectedVersion !== undefined || body.version !== undefined) {
-      checkOccVersion(existingDoc, {
-        entityType: 'Document',
-        entityId: id,
-        expectedVersion: Number(body.expectedVersion ?? body.version)
-      });
-    }
-
     await orm.transaction(async (tx) => {
-      await tx.update(documents).set({
+      // V6 Sub-phase 5.2 (TD-154): Read document under row lock (.for('update')) to prevent concurrent lost updates
+      // and race conditions with concurrent finalizeDocument calls.
+      const [existingDoc] = await tx
+        .select()
+        .from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
+        .for('update');
+
+      if (!existingDoc) {
+        throw new NotFoundError('سند مورد نظر یافت نشد.');
+      }
+
+      if (existingDoc.status === 'final') {
+        throw new ValidationError('امکان ویرایش مستقیم سند نهایی‌شده وجود ندارد.');
+      }
+
+      if (status === 'final') {
+        throw new ValidationError(
+          'نهایی‌سازی سند از مسیر ویرایش مجاز نیست؛ عملیات نهایی‌سازی باید از مسیر «نهایی‌سازی و تایید» انجام شود تا کسر موجودی انبار، صدور سند حسابداری و گردش کار به‌درستی اجرا گردند.'
+        );
+      }
+
+      if (body.expectedVersion !== undefined || body.version !== undefined) {
+        checkOccVersion(existingDoc, {
+          entityType: 'Document',
+          entityId: id,
+          expectedVersion: Number(body.expectedVersion ?? body.version)
+        });
+      }
+
+      const newVer = nextVersion(existingDoc.version);
+
+      // Atomic update with OCC WHERE clause to guarantee no concurrent modification slipped through
+      const [updatedDoc] = await tx.update(documents).set({
         refNumber: refNumber ? String(refNumber) : existingDoc.refNumber,
         date: date ? normalizeDateToDbTimestamp(date) : existingDoc.date,
         user: user || existingDoc.user,
@@ -230,11 +247,22 @@ export class DocumentService {
         status: status || existingDoc.status,
         currency: currency || existingDoc.currency,
         attachments: body.attachments !== undefined ? body.attachments : (existingDoc.attachments || []),
-        version: nextVersion(existingDoc.version)
-      }).where(eq(documents.id, id));
+        version: newVer
+      }).where(and(eq(documents.id, id), eq(documents.version, existingDoc.version)))
+        .returning({ id: documents.id, version: documents.version });
+
+      if (!updatedDoc) {
+        throw new OptimisticLockError({
+          entityType: 'Document',
+          entityId: id,
+          expectedVersion: existingDoc.version,
+          message: `سند #${id} به دلیل ویرایش همزمان توسط کاربر دیگر تغییر یافته است.`
+        });
+      }
 
       if (Array.isArray(docLines)) {
-        await tx.delete(documentItems).where(eq(documentItems.documentId, id));
+        // V6.0.21 (TD-157): Soft-delete old line items instead of physical hard delete (RULE 09)
+        await tx.update(documentItems).set({ isDeleted: 1 }).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
         const docLocation = location ? String(location).trim() : '';
 
@@ -289,19 +317,40 @@ export class DocumentService {
   }
 
   /**
-   * Scans existing documents of the given type and returns the maximum numeric refNumber suffix.
+   * TD-152 (V6 Sub-phase 4.3):
+   * Scans existing documents of the given type and fiscal year, returning the maximum numeric refNumber suffix.
+   * Isolates scanning to the specific fiscal year so that new fiscal years correctly start serial numbers from 1 (or startNumber),
+   * rather than carrying over historical numbers from prior years.
    */
-  private static async getMaxExistingRefNumber(tx: DbClient, type: string): Promise<number> {
+  private static async getMaxExistingRefNumber(tx: DbClient, type: string, fiscalYear?: number): Promise<number> {
+    const conditions = [
+      eq(documents.type, type),
+      eq(documents.isDeleted, 0)
+    ];
+
+    if (fiscalYear && fiscalYear >= 1300 && fiscalYear <= 1500) {
+      const startIso = jalaliToIsoDate(`${fiscalYear}/01/01`);
+      const endIso = jalaliToIsoDate(`${fiscalYear + 1}/01/01`);
+      if (startIso && endIso) {
+        conditions.push(
+          gte(documents.date, `${startIso} 00:00:00`),
+          lt(documents.date, `${endIso} 00:00:00`)
+        );
+      }
+    }
+
     const existingDocs = await tx
-      .select({ refNumber: documents.refNumber })
+      .select({ refNumber: documents.refNumber, date: documents.date })
       .from(documents)
-      .where(and(
-        eq(documents.type, type),
-        eq(documents.isDeleted, 0)
-      ));
+      .where(and(...conditions));
 
     let maxNum = 0;
     for (const doc of existingDocs) {
+      // Secondary in-memory validation to guarantee calendar boundary precision
+      if (fiscalYear && fiscalYear >= 1300 && fiscalYear <= 1500) {
+        const docFy = resolveJalaliFiscalYear(doc.date);
+        if (docFy !== fiscalYear) continue;
+      }
       if (doc.refNumber) {
         const numStr = String(doc.refNumber).replace(/\D/g, '');
         if (numStr) {
@@ -334,8 +383,8 @@ export class DocumentService {
       return String(Math.max(counter.lastRefNumber + 1, startNumber));
     }
 
-    // Cold start: peek from max existing document number (read-only, no counter write)
-    const maxNum = await DocumentService.getMaxExistingRefNumber(orm, type);
+    // Cold start: peek from max existing document number for THIS fiscal year (read-only, no counter write)
+    const maxNum = await DocumentService.getMaxExistingRefNumber(orm, type, fiscalYear);
     return String(Math.max(maxNum + 1, startNumber));
   }
 
@@ -368,9 +417,9 @@ export class DocumentService {
             eq(documentRefCounters.fiscalYear, fiscalYear)
           ));
       } else {
-        // V9-1.2: cold-start atomic seeding — INSERT ... ON CONFLICT DO NOTHING eliminates the
+        // V9-1.2 / V6 TD-152: cold-start atomic seeding — INSERT ... ON CONFLICT DO NOTHING eliminates the
         // MAX()+1 race where two concurrent first calls computed the same number.
-        const maxNum = await DocumentService.getMaxExistingRefNumber(tx, type);
+        const maxNum = await DocumentService.getMaxExistingRefNumber(tx, type, fiscalYear);
         const seedNum = Math.max(maxNum + 1, startNumber);
 
         const inserted = await tx
@@ -484,13 +533,26 @@ export class DocumentService {
                   .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
               }
             } else {
-              await tx
+              const inserted = await tx
                 .insert(documentRefCounters)
                 .values({ docType, fiscalYear: year, lastRefNumber: val })
-                .onConflictDoUpdate({
-                  target: [documentRefCounters.docType, documentRefCounters.fiscalYear],
-                  set: { lastRefNumber: sql`GREATEST(${documentRefCounters.lastRefNumber}, ${val})` }
-                });
+                .onConflictDoNothing({
+                  target: [documentRefCounters.docType, documentRefCounters.fiscalYear]
+                })
+                .returning({ lastRefNumber: documentRefCounters.lastRefNumber });
+              if (inserted.length === 0) {
+                const [retryCounter] = await tx
+                  .select()
+                  .from(documentRefCounters)
+                  .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)))
+                  .for('update');
+                if (retryCounter && val > retryCounter.lastRefNumber) {
+                  await tx
+                    .update(documentRefCounters)
+                    .set({ lastRefNumber: val })
+                    .where(and(eq(documentRefCounters.docType, docType), eq(documentRefCounters.fiscalYear, year)));
+                }
+              }
             }
           }
         }
@@ -536,41 +598,98 @@ export class DocumentService {
             const absVariance = Math.abs(variance);
             const txNotes = variance > 0 ? 'اضافی انبارگردانی دوره‌ای' : 'کسری انبارگردانی دوره‌ای';
 
-            await tx.insert(transactions).values({
-              itemId: Number(itemId),
-              documentId: docId,
-              type: txType,
-              quantity: absVariance,
-              date: normalizedDocDate,
-              documentType: 'audit',
-              documentRef: String(finalRefNumber),
-              createdBy: user,
-              notes: txNotes,
-              location: targetLoc,
-              isDeleted: 0
-            });
-
-            const [itemData] = await tx
-              .select({ stocks: items.stocks, currentStock: items.currentStock })
+            // V6 Sub-phase 1.1 (TD-135): استخراج نرخ جاری WAC یا بهای استاندارد کالا با قفل سطری جهت جلوگیری از رقیق‌سازی یا صفر شدن WAC در اضافه انبارگردانی
+            const [targetItem] = await tx
+              .select({
+                weightedAverageCost: items.weightedAverageCost,
+              })
               .from(items)
               .where(eq(items.id, Number(itemId)))
               .for('update');
 
-            const currentStocks = (itemData?.stocks as Record<string, number>) || {};
-            currentStocks[targetLoc] = fin(physical_stock).round(4).toNumber();
-            
-            const newTotalStock = Object.values(currentStocks)
-              .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
-              .round(4)
-              .toNumber();
+            let auditMovementPrice = Number(targetItem?.weightedAverageCost || 0);
+            if (auditMovementPrice <= 0) {
+              const [priceRow] = await tx
+                .select({ price: itemPrices.price })
+                .from(itemPrices)
+                .where(and(eq(itemPrices.itemId, Number(itemId)), eq(itemPrices.isDeleted, 0)))
+                .limit(1);
+              auditMovementPrice = Number(priceRow?.price || 0);
+            }
 
-            await tx.update(items).set({
-              stocks: currentStocks,
-              currentStock: newTotalStock
-            }).where(eq(items.id, Number(itemId)));
+            await DocumentService.applyStockMovement(tx, {
+              itemId: Number(itemId),
+              documentId: docId,
+              inOut: txType,
+              quantity: absVariance,
+              price: auditMovementPrice,
+              date: normalizedDocDate,
+              documentType: 'audit',
+              documentRef: String(finalRefNumber),
+              user,
+              notes: txNotes,
+              targetLoc
+            });
           }
         }
       } else {
+        // V6 Sub-phase 2.4 (TD-139): اعتبارسنجی متمرکز سقف رزرو کالا پیش از خروج قطعی در داخل تراکنش دیتابیس
+        if (docStatus === 'final' && inOut === 'out') {
+          const reservationReport = await ItemStockReservationService.getReservedStockDetails(tx);
+          const excludeDocId = body.excludeDocumentId ? Number(body.excludeDocumentId) : undefined;
+
+          for (const item of docLines) {
+            const itId = Number(item.itemId);
+            const reqQty = Number(item.quantity || 0);
+            if (reqQty <= 0) continue;
+
+            const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : (docLocation || ''));
+
+            // قفل سطری ردیف کالا جهت پیشگیری از Race Condition و خواندن آخرین موجودی
+            const [dbItem] = await tx
+              .select({
+                id: items.id,
+                code: items.code,
+                name: items.name,
+                unit: items.unit,
+                stocks: items.stocks,
+                currentStock: items.currentStock,
+              })
+              .from(items)
+              .where(and(eq(items.id, itId), eq(items.isDeleted, 0)))
+              .for('update');
+
+            if (!dbItem) {
+              throw new NotFoundError(`کالا با شناسه ${itId} در سیستم یافت نشد.`);
+            }
+
+            const summary = reservationReport.itemSummaries.find(s => s.itemId === itId);
+            const sellableInfo = ItemStockReservationService.computeSellable(
+              summary,
+              (dbItem.stocks as Record<string, number>) || {},
+              {
+                location: targetLoc,
+                excludeDocumentId: excludeDocId,
+                projectId: finalProjectId,
+              }
+            );
+
+            if (reqQty > sellableInfo.sellable) {
+              const otherReservations = (summary?.reservations || []).filter(
+                r => !(r.sourceType === 'proforma' && excludeDocId && Number(r.sourceId) === excludeDocId) &&
+                     !(r.sourceType === 'project' && finalProjectId && Number(r.sourceId) === finalProjectId)
+              );
+              const otherNames = otherReservations.length > 0
+                ? ` (${otherReservations.map(r => `«${r.sourceRef || r.sourceTitle}» [${r.reservedQty} ${r.unit}]`).join('، ')})`
+                : '';
+
+              throw new ValidationError(
+                `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem.unit || 'عدد'} برای کالا «${dbItem.name}» (${dbItem.code}) وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}${otherNames}، قابل فروش: ${sellableInfo.sellable}.`
+              );
+            }
+          }
+        }
+
         for (const item of docLines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
           const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
@@ -1045,7 +1164,7 @@ export class DocumentService {
       targetLoc: string;
       notes?: string;
     }
-  ): Promise<void> {
+  ): Promise<{ transactionId: number }> {
     const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc, notes } = params;
     const qty = Number(quantity);
     const priceNum = Number(price);
@@ -1120,7 +1239,7 @@ export class DocumentService {
 
     const normalizedTxDate = normalizeDateToDbTimestamp(date);
 
-    await tx.insert(transactions).values({
+    const [insertedTx] = await tx.insert(transactions).values({
       itemId,
       documentId: documentId ?? undefined,
       type: inOut,
@@ -1134,7 +1253,7 @@ export class DocumentService {
       notes: notes || '',
       location: finalTargetLoc,
       isDeleted: 0,
-    });
+    }).returning({ id: transactions.id });
 
     const updatedLocStock = inOut === 'in'
       ? fin(currentLocStock).add(qty).round(4).toNumber()
@@ -1185,6 +1304,8 @@ export class DocumentService {
           { userName: user }
         );
         await OutboxService.saveToOutbox(tx, stockEvent);
+
+        return { transactionId: insertedTx.id };
       }
 
   /**
@@ -1252,7 +1373,7 @@ export class DocumentService {
 
   /**
    * Finalizes a draft or proforma document in a strict 4-step atomic orchestration:
-   * 1. Pre-flight validation & row-level locking (.for('update'))
+   * 1. Pre-flight validation & hierarchical row-level locking (ITEMS_STOCK: 40 -> DOCUMENTS: 60)
    * 2. Inventory & Kardex Stock Movement (WAC preserved via applyStockMovement)
    * 3. Document status commitment (draft/proforma -> final) & Domain Event outbox
    * 4. Double-entry accounting voucher generation (strict mode by default, Rule DB-008)
@@ -1269,160 +1390,201 @@ export class DocumentService {
     const isStrict = options?.strict !== false;
 
     const execute = async (tx: DbExecutor): Promise<void> => {
-      // Step 1: Pre-flight validation & row-level locking
-      const [doc] = await tx.select().from(documents)
-        .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
-        .for('update');
+      // Step 1: Pre-flight lookup & validation without holding locks
+      const [docPeek] = await tx.select({
+        id: documents.id,
+        status: documents.status,
+        type: documents.type,
+        refNumber: documents.refNumber,
+      }).from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
 
-      if (!doc) {
+      if (!docPeek) {
         throw new NotFoundError(`سند با شناسه ${id} یافت نشد`);
       }
-      if (doc.status === 'final') {
+      if (docPeek.status === 'final') {
         logger.info({ message: `[DocumentService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
         return;
       }
 
       // Pre-flight: verify line items existence and validity
-      const docLines = await tx.select().from(documentItems).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
-      if (!docLines || docLines.length === 0) {
-        throw new ValidationError(`سند شماره «${doc.refNumber || id}» فاقد هرگونه قلم کالا برای نهایی‌سازی است.`);
+      const rawLines = await tx.select({
+        id: documentItems.id,
+        itemId: documentItems.itemId,
+        quantity: documentItems.quantity,
+        unitPrice: documentItems.unitPrice,
+        location: documentItems.location,
+      }).from(documentItems)
+        .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+
+      if (!rawLines || rawLines.length === 0) {
+        throw new ValidationError(`سند شماره «${docPeek.refNumber || id}» فاقد هرگونه قلم کالا برای نهایی‌سازی است.`);
       }
 
-      for (const item of docLines) {
+      for (const item of rawLines) {
         const qty = Number(item.quantity);
         if (!Number.isFinite(qty) || qty <= 0) {
-          throw new ValidationError(`مقدار قلم کالا (شناسه ${item.itemId}) در سند شماره «${doc.refNumber || id}» باید عددی بزرگ‌تر از صفر باشد.`);
+          throw new ValidationError(`مقدار قلم کالا (شناسه ${item.itemId}) در سند شماره «${docPeek.refNumber || id}» باید عددی بزرگ‌تر از صفر باشد.`);
         }
         const price = Number(item.unitPrice || 0);
         if (!Number.isFinite(price) || price < 0) {
-          throw new ValidationError(`قیمت واحد قلم کالا (شناسه ${item.itemId}) در سند شماره «${doc.refNumber || id}» نمی‌تواند منفی باشد.`);
+          throw new ValidationError(`قیمت واحد قلم کالا (شناسه ${item.itemId}) در سند شماره «${docPeek.refNumber || id}» نمی‌تواند منفی باشد.`);
         }
       }
 
-      const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
-      const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
+      // V6 Sub-phase 5.1 (TD-159): Enforce strict LockHierarchyLevel (ITEMS_STOCK: 40 -> DOCUMENTS: 60)
+      // Sort item IDs in ascending order to prevent deadlocks when concurrent documents share items
+      const sortedItemIds = sortIdsForLocking(rawLines.map(line => line.itemId));
 
-      // Pre-flight stock availability & reservation check for exit documents (TD-118)
-      if (inOut === 'out') {
-        const reservationReport = await ItemStockReservationService.getReservedStockDetails();
-        for (const item of docLines) {
-          const qty = fin(item.quantity).toNumber();
-          const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
+      // Acquire ordered locks strictly: Items (Level 40) -> Documents (Level 60)
+      await withOrderedLocks(
+        tx,
+        [
+          { table: items, ids: sortedItemIds, level: LockHierarchyLevel.ITEMS_STOCK, name: 'items' },
+          { table: documents, id, level: LockHierarchyLevel.DOCUMENTS, name: 'documents' }
+        ],
+        async () => {
+          // Re-fetch document with locks held
+          const [doc] = await tx.select().from(documents)
+            .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
 
-          const [dbItem] = await tx.select({
-            id: items.id,
-            code: items.code,
-            name: items.name,
-            unit: items.unit,
-            stocks: items.stocks,
-            currentStock: items.currentStock,
-          }).from(items).where(eq(items.id, item.itemId)).for('update');
-
-          if (!dbItem) {
-            throw new NotFoundError(`کالا با شناسه ${item.itemId} یافت نشد`);
+          if (!doc) {
+            throw new NotFoundError(`سند با شناسه ${id} یافت نشد`);
+          }
+          if (doc.status === 'final') {
+            logger.info({ message: `[DocumentService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
+            return;
           }
 
-          const summary = reservationReport.itemSummaries.find(s => s.itemId === item.itemId);
-          const sellableInfo = ItemStockReservationService.computeSellable(
-            summary,
-            (dbItem.stocks as Record<string, number>) || {},
-            {
-              location: targetLoc,
-              excludeDocumentId: id,
-              projectId: doc.projectId ? Number(doc.projectId) : null,
+          const docLines = await tx.select().from(documentItems)
+            .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+
+          const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
+          const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
+
+          // Pre-flight stock availability & reservation check for exit documents (TD-118)
+          if (inOut === 'out') {
+            const reservationReport = await ItemStockReservationService.getReservedStockDetails(tx);
+            for (const item of docLines) {
+              const qty = fin(item.quantity).toNumber();
+              const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
+
+              const [dbItem] = await tx.select({
+                id: items.id,
+                code: items.code,
+                name: items.name,
+                unit: items.unit,
+                stocks: items.stocks,
+                currentStock: items.currentStock,
+              }).from(items).where(eq(items.id, item.itemId)).for('update');
+
+              if (!dbItem) {
+                throw new NotFoundError(`کالا با شناسه ${item.itemId} یافت نشد`);
+              }
+
+              const summary = reservationReport.itemSummaries.find(s => s.itemId === item.itemId);
+              const sellableInfo = ItemStockReservationService.computeSellable(
+                summary,
+                (dbItem.stocks as Record<string, number>) || {},
+                {
+                  location: targetLoc,
+                  excludeDocumentId: id,
+                  projectId: doc.projectId ? Number(doc.projectId) : null,
+                }
+              );
+
+              if (qty > sellableInfo.sellable) {
+                throw new InsufficientStockError(
+                  `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem.unit || 'عدد'} برای کالا «${dbItem.name}» (${dbItem.code}) وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}، قابل فروش: ${sellableInfo.sellable}.`
+                );
+              }
             }
-          );
+          }
 
-          if (qty > sellableInfo.sellable) {
-            throw new InsufficientStockError(
-              `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem.unit || 'عدد'} برای کالا «${dbItem.name}» (${dbItem.code}) وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}، قابل فروش: ${sellableInfo.sellable}.`
+          // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
+          for (const item of docLines) {
+            const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
+            const qty = Number(item.quantity);
+            const price = Number(item.unitPrice || 0);
+
+            await DocumentService.applyStockMovement(tx, {
+              itemId: item.itemId,
+              documentId: id,
+              inOut,
+              quantity: qty,
+              price,
+              date: doc.date,
+              documentType: targetType,
+              documentRef: doc.refNumber,
+              user: user || doc.user,
+              targetLoc,
+            });
+          }
+
+          // Step 3: Document Status Commitment & Domain Event Outbox
+          await tx.update(documents).set({ 
+            status: 'final',
+            type: targetType,
+            version: nextVersion(doc.version)
+          }).where(eq(documents.id, id));
+
+          const isSales = targetType === 'invoice' || targetType === 'proforma';
+          const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
+
+          if (isSales) {
+            const invEvent = domainEventBus.createEvent(
+              DomainEventType.INVOICE_APPROVED,
+              'Document',
+              String(id),
+              {
+                documentId: id,
+                refNumber: doc.refNumber,
+                docType: targetType,
+                buyerName: doc.buyerName || '',
+                currency: doc.currency || 'IRR',
+                itemCount: docLines.length,
+                status: 'final'
+              },
+              { userName: user || doc.user }
             );
+            await OutboxService.saveToOutbox(tx, invEvent);
+          } else if (isPurchase) {
+            const purchEvent = domainEventBus.createEvent(
+              DomainEventType.PURCHASE_APPROVED,
+              'Document',
+              String(id),
+              {
+                documentId: id,
+                refNumber: doc.refNumber,
+                supplierName: doc.buyerName || '',
+                currency: doc.currency || 'IRR',
+                itemCount: docLines.length,
+                status: 'final'
+              },
+              { userName: user || doc.user }
+            );
+            await OutboxService.saveToOutbox(tx, purchEvent);
+          }
+
+          // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
+          if (isSales) {
+            await VoucherSyncService.syncSalesInvoiceVoucher(id, {
+              username: user || doc.user,
+              strict: isStrict,
+            }, tx);
+          } else if (isPurchase) {
+            await VoucherSyncService.syncPurchaseInvoiceVoucher(id, {
+              username: user || doc.user,
+              strict: isStrict,
+            }, tx);
+          } else if (['remittance', 'waste', 'return'].includes(targetType)) {
+            await VoucherSyncService.syncWarehouseDocumentVoucher(id, {
+              username: user || doc.user,
+              strict: isStrict,
+            }, tx);
           }
         }
-      }
-
-      // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
-      for (const item of docLines) {
-        const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
-        const qty = Number(item.quantity);
-        const price = Number(item.unitPrice || 0);
-
-        await DocumentService.applyStockMovement(tx, {
-          itemId: item.itemId,
-          documentId: id,
-          inOut,
-          quantity: qty,
-          price,
-          date: doc.date,
-          documentType: targetType,
-          documentRef: doc.refNumber,
-          user: user || doc.user,
-          targetLoc,
-        });
-      }
-
-      // Step 3: Document Status Commitment & Domain Event Outbox
-      await tx.update(documents).set({ 
-        status: 'final',
-        type: targetType,
-        version: nextVersion(doc.version)
-      }).where(eq(documents.id, id));
-
-      const isSales = targetType === 'invoice' || targetType === 'proforma';
-      const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
-
-      if (isSales) {
-        const invEvent = domainEventBus.createEvent(
-          DomainEventType.INVOICE_APPROVED,
-          'Document',
-          String(id),
-          {
-            documentId: id,
-            refNumber: doc.refNumber,
-            docType: targetType,
-            buyerName: doc.buyerName || '',
-            currency: doc.currency || 'IRR',
-            itemCount: docLines.length,
-            status: 'final'
-          },
-          { userName: user || doc.user }
-        );
-        await OutboxService.saveToOutbox(tx, invEvent);
-      } else if (isPurchase) {
-        const purchEvent = domainEventBus.createEvent(
-          DomainEventType.PURCHASE_APPROVED,
-          'Document',
-          String(id),
-          {
-            documentId: id,
-            refNumber: doc.refNumber,
-            supplierName: doc.buyerName || '',
-            currency: doc.currency || 'IRR',
-            itemCount: docLines.length,
-            status: 'final'
-          },
-          { userName: user || doc.user }
-        );
-        await OutboxService.saveToOutbox(tx, purchEvent);
-      }
-
-      // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
-      if (isSales) {
-        await VoucherSyncService.syncSalesInvoiceVoucher(id, {
-          username: user || doc.user,
-          strict: isStrict,
-        }, tx);
-      } else if (isPurchase) {
-        await VoucherSyncService.syncPurchaseInvoiceVoucher(id, {
-          username: user || doc.user,
-          strict: isStrict,
-        }, tx);
-      } else if (['remittance', 'waste', 'return'].includes(targetType)) {
-        await VoucherSyncService.syncWarehouseDocumentVoucher(id, {
-          username: user || doc.user,
-          strict: isStrict,
-        }, tx);
-      }
+      );
     };
 
     if (externalTx) {
@@ -1446,6 +1608,9 @@ export class DocumentService {
       const deletedByUser = user || doc.user || 'system';
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)
       const nowIso = await businessNowIsoDateTime();
+
+      // Fetch active document items before soft-deleting
+      const docLines = await tx.select().from(documentItems).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
       // 1. Soft-delete document with deletedAt & deletedBy
       await tx.update(documents).set({
@@ -1490,7 +1655,6 @@ export class DocumentService {
       }
 
       // 4. Revert stock for final documents
-      const docLines = await tx.select().from(documentItems).where(eq(documentItems.documentId, id));
       const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
 
       if (doc.status === 'final') {
@@ -1511,11 +1675,11 @@ export class DocumentService {
           });
         }
 
-        // V9-1.1: برگشت سند حسابداری متناظر (صدور سند معکوس) در همان تراکنش
+        // V9-1.1 & V6.0.5: برگشت اسناد حسابداری متناظر (صدور سند معکوس) در همان تراکنش برای کلیه انواع اسناد
         const linkedVouchers = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
           .from(journalVouchers)
           .where(and(
-            eq(journalVouchers.referenceModule, 'invoice'),
+            inArray(journalVouchers.referenceModule, ['invoice', 'purchase', 'inventory', 'warehouse', 'document', 'production']),
             eq(journalVouchers.referenceId, id),
             eq(journalVouchers.isDeleted, 0)
           ));
@@ -1557,64 +1721,24 @@ export class DocumentService {
 
   /**
    * Reconciles and rebuilds inventory stocks directly from the transaction ledger (Event Sourcing).
-   * Ensures 100% mathematical consistency between location breakdown (stocks) and current_stock.
+   * V6.0.5: Unified with KardexWacRecalculatorService to eliminate divergence and preserve WAC.
    */
   static async reconcileAndRebuildStock(targetItemId?: number): Promise<{
     reconciledCount: number;
     discrepanciesFixed: number;
   }> {
-    return await orm.transaction(async (tx) => {
-      // Fetch all items or specific item
-      const condition = targetItemId 
-        ? and(eq(items.id, targetItemId), eq(items.isDeleted, 0)) 
-        : eq(items.isDeleted, 0);
-      const allActiveItems = await tx.select().from(items).where(condition).for('update');
-
-      let discrepanciesFixed = 0;
-
-      for (const it of allActiveItems) {
-        // Fetch all active transactions for this item
-        const txList = await tx
-          .select({
-            type: transactions.type,
-            quantity: transactions.quantity,
-            location: transactions.location
-          })
-          .from(transactions)
-          .where(and(eq(transactions.itemId, it.id), eq(transactions.isDeleted, 0)));
-
-        const locationStocks: Record<string, number> = {};
-        for (const t of txList) {
-          const loc = t.location || 'default';
-          const q = Number(t.quantity) || 0;
-          const current = locationStocks[loc] || 0;
-          locationStocks[loc] = roundFinancial(t.type === 'in' ? current + q : current - q);
-        }
-
-        const totalRebuiltStock = roundFinancial(
-          Object.values(locationStocks).reduce((sum, val) => sum + (Number(val) || 0), 0)
-        );
-
-        const oldCurrentStock = Number(it.currentStock || 0);
-        const oldStocksObj = (it.stocks as Record<string, number>) || {};
-
-        // Check if there was any discrepancy
-        const hasDiff = oldCurrentStock !== totalRebuiltStock || 
-          JSON.stringify(oldStocksObj) !== JSON.stringify(locationStocks);
-
-        if (hasDiff) {
-          discrepanciesFixed++;
-          await tx.update(items).set({
-            stocks: locationStocks,
-            currentStock: totalRebuiltStock
-          }).where(eq(items.id, it.id));
-        }
-      }
-
+    if (targetItemId) {
+      const result = await KardexWacRecalculatorService.rebuildItemFromLedger(targetItemId);
+      const isFixed = result.beforeStock !== result.afterStock || result.oldWac !== result.newWac;
       return {
-        reconciledCount: allActiveItems.length,
-        discrepanciesFixed
+        reconciledCount: 1,
+        discrepanciesFixed: isFixed ? 1 : 0
       };
-    });
+    }
+    const rebuildSummary = await KardexWacRecalculatorService.rebuildAllFromLedger();
+    return {
+      reconciledCount: rebuildSummary.totalItemsChecked || rebuildSummary.rebuiltCount,
+      discrepanciesFixed: rebuildSummary.discrepanciesFixed
+    };
   }
 }

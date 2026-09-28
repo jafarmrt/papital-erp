@@ -13,12 +13,25 @@ going forward.
 | Client-bundled update center | `src/data/changelogs/2.ts` | `2.x.y` release series |
 | Client-bundled update center (archive) | `src/data/changelogs/3.ts` | completed `3.x.y` release series (`v3.0.0` - `v3.3.22`) |
 | Client-bundled update center (archive) | `src/data/changelogs/4.ts` | completed `4.x.y` release series (`v4.0.0` - `v4.0.42`) |
-| Client-bundled update center (active) | `src/data/changelogs/5.ts` | current `5.x.y` release series (`v5.0.0` onward) |
+| Client-bundled update center (archive) | `src/data/changelogs/5.ts` | completed `5.x.y` release series (`v5.0.0` - `v5.0.20`) |
+| Client-bundled update center (active) | `src/data/changelogs/6.ts` | current `6.x.y` release series (`v6.0.0` onward) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 5.x Series (Active)
+## Version 6.x Series (Active)
+
+### v6.0.0 — Official Launch of Version 6 & Version 5 Closure
+- **Version 5 Closure:** Concluded and archived the v5.x series (`v5.0.0` through `v5.0.20`) after successfully completing inter-module integration, the 5-phase invoice-stock fix plan, 15-suite test runner isolation, and conducting the comprehensive independent data-integrity audit.
+- **Version 6 Mission:** Enacted the Master Roadmap for Version 6 (`V6_MASTER_ROADMAP.md`) focusing on systemic remediation of 26 audited technical findings across 6 strategic pillars: Event-Sourced Kardex & True WAC preservation, double-entry ledger & year-end closing hardening, treasury separation of cash vs promissory cheques, deadlock-free row-locking hierarchy, and 100% architecture rules compliance (zero direct route mutations and zero hard deletes).
+- **Governance Alignment:** Synchronized `AGENTS.md`, `package.json` (`6.0.0`), `check-version-sync.ts`, active roadmap `V6_MASTER_ROADMAP.md`, and activated `src/data/changelogs/6.ts`.
+
+---
+
+## Version 5.x Series (Archived / Finalized)
+
+### v5.0.20 — Final Release & Conclusion of Version 5
+- **Inter-Module Integration & Audit:** Completed 20 iterative releases across cross-module integration, stock movement automation, test-suite decoupling, and execution of comprehensive independent business logic audit.
 
 ### v5.0.0 — Official Launch of Version 5 & Version 4 Closure
 - **Version 4 Closure:** Officially concluded and archived the v4.x series (`v4.0.0` through `v4.0.42`) encompassing major architectural refactorings, strict financial decimal precision, runtime contract hardening with Zod, frontend decluttering, and chunk error resilience.

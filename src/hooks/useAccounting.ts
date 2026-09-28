@@ -439,11 +439,12 @@ export function useAccounting() {
     id: number, 
     status: string, 
     description?: string, 
-    bankAccountId?: number
+    bankAccountId?: number,
+    transfereePartyName?: string
   ) => {
     await fetchJson(`/accounting/cheques/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, description, notes: description, bankAccountId }),
+      body: JSON.stringify({ status, description, notes: description, bankAccountId, transfereePartyName }),
     });
     await loadCheques();
     await loadVouchers();

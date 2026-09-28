@@ -4,8 +4,8 @@ import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-or
 import type { JournalVoucher, JournalVoucherItem } from '../../types.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
 import { fin } from '../../lib/financialDecimal.js';
-import { getTodayJalaliDate } from '../../utils.js';
-import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError } from '../../errors/customErrors.js';
+import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessClock.js';
+import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
 
 export class VoucherService {
   static async getNextVoucherNumber(tx?: DbExecutor): Promise<number> {
@@ -133,7 +133,7 @@ export class VoucherService {
       })
       .from(journalVoucherItems)
       .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-      .where(inArray(journalVoucherItems.voucherId, voucherIds))
+      .where(and(inArray(journalVoucherItems.voucherId, voucherIds), eq(journalVoucherItems.isDeleted, 0)))
       .orderBy(asc(journalVoucherItems.rowOrder));
 
       for (const item of rawItems) {
@@ -197,7 +197,7 @@ export class VoucherService {
     })
     .from(journalVoucherItems)
     .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
-    .where(eq(journalVoucherItems.voucherId, id))
+    .where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)))
     .orderBy(asc(journalVoucherItems.rowOrder));
 
     return {
@@ -277,16 +277,18 @@ export class VoucherService {
     }
 
     const executeWork = async (tx: DbExecutor) => {
+      const voucherDate = normalizeDateToIso(data.date?.trim()) || (await businessTodayIsoDate());
+
       // Check if fiscal year is closed
       if (data.voucherType !== 'closing') {
-        await this.checkFiscalPeriodOpen(data.date, tx);
+        await this.checkFiscalPeriodOpen(voucherDate, tx);
       }
 
       const voucherNum = await this.getNextVoucherNumber(tx);
       const [voucher] = await tx.insert(journalVouchers).values({
         manualVoucherNumber: data.manualVoucherNumber?.trim() || '',
         voucherNumber: voucherNum,
-        date: data.date.trim(),
+        date: voucherDate,
         voucherType: data.voucherType || 'general',
         status: data.status || 'draft',
         totalDebit: sumDebit.toNumber(),
@@ -358,8 +360,10 @@ export class VoucherService {
         throw new BusinessLogicError('اسناد دائم و قطعی‌شده به دلیل رعایت الزامات تغییرناپذیری دفتر کل قابل ویرایش مستقیم نیستند. لطفاً از گزینه‌های استاندارد «صدور سند برگشتی (ابطال سند)» یا «صدور سند اصلاحی» استفاده فرمایید.');
       }
 
-      if (data.date) {
-        await this.checkFiscalPeriodOpen(data.date, tx);
+      const updatedDate = data.date ? (normalizeDateToIso(data.date.trim()) || data.date.trim()) : undefined;
+
+      if (updatedDate) {
+        await this.checkFiscalPeriodOpen(updatedDate, tx);
       } else {
         await this.checkFiscalPeriodOpen(existing.date, tx);
       }
@@ -383,8 +387,8 @@ export class VoucherService {
           throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
         }
 
-        // Delete old items and re-insert
-        await tx.delete(journalVoucherItems).where(eq(journalVoucherItems.voucherId, id));
+        // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
+        await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
 
         let row = 1;
         for (const item of data.items) {
@@ -400,12 +404,13 @@ export class VoucherService {
             currency: item.currency || 'IRR',
             exchangeRate: Number(item.exchangeRate) || 1,
             description: item.description?.trim() || data.description || existing.description,
+            isDeleted: 0,
           });
         }
       }
 
       await tx.update(journalVouchers).set({
-        ...(data.date ? { date: data.date.trim() } : {}),
+        ...(updatedDate ? { date: updatedDate } : {}),
         ...(data.voucherType ? { voucherType: data.voucherType } : {}),
         ...(data.manualVoucherNumber !== undefined ? { manualVoucherNumber: data.manualVoucherNumber.trim() } : {}),
         ...(data.description ? { description: data.description.trim() } : {}),
@@ -440,7 +445,9 @@ export class VoucherService {
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
+      // V6.0.21 (TD-157): Cascade soft-delete journal voucher and its line items (RULE 09)
       await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, id));
+      await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
       return { success: true };
     });
   }
@@ -461,16 +468,51 @@ export class VoucherService {
   ): Promise<JournalVoucher> {
 
     const execute = async (tx: DbExecutor): Promise<number> => {
-      // V3.0.7 (TD-061): سند اصلی باید «داخل تراکنش اجرایی» خوانده شود؛
-      // خواندن قبلی با اتصال orm خارج از externalTx می‌توانست snapshot منقضی
-      // (ویرایش همزمان سند) را مبنای سند معکوس قرار دهد.
-      const original = await this.getJournalVoucherById(params.voucherId, tx);
-      if (!original) throw new Error('سند مبدا یافت نشد');
-      if (!original.items || original.items.length === 0) {
-        throw new Error('سند مبدا فاقد ردیف‌های مالی برای برگشت است');
+      // TD-146: قفل سطری سخت‌گیرانه روی سند مبدأ برای جلوگیری از مسابقه همزمانی (Race Condition)
+      const [original] = await tx.select().from(journalVouchers)
+        .where(and(eq(journalVouchers.id, params.voucherId), eq(journalVouchers.isDeleted, 0)))
+        .for('update');
+
+      if (!original) throw new NotFoundError('سند مبدا یافت نشد یا قبلاً حذف شده است');
+
+      // ممانعت از ابطال اسناد اختتامیه
+      if (original.voucherType === 'closing') {
+        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال مستقیم نیست.`);
       }
 
-      const reversalDate = params.date?.trim() || original.date;
+      // ممانعت از ابطال سندی که خود سند برگشتی است
+      if (original.referenceNumber?.startsWith('REV-V')) {
+        throw new ConflictError(`امکان صدور سند معکوس برای سند برگشتی «${original.voucherNumber}» وجود ندارد.`);
+      }
+
+      // TD-146: بررسی عدم وجود سند معکوس فعال پیشین برای این سند مبدأ
+      const expectedRevRef = `REV-V${original.voucherNumber}`;
+      const existingReversals = await tx.select().from(journalVouchers)
+        .where(and(
+          eq(journalVouchers.referenceId, original.id),
+          eq(journalVouchers.referenceNumber, expectedRevRef),
+          eq(journalVouchers.isDeleted, 0)
+        ))
+        .for('update');
+
+      if (existingReversals.length > 0) {
+        throw new ConflictError(
+          `برای سند شماره «${original.voucherNumber}» قبلاً سند معکوس به شماره «${existingReversals[0].voucherNumber}» صادر گردیده است و امکان ابطال مجدد وجود ندارد.`
+        );
+      }
+
+      const originalItems = await tx.select().from(journalVoucherItems)
+        .where(and(
+          eq(journalVoucherItems.voucherId, original.id),
+          eq(journalVoucherItems.isDeleted, 0)
+        ))
+        .orderBy(journalVoucherItems.rowOrder);
+
+      if (!originalItems || originalItems.length === 0) {
+        throw new ValidationError('سند مبدا فاقد ردیف‌های مالی برای برگشت است');
+      }
+
+      const reversalDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
 
       await this.checkFiscalPeriodOpen(reversalDate, tx);
 
@@ -489,7 +531,7 @@ export class VoucherService {
         description: desc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
-        referenceNumber: `REV-V${original.voucherNumber}`,
+        referenceNumber: expectedRevRef,
         currency: original.currency || 'IRR',
         createdById: params.userId || null,
         createdByUsername: params.username || '',
@@ -497,7 +539,7 @@ export class VoucherService {
 
       // Invert rows: debit becomes credit, credit becomes debit
       let row = 1;
-      for (const item of original.items!) {
+      for (const item of originalItems) {
         await tx.insert(journalVoucherItems).values({
           voucherId: voucher.id,
           accountId: item.accountId,
@@ -562,7 +604,7 @@ export class VoucherService {
     if (!original) throw new Error('سند مبدا یافت نشد');
 
     const result = await orm.transaction(async (tx) => {
-      const correctionDate = params.date?.trim() || original.date;
+      const correctionDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
       await this.checkFiscalPeriodOpen(correctionDate, tx);
 
       // 1. Create Reversal Voucher
@@ -709,7 +751,7 @@ export class VoucherService {
       throw new Error('سند جدید بازثبت‌شده باید حداقل دارای دو ردیف بدهکار و بستانکار باشد');
     }
 
-    const repostDate = params.date ? params.date.trim() : getTodayJalaliDate();
+    const repostDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
 
     const result = await orm.transaction(async (tx) => {
       const original = await this.getJournalVoucherById(params.voucherId, tx);

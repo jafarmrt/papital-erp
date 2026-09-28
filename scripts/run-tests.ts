@@ -13,21 +13,109 @@ async function main() {
   let isSummaryOnly = false;
   let reportFilePath: string | null = null;
   let isVerbose = false;
+  let testFilter: string | undefined = undefined;
 
-  for (const arg of rawArgs) {
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
     if (arg === '--json') {
       isJsonOutput = true;
     } else if (arg === '--summary') {
       isSummaryOnly = true;
     } else if (arg === '--verbose' || arg === '-v') {
       isVerbose = true;
+    } else if (arg.startsWith('--test=')) {
+      testFilter = arg.replace('--test=', '').trim();
+    } else if ((arg === '--test' || arg === '-t') && i + 1 < rawArgs.length) {
+      testFilter = rawArgs[++i].trim();
+    } else if (arg.startsWith('--filter=')) {
+      testFilter = arg.replace('--filter=', '').trim();
+    } else if ((arg === '--filter' || arg === '-f') && i + 1 < rawArgs.length) {
+      testFilter = rawArgs[++i].trim();
+    } else if (arg === '--help' || arg === '-h') {
+      console.log(`
+Papital ERP Test Runner Usage:
+  npx tsx scripts/run-tests.ts [options] [suite/layer]
+
+Options:
+  --suite=<name>, -s <name>     Run a specific test suite (e.g., database, unit, regression)
+  --test=<id/name>, -t <name>   Run specific test(s) matching ID or keyword (e.g. td-144, coa)
+  --filter=<pattern>, -f        Alias for --test
+  --layer=<name>, -l <name>     Run a specific layer filter
+  --summary                     Print only summary metrics
+  --json                        Output JSON formatted report
+  --verbose, -v                 Print detailed execution steps
+  --report-file=<path>          Save JSON report to file
+
+Available Suites:
+  unit                Pure in-memory unit tests (financial math, Iranian IDs/cards/phones, rule engine)
+  database (or db)    PostgreSQL schema, triggers, JSONB check constraints, foreign keys
+  workflow (or wf)    Workflow states, transitions, approvals, quorum, SLA
+  concurrency         Optimistic locking, concurrent stock issues, race conditions
+  regression (or reg) Regression suite for critical production fixes
+  document_integrity  Document finalization, stock reservation, voucher reversal
+  business_logic      Kardex invariants, atomic codes, menu deny-list
+  critical_path       Voucher sequences, single stock deduction, idempotency
+  penetration (or pen) HTTP penetration tests (XSS, SQLi, SSRF, brute-force resistance)
+  security (or sec)   Authorization policies, token validation, password hashing
+  integration         Cross-module service integration
+  api                 HTTP endpoints and response contract validation
+  recovery (or rec)   Reconciliation, backup restore, failure self-healing
+  stress              Stress and load simulation
+  e2e                 End-to-end user journey scenarios
+`);
+      process.exit(0);
     } else if (arg.startsWith('--report-file=')) {
       reportFilePath = arg.replace('--report-file=', '').trim();
+    } else if (arg === '--report-file' && i + 1 < rawArgs.length) {
+      reportFilePath = rawArgs[++i].trim();
     } else if (arg.startsWith('--layer=')) {
       layerArg = arg.replace('--layer=', '').trim();
+    } else if ((arg === '--layer' || arg === '-l') && i + 1 < rawArgs.length) {
+      layerArg = rawArgs[++i].trim();
+    } else if (arg.startsWith('--suite=')) {
+      layerArg = arg.replace('--suite=', '').trim();
+    } else if ((arg === '--suite' || arg === '-s') && i + 1 < rawArgs.length) {
+      layerArg = rawArgs[++i].trim();
     } else if (!arg.startsWith('-') && !layerArg) {
       layerArg = arg.trim();
     }
+  }
+
+  // Normalize suite/layer aliases
+  if (layerArg) {
+    const normalized = String(layerArg).toLowerCase().replace(/[-_]/g, '');
+    const aliasMap: Record<string, string> = {
+      unit: 'unit',
+      integration: 'integration',
+      api: 'api',
+      db: 'database',
+      database: 'database',
+      workflow: 'workflow',
+      wf: 'workflow',
+      concurrency: 'concurrency',
+      concurrent: 'concurrency',
+      security: 'security',
+      sec: 'security',
+      regression: 'regression',
+      reg: 'regression',
+      stress: 'stress',
+      e2e: 'e2e',
+      recovery: 'recovery',
+      rec: 'recovery',
+      penetration: 'penetration',
+      pen: 'penetration',
+      criticalpath: 'critical_path',
+      critical: 'critical_path',
+      crit: 'critical_path',
+      docintegrity: 'document_integrity',
+      documentintegrity: 'document_integrity',
+      document: 'document_integrity',
+      docs: 'document_integrity',
+      businesslogic: 'business_logic',
+      businesslogicaudit: 'business_logic',
+      audit: 'business_logic'
+    };
+    layerArg = aliasMap[normalized] || layerArg;
   }
 
   const isolationEnabled = process.env.ERP_TEST_SCHEMA_ISOLATION === '1';
@@ -45,7 +133,7 @@ async function main() {
   if (!isJsonOutput) {
     console.log('======================================================================');
     console.log(`🚀 Papital ERP Test Runner Matrix (Phase 8/21 Suite Engine)`);
-    console.log(`   Scope Filter : ${layerArg ? `[Layer: ${layerArg}]` : 'ALL (Full 21 Suites Matrix)'}`);
+    console.log(`   Scope Filter : ${layerArg ? `[Layer: ${layerArg}]` : 'ALL (Full 21 Suites Matrix)'}${testFilter ? ` [Test Filter: "${testFilter}"]` : ''}`);
     try {
       const url = new URL(process.env.DATABASE_URL || '');
       console.log(`   Target DB    : postgresql://${url.hostname}:${url.port || 5432}/${url.pathname.replace(/^\//, '')}`);
@@ -65,7 +153,7 @@ async function main() {
       teardown = ctx.teardown;
     }
 
-    const report = await Phase21TestRunner.runAllTests(layerArg);
+    const report = await Phase21TestRunner.runAllTests(layerArg, testFilter);
 
     // Compute key quality metrics
     const totalCases = report.totalTests;

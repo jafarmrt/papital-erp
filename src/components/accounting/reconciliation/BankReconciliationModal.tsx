@@ -571,9 +571,15 @@ export function BankReconciliationModal({
                                     </span>
                                   )}
                                   {row.matchQuality === 'amount_date' && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-md border border-sky-200/60 dark:border-sky-800/60">
+                                    <span 
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-md border border-sky-200/60 dark:border-sky-800/60"
+                                      title={row.dateDiffDays !== undefined ? `فاصله تقویمی: ${row.dateDiffDays} روز` : undefined}
+                                    >
                                       <Check size={11} />
                                       تطبیق هوشمند مبلغ و تاریخ
+                                      {row.dateDiffDays !== undefined && row.dateDiffDays > 0 ? (
+                                        <span className="text-[9px] opacity-80 font-normal">({formatPersianNumber(row.dateDiffDays)} روز)</span>
+                                      ) : null}
                                     </span>
                                   )}
                                   {row.matchQuality === 'amount_only' && (

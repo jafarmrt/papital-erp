@@ -97,6 +97,8 @@ export const transfers = pgTable('transfers', {
   notes: text('notes').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+  isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
   idx_transfer_code: index('idx_transfer_code').on(table.code),
+  idx_transfer_deleted: index('idx_transfer_deleted').on(table.isDeleted),
 }));

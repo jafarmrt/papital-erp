@@ -1,14 +1,11 @@
 import { Router } from 'express';
-import { eq, sql } from 'drizzle-orm';
-import { orm } from '../db/drizzle.js';
-import { warehouses } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { WarehouseService } from '../services/warehouse.service.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -35,7 +32,7 @@ const updateWarehouseValidation = z.object({
 
 router.get('/warehouses', async (req, res) => {
   try {
-    const data = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1));
+    const data = await WarehouseService.listActive();
     res.json(data);
   } catch (err) { throw err; }
 });
@@ -43,22 +40,18 @@ router.get('/warehouses', async (req, res) => {
 router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), async (req, res) => {
   try {
     const { name, code } = req.body;
-    const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    if (!cleanCode) {
-      return res.status(400).json({ error: 'کد انبار نامعتبر است' });
-    }
+    const created = await WarehouseService.createWarehouse({ name, code });
 
-    const [info] = await orm.insert(warehouses).values({ name, code: cleanCode, isActive: 1 }).returning({ id: warehouses.id });
     await logActivity({
       action: 'CREATE',
       entity: 'انبار',
-      entityId: info.id,
-      description: `تعریف انبار جدید «${name}» با کد «${cleanCode}»`,
-      details: { name, code: cleanCode },
+      entityId: created.id,
+      description: `تعریف انبار جدید «${created.name}» با کد «${created.code}»`,
+      details: { name: created.name, code: created.code },
       req
     });
 
-    res.json({ id: info.id, name, code: cleanCode, is_active: 1 });
+    res.json({ id: created.id, name: created.name, code: created.code, is_active: created.isActive });
   } catch (err) { 
     logger.error({ message: 'POST /warehouses ERROR', error: err });
     throw err; 
@@ -69,16 +62,14 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
   try {
     const { name } = req.body;
     const id = Number(req.params.id);
-    const [oldWh] = await orm.select().from(warehouses).where(eq(warehouses.id, id));
-    if (!oldWh) throw new NotFoundError('انبار یافت نشد');
+    const { previous: oldWh, current: updatedWh } = await WarehouseService.updateWarehouse(id, { name });
 
-    await orm.update(warehouses).set({ name }).where(eq(warehouses.id, id));
     await logActivity({
       action: 'UPDATE',
       entity: 'انبار',
       entityId: oldWh.id,
       description: `ویرایش نام انبار کد «${oldWh.code}» از «${oldWh.name}» به «${name}»`,
-      details: { before: { name: oldWh.name }, after: { name } },
+      details: { before: { name: oldWh.name }, after: { name: updatedWh.name } },
       req
     });
 
@@ -89,18 +80,8 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
 router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const [wh] = await orm.select().from(warehouses).where(eq(warehouses.id, id));
-    if (!wh) throw new NotFoundError('انبار یافت نشد');
+    const wh = await WarehouseService.deactivateWarehouse(id);
 
-    // TD-117: بررسی وجود موجودی کالا در انبار پیش از غیرفعال‌سازی
-    const resCheck = await orm.execute(sql`
-      SELECT COUNT(*)::int AS n FROM items
-      WHERE is_deleted = 0 AND COALESCE((stocks->>${wh.code}::text)::numeric, 0) <> 0`);
-    if (Number((resCheck.rows[0] as any)?.n) > 0) {
-      throw new ConflictError(`انبار «${wh.name}» هنوز موجودی دارد؛ ابتدا موجودی را با سند انتقال خالی کنید.`);
-    }
-
-    await orm.update(warehouses).set({ isActive: 0 }).where(eq(warehouses.id, id));
     await logActivity({
       action: 'DELETE',
       entity: 'انبار',

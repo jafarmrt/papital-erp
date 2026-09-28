@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { logger } from '../../middleware/logger.js';
+import { resolveWarehouseCode } from './warehouseResolver.js';
 
 export const KARDEX_BACKFILL_REF = 'موجودی اولیه (تطبیق سیستم)';
 
@@ -35,6 +36,8 @@ export class KardexBackfillService {
     let repairedRows = 0;
 
     await orm.transaction(async (tx) => {
+      const defaultWhCode = await resolveWarehouseCode(tx, '').catch(() => 'main');
+
       for (const row of candidateRows) {
         const itemId = Number(row.id);
         const totalStock = Number(row.current_stock || 0);
@@ -68,6 +71,7 @@ export class KardexBackfillService {
           for (const [whCode, qtyVal] of Object.entries(stocksObj)) {
             const qty = Number(qtyVal || 0);
             if (qty > 0) {
+              const targetWh = await resolveWarehouseCode(tx, whCode).catch(() => defaultWhCode);
               await tx.insert(transactions).values({
                 itemId,
                 type: 'in',
@@ -77,7 +81,7 @@ export class KardexBackfillService {
                 date: todayStr,
                 documentType: 'audit',
                 documentRef: KARDEX_BACKFILL_REF,
-                location: whCode,
+                location: targetWh,
                 notes: 'ثبت موجودی اولیه جهت گردش کالا',
                 createdBy: 'سیستم',
                 isDeleted: 0
@@ -95,7 +99,7 @@ export class KardexBackfillService {
             date: todayStr,
             documentType: 'audit',
             documentRef: KARDEX_BACKFILL_REF,
-            location: 'main',
+            location: defaultWhCode,
             notes: 'ثبت موجودی اولیه جهت گردش کالا',
             createdBy: 'سیستم',
             isDeleted: 0

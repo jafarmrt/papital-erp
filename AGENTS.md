@@ -1,6 +1,6 @@
 # AI Agent Instructions (AGENTS.md)
 
-> **Documentation Map (Version 5.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/5.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
+> **Documentation Map (Version 6.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V6_MASTER_ROADMAP.md` • نقشه راه آرشیو v5: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/6.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
 
 هر ایجنت هوش مصنوعی برای حفظ پایداری سیستم ملزم به رعایت دقیق این قواعد است:
 
@@ -53,7 +53,7 @@
 - **Form State:** Use dedicated `editingId: number | null` and `isEditing = editingId !== null` instead of holding `id: 0`.
 
 ## 7. AI Agent Auto-Changelog Updates & Release Tracking
-- **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to `src/data/changelogs/4.ts` with Jalali date, version bump (v4.x.y), title, summary, changes, and fixes.
+- **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to `src/data/changelogs/5.ts` with Jalali date, version bump (v5.x.y), title, summary, changes, and fixes.
 - **Completeness:** All functional, structural, and architectural changes must be recorded.
 
 ## 8. Server Startup & Background Seed Execution
@@ -85,8 +85,8 @@
 - **Three-Way Sync:** Keep global `current_stock`, warehouse location JSONB `stocks`, and Kardex ledger fully aligned.
 
 ## 13. Scalable Changelog Architecture
-- **Version Partitioning:** Changelogs are split by major version (`0.ts`, `1.ts`, `2.ts`, `3.ts` as archives; `4.ts` active) in `src/data/changelogs/`.
-- **Active File:** For version 4.x releases, append to `src/data/changelogs/4.ts` and bump `package.json` `"version"`.
+- **Version Partitioning:** Changelogs are split by major version (`0.ts`, `1.ts`, `2.ts`, `3.ts`, `4.ts` as archives; `5.ts` active) in `src/data/changelogs/`.
+- **Active File:** For version 5.x releases, append to `src/data/changelogs/5.ts` and bump `package.json` `"version"`.
 
 ## 14. Workflow Engine, Visual Canvas & SLA Analytics
 1. **Rule Engine (`ruleConditionsJson`):** Evaluate context variables using operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`).
@@ -108,9 +108,20 @@
 - **Standardized `fetchJson`:** Use `fetchJson` from `/src/api.ts` with `credentials: 'include'`.
 - **Guarded Background Polling:** Intervals (`setInterval`) must check active sub-tab state and clean up on unmount.
 
-## 17. System Testing & E2E Integration Audit
-- **Modular Test Suites:** Suites isolated under `src/tests/suites/` (`unit`, `database`, `workflow`, `concurrency`, `integration`, `security`, `api`, `regression`).
-- **Execution:** Run tests via CLI (`npm run test`) or administrative endpoint (`/api/system/tests/run`).
+## 17. System Testing, E2E Audit & Token-Safe Execution
+- **Modular Test Suites:** Suites isolated under `src/tests/suites/` (`unit`, `database`, `workflow`, `concurrency`, `integration`, `security`, `api`, `regression`, `criticalPath`, `businessLogicAudit`, etc.).
+- **Interactive Chat Token Safety Guard (CRITICAL):**
+  - **No Blind Full-Suite Runs in Chat:** Running the entire test runner (`npm test` or `npm run test:full`) runs 15+ heavy test suites, generates tens of thousands of characters in console logs, takes >60s, and causes Gemini 2M TPM input token quota exhaustion (`resource_exhausted` / `model overloaded`).
+  - **Fast Verification First:** Always verify syntax, types, and builds via fast, lightweight tools (`lint_applet` / `npm run lint` and `compile_applet`).
+  - **Targeted Suite Execution:** If runtime database verification is necessary during a prompt, run ONLY the specific relevant suite:
+    ```bash
+    npx tsx scripts/run-tests.ts --suite database
+    # or
+    npx tsx scripts/run-tests.ts --suite regression
+    ```
+  - **Full Suite Reservation:** Reserve `npm run test:full` for offline CLI execution, CI/CD, or when explicitly requested by the user.
+  - **No Polling Loops:** Never poll `manage_task` repeatedly on long background jobs; wait for the system notification.
+  - **Context Reset Recommendation:** When a conversation exceeds 20-25 turns, advise the user to start a fresh chat to reset input token accumulation.
 
 ## 18. Financial Reporting & Trial Balance
 - **4-Level Trial Balance (`FinancialReportsTab.tsx`):** Displays group, general, subsidiary, and detailed accounts.
@@ -148,12 +159,15 @@
 - **Production Seed Gating (DB-014):** Seeding disabled in production unless `ALLOW_SEED_IN_PRODUCTION=true`, protected by advisory lock (`pg_try_advisory_lock(89345)`).
 - **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 30000` ms. Bulk tasks use `withLongQueryTimeout(fn)`.
 
-## 23. V5 Governance — Active Series, Inter-Module Integration, Testing & Architecture Optimization
-- **Active Series (v5.x.y):** The active changelog file is `src/data/changelogs/5.ts` (`v5.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), and `4.ts` (`v4.x.y` - finalized and archived at `v4.0.42`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/5.ts` and bump `package.json` `"version"`.
-- **Core Mission of Version 5:**
-  1. **Inter-Module Integration & End-to-End Workflows (ارتباط و یکپارچگی بین ماژول‌ها):** Ensuring seamless data flow, state consistency, and proper cross-domain interactions among Inventory, Accounting/Vouchers, Treasury, Production/Projects, Procurement/Requisitions, CRM/Orders, and Personnel.
-  2. **Verification, Testing & Correction (تست، اصلاح و بهینه‌سازی کارکرد):** Comprehensive testing and hardening of cross-module transactions, eliminating discrepancies, edge-case race conditions, and circular dependencies.
-  3. **Continuity of Version 4 Architecture & UI Simplicity (پیوستگی اصول معماری و خلوت‌سازی v4):** Full adherence to Drizzle ORM rules, FinancialDecimal precision, zero-float policy, atomic database transactions, UI decluttering, and natural Persian terminology without technical jargon.
+## 23. V6 Governance — Active Series, Data-Integrity Remediation, Event-Sourced Inventory & Enterprise Accounting Hardening
+- **Active Series (v6.x.y):** The active changelog file is `src/data/changelogs/6.ts` (`v6.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), `4.ts` (`v4.x.y`), and `5.ts` (`v5.x.y` - finalized and archived at `v5.0.20`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/6.ts` and bump `package.json` `"version"`.
+- **Core Mission of Version 6:**
+  1. **Data-Integrity Remediation (اصلاحات بنیادین ۲۶‌گانه ممیزی):** Direct systematic resolution of all 26 findings from the independent audit across Inventory Kardex, Double-Entry Accounting, Treasury/Cheques, Sequential Numbering, and Concurrency.
+  2. **Event-Sourced Kardex & True WAC Preservation (پایدارسازی کاردکس و حفظ WAC):** Complete elimination of WAC dilution in inventory audits, WAC zeroing on stock depletion, and unrecorded movements during Excel imports.
+  3. **Enterprise Double-Entry Accounting & Year-End Closing (انضباط دفاتر دوبل و بستن سال مالی):** Cross-calendar date normalization, transaction-isolated trial balance calculations, multi-currency COGS exchange rate integration, and elimination of double-reversals.
+  4. **Treasury Separation & Sayad Lifecycle (تفکیک خزانه‌داری نقدی از اسناد مدت‌دار):** Preventing direct bank balance mutation on cheque transactions and enabling the full Sayad endorsement/spent workflow.
+  5. **Concurrency & Deadlock-Free Hierarchy (انضباط قفل‌های سطری و همروندی):** Strict enforcement of `LockHierarchyLevel` table priorities (`items` before `documents`) to permanently prevent PostgreSQL deadlock errors.
+  6. **Architecture Rules Compliance (انطباق با ۱۰ قانون بنیادین معماری):** Migration of all direct DB mutations from route files into domain services (Rule 01) and eradication of hard deletes across auditable entities (Rule 09).
 - **CHANGELOG.md Archive:** Condensed markdown archive of major series milestones lives in root `CHANGELOG.md`.
 - **Technical Debt Registry (TECH_DEBT.md):** ANY shortcut, workaround, or known issue must be registered with unique `TD-###` in `TECH_DEBT.md`. Resolving a debt requires updating its status in the same change-set.
 - **Data-Safety Invariant:** Test cleanup gated on `NODE_ENV ∈ {test,development}` AND `ERP_ALLOW_TEST_CLEANUP=1`, scoped to synthetic test IDs only. `db:push` is BANNED; migrations come exclusively from the atomic migrator.
@@ -163,7 +177,7 @@
   - DBHub read-only MCP configuration: see `docs/LOCAL_MCP_TOOLING.md`.
 - **Release Version Bump = 2 Synced Locations:**
   1. `"version"` in `package.json` (single source of truth; dynamically resolved by `src/lib/version.ts` and `/health`).
-  2. Top entry in active changelog `src/data/changelogs/5.ts`.
+  2. Top entry in active changelog `src/data/changelogs/6.ts`.
 
 ## 24. GitHub Sync Policy
 - **Commit & Push:** In local development or environments with configured Git credentials/SSH keys, commit with descriptive messages and push to `origin/master`.

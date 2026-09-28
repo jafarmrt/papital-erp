@@ -1,5 +1,5 @@
 import { sql, eq, and, or, inArray } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses, productionProjects, documents, documentItems } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
@@ -449,12 +449,13 @@ export class ItemStockReservationService {
   /**
    * Comprehensive calculation of reserved items across active Proforma Invoices AND Project Control.
    */
-  static async getReservedStockDetails(): Promise<ReservedItemsFullReport> {
+  static async getReservedStockDetails(executor?: DbExecutor): Promise<ReservedItemsFullReport> {
     try {
+      const client = executor || orm;
       const allReservationEntries: ReservedItemDetail[] = [];
 
       // 1. Fetch active proforma documents
-      const activeProformas = await orm
+      const activeProformas = await client
         .select({
           id: documents.id,
           refNumber: documents.refNumber,
@@ -475,7 +476,7 @@ export class ItemStockReservationService {
 
       if (activeProformas.length > 0) {
         const proformaIds = activeProformas.map(p => p.id);
-        const proformaLines = await orm
+        const proformaLines = await client
           .select({
             documentId: documentItems.documentId,
             itemId: documentItems.itemId,
@@ -525,7 +526,7 @@ export class ItemStockReservationService {
       }
 
       // 2. Fetch active production projects
-      const activeProjs = await orm
+      const activeProjs = await client
         .select({
           id: productionProjects.id,
           projectCode: productionProjects.projectCode,
@@ -539,7 +540,7 @@ export class ItemStockReservationService {
           sql`${productionProjects.status} NOT IN ('completed', 'cancelled')`
         ));
 
-      const allItems = await orm
+      const allItems = await client
         .select({
           id: items.id,
           code: items.code,

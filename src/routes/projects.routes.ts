@@ -1,16 +1,13 @@
 import { Router } from 'express';
-import { eq, desc, and, sql, asc } from 'drizzle-orm';
+import { eq, desc, and, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, projectProductStageProgress } from '../db/schema.js';
+import { productionProjects, projectStages, items, projectProductStageProgress } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { withOrderedLocks } from '../lib/lockOrder.js';
-import { businessNowIsoDateTime } from '../lib/businessClock.js';
-import { DocumentService } from '../services/document.service.js';
-import { NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { ProjectService } from '../services/projects.service.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -612,93 +609,33 @@ router.post('/projects', authorizePermission('projects.create'), validate(create
       title, customer_id, customer_name, item_id, item_code, item_name, 
       quantity, unit, start_date, end_date, priority, description, initial_stages,
       products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
-      custom_stages, customStages, attachments
+      custom_stages, customStages, attachments, project_code
     } = req.body;
-
-    // Auto generate or uniquify project code
-    let projectCode = '';
-    if (req.body.project_code !== undefined && req.body.project_code !== null) {
-      projectCode = String(req.body.project_code).trim();
-    }
-
-    if (!projectCode) {
-      const countRes = await orm.select({ count: sql<number>`count(*)` }).from(productionProjects);
-      const totalNum = Number(countRes[0]?.count || 0) + 1;
-      const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-      const rawYear = new Date().toLocaleDateString('fa-IR-u-ca-persian', { year: 'numeric' });
-      const jalaliYear = rawYear.replace(/[۰-۹]/g, d => String(faDigits.indexOf(d))) || '1405';
-      projectCode = `PRJ-${jalaliYear}-${totalNum.toString().padStart(3, '0')}`;
-    }
-
-    // Ensure projectCode is strictly unique in DB using explicit text casting
-    let uniqueCode = String(projectCode);
-    let codeCounter = 1;
-    while (true) {
-      const existing = await orm
-        .select({ id: productionProjects.id })
-        .from(productionProjects)
-        .where(sql`${productionProjects.projectCode} = ${String(uniqueCode)}::text`);
-      if (existing.length === 0) break;
-      uniqueCode = `${projectCode}-${codeCounter++}`;
-    }
-    projectCode = String(uniqueCode);
-
-    // Validate FKs
-    let validCustomerId: number | null = null;
-    if (customer_id && !isNaN(Number(customer_id))) {
-      const foundCust = await orm.select({ id: customers.id }).from(customers).where(eq(customers.id, Number(customer_id)));
-      if (foundCust.length > 0) validCustomerId = Number(customer_id);
-    }
-
-    let validItemId: number | null = null;
-    if (item_id && !isNaN(Number(item_id))) {
-      const foundItem = await orm.select({ id: items.id }).from(items).where(eq(items.id, Number(item_id)));
-      if (foundItem.length > 0) validItemId = Number(item_id);
-    }
 
     const currentUser = req.user?.username || 'سیستم';
 
-    const [newProject] = await orm.insert(productionProjects).values({
-      projectCode,
-      title: title.trim(),
-      customerId: validCustomerId,
-      customerName: customer_name || '',
-      itemId: validItemId,
-      itemCode: item_code || '',
-      itemName: item_name || '',
-      quantity: quantity ? Number(quantity) : 1,
-      unit: unit || 'عدد',
-      startDate: start_date || '',
-      endDate: end_date || '',
-      status: 'planned',
-      priority: priority || 'medium',
-      description: description || '',
-      createdBy: currentUser,
-      products: Array.isArray(products) ? products : [],
-      inventoryControl: inventoryControl || inventory_control || {},
-      stageSchedules: stageSchedules || stage_schedules || {},
-      customStages: customStages || custom_stages || [],
-      attachments: Array.isArray(attachments) ? attachments : [],
-    }).returning();
-
-    // Insert initial stages if provided
-    let createdStages: StageLike[] = [];
-    if (Array.isArray(initial_stages) && initial_stages.length > 0) {
-      const stageValues = initial_stages.map((stg: Record<string, unknown>, index: number) => ({
-        projectId: newProject.id,
-        stageOrder: index + 1,
-        title: typeof stg.title === 'string' && stg.title.trim() ? stg.title.trim() : `مرحله ${index + 1}`,
-        status: typeof stg.status === 'string' ? stg.status : 'pending',
-        startDate: typeof stg.start_date === 'string' ? stg.start_date : (start_date || ''),
-        endDate: typeof stg.end_date === 'string' ? stg.end_date : (end_date || ''),
-        assignedPersonnel: Array.isArray(stg.assigned_personnel) ? stg.assigned_personnel : [],
-        requiredResources: Array.isArray(stg.required_resources) ? stg.required_resources : [],
-        progressPercent: typeof stg.progress_percent === 'number' ? stg.progress_percent : 0,
-        notes: typeof stg.notes === 'string' ? stg.notes : ''
-      }));
-
-      createdStages = await orm.insert(projectStages).values(stageValues).returning();
-    }
+    const { project: newProject, stages: createdStages } = await ProjectService.createProject({
+      title,
+      projectCode: project_code,
+      customerId: customer_id,
+      customerName: customer_name,
+      itemId: item_id,
+      itemCode: item_code,
+      itemName: item_name,
+      quantity,
+      unit,
+      startDate: start_date,
+      endDate: end_date,
+      priority,
+      description,
+      initialStages: initial_stages,
+      products,
+      inventoryControl: inventoryControl || inventory_control,
+      stageSchedules: stageSchedules || stage_schedules,
+      customStages: customStages || custom_stages,
+      attachments,
+      createdBy: currentUser
+    });
 
     await logActivity({
       userId: req.user?.id,
@@ -723,88 +660,44 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    const [existing] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
-    if (!existing) return res.status(404).json({ error: 'پروژه یافت نشد' });
-
     const { 
       title, customer_id, customer_name, item_id, item_code, item_name, 
-      quantity, unit, start_date, end_date, status, priority, description 
+      quantity, unit, start_date, end_date, status, priority, description,
+      products, inventory_control, inventoryControl, stage_schedules, stageSchedules,
+      custom_stages, customStages, attachments, project_code
     } = req.body;
 
-    const updateData: Record<string, unknown> = {};
-    if (title !== undefined) updateData.title = title.trim();
-    
-    if (req.body.project_code !== undefined && req.body.project_code !== null && String(req.body.project_code).trim()) {
-      let requestedCode = String(req.body.project_code).trim();
-      let uniqueCode = requestedCode;
-      let codeCounter = 1;
-      while (true) {
-        const existingCode = await orm
-          .select({ id: productionProjects.id })
-          .from(productionProjects)
-          .where(sql`${productionProjects.projectCode} = ${String(uniqueCode)}::text`);
-        if (existingCode.length === 0 || existingCode[0].id === id) break;
-        uniqueCode = `${requestedCode}-${codeCounter++}`;
-      }
-      updateData.projectCode = String(uniqueCode);
-    }
-
-    if (customer_id !== undefined) {
-      if (customer_id && !isNaN(Number(customer_id))) {
-        const foundCust = await orm.select({ id: customers.id }).from(customers).where(eq(customers.id, Number(customer_id)));
-        updateData.customerId = foundCust.length > 0 ? Number(customer_id) : null;
-      } else {
-        updateData.customerId = null;
+    if (status === 'completed') {
+      const matrixCheck = await getProjectProgressMatrixStatus(id, orm);
+      if (!matrixCheck.allMatrixCompleted) {
+        return res.status(400).json({
+          error: `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`
+        });
       }
     }
 
-    if (customer_name !== undefined) updateData.customerName = customer_name;
+    const { current: updated } = await ProjectService.updateProject(id, {
+      title,
+      projectCode: project_code,
+      customerId: customer_id,
+      customerName: customer_name,
+      itemId: item_id,
+      itemCode: item_code,
+      itemName: item_name,
+      quantity,
+      unit,
+      startDate: start_date,
+      endDate: end_date,
+      status,
+      priority,
+      description,
+      products,
+      inventoryControl: inventoryControl ?? inventory_control,
+      stageSchedules: stageSchedules ?? stage_schedules,
+      customStages: customStages ?? custom_stages,
+      attachments
+    });
 
-    if (item_id !== undefined) {
-      if (item_id && !isNaN(Number(item_id))) {
-        const foundItem = await orm.select({ id: items.id }).from(items).where(eq(items.id, Number(item_id)));
-        updateData.itemId = foundItem.length > 0 ? Number(item_id) : null;
-      } else {
-        updateData.itemId = null;
-      }
-    }
-    if (item_code !== undefined) updateData.itemCode = item_code;
-    if (item_name !== undefined) updateData.itemName = item_name;
-    if (quantity !== undefined) updateData.quantity = Number(quantity);
-    if (unit !== undefined) updateData.unit = unit;
-    if (start_date !== undefined) updateData.startDate = start_date;
-    if (end_date !== undefined) updateData.endDate = end_date;
-    if (status !== undefined) {
-      if (status === 'completed') {
-        const matrixCheck = await getProjectProgressMatrixStatus(id, orm);
-        if (!matrixCheck.allMatrixCompleted) {
-          return res.status(400).json({
-            error: `امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`
-          });
-        }
-      }
-      updateData.status = status;
-    }
-    if (priority !== undefined) updateData.priority = priority;
-    if (description !== undefined) updateData.description = description;
-
-    if (req.body.products !== undefined) updateData.products = Array.isArray(req.body.products) ? req.body.products : [];
-    if (req.body.inventory_control !== undefined || req.body.inventoryControl !== undefined) {
-      updateData.inventoryControl = req.body.inventoryControl ?? req.body.inventory_control ?? {};
-    }
-    if (req.body.stage_schedules !== undefined || req.body.stageSchedules !== undefined) {
-      updateData.stageSchedules = req.body.stageSchedules ?? req.body.stage_schedules ?? {};
-    }
-    if (req.body.custom_stages !== undefined || req.body.customStages !== undefined) {
-      updateData.customStages = req.body.customStages ?? req.body.custom_stages ?? [];
-    }
-    if (req.body.attachments !== undefined) {
-      updateData.attachments = Array.isArray(req.body.attachments) ? req.body.attachments : [];
-    }
-
-    await orm.update(productionProjects).set(updateData).where(eq(productionProjects.id, id));
-
-    const [updated] = await orm.select().from(productionProjects).where(eq(productionProjects.id, id));
     const rawStages = await orm.select().from(projectStages).where(and(eq(projectStages.projectId, id), eq(projectStages.isDeleted, 0))).orderBy(asc(projectStages.stageOrder));
 
     const currentUser = req.user?.username || 'سیستم';
@@ -828,69 +721,14 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
 router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit'), validate(addProjectToInventorySchema), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { itemsToAdd, markCompleted } = req.body; // array of { itemId: number, quantity: number, notes?: string }
+    const { itemsToAdd, markCompleted } = req.body;
     const currentUser = req.user?.username || 'سیستم';
 
-    const result = await orm.transaction(async (tx) => {
-      // Observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
-      const targetItemIds = (itemsToAdd || []).map((e: { itemId: number | string }) => Number(e.itemId)).filter(Boolean);
-      await withOrderedLocks(tx, [
-        { table: items, ids: targetItemIds, name: 'items' },
-        { table: productionProjects, id, name: 'productionProjects' }
-      ], async () => true);
-
-      // Read production project
-      const [proj] = await tx.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
-      if (!proj) {
-        throw new NotFoundError('پروژه یافت نشد');
-      }
-
-      let addedCount = 0;
-
-      for (const entry of itemsToAdd) {
-        const targetItemId = Number(entry.itemId);
-        const qtyToAdd = Number(entry.quantity);
-        if (!targetItemId || isNaN(targetItemId) || !qtyToAdd || qtyToAdd <= 0) continue;
-
-        const [targetItem] = await tx.select({
-          weightedAverageCost: items.weightedAverageCost
-        }).from(items).where(eq(items.id, targetItemId)).for('update');
-
-        if (!targetItem) continue;
-
-        // V3.0.7 (TD-054) + V3.1.45 (TD-074): مسیر واحد حرکت انبار (applyStockMovement)؛
-        // مبنای قیمت: unitPrice اختیاری ورودی و در نبود آن WAC فعلی کالا
-        // (ارزش‌گذاری محافظه‌کارانه محصول تولیدی به قیمت تمام‌شده جاری).
-        const oldWac = Number(targetItem.weightedAverageCost || 0);
-        const costBasis = Number(entry.unitPrice);
-        const unitPrice = !isNaN(costBasis) && costBasis > 0 ? costBasis : oldWac;
-
-        await DocumentService.applyStockMovement(tx, {
-          itemId: targetItemId,
-          inOut: 'in',
-          quantity: qtyToAdd,
-          price: unitPrice,
-          date: await businessNowIsoDateTime(),
-          documentType: 'پروژه تولید',
-          documentRef: proj.projectCode,
-          user: currentUser,
-          targetLoc: entry.location ? String(entry.location).trim() : '',
-          notes: entry.notes || `ورود حاصل از تکمیل پروژه ${proj.title} (${proj.projectCode})`
-        });
-
-        addedCount++;
-      }
-
-      // Mark project as completed if requested
-      if (markCompleted) {
-        const matrixCheck = await getProjectProgressMatrixStatus(id, tx);
-        if (!matrixCheck.allMatrixCompleted) {
-          throw new ValidationError(`امکان تغییر وضعیت پروژه به تکمیل‌شده وجود ندارد؛ هنوز تمام گزینه‌های ماتریس پیشرفت فیزیکی محصولات در بخش «پیشرفت به تفکیک کد کالا» تیک نخورده‌اند (${matrixCheck.completedMatrixCells} از ${matrixCheck.totalMatrixCells} مورد تکمیل شده است).`);
-        }
-        await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
-      }
-
-      return { addedCount, projectCode: proj.projectCode };
+    const result = await ProjectService.addProjectToInventory({
+      projectId: id,
+      itemsToAdd,
+      markCompleted,
+      currentUser
     });
 
     await logActivity({
@@ -919,11 +757,7 @@ router.delete('/projects/:id', authorizePermission('projects.delete'), validate(
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    const [existing] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
-    if (!existing) return res.status(404).json({ error: 'پروژه یافت نشد' });
-
-    await orm.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, id));
-    await orm.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.projectId, id));
+    const existing = await ProjectService.deleteProject(id);
 
     const currentUser = req.user?.username || 'سیستم';
     await logActivity({
@@ -948,26 +782,15 @@ router.post('/projects/:id/stages', authorizePermission('projects.edit'), valida
     const projectId = parseInt(req.params.id, 10);
     const { title, status, start_date, end_date, assigned_personnel, required_resources, notes } = req.body;
 
-    // Get max order
-    const existingStages = await orm
-      .select()
-      .from(projectStages)
-      .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
-
-    const nextOrder = existingStages.length + 1;
-
-    const [newStage] = await orm.insert(projectStages).values({
-      projectId,
-      stageOrder: nextOrder,
-      title: title.trim(),
-      status: status || 'pending',
-      startDate: start_date || '',
-      endDate: end_date || '',
-      assignedPersonnel: Array.isArray(assigned_personnel) ? assigned_personnel : [],
-      requiredResources: Array.isArray(required_resources) ? required_resources : [],
-      progressPercent: status === 'completed' ? 100 : 0,
-      notes: notes || '',
-    }).returning();
+    const newStage = await ProjectService.addStage(projectId, {
+      title,
+      status,
+      startDate: start_date,
+      endDate: end_date,
+      assignedPersonnel: assigned_personnel,
+      requiredResources: required_resources,
+      notes
+    });
 
     res.status(201).json(formatStage(newStage));
   } catch (err) {
@@ -984,41 +807,22 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
       return res.status(400).json({ error: 'شناسه‌ها نامعتبر هستند' });
     }
 
-    const [existing] = await orm.select().from(projectStages).where(and(eq(projectStages.id, stageId), eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)));
-    if (!existing) return res.status(404).json({ error: 'مرحله یافت نشد' });
-
     const { 
       title, stage_order, status, start_date, end_date, 
       assigned_personnel, required_resources, progress_percent, notes 
     } = req.body;
 
-    const updateData: Record<string, unknown> = {};
-    if (title !== undefined) updateData.title = title.trim();
-    if (stage_order !== undefined) updateData.stageOrder = Number(stage_order);
-    if (status !== undefined) {
-      updateData.status = status;
-      if (status === 'completed') {
-        updateData.progressPercent = 100;
-        updateData.completedAt = new Date().toISOString();
-      }
-    }
-    if (start_date !== undefined) updateData.startDate = start_date;
-    if (end_date !== undefined) updateData.endDate = end_date;
-    if (assigned_personnel !== undefined) updateData.assignedPersonnel = Array.isArray(assigned_personnel) ? assigned_personnel : [];
-    if (required_resources !== undefined) updateData.requiredResources = Array.isArray(required_resources) ? required_resources : [];
-    if (progress_percent !== undefined) {
-      const p = Math.min(100, Math.max(0, Number(progress_percent)));
-      updateData.progressPercent = p;
-      if (p === 100 && existing.status !== 'completed') {
-        updateData.status = 'completed';
-        updateData.completedAt = new Date().toISOString();
-      } else if (p > 0 && p < 100 && existing.status === 'pending') {
-        updateData.status = 'in_progress';
-      }
-    }
-    if (notes !== undefined) updateData.notes = notes;
-
-    await orm.update(projectStages).set(updateData).where(eq(projectStages.id, stageId));
+    await ProjectService.updateStage(projectId, stageId, {
+      title,
+      stageOrder: stage_order,
+      status,
+      startDate: start_date,
+      endDate: end_date,
+      assignedPersonnel: assigned_personnel,
+      requiredResources: required_resources,
+      progressPercent: progress_percent,
+      notes
+    });
 
     // همگام‌سازی مجدد و خودکار مراحل و وضعیت پروژه بر اساس پیشرفت SKUها
     const syncRes = await syncProjectStagesAndStatusFromProductProgress(projectId);
@@ -1039,10 +843,7 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
 
-    const [existing] = await orm.select().from(projectStages).where(and(eq(projectStages.id, stageId), eq(projectStages.projectId, projectId)));
-    if (!existing) return res.status(404).json({ error: 'مرحله یافت نشد' });
-
-    await orm.update(projectStages).set({ isDeleted: 1 }).where(eq(projectStages.id, stageId));
+    await ProjectService.deleteStage(projectId, stageId);
 
     res.json({ success: true, message: 'مرحله با موفقیت حذف شد' });
   } catch (err) {
@@ -1051,141 +852,8 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
 });
 
 // همگام‌سازی خودکار درصد پیشرفت و وضعیت هر مرحله و کل پروژه بر اساس ماتریس SKUها
-export async function syncProjectStagesAndStatusFromProductProgress(projectId: number) {
-  const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
-  if (!project) return null;
+export const syncProjectStagesAndStatusFromProductProgress = ProjectService.syncProjectStagesAndStatusFromProductProgress;
 
-  const rawStages = await orm.select().from(projectStages)
-    .where(and(eq(projectStages.projectId, projectId), eq(projectStages.isDeleted, 0)))
-    .orderBy(asc(projectStages.stageOrder));
-
-  const products = (Array.isArray(project.products) ? project.products : []) as ProjectProductRow[];
-
-  if (rawStages.length === 0) return { project, stages: [] };
-
-  const progressRows = await orm.select().from(projectProductStageProgress)
-    .where(and(eq(projectProductStageProgress.projectId, projectId), eq(projectProductStageProgress.isDeleted, 0)));
-
-  const progressMap = new Map<string, typeof progressRows[number]>();
-  for (const row of progressRows) {
-    progressMap.set(`${row.itemId}|${row.stageOrder}`, row);
-  }
-
-  const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
-  const stagesForCompute = rawStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
-
-  const productRows = products.map(p => {
-    const itemId = resolveProductItemId(p);
-    const applicableOrders = itemId ? computeApplicableStageOrders(p, optionalTitles, stagesForCompute) : [];
-    let completedCount = 0;
-    for (const order of applicableOrders) {
-      const key = `${itemId}|${order}`;
-      const row = progressMap.get(key);
-      if (row?.status === 'completed') completedCount++;
-    }
-    const percent = applicableOrders.length > 0 ? Math.round((completedCount / applicableOrders.length) * 100) : 0;
-    return {
-      itemId,
-      quantity: Number(p.quantity) || 0,
-      applicableOrders,
-      completedCount,
-      percent
-    };
-  });
-
-  const bizNow = await businessNowIsoDateTime();
-
-  let anyProgressDetected = false;
-  let allStagesCompleted = rawStages.length > 0;
-  const updatedStages: (typeof rawStages[number] & { completedSkusCount?: number; applicableSkusCount?: number })[] = [];
-
-  for (const stg of rawStages) {
-    const applicableProducts = productRows.filter(p => p.itemId && p.applicableOrders.includes(stg.stageOrder));
-    const applicableCount = applicableProducts.length;
-    let completedCount = 0;
-    for (const p of applicableProducts) {
-      const key = `${p.itemId}|${stg.stageOrder}`;
-      const row = progressMap.get(key);
-      if (row?.status === 'completed') completedCount++;
-    }
-
-    let calculatedPercent = 0;
-    let calculatedStatus = 'pending';
-
-    if (applicableCount > 0) {
-      calculatedPercent = Math.round((completedCount / applicableCount) * 100);
-      if (completedCount === applicableCount) {
-        calculatedStatus = 'completed';
-      } else if (completedCount > 0) {
-        calculatedStatus = 'in_progress';
-      } else {
-        calculatedStatus = stg.status === 'blocked' ? 'blocked' : 'pending';
-      }
-    } else {
-      calculatedPercent = Number(stg.progressPercent || 0);
-      calculatedStatus = stg.status || 'pending';
-    }
-
-    if (completedCount > 0 || calculatedPercent > 0) {
-      anyProgressDetected = true;
-    }
-    if (calculatedStatus !== 'completed') {
-      allStagesCompleted = false;
-    }
-
-    const completedAt = calculatedStatus === 'completed' ? (stg.completedAt || bizNow) : null;
-
-    if (stg.progressPercent !== calculatedPercent || stg.status !== calculatedStatus) {
-      await orm.update(projectStages).set({
-        progressPercent: calculatedPercent,
-        status: calculatedStatus,
-        completedAt
-      }).where(eq(projectStages.id, stg.id));
-    }
-
-    updatedStages.push({
-      ...stg,
-      progressPercent: calculatedPercent,
-      status: calculatedStatus,
-      completedAt,
-      completedSkusCount: completedCount,
-      applicableSkusCount: applicableCount
-    });
-  }
-
-  // وضعیت کل پروژه:
-  // ۱) اگر تمام موارد سفارش به انبار ارسال شده و همه مراحل برای تمام کالاها تکمیل شده است -> completed
-  // ۲) اگر هرگونه پیشرفتی در هر SKU یا مرحله‌ای انجام شده است -> از planned به in_progress تغییر می‌یابد
-  const totalQty = productRows.reduce((acc, p) => acc + p.quantity, 0);
-  const weightedProgress = totalQty > 0
-    ? Math.round(productRows.reduce((acc, p) => acc + (p.percent * p.quantity), 0) / totalQty)
-    : 0;
-
-  const allProductsDone = productRows.length > 0 && productRows.every(p => p.applicableOrders.length > 0 && p.completedCount === p.applicableOrders.length);
-  const isOverallCompleted = allProductsDone || (allStagesCompleted && rawStages.length > 0);
-
-  let newProjectStatus = project.status;
-  if (isOverallCompleted) {
-    newProjectStatus = 'completed';
-  } else if (anyProgressDetected || weightedProgress > 0) {
-    if (project.status === 'planned' || project.status === 'completed') {
-      newProjectStatus = 'in_progress';
-    }
-  } else if (!anyProgressDetected && weightedProgress === 0 && project.status === 'completed') {
-    newProjectStatus = 'in_progress';
-  }
-
-  if (newProjectStatus !== project.status) {
-    await orm.update(productionProjects).set({ status: newProjectStatus }).where(eq(productionProjects.id, projectId));
-    project.status = newProjectStatus;
-  }
-
-  return {
-    project,
-    stages: updatedStages,
-    weightedProgress
-  };
-}
 
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
 router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), async (req, res) => {
@@ -1323,67 +991,21 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
 
-    const [project] = await orm.select().from(productionProjects).where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0))).for('update');
-    if (!project) return res.status(404).json({ error: 'پروژه یافت نشد' });
-
-    const products = (Array.isArray(project.products) ? project.products : []) as ProjectProductRow[];
-    const productByItemId = new Map<number, ProjectProductRow>();
-    for (const p of products) {
-      const id = resolveProductItemId(p);
-      if (id) productByItemId.set(id, p);
-    }
-
-    const bizNow = await businessNowIsoDateTime();
     const currentUser = req.user?.username || 'سیستم';
     const updates = req.body.items as Array<{ item_id: number | string; stage_order: number | string; stage_title?: string; status: ProductProgressStatus }>;
 
-    let applied = 0;
-    let skippedInvalid = 0;
-    await orm.transaction(async (tx) => {
-      for (const u of updates) {
-        const itemId = Number(u.item_id);
-        const stageOrder = Number(u.stage_order);
-        if (!Number.isFinite(itemId) || itemId <= 0 || !Number.isFinite(stageOrder) || stageOrder <= 0 || !PRODUCT_PROGRESS_STATUSES.includes(u.status)) {
-          skippedInvalid++;
-          continue;
-        }
-        const product = productByItemId.get(itemId);
-        if (!product) {
-          // SKU باید جزو products تعریف‌شده پروژه باشد
-          skippedInvalid++;
-          continue;
-        }
+    const { applied, skippedInvalid } = await ProjectService.updateProductProgress(
+      projectId,
+      updates.map(u => ({
+        itemId: Number(u.item_id),
+        stageOrder: Number(u.stage_order),
+        stageTitle: u.stage_title,
+        status: u.status
+      })),
+      currentUser
+    );
 
-        const stageRow = await tx.select({ id: projectStages.id, title: projectStages.title }).from(projectStages)
-          .where(and(eq(projectStages.projectId, projectId), eq(projectStages.stageOrder, stageOrder), eq(projectStages.isDeleted, 0)))
-          .limit(1);
-        const stageTitle = stageRow[0]?.title || String(u.stage_title || '').trim() || `مرحله ${stageOrder}`;
-
-        await tx.insert(projectProductStageProgress).values({
-          projectId,
-          itemId,
-          itemCode: product.item_code ?? product.itemCode ?? '',
-          itemName: product.item_name ?? product.itemName ?? '',
-          quantity: Number(product.quantity) || 0,
-          stageOrder,
-          stageTitle,
-          status: u.status,
-          updatedAt: bizNow,
-          updatedByName: currentUser,
-          isDeleted: 0
-        }).onConflictDoUpdate({
-          target: [projectProductStageProgress.projectId, projectProductStageProgress.itemId, projectProductStageProgress.stageOrder],
-          set: {
-            status: u.status,
-            stageTitle,
-            quantity: Number(product.quantity) || 0,
-            updatedAt: bizNow,
-            updatedByName: currentUser
-          }
-        });
-        applied++;
-      }
-    });
+    const [project] = await orm.select({ projectCode: productionProjects.projectCode, status: productionProjects.status }).from(productionProjects).where(eq(productionProjects.id, projectId));
 
     await logActivity({
       userId: req.user?.id,
@@ -1392,7 +1014,7 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
       action: 'UPDATE',
       entity: 'پیشرفت به تفکیک کد کالا',
       entityId: String(projectId),
-      description: `بروزرسانی پیشرفت ماتریسی SKU×مرحله پروژه ${project.projectCode}: ${applied} تغییر اعمال شد`
+      description: `بروزرسانی پیشرفت ماتریسی SKU×مرحله پروژه ${project?.projectCode || projectId}: ${applied} تغییر اعمال شد`
     });
 
     // همگام‌سازی اتوماتیک مراحل و وضعیت پروژه
