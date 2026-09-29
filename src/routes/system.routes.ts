@@ -350,7 +350,30 @@ router.get('/activity-logs/integrity', authorize('admin', 'manager'), async (req
 
 // Admin clear data (Wipe & Reset all system operational data and users to trigger initial setup scenario)
 router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), async (req, res) => {
+  // P0-01 (ARCH-01): محافظت قطعی در برابر حذف فیزیکی دیتابیس در محیط پروداکشن
+  const isProd = process.env.NODE_ENV === 'production';
+  const allowDangerousPurge = process.env.ALLOW_DANGEROUS_DATA_PURGE === 'true';
+
+  if (isProd || !allowDangerousPurge) {
+    logger.error({
+      message: 'Blocked unauthorized attempt to wipe all ERP operational data via /admin/clear-data',
+      user: req.user?.username,
+      nodeEnv: process.env.NODE_ENV,
+      allowDangerousPurge,
+      ip: extractClientIp(req)
+    });
+    throw new ForbiddenError(
+      'عملیات حذف کل داده‌های سیستم در محیط پروداکشن یا بدون فعال‌سازی صریح متغیر ALLOW_DANGEROUS_DATA_PURGE اکیداً مسدود است (مطابق قانون بنیادین RULE 09).'
+    );
+  }
+
   try {
+    logger.warn({
+      message: 'Authorized /admin/clear-data execution started in non-production environment',
+      user: req.user?.username,
+      ip: extractClientIp(req)
+    });
+
     await orm.transaction(async (tx) => {
       // 1. Logs, Webhooks, Outbox, DLQ, Drafts & Idempotency
       await tx.delete(eventActionLogs);

@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import {
   projectBomAllocations,
   productionProjects,
@@ -68,6 +68,7 @@ export class ProjectBomAllocationService {
     allocations: BomReceiptAllocationInput[];
     userId?: number;
     username?: string;
+    externalTx?: DbExecutor;
   }): Promise<{
     allocatedCount: number;
     allocations: ProjectBomAllocationRecord[];
@@ -75,7 +76,7 @@ export class ProjectBomAllocationService {
     const operatorName = params.username || 'سیستم';
     const operatorId = typeof params.userId === 'number' && !isNaN(params.userId) && params.userId > 0 ? params.userId : null;
 
-    return await orm.transaction(async (txEngine) => {
+    const executeReceiptAlloc = async (txEngine: DbExecutor) => {
       // Strictly observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
       const requestedItemIds = params.allocations.map(a => a.itemId);
       await withOrderedLocks(txEngine, [
@@ -225,7 +226,12 @@ export class ProjectBomAllocationService {
         allocatedCount: results.length,
         allocations: results,
       };
-    });
+    };
+
+    if (params.externalTx) {
+      return await executeReceiptAlloc(params.externalTx);
+    }
+    return await orm.transaction(executeReceiptAlloc);
   }
 
   /**
@@ -242,6 +248,7 @@ export class ProjectBomAllocationService {
     allocations: BomAllocationItemInput[];
     userId?: number;
     username?: string;
+    externalTx?: DbExecutor;
   }): Promise<{
     allocatedCount: number;
     allocations: ProjectBomAllocationRecord[];
@@ -249,7 +256,7 @@ export class ProjectBomAllocationService {
     const operatorName = params.username || 'سیستم';
     const operatorId = typeof params.userId === 'number' && !isNaN(params.userId) && params.userId > 0 ? params.userId : null;
 
-    return await orm.transaction(async (txEngine) => {
+    const executeAllocation = async (txEngine: DbExecutor) => {
       // Strictly observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
       const requestedItemIds = params.allocations.map(a => a.itemId);
       await withOrderedLocks(txEngine, [
@@ -374,7 +381,12 @@ export class ProjectBomAllocationService {
         allocatedCount: results.length,
         allocations: results,
       };
-    });
+    };
+
+    if (params.externalTx) {
+      return await executeAllocation(params.externalTx);
+    }
+    return await orm.transaction(executeAllocation);
   }
 
   /**
@@ -382,10 +394,9 @@ export class ProjectBomAllocationService {
    */
   static async consumeAllocation(
     allocationId: number,
-    opts?: { userId?: number; username?: string }
+    opts?: { userId?: number; username?: string; externalTx?: DbExecutor }
   ): Promise<ProjectBomAllocationRecord> {
-
-    return await orm.transaction(async (txEngine) => {
+    const executeConsume = async (txEngine: DbExecutor) => {
       const [alloc] = await txEngine
         .select()
         .from(projectBomAllocations)
@@ -420,7 +431,12 @@ export class ProjectBomAllocationService {
         status: 'consumed',
         consumedAt,
       } as ProjectBomAllocationRecord;
-    });
+    };
+
+    if (opts?.externalTx) {
+      return await executeConsume(opts.externalTx);
+    }
+    return await orm.transaction(executeConsume);
   }
 
   /**
@@ -428,12 +444,12 @@ export class ProjectBomAllocationService {
    */
   static async releaseAllocation(
     allocationId: number,
-    opts?: { reason?: string; userId?: number; username?: string }
+    opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor }
   ): Promise<ProjectBomAllocationRecord> {
     const operatorName = opts?.username || 'سیستم';
     const reason = opts?.reason || 'آزادسازی تخصیص مواد اولیه پروژه';
 
-    return await orm.transaction(async (txEngine) => {
+    const executeRelease = async (txEngine: DbExecutor) => {
       // Pre-read allocation to get itemId for locking in hierarchy order: Items (Level 40) -> Production (Level 50)
       const [preAlloc] = await txEngine.select({ itemId: projectBomAllocations.itemId }).from(projectBomAllocations).where(eq(projectBomAllocations.id, allocationId));
       if (preAlloc?.itemId) {
@@ -503,7 +519,12 @@ export class ProjectBomAllocationService {
         status: 'released',
         releasedAt,
       } as ProjectBomAllocationRecord;
-    });
+    };
+
+    if (opts?.externalTx) {
+      return await executeRelease(opts.externalTx);
+    }
+    return await orm.transaction(executeRelease);
   }
 
   /**

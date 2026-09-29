@@ -261,13 +261,15 @@ export function matchStatementWithTransactions(
       !usedTxIds.has(t.id)
     );
 
-    // ۱. سطح اول: تطبیق بر اساس شماره پیگیری/ارجاع (اگر حداقل ۴ رقم معتبر داشته باشد)
+    // ۱. سطح اول: تطبیق بر اساس شماره پیگیری/ارجاع دقیق (اگر حداقل ۴ رقم معتبر داشته باشد)
     if (row.tracking && row.tracking.length >= 4) {
       const matchByTracking = sameTypeCandidates.find(t => {
         const txTrack = toEnglishDigits(t.trackingNumber || '').replace(/[^\d]/g, '');
         if (!txTrack || txTrack.length < 4) return false;
-        // تطبیق برابر یا شمول در کد پیگیری به همراه برابری مبلغ
-        const trackingMatches = txTrack === row.tracking || txTrack.includes(row.tracking) || row.tracking.includes(txTrack);
+        // P2-05: انطباق دقیق شماره پیگیری (بدون تطابق زیررشته‌ای) به همراه برابری مبلغ
+        const cleanTx = txTrack.replace(/^0+/, '');
+        const cleanRow = row.tracking.replace(/^0+/, '');
+        const trackingMatches = txTrack === row.tracking || (cleanTx.length >= 4 && cleanTx === cleanRow);
         const amountMatches = Math.abs(Number(t.amount) - row.amount) < 1;
         return trackingMatches && amountMatches;
       });
@@ -278,14 +280,14 @@ export function matchStatementWithTransactions(
       }
     }
 
-    // ۲. سطح دوم: تطبیق بر اساس مبلغ دقیق و تاریخ همزمان یا اختلاف حداکثر ۲ روز
+    // ۲. سطح دوم: تطبیق هوشمند بر اساس مبلغ دقیق و تاریخ همزمان یا اختلاف حداکثر ۲ روز (پایا/ساتنا/شتاب)
     if (!matchedTx) {
       const exactAmountCandidates = sameTypeCandidates.filter(t => 
         Math.abs(Number(t.amount) - row.amount) < 1
       );
 
       if (exactAmountCandidates.length > 0) {
-        // جستجوی نزدیک‌ترین تاریخ
+        // جستجوی نزدیک‌ترین تاریخ با سقف خطای حداکثر ۲ روز
         let bestCandidate: TreasuryTxCandidate | null = null;
         let minDiff = 999;
 
@@ -301,14 +303,6 @@ export function matchStatementWithTransactions(
           matchedTx = bestCandidate;
           matchQuality = 'amount_date';
           dateDiffDays = minDiff;
-        } else if (exactAmountCandidates.length === 1) {
-          // ۳. سطح سوم: تطبیق منحصربه‌فرد بر اساس مبلغ با سقف خطای حداکثر ۳۰ روز (جلوگیری از انطباق اشتباه در دوره‌های مالی مختلف)
-          const singleDiff = calculateDateDiffDays(row.date, exactAmountCandidates[0].date);
-          if (singleDiff <= 30) {
-            matchedTx = exactAmountCandidates[0];
-            matchQuality = 'amount_only';
-            dateDiffDays = singleDiff;
-          }
         }
       }
     }

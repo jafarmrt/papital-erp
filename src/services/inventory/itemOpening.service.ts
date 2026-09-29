@@ -1,6 +1,6 @@
 import { orm, DbExecutor } from '../../db/drizzle.js';
 import { items, journalVouchers, transactions } from '../../db/schema.js';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { AccountMappingService } from '../accounting/accountMapping.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { logger } from '../../middleware/logger.js';
@@ -41,13 +41,25 @@ export class ItemOpeningService {
       throw new Error('حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
     }
 
-    // اصلاح unitPrice تراکنش‌های «ثبت اولیه کالا» (قبلاً صفر بود)
+    // P1-07 (M-09 & INV-03): اصلاح unitPrice منحصراً برای تراکنش «ثبت اولیه کالا»، نه دستکاری اسناد انبارگردانی دوره‌ای
     try {
       await executor.update(transactions)
-        .set({ unitPrice: wac })
-        .where(and(eq(transactions.itemId, itemId), eq(transactions.documentType, 'audit')));
+        .set({
+          unitPrice: wac,
+          totalPrice: sql`${transactions.quantity} * ${wac}`
+        })
+        .where(and(
+          eq(transactions.itemId, itemId),
+          eq(transactions.documentType, 'audit'),
+          or(
+            eq(transactions.documentRef, 'ثبت اولیه کالا'),
+            eq(transactions.documentRef, 'درون‌ریزی اکسل'),
+            eq(transactions.unitPrice, 0)
+          ),
+          eq(transactions.isDeleted, 0)
+        ));
     } catch (err: unknown) {
-      logger.warn({ message: `Could not update audit tx unit price for item ${itemId}`, error: err });
+      logger.warn({ message: `Could not update initial audit tx unit price for item ${itemId}`, error: err });
     }
 
     const voucher = await VoucherService.createJournalVoucher({

@@ -8,7 +8,8 @@ import {
   pieceworkPayrolls, 
   items, 
   productionProjects,
-  appSettings
+  appSettings,
+  transactions
 } from '../../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
@@ -18,6 +19,7 @@ import { logger } from '../../middleware/logger.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
+import { toEnglishDigits } from '../../utils.js';
 import type { JournalVoucher } from '../../types.js';
 
 export class VoucherSyncService {
@@ -32,7 +34,8 @@ export class VoucherSyncService {
     username?: string;
     strict?: boolean;
   }, tx?: DbExecutor): Promise<JournalVoucher | null> {
-    const isStrict = options?.strict === true;
+    // P2-04: پیش‌فرض قرار دادن حالت Strict برای تضمین کامل ردپای حسابداری اسناد نهایی
+    const isStrict = options?.strict !== false;
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || (doc.type !== 'invoice' && doc.type !== 'proforma') || doc.status !== 'final') {
@@ -91,10 +94,24 @@ export class VoucherSyncService {
       vatAmount = Number(options.vatAmount) || 0;
     } else if (options?.vatPercent && !isNaN(Number(options.vatPercent))) {
       vatAmount = fin(netAmount).multiply(Number(options.vatPercent)).divide(100).round(0).toNumber();
-    } else if (doc.notes && doc.notes.includes('ارزش افزوده')) {
-      const match = doc.notes.match(/ارزش افزوده:\s*([\d,]+)/);
-      if (match && match[1]) {
-        vatAmount = Number(match[1].replace(/,/g, '')) || 0;
+    } else if (doc.notes && (doc.notes.includes('ارزش افزوده') || doc.notes.includes('مالیات') || /vat/i.test(doc.notes))) {
+      // P1-01 (F9 & DOC-02): نرمال‌سازی ارقام فارسی و جداکننده‌ها برای استخراج دقیق ارزش افزوده از یادداشت سند
+      const normalizedNotes = toEnglishDigits(doc.notes).replace(/٬/g, ',');
+
+      // ۱) اولویت بررسی درصد ارزش افزوده: مثلاً «ارزش افزوده: ۱۰٪»، «مالیات: 10%» یا «۱۰ درصد»
+      const percentMatch = normalizedNotes.match(/(?:ارزش\s*(?:بر\s*)?افزوده|مالیات(?:\s*و\s*عوارض)?|vat)\s*[:=]?\s*([\d.]+)\s*(?:%|٪|درصد)/i) ||
+                           normalizedNotes.match(/([\d.]+)\s*(?:%|٪|درصد)\s*(?:ارزش\s*(?:بر\s*)?افزوده|مالیات(?:\s*و\s*عوارض)?|vat)/i);
+      if (percentMatch && percentMatch[1]) {
+        const pct = Number(percentMatch[1]);
+        if (pct > 0 && pct <= 100) {
+          vatAmount = fin(netAmount).multiply(pct).divide(100).round(0).toNumber();
+        }
+      } else {
+        // ۲) در غیر این صورت، مبلغ مقطوع ریالی: مثلاً «ارزش افزوده: ۵۰,۰۰۰»
+        const match = normalizedNotes.match(/(?:ارزش\s*(?:بر\s*)?افزوده|مالیات(?:\s*و\s*عوارض)?|vat)\s*[:=]?\s*([\d,.]+)/i);
+        if (match && match[1]) {
+          vatAmount = Number(match[1].replace(/,/g, '')) || 0;
+        }
       }
     }
 
@@ -240,12 +257,31 @@ export class VoucherSyncService {
       });
     }
 
-    // ۵) V5.0.17 (TD-120) & V6.0.4 (TD-143): ثبت ردیف‌های بهای تمام‌شده کالای فروش‌رفته (COGS) و کسر متناظر موجودی انبار با تسعیر ارزی دقیق
+    // ۵) V5.0.17 (TD-120), V6.0.4 (TD-143) & P1-02 (H-01): ثبت ردیف‌های بهای تمام‌شده کالای فروش‌رفته (COGS) و کسر متناظر موجودی انبار بر پایه بهای تمام‌شده تاریخی خروج
+    const docTxs = await executor.select({
+      itemId: transactions.itemId,
+      unitPrice: transactions.unitPrice,
+    }).from(transactions)
+      .where(and(
+        eq(transactions.documentId, docId),
+        eq(transactions.type, 'out'),
+        eq(transactions.isDeleted, 0)
+      ));
+    const txCostMap = new Map<number, number>();
+    for (const t of docTxs) {
+      if (t.unitPrice && Number(t.unitPrice) > 0) {
+        txCostMap.set(t.itemId, Number(t.unitPrice));
+      }
+    }
+
     let fgCost = fin(0);
     let rmCost = fin(0);
     for (const line of itemsList) {
       const q = Number(line.quantity) || 0;
-      const wac = Number(line.weightedAverageCost) || 0; // WAC is in IRR
+      const historicalCost = txCostMap.get(line.itemId);
+      const wac = (historicalCost !== undefined && historicalCost > 0)
+        ? historicalCost
+        : (Number(line.weightedAverageCost) || 0); // fallback to current WAC if no tx recorded
       const lineCost = fin(q).multiply(wac);
       if (line.itemType === 'product') {
         fgCost = fgCost.add(lineCost);
@@ -328,7 +364,8 @@ export class VoucherSyncService {
 
     let resultVoucher: JournalVoucher | null = null;
     if (existingVoucher) {
-      if (existingVoucher.status === 'permanent') {
+      // P1-02 (H-01): اسناد تاییدشده و قطعی هرگز نباید با بهای تمام‌شده روز بازنویسی شوند
+      if (existingVoucher.status === 'permanent' || existingVoucher.status === 'approved') {
         return VoucherService.getJournalVoucherById(existingVoucher.id, tx);
       }
       resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {
@@ -369,7 +406,8 @@ export class VoucherSyncService {
     exchangeRate?: number;
     strict?: boolean;
   }, tx?: DbExecutor): Promise<JournalVoucher | null> {
-    const isStrict = options?.strict === true;
+    // P2-04: پیش‌فرض قرار دادن حالت Strict برای صدور سند خرید/رسید
+    const isStrict = options?.strict !== false;
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || !['receipt', 'production_receipt', 'purchase'].includes(doc.type) || doc.status !== 'final') {
@@ -410,7 +448,10 @@ export class VoucherSyncService {
 
     for (const it of itemsList) {
       const q = Number(it.quantity) || 0;
-      const p = Number(it.unitPrice) > 0 ? Number(it.unitPrice) : (Number(it.weightedAverageCost) || 0);
+      // P1-03 (M-06): در رسیدهای خرید قیمت واقعی فاکتور ثبت می‌شود؛ فال‌بک به WAC فقط مختص رسیدهای تولید است
+      const p = doc.type === 'production_receipt'
+        ? (Number(it.unitPrice) > 0 ? Number(it.unitPrice) : (Number(it.weightedAverageCost) || 0))
+        : Number(it.unitPrice || 0);
       const d = Number(it.discount) || 0;
       const lineNetRaw = fin(q).multiply(p).subtract(d);
       const lineNet = lineNetRaw.isNegative() ? fin(0) : lineNetRaw;
@@ -583,7 +624,8 @@ export class VoucherSyncService {
 
     let resultVoucher: JournalVoucher | null = null;
     if (existingVoucher) {
-      if (existingVoucher.status === 'permanent') {
+      // P1-02 (H-01): اسناد تاییدشده و قطعی خرید هرگز نباید با سنک مجدد بازنویسی شوند
+      if (existingVoucher.status === 'permanent' || existingVoucher.status === 'approved') {
         return VoucherService.getJournalVoucherById(existingVoucher.id, tx);
       }
       resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {
@@ -622,8 +664,10 @@ export class VoucherSyncService {
     userId?: number;
     username?: string;
     strict?: boolean;
+    exchangeRate?: number;
   }, tx?: DbExecutor): Promise<JournalVoucher | null> {
-    const isStrict = options?.strict === true;
+    // P2-04: پیش‌فرض قرار دادن حالت Strict برای صدور سند انبار
+    const isStrict = options?.strict !== false;
     const executor = tx || orm;
     const [doc] = await executor.select().from(documents).where(eq(documents.id, docId));
     if (!doc || doc.isDeleted === 1 || doc.status !== 'final') {
@@ -651,7 +695,12 @@ export class VoucherSyncService {
     .leftJoin(items, eq(documentItems.itemId, items.id))
     .where(and(eq(documentItems.documentId, docId), eq(documentItems.isDeleted, 0)));
 
-    if (!itemsList || itemsList.length === 0) return null;
+    if (!itemsList || itemsList.length === 0) {
+      if (isStrict) {
+        throw new ValidationError(`سند انبار شماره «${doc.refNumber}» فاقد هرگونه قلم کالا برای صدور سند حسابداری است.`);
+      }
+      return null;
+    }
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     const rawMaterialAcc = (await AccountMappingService.getInventoryRawMaterialsAccount(tx)) || allAccs.find(a => a.code === '1401') || allAccs.find(a => a.code === '14');
@@ -707,8 +756,9 @@ export class VoucherSyncService {
 
       for (const line of itemsList) {
         const q = Number(line.quantity) || 0;
-        const linePrice = Number(line.unitPrice) > 0 ? Number(line.unitPrice) : (Number(line.weightedAverageCost) || 0);
-        const cost = fin(q).multiply(linePrice);
+        // P1-06 (M-07 & F11): حواله مصرف بر مبنای بهای تمام‌شده میانگین موزون (WAC) ارزیابی می‌شود، نه قیمت فروش
+        const lineCostRate = Number(line.weightedAverageCost) > 0 ? Number(line.weightedAverageCost) : (Number(line.unitPrice) || 0);
+        const cost = fin(q).multiply(lineCostRate);
         if (line.itemType === 'product') {
           productCost = productCost.add(cost);
         } else {
@@ -741,28 +791,40 @@ export class VoucherSyncService {
         description: `بهای مواد و کالای خارج‌شده بابت حواله ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
       });
 
-      if (rawMatCostNum > 0 && rawMaterialAcc) {
-        voucherItems.push({
-          accountId: rawMaterialAcc.id,
-          detailedType: 'other',
-          detailedName: 'موجودی مواد اولیه و ملزومات',
-          debit: 0,
-          credit: rawMatCostNum,
-          currency: doc.currency || 'IRR',
-          description: `کاهش موجودی مواد اولیه بابت حواله خروج شماره ${doc.refNumber}`
-        });
+      if (rawMatCostNum > 0) {
+        if (!rawMaterialAcc) {
+          if (isStrict) {
+            throw new ValidationError('سرفصل حسابداری موجودی مواد اولیه و ملزومات (۱۴۰۱) در تنظیمات حسابداری یافت نشد.');
+          }
+        } else {
+          voucherItems.push({
+            accountId: rawMaterialAcc.id,
+            detailedType: 'other',
+            detailedName: 'موجودی مواد اولیه و ملزومات',
+            debit: 0,
+            credit: rawMatCostNum,
+            currency: doc.currency || 'IRR',
+            description: `کاهش موجودی مواد اولیه بابت حواله خروج شماره ${doc.refNumber}`
+          });
+        }
       }
 
-      if (productCostNum > 0 && finishedGoodsAcc) {
-        voucherItems.push({
-          accountId: finishedGoodsAcc.id,
-          detailedType: 'other',
-          detailedName: 'موجودی محصولات نهایی و کالای ساخته‌شده',
-          debit: 0,
-          credit: productCostNum,
-          currency: doc.currency || 'IRR',
-          description: `کاهش موجودی محصولات بابت حواله خروج شماره ${doc.refNumber}`
-        });
+      if (productCostNum > 0) {
+        if (!finishedGoodsAcc) {
+          if (isStrict) {
+            throw new ValidationError('سرفصل حسابداری موجودی کالای ساخته‌شده (۱۴۰۳) در تنظیمات حسابداری یافت نشد.');
+          }
+        } else {
+          voucherItems.push({
+            accountId: finishedGoodsAcc.id,
+            detailedType: 'other',
+            detailedName: 'موجودی محصولات نهایی و کالای ساخته‌شده',
+            debit: 0,
+            credit: productCostNum,
+            currency: doc.currency || 'IRR',
+            description: `کاهش موجودی محصولات بابت حواله خروج شماره ${doc.refNumber}`
+          });
+        }
       }
 
     } else if (doc.type === 'waste') {
@@ -772,8 +834,9 @@ export class VoucherSyncService {
 
       for (const line of itemsList) {
         const q = Number(line.quantity) || 0;
-        const linePrice = Number(line.unitPrice) > 0 ? Number(line.unitPrice) : (Number(line.weightedAverageCost) || 0);
-        const cost = fin(q).multiply(linePrice);
+        // P1-06 (M-07 & F11): ثبت هزینه ضایعات بر مبنای بهای تمام‌شده میانگین موزون (WAC)، نه قیمت فروش
+        const lineCostRate = Number(line.weightedAverageCost) > 0 ? Number(line.weightedAverageCost) : (Number(line.unitPrice) || 0);
+        const cost = fin(q).multiply(lineCostRate);
         if (line.itemType === 'product') {
           productWaste = productWaste.add(cost);
         } else {
@@ -785,7 +848,12 @@ export class VoucherSyncService {
       const productWasteNum = productWaste.round(4).toNumber();
       const totalWasteAmount = fin(rawMatWasteNum).add(productWasteNum).round(4).toNumber();
       if (totalWasteAmount <= 0) return null;
-      if (!wasteExpenseAcc) return null;
+      if (!wasteExpenseAcc) {
+        if (isStrict) {
+          throw new ValidationError('سرفصل حسابداری هزینه ضایعات و افت کیفی (۶۰۰۳) در تنظیمات حسابداری یافت نشد.');
+        }
+        return null;
+      }
 
       voucherType = 'general';
       voucherDescription = `ثبت ضایعات و افت کیفی مواد/کالا شماره ${doc.refNumber}`;
@@ -800,28 +868,40 @@ export class VoucherSyncService {
         description: `هزینه ضایعات و افت کیفی بابت سند شماره ${doc.refNumber}`
       });
 
-      if (rawMatWasteNum > 0 && rawMaterialAcc) {
-        voucherItems.push({
-          accountId: rawMaterialAcc.id,
-          detailedType: 'other',
-          detailedName: 'موجودی مواد اولیه و ملزومات',
-          debit: 0,
-          credit: rawMatWasteNum,
-          currency: doc.currency || 'IRR',
-          description: `کاهش موجودی مواد اولیه بابت ضایعات سند شماره ${doc.refNumber}`
-        });
+      if (rawMatWasteNum > 0) {
+        if (!rawMaterialAcc) {
+          if (isStrict) {
+            throw new ValidationError('سرفصل حسابداری موجودی مواد اولیه و ملزومات (۱۴۰۱) جهت ثبت ضایعات یافت نشد.');
+          }
+        } else {
+          voucherItems.push({
+            accountId: rawMaterialAcc.id,
+            detailedType: 'other',
+            detailedName: 'موجودی مواد اولیه و ملزومات',
+            debit: 0,
+            credit: rawMatWasteNum,
+            currency: doc.currency || 'IRR',
+            description: `کاهش موجودی مواد اولیه بابت ضایعات سند شماره ${doc.refNumber}`
+          });
+        }
       }
 
-      if (productWasteNum > 0 && finishedGoodsAcc) {
-        voucherItems.push({
-          accountId: finishedGoodsAcc.id,
-          detailedType: 'other',
-          detailedName: 'موجودی محصولات نهایی و کالای ساخته‌شده',
-          debit: 0,
-          credit: productWasteNum,
-          currency: doc.currency || 'IRR',
-          description: `کاهش موجودی محصولات بابت ضایعات سند شماره ${doc.refNumber}`
-        });
+      if (productWasteNum > 0) {
+        if (!finishedGoodsAcc) {
+          if (isStrict) {
+            throw new ValidationError('سرفصل حسابداری موجودی کالای ساخته‌شده (۱۴۰۳) جهت ثبت ضایعات یافت نشد.');
+          }
+        } else {
+          voucherItems.push({
+            accountId: finishedGoodsAcc.id,
+            detailedType: 'other',
+            detailedName: 'موجودی محصولات نهایی و کالای ساخته‌شده',
+            debit: 0,
+            credit: productWasteNum,
+            currency: doc.currency || 'IRR',
+            description: `کاهش موجودی محصولات بابت ضایعات سند شماره ${doc.refNumber}`
+          });
+        }
       }
 
     } else if (doc.type === 'return') {
@@ -846,11 +926,36 @@ export class VoucherSyncService {
         }
       }
 
-      // TD-143 & TD-145: تسعیر ارزی بهای تمام‌شده مرجوعی در صورت ارزی بودن سند
+      // TD-143, TD-145 & C-04: تسعیر ارزی بهای تمام‌شده مرجوعی در صورت ارزی بودن سند
       let fgCostConv = fgReturnCost;
       let rmCostConv = rmReturnCost;
-      const docCurrency = doc.currency || 'IRR';
-      const docExchangeRate = Number((doc as any).exchangeRate) || 0;
+      const docCurrency = (doc.currency || 'IRR').toUpperCase();
+      let docExchangeRate = 1;
+
+      if (docCurrency !== 'IRR') {
+        if (options?.exchangeRate !== undefined && Number(options.exchangeRate) > 0) {
+          docExchangeRate = Number(options.exchangeRate);
+        } else if (doc.notes) {
+          const match = doc.notes.match(/(?:نرخ\s*تسعیر|exchange_?rate)\s*[:=]?\s*([\d,.]+)/i);
+          if (match && match[1]) {
+            const parsed = Number(match[1].replace(/,/g, ''));
+            if (parsed > 0) docExchangeRate = parsed;
+          }
+        }
+        if (docExchangeRate === 1) {
+          try {
+            const [settingRow] = await executor.select().from(appSettings)
+              .where(eq(appSettings.key, `exchange_rate_${docCurrency.toLowerCase()}`));
+            if (settingRow && settingRow.value) {
+              const val = Number(settingRow.value);
+              if (val > 0) docExchangeRate = val;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+
       if (docCurrency !== 'IRR' && docExchangeRate > 0) {
         if (docExchangeRate >= 1) {
           fgCostConv = fgReturnCost.divide(docExchangeRate);
@@ -866,8 +971,12 @@ export class VoucherSyncService {
       const rmCostNum = rmCostConv.round(4).toNumber();
       const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4).toNumber();
 
-      if (totalReturnAmountNum <= 0 && totalCogsNum <= 0) return null;
-      if (!salesReturnAcc || !customerAcc) return null;
+      if (!salesReturnAcc || !customerAcc) {
+        if (isStrict) {
+          throw new ValidationError('سرفصل‌های حسابداری برگشت از فروش (۵۱۰۱) یا حساب‌های دریافتنی تجاری (۱۲۰۱) در تنظیمات حسابداری یافت نشد.');
+        }
+        return null;
+      }
 
       let matchedCustomerId: number | null = null;
       if (doc.buyerName) {
@@ -974,7 +1083,8 @@ export class VoucherSyncService {
 
     let resultVoucher: JournalVoucher | null = null;
     if (existingVoucher) {
-      if (existingVoucher.status === 'permanent') {
+      // P1-02 (H-01): اسناد تاییدشده و قطعی حواله/مرجوعی هرگز نباید با سنک مجدد بازنویسی شوند
+      if (existingVoucher.status === 'permanent' || existingVoucher.status === 'approved') {
         return VoucherService.getJournalVoucherById(existingVoucher.id, tx);
       }
       resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {

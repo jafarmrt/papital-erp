@@ -155,18 +155,20 @@ export class StockReconciliationService {
         item_id,
         COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE 0 END), 0) as total_in,
         COALESCE(SUM(CASE WHEN type = 'out' THEN quantity ELSE 0 END), 0) as total_out,
-        COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE -quantity END), 0) as kardex_balance
+        COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE -quantity END), 0) as kardex_balance,
+        COALESCE(SUM(CASE WHEN type = 'in' THEN total_price ELSE 0 END), 0) as total_in_value
       FROM ${transactions}
       WHERE is_deleted = 0
       GROUP BY item_id
     `);
 
-    const kardexMap = new Map<number, { totalIn: number; totalOut: number; kardexBalance: number }>();
+    const kardexMap = new Map<number, { totalIn: number; totalOut: number; kardexBalance: number; totalInValue: number }>();
     for (const r of kardexAggregates.rows as Record<string, unknown>[]) {
       kardexMap.set(Number(r.item_id), {
         totalIn: fin(Number(r.total_in) || 0).toNumber(),
         totalOut: fin(Number(r.total_out) || 0).toNumber(),
         kardexBalance: fin(Number(r.kardex_balance) || 0).toNumber(),
+        totalInValue: fin(Number(r.total_in_value) || 0).toNumber(),
       });
     }
 
@@ -225,7 +227,7 @@ export class StockReconciliationService {
         }
       }
 
-      const kardexData = kardexMap.get(item.id) || { totalIn: 0, totalOut: 0, kardexBalance: 0 };
+      const kardexData = kardexMap.get(item.id) || { totalIn: 0, totalOut: 0, kardexBalance: 0, totalInValue: 0 };
       const kardexBalance = kardexData.kardexBalance;
 
       const itemKardexLocs: Record<string, number> = {};
@@ -273,6 +275,16 @@ export class StockReconciliationService {
         negativeStockItemsCount++;
       }
 
+      // P1-07 & M-08 (INV-02): محاسبه بهای تمام‌شده واقعی میانگین از گردش کاردکس و ثبت مغایرت
+      const computedWac = kardexData.totalIn > 0 
+        ? fin(kardexData.totalInValue).divide(kardexData.totalIn, 4).toNumber() 
+        : recordedWac;
+
+      if (recordedWac > 0 && computedWac > 0 && Math.abs(recordedWac - computedWac) > 1) {
+        discrepancies.push('kardex_wac_mismatch');
+        anomalyDetails.push(`نرخ میانگین موزون ثبتی (${recordedWac}) با بهای محاسباتی کاردکس (${computedWac}) مغایرت دارد.`);
+      }
+
       totalScalarStock = FinancialMath.add(totalScalarStock, scalarStock);
       totalKardexStock = FinancialMath.add(totalKardexStock, kardexBalance);
 
@@ -303,7 +315,7 @@ export class StockReconciliationService {
         whStocksSum: whSum,
         kardexNetBalance: kardexBalance,
         recordedWac,
-        computedWac: recordedWac,
+        computedWac,
         discrepancies,
         whBreakdown,
         kardexLocBreakdown: itemKardexLocs,
@@ -384,7 +396,7 @@ export class StockReconciliationService {
     const userFullNameMap = new Map(allUsers.map(u => [u.username, u.fullName]));
 
     let runningBal = 0;
-    let runningWac = defaultWac;
+    let runningWac = 0;
     const locationRunning: Record<string, number> = {};
     let totalIn = 0;
     let totalOut = 0;
@@ -392,14 +404,23 @@ export class StockReconciliationService {
 
     for (const tx of itemTxs) {
       const qty = fin(tx.quantity).toNumber();
-      const unitPrice = defaultWac;
+      const txPrice = Number(tx.unitPrice) || 0;
+      const isReversal = Boolean(tx.reversalOfId) || (Boolean(tx.documentRef) && tx.documentRef!.startsWith('REV-'));
+
+      let effectiveUnitPrice = txPrice;
 
       if (tx.type === 'in') {
+        // P1-07 & M-08 (INV-02): محاسبه پویا و گام‌به‌گام WAC متناسب با هر تراکنش ورودی
+        if (!isReversal && txPrice > 0) {
+          runningWac = FinancialMath.calculateWAC(runningBal, runningWac, qty, txPrice).toNumber();
+        }
         runningBal = FinancialMath.add(runningBal, qty);
         totalIn = FinancialMath.add(totalIn, qty);
+        effectiveUnitPrice = txPrice > 0 ? txPrice : (runningWac > 0 ? runningWac : defaultWac);
       } else if (tx.type === 'out') {
         runningBal = FinancialMath.subtract(runningBal, qty);
         totalOut = FinancialMath.add(totalOut, qty);
+        effectiveUnitPrice = txPrice > 0 ? txPrice : (runningWac > 0 ? runningWac : defaultWac);
       }
 
       const loc = tx.location || '';
@@ -410,6 +431,8 @@ export class StockReconciliationService {
         locationRunning[loc] = FinancialMath.subtract(locationRunning[loc], qty);
       }
 
+      const rowWac = runningWac > 0 ? runningWac : defaultWac;
+
       entries.push({
         transactionId: tx.id,
         date: tx.date || '',
@@ -418,17 +441,17 @@ export class StockReconciliationService {
         documentRef: tx.documentRef || '',
         location: loc,
         quantity: qty,
-        unitPrice,
-        totalAmount: FinancialMath.multiply(qty, unitPrice),
+        unitPrice: effectiveUnitPrice,
+        totalAmount: FinancialMath.multiply(qty, effectiveUnitPrice),
         runningBalance: runningBal,
         runningLocationStock: locationRunning[loc],
         runningGlobalStock: runningBal,
-        runningWac,
-        runningTotalValue: FinancialMath.multiply(runningBal, runningWac),
+        runningWac: rowWac,
+        runningTotalValue: FinancialMath.multiply(runningBal, rowWac),
         notes: tx.notes || '',
         createdBy: userFullNameMap.get(tx.createdBy || '') || tx.createdBy || 'سیستم',
         reversalOfId: tx.reversalOfId,
-        isReversal: Boolean(tx.reversalOfId),
+        isReversal,
       });
     }
 

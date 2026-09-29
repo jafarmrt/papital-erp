@@ -1,8 +1,9 @@
 import { eq, and, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, taskCategories } from '../db/schema.js';
+import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, journalVouchers, taskCategories } from '../db/schema.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
+import { VoucherService } from './accounting/voucher.service.js';
 
 export interface CreatePieceworkTaskInput {
   code?: string;
@@ -670,6 +671,99 @@ export class PieceworkService {
 
     await executor.update(pieceworkLogs).set({ isDeleted: 1 }).where(eq(pieceworkLogs.id, id));
     return existing;
+  }
+
+  /**
+   * Cancels and soft-deletes a piecework payroll, reverses its financial voucher,
+   * and unlinks its logs back to pending state (RULE 01 & RULE 09).
+   */
+  static async deletePayroll(
+    payrollId: number,
+    options?: {
+      userId?: number;
+      username?: string;
+      reason?: string;
+      externalTx?: DbExecutor;
+    }
+  ): Promise<typeof pieceworkPayrolls.$inferSelect> {
+    const operatorName = options?.username || 'سیستم';
+    const operatorId = options?.userId ?? null;
+    const reason = options?.reason || `ابطال و حذف فیش حقوقی`;
+
+    const executeDelete = async (tx: DbExecutor) => {
+      const [pay] = await tx
+        .select()
+        .from(pieceworkPayrolls)
+        .where(and(eq(pieceworkPayrolls.id, payrollId), eq(pieceworkPayrolls.isDeleted, 0)))
+        .for('update');
+
+      if (!pay) {
+        throw new NotFoundError('فیش حقوقی یافت نشد');
+      }
+
+      // V4.0.33: Guard against deleting payrolls with treasury payment records
+      if (['paid', 'partially_paid'].includes(pay.status || '')) {
+        throw new BadRequestError(
+          'این فیش حقوقی دارای تراکنش پرداخت خزانه‌ای ثبت‌شده است؛ ابطال آن مجاز نیست مگر اینکه ابتدا تراکنش‌های پرداخت آن در بخش خزانه ابطال گردند.'
+        );
+      }
+
+      // Check linked voucher
+      const [linkedVoucher] = await tx
+        .select()
+        .from(journalVouchers)
+        .where(
+          and(
+            eq(journalVouchers.referenceModule, 'payroll'),
+            eq(journalVouchers.referenceId, payrollId),
+            eq(journalVouchers.isDeleted, 0)
+          )
+        )
+        .for('update');
+
+      if (linkedVoucher && linkedVoucher.status === 'permanent') {
+        throw new BadRequestError(
+          `سند حسابداری شماره #${linkedVoucher.voucherNumber} قطعی شده است و امکان ابطال فیش حقوقی وجود ندارد.`
+        );
+      }
+
+      if (linkedVoucher) {
+        if (linkedVoucher.status === 'approved') {
+          // If approved, reverse the voucher formally
+          await VoucherService.reverseVoucher({
+            voucherId: linkedVoucher.id,
+            reason: `${reason} #${pay.payrollNumber || payrollId}`,
+            userId: operatorId ?? undefined,
+            username: operatorName,
+            externalTx: tx,
+            allowReversalOfReversal: true
+          });
+        } else {
+          // If draft, soft-delete it
+          await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, linkedVoucher.id));
+        }
+      }
+
+      // Unlink logs back to pending
+      await tx
+        .update(pieceworkLogs)
+        .set({ payrollId: null, status: 'pending' })
+        .where(eq(pieceworkLogs.payrollId, payrollId));
+
+      // Soft delete payroll
+      const [updatedPay] = await tx
+        .update(pieceworkPayrolls)
+        .set({ isDeleted: 1 })
+        .where(eq(pieceworkPayrolls.id, payrollId))
+        .returning();
+
+      return updatedPay || pay;
+    };
+
+    if (options?.externalTx) {
+      return await executeDelete(options.externalTx);
+    }
+    return await orm.transaction(executeDelete);
   }
 }
 

@@ -24,6 +24,7 @@ import {
   type BomReceiptAllocationInput,
   type ProjectBomAllocationRecord
 } from './projectBomAllocation.service.js';
+import type { DbExecutor } from '../../db/drizzle.js';
 
 export type {
   DiscrepancyType,
@@ -128,6 +129,7 @@ export class InventoryIntegrityService {
     allocations: BomAllocationItemInput[];
     userId?: number;
     username?: string;
+    externalTx?: DbExecutor;
   }) {
     return ProjectBomAllocationService.allocateMaterialsForProject(params);
   }
@@ -137,15 +139,16 @@ export class InventoryIntegrityService {
     allocations: BomReceiptAllocationInput[];
     userId?: number;
     username?: string;
+    externalTx?: DbExecutor;
   }) {
     return ProjectBomAllocationService.allocateReceiptItemsForProjectBom(params);
   }
 
-  static async consumeAllocation(allocationId: number, opts?: { userId?: number; username?: string }) {
+  static async consumeAllocation(allocationId: number, opts?: { userId?: number; username?: string; externalTx?: DbExecutor }) {
     return ProjectBomAllocationService.consumeAllocation(allocationId, opts);
   }
 
-  static async releaseAllocation(allocationId: number, opts?: { reason?: string; userId?: number; username?: string }) {
+  static async releaseAllocation(allocationId: number, opts?: { reason?: string; userId?: number; username?: string; externalTx?: DbExecutor }) {
     return ProjectBomAllocationService.releaseAllocation(allocationId, opts);
   }
 

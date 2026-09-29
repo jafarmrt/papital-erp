@@ -118,15 +118,17 @@ export async function runMigrations(): Promise<MigrationResult> {
       logger.warn(`[Migrator] piecework_payrolls paid_amount column check: ${e.message}`);
     }
 
-    // V6.0.21 (TD-157): Ensure is_deleted column exists on document_items and journal_voucher_items for soft-delete compliance (RULE 09)
+    // V6.0.21 (TD-157): Ensure is_deleted column exists on document_items, journal_voucher_items and transfers for soft-delete compliance (RULE 09)
     try {
       await pool.query(`
         ALTER TABLE document_items ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
         ALTER TABLE journal_voucher_items ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
+        ALTER TABLE transfers ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
         CREATE INDEX IF NOT EXISTS idx_jvi_deleted ON journal_voucher_items (is_deleted);
+        CREATE INDEX IF NOT EXISTS idx_transfer_deleted ON transfers (is_deleted);
       `);
     } catch (e: any) {
-      logger.warn(`[Migrator] line items is_deleted column check: ${e.message}`);
+      logger.warn(`[Migrator] line items & transfers is_deleted column check: ${e.message}`);
     }
 
     let after = before;

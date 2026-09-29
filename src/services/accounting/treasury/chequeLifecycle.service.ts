@@ -1,6 +1,6 @@
 import { orm } from '../../../db/drizzle.js';
-import { bankAccounts, cheques } from '../../../db/schema.js';
-import { eq, desc, asc, and, or, like, gte, lte } from 'drizzle-orm';
+import { bankAccounts, cheques, journalVouchers } from '../../../db/schema.js';
+import { eq, desc, asc, and, or, like, gte, lte, sql } from 'drizzle-orm';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
@@ -373,9 +373,14 @@ export class ChequeLifecycleService {
         await txEngine.update(bankAccounts).set({ currentBalance: newBal.toNumber() }).where(eq(bankAccounts.id, bank.id));
 
         if (existing.type === 'received' && bank.accountId) {
-          const inCollectionAcc = (await AccountMappingService.getChequeInCollectionAccount(txEngine))
-            || (await AccountMappingService.getChequeReceivableAccount(txEngine));
-          if (inCollectionAcc) {
+          // P2-01: اگر چک مستقیماً از وضعیت نزد صندوق (received/in_treasury/in_safe) وصول شده باشد،
+          // سرفصل اسناد دریافتنی نزد صندوق (۱۱۰۱) بستانکار می‌شود؛ و اگر در جریان وصول بوده (in_collection)، سرفصل ۱۱۰۲.
+          const isDirectFromTreasury = existing.status === 'received' || existing.status === 'in_treasury' || existing.status === 'in_safe';
+          const creditAcc = isDirectFromTreasury
+            ? ((await AccountMappingService.getChequeReceivableAccount(txEngine)) || (await AccountMappingService.getChequeInCollectionAccount(txEngine)))
+            : ((await AccountMappingService.getChequeInCollectionAccount(txEngine)) || (await AccountMappingService.getChequeReceivableAccount(txEngine)));
+
+          if (creditAcc) {
             await VoucherService.createJournalVoucher({
               date: voucherIsoDate,
               voucherType: 'treasury',
@@ -396,12 +401,14 @@ export class ChequeLifecycleService {
                   description: `واریز به بانک بابت وصول چک ${existing.chequeNumber}`
                 },
                 {
-                  accountId: inCollectionAcc.id,
+                  accountId: creditAcc.id,
                   detailedType: 'other',
                   detailedName: `چک ${existing.chequeNumber}`,
                   debit: 0,
                   credit: amount,
-                  description: `بستانکاری اسناد دریافتنی بابت پاس شدن چک ${existing.chequeNumber}`
+                  description: isDirectFromTreasury
+                    ? `بستانکاری اسناد دریافتنی نزد صندوق بابت وصول مستقیم چک ${existing.chequeNumber}`
+                    : `بستانکاری اسناد در جریان وصول بابت پاس شدن چک ${existing.chequeNumber}`
                 }
               ]
             }, txEngine);
@@ -476,9 +483,13 @@ export class ChequeLifecycleService {
       } else if (data.status === 'bounced') {
         const bouncedAcc = (await AccountMappingService.getChequeProtestAccount(txEngine))
           || (await AccountMappingService.getTradeReceivablesAccount(txEngine));
-        const inCollectionAcc = (await AccountMappingService.getChequeInCollectionAccount(txEngine))
-          || (await AccountMappingService.getChequeReceivableAccount(txEngine));
-        if (bouncedAcc && inCollectionAcc && existing.type === 'received') {
+        // P2-01: اگر چک مستقیماً از نزد صندوق واخواست شده باشد، سرفصل اسناد نزد صندوق (۱۱۰۱) بستانکار می‌شود؛ و اگر در جریان وصول بوده، ۱۱۰۲
+        const isDirectFromTreasury = existing.status === 'received' || existing.status === 'in_treasury' || existing.status === 'in_safe';
+        const creditAcc = isDirectFromTreasury
+          ? ((await AccountMappingService.getChequeReceivableAccount(txEngine)) || (await AccountMappingService.getChequeInCollectionAccount(txEngine)))
+          : ((await AccountMappingService.getChequeInCollectionAccount(txEngine)) || (await AccountMappingService.getChequeReceivableAccount(txEngine)));
+
+        if (bouncedAcc && creditAcc && existing.type === 'received') {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'adjustment',
@@ -499,12 +510,14 @@ export class ChequeLifecycleService {
                 description: `برگشت چک ${existing.chequeNumber}`
               },
               {
-                accountId: inCollectionAcc.id,
+                accountId: creditAcc.id,
                 detailedType: 'other',
                 detailedName: `چک ${existing.chequeNumber}`,
                 debit: 0,
                 credit: amount,
-                description: `کسر از اسناد در جریان وصول بابت برگشت چک ${existing.chequeNumber}`
+                description: isDirectFromTreasury
+                  ? `کسر از اسناد دریافتنی نزد صندوق بابت برگشت مستقیم چک ${existing.chequeNumber}`
+                  : `کسر از اسناد در جریان وصول بابت برگشت چک ${existing.chequeNumber}`
               }
             ]
           }, txEngine);
@@ -585,16 +598,47 @@ export class ChequeLifecycleService {
         throw new BusinessLogicError('چک وصول‌شده یا خرج‌شده قابل حذف نیست — اسناد مالی مربوط به آن صادر گردیده است');
       }
 
-      // V1.4.0 (DB-009): حذف چکِ دارای سند، حتماً با سند معکوس در همان تراکنش —
-      // تا رد دفتری چک (اسناد دریافتنی/پرداختنی/واخواست) بدون جبران باقی نماند.
-      if (existing.voucherId) {
-        await VoucherService.reverseVoucher({
-          voucherId: existing.voucherId,
-          reason: `ابطال چک شماره ${existing.chequeNumber} (حذف رکورد)`,
-          userId: user?.userId,
-          username: user?.username,
-          externalTx: txEngine,
-        });
+      // P2-02 (AUD-ACC): شناسایی و ابطال اتمیک کلیه اسناد چرخه عمر چک (سند اولیه، در جریان وصول، واخواست و...)
+      const activeChequeVouchers = await txEngine.select({
+        id: journalVouchers.id,
+        voucherNumber: journalVouchers.voucherNumber,
+        status: journalVouchers.status,
+      }).from(journalVouchers)
+        .where(and(
+          eq(journalVouchers.isDeleted, 0),
+          or(
+            existing.voucherId ? eq(journalVouchers.id, existing.voucherId) : sql`1 = 0`,
+            and(
+              eq(journalVouchers.referenceModule, 'cheque'),
+              sql`${journalVouchers.referenceNumber} = ${String(existing.chequeNumber)}::text`
+            )
+          )
+        ))
+        .for('update');
+
+      const reversedVoucherIds = new Set<number>();
+      for (const v of activeChequeVouchers) {
+        if (!reversedVoucherIds.has(v.id) && v.status !== 'permanent') {
+          const expectedRevRef = `REV-V${v.voucherNumber}`;
+          const [hasReversal] = await txEngine.select({ id: journalVouchers.id })
+            .from(journalVouchers)
+            .where(and(
+              eq(journalVouchers.referenceId, v.id),
+              eq(journalVouchers.referenceNumber, expectedRevRef),
+              eq(journalVouchers.isDeleted, 0)
+            ));
+
+          if (!hasReversal) {
+            await VoucherService.reverseVoucher({
+              voucherId: v.id,
+              reason: `ابطال چک شماره ${existing.chequeNumber} (حذف رکورد و ابطال چرخه عمر)`,
+              userId: user?.userId,
+              username: user?.username,
+              externalTx: txEngine,
+            });
+            reversedVoucherIds.add(v.id);
+          }
+        }
       }
 
       await txEngine.update(cheques).set({ isDeleted: 1 }).where(eq(cheques.id, id));

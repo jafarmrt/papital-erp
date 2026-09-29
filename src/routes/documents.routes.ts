@@ -91,7 +91,9 @@ export const documentCreateSchema = z.object({
 
 export const finalizeDocumentSchema = z.object({
   body: z.object({
-    user: z.string().max(100).optional()
+    user: z.string().max(100).optional(),
+    vatPercent: z.union([z.number().min(0).max(100), z.string(), z.null()]).optional(),
+    vatAmount: z.union([z.number().min(0), z.string(), z.null()]).optional(),
   }).optional(),
   params: z.object({
     id: numericIdString
@@ -212,8 +214,20 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
   const userRole = req.user?.role;
   const isSalesUser = userRole === 'sales_manager' || (userRole !== 'admin' && userRole !== 'manager' && userRole !== 'warehouse_keeper' && userRole !== 'accountant');
   
-  if (isSalesUser && req.body.status === 'final') {
-    throw new ForbiddenError('کاربران فروش فقط مجاز به صدور پیش‌فاکتور می‌باشند. ثبت فاکتور نهایی و کسر از انبار باید توسط انباردار یا مدیر تایید گردد.');
+  if (isSalesUser) {
+    if (req.body.status === 'final') {
+      throw new ForbiddenError('کاربران فروش فقط مجاز به صدور پیش‌فاکتور می‌باشند. ثبت فاکتور نهایی و کسر از انبار باید توسط انباردار یا مدیر تایید گردد.');
+    }
+    // P0-02 (F17): کاربران فروش نباید با حذف فیلد status یا ارسال invoice به وضعیت قطعی برسند
+    if (!req.body.status || req.body.status === 'draft') {
+      req.body.status = 'proforma';
+    }
+    if (req.body.docType === 'invoice') {
+      req.body.docType = 'proforma';
+    }
+    if (req.body.status !== 'proforma') {
+      throw new ForbiddenError('کاربران فروش فقط مجاز به صدور پیش‌فاکتور (proforma) می‌باشند.');
+    }
   }
 
   // V10-4.3: اتصال سند به پرونده CRM فقط با فیلد صریح crmLeadId — حذف اتکا به تگ متنی «CRM #n»
@@ -415,13 +429,19 @@ router.get('/documents/:id', validate(paramsDocIdOrRefSchema), asyncHandler(asyn
 
 router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_keeper', 'accountant', 'documents.edit', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  const { user } = req.body || {};
+  const { user, vatAmount, vatPercent } = req.body || {};
   const beforeDoc = await DocumentService.getDocumentById(docId);
   if (!beforeDoc) {
     throw new NotFoundError('سند مورد نظر یافت نشد.');
   }
 
-  await DocumentService.finalizeDocument(docId, user);
+  const parsedVatAmount = vatAmount !== undefined && vatAmount !== null ? Number(vatAmount) : undefined;
+  const parsedVatPercent = vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined;
+
+  await DocumentService.finalizeDocument(docId, user, undefined, {
+    vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
+    vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
+  });
 
   // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود
   

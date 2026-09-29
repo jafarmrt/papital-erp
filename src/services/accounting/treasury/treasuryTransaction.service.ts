@@ -540,13 +540,17 @@ export class TreasuryTransactionService {
 
       // 4) سند معکوس اتوماتیک (اگر اصل سند دارد)
       let reversalVoucherId: number | null = null;
+      const isReversalOfReversal = original.reversalOfId !== null;
       if (original.voucherId) {
         const rv = await VoucherService.reverseVoucher({
           voucherId: original.voucherId,
-          reason: `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
+          reason: isReversalOfReversal
+            ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId}) — ${reason}`
+            : `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
           userId: params.userId,
           username: params.username,
           externalTx: txEngine,
+          allowReversalOfReversal: true,
         });
         reversalVoucherId = rv?.id || null;
       }
@@ -568,7 +572,9 @@ export class TreasuryTransactionService {
         chequeId: original.chequeId || null,
         documentId: original.documentId || null,
         reversalOfId: original.id,
-        description: `ابطال تراکنش ${original.transactionNumber} — دلیل: ${reason}`,
+        description: isReversalOfReversal
+          ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId}) — دلیل: ${reason}`
+          : `ابطال تراکنش ${original.transactionNumber} — دلیل: ${reason}`,
         status: 'completed',
         createdById: params.userId || null,
       }).returning();
@@ -798,6 +804,17 @@ export class TreasuryTransactionService {
         .for('update');
 
       const nowIso = await businessTodayIsoDate();
+
+      // P2-05: گارد ممانعت از ثبت مجدد تراکنش‌های قبلاً تطبیق‌یافته در سرور
+      if (params.reconciled) {
+        const alreadyReconciledRow = rows.find(r => r.reconciled === 1);
+        if (alreadyReconciledRow) {
+          throw new BusinessLogicError(
+            `تراکنش شماره «${alreadyReconciledRow.transactionNumber}» قبلاً در دسته «${alreadyReconciledRow.reconciledBatch || 'نامشخص'}» تطبیق داده شده است و امکان تطبیق مجدد ندارد.`
+          );
+        }
+      }
+
       for (const row of rows) {
         await txEngine.update(treasuryTransactions).set({
           reconciled: params.reconciled ? 1 : 0,

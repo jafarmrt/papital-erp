@@ -1,7 +1,7 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
-import { eq, and, asc } from 'drizzle-orm';
-import { fin } from '../../lib/financialDecimal.js';
+import { eq, and, asc, inArray } from 'drizzle-orm';
+import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
@@ -60,6 +60,20 @@ export class KardexWacRecalculatorService {
         .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0)))
         .orderBy(asc(transactions.date), asc(transactions.id));
 
+      // P0-04 (F1 & INV-01): شناسایی تراکنش‌های معکوسی که ردیف مبدا آن‌ها حذف شده تا اثر مضاعف نگذارند
+      const reversalIds = itemTxs
+        .filter(t => t.reversalOfId !== null)
+        .map(t => t.reversalOfId as number);
+
+      let deletedOrigIds = new Set<number>();
+      if (reversalIds.length > 0) {
+        const deletedOrigs = await txEngine
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(and(inArray(transactions.id, reversalIds), eq(transactions.isDeleted, 1)));
+        deletedOrigIds = new Set(deletedOrigs.map(d => d.id));
+      }
+
       let runningBal = fin(0);
       let runningWac = fin(item.weightedAverageCost || 0);
       const whBreakdown: Record<string, number> = {};
@@ -74,26 +88,21 @@ export class KardexWacRecalculatorService {
       const policy = await NegativeStockPolicyService.getPolicy(txEngine);
 
       for (const tx of itemTxs) {
+        // اگر تراکنش، معکوس یک ردیف حذف‌شده باشد، نباید بازپخش شود
+        if (tx.reversalOfId && deletedOrigIds.has(tx.reversalOfId)) {
+          continue;
+        }
+
         const qty = fin(tx.quantity);
         const unitPrice = fin(tx.unitPrice || 0);
         const loc = tx.location || defaultWhCode;
+        const isReversal = tx.reversalOfId !== null || (Boolean(tx.documentRef) && tx.documentRef!.startsWith('REV-'));
 
         if (tx.type === 'in' || tx.type === 'transfer_in') {
-          // محاسبه دقیق میانگین موزون (WAC):
-          // اگر قیمت ورودی معتبر باشد:
-          if (unitPrice.greaterThan(0)) {
-            if (runningBal.greaterThan(0) && runningWac.greaterThan(0)) {
-              const currentTotalValue = runningBal.multiply(runningWac);
-              const incomingTotalValue = qty.multiply(unitPrice);
-              const newTotalQty = runningBal.add(qty);
-              runningWac = newTotalQty.greaterThan(0)
-                ? currentTotalValue.add(incomingTotalValue).divide(newTotalQty, 4)
-                : unitPrice.round(4);
-            } else {
-              runningWac = unitPrice.round(4);
-            }
+          // P1-03 (H-04 & TD-135): محاسبه دقیق WAC بر مبنای متد مرکزی واحد و بدون واگرایی
+          if (!isReversal) {
+            runningWac = FinancialMath.calculateWAC(runningBal, runningWac, qty, unitPrice);
           }
-          // اگر قیمت ورودی صفر باشد (مثلاً تعدیل انبارگردانی بدون قیمت)، WAC قبلی حفظ می‌شود (TD-135)
 
           runningBal = runningBal.add(qty);
           whBreakdown[loc] = fin(whBreakdown[loc] || 0).add(qty).toNumber();

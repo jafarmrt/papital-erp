@@ -385,8 +385,9 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     if (rebuildRes2.newStock !== 0) {
       throw new Error(`موجودی پس از خروج کامل باید ۰ باشد، اما ${rebuildRes2.newStock} است.`);
     }
-    if (rebuildRes2.newWac !== 0) {
-      throw new Error(`میانگین موزون کالای با موجودی ۰ باید ۰ شود، اما ${rebuildRes2.newWac} است.`);
+    // V6 (TD-136): در صورت صفر شدن موجودی با خروج کالا، آخرین نرخ میانگین موزون معتبر (1500) حفظ می‌شود
+    if (rebuildRes2.newWac !== 1500) {
+      throw new Error(`میانگین موزون کالای با موجودی ۰ باید آخرین نرخ معتبر (۱۵۰۰) را حفظ کند، اما ${rebuildRes2.newWac} است.`);
     }
 
     // Verify Audit log was recorded

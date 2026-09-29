@@ -447,9 +447,16 @@ export class ItemStockReservationService {
   }
 
   /**
+   * P1-05 (H-02): گیت رزرویشن در ثبت اسناد (Fail-Closed) — در صورت خطا استثنا صادر می‌شود تا موجودی رزرو صفر تلقی نشود
+   */
+  static async getReservedStockDetailsOrThrow(executor?: DbExecutor): Promise<ReservedItemsFullReport> {
+    return this.getReservedStockDetails(executor, true);
+  }
+
+  /**
    * Comprehensive calculation of reserved items across active Proforma Invoices AND Project Control.
    */
-  static async getReservedStockDetails(executor?: DbExecutor): Promise<ReservedItemsFullReport> {
+  static async getReservedStockDetails(executor?: DbExecutor, throwOnError: boolean = false): Promise<ReservedItemsFullReport> {
     try {
       const client = executor || orm;
       const allReservationEntries: ReservedItemDetail[] = [];
@@ -687,6 +694,9 @@ export class ItemStockReservationService {
       };
     } catch (err) {
       logger.error({ message: 'Error generating reserved stock details', error: err });
+      if (throwOnError) {
+        throw err;
+      }
       return {
         summaryMetrics: {
           totalReservedItemsCount: 0,

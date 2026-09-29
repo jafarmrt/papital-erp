@@ -479,7 +479,12 @@ export class DocumentService {
     } = body;
 
     const docType = rawDocType || rawType || 'invoice';
-    const docStatus = status || 'final';
+    // P0-02 (F17 & ACC-03): تعیین امن وضعیت سند؛ پیش‌فاکتور هرگز نباید به عنوان سند نهایی ثبت شود
+    const docStatus = status || (docType === 'proforma' ? 'proforma' : 'final');
+
+    if (docType === 'proforma' && docStatus === 'final') {
+      throw new ValidationError('پیش‌فاکتور نمی‌تواند مستقیماً با وضعیت نهایی (final) صادر شود. لطفاً پیش‌فاکتور را صادر کرده و سپس از طریق فرآیند نهایی‌سازی اقدام فرمایید.');
+    }
     const docLocation = location ? String(location).trim() : '';
 
     // V3.1.46 (TD-070): لینک رسمی سند به پروژه — اعتبارسنجی وجود پروژه پیش از درج (FK انسانی)
@@ -560,12 +565,26 @@ export class DocumentService {
 
       const normalizedDocDate = normalizeDateToDbTimestamp(date);
 
+      // P1-01 (F9 & DOC-02): حفظ درصد یا مبلغ ارزش افزوده در یادداشت سند در صورت عدم وجود جهت انتقال بی‌نقص به فاکتور نهایی
+      let finalNotes = notes || '';
+      const inputVatPercent = body.vat_percent !== undefined ? body.vat_percent : body.vatPercent;
+      const inputVatAmount = body.vat_amount !== undefined ? body.vat_amount : body.vatAmount;
+      if (inputVatPercent !== undefined && inputVatPercent !== null && !isNaN(Number(inputVatPercent)) && Number(inputVatPercent) > 0) {
+        if (!finalNotes.includes('ارزش افزوده') && !finalNotes.includes('مالیات') && !/vat/i.test(finalNotes)) {
+          finalNotes = finalNotes ? `${finalNotes} | [ارزش افزوده: ${Number(inputVatPercent)}%]` : `[ارزش افزوده: ${Number(inputVatPercent)}%]`;
+        }
+      } else if (inputVatAmount !== undefined && inputVatAmount !== null && !isNaN(Number(inputVatAmount)) && Number(inputVatAmount) > 0) {
+        if (!finalNotes.includes('ارزش افزوده') && !finalNotes.includes('مالیات') && !/vat/i.test(finalNotes)) {
+          finalNotes = finalNotes ? `${finalNotes} | [ارزش افزوده: ${Number(inputVatAmount)}]` : `[ارزش افزوده: ${Number(inputVatAmount)}]`;
+        }
+      }
+
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
         refNumber: String(finalRefNumber),
         date: normalizedDocDate,
         user,
-        notes: notes || '',
+        notes: finalNotes,
         buyerName: finalBuyerName,
         buyerCity: finalBuyerCity,
         buyerPhone: finalBuyerPhone,
@@ -579,15 +598,38 @@ export class DocumentService {
       const docId = insertedDoc.id;
 
       if (docType === 'audit') {
+        // H-06 & TD-159: اخذ قفل سطری ردیف‌های کالا بر اساس شناسه مرتب‌شده جهت جلوگیری از بن‌بست همروندی (Deadlock)
+        const sortedAuditItemIds = sortIdsForLocking(docLines.map(l => Number(l.itemId)).filter(id => !isNaN(id) && id > 0));
+        const lockedAuditItems = await tx
+          .select({
+            id: items.id,
+            weightedAverageCost: items.weightedAverageCost,
+            currentStock: items.currentStock,
+            stocks: items.stocks,
+          })
+          .from(items)
+          .where(and(inArray(items.id, sortedAuditItemIds), eq(items.isDeleted, 0)))
+          .for('update');
+        const auditItemMap = new Map(lockedAuditItems.map(it => [it.id, it]));
+
         for (const item of docLines) {
-          const { itemId, system_stock, physical_stock, location: itemLoc } = item;
+          const { itemId, physical_stock, location: itemLoc } = item;
           const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
-          const variance = Number(physical_stock) - Number(system_stock);
+          const targetItem = auditItemMap.get(Number(itemId));
+
+          // P1-04 (H-05): محاسبه انحراف انبارگردانی در سمت سرور بر مبنای موجودی ثبت‌شده واقعی در پایگاه‌داده تحت قفل
+          const whStocks = (targetItem?.stocks as Record<string, number>) || {};
+          const dbStock = targetLoc && whStocks[targetLoc] !== undefined
+            ? Number(whStocks[targetLoc] || 0)
+            : Number(targetItem?.currentStock || 0);
+
+          const physicalQty = Number(physical_stock || 0);
+          const variance = physicalQty - dbStock;
 
           await tx.insert(documentItems).values({
             documentId: docId,
             itemId: Number(itemId),
-            quantity: Number(physical_stock || 0),
+            quantity: physicalQty,
             unitPrice: 0,
             discount: 0,
             location: targetLoc
@@ -597,15 +639,6 @@ export class DocumentService {
             const txType = variance > 0 ? 'in' : 'out';
             const absVariance = Math.abs(variance);
             const txNotes = variance > 0 ? 'اضافی انبارگردانی دوره‌ای' : 'کسری انبارگردانی دوره‌ای';
-
-            // V6 Sub-phase 1.1 (TD-135): استخراج نرخ جاری WAC یا بهای استاندارد کالا با قفل سطری جهت جلوگیری از رقیق‌سازی یا صفر شدن WAC در اضافه انبارگردانی
-            const [targetItem] = await tx
-              .select({
-                weightedAverageCost: items.weightedAverageCost,
-              })
-              .from(items)
-              .where(eq(items.id, Number(itemId)))
-              .for('update');
 
             let auditMovementPrice = Number(targetItem?.weightedAverageCost || 0);
             if (auditMovementPrice <= 0) {
@@ -633,10 +666,28 @@ export class DocumentService {
           }
         }
       } else {
-        // V6 Sub-phase 2.4 (TD-139): اعتبارسنجی متمرکز سقف رزرو کالا پیش از خروج قطعی در داخل تراکنش دیتابیس
+        // V6 Sub-phase 2.4 (TD-139) & P1-05 (H-02): گیت رزرویشن Fail-Closed در تراکنش خروج قطعی
         if (docStatus === 'final' && inOut === 'out') {
-          const reservationReport = await ItemStockReservationService.getReservedStockDetails(tx);
+          const reservationReport = await ItemStockReservationService.getReservedStockDetailsOrThrow(tx);
           const excludeDocId = body.excludeDocumentId ? Number(body.excludeDocumentId) : undefined;
+
+          // H-06 & TD-159: اخذ قفل سطری اقلام خروجی بر اساس ترتیب اکید شناسه‌ها برای ممانعت از Deadlock
+          const distinctSortedIds = sortIdsForLocking(
+            Array.from(new Set(docLines.map(l => Number(l.itemId)).filter(id => !isNaN(id) && id > 0)))
+          );
+          const lockedDbItems = await tx
+            .select({
+              id: items.id,
+              code: items.code,
+              name: items.name,
+              unit: items.unit,
+              stocks: items.stocks,
+              currentStock: items.currentStock,
+            })
+            .from(items)
+            .where(and(inArray(items.id, distinctSortedIds), eq(items.isDeleted, 0)))
+            .for('update');
+          const dbItemMap = new Map(lockedDbItems.map(it => [it.id, it]));
 
           for (const item of docLines) {
             const itId = Number(item.itemId);
@@ -644,20 +695,7 @@ export class DocumentService {
             if (reqQty <= 0) continue;
 
             const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : (docLocation || ''));
-
-            // قفل سطری ردیف کالا جهت پیشگیری از Race Condition و خواندن آخرین موجودی
-            const [dbItem] = await tx
-              .select({
-                id: items.id,
-                code: items.code,
-                name: items.name,
-                unit: items.unit,
-                stocks: items.stocks,
-                currentStock: items.currentStock,
-              })
-              .from(items)
-              .where(and(eq(items.id, itId), eq(items.isDeleted, 0)))
-              .for('update');
+            const dbItem = dbItemMap.get(itId);
 
             if (!dbItem) {
               throw new NotFoundError(`کالا با شناسه ${itId} در سیستم یافت نشد.`);
@@ -763,7 +801,7 @@ export class DocumentService {
       if (docStatus === 'final' && !body.skipVoucherSync) {
         const vatPercent = body.vat_percent !== undefined ? body.vat_percent : body.vatPercent;
         const vatAmount = body.vat_amount !== undefined ? body.vat_amount : body.vatAmount;
-        const isStrict = body.strict;
+        const isStrict = body.strict !== false;
         if (docType === 'invoice' || docType === 'proforma') {
           await VoucherSyncService.syncSalesInvoiceVoucher(docId, {
             username: user,
@@ -1239,18 +1277,23 @@ export class DocumentService {
 
     const normalizedTxDate = normalizeDateToDbTimestamp(date);
 
+    const currentItemWac = Number(itemData.weightedAverageCost) || 0;
+    // P1-02 (H-01, F2 & INV-01): ثبت بهای تمام‌شده تاریخی خروج در تراکنش انبار جهت حفظ انضباط دفاتر دوبل
+    const txUnitPrice = inOut === 'out' ? (currentItemWac > 0 ? currentItemWac : price) : price;
+    const txTotalPrice = fin(txUnitPrice).multiply(qty).round(4).toNumber();
+
     const [insertedTx] = await tx.insert(transactions).values({
       itemId,
       documentId: documentId ?? undefined,
       type: inOut,
       quantity: qty,
-      unitPrice: price,
-      totalPrice: fin(price).multiply(qty).round(4).toNumber(),
+      unitPrice: txUnitPrice,
+      totalPrice: txTotalPrice,
       date: normalizedTxDate,
       documentType,
       documentRef: String(documentRef),
       createdBy: user,
-      notes: notes || '',
+      notes: notes || (inOut === 'out' && price !== txUnitPrice && price > 0 ? `قیمت فروش: ${price}` : ''),
       location: finalTargetLoc,
       isDeleted: 0,
     }).returning({ id: transactions.id });
@@ -1385,7 +1428,7 @@ export class DocumentService {
     id: number,
     user?: string,
     externalTx?: DbExecutor,
-    options?: { strict?: boolean }
+    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number }
   ): Promise<void> {
     const isStrict = options?.strict !== false;
 
@@ -1571,6 +1614,9 @@ export class DocumentService {
             await VoucherSyncService.syncSalesInvoiceVoucher(id, {
               username: user || doc.user,
               strict: isStrict,
+              vatAmount: options?.vatAmount,
+              vatPercent: options?.vatPercent,
+              exchangeRate: options?.exchangeRate,
             }, tx);
           } else if (isPurchase) {
             await VoucherSyncService.syncPurchaseInvoiceVoucher(id, {
@@ -1649,30 +1695,43 @@ export class DocumentService {
             notes: `تراکنش معکوس حذف سند ${doc.refNumber || id} (معکوس تراکنش #${orig.id})`,
             location: orig.location || 'default',
             reversalOfId: orig.id,
-            isDeleted: 0,
+            isDeleted: 0, // V9 (DB-009): تراکنش معکوس فعال جهت تراز کردن کاردکس و ثبت عطف معکوس
           });
         }
       }
 
       // 4. Revert stock for final documents
-      const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
-
       if (doc.status === 'final') {
-        for (const item of docLines) {
-          // V3.0.7 (TD-061): انبار برگشتی = انبار واقعی ردیف اصلی از ledger
-          // (transactions نسخه‌های قبلی سند)؛ نه کلید 'default' که باعث به‌روزرسانی
-          // گره اشتباه در stocks.jsonb و واگرایی سه‌طرفه می‌شد.
-          const origTxForItem = originalTxs.find(t => t.itemId === item.itemId && (t.location || '') === (item.location || ''))
-            || originalTxs.find(t => t.itemId === item.itemId);
-          const targetLoc = (origTxForItem?.location || item.location || '').trim() || 'default';
+        const defaultWh = await resolveWarehouseCode(tx, '');
 
-          await DocumentService.applyStockReversal(tx, {
-            itemId: item.itemId,
-            quantity: item.quantity,
-            originalDirection: docDirection,
-            unitPrice: Number(item.unitPrice || 0),
-            location: targetLoc
-          });
+        // C-01 & F3: موجودی انبار منحصراً بر اساس گردش واقعی تراکنش‌های ثبت‌شده (originalTxs) معکوس می‌شود؛
+        // در اسناد انبارگردانی فقط انحراف (variance) ثبت شده بود و نباید کل physical_stock برگشت داده شود.
+        if (originalTxs.length > 0) {
+          for (const orig of originalTxs) {
+            const origQty = Number(orig.quantity) || 0;
+            if (origQty > 0) {
+              const targetLoc = (orig.location || '').trim() || defaultWh;
+              await DocumentService.applyStockReversal(tx, {
+                itemId: orig.itemId,
+                quantity: origQty,
+                originalDirection: orig.type as 'in' | 'out',
+                unitPrice: Number(orig.unitPrice || 0),
+                location: targetLoc
+              });
+            }
+          }
+        } else if (doc.type !== 'audit') {
+          const docDirection: 'in' | 'out' = (doc.type === 'receipt' || doc.type === 'production_receipt' || doc.type === 'return') ? 'in' : 'out';
+          for (const item of docLines) {
+            const targetLoc = (item.location || '').trim() || defaultWh;
+            await DocumentService.applyStockReversal(tx, {
+              itemId: item.itemId,
+              quantity: item.quantity,
+              originalDirection: docDirection,
+              unitPrice: Number(item.unitPrice || 0),
+              location: targetLoc
+            });
+          }
         }
 
         // V9-1.1 & V6.0.5: برگشت اسناد حسابداری متناظر (صدور سند معکوس) در همان تراکنش برای کلیه انواع اسناد

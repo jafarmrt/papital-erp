@@ -182,6 +182,11 @@ export const FinancialMath = {
       return curCost;
     }
 
+    // P1-03 (H-04 & TD-135): رسید یا تعدیل با قیمت صفر یا منفی نباید WAC تاریخی را صفر یا رقیق کند
+    if (inPrice.lessThanOrEqual(0)) {
+      return curCost;
+    }
+
     if (curQty.lessThanOrEqual(0)) {
       return inPrice.round(4);
     }

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { orm } from '../db/drizzle.js';
@@ -1374,67 +1375,25 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
 });
 
 // DELETE /api/piecework/payrolls/:id - Cancel/delete payroll and un-link logs
-router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
+router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
 
-    const result = await orm.transaction(async (tx) => {
-      const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
-      if (!pay) {
-        return { status: 404, error: 'فیش حقوقی یافت نشد' };
-      }
+  const deletedPayroll = await PieceworkService.deletePayroll(id, {
+    userId: req.user?.id,
+    username: req.user?.username || 'سیستم',
+    reason: `ابطال و حذف فیش حقوقی توسط کاربر`
+  });
 
-      // V4.0.33: گارد عدم ابطال فیش‌های دارای پرداخت خزانه‌ای (کامل یا جزئی)
-      if (['paid', 'partially_paid'].includes(pay.status || '')) {
-        return {
-          status: 400,
-          error: 'این فیش حقوقی دارای تراکنش پرداخت خزانه‌ای ثبت‌شده است؛ ابطال آن مجاز نیست مگر اینکه ابتدا تراکنش‌های پرداخت آن در بخش خزانه ابطال گردند.'
-        };
-      }
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'سیستم',
+    action: 'DELETE',
+    entity: 'فیش حقوقی',
+    entityId: id,
+    description: `ابطال و حذف فیش حقوقی ${deletedPayroll?.payrollNumber || id}`
+  });
 
-      // Check linked voucher
-      const [linkedVoucher] = await tx.select().from(journalVouchers).where(and(
-        eq(journalVouchers.referenceModule, 'payroll'),
-        eq(journalVouchers.referenceId, id),
-        eq(journalVouchers.isDeleted, 0)
-      )).for('update');
-
-      if (linkedVoucher && linkedVoucher.status === 'permanent') {
-        return { status: 400, error: `سند حسابداری شماره #${linkedVoucher.voucherNumber} قطعی شده است و امکان ابطال فیش حقوقی وجود ندارد.` };
-      }
-
-      if (linkedVoucher) {
-        await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, linkedVoucher.id));
-      }
-
-      // Unlink logs back to pending
-      await tx.update(pieceworkLogs)
-        .set({ payrollId: null, status: 'pending' })
-        .where(eq(pieceworkLogs.payrollId, id));
-
-      await tx.update(pieceworkPayrolls).set({ isDeleted: 1 }).where(eq(pieceworkPayrolls.id, id));
-
-      return { status: 200, payroll: pay };
-    });
-
-    if (result.error) {
-      return res.status(result.status).json({ error: result.error });
-    }
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'DELETE',
-      entity: 'فیش حقوقی',
-      entityId: id,
-      description: `ابطال و حذف فیش حقوقی ${result.payroll.payrollNumber}`
-    });
-
-    res.json({ status: 'ok', message: 'فیش حقوقی با موفقیت باطل شد' });
-  } catch (err) {
-    logger.error({ message: 'Error deleting payroll', error: err });
-    throw err;
-  }
-});
+  res.json({ status: 'ok', message: 'فیش حقوقی با موفقیت باطل شد', payroll: deletedPayroll });
+}));
 
 export default router;

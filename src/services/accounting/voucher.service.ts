@@ -353,11 +353,12 @@ export class VoucherService {
     const executeWork = async (tx: DbExecutor) => {
       const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
-      if (existing.isDeleted === 1) throw new NotFoundError('سند حذف شده است');
-
-      // Strict Invariant: Permanent / Posted finalized financial documents cannot be directly edited.
-      if (existing.status === 'permanent') {
-        throw new BusinessLogicError('اسناد دائم و قطعی‌شده به دلیل رعایت الزامات تغییرناپذیری دفتر کل قابل ویرایش مستقیم نیستند. لطفاً از گزینه‌های استاندارد «صدور سند برگشتی (ابطال سند)» یا «صدور سند اصلاحی» استفاده فرمایید.');
+      // P2-03: انجماد اسناد تاییدشده (approved) و دائم (permanent) — ویرایش مستقیم منحصراً برای اسناد با وضعیت پیش‌نویس (draft) مجاز است
+      if (existing.status !== 'draft') {
+        const statusLabel = existing.status === 'approved' ? 'تاییدشده' : existing.status === 'permanent' ? 'دائم و قطعی' : existing.status;
+        throw new BusinessLogicError(
+          `اسناد با وضعیت «${statusLabel}» به دلیل رعایت الزامات تغییرناپذیری دفتر روزنامه قابل ویرایش مستقیم نیستند. برای اعمال هرگونه تغییر، منحصراً از فرایند استاندارد «صدور سند اصلاحی» یا «ابطال سند» استفاده نمایید.`
+        );
       }
 
       const updatedDate = data.date ? (normalizeDateToIso(data.date.trim()) || data.date.trim()) : undefined;
@@ -464,6 +465,7 @@ export class VoucherService {
       userId?: number;
       username?: string;
       externalTx?: DbExecutor;
+      allowReversalOfReversal?: boolean;
     }
   ): Promise<JournalVoucher> {
 
@@ -480,13 +482,15 @@ export class VoucherService {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال مستقیم نیست.`);
       }
 
-      // ممانعت از ابطال سندی که خود سند برگشتی است
-      if (original.referenceNumber?.startsWith('REV-V')) {
+      const isReversalOfReversal = Boolean(original.referenceNumber?.startsWith('REV-V') || original.referenceNumber?.startsWith('VOID-REPOST-V'));
+
+      // ممانعت از ابطال سندی که خود سند برگشتی است، مگر در موارد کنترل‌شده خزانه‌داری
+      if (isReversalOfReversal && !params.allowReversalOfReversal) {
         throw new ConflictError(`امکان صدور سند معکوس برای سند برگشتی «${original.voucherNumber}» وجود ندارد.`);
       }
 
-      // TD-146: بررسی عدم وجود سند معکوس فعال پیشین برای این سند مبدأ
-      const expectedRevRef = `REV-V${original.voucherNumber}`;
+      // P2-06: تعیین شماره عطف معکوس — در صورت ابطال سند معکوس، پیشوند RE-REV اختصاص می‌یابد
+      const expectedRevRef = isReversalOfReversal ? `RE-REV-V${original.voucherNumber}` : `REV-V${original.voucherNumber}`;
       const existingReversals = await tx.select().from(journalVouchers)
         .where(and(
           eq(journalVouchers.referenceId, original.id),
@@ -518,7 +522,9 @@ export class VoucherService {
 
       const nextNumber = await this.getNextVoucherNumber(tx);
       const reasonText = params.reason?.trim() ? ` (علت: ${params.reason.trim()})` : '';
-      const desc = `سند برگشت/عطف سند حسابداری شماره ${original.voucherNumber}${reasonText}: ${original.description}`;
+      const desc = isReversalOfReversal
+        ? `سند اصلاحی معکوسِ معکوس سند حسابداری شماره ${original.voucherNumber}${reasonText}: ${original.description}`
+        : `سند برگشت/عطف سند حسابداری شماره ${original.voucherNumber}${reasonText}: ${original.description}`;
 
       const [voucher] = await tx.insert(journalVouchers).values({
         voucherNumber: nextNumber,
@@ -603,9 +609,38 @@ export class VoucherService {
     const original = await this.getJournalVoucherById(params.voucherId);
     if (!original) throw new Error('سند مبدا یافت نشد');
 
+    // C-03 & P0-06: اسناد قطعی (permanent) از نظر قانونی و سیستمی غیرقابل ابطال یا اصلاح هستند
+    if (original.status === 'permanent') {
+      throw new BusinessLogicError(`سند قطعی شماره «${original.voucherNumber}» غیرقابل اصلاح یا ابطال است.`);
+    }
+
+    if (original.voucherType === 'closing') {
+      throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل اصلاح مستقیم نیست.`);
+    }
+
+    if (original.referenceNumber?.startsWith('REV-V') || original.referenceNumber?.startsWith('VOID-REPOST-V')) {
+      throw new ConflictError(`امکان اصلاح سند معکوس یا برگشتی «${original.voucherNumber}» وجود ندارد.`);
+    }
+
     const result = await orm.transaction(async (tx) => {
       const correctionDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
       await this.checkFiscalPeriodOpen(correctionDate, tx);
+
+      // C-03 & P0-06: گارد عدم وجود سند معکوس فعال قبلی
+      const expectedRevRef = `REV-V${original.voucherNumber}`;
+      const existingReversals = await tx.select().from(journalVouchers)
+        .where(and(
+          eq(journalVouchers.referenceId, original.id),
+          eq(journalVouchers.referenceNumber, expectedRevRef),
+          eq(journalVouchers.isDeleted, 0)
+        ))
+        .for('update');
+
+      if (existingReversals.length > 0) {
+        throw new ConflictError(
+          `برای سند شماره «${original.voucherNumber}» قبلاً سند معکوس اصلاحی به شماره «${existingReversals[0].voucherNumber}» صادر گردیده است.`
+        );
+      }
 
       // 1. Create Reversal Voucher
       const revNumber = await this.getNextVoucherNumber(tx);
@@ -758,6 +793,35 @@ export class VoucherService {
       if (!original) throw new Error('سند مبدا جهت بازثبت یافت نشد');
       if (original.isDeleted === 1 || original.is_deleted === 1) throw new Error('سند مبدا حذف شده است');
 
+      // C-03 & P0-06: اسناد قطعی (permanent) به هیچ وجه قابل ابطال یا بازثبت نیستند
+      if (original.status === 'permanent') {
+        throw new BusinessLogicError(`سند قطعی شماره «${original.voucherNumber}» از نظر قانونی و مالی غیرقابل ابطال یا بازثبت است.`);
+      }
+
+      if (original.voucherType === 'closing') {
+        throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال یا بازثبت نیست.`);
+      }
+
+      if (original.referenceNumber?.startsWith('REV-V') || original.referenceNumber?.startsWith('VOID-REPOST-V')) {
+        throw new ConflictError(`امکان بازثبت مجدد سند معکوس یا ابطال‌شده «${original.voucherNumber}» وجود ندارد.`);
+      }
+
+      // C-03 & P0-06: گارد عدم وجود سند ابطال/بازثبت قبلی
+      const expectedVoidRef = `VOID-REPOST-V${original.voucherNumber}`;
+      const existingVoids = await tx.select().from(journalVouchers)
+        .where(and(
+          eq(journalVouchers.referenceId, original.id),
+          eq(journalVouchers.referenceNumber, expectedVoidRef),
+          eq(journalVouchers.isDeleted, 0)
+        ))
+        .for('update');
+
+      if (existingVoids.length > 0) {
+        throw new ConflictError(
+          `برای سند شماره «${original.voucherNumber}» قبلاً سند ابطال جهت بازثبت صادر گردیده است.`
+        );
+      }
+
       await this.checkFiscalPeriodOpen(original.date, tx);
       await this.checkFiscalPeriodOpen(repostDate, tx);
 
@@ -771,12 +835,12 @@ export class VoucherService {
         date: repostDate,
         voucherType: 'adjustment',
         status: 'approved',
-        totalDebit: original.totalDebit,
-        totalCredit: original.totalCredit,
+        totalDebit: original.totalCredit,
+        totalCredit: original.totalDebit,
         description: voidDesc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
-        referenceNumber: `VOID-REPOST-V${original.voucherNumber}`,
+        referenceNumber: expectedVoidRef,
         currency: original.currency || 'IRR',
         createdById: params.userId || null,
         createdByUsername: params.username || '',

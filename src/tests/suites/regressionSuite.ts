@@ -1,6 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { categories, items, documents, documentItems, transactions, warehouses, journalVouchers, journalVoucherItems, accounts, documentRefCounters } from '../../db/schema.js';
 import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
 import { normalizeDateToDbTimestamp, jalaliToIsoDate } from '../../utils.js';
@@ -2721,8 +2721,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`نام خریدار به‌درستی ذخیره نشده است: ${docAfterUpdate1.buyerName}`);
       }
 
-      // Verify line items were updated
-      const updatedLines = await orm.select().from(documentItems).where(eq(documentItems.documentId, draftDoc.id));
+      // Verify line items were updated (active records)
+      const updatedLines = await orm.select().from(documentItems).where(and(eq(documentItems.documentId, draftDoc.id), eq(documentItems.isDeleted, 0)));
       if (updatedLines.length !== 1 || Number(updatedLines[0].quantity) !== 7) {
         throw new Error(`تعداد ردیف کالای سند پس از ویرایش نادرست است: ${updatedLines[0]?.quantity}`);
       }
