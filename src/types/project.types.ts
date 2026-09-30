@@ -210,6 +210,7 @@ export interface ProjectStageSchedule {
   endDate?: string;
   notes?: string;
   productSchedules?: Record<string, ProductStageSchedule>;
+  [key: string]: any;
 }
 
 export type ProjectStageSchedulesMap = Record<string, ProjectStageSchedule>;

@@ -2,6 +2,7 @@ import React from 'react';
 import { Item, Category } from '../../../types';
 import { ItemFormData } from './types';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';
+import { parseCleanNumber } from '../../../utils';
 
 interface ItemBasicFormProps {
   form: ItemFormData;
@@ -269,7 +270,7 @@ export const ItemBasicForm: React.FC<ItemBasicFormProps> = ({
             min="0"
             step="any"
             value={form.reorder_point}
-            onChange={e => setForm({ ...form, reorder_point: parseFloat(e.target.value) || 0 })}
+            onChange={e => setForm({ ...form, reorder_point: parseCleanNumber(e.target.value, 0) })}
             className="w-full border border-slate-300/80 rounded-xl px-3 py-2 text-left font-mono text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
             dir="ltr"
             placeholder="۱۰"

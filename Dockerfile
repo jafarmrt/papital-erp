@@ -33,8 +33,8 @@ USER node
 
 EXPOSE 3000
 
-# Container-level liveness fallback (K8s probes remain the authoritative gates)
+# Container-level startup/liveness fallback (K8s probes remain the authoritative gates)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/health/live >/dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/health/startup >/dev/null 2>&1 || exit 1
 
 CMD ["node", "dist/server.cjs"]

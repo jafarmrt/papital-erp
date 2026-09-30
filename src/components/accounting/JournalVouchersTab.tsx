@@ -823,7 +823,7 @@ export function JournalVouchersTab({
                                         })}
                                         className="group relative rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden cursor-pointer hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-800 aspect-4/3 flex flex-col"
                                       >
-                                        {att.fileType.startsWith('image/') ? (
+                                        {att.fileType?.startsWith('image/') ? (
                                           <img
                                             src={att.dataUrl}
                                             alt={att.fileName}

@@ -1,7 +1,7 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-orm';
-import type { JournalVoucher, JournalVoucherItem } from '../../types.js';
+import type { JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessClock.js';
@@ -145,7 +145,7 @@ export class VoucherService {
           account_id: item.accountId,
           voucher_id: item.voucherId,
           row_order: item.rowOrder ?? 1,
-        });
+        } as JournalVoucherItem);
         itemsMap.set(item.voucherId, list);
       }
     }
@@ -167,7 +167,7 @@ export class VoucherService {
       reference_number: v.referenceNumber || '',
       created_by_username: v.createdByUsername || '',
       items: itemsMap.get(v.id) || []
-    }));
+    } as JournalVoucher));
 
     return { data, total, page, limit };
   }
@@ -202,6 +202,8 @@ export class VoucherService {
 
     return {
       ...v,
+      attachments: (Array.isArray(v.attachments) ? v.attachments : []) as FinancialAttachment[],
+      description: v.description || '',
       voucher_number: v.voucherNumber,
       manual_voucher_number: v.manualVoucherNumber || '',
       voucher_type: v.voucherType as JournalVoucher['voucherType'],
@@ -225,7 +227,7 @@ export class VoucherService {
         account_id: item.accountId,
         voucher_id: item.voucherId,
         row_order: item.rowOrder ?? 1,
-      }))
+      } as JournalVoucherItem))
     };
   }
 

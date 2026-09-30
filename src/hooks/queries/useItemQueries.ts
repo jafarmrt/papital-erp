@@ -14,10 +14,22 @@ export interface ItemsResponse {
   totalPages: number;
 }
 
+export function useAllItemsQuery(type?: 'product' | 'raw_material') {
+  return useQuery<Item[]>({
+    queryKey: QUERY_KEYS.items.list({ type: type || 'all', all: true }),
+    queryFn: async () => {
+      const url = type ? `/items?type=${type}&limit=0` : '/items?limit=0';
+      const res = await fetchJson(url);
+      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
 /**
  * Hook to query items (products / raw materials) with pagination and search
  */
-export function useItemsQuery(type: 'product' | 'raw_material', page: number = 1, limit: number = 50, search?: string) {
+export function useItemsQuery(type: 'product' | 'raw_material' = 'product', page: number = 1, limit: number = 50, search?: string) {
   return useQuery<ItemsResponse>({
     queryKey: QUERY_KEYS.items.list({ type, page, limit, search: search?.trim() || '' }),
     queryFn: async () => {

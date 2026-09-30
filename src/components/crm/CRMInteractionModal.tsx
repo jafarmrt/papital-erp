@@ -112,7 +112,7 @@ export function CRMInteractionModal({
 
                     return (
                       <select
-                        value={selectedLeadForActivity?.id || ''}
+                        value=""
                         onChange={(e) => {
                           const leadId = Number(e.target.value);
                           const found = filteredLeads.find((l) => l.id === leadId);

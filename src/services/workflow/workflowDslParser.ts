@@ -106,7 +106,7 @@ export async function getEntityContext(entityType: string, entityId: string, txE
   try {
     const numericId = Number(entityId) || 0;
     if (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma') {
-      let doc = null;
+      let doc: typeof documents.$inferSelect | undefined = undefined;
       if (numericId > 0) {
         [doc] = await txExecutor.select().from(documents).where(eq(documents.id, numericId));
       }
@@ -116,9 +116,9 @@ export async function getEntityContext(entityType: string, entityId: string, txE
       if (doc) {
         const itemsList = await txExecutor.select().from(documentItems).where(eq(documentItems.documentId, doc.id));
         const totalAmount = itemsList.reduce((acc: number, item: typeof documentItems.$inferSelect) => acc + (Number(item.quantity || 0) * Number(item.unitPrice || 0) - Number(item.discount || 0)), 0);
-        context.amount = totalAmount || Number(doc.totalAmount) || 0;
-        context.finalAmount = totalAmount || Number(doc.totalAmount) || 0;
-        context.totalAmount = totalAmount || Number(doc.totalAmount) || 0;
+        context.amount = totalAmount || Number((doc as any).totalAmount) || 0;
+        context.finalAmount = totalAmount || Number((doc as any).totalAmount) || 0;
+        context.totalAmount = totalAmount || Number((doc as any).totalAmount) || 0;
         context.itemCount = itemsList.length;
         context.docType = doc.type;
         context.type = doc.type;
@@ -130,7 +130,7 @@ export async function getEntityContext(entityType: string, entityId: string, txE
         context.currency = doc.currency || 'IRR';
         context.refNumber = doc.refNumber || '';
         context.ref_number = doc.refNumber || '';
-        context.createdById = doc.createdById;
+        context.createdById = (doc as any).createdById;
         context.notes = doc.notes || '';
       }
     } else if (entityType === 'project') {

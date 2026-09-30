@@ -88,6 +88,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       ]
     });
     const purchaseDoc = await DocumentService.getDocumentById(purchaseDocId);
+    if (!purchaseDoc) throw new Error('فاکتور خرید یافت نشد');
 
     // Step 2: Verify Inventory stock increment & Weighted Average Cost (WAC) recalculation
     // Initial: 100 @ 50,000 = 5,000,000
@@ -187,6 +188,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       ]
     });
     const salesDoc = await DocumentService.getDocumentById(salesDocId);
+    if (!salesDoc) throw new Error('فاکتور فروش یافت نشد');
 
     // Step 2: Start Workflow Approval
     const wf = await createTestWorkflow({
@@ -401,6 +403,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       ]
     });
     const wooDoc = await DocumentService.getDocumentById(wooDocId);
+    if (!wooDoc) throw new Error('فاکتور ووکامرس یافت نشد');
 
     // Step 3: Complete Idempotency record
     await IdempotencyService.complete({

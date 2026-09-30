@@ -503,7 +503,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                   <div className="flex flex-wrap gap-2 pt-1 pr-8">
                     {activeProducts.map((p) => {
                       const isSkippedAssembly = isAssemblyStage && p.needs_assembly === false;
-                      const pSched = schedObj[p.id];
+                      const pSched = (schedObj as any)[p.id] || schedObj.productSchedules?.[p.id];
                       const hasSpecificDates = pSched && (pSched.startDate || pSched.endDate);
 
                       return (

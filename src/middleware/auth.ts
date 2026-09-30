@@ -159,7 +159,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   }
 
   const jwtSecret = getJwtSecret();
-  jwt.verify(token, jwtSecret, async (err, decoded) => {
+  jwt.verify(token, jwtSecret, async (err: any, decoded: any) => {
     if (err || !decoded) {
       return res.status(401).json({ error: 'توکن نامعتبر است یا منقضی شده' });
     }

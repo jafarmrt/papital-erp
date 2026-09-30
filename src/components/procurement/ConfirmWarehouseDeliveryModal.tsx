@@ -9,27 +9,27 @@ export interface ConfirmWarehouseDeliveryModalProps {
   isSubmitting: boolean;
   order: {
     id: number;
-    refNumber?: string;
-    buyerName?: string;
-    location?: string;
-    totalAmount?: number;
-    itemsCount?: number;
-    date?: string;
-    projectName?: string;
+    refNumber?: string | null;
+    buyerName?: string | null;
+    location?: string | null;
+    totalAmount?: number | null;
+    itemsCount?: number | null;
+    date?: string | null;
+    projectName?: string | null;
     items?: Array<{
       itemId: number;
-      itemName?: string;
-      itemCode?: string;
+      itemName?: string | null;
+      itemCode?: string | null;
       quantity: number;
-      unitPrice?: number;
-      unit?: string;
+      unitPrice?: number | null;
+      unit?: string | null;
     }>;
   } | null;
   bulkOrders?: Array<{
     id: number;
-    refNumber?: string;
-    buyerName?: string;
-    totalAmount?: number;
+    refNumber?: string | null;
+    buyerName?: string | null;
+    totalAmount?: number | null;
   }>;
 }
 

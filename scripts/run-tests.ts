@@ -118,7 +118,8 @@ Available Suites:
     layerArg = aliasMap[normalized] || layerArg;
   }
 
-  const isolationEnabled = process.env.ERP_TEST_SCHEMA_ISOLATION === '1';
+  // TD-134 (Roadmap 2.5): ایزولاسیون کامل دیتابیس تست‌ها به‌صورت پیش‌فرض فعال است مگر با ERP_TEST_SCHEMA_ISOLATION=0 خاموش شود
+  const isolationEnabled = process.env.ERP_TEST_SCHEMA_ISOLATION !== '0';
 
   // TST-003 companion: the dedicated CLI runner always runs in a test context,
   // so fixture cleanup is safe here (API-endpoint & production remain gated).
@@ -140,7 +141,7 @@ Available Suites:
     } catch {
       console.log(`   Target DB    : [DATABASE_URL not parseable or missing]`);
     }
-    console.log(`   Isolation    : ${isolationEnabled ? 'ENABLED (ERP_TEST_SCHEMA_ISOLATION=1)' : 'DISABLED'}`);
+    console.log(`   Isolation    : ${isolationEnabled ? 'ENABLED (Default in V7 / TD-134)' : 'DISABLED'}`);
     console.log(`   Cleanup Mode : SYNTHETIC TEST ARTIFACTS ONLY (Safe dev preservation)`);
     console.log('======================================================================\n');
   }

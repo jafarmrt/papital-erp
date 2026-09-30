@@ -133,6 +133,7 @@ router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
 // Mark one notification as read
 router.put('/notifications/:id/read', validate(notifParamSchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
+  if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const notifId = Number(req.params.id);
 
   await orm
@@ -146,6 +147,7 @@ router.put('/notifications/:id/read', validate(notifParamSchema), asyncHandler(a
 // Mark all notifications as read
 router.put('/notifications/read-all', asyncHandler(async (req, res) => {
   const userId = req.user?.id;
+  if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
 
   await orm
     .update(notifications)
@@ -158,6 +160,7 @@ router.put('/notifications/read-all', asyncHandler(async (req, res) => {
 // Delete a notification
 router.delete('/notifications/:id', validate(notifParamSchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
+  if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
   const notifId = Number(req.params.id);
 
   await orm

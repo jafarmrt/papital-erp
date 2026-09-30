@@ -608,7 +608,7 @@ const reportBanksHandler = asyncHandler(async (req, res) => {
       totalCashAndBankLedger,
       totalCashAndBankTreasury,
       totalDiscrepancy,
-      accounts: banks.map(b => ({
+      accounts: (banks as any[]).map((b: any) => ({
         id: b.id,
         code: b.code,
         title: b.title,
@@ -711,7 +711,7 @@ router.post('/accounting/bank-accounts', authorizePermission('accounting.treasur
 const updateBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // V1.4.0: snapshot قبل برای audit
-  const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
+  const before = (await AccountingService.getBankAccounts()).find((b: any) => b.id === id) || null;
   const updated = await AccountingService.updateBankAccount(id, {
     ...req.body,
     ...(req.body.shebaNumber || req.body.shabaNumber ? { shebaNumber: req.body.shebaNumber || req.body.shabaNumber } : {}),
@@ -736,7 +736,7 @@ router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.trea
 
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const before = (await AccountingService.getBankAccounts()).find(b => b.id === id) || null;
+  const before = (await AccountingService.getBankAccounts()).find((b: any) => b.id === id) || null;
   const result = await AccountingService.deleteBankAccount(id);
   await logActivity({
     userId: req.user?.id,

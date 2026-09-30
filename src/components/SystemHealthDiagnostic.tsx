@@ -135,7 +135,7 @@ export default function SystemHealthDiagnostic() {
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
     
-    const parts = [];
+    const parts: string[] = [];
     if (d > 0) parts.push(`${d} روز`);
     if (h > 0) parts.push(`${h} ساعت`);
     if (m > 0) parts.push(`${m} دقیقه`);

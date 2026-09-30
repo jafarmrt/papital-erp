@@ -347,7 +347,8 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     });
 
     // Test dual-write saveToOutbox
-    await OutboxService.recordEvent(null, testEvent);
+    const { orm } = await import('../../db/drizzle.js');
+    await OutboxService.recordEvent(orm, testEvent);
 
     // Test processing pending batch (atomic claim and dispatch)
     const batchRes = await OutboxService.processPendingBatch(10);
@@ -1122,7 +1123,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
     const targetWarehouse = 'branch2';
     const locKey = `stock_${targetWarehouse}`;
-    const warehouseStock = mockItem[locKey as keyof typeof mockItem] ?? (mockItem.stocks as any)[targetWarehouse] ?? 0;
+    const warehouseStock = Number(mockItem[locKey as keyof typeof mockItem] ?? (mockItem.stocks as any)[targetWarehouse] ?? 0);
     const requestedQty = 2;
 
     if (warehouseStock >= requestedQty) {

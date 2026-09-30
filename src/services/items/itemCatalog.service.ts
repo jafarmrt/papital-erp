@@ -555,7 +555,7 @@ export class ItemCatalogService {
               }
             }
           } else if (hasCustomStockInRow || currentStock !== undefined) {
-            const finalStock = hasCustomStockInRow ? currentStock : matchedItem.currentStock;
+            const finalStock = (hasCustomStockInRow ? currentStock : matchedItem.currentStock) ?? 0;
             const diff = finalStock - (matchedItem.currentStock || 0);
             const defaultLoc = await resolveWarehouseCode(tx, '');
             if (diff > 0) {

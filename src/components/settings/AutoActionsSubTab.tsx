@@ -1,56 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Zap, Plus, RefreshCw, Search, Globe, Bell, Smartphone, GitBranch, ShieldCheck, CheckCircle2, XCircle, AlertCircle, Play, Edit3, Trash2, ToggleLeft, ToggleRight, Clock, Activity, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { fetchJson } from '../../api';
 import { RuleEditorModal, RuleFormData } from './RuleEditorModal';
-
-interface ActionRule {
-  id: number;
-  name: string;
-  description: string;
-  eventType: string;
-  conditionsJson: any[];
-  actionType: 'webhook' | 'in_app_notification' | 'workflow_trigger' | 'sms_simulation' | 'audit_log';
-  actionConfigJson: any;
-  isActive: number;
-  executionCount: number;
-  lastExecutedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ActionLog {
-  id: number;
-  ruleId: number;
-  eventId: string;
-  eventType: string;
-  actionType: string;
-  status: 'success' | 'failed' | 'condition_unmatched' | 'skipped';
-  requestPayloadJson: any;
-  responsePayloadJson: any;
-  errorMessage?: string;
-  durationMs: number;
-  executedAt: string;
-}
-
-interface ActionStats {
-  totalRules: number;
-  activeRules: number;
-  totalLogs: number;
-  successLogs: number;
-  failedLogs: number;
-  unmatchedLogs: number;
-  successRate: number;
-  avgDurationMs: number;
-}
+import {
+  ActionRule,
+  useActionRulesQuery,
+  useActionStatsQuery,
+  useActionLogsQuery,
+} from '../../hooks/queries/useEventQueries';
+import { QUERY_KEYS } from '../../lib/queryKeys';
 
 export function AutoActionsSubTab() {
-  const [rules, setRules] = useState<ActionRule[]>([]);
-  const [logs, setLogs] = useState<ActionLog[]>([]);
-  const [stats, setStats] = useState<ActionStats | null>(null);
+  const queryClient = useQueryClient();
+  const { data: rules = [], isLoading: isLoadingRules, refetch: refetchRules } = useActionRulesQuery();
+  const { data: stats = null, refetch: refetchStats } = useActionStatsQuery();
+  const { data: logs = [], isLoading: isLoadingLogs, refetch: refetchLogs } = useActionLogsQuery(50);
   
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = isLoadingRules || isLoadingLogs;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [actionTypeFilter, setActionTypeFilter] = useState<string>('ALL');
@@ -67,83 +36,9 @@ export function AutoActionsSubTab() {
     setTimeout(() => setNotification(null), 4500);
   };
 
-  const fetchStats = async () => {
-    try {
-      const data = await fetchJson<{ success?: boolean; stats?: ActionStats }>('/events/action-rules/stats');
-      if (data?.success && data.stats) {
-        setStats(data.stats);
-      }
-    } catch {
-      // Ignore background stats errors
-    }
-  };
-
-  const fetchRules = async () => {
-    try {
-      setIsLoading(true);
-      const data = await fetchJson<{ success?: boolean; data?: ActionRule[] }>('/events/action-rules');
-      if (data?.success && Array.isArray(data.data)) {
-        setRules(data.data);
-      }
-    } catch (err) {
-      showNotification('خطا در دریافت لیست قوانین اکشن', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchLogs = async () => {
-    try {
-      const data = await fetchJson<{ success?: boolean; logs?: ActionLog[] }>('/events/action-logs?limit=50');
-      if (data?.success && Array.isArray(data.logs)) {
-        setLogs(data.logs);
-      }
-    } catch {
-      // Ignore silent background log errors
-    }
-  };
-
   const reloadAll = async () => {
-    await Promise.all([fetchStats(), fetchRules(), fetchLogs()]);
+    await Promise.all([refetchRules(), refetchStats(), refetchLogs()]);
   };
-
-  useEffect(() => {
-    reloadAll();
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    // V9 Phase 4.2: توقف polling وقتی تب مرورگر نامرئی است — جلوگیری از ترافیک بی‌مصرف هر ۱۲ ثانیه
-    const stopPolling = () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
-    };
-    const startPolling = () => {
-      if (!interval) {
-        interval = setInterval(reloadAll, 12000);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        startPolling();
-        // بروزرسانی فوری داده‌ها پس از بازگشت به تب
-        reloadAll();
-      } else {
-        stopPolling();
-      }
-    };
-
-    if (document.visibilityState === 'visible') {
-      startPolling();
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      stopPolling();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
 
   const handleToggleRule = async (id: number) => {
     try {
@@ -152,10 +47,9 @@ export function AutoActionsSubTab() {
       });
       if (data?.success) {
         showNotification(data.message || 'وضعیت قانون به‌روز شد.');
-        fetchRules();
-        fetchStats();
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       }
-    } catch (err) {
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در تغییر وضعیت قانون', 'error');
     }
   };
@@ -168,9 +62,8 @@ export function AutoActionsSubTab() {
         method: 'DELETE'
       });
       showNotification('قانون با موفقیت حذف گردید.');
-      fetchRules();
-      fetchStats();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در حذف قانون', 'error');
     }
   };
@@ -183,12 +76,11 @@ export function AutoActionsSubTab() {
       });
       if (data?.success) {
         showNotification(`تست قانون اجرا شد: وضعیت [${data.status}] (${data.durationMs}ms)`);
-        fetchLogs();
-        fetchStats();
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       } else {
         showNotification('خطا در اجرای تست قانون', 'error');
       }
-    } catch (err) {
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در ارتباط با سرور', 'error');
     }
   };
@@ -205,9 +97,8 @@ export function AutoActionsSubTab() {
       });
 
       showNotification(data?.message || 'قانون با موفقیت ذخیره گردید.');
-      fetchRules();
-      fetchStats();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در ذخیره‌سازی قانون', 'error');
       throw err;
     }

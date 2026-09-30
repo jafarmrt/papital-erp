@@ -660,7 +660,7 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
 
       // 3. 5th attempt -> account must be locked for 30 minutes
       const fifthFail = await recordFailedAttempt(testUsername);
-      if (!fifthFail.locked || fifthFail.remainingMinutes <= 0) {
+      if (!fifthFail.locked || !fifthFail.remainingMinutes || fifthFail.remainingMinutes <= 0) {
         throw new Error('تلاش پنجم باید حساب کاربری را قفل کند (30 دقیقه)');
       }
 

@@ -13,7 +13,7 @@ import { OutboxService } from './events/outboxService.js';
 import { VoucherSyncService } from './accounting/voucherSync.service.js';
 import { VoucherService } from './accounting/voucher.service.js';
 import { NegativeStockPolicyService } from './inventory/negativeStockPolicy.service.js';
-import { resolveWarehouseCode } from './inventory/warehouseResolver.js';
+import { resolveWarehouseCode, createWarehouseResolver } from './inventory/warehouseResolver.js';
 import { ItemStockReservationService } from './items/itemStockReservation.service.js';
 import { KardexWacRecalculatorService } from './inventory/kardexWacRecalculator.service.js';
 import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../lib/lockOrder.js';
@@ -128,8 +128,8 @@ export interface FormattedDocument {
   ref_number: string;
   type: string;
   date: string;
-  user: string;
-  status: string;
+  user: string | null;
+  status: string | null;
   notes: string | null;
   buyerName: string | null;
   buyer_name: string | null;
@@ -139,9 +139,9 @@ export interface FormattedDocument {
   buyer_phone: string | null;
   buyerAddress: string | null;
   buyer_address: string | null;
-  currency: string;
-  version: number;
-  isDeleted: number;
+  currency: string | null;
+  version?: number | null;
+  isDeleted?: number | null;
   projectId?: number | null;
   project_id?: number | null;
   createdAt?: string | null;
@@ -163,7 +163,7 @@ export interface FormattedDocument {
     method: string;
     amount: number;
     date: string;
-    status: string;
+    status: string | null;
     trackingNumber?: string | null;
     bankAccountId?: number | null;
     description?: string | null;
@@ -265,13 +265,14 @@ export class DocumentService {
         await tx.update(documentItems).set({ isDeleted: 1 }).where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
         const docLocation = location ? String(location).trim() : '';
+        const resolveWh = await createWarehouseResolver(tx);
 
         for (const item of docLines) {
           const { itemId, quantity, unit_price, unitPrice, discount, location: itemLoc } = item;
           const price = unit_price ?? unitPrice ?? 0;
           const disc = discount || 0;
           const qty = Number(quantity);
-          const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
+          const targetLoc = resolveWh(itemLoc || docLocation || '');
 
           if (!Number.isFinite(qty) || qty <= 0) {
             throw new ValidationError(`مقدار/تعداد برای کالای با شناسه ${itemId} باید عددی بزرگ‌تر از صفر باشد.`);
@@ -612,9 +613,29 @@ export class DocumentService {
           .for('update');
         const auditItemMap = new Map(lockedAuditItems.map(it => [it.id, it]));
 
+        // TD-164: حذف کوئری‌های تکراری N+1 انبار و قیمت در حلقه انبارگردانی
+        const resolveWh = await createWarehouseResolver(tx);
+
+        // واکشی دسته‌ای قیمت‌ها برای اقلامی که میانگین موزون ندارند با یک کوئری یکتا
+        const missingPriceItemIds = lockedAuditItems
+          .filter(it => Number(it.weightedAverageCost || 0) <= 0)
+          .map(it => it.id);
+        const auditPriceMap = new Map<number, number>();
+        if (missingPriceItemIds.length > 0) {
+          const priceRows = await tx
+            .select({ itemId: itemPrices.itemId, price: itemPrices.price })
+            .from(itemPrices)
+            .where(and(inArray(itemPrices.itemId, missingPriceItemIds), eq(itemPrices.isDeleted, 0)));
+          for (const pr of priceRows) {
+            if (!auditPriceMap.has(pr.itemId)) {
+              auditPriceMap.set(pr.itemId, Number(pr.price || 0));
+            }
+          }
+        }
+
         for (const item of docLines) {
           const { itemId, physical_stock, location: itemLoc } = item;
-          const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
+          const targetLoc = resolveWh(itemLoc || docLocation || '');
           const targetItem = auditItemMap.get(Number(itemId));
 
           // P1-04 (H-05): محاسبه انحراف انبارگردانی در سمت سرور بر مبنای موجودی ثبت‌شده واقعی در پایگاه‌داده تحت قفل
@@ -642,12 +663,7 @@ export class DocumentService {
 
             let auditMovementPrice = Number(targetItem?.weightedAverageCost || 0);
             if (auditMovementPrice <= 0) {
-              const [priceRow] = await tx
-                .select({ price: itemPrices.price })
-                .from(itemPrices)
-                .where(and(eq(itemPrices.itemId, Number(itemId)), eq(itemPrices.isDeleted, 0)))
-                .limit(1);
-              auditMovementPrice = Number(priceRow?.price || 0);
+              auditMovementPrice = auditPriceMap.get(Number(itemId)) || 0;
             }
 
             await DocumentService.applyStockMovement(tx, {
@@ -659,13 +675,16 @@ export class DocumentService {
               date: normalizedDocDate,
               documentType: 'audit',
               documentRef: String(finalRefNumber),
-              user,
+              user: user || 'system',
               notes: txNotes,
               targetLoc
             });
           }
         }
       } else {
+        // TD-164: ایجاد حل‌کننده انبار قبل از ورود به حلقه‌ها
+        const resolveWh = await createWarehouseResolver(tx);
+
         // V6 Sub-phase 2.4 (TD-139) & P1-05 (H-02): گیت رزرویشن Fail-Closed در تراکنش خروج قطعی
         if (docStatus === 'final' && inOut === 'out') {
           const reservationReport = await ItemStockReservationService.getReservedStockDetailsOrThrow(tx);
@@ -694,7 +713,7 @@ export class DocumentService {
             const reqQty = Number(item.quantity || 0);
             if (reqQty <= 0) continue;
 
-            const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : (docLocation || ''));
+            const targetLoc = resolveWh(item.location ? String(item.location).trim() : (docLocation || ''));
             const dbItem = dbItemMap.get(itId);
 
             if (!dbItem) {
@@ -733,19 +752,19 @@ export class DocumentService {
           const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
           const disc = discount || 0;
           const qty = Number(quantity);
-          const targetLoc = await resolveWarehouseCode(tx, itemLoc || docLocation || '');
+          const targetLoc = resolveWh(itemLoc || docLocation || '');
 
           if (docStatus === 'final') {
             await DocumentService.applyStockMovement(tx, {
               itemId: Number(itemId),
               documentId: docId,
-              inOut,
+              inOut: inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out'),
               quantity: qty,
               price,
-              date,
+              date: date || normalizedDocDate,
               documentType: docType,
-              documentRef: String(finalRefNumber),
-              user,
+              documentRef: String(finalRefNumber || ''),
+              user: user || '',
               targetLoc,
             });
           }
@@ -893,9 +912,9 @@ export class DocumentService {
       document_id: number;
       item_id: number;
       quantity: number;
-      unit_price: number;
-      discount: number;
-      location: string;
+      unit_price: number | null;
+      discount: number | null;
+      location: string | null;
       name: string | null;
       code: string | null;
       unit: string | null;
@@ -905,7 +924,7 @@ export class DocumentService {
       documentId: number | null;
       amount: number;
       type: string;
-      status: string;
+      status: string | null;
     }> = [];
 
     if (docIds.length > 0) {
@@ -995,7 +1014,12 @@ export class DocumentService {
         paidAmount: safePaidAmount,
         remainingAmount,
         settlementStatus,
-        items: dItems
+        items: dItems.map(i => ({
+          ...i,
+          unit_price: Number(i.unit_price || 0),
+          discount: Number(i.discount || 0),
+          location: i.location || ''
+        }))
       };
     });
 
@@ -1559,7 +1583,7 @@ export class DocumentService {
               date: doc.date,
               documentType: targetType,
               documentRef: doc.refNumber,
-              user: user || doc.user,
+              user: user || doc.user || 'system',
               targetLoc,
             });
           }
@@ -1573,6 +1597,7 @@ export class DocumentService {
 
           const isSales = targetType === 'invoice' || targetType === 'proforma';
           const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(targetType);
+          const safeUser = user || doc.user || 'system';
 
           if (isSales) {
             const invEvent = domainEventBus.createEvent(
@@ -1588,7 +1613,7 @@ export class DocumentService {
                 itemCount: docLines.length,
                 status: 'final'
               },
-              { userName: user || doc.user }
+              { userName: safeUser }
             );
             await OutboxService.saveToOutbox(tx, invEvent);
           } else if (isPurchase) {
@@ -1604,7 +1629,7 @@ export class DocumentService {
                 itemCount: docLines.length,
                 status: 'final'
               },
-              { userName: user || doc.user }
+              { userName: safeUser }
             );
             await OutboxService.saveToOutbox(tx, purchEvent);
           }
@@ -1612,7 +1637,7 @@ export class DocumentService {
           // Step 4: Auto-generate double-entry accounting voucher (Rule DB-008, Strict Mode)
           if (isSales) {
             await VoucherSyncService.syncSalesInvoiceVoucher(id, {
-              username: user || doc.user,
+              username: safeUser,
               strict: isStrict,
               vatAmount: options?.vatAmount,
               vatPercent: options?.vatPercent,
@@ -1620,12 +1645,12 @@ export class DocumentService {
             }, tx);
           } else if (isPurchase) {
             await VoucherSyncService.syncPurchaseInvoiceVoucher(id, {
-              username: user || doc.user,
+              username: safeUser,
               strict: isStrict,
             }, tx);
           } else if (['remittance', 'waste', 'return'].includes(targetType)) {
             await VoucherSyncService.syncWarehouseDocumentVoucher(id, {
-              username: user || doc.user,
+              username: safeUser,
               strict: isStrict,
             }, tx);
           }

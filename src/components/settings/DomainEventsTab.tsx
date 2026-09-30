@@ -1,82 +1,63 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Zap, RefreshCw, Search, Filter, CheckCircle2, Send, Activity, Package, FileText, GitBranch, CreditCard, ChevronDown, ChevronUp, Clock, Inbox, AlertTriangle, Play, RotateCcw, Database, Sliders, AlertOctagon, History, Globe } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
-import { fetchJson } from '../../api';
-import toast from 'react-hot-toast';
 import { AutoActionsSubTab } from './AutoActionsSubTab';
 import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
 import { EventSourcingReplaySubTab } from './EventSourcingReplaySubTab';
 import { WebhookManagementSubTab } from './WebhookManagementSubTab';
-
-interface DomainEvent {
-  eventId: string;
-  eventType: string;
-  aggregateType: string;
-  aggregateId: string;
-  payload: any;
-  metadata: {
-    userId?: number;
-    userName?: string;
-    correlationId?: string;
-    timestamp: string;
-  };
-  occurredAt: string;
-}
-
-interface DomainEventStats {
-  totalEmitted: number;
-  eventCounts: Record<string, number>;
-  recentCount: number;
-}
-
-interface OutboxEvent {
-  id: number;
-  eventId: string;
-  eventType: string;
-  aggregateType: string;
-  aggregateId: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  payload: any;
-  metadata: any;
-  retryCount: number;
-  nextRetryAt?: string;
-  lastError?: string;
-  occurredAt: string;
-  processedAt?: string;
-}
-
-interface OutboxStats {
-  total: number;
-  pending: number;
-  processing: number;
-  completed: number;
-  failed: number;
-  workerRunning: boolean;
-}
+import {
+  OutboxEvent,
+  useDomainEventsQuery,
+  useOutboxStatsQuery,
+  useOutboxEventsQuery,
+  useSimulateEventMutation,
+  useProcessOutboxMutation,
+  useRetryFailedOutboxMutation,
+  useRetrySingleOutboxEventMutation,
+} from '../../hooks/queries/useEventQueries';
 
 export function DomainEventsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'rules' | 'outbox' | 'dlq' | 'replay' | 'webhooks' | 'events'>('rules');
   
-  // Live Domain Events state
-  const [events, setEvents] = useState<DomainEvent[]>([]);
-  const [stats, setStats] = useState<DomainEventStats | null>(null);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  // Live Domain Events state & query
   const [selectedFilter, setSelectedFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
-  const [isSimulating, setIsSimulating] = useState(false);
 
-  // Outbox state
-  const [outboxEventsList, setOutboxEventsList] = useState<OutboxEvent[]>([]);
-  const [outboxStats, setOutboxStats] = useState<OutboxStats | null>(null);
-  const [isLoadingOutbox, setIsLoadingOutbox] = useState(false);
+  const {
+    data: eventsData,
+    isLoading: isLoadingEvents,
+    refetch: refetchEvents,
+  } = useDomainEventsQuery(selectedFilter, { enabled: activeSubTab === 'events' });
+  const events = eventsData?.events || [];
+  const stats = eventsData?.stats || null;
+
+  // Outbox state & queries
   const [outboxStatusFilter, setOutboxStatusFilter] = useState<string>('ALL');
   const [outboxSearchQuery, setOutboxSearchQuery] = useState<string>('');
   const [expandedOutboxId, setExpandedOutboxId] = useState<number | null>(null);
-  const [isProcessingNow, setIsProcessingNow] = useState(false);
-  const [isRetryingAll, setIsRetryingAll] = useState(false);
-  const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
 
+  const {
+    data: outboxStats = null,
+    isLoading: isLoadingOutboxStats,
+    refetch: refetchOutboxStats,
+  } = useOutboxStatsQuery({ enabled: activeSubTab === 'outbox' });
+
+  const {
+    data: outboxEventsList = [],
+    isLoading: isLoadingOutboxEvents,
+    refetch: refetchOutboxEvents,
+  } = useOutboxEventsQuery(outboxStatusFilter, { enabled: activeSubTab === 'outbox' });
+
+  const isLoadingOutbox = isLoadingOutboxStats || isLoadingOutboxEvents;
+
+  // Mutations
+  const simulateMutation = useSimulateEventMutation();
+  const processOutboxMutation = useProcessOutboxMutation();
+  const retryFailedMutation = useRetryFailedOutboxMutation();
+  const retrySingleMutation = useRetrySingleOutboxEventMutation();
+
+  const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
@@ -84,158 +65,47 @@ export function DomainEventsTab() {
     setTimeout(() => setNotificationMessage(null), 4500);
   };
 
-  const fetchEvents = async (signal?: AbortSignal) => {
-    try {
-      setIsLoadingEvents(true);
-      const json = await fetchJson<{ events?: DomainEvent[]; stats?: DomainEventStats }>(
-        `/events/domain-events?limit=100&filter=${selectedFilter}`,
-        { signal }
-      );
-      if (json) {
-        setEvents(Array.isArray(json.events) ? json.events : []);
-        setStats(json.stats || null);
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error fetching domain events:', err);
-      toast.error('خطا در دریافت رویدادهای دامنه');
-    } finally {
-      setIsLoadingEvents(false);
-    }
-  };
-
-  const fetchOutbox = async (signal?: AbortSignal) => {
-    try {
-      setIsLoadingOutbox(true);
-      const [statsJson, listJson] = await Promise.all([
-        fetchJson<{ success?: boolean; stats?: OutboxStats }>('/events/outbox/stats', { signal }).catch((err) => {
-          if (err?.name === 'AbortError') throw err;
-          console.error('Failed to load outbox stats:', err);
-          return null;
-        }),
-        fetchJson<{ success?: boolean; events?: OutboxEvent[] }>(`/events/outbox?limit=100&status=${outboxStatusFilter}`, { signal }).catch((err) => {
-          if (err?.name === 'AbortError') throw err;
-          console.error('Failed to load outbox events list:', err);
-          return null;
-        })
-      ]);
-
-      if (statsJson?.stats) {
-        setOutboxStats(statsJson.stats);
-      }
-      setOutboxEventsList(Array.isArray(listJson?.events) ? listJson.events : []);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error fetching outbox data:', err);
-      toast.error('خطا در دریافت صف رویدادهای Outbox');
-    } finally {
-      setIsLoadingOutbox(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    if (activeSubTab === 'events') {
-      fetchEvents(controller.signal);
-    } else if (activeSubTab === 'outbox') {
-      fetchOutbox(controller.signal);
-    }
-    return () => controller.abort();
-  }, [activeSubTab, selectedFilter, outboxStatusFilter]);
-
-  // Periodic polling for freshness
-  useEffect(() => {
-    if (activeSubTab !== 'events' && activeSubTab !== 'outbox') return;
-
-    const interval = setInterval(() => {
-      if (activeSubTab === 'events') {
-        fetchEvents();
-      } else if (activeSubTab === 'outbox') {
-        fetchOutbox();
-      }
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [activeSubTab, selectedFilter, outboxStatusFilter]);
-
   const handleSimulateTestEvent = async () => {
     try {
-      setIsSimulating(true);
-      const res = await fetchJson<{ success?: boolean; message?: string }>('/events/domain-events/simulate', {
-        method: 'POST',
-        body: JSON.stringify({
-          eventType: 'SimulatedTestEvent',
-          aggregateType: 'System',
-          aggregateId: `TEST_${Math.floor(Math.random() * 9000 + 1000)}`,
-          payload: {
-            description: 'ارزیابی و تست عملکردی خط لوله انتشار رویدادهای سازمانی (Event Pipeline)',
-            timestamp: new Date().toISOString()
-          }
-        })
+      await simulateMutation.mutateAsync({
+        eventType: 'SimulatedTestEvent',
+        aggregateType: 'System',
+        aggregateId: `TEST_${Math.floor(Math.random() * 9000 + 1000)}`,
+        payload: {
+          description: 'ارزیابی و تست عملکردی خط لوله انتشار رویدادهای سازمانی (Event Pipeline)',
+          timestamp: new Date().toISOString()
+        }
       });
-
-      if (res?.success) {
-        showNotification('رویداد آزمایشی با موفقیت در گذرگاه منتشر شد.');
-        await fetchEvents();
-      }
-    } catch (err) {
+      showNotification('رویداد آزمایشی با موفقیت در گذرگاه منتشر شد.');
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در انتشار رویداد آزمایشی', 'error');
-    } finally {
-      setIsSimulating(false);
     }
   };
 
   const handleProcessOutboxNow = async () => {
     try {
-      setIsProcessingNow(true);
-      const json = await fetchJson<{ success?: boolean; message?: string }>('/events/outbox/process-now', {
-        method: 'POST',
-        body: JSON.stringify({ batchSize: 50 })
-      });
-      if (json?.success) {
-        showNotification(json.message || 'پردازش دسته با موفقیت انجام شد.');
-        await fetchOutbox();
-      } else {
-        showNotification(json?.message || 'خطا در پردازش فوری صندوق خروجی', 'error');
-      }
-    } catch (err) {
+      const res = await processOutboxMutation.mutateAsync();
+      showNotification(res?.message || 'پردازش دسته با موفقیت انجام شد.');
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در پردازش صندوق خروجی', 'error');
-    } finally {
-      setIsProcessingNow(false);
     }
   };
 
   const handleRetryAllFailed = async () => {
     try {
-      setIsRetryingAll(true);
-      const json = await fetchJson<{ success?: boolean; message?: string }>('/events/outbox/retry-failed', {
-        method: 'POST'
-      });
-      if (json?.success) {
-        showNotification(json.message || 'رویدادهای ناموفق برای ارسال مجدد آماده شدند.');
-        await fetchOutbox();
-      } else {
-        showNotification(json?.message || 'خطا در بازنشانی رویدادهای ناموفق', 'error');
-      }
-    } catch (err) {
+      const res = await retryFailedMutation.mutateAsync();
+      showNotification(res?.message || 'رویدادهای ناموفق برای ارسال مجدد آماده شدند.');
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در تلاش مجدد رویدادهای ناموفق', 'error');
-    } finally {
-      setIsRetryingAll(false);
     }
   };
 
   const handleRetrySingle = async (eventId: string) => {
     try {
       setRetryingEventId(eventId);
-      const json = await fetchJson<{ success?: boolean; message?: string }>(`/events/outbox/${eventId}/retry`, {
-        method: 'POST'
-      });
-      if (json?.success) {
-        showNotification(json.message || `رویداد ${eventId} بازنشانی شد.`);
-        await fetchOutbox();
-      } else {
-        showNotification(json?.message || 'خطا در تلاش مجدد رویداد', 'error');
-      }
-    } catch (err) {
+      const res = await retrySingleMutation.mutateAsync(eventId);
+      showNotification(res?.message || `رویداد ${eventId} بازنشانی شد.`);
+    } catch (err: any) {
       showNotification(err?.message || 'خطا در تلاش مجدد', 'error');
     } finally {
       setRetryingEventId(null);
@@ -502,7 +372,7 @@ export function DomainEventsTab() {
               </div>
 
               <button
-                onClick={() => fetchOutbox()}
+                onClick={() => { refetchOutboxStats(); refetchOutboxEvents(); }}
                 disabled={isLoadingOutbox}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition-all"
               >
@@ -512,20 +382,20 @@ export function DomainEventsTab() {
 
               <button
                 onClick={handleProcessOutboxNow}
-                disabled={isProcessingNow}
+                disabled={processOutboxMutation.isPending}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all disabled:opacity-50"
               >
-                <Play className={`w-3.5 h-3.5 ${isProcessingNow ? 'animate-spin' : ''}`} />
-                <span>{isProcessingNow ? 'در حال اجرا...' : 'پردازش دستی دسته'}</span>
+                <Play className={`w-3.5 h-3.5 ${processOutboxMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>{processOutboxMutation.isPending ? 'در حال اجرا...' : 'پردازش دستی دسته'}</span>
               </button>
 
               {(outboxStats?.failed || 0) > 0 && (
                 <button
                   onClick={handleRetryAllFailed}
-                  disabled={isRetryingAll}
+                  disabled={retryFailedMutation.isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 transition-all disabled:opacity-50"
                 >
-                  <RotateCcw className={`w-3.5 h-3.5 ${isRetryingAll ? 'animate-spin' : ''}`} />
+                  <RotateCcw className={`w-3.5 h-3.5 ${retryFailedMutation.isPending ? 'animate-spin' : ''}`} />
                   <span>تلاش مجدد تمام خطاهای ارسال ({outboxStats?.failed})</span>
                 </button>
               )}
@@ -714,7 +584,7 @@ export function DomainEventsTab() {
               </div>
 
               <button
-                onClick={() => fetchEvents()}
+                onClick={() => refetchEvents()}
                 disabled={isLoadingEvents}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition-all"
               >
@@ -724,11 +594,11 @@ export function DomainEventsTab() {
 
               <button
                 onClick={handleSimulateTestEvent}
-                disabled={isSimulating}
+                disabled={simulateMutation.isPending}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSimulating ? 'در حال انتشار...' : 'انتشار رویداد آزمایشی'}</span>
+                <span>{simulateMutation.isPending ? 'در حال انتشار...' : 'انتشار رویداد آزمایشی'}</span>
               </button>
             </div>
 

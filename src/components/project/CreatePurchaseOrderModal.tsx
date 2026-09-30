@@ -6,6 +6,7 @@ import { fetchJson } from '../../api';
 import { formatPersianPrice, getTodayJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean;
@@ -500,17 +501,16 @@ export function CreatePurchaseOrderModal({
                           </div>
                         </td>
                         <td className="p-2.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={row.unitPrice === 0 ? '' : row.unitPrice}
-                              onChange={e => handleUpdateRow(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              className="w-24 p-1 border border-slate-300 rounded text-center font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                            />
-                            <span className="text-[10px] text-slate-500">ریال</span>
-                          </div>
+                          <FinancialAmountInput
+                            value={row.unitPrice}
+                            onChange={val => handleUpdateRow(idx, 'unitPrice', val)}
+                            currency="IRR"
+                            variant="table"
+                            placeholder="0"
+                            className="w-28 mx-auto"
+                            containerClassName="w-full border border-slate-300 rounded focus-within:ring-1 focus-within:ring-amber-500"
+                            inputClassName="p-1 text-center font-mono text-slate-900"
+                          />
                         </td>
                         <td className="p-2.5 text-center font-mono font-bold text-slate-900">
                           {formatPersianPrice(row.quantity * row.unitPrice)}

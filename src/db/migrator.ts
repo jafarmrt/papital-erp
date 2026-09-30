@@ -74,63 +74,6 @@ export async function runMigrations(): Promise<MigrationResult> {
     // Execute official Drizzle migration runner (records applied migrations in __drizzle_migrations)
     await migrate(orm, { migrationsFolder });
 
-    // V3.1.13: Ensure project_stages has updated_at column to guarantee trg_project_stages_updated_at trigger compatibility
-    try {
-      await pool.query(`
-        ALTER TABLE project_stages ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
-        DROP TRIGGER IF EXISTS trg_project_stages_updated_at ON project_stages;
-        CREATE TRIGGER trg_project_stages_updated_at BEFORE UPDATE ON project_stages FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-      `);
-    } catch (e: any) {
-      logger.warn(`[Migrator] project_stages trigger check: ${e.message}`);
-    }
-
-    // V3.1.28: Ensure attachments jsonb columns exist for financial entities
-    try {
-      await pool.query(`
-        ALTER TABLE documents ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
-        ALTER TABLE journal_vouchers ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
-        ALTER TABLE cheques ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
-        ALTER TABLE treasury_transactions ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
-        ALTER TABLE piecework_payrolls ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
-        ALTER TABLE production_projects ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
-      `);
-    } catch (e: any) {
-      logger.warn(`[Migrator] financial attachments column check: ${e.message}`);
-    }
-
-    // V4.0.4 (TD-091 / Subphase 3.1): Ensure piecework_payroll_number_seq exists for atomic payroll numbering
-    try {
-      await pool.query(`
-        CREATE SEQUENCE IF NOT EXISTS piecework_payroll_number_seq START WITH 1001 INCREMENT BY 1;
-      `);
-    } catch (e: any) {
-      logger.warn(`[Migrator] piecework_payroll_number_seq check: ${e.message}`);
-    }
-
-    // V4.0.33: Ensure paid_amount column exists on piecework_payrolls for partial payments and backfill past paid payrolls
-    try {
-      await pool.query(`
-        ALTER TABLE piecework_payrolls ADD COLUMN IF NOT EXISTS paid_amount numeric(18, 4) DEFAULT 0;
-        UPDATE piecework_payrolls SET paid_amount = net_payable WHERE status = 'paid' AND (paid_amount IS NULL OR paid_amount = 0);
-      `);
-    } catch (e: any) {
-      logger.warn(`[Migrator] piecework_payrolls paid_amount column check: ${e.message}`);
-    }
-
-    // V6.0.21 (TD-157): Ensure is_deleted column exists on document_items, journal_voucher_items and transfers for soft-delete compliance (RULE 09)
-    try {
-      await pool.query(`
-        ALTER TABLE document_items ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
-        ALTER TABLE journal_voucher_items ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
-        ALTER TABLE transfers ADD COLUMN IF NOT EXISTS is_deleted integer DEFAULT 0;
-        CREATE INDEX IF NOT EXISTS idx_jvi_deleted ON journal_voucher_items (is_deleted);
-        CREATE INDEX IF NOT EXISTS idx_transfer_deleted ON transfers (is_deleted);
-      `);
-    } catch (e: any) {
-      logger.warn(`[Migrator] line items & transfers is_deleted column check: ${e.message}`);
-    }
-
     let after = before;
     try {
       const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');

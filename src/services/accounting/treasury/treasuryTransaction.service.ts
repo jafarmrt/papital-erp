@@ -278,7 +278,7 @@ export class TreasuryTransactionService {
       voucher_id: t.voucherId,
       cheque_id: t.chequeId,
       document_id: t.documentId,
-    }));
+    } as TreasuryTransaction));
   }
 
   static async createTreasuryTransaction(data: {
@@ -405,7 +405,7 @@ export class TreasuryTransactionService {
           username: data.username,
           items: [
             {
-              accountId: debitAccountId,
+              accountId: debitAccountId!,
               detailedType: data.type === 'receipt' ? treasuryDetailedType : (data.partyType || 'other'),
               detailedId: data.type === 'receipt' ? treasuryDetailedId : data.partyId,
               detailedName: data.type === 'receipt' ? treasuryDetailedName : data.partyName,
@@ -415,7 +415,7 @@ export class TreasuryTransactionService {
               description: descText,
             },
             {
-              accountId: creditAccountId,
+              accountId: creditAccountId!,
               detailedType: data.type === 'receipt' ? (data.partyType || 'other') : treasuryDetailedType,
               detailedId: data.type === 'receipt' ? data.partyId : treasuryDetailedId,
               detailedName: data.type === 'receipt' ? data.partyName : treasuryDetailedName,
@@ -475,7 +475,7 @@ export class TreasuryTransactionService {
         partyType: tx.partyType as TreasuryTransaction['partyType'],
         status: tx.status as TreasuryTransaction['status'],
         bankAccountTitle: bank.title,
-      };
+      } as TreasuryTransaction;
     });
   }
 
@@ -612,7 +612,7 @@ export class TreasuryTransactionService {
         partyType: reversalTx.partyType as TreasuryTransaction['partyType'],
         status: reversalTx.status as TreasuryTransaction['status'],
         bankAccountTitle: bank.title,
-      };
+      } as TreasuryTransaction;
     });
   }
 

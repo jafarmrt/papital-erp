@@ -174,7 +174,7 @@ export class PayrollPaymentService {
         );
       }
 
-      if (!['approved', 'partially_paid', 'draft'].includes(payroll.status)) {
+      if (!payroll.status || !['approved', 'partially_paid', 'draft'].includes(payroll.status)) {
         throw new ConflictError(`وضعیت فعلی فیش (${payroll.status}) اجازه ثبت پرداخت ندارد.`);
       }
 

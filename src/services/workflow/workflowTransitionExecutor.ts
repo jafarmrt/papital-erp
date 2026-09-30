@@ -27,7 +27,7 @@ export interface WorkflowStateSnapshot {
   workflowDefinitionId?: number;
   stateKey: string;
   title: string;
-  stateType: string;
+  stateType?: string | null;
   slaHours?: number | null;
   positionX?: number | null;
   positionY?: number | null;
@@ -66,8 +66,8 @@ export interface WorkflowDefinitionRow {
   title: string;
   entityType: string;
   description?: string | null;
-  version: number;
-  isActive: number;
+  version?: number | null;
+  isActive?: number | null;
   dslJson?: unknown;
 }
 
@@ -183,7 +183,7 @@ export class WorkflowTransitionExecutor {
 
     if (entityContext) {
       filtered = filtered.filter(t => {
-        return WorkflowRuleEngine.evaluateConditions(t.ruleConditionsJson, entityContext);
+        return WorkflowRuleEngine.evaluateConditions(t.ruleConditionsJson as any, entityContext);
       });
     }
 
@@ -522,7 +522,7 @@ export class WorkflowTransitionExecutor {
 
       const quorumEval = WorkflowQuorumService.evaluateAndAddSignature({
         approvalRuleType: transition.approvalRuleType as 'SINGLE' | 'AND_ALL' | 'OR_ANY' | 'K_OF_N' | undefined,
-        kValue: transition.kValue,
+        kValue: transition.kValue ?? undefined,
         existingSignatures,
         userId: params.userId || 0,
         userName: params.userName,

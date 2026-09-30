@@ -43,8 +43,10 @@ router.get('/items/prices/all', async (req, res) => {
 
     const grouped: Record<number, Array<typeof itemPrices.$inferSelect>> = {};
     for (const p of activePrices) {
-      if (!grouped[p.itemId]) grouped[p.itemId] = [];
-      grouped[p.itemId].push(p);
+      const itId = Number(p.itemId || p.item_id);
+      if (!itId) continue;
+      if (!grouped[itId]) grouped[itId] = [];
+      grouped[itId].push(p as typeof itemPrices.$inferSelect);
     }
     res.json(grouped);
   } catch (err) {
@@ -155,6 +157,19 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
         .where(and(inArray(items.id, itemIds), eq(items.isDeleted, 0)));
       const validItemMap = new Map<number, { id: number; name: string; code: string }>(validItems.map(i => [i.id, i]));
 
+      // TD-164: واکشی دسته‌ای کلیه قیمت‌های فعلی اقلام تحت قفل سطری با یک کوری واحد
+      const allExistingPrices = await tx.select()
+        .from(itemPrices)
+        .where(and(inArray(itemPrices.itemId, itemIds), eq(itemPrices.isDeleted, 0)))
+        .for('update');
+
+      const pricesByItemId = new Map<number, Array<typeof itemPrices.$inferSelect>>();
+      for (const p of allExistingPrices) {
+        const list = pricesByItemId.get(p.itemId) || [];
+        list.push(p);
+        pricesByItemId.set(p.itemId, list);
+      }
+
       for (const item of updates) {
         const { itemId, title, price, currency = 'IRR' } = item;
         const numItemId = Number(itemId);
@@ -164,11 +179,7 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
         const cleanTitle = normalizeStrategyTitle(String(title));
         const canKey = getStrategyCanonicalKey(cleanTitle);
 
-        const existingList = await tx.select()
-          .from(itemPrices)
-          .where(and(eq(itemPrices.itemId, numItemId), eq(itemPrices.isDeleted, 0)))
-          .for('update');
-
+        const existingList = pricesByItemId.get(numItemId) || [];
         const matchingActive = existingList.filter(p => getStrategyCanonicalKey(p.title) === canKey);
 
         if (price === null || price === undefined || price === '' || Number(price) <= 0) {

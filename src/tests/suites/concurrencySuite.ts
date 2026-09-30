@@ -487,17 +487,25 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       throw new Error(`Timeout test initial acquire expected PROCESS_NEW, got ${timeoutAcquire1.action}`);
     }
 
-    // Wait 1.1s for lock to timeout
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    // TD-134: پایش شرطی هوشمند (Condition Polling) به‌جای sleep ثابت وابسته به زمان
+    const pollStart = Date.now();
+    let timeoutAcquired = false;
+    let timeoutAcquire2: any;
+    while (Date.now() - pollStart < 2500) {
+      await new Promise(resolve => setTimeout(resolve, 60));
+      timeoutAcquire2 = await IdempotencyService.acquireOrGet({
+        key: timeoutKey,
+        scope: testScope,
+        lockTimeoutSeconds: 60
+      });
+      if (timeoutAcquire2.action === 'PROCESS_NEW') {
+        timeoutAcquired = true;
+        break;
+      }
+    }
 
-    // Re-acquire expired lock -> MUST re-acquire with OCC and return PROCESS_NEW
-    const timeoutAcquire2 = await IdempotencyService.acquireOrGet({
-      key: timeoutKey,
-      scope: testScope,
-      lockTimeoutSeconds: 60
-    });
-    if (timeoutAcquire2.action !== 'PROCESS_NEW') {
-      throw new Error(`Timeout re-acquire expected PROCESS_NEW via OCC, got ${timeoutAcquire2.action}`);
+    if (!timeoutAcquired || timeoutAcquire2?.action !== 'PROCESS_NEW') {
+      throw new Error(`Timeout re-acquire expected PROCESS_NEW via OCC, got ${timeoutAcquire2?.action}`);
     }
 
     results.push(makeTestCase({
@@ -546,7 +554,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     const acqU2Docs = await IdempotencyService.acquireOrGet({
       key: sharedKey,
       scope: 'documents',
-      userId: u2Id,
+      userId: u2Id ?? undefined,
       requestPath: '/api/documents',
       requestMethod: 'POST'
     });

@@ -1,6 +1,6 @@
 # AI Agent Instructions (AGENTS.md)
 
-> **Documentation Map (Version 6.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V6_MASTER_ROADMAP.md` • نقشه راه آرشیو v5: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/6.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
+> **Documentation Map (Version 7.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V7_MASTER_ROADMAP.md` • نقشه راه آرشیو v6: `V6_MASTER_ROADMAP.md` • نقشه راه آرشیو v5: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/7.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
 
 هر ایجنت هوش مصنوعی برای حفظ پایداری سیستم ملزم به رعایت دقیق این قواعد است:
 
@@ -159,15 +159,14 @@
 - **Production Seed Gating (DB-014):** Seeding disabled in production unless `ALLOW_SEED_IN_PRODUCTION=true`, protected by advisory lock (`pg_try_advisory_lock(89345)`).
 - **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 30000` ms. Bulk tasks use `withLongQueryTimeout(fn)`.
 
-## 23. V6 Governance — Active Series, Data-Integrity Remediation, Event-Sourced Inventory & Enterprise Accounting Hardening
-- **Active Series (v6.x.y):** The active changelog file is `src/data/changelogs/6.ts` (`v6.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), `4.ts` (`v4.x.y`), and `5.ts` (`v5.x.y` - finalized and archived at `v5.0.20`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/6.ts` and bump `package.json` `"version"`.
-- **Core Mission of Version 6:**
-  1. **Data-Integrity Remediation (اصلاحات بنیادین ۲۶‌گانه ممیزی):** Direct systematic resolution of all 26 findings from the independent audit across Inventory Kardex, Double-Entry Accounting, Treasury/Cheques, Sequential Numbering, and Concurrency.
-  2. **Event-Sourced Kardex & True WAC Preservation (پایدارسازی کاردکس و حفظ WAC):** Complete elimination of WAC dilution in inventory audits, WAC zeroing on stock depletion, and unrecorded movements during Excel imports.
-  3. **Enterprise Double-Entry Accounting & Year-End Closing (انضباط دفاتر دوبل و بستن سال مالی):** Cross-calendar date normalization, transaction-isolated trial balance calculations, multi-currency COGS exchange rate integration, and elimination of double-reversals.
-  4. **Treasury Separation & Sayad Lifecycle (تفکیک خزانه‌داری نقدی از اسناد مدت‌دار):** Preventing direct bank balance mutation on cheque transactions and enabling the full Sayad endorsement/spent workflow.
-  5. **Concurrency & Deadlock-Free Hierarchy (انضباط قفل‌های سطری و همروندی):** Strict enforcement of `LockHierarchyLevel` table priorities (`items` before `documents`) to permanently prevent PostgreSQL deadlock errors.
-  6. **Architecture Rules Compliance (انطباق با ۱۰ قانون بنیادین معماری):** Migration of all direct DB mutations from route files into domain services (Rule 01) and eradication of hard deletes across auditable entities (Rule 09).
+## 23. V7 Governance — Active Series, Strict Typing, Zod Coverage, N+1 Optimization & Stock Normalization
+- **Active Series (v7.x.y):** The active changelog file is `src/data/changelogs/7.ts` (`v7.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), `4.ts` (`v4.x.y`), `5.ts` (`v5.x.y`), and `6.ts` (`v6.x.y` - finalized and archived at `v6.0.28`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/7.ts` and bump `package.json` `"version"`.
+- **Core Mission of Version 7:**
+  1. **Strict TypeScript & Type Safety (فعال‌سازی Strict Mode):** Incremental adoption of `strict: true`, `strictNullChecks: true`, and elimination of untyped `: any` escape hatches across financial and inventory paths.
+  2. **100% Zod Validation Coverage (اعتبارسنجی کامل روت‌ها):** Complete Zod middleware protection on all remaining unvalidated endpoints (Procurement, Dashboard, Transactions) preventing NaN/malformed inputs.
+  3. **N+1 Performance Elimination (حذف کوری‌های متوالی در لوپ‌ها):** Batch fetching of warehouse locations and item base prices in document finalization and audit loops.
+  4. **Database Migrator Hardening (استحکام مایگریتور):** Formalization of all ad-hoc DDL into numbered Drizzle migrations and fail-fast startup behavior in production.
+  5. **Data Model Normalization (نرمال‌سازی انبار):** Migration of per-warehouse inventory quantities from JSONB blob into a normalized `item_warehouse_stocks` table with database-level constraints.
 - **CHANGELOG.md Archive:** Condensed markdown archive of major series milestones lives in root `CHANGELOG.md`.
 - **Technical Debt Registry (TECH_DEBT.md):** ANY shortcut, workaround, or known issue must be registered with unique `TD-###` in `TECH_DEBT.md`. Resolving a debt requires updating its status in the same change-set.
 - **Data-Safety Invariant:** Test cleanup gated on `NODE_ENV ∈ {test,development}` AND `ERP_ALLOW_TEST_CLEANUP=1`, scoped to synthetic test IDs only. `db:push` is BANNED; migrations come exclusively from the atomic migrator.
@@ -177,7 +176,7 @@
   - DBHub read-only MCP configuration: see `docs/LOCAL_MCP_TOOLING.md`.
 - **Release Version Bump = 2 Synced Locations:**
   1. `"version"` in `package.json` (single source of truth; dynamically resolved by `src/lib/version.ts` and `/health`).
-  2. Top entry in active changelog `src/data/changelogs/6.ts`.
+  2. Top entry in active changelog `src/data/changelogs/7.ts`.
 
 ## 24. GitHub Sync Policy
 - **Commit & Push:** In local development or environments with configured Git credentials/SSH keys, commit with descriptive messages and push to `origin/master`.

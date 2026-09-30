@@ -607,7 +607,7 @@ export class ProcurementService {
       if (unhandledItems.length > 0) {
         try {
           const docLines = unhandledItems.map(i => ({
-            itemId: i.itemId,
+            itemId: Number(i.itemId) || 0,
             quantity: Number(i.requestedQty),
             unit_price: Number(i.unitPriceEstimate || 0),
             discount: 0,

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import Decimal from "decimal.js";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -781,6 +782,24 @@ export function formatCurrencyLabel(c?: string): string {
   return c;
 }
 
+/**
+ * Safely parse any number or string (including Persian/Arabic digits, thousand separators, or whitespace)
+ * into a pure JavaScript number. Backed by Decimal to eliminate floating-point drift.
+ */
+export function parseCleanNumber(val: unknown, defaultValue: number = 0): number {
+  if (val === null || val === undefined || typeof val === 'object') return defaultValue;
+  if (typeof val === 'number') return isNaN(val) || !isFinite(val) ? defaultValue : val;
+  const str = toEnglishDigits(String(val)).replace(/,/g, '').trim();
+  if (str === '' || str === '-') return defaultValue;
+  try {
+    const d = new Decimal(str);
+    return d.isFinite() ? d.toNumber() : defaultValue;
+  } catch {
+    const num = Number(str);
+    return isNaN(num) || !isFinite(num) ? defaultValue : num;
+  }
+}
+
 export function parseQuantityOrTime(val: string | number | null | undefined): number {
   if (val === null || val === undefined || typeof val === 'object') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
@@ -788,12 +807,11 @@ export function parseQuantityOrTime(val: string | number | null | undefined): nu
     const str = toEnglishDigits(String(val)).trim();
     if (str.includes(':')) {
       const parts = str.split(':');
-      const hours = parseFloat(parts[0]) || 0;
-      const minutes = parseFloat(parts[1]) || 0;
+      const hours = parseCleanNumber(parts[0], 0);
+      const minutes = parseCleanNumber(parts[1], 0);
       return hours + (minutes / 60);
     }
-    const num = parseFloat(str.replace(/,/g, ''));
-    return isNaN(num) ? 0 : num;
+    return parseCleanNumber(str, 0);
   } catch {
     return 0;
   }
@@ -1022,10 +1040,14 @@ export function formatPersianDateTime(dateInput: any): string {
  */
 export function roundFinancial(num: number | string | null | undefined, decimals: number = 4): number {
   if (num === null || num === undefined || typeof num === 'object') return 0;
-  const n = typeof num === 'number' ? num : parseFloat(String(num));
-  if (isNaN(n) || !isFinite(n)) return 0;
-  const factor = Math.pow(10, decimals);
-  return Math.round((n + Number.EPSILON) * factor) / factor;
+  const n = parseCleanNumber(num, 0);
+  if (n === 0) return 0;
+  try {
+    return new Decimal(n).toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP).toNumber();
+  } catch {
+    const factor = Math.pow(10, decimals);
+    return Math.round((n + Number.EPSILON) * factor) / factor;
+  }
 }
 
 /**

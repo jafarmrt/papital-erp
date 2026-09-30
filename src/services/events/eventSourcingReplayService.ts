@@ -338,7 +338,7 @@ export class EventSourcingReplayService {
     };
 
     // 1. Fetch active Action Rules matching this event
-    const simulationResults = [];
+    const simulationResults: any[] = [];
     const rules = await EventActionEngineService.getRules({ eventType: params.eventType, isActive: true });
 
     for (const rule of rules) {

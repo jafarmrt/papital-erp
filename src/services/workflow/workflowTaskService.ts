@@ -462,7 +462,7 @@ export class WorkflowTaskService {
 
     const consolidatedPendingList = Array.from(instanceMap.values());
 
-    const matched = [];
+    const matched: any[] = [];
     for (const item of consolidatedPendingList) {
       const app = item.approval;
       const inst = item.instance;

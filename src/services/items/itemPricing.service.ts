@@ -9,9 +9,9 @@ export interface PriceItemRecord {
   item_id?: number | string;
   title?: string;
   price?: number | string;
-  currency?: string;
-  isDeleted?: number;
-  is_deleted?: number;
+  currency?: string | null;
+  isDeleted?: number | null;
+  is_deleted?: number | null;
   [key: string]: unknown;
 }
 

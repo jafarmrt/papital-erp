@@ -2047,8 +2047,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // 1. Ensure required accounts exist
       await AccountingService.seedStandardAccounts();
       const allAccounts = await AccountingService.getAllAccounts();
-      const expenseAcc = allAccounts.find(a => a.code === '7101') || allAccounts[0];
-      const bankAcc = allAccounts.find(a => a.code === '1102') || allAccounts[1];
+      const expenseAcc = allAccounts.find((a: any) => a.code === '7101') || allAccounts[0];
+      const bankAcc = allAccounts.find((a: any) => a.code === '1102') || allAccounts[1];
 
       // 2. Direct Voucher with Jalali Date (1404-10-15) -> Must normalize to Gregorian ISO
       const vJalali = await VoucherService.createJournalVoucher({
@@ -3296,7 +3296,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // 9. Query Check: VoucherService.getJournalVoucherById MUST only return active line items
       const fetchedVoucher = await VoucherService.getJournalVoucherById(voucher.id);
-      if (!fetchedVoucher || fetchedVoucher.items.length !== 2) {
+      if (!fetchedVoucher || !fetchedVoucher.items || fetchedVoucher.items.length !== 2) {
         throw new Error('خروجی getJournalVoucherById آرتیکل‌های حذف‌شده را تفکیک نکرده است.');
       }
 

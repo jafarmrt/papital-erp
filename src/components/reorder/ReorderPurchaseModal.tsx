@@ -5,6 +5,7 @@ import { fetchJson } from '../../api';
 import { Customer } from '../../types';
 import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 export interface ReorderModalItem {
   id: number;
@@ -398,13 +399,15 @@ export function ReorderPurchaseModal({
                       </td>
                       <td className="p-2.5 text-center font-bold text-slate-600">{it.unit || 'عدد'}</td>
                       <td className="p-2.5 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={it.unitPrice === 0 ? '' : it.unitPrice}
-                          onChange={e => handleUpdateItemField(it.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          className="w-28 p-1.5 bg-white border border-slate-300 rounded text-center font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                        <FinancialAmountInput
+                          value={it.unitPrice}
+                          onChange={val => handleUpdateItemField(it.id, 'unitPrice', val)}
+                          currency="IRR"
+                          variant="table"
+                          placeholder="0"
+                          className="w-28 mx-auto"
+                          containerClassName="w-full bg-white border border-slate-300 rounded focus-within:ring-2 focus-within:ring-amber-400"
+                          inputClassName="p-1.5 text-center font-mono font-bold text-slate-800"
                         />
                       </td>
                       <td className="p-2.5 text-center font-mono font-bold text-amber-700">

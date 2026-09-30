@@ -743,7 +743,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
       return res.status(409).json({ error: 'حذف حساب کاربری خودی مجاز نیست.' });
     }
 
-    let deletedUserInfo: { fullName: string | null; username: string; role: string } | null = null;
+    let deletedUserInfo: { fullName: string | null; username: string; role: string } | undefined = undefined;
 
     await orm.transaction(async (tx) => {
       const [delUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
@@ -772,9 +772,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
       deletedUserInfo = { fullName: delUser.fullName, username: delUser.username, role: delUser.role };
     });
 
-    invalidateUserAuthCache(targetUserId);
-
-    const finalInfo = deletedUserInfo as { fullName: string | null; username: string; role: string };
+    const finalInfo = deletedUserInfo!;
     await logActivity({
       req,
       action: 'DELETE',

@@ -1,4 +1,4 @@
-import { toEnglishDigits, jalaliToIsoDate } from '../../../utils';
+import { toEnglishDigits, jalaliToIsoDate, parseCleanNumber } from '../../../utils';
 
 export interface StatementRow {
   rowNo: number;
@@ -51,8 +51,8 @@ export function parseCleanAmount(raw: unknown): number {
   }
   // حذف جداکننده‌ها و کاراکترهای غیرعددی (بجز اعشار)
   str = str.replace(/,/g, '').replace(/[^\d.-]/g, '');
-  const n = parseFloat(str);
-  return isNaN(n) ? 0 : Math.abs(n);
+  const n = parseCleanNumber(str, 0);
+  return Math.abs(n);
 }
 
 /**

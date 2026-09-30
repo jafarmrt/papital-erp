@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Item } from '../../../types';
 import { fetchJson } from '../../../api';
-import { getTodayJalaliDate } from '../../../utils';
+import { getTodayJalaliDate, parseCleanNumber } from '../../../utils';
 import { ItemFormData, ItemFormModalProps } from './types';
 import {
   parseItemStocks,
@@ -238,11 +238,11 @@ export function useItemForm({
         code: finalCode,
         current_stock: calculatedStock,
         stocks: form.stocks,
-        weight: form.weight ? parseFloat(form.weight) : undefined,
+        weight: form.weight ? parseCleanNumber(form.weight) : undefined,
         // V2.0.0: کلید صحیح بک‌اند برای «بهای تمام‌شده اولیه (WAC/خرید)» —
         // قبلاً initial_cost فرستاده می‌شد که توسط Zod حذف و WAC صفر ذخیره می‌شد
-        weighted_average_cost: Number(form.initial_cost) || 0,
-        initial_cost: Number(form.initial_cost) || 0
+        weighted_average_cost: parseCleanNumber(form.initial_cost, 0),
+        initial_cost: parseCleanNumber(form.initial_cost, 0)
       };
 
       if (onSave) {

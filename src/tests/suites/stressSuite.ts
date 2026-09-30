@@ -452,7 +452,7 @@ export async function runStressTests(): Promise<TestCaseResult[]> {
     const t6Start = Date.now();
     const testEvtId = `evt_stress_outbox_${Date.now()}`;
     try {
-      await OutboxService.saveToOutbox(undefined, {
+      await OutboxService.saveToOutbox(orm, {
         eventId: testEvtId,
         eventType: 'StressTestEvent' as any,
         aggregateType: 'System' as any,

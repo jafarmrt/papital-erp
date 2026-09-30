@@ -150,7 +150,7 @@ export class BankAccountService {
         account_name: b.accountName || undefined,
         account_code: b.accountCode || undefined,
         is_active: b.isActive ?? 1,
-      };
+      } as BankAccount;
     });
   }
 
@@ -309,7 +309,7 @@ export class BankAccountService {
       return {
         ...inserted,
         type: inserted.type as BankAccount['type'],
-      };
+      } as BankAccount;
     };
 
     if (externalTx) {
@@ -524,7 +524,7 @@ export class BankAccountService {
       return {
         ...updated,
         type: updated.type as BankAccount['type'],
-      };
+      } as BankAccount;
     };
 
     if (externalTx) {

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Scale, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { formatPersianPrice } from '../../utils';
 import { AccountSearchSelect } from './AccountSearchSelect';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { Account } from '../../types';
 
 export interface VoucherItemDraft {
@@ -269,12 +270,10 @@ export function VoucherItemsTable({
                   {/* Debit Input */}
                   <td className="py-2 px-2">
                     <div className="relative">
-                      <input
+                      <FinancialAmountInput
                         ref={itemRefs.current[idx]?.debitRef}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={it.debit || ''}
+                        value={it.debit}
+                        variant="table"
                         onFocus={() => setActiveRowIndex(idx)}
                         onKeyDown={(e) => {
                           // Space key in empty debit: auto-balance
@@ -297,9 +296,11 @@ export function VoucherItemsTable({
                             }
                           }
                         }}
-                        onChange={e => updateItem(idx, { debit: parseFloat(e.target.value) || 0 })}
+                        onChange={val => updateItem(idx, { debit: val })}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 text-xs text-left font-mono bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-emerald-500"
+                        className="w-full"
+                        containerClassName="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus-within:ring-2 focus-within:ring-emerald-500"
+                        inputClassName="w-full px-2.5 py-1.5 text-xs text-left font-mono text-slate-900 dark:text-white font-bold"
                       />
                     </div>
                     {it.debit > 0 && (
@@ -312,12 +313,10 @@ export function VoucherItemsTable({
                   {/* Credit Input */}
                   <td className="py-2 px-2">
                     <div className="relative">
-                      <input
+                      <FinancialAmountInput
                         ref={itemRefs.current[idx]?.creditRef}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={it.credit || ''}
+                        value={it.credit}
+                        variant="table"
                         onFocus={() => setActiveRowIndex(idx)}
                         onKeyDown={(e) => {
                           // Space key in empty credit: auto-balance
@@ -336,9 +335,11 @@ export function VoucherItemsTable({
                             }
                           }
                         }}
-                        onChange={e => updateItem(idx, { credit: parseFloat(e.target.value) || 0 })}
+                        onChange={val => updateItem(idx, { credit: val })}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 text-xs text-left font-mono bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-rose-500"
+                        className="w-full"
+                        containerClassName="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus-within:ring-2 focus-within:ring-rose-500"
+                        inputClassName="w-full px-2.5 py-1.5 text-xs text-left font-mono text-slate-900 dark:text-white font-bold"
                       />
                     </div>
                     {it.credit > 0 && (

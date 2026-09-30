@@ -5,7 +5,7 @@ import { Boxes, Plus, Search, RefreshCw, CheckCircle2, Clock, RotateCcw, User, W
 import * as xlsx from 'xlsx';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
-import { formatPersianDate, formatPersianNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber, parseCleanNumber } from '../../utils';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -102,8 +102,8 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       return;
     }
 
-    const qtyNum = parseFloat(allocateQty);
-    if (isNaN(qtyNum) || qtyNum <= 0) {
+    const qtyNum = parseCleanNumber(allocateQty, 0);
+    if (qtyNum <= 0) {
       setErrorMsg('تعداد یا مقدار تخصیص باید بزرگتر از صفر باشد.');
       return;
     }

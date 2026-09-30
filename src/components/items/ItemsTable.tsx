@@ -92,7 +92,7 @@ export function ItemsTable({
                       <SafeImage
                         src={item.thumbnail}
                         alt={item.name}
-                        onClick={() => onViewImage(item.image || item.thumbnail)}
+                        onClick={() => onViewImage((item.image || item.thumbnail)!)}
                         className="w-9 h-9 object-cover rounded-lg shadow-sm border border-slate-200 m-auto cursor-pointer group-hover:scale-105 transition-all"
                       />
                     ) : (

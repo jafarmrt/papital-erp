@@ -411,7 +411,7 @@ export class AccountingReportService {
         voucherNumber: r.voucherNumber,
         manualVoucherNumber: r.manualVoucherNumber || undefined,
         date: r.date,
-        voucherType: r.voucherType,
+        voucherType: r.voucherType || 'general',
         accountCode: r.accountCode,
         accountName: r.accountName,
         accountLevel: r.accountLevel,

@@ -81,4 +81,37 @@ router.get('/drafts', async (req, res) => {
   }
 });
 
+// Delete / discard a specific draft by entityType and optional draftKey
+router.delete('/drafts/:entityType', validate(entityTypeParamSchema), async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const sessionId = (req.headers['x-session-id'] as string) || '';
+    const entityType = req.params.entityType;
+    const draftKey = (req.query.draftKey as string) || 'default';
+
+    const result = await FormDraftService.deleteDraft(entityType, draftKey, userId, sessionId);
+    res.json(result);
+  } catch (error) {
+    logger.error('Error deleting form draft:', error);
+    throw error;
+  }
+});
+
+// Delete a draft by specific numeric ID
+router.delete('/drafts/id/:id', async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const id = Number(req.params.id);
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ error: 'شناسه پیش‌نویس نامعتبر است' });
+    }
+
+    const result = await FormDraftService.deleteDraftById(id, userId);
+    res.json(result);
+  } catch (error) {
+    logger.error('Error deleting form draft by id:', error);
+    throw error;
+  }
+});
+
 export default router;

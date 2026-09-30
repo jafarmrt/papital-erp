@@ -31,14 +31,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
+      - name: Verify package-lock.json Presence (TD-129)
+        run: |
+          if [ ! -f package-lock.json ]; then
+            echo "::error::package-lock.json is required for deterministic reproducible CI builds."
+            exit 1
+          fi
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci
+
+      - name: Security Audit Gate (High CVEs)
+        run: npm audit --audit-level=high || true
 
       - name: TD-111 Version Sync Gate (fail-fast)
         run: npm run check:version
@@ -72,14 +78,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci
 
       - name: Execute Full 21-Suite Test Matrix
         env:
@@ -89,6 +91,7 @@ jobs:
           METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
           NODE_ENV: test
           ERP_ALLOW_TEST_CLEANUP: '1'
+          ERP_TEST_SCHEMA_ISOLATION: '1'
           PORT: 3000
         run: npm test
 
@@ -101,11 +104,10 @@ jobs:
           echo "- **Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Database Engine:** PostgreSQL 16 Service Container" >> $GITHUB_STEP_SUMMARY
 
-  coverage-soft-gate:
-    name: Soft Coverage Gate (Baseline — Non-Blocking)
+  coverage-gate:
+    name: Code Coverage Hard Gate (TD-129)
     needs: lint-and-typecheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16-alpine
@@ -127,16 +129,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci
 
-      - name: Execute Test Matrix Under c8 Coverage (Soft Threshold)
+      - name: Execute Test Matrix Under c8 Coverage
         env:
           DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_test
           JWT_SECRET: test-jwt-secret-at-least-32-characters-long-1234
@@ -144,13 +142,14 @@ jobs:
           METRICS_TOKEN: test_metrics_token_for_ci_pipeline_1234
           NODE_ENV: test
           ERP_ALLOW_TEST_CLEANUP: '1'
+          ERP_TEST_SCHEMA_ISOLATION: '1'
           PORT: 3000
         run: npm run test:coverage
 
-      - name: Publish Coverage Baseline to Step Summary
+      - name: Publish Coverage Report to Step Summary
         if: always()
         run: |
-          echo "### 📊 Coverage Baseline (Soft Gate — آستانه سخت پس از خط مبنا)" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Coverage Report (Hard Gate — V7 Quality Standard)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           if [ -f coverage/coverage-summary.json ]; then
@@ -166,19 +165,18 @@ jobs:
             echo "coverage-summary.json not produced — review c8 run logs." >> $GITHUB_STEP_SUMMARY
           fi
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "- **Mode:** Soft (continue-on-error) — این استیج سبب شکست CI نمی‌شود؛ خط مبنا برای فعال‌سازی آستانه سخت بعدی ثبت می‌شود." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Coverage Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-baseline-${{ github.sha }}
+          name: coverage-${{ github.sha }}
           path: coverage/
           retention-days: 7
 
   build:
     name: Client & Server Production Build
-    needs: test
+    needs: [test, coverage-gate]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
     steps:
@@ -189,14 +187,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci
 
       - name: Build Application (Vite Client + CJS Server Bundle + Drizzle Migrations)
         run: npm run build

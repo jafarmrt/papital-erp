@@ -14,7 +14,18 @@ interface CustomersResponse {
   totalPages: number;
 }
 
-export function useCustomersQuery(page: number, limit: number, search?: string, partyType?: string) {
+export function useAllCustomersQuery() {
+  return useQuery<Customer[]>({
+    queryKey: QUERY_KEYS.customers.list({ all: true }),
+    queryFn: async () => {
+      const res = await fetchJson('/customers?limit=0');
+      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCustomersQuery(page: number = 1, limit: number = 50, search?: string, partyType?: string) {
   return useQuery<CustomersResponse>({
     queryKey: QUERY_KEYS.customers.list({ page, limit, search, partyType }),
     queryFn: async () => {

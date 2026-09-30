@@ -85,7 +85,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       const accB = accountRows[1].id;
 
       const stamp = Date.now();
-      const promises = [];
+      const promises: any[] = [];
       for (let i = 0; i < 8; i++) {
         promises.push(
           request(app)
@@ -157,7 +157,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
       if (!docId) throw new Error('شناسه سند بازنگشت');
 
       // 10 concurrent finalize requests — only one must apply the stock movement
-      const promises = [];
+      const promises: any[] = [];
       for (let i = 0; i < 10; i++) {
         promises.push(
           request(app)

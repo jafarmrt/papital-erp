@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ClipboardCheck, Search } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, parseCleanNumber } from '../../utils';
 import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
 
@@ -209,7 +209,8 @@ export function PhysicalAuditSheetTab({
                 </tr>
               ) : (
                 filteredItems.map((item, idx) => {
-                  const physVal = parseFloat(item.physical_stock);
+                  const hasInput = item.physical_stock !== null && item.physical_stock !== undefined && String(item.physical_stock).trim() !== '';
+                  const physVal = hasInput ? parseCleanNumber(item.physical_stock, 0) : NaN;
                   const hasVal = !isNaN(physVal);
                   const diff = hasVal ? physVal - item.system_stock_computed : 0;
 

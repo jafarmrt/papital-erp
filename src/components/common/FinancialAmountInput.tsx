@@ -1,9 +1,10 @@
-import React, { useId, useMemo, useRef } from 'react';
+import React, { useId, useMemo, useRef, useImperativeHandle } from 'react';
 import { Coins, Copy, Check } from 'lucide-react';
 import {
   toEnglishDigits,
   formatCurrencyLabel,
-  financialAmountToPersianWords
+  financialAmountToPersianWords,
+  parseCleanNumber
 } from '../../utils';
 
 export interface FinancialAmountInputProps {
@@ -12,6 +13,8 @@ export interface FinancialAmountInputProps {
   /** تابع بازخورد تغییرات با مقدار عددی پاکسازی‌شده */
   onChange: (val: number) => void;
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   /** واحد پولی (پیش‌فرض IRR) */
   currency?: string;
   label?: string;
@@ -20,9 +23,14 @@ export interface FinancialAmountInputProps {
   disabled?: boolean;
   readOnly?: boolean;
   className?: string;
+  containerClassName?: string;
   inputClassName?: string;
   id?: string;
   name?: string;
+  /** حالت نمایش: استاندارد فرم، فشرده یا جدول سطری */
+  variant?: 'standard' | 'compact' | 'table';
+  /** عدم نمایش برچسب ارزی الحاقی */
+  hideCurrencyAdornment?: boolean;
   /** نمایش معادل روان به حروف در زیر اینپوت */
   showWordsBadge?: boolean;
   /** نمایش معادل تومان در صورت ریالی بودن واحد پول */
@@ -32,6 +40,7 @@ export interface FinancialAmountInputProps {
   /** حداقل و حداکثر مجاز */
   min?: number;
   max?: number;
+  step?: string | number;
   autoFocus?: boolean;
   /** راهنما یا هشدار سفارشی اضافی */
   helperText?: React.ReactNode;
@@ -44,12 +53,15 @@ export interface FinancialAmountInputProps {
  * - کنترل دقیق مکان‌نما (Caret Tracking) و عدم پرش کرسر هنگام درج جداکننده‌ها
  * - تبدیل همگام مبلغ به حروف سلیس فارسی (پشتیبانی تا کوادریلیون)
  * - تفکیک هوشمند ریال و تومان (نمایش معادل تومانی زیر مبلغ ریالی)
- * - بازگرداندن عدد تمیز (Clean Number) به فرم والد
+ * - بازگرداندن عدد تمیز (Clean Number) به فرم والد با حذف کامل خطای IEEE-754 و parseFloat
+ * - پشتیبانی از forwardRef جهت فوکوس کیبورد در جداول و فرم‌های حسابداری
  */
-export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
+export const FinancialAmountInput = React.forwardRef<HTMLInputElement, FinancialAmountInputProps>(({
   value,
   onChange,
   onBlur,
+  onFocus,
+  onKeyDown,
   currency = 'IRR',
   label,
   placeholder = '0',
@@ -57,36 +69,43 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
   disabled = false,
   readOnly = false,
   className = '',
+  containerClassName = '',
   inputClassName = '',
   id,
   name,
-  showWordsBadge = true,
+  variant = 'standard',
+  hideCurrencyAdornment,
+  showWordsBadge,
   showTomanEquivalent = true,
   allowCopyWords = true,
   min,
   max,
+  step,
   autoFocus = false,
   helperText
-}) => {
+}, ref) => {
   const generatedId = useId();
   const inputId = id || generatedId;
-  const inputRef = useRef<HTMLInputElement>(null);
+  const internalInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = React.useState(false);
+
+  // هماهنگ‌سازی ref ارجاعی با المنت داخلی اینپوت
+  useImperativeHandle(ref, () => internalInputRef.current!, []);
+
+  const isTable = variant === 'table';
+  const shouldShowWords = showWordsBadge ?? (!isTable && variant !== 'compact');
+  const shouldHideAdornment = hideCurrencyAdornment ?? isTable;
 
   // پاکسازی ورودی و استخراج عدد صحیح
   const numericValue = useMemo(() => {
-    if (value === null || value === undefined || value === '') return 0;
-    const clean = toEnglishDigits(String(value)).replace(/[,\s]/g, '');
-    const parsed = Number(clean);
-    return isNaN(parsed) ? 0 : parsed;
+    return parseCleanNumber(value, 0);
   }, [value]);
 
-  // رشته نمایشی فرمت‌شده با کامای انگلیسی
+  // رشته نمایشی فرمت‌شده با کامای استاندارد
   const displayFormatted = useMemo(() => {
     if (value === null || value === undefined || value === '') return '';
     const clean = toEnglishDigits(String(value)).replace(/[,\s]/g, '');
     if (clean === '' || clean === '0') return clean;
-    // جداسازی ارقام با کاما
     const isNegative = clean.startsWith('-');
     const digits = isNegative ? clean.slice(1) : clean;
     const parts = digits.split('.');
@@ -96,9 +115,9 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
 
   // تبدیل مبلغ به حروف فارسی
   const wordsResult = useMemo(() => {
-    if (!numericValue || numericValue === 0) return null;
+    if (!numericValue || numericValue === 0 || !shouldShowWords) return null;
     return financialAmountToPersianWords(numericValue, currency);
-  }, [numericValue, currency]);
+  }, [numericValue, currency, shouldShowWords]);
 
   const curLabel = useMemo(() => formatCurrencyLabel(currency), [currency]);
   const isRial = (currency?.toUpperCase() === 'IRR' || currency === 'ریال');
@@ -118,14 +137,13 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
       return;
     }
 
-    const parsed = parseFloat(cleanStr);
-    const safeNum = isNaN(parsed) ? 0 : parsed;
+    const safeNum = parseCleanNumber(cleanStr, 0);
     onChange(safeNum);
 
     // تنظیم مجدد موقعیت مکان‌نما پس از درج کاماها
     requestAnimationFrame(() => {
-      if (!inputRef.current) return;
-      const newDisplay = inputRef.current.value;
+      if (!internalInputRef.current) return;
+      const newDisplay = internalInputRef.current.value;
       let newCursor = 0;
       let digitsCount = 0;
 
@@ -141,7 +159,7 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
       if (digitsBeforeCursor === 0) newCursor = 0;
       if (digitsBeforeCursor >= cleanStr.length) newCursor = newDisplay.length;
 
-      inputRef.current.setSelectionRange(newCursor, newCursor);
+      internalInputRef.current.setSelectionRange(newCursor, newCursor);
     });
   };
 
@@ -157,8 +175,16 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const baseContainerStyle = isTable
+    ? `relative flex items-center ${containerClassName}`
+    : `relative rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 transition-all focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent flex items-center shadow-xs ${containerClassName}`;
+
+  const baseInputStyle = isTable
+    ? `w-full text-xs font-mono font-bold text-left bg-transparent outline-none placeholder:text-slate-400 ${inputClassName}`
+    : `w-full py-2 px-3 text-xs font-mono font-bold text-left bg-transparent border-0 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 ${inputClassName}`;
+
   return (
-    <div className={`space-y-1.5 ${className}`}>
+    <div className={isTable ? className : `space-y-1.5 ${className}`}>
       {label && (
         <div className="flex items-center justify-between">
           <label htmlFor={inputId} className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -172,9 +198,9 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
       )}
 
       {/* Input container */}
-      <div className="relative rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 transition-all focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent flex items-center shadow-xs">
+      <div className={baseContainerStyle}>
         <input
-          ref={inputRef}
+          ref={internalInputRef}
           id={inputId}
           name={name}
           type="text"
@@ -184,19 +210,26 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
           disabled={disabled}
           readOnly={readOnly}
           autoFocus={autoFocus}
+          min={min}
+          max={max}
+          step={step}
           value={displayFormatted}
           onChange={handleChange}
           onBlur={onBlur}
+          onFocus={onFocus}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className={`w-full py-2 px-3 text-xs font-mono font-bold text-left bg-transparent border-0 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 ${inputClassName}`}
+          className={baseInputStyle}
         />
-        <div className="px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 rounded-l-lg select-none shrink-0">
-          {curLabel}
-        </div>
+        {!shouldHideAdornment && (
+          <div className="px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 rounded-l-lg select-none shrink-0">
+            {curLabel}
+          </div>
+        )}
       </div>
 
       {/* Words Preview Badge (Persian words + Toman equivalent) */}
-      {showWordsBadge && wordsResult && (
+      {shouldShowWords && wordsResult && (
         <div className="flex items-start justify-between gap-2 p-2 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-950 dark:text-indigo-200 animate-fadeIn">
           <div className="flex items-start gap-1.5 flex-1 min-w-0">
             <Coins className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
@@ -231,5 +264,7 @@ export const FinancialAmountInput: React.FC<FinancialAmountInputProps> = ({
       )}
     </div>
   );
-};
+});
+
+FinancialAmountInput.displayName = 'FinancialAmountInput';
 export default FinancialAmountInput;

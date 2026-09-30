@@ -7,7 +7,7 @@ import {
   users,
   appSettings
 } from '../../db/schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import { BaseDomainEvent, DomainEventType } from './domainEvents.js';
 import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -622,7 +622,7 @@ export class EventActionEngineService {
    */
   public static async getRules(filter?: { isActive?: boolean; eventType?: string }) {
     const query = orm.select().from(eventActionRules);
-    const conditions = [];
+    const conditions: SQL[] = [];
 
     if (filter?.isActive !== undefined) {
       conditions.push(eq(eventActionRules.isActive, filter.isActive ? 1 : 0));
@@ -779,8 +779,8 @@ export class EventActionEngineService {
     const limit = Math.min(filter?.limit || 50, 100);
     const offset = filter?.offset || 0;
 
-    let whereClause = undefined;
-    const conditions = [];
+    let whereClause: SQL | undefined = undefined;
+    const conditions: SQL[] = [];
 
     if (filter?.ruleId) {
       conditions.push(eq(eventActionLogs.ruleId, filter.ruleId));

@@ -135,7 +135,7 @@ export class FormDraftService {
       return null;
     }
 
-    let results = [];
+    let results: (typeof formDrafts.$inferSelect)[] = [];
     if (userId) {
       results = await orm.select()
         .from(formDrafts)

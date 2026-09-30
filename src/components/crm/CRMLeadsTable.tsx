@@ -75,7 +75,7 @@ export function CRMLeadsTable({
                     <td className="p-3 text-slate-600">
                       {lead.customerName ? (
                         <button
-                          onClick={() => onOpenCustomerDossier?.(lead.customerName)}
+                          onClick={() => onOpenCustomerDossier?.(lead.customerName!)}
                           className="font-bold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1 cursor-pointer"
                           title="مشاهده پرونده جامع این مشتری"
                         >

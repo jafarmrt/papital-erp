@@ -222,7 +222,7 @@ export function GeneralSettingsTab({
             <label className="block text-sm font-medium mb-1 text-slate-700">منطقه زمانی رسمی سامانه</label>
             <select
               value={displayTimezone}
-              onChange={(e) => setDisplayTimezone(e.target.value)}
+              onChange={(e) => setDisplayTimezone?.(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 bg-white border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
               dir="ltr"
             >

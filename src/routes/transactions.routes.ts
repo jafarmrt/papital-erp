@@ -1,14 +1,32 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { orm } from '../db/drizzle.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
 import { transactions, items, users } from '../db/schema.js';
-import { eq, desc, sql, and, gte, lte, or, ilike } from 'drizzle-orm';
+import { eq, desc, sql, and, gte, lte, or, ilike, type SQL } from 'drizzle-orm';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 router.use(authenticateToken);
 
-router.get('/transactions', async (req, res) => {
+const listTransactionsSchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(500).default(50),
+    startDate: z.string().max(50).optional(),
+    endDate: z.string().max(50).optional(),
+    search: z.string().max(120).optional(),
+    type: z.enum(['in', 'out', 'all']).optional(),
+    documentType: z.string().max(50).optional(),
+    itemId: z.coerce.number().int().positive().optional(),
+    export: z.enum(['true', 'false']).optional(),
+    includeDeleted: z.enum(['true', 'false']).optional(),
+    showDeleted: z.enum(['true', 'false']).optional()
+  }).passthrough()
+}).passthrough();
+
+router.get('/transactions', validate(listTransactionsSchema), async (req, res) => {
   try {
     // V9-1.3: صفحه‌بندی NaN-safe با سقف
     const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
@@ -21,7 +39,7 @@ router.get('/transactions', async (req, res) => {
     const isExport = req.query.export === 'true';
     const includeDeleted = req.query.includeDeleted === 'true' || req.query.showDeleted === 'true';
 
-    const conditions = [];
+    const conditions: SQL[] = [];
     if (!includeDeleted) {
       conditions.push(eq(transactions.isDeleted, 0));
     }

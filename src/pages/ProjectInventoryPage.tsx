@@ -228,7 +228,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
           <ProjectInventoryTab
             project={project}
             itemsList={itemsList}
-            onUpdate={() => selectedProjectId && loadProjectDetail(selectedProjectId)}
+            onUpdate={() => { if (selectedProjectId) loadProjectDetail(selectedProjectId); }}
           />
         </div>
       )}

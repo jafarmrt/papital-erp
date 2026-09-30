@@ -6,11 +6,12 @@ import type { DbExecutor } from '../../db/drizzle.js';
 
 export type DbClient = DbExecutor;
 
+export type WarehouseResolverFn = (raw: unknown) => string;
+
 /**
- * TD-114: هر ورودی (کد، نام یا خالی) را به کد یک انبار فعال تبدیل می‌کند، یا خطای ۴۲۲ (ValidationError) می‌دهد.
+ * TD-164: ایجاد حل‌کننده دسته‌ای و کش‌شده کد انبار برای جلوگیری از کوری‌های تکراری N+1 در حلقه‌های اسناد
  */
-export async function resolveWarehouseCode(tx: DbClient, raw: unknown): Promise<string> {
-  const input = String(raw ?? '').trim();
+export async function createWarehouseResolver(tx: DbClient): Promise<WarehouseResolverFn> {
   const active = await tx
     .select({ code: warehouses.code, name: warehouses.name })
     .from(warehouses)
@@ -20,20 +21,40 @@ export async function resolveWarehouseCode(tx: DbClient, raw: unknown): Promise<
     throw new ValidationError('هیچ انبار فعالی تعریف نشده است. از تنظیمات ← مدیریت انبارها یک انبار بسازید.');
   }
 
-  // ورودی خالی: به کد اولین انبار فعال نگاشت می‌شود
-  if (!input) return active[0].code;
+  const defaultCode = active[0].code;
+  const codeLookup = new Map<string, string>();
+  const nameLookup = new Map<string, string>();
 
-  // مطابقت مستقیم با کد انبار
-  const byCode = active.find(w => w.code.toLowerCase() === input.toLowerCase());
-  if (byCode) return byCode.code;
-
-  // مطابقت با نام انبار (مانند «انبار اصلی» یا «انبار مرکزی»)
-  const byName = active.find(w => (w.name || '').trim().toLowerCase() === input.toLowerCase());
-  if (byName) {
-    logger.warn({ message: `[WarehouseResolver] name used instead of code: "${input}" -> "${byName.code}"` });
-    return byName.code;
+  for (const w of active) {
+    codeLookup.set(w.code.toLowerCase(), w.code);
+    if (w.name) {
+      nameLookup.set(w.name.trim().toLowerCase(), w.code);
+    }
   }
 
-  // در صورتی که کد یا نام در میان انبارهای فعال یافت نشود
-  throw new ValidationError(`انبار «${input}» تعریف نشده یا غیرفعال است.`);
+  return (raw: unknown): string => {
+    const input = String(raw ?? '').trim();
+    if (!input) return defaultCode;
+
+    const lower = input.toLowerCase();
+    const byCode = codeLookup.get(lower);
+    if (byCode) return byCode;
+
+    const byName = nameLookup.get(lower);
+    if (byName) {
+      logger.warn({ message: `[WarehouseResolver] name used instead of code: "${input}" -> "${byName}"` });
+      return byName;
+    }
+
+    throw new ValidationError(`انبار «${input}» تعریف نشده یا غیرفعال است.`);
+  };
 }
+
+/**
+ * TD-114: هر ورودی (کد، نام یا خالی) را به کد یک انبار فعال تبدیل می‌کند، یا خطای ۴۲۲ (ValidationError) می‌دهد.
+ */
+export async function resolveWarehouseCode(tx: DbClient, raw: unknown): Promise<string> {
+  const resolver = await createWarehouseResolver(tx);
+  return resolver(raw);
+}
+

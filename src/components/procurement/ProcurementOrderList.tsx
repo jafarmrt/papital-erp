@@ -34,7 +34,7 @@ export function ProcurementOrderList({
       const mSupplier = (o.supplierName || '').toLowerCase().includes(q);
       const mReq = (o.requisitionCode || '').toLowerCase().includes(q);
       const mProject = (o.projectName || '').toLowerCase().includes(q);
-      const mItems = o.items.some(i => i.itemName.toLowerCase().includes(q) || i.itemCode.toLowerCase().includes(q));
+      const mItems = o.items.some(i => (i.itemName || '').toLowerCase().includes(q) || (i.itemCode || '').toLowerCase().includes(q));
       return mRef || mSupplier || mReq || mProject || mItems;
     });
   }, [orders, type, searchTerm]);

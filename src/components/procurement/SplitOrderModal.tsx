@@ -3,10 +3,11 @@ import { X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, FileText, AlertC
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, PurchaseRequisitionItemRow, Item } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, parseCleanNumber } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -77,7 +78,7 @@ export function SplitOrderModal({
       const rem = it.remainingQty !== undefined 
         ? Math.max(0, it.remainingQty) 
         : Math.max(0, (it.requestedQty || 0) - (it.orderedQty || 0));
-      map.set(it.id, rem);
+      map.set(it.id || '', rem);
     });
     return map;
   }, [requisitionItems]);
@@ -104,10 +105,10 @@ export function SplitOrderModal({
             ? Math.max(0, it.remainingQty) 
             : Math.max(0, (it.requestedQty || 0) - (it.orderedQty || 0));
           return {
-            reqItemId: it.id,
+            reqItemId: it.id || '',
             itemId: it.itemId || 0,
             itemCode: it.itemCode || '',
-            itemName: it.itemName,
+            itemName: it.itemName || it.itemCode || '',
             quantity: rem,
             unitPrice: it.unitPriceEstimate || 0,
             unit: it.unit || 'عدد',
@@ -149,8 +150,8 @@ export function SplitOrderModal({
 
   // Auto set recommended closure reason if discrepancy exists
   useEffect(() => {
-    const hasOver = requisitionItems.some(it => getLiveRemainingQty(it.id) < 0);
-    const hasUnder = requisitionItems.some(it => getLiveRemainingQty(it.id) > 0);
+    const hasOver = requisitionItems.some(it => getLiveRemainingQty(it.id || '') < 0);
+    const hasUnder = requisitionItems.some(it => getLiveRemainingQty(it.id || '') > 0);
 
     if (hasOver && !hasUnder && closureReasonType === 'complete') {
       setClosureReasonType('over_fulfillment');
@@ -200,12 +201,13 @@ export function SplitOrderModal({
 
   // Add item to package
   const handleAddItemToPackage = (pkgId: string, reqItem: PurchaseRequisitionItemRow) => {
+    const rId = reqItem.id || String(reqItem.itemId);
     setPackages(prev => prev.map(p => {
       if (p.id !== pkgId) return p;
-      if (p.items.some(i => i.reqItemId === reqItem.id)) return p;
+      if (p.items.some(i => i.reqItemId === rId)) return p;
 
-      const liveRem = getLiveRemainingQty(reqItem.id);
-      const initRem = initialRemainings.get(reqItem.id) || 0;
+      const liveRem = getLiveRemainingQty(rId);
+      const initRem = initialRemainings.get(rId) || 0;
       const initialQty = liveRem > 0 ? liveRem : 1;
 
       return {
@@ -213,10 +215,10 @@ export function SplitOrderModal({
         items: [
           ...p.items,
           {
-            reqItemId: reqItem.id,
+            reqItemId: rId,
             itemId: reqItem.itemId || 0,
             itemCode: reqItem.itemCode || '',
-            itemName: reqItem.itemName,
+            itemName: reqItem.itemName || reqItem.itemCode || '',
             quantity: initialQty,
             unitPrice: reqItem.unitPriceEstimate || 0,
             unit: reqItem.unit || 'عدد',
@@ -234,18 +236,19 @@ export function SplitOrderModal({
       const newItems = [...p.items];
 
       requisitionItems.forEach(reqItem => {
-        const liveRem = getLiveRemainingQty(reqItem.id);
-        const existing = newItems.find(i => i.reqItemId === reqItem.id);
+        const rId = reqItem.id || String(reqItem.itemId);
+        const liveRem = getLiveRemainingQty(rId);
+        const existing = newItems.find(i => i.reqItemId === rId);
         if (!existing && liveRem > 0) {
           newItems.push({
-            reqItemId: reqItem.id,
+            reqItemId: rId,
             itemId: reqItem.itemId || 0,
             itemCode: reqItem.itemCode || '',
-            itemName: reqItem.itemName,
+            itemName: reqItem.itemName || reqItem.itemCode || '',
             quantity: liveRem,
             unitPrice: reqItem.unitPriceEstimate || 0,
             unit: reqItem.unit || 'عدد',
-            initialAvailableQty: initialRemainings.get(reqItem.id) || 0
+            initialAvailableQty: initialRemainings.get(rId) || 0
           });
         }
       });
@@ -444,10 +447,10 @@ export function SplitOrderModal({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {requisitionItems.map((item, idx) => {
-                    const allocated = getAllocatedQty(item.id);
-                    const liveRem = getLiveRemainingQty(item.id);
+                    const allocated = getAllocatedQty(item.id || '');
+                    const liveRem = getLiveRemainingQty(item.id || '');
 
-                    let statusBadge = null;
+                    let statusBadge: React.ReactNode = null;
                     if (liveRem === 0) {
                       statusBadge = (
                         <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md font-bold text-[11px] flex items-center justify-center gap-1">
@@ -712,22 +715,23 @@ export function SplitOrderModal({
                                 <td className="p-2 text-center font-bold text-slate-600">{it.unit}</td>
                                 <td className="p-2 text-center">
                                   <input
-                                    type="number"
-                                    min="0.01"
-                                    step="any"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={it.quantity === 0 ? '' : it.quantity}
-                                    onChange={e => handleUpdateItemField(pkg.id, it.reqItemId, 'quantity', parseFloat(e.target.value) || 0)}
+                                    onChange={e => handleUpdateItemField(pkg.id, it.reqItemId, 'quantity', parseCleanNumber(e.target.value, 0))}
                                     className="w-24 p-1 text-center font-mono font-bold bg-white border border-slate-300 rounded focus:ring-1 focus:ring-amber-500 focus:outline-none"
                                   />
                                 </td>
                                 <td className="p-2 text-center">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="any"
-                                    value={it.unitPrice === 0 ? '' : it.unitPrice}
-                                    onChange={e => handleUpdateItemField(pkg.id, it.reqItemId, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                    className="w-28 p-1 text-center font-mono font-bold bg-white border border-slate-300 rounded focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                                  <FinancialAmountInput
+                                    value={it.unitPrice}
+                                    onChange={val => handleUpdateItemField(pkg.id, it.reqItemId, 'unitPrice', val)}
+                                    currency="IRR"
+                                    variant="table"
+                                    placeholder="0"
+                                    className="w-28 mx-auto"
+                                    containerClassName="w-full border border-slate-300 rounded focus-within:ring-1 focus-within:ring-amber-500"
+                                    inputClassName="p-1 text-center font-mono font-bold"
                                   />
                                 </td>
                                 <td className="p-2 text-center font-mono font-black text-amber-800">

@@ -1,7 +1,5 @@
 import React, { useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { fetchJson } from '../api';
-import { toast } from 'react-hot-toast';
 import { User, Role } from '../types';
 import {
   Users,
@@ -19,7 +17,8 @@ import {
   useUsersQuery,
   useRolesQuery,
   usePermissionCatalogQuery,
-  useDeleteUserMutation
+  useDeleteUserMutation,
+  useDeleteRoleMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
 
@@ -32,6 +31,7 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
   const rolesQuery = useRolesQuery();
   const permQuery = usePermissionCatalogQuery();
   const deleteUserMutation = useDeleteUserMutation();
+  const deleteRoleMutation = useDeleteRoleMutation();
 
   const users = usersQuery.data ?? [];
   const rolesList = rolesQuery.data ?? [];
@@ -74,12 +74,10 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
   const executeDeleteRole = async () => {
     const id = confirmRoleState.roleId;
     try {
-      await fetchJson(`/roles/${id}`, { method: 'DELETE' });
-      toast.success('نقش با موفقیت حذف شد');
-      loadData();
+      await deleteRoleMutation.mutateAsync(id);
       setConfirmRoleState({ isOpen: false, roleId: 0, roleName: '' });
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در حذف نقش');
+    } catch {
+      // Handled in mutation onError
     }
   };
 
@@ -179,7 +177,7 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
                 مدیران ارشد (Admin)
               </span>
               <strong className="text-base text-slate-800 font-bold">
-                {users.filter((u) => u.role === 'admin').length} کاربر
+                {users.filter((u: any) => u.role === 'admin').length} کاربر
               </strong>
             </div>
           </div>

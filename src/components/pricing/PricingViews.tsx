@@ -73,7 +73,7 @@ export function PricingGridView(props: PricingViewsShared) {
                 const cleanTitle = formatStrategyDisplayTitle(st);
                 const canKey = getStrategyCanonicalKey(cleanTitle);
                 const fieldVal = getFieldValue(item.id, cleanTitle);
-                const isFieldEditing = localEdits[item.id]?.[canKey] !== undefined;
+                const isFieldEditing = (item.id && canKey) ? (localEdits[item.id]?.[canKey] !== undefined) : false;
                 const marginBadge = getMarginBadge(fieldVal.price, (item as any).weighted_average_cost);
 
                 return (
@@ -190,7 +190,7 @@ export function PricingTableView(props: PricingViewsShared) {
                   const cleanTitle = formatStrategyDisplayTitle(st);
                   const canKey = getStrategyCanonicalKey(cleanTitle);
                   const fieldVal = getFieldValue(item.id, cleanTitle);
-                  const isFieldEditing = localEdits[item.id]?.[canKey] !== undefined;
+                  const isFieldEditing = (item.id && canKey) ? (localEdits[item.id]?.[canKey] !== undefined) : false;
                   const marginBadge = getMarginBadge(fieldVal.price, (item as any).weighted_average_cost);
                   
                   return (

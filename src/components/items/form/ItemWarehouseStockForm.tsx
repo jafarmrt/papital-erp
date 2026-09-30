@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
+import { parseCleanNumber } from '../../../utils';
 import { ItemFormData } from './types';
 
 interface ItemWarehouseStockFormProps {
@@ -46,7 +47,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
                   step="any"
                   value={form.stocks[w.code] ?? form.stocks[w.id] ?? ''}
                   onChange={e => {
-                    const val = parseFloat(e.target.value) || 0;
+                    const val = parseCleanNumber(e.target.value, 0);
                     setForm({
                       ...form,
                       stocks: { ...form.stocks, [w.code]: val, [w.id]: val }
@@ -73,7 +74,7 @@ export const ItemWarehouseStockForm: React.FC<ItemWarehouseStockFormProps> = ({
               min="0"
               step="any"
               value={form.current_stock}
-              onChange={e => setForm({ ...form, current_stock: parseFloat(e.target.value) || 0 })}
+              onChange={e => setForm({ ...form, current_stock: parseCleanNumber(e.target.value, 0) })}
               className="w-full border border-slate-300/80 rounded-xl px-3 py-2 text-left font-mono text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
               dir="ltr"
             />

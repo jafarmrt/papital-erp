@@ -299,7 +299,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                         {tx.partyName || '—'}
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        {getPartyTypeLabel(tx.partyType)}
+                        {getPartyTypeLabel(tx.partyType || '')}
                         {tx.purpose && <span className="mr-1">({tx.purpose})</span>}
                       </div>
                     </td>
@@ -317,7 +317,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
 
                     {/* Description & Attachments */}
                     <td className="py-3 px-3 max-w-[200px]">
-                      <div className="truncate text-slate-600 dark:text-slate-300 text-[11px]" title={tx.description}>
+                      <div className="truncate text-slate-600 dark:text-slate-300 text-[11px]" title={tx.description || undefined}>
                         {tx.description || '—'}
                       </div>
                       {Array.isArray(tx.attachments) && tx.attachments.length > 0 && (

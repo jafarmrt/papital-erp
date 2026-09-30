@@ -149,7 +149,7 @@ export async function createTestDocument(
 
   const [insertedDoc] = await db.insert(documents).values(docData).returning();
 
-  const insertedItems = [];
+  const insertedItems: any[] = [];
   if (itemsList.length > 0) {
     for (const item of itemsList) {
       const [itemRow] = await db
@@ -199,7 +199,7 @@ export async function createTestVoucher(
 
   const [insertedVoucher] = await db.insert(journalVouchers).values(voucherData).returning();
 
-  const insertedItems = [];
+  const insertedItems: any[] = [];
   if (itemsList.length > 0) {
     for (let idx = 0; idx < itemsList.length; idx++) {
       const item = itemsList[idx];
@@ -270,7 +270,7 @@ export async function createTestWorkflow(overrides: {
     { fromKey: 'review', toKey: 'approved', actionKey: 'approve', title: 'تایید نهایی' }
   ];
 
-  const createdTransitions = [];
+  const createdTransitions: any[] = [];
   for (const tr of transDefs) {
     if (stateMap[tr.fromKey] && stateMap[tr.toKey]) {
       const [trans] = await db

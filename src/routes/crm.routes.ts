@@ -342,10 +342,12 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
     });
   }
 
+  const safeLimit = Math.min(Number(req.query.limit) || 500, 500);
   const leads = await orm.select()
     .from(crmLeads)
     .where(whereClause)
-    .orderBy(desc(crmLeads.updatedAt), desc(crmLeads.id));
+    .orderBy(desc(crmLeads.updatedAt), desc(crmLeads.id))
+    .limit(safeLimit);
 
   res.json(leads.map(formatLead));
 }));
@@ -750,7 +752,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
       customerId: updated.customerId,
       type: 'task',
       title: 'تغییر مرحله فروش',
-      description: `مرحله فروش از "${stageLabels[existing.stage] || existing.stage}" به "${stageLabels[stage] || stage}" تغییر یافت.`,
+      description: `مرحله فروش از "${stageLabels[existing.stage || ''] || existing.stage || ''}" به "${stageLabels[stage] || stage}" تغییر یافت.`,
       loggedBy: authorName,
       activityDate: await businessTodayIsoDate(),
       createdAt: nowIso,
@@ -786,10 +788,10 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   // Convert lead to formal customer in customers table
   const resolvedCustomerId = await syncCustomerFromCRMLead(
     lead.customerId,
-    lead.customerName,
-    lead.phone,
-    lead.company,
-    lead.title,
+    lead.customerName || undefined,
+    lead.phone || undefined,
+    lead.company || undefined,
+    lead.title || undefined,
     { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
   );
 
@@ -804,10 +806,10 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   }).where(eq(crmLeads.id, id)).returning();
 
   // Fetch customer details if exists
-  let customerObj = null;
+  let customerObj: typeof customers.$inferSelect | null = null;
   if (resolvedCustomerId) {
     const [c] = await orm.select().from(customers).where(eq(customers.id, resolvedCustomerId));
-    customerObj = c;
+    customerObj = c || null;
   }
 
   // Log activity
@@ -914,7 +916,8 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     .leftJoin(crmLeads, eq(crmActivities.leadId, crmLeads.id))
     .leftJoin(customers, eq(crmActivities.customerId, customers.id))
     .where(and(...conditions))
-    .orderBy(desc(crmActivities.createdAt));
+    .orderBy(desc(crmActivities.createdAt))
+    .limit(Math.min(Number(req.query.limit) || 200, 500));
 
   res.json(activities.map(formatActivity));
 }));

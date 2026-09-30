@@ -476,10 +476,10 @@ export default function ProjectScheduleTab({
           const next = { ...prev };
           const stg = { ...(next[stageId] || {}) };
           targetsToUpdate.forEach(({ productId, taskIdx }) => {
-            if (stg[productId]?.tasks?.[taskIdx]) {
+            if (stg[productId]) {
               stg[productId] = {
                 ...stg[productId],
-                tasks: stg[productId].tasks!.map((tk, i) => i === taskIdx ? { ...tk, isLoggedToPiecework: true } : tk)
+                tasks: ((stg[productId] as any).tasks || []).map((tk: any, i: number) => i === taskIdx ? { ...tk, isLoggedToPiecework: true } : tk)
               };
             }
           });
@@ -500,9 +500,9 @@ export default function ProjectScheduleTab({
   let totalLaborBudget = 0;
   const personnelBudgetMap: Record<string, number> = {};
 
-  Object.values(schedulesMap).forEach(prodMap => {
-    Object.values(prodMap).forEach(sched => {
-      (sched.tasks || []).forEach(t => {
+  Object.values(schedulesMap).forEach((prodMap: any) => {
+    Object.values(prodMap).forEach((sched: any) => {
+      (sched?.tasks || []).forEach((t: any) => {
         const cost = Number(t.estimatedCost) || 0;
         totalLaborBudget += cost;
         if (t.assignedPersonnelName) {

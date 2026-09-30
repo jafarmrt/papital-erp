@@ -172,7 +172,7 @@ export function ProductTreeInventoryCards({
                     prodShortfallCount++;
                   }
                 });
-              } else if ((sec.itemsSchema || []).length > 0) {
+              } else if (sec.itemsSchema && sec.itemsSchema.length > 0) {
                 totalMaterialsCount += sec.itemsSchema.length;
               }
             });

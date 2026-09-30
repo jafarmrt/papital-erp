@@ -118,7 +118,7 @@ export function CRMLeadDrawer({
               <span className="text-slate-400 block text-[10px]">خریدار / مخاطب:</span>
               {selectedLeadDrawer.customerName && onOpenCustomerDossier ? (
                 <button
-                  onClick={() => onOpenCustomerDossier(selectedLeadDrawer.customerName)}
+                  onClick={() => onOpenCustomerDossier(selectedLeadDrawer.customerName!)}
                   className="font-black text-xs text-blue-700 hover:text-blue-900 hover:underline cursor-pointer inline-flex items-center gap-1 mt-0.5"
                   title="مشاهده پرونده جامع این مشتری"
                 >

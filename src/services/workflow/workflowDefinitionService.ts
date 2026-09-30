@@ -6,7 +6,7 @@ import {
   workflowTransitions,
   workflowInstances
 } from '../../db/schema.js';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, sql, inArray, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { 
   CreateWorkflowDefinitionInput, 
@@ -80,7 +80,7 @@ export class WorkflowDefinitionService {
   static async getDefinitions(filter?: { isActive?: boolean; entityType?: string }): Promise<WorkflowDefinitionWithStats[]> {
     await this.seedDefaultWorkflows();
 
-    const conditions = [];
+    const conditions: SQL[] = [];
 
     if (filter?.isActive !== undefined) {
       conditions.push(eq(workflowDefinitions.isActive, filter.isActive ? 1 : 0));

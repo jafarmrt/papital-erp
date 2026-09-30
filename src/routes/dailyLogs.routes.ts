@@ -136,7 +136,7 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
   // Check if user has manage_all permission or is admin
   let canManageAll = currentUserRole === 'admin' || currentUserRole === 'manager';
   if (!canManageAll) {
-    const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, currentUserRole));
+    const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, currentUserRole || ''));
     if (roleRecord && Array.isArray(roleRecord.permissions)) {
       if ((roleRecord.permissions as string[]).includes('daily_logs.manage_all') || (roleRecord.permissions as string[]).includes('*')) {
         canManageAll = true;
@@ -232,7 +232,8 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
     );
   }
 
-  const mapped = result.map(formatDailyLog);
+  const safeLimit = Math.min(Number(req.query.limit) || 200, 500);
+  const mapped = result.slice(0, safeLimit).map(formatDailyLog);
   res.json(mapped);
 }));
 
@@ -470,8 +471,8 @@ router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(cr
     .insert(dailyWorkLogs)
     .values({
       userId,
-      username,
-      userFullName,
+      username: username || 'user',
+      userFullName: userFullName || 'کاربر سیستم',
       date: rawDate,
       dateIso: computedDateIso,
       startTime,

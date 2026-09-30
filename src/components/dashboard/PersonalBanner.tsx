@@ -138,8 +138,8 @@ export function PersonalBanner({ user }: PersonalBannerProps) {
     setPrincipleIndex((prev) => (prev + 1) % FAIR_TRADE_PRINCIPLES.length);
   };
 
-  const currentPrinciple = FAIR_TRADE_PRINCIPLES[principleIndex];
-  const PrincipleIcon = currentPrinciple.icon;
+  const currentPrinciple = FAIR_TRADE_PRINCIPLES[principleIndex] || FAIR_TRADE_PRINCIPLES[0]!;
+  const PrincipleIcon = currentPrinciple.icon as React.ElementType;
   const displayName = user?.full_name || (user as any)?.fullName || user?.username || 'کاربر گرامی';
 
   return (

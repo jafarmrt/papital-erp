@@ -330,7 +330,7 @@ export default function ActivityLogsPage() {
               className="px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">همه کاربران</option>
-              {filterOptions.users.map((u, idx) => (
+              {filterOptions.users.map((u: any, idx: number) => (
                 <option key={`${u.username}-${idx}`} value={u.username}>
                   {u.fullName ? `${u.fullName} (${u.username})` : u.username}
                 </option>
@@ -351,8 +351,8 @@ export default function ActivityLogsPage() {
               <option value="DELETE">حذف (DELETE)</option>
               <option value="SETTING_CHANGE">تغییر تنظیمات (SETTING_CHANGE)</option>
               {filterOptions.actions
-                .filter(a => !['LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'SETTING_CHANGE'].includes(a))
-                .map(a => (
+                .filter((a: any) => !['LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'SETTING_CHANGE'].includes(a))
+                .map((a: any) => (
                   <option key={a} value={a}>{a}</option>
                 ))}
             </select>
@@ -363,7 +363,7 @@ export default function ActivityLogsPage() {
               className="px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">همه بخش‌ها / موجودیت‌ها</option>
-              {filterOptions.entities.map(e => (
+              {filterOptions.entities.map((e: any) => (
                 <option key={e} value={e}>{e}</option>
               ))}
             </select>

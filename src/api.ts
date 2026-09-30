@@ -15,24 +15,42 @@ export class ApiError extends Error {
   }
 }
 
+export class ProtocolError extends ApiError {
+  constructor(message: string, status = 500, details?: any) {
+    super(message, 'PROTOCOL_ERROR', status, details);
+    this.name = 'ProtocolError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 let inMemoryCsrfToken: string | null = null;
 let inMemoryAuthToken: string | null = null;
 
 export function setCsrfToken(token: string | null | undefined): void {
   inMemoryCsrfToken = token || null;
-  if (typeof window !== 'undefined') {
+  if (typeof document !== 'undefined') {
     if (token) {
-      localStorage.setItem('csrf_token', token);
+      document.cookie = `csrf_token=${encodeURIComponent(token)}; path=/; SameSite=None; Secure; max-age=86400`;
     } else {
+      document.cookie = `csrf_token=; path=/; SameSite=None; Secure; max-age=0`;
+    }
+    try {
       localStorage.removeItem('csrf_token');
+    } catch {
+      // Ignore if localStorage unavailable
     }
   }
 }
 
 export function getCsrfToken(): string | null {
   if (inMemoryCsrfToken) return inMemoryCsrfToken;
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('csrf_token');
+  if (typeof document !== 'undefined') {
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+    if (match && match[1]) {
+      const decoded = decodeURIComponent(match[1]);
+      inMemoryCsrfToken = decoded;
+      return decoded;
+    }
   }
   return null;
 }
@@ -50,7 +68,7 @@ async function refreshActiveCsrfToken(): Promise<string | null> {
         headers: { 'Content-Type': 'application/json' }
       });
       if (csrfRes.ok) {
-        const csrfData = await csrfRes.json().catch(() => ({}));
+        const csrfData = await csrfRes.json().catch(() => null);
         if (csrfData?.csrfToken) {
           setCsrfToken(csrfData.csrfToken);
           return csrfData.csrfToken;
@@ -145,7 +163,16 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
   }
 
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
+    let data: any;
+    try {
+      const text = await res.text();
+      data = text ? JSON.parse(text) : {};
+    } catch (parseErr: any) {
+      throw new ProtocolError(
+        `پاسخ خطای سرور با فرمت معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
+        res.status
+      );
+    }
     if (res.status === 401) {
       if (typeof window !== 'undefined' && !isPublicEndpoint) {
         setCsrfToken(null);
@@ -187,12 +214,26 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     }
     throw new ApiError(errorMessage, code, res.status, details);
   }
-  const jsonResponse = await res.json().catch(() => ({}));
-  if (jsonResponse?.csrfToken) {
-    setCsrfToken(jsonResponse.csrfToken);
+
+  let jsonResponse: T;
+  try {
+    if (res.status === 204) {
+      jsonResponse = {} as T;
+    } else {
+      const text = await res.text();
+      jsonResponse = (text ? JSON.parse(text) : {}) as T;
+    }
+  } catch (parseErr: any) {
+    throw new ProtocolError(
+      `پاسخ سرور قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
+      res.status
+    );
   }
-  if (jsonResponse?.token) {
-    setAuthToken(jsonResponse.token);
+  if ((jsonResponse as any)?.csrfToken) {
+    setCsrfToken((jsonResponse as any).csrfToken);
+  }
+  if ((jsonResponse as any)?.token) {
+    setAuthToken((jsonResponse as any).token);
   }
   return jsonResponse;
 }

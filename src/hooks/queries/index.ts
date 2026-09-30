@@ -11,6 +11,8 @@ export * from './useDocumentQueries';
 export * from './useActivityLogQueries';
 export * from './useUserQueries';
 export * from './useTransactionQueries';
+export * from './useEventQueries';
+export * from './useProjectQueries';
 export * from '../../lib/queryKeys';
 export * from '../../lib/queryInvalidation';
 

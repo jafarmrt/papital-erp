@@ -471,7 +471,7 @@ export async function getProjectProgressMatrixStatus(
   }
 
   const optionalTitles = new Set(products.flatMap(p => (p.selected_optional_stages || []).map(t => String(t).trim())));
-  const stagesForCompute = rawStages.map(s => ({ stageOrder: s.stageOrder, title: s.title }));
+  const stagesForCompute = rawStages.map((s: any) => ({ stageOrder: s.stageOrder, title: s.title }));
 
   let totalMatrixCells = 0;
   let completedMatrixCells = 0;
@@ -537,7 +537,7 @@ router.get('/projects', authorizePermission('projects.view', 'projects.create', 
     });
 
     // Apply optional client filters
-    let filtered = result;
+    let filtered = result.filter((p): p is NonNullable<typeof p> => p !== null);
 
     if (status && typeof status === 'string' && status !== 'all') {
       filtered = filtered.filter(p => p.status === status);
@@ -825,8 +825,8 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
     });
 
     // همگام‌سازی مجدد و خودکار مراحل و وضعیت پروژه بر اساس پیشرفت SKUها
-    const syncRes = await syncProjectStagesAndStatusFromProductProgress(projectId);
-    const targetStage = syncRes?.stages?.find(s => s.id === stageId);
+    const syncRes: any = await syncProjectStagesAndStatusFromProductProgress(projectId);
+    const targetStage = syncRes?.stages?.find((s: any) => s.id === stageId);
     const [updatedStage] = targetStage 
       ? [targetStage] 
       : await orm.select().from(projectStages).where(eq(projectStages.id, stageId));

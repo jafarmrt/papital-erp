@@ -91,7 +91,7 @@ router.get('/items/reorder-alerts', async (req, res) => {
         ilike(items.name, `%${search}%`),
         ilike(items.code, `%${search}%`),
         ilike(items.category, `%${search}%`)
-      ));
+      )!);
     }
 
     const fetchedItems = await orm.select().from(items)
@@ -153,7 +153,7 @@ router.get('/items', async (req, res) => {
       conditions.push(or(
         ilike(items.name, `%${search}%`),
         ilike(items.code, `%${search}%`)
-      ));
+      )!);
     }
 
     const whereClause = and(...conditions);
@@ -194,7 +194,7 @@ router.get('/items', async (req, res) => {
 
       txItemSet = new Set(txRows.map(r => r.itemId));
       docItemSet = new Set(docRows.map(r => r.itemId));
-      voucherItemSet = new Set(voucherRows.map(r => r.referenceId));
+      voucherItemSet = new Set(voucherRows.map(r => r.referenceId).filter((id): id is number => id !== null));
     }
 
     const rawLocQuery = req.query.location ? String(req.query.location).trim() : (req.query.warehouse ? String(req.query.warehouse).trim() : '');

@@ -131,11 +131,11 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
           .where(eq(items.id, testItem.id))
           .for('update');
 
-        if (!itemRow || itemRow.currentStock < requestedQty) {
+        if (!itemRow || (itemRow.currentStock ?? 0) < requestedQty) {
           throw new Error('موجودی انبار ناکافی است');
         }
 
-        const newStock = itemRow.currentStock - requestedQty;
+        const newStock = (itemRow.currentStock ?? 0) - requestedQty;
         await tx
           .update(items)
           .set({
@@ -1163,7 +1163,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     // Fetch draft
     const retrieved = await FormDraftService.getDraft('voucher', 'test_voucher_draft_01', user.id);
 
-    if (!retrieved || retrieved.payload?.description !== draftPayload.description) {
+    if (!retrieved || (retrieved.payload as any)?.description !== draftPayload.description) {
       throw new Error('بازیابی پیش‌نویس از سرور ناموفق بود یا محتوا مطابقت ندارد');
     }
 

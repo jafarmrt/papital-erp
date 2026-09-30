@@ -11,7 +11,7 @@ import {
 import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../api';
-import { formatPersianDate, formatPersianNumber } from '../utils';
+import { formatPersianDate, formatPersianNumber, parseCleanNumber } from '../utils';
 
 // Subcomponents
 import { Inventory3WayIntegrityTab } from '../components/inventory/Inventory3WayIntegrityTab';
@@ -251,7 +251,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
         notes: notes || `ثبت انبارگردانی در موقعیت ${selectedLocation}`,
         status: 'final',
         items: auditedList.map((i: any) => {
-          const phys = parseFloat(i.physical_stock) || 0;
+          const phys = parseCleanNumber(i.physical_stock, 0);
           return {
             itemId: i.id,
             system_stock: i.system_stock_computed,

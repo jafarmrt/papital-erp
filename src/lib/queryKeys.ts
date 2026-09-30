@@ -156,6 +156,17 @@ export const QUERY_KEYS = {
     all: ['prices'] as const,
     byItem: (itemId?: number | null) => ['prices', 'by-item', itemId ?? 'none'] as const,
   },
+
+  // Domain Events & Outbox
+  events: {
+    all: ['events'] as const,
+    list: (filter?: string) => ['events', 'list', filter ?? 'ALL'] as const,
+    outbox: (status?: string) => ['events', 'outbox', status ?? 'ALL'] as const,
+    outboxStats: () => ['events', 'outbox-stats'] as const,
+    actionRules: () => ['events', 'action-rules'] as const,
+    actionLogs: (limit?: number) => ['events', 'action-logs', limit ?? 50] as const,
+    actionStats: () => ['events', 'action-stats'] as const,
+  },
 } as const;
 
 export type QueryDomain = keyof typeof QUERY_KEYS;

@@ -644,7 +644,7 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     }
 
     const insertedIds = await PieceworkService.logWorkEntries(
-      items.map(item => ({
+      items.map((item: any) => ({
         ...item,
         createdById: currentUserId,
         createdByUsername: currentUsername
@@ -750,7 +750,7 @@ router.get('/piecework/payrolls', async (req, res) => {
       id: number;
       voucherNumber: number;
       referenceId: number | null;
-      status: string;
+      status: string | null;
       date: string;
     }> = [];
     if (payrollIds.length > 0) {
@@ -866,9 +866,12 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
       .where(and(inArray(pieceworkLogs.payrollId, payrollIds), eq(pieceworkLogs.isDeleted, 0)))
       .orderBy(pieceworkLogs.date);
       for (const lg of logs) {
-        const arr = itemsByPayroll.get(lg.payrollId) || [];
-        arr.push(lg);
-        itemsByPayroll.set(lg.payrollId, arr);
+        const pid = Number(lg.payrollId);
+        if (pid) {
+          const arr = itemsByPayroll.get(pid) || [];
+          arr.push(lg);
+          itemsByPayroll.set(pid, arr);
+        }
       }
     }
 
@@ -1131,8 +1134,8 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
       };
     });
 
-    if (result.error) {
-      return res.status(result.status).json({ error: result.error });
+    if (result.error || !result.payroll) {
+      return res.status(result.status || 400).json({ error: result.error || 'خطا در صدور فیش حقوقی' });
     }
 
     const { payroll, personnelName, voucher } = result;
@@ -1215,8 +1218,8 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
       };
     });
 
-    if (result.error) {
-      return res.status(result.status).json({ error: result.error });
+    if (result.error || !result.payroll) {
+      return res.status(result.status || 400).json({ error: result.error || 'خطا در ویرایش وضعیت فیش حقوقی' });
     }
 
     await logActivity({
@@ -1359,8 +1362,8 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
       return { status: 200, payroll: pay, voucher };
     });
 
-    if (result.error) {
-      return res.status(result.status).json({ error: result.error });
+    if (result.error || !result.voucher || !result.payroll) {
+      return res.status(result.status || 400).json({ error: result.error || 'خطا در ثبت سند فیش حقوقی' });
     }
 
     res.json({

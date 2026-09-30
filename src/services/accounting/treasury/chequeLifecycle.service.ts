@@ -126,7 +126,7 @@ export class ChequeLifecycleService {
       voucher_id: c.voucherId,
       statusHistory: (c.statusHistory as unknown as Cheque['statusHistory']) || [],
       status_history: (c.statusHistory as unknown as Cheque['statusHistory']) || [],
-    }));
+    } as Cheque));
   }
 
   static async createCheque(data: {
@@ -281,7 +281,7 @@ export class ChequeLifecycleService {
       status: inserted.status as Cheque['status'],
       partyType: (inserted.partyType || 'customer') as Cheque['partyType'],
       statusHistory: initialHistory,
-    };
+    } as Cheque;
   }
 
   static async updateChequeStatus(id: number, data: {
@@ -583,7 +583,7 @@ export class ChequeLifecycleService {
         status: updated.status as Cheque['status'],
         partyType: (updated.partyType || 'customer') as Cheque['partyType'],
         statusHistory: history,
-      };
+      } as Cheque;
     });
   }
 

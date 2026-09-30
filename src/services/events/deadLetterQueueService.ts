@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { deadLetterEvents, outboxEvents } from '../../db/schema.js';
-import { eq, and, sql, desc, count } from 'drizzle-orm';
+import { eq, and, sql, desc, count, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
@@ -149,7 +149,7 @@ export class DeadLetterQueueService {
       const limit = Math.min(filters.limit || 50, 200);
       const offset = filters.offset || 0;
 
-      const conditions = [];
+      const conditions: SQL[] = [];
 
       if (filters.status && filters.status !== 'all') {
         conditions.push(eq(deadLetterEvents.status, filters.status));

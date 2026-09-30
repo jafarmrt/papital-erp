@@ -638,10 +638,7 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
       userName: req.user?.username
     });
 
-    res.json({
-      success: true,
-      ...simulationResult
-    });
+    res.json(simulationResult);
   } catch (error) {
     throw error;
   }
@@ -818,10 +815,7 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), async (req, 
       customHeaders
     );
 
-    res.json({
-      success: true,
-      ...pingResult
-    });
+    res.json(pingResult);
   } catch (error) {
     throw error;
   }

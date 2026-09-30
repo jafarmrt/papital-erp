@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { 
   Plus, Search, Layers, LayoutGrid, List, Calendar, CheckCircle2,
@@ -6,20 +7,31 @@ import {
   ChevronLeft, RefreshCw, Building, ShoppingCart,
   Paperclip
 } from 'lucide-react';
-import { ProductionProject, Customer, Item } from '../types';
-import { fetchJson } from '../api';
+import { ProductionProject } from '../types';
 import { formatPersianNumber } from '../utils';
 import ProjectModal from '../components/ProjectModal';
 import ProjectDetailModal from '../components/ProjectDetailModal';
 import { SectionErrorBoundary } from '../components/common';
-import toast from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
+import {
+  useProjectsQuery,
+  useAllCustomersQuery,
+  useAllItemsQuery,
+  useDeleteProjectMutation,
+} from '../hooks/queries';
+import { QUERY_KEYS } from '../lib/queryKeys';
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<ProductionProject[]>([]);
-  const [customersList, setCustomersList] = useState<Customer[]>([]);
-  const [itemsList, setItemsList] = useState<Item[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
+  const projectsQuery = useProjectsQuery();
+  const customersQuery = useAllCustomersQuery();
+  const itemsQuery = useAllItemsQuery();
+  const deleteProjectMutation = useDeleteProjectMutation();
+
+  const projects = projectsQuery.data ?? [];
+  const customersList = customersQuery.data ?? [];
+  const itemsList = itemsQuery.data ?? [];
+  const loading = projectsQuery.isFetching || customersQuery.isFetching || itemsQuery.isFetching;
 
   // Filters
   const { searchQuery, debouncedSearchQuery, setSearchQuery } = useSearch();
@@ -35,35 +47,9 @@ export default function ProjectsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState<boolean>(false);
   const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>('overview');
 
-  const loadInitialData = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const [projRes, custRes, itemRes] = await Promise.all([
-        fetchJson('/projects', { signal }),
-        fetchJson('/customers', { signal }),
-        fetchJson('/items', { signal })
-      ]);
-
-      if (Array.isArray(projRes)) setProjects(projRes);
-      
-      const rawCust = Array.isArray(custRes) ? custRes : (custRes?.data && Array.isArray(custRes.data) ? custRes.data : []);
-      setCustomersList(rawCust);
-
-      const rawItems = Array.isArray(itemRes) ? itemRes : (itemRes?.data && Array.isArray(itemRes.data) ? itemRes.data : []);
-      setItemsList(rawItems);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      toast.error('خطا در دریافت اطلاعات پروژه‌ها');
-    } finally {
-      setLoading(false);
-    }
+  const loadInitialData = () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
   };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadInitialData(controller.signal);
-    return () => controller.abort();
-  }, []);
 
   const handleOpenCreateModal = () => {
     setProjectToEdit(null);
@@ -83,18 +69,7 @@ export default function ProjectsPage() {
 
   const handleDeleteProject = async (id: number, code: string) => {
     if (!(await confirmAction({ title: 'حذف پروژه تولید', message: `آیا از حذف پروژه تولید با کد ${code} مطمئن هستید؟` }))) return;
-
-    try {
-      const res = await fetchJson(`/projects/${id}`, { method: 'DELETE' });
-      if (res && res.success) {
-        toast.success('پروژه با موفقیت حذف شد');
-        loadInitialData();
-      } else {
-        toast.error(res?.error || 'خطا در حذف پروژه');
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ارتباط با سرور');
-    }
+    await deleteProjectMutation.mutateAsync(id);
   };
 
   // Filter calculation

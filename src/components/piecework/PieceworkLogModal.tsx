@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { BatchLogRow } from '../../hooks/usePiecework';
 import { formatPersianPrice, formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
 interface PieceworkLogModalProps {
   isOpen: boolean;
@@ -136,13 +137,15 @@ export function PieceworkLogModal({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">{`نرخ واحد (${curLbl})`}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={editingLog.unitRate === 0 ? '' : editingLog.unitRate}
-                    onChange={(e) => setEditingLog(prev => prev ? { ...prev, unitRate: parseFloat(e.target.value) || 0 } : null)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 font-mono"
+                  <FinancialAmountInput
+                    value={editingLog.unitRate}
+                    onChange={(val) => setEditingLog(prev => prev ? { ...prev, unitRate: val } : null)}
+                    currency={appCurrency}
+                    variant="compact"
+                    showWordsBadge={false}
+                    className="w-full"
+                    containerClassName="w-full bg-slate-50 border border-slate-200 rounded-xl"
+                    inputClassName="px-3 py-2 text-xs font-bold text-slate-800 font-mono"
                   />
                 </div>
               </div>
@@ -275,17 +278,19 @@ export function PieceworkLogModal({
 
                         <div className="w-full sm:w-28">
                           <label className="block text-[10px] font-bold text-slate-500 mb-1">{`نرخ واحد (${curLbl})`}</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={row.unitRate === 0 ? '' : row.unitRate}
-                            onChange={(e) => {
+                          <FinancialAmountInput
+                            value={row.unitRate}
+                            onChange={(val) => {
                               const newRows = [...batchLogRows];
-                              newRows[idx].unitRate = parseFloat(e.target.value) || 0;
+                              newRows[idx].unitRate = val;
                               setBatchLogRows(newRows);
                             }}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 text-center font-mono"
+                            currency={appCurrency}
+                            variant="table"
+                            placeholder="0"
+                            className="w-full"
+                            containerClassName="w-full bg-white border border-slate-200 rounded-lg"
+                            inputClassName="px-2.5 py-1.5 text-xs font-bold text-slate-800 text-center font-mono"
                           />
                         </div>
 

@@ -729,7 +729,7 @@ router.get('/global-search', async (req, res) => {
       type: string;
       category: string | null;
       unit: string | null;
-      currentStock: number;
+      currentStock: number | null;
       thumbnail: string | null;
     }> = [];
     try {
@@ -831,7 +831,7 @@ router.get('/global-search', async (req, res) => {
       id: number;
       project_code: string;
       title: string;
-      status: string;
+      status: string | null;
       customer_name: string | null;
     }> = [];
     try {

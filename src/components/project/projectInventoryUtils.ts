@@ -119,7 +119,7 @@ export const buildConsolidatedPurchaseList = (
           if (!map[key]) {
             map[key] = {
               id: key,
-              itemCode: gItem.itemCode,
+              itemCode: gItem.itemCode || '',
               itemName: gItem.name,
               category: sec.title,
               unit: gItem.unit || 'عدد',
@@ -245,7 +245,7 @@ export function buildReservedItemsToFreeze(
           const cur = itemTotals.get(key) || {
             itemCode: effectiveCode,
             itemName: effectiveName,
-            category: itemRes.category || sec.title,
+            category: (itemRes as any).category || sec.title,
             unit: itemRes.unit || 'عدد',
             totalRequiredQty: 0
           };

@@ -82,3 +82,44 @@ export function useSaveUserMutation(onDone?: () => void) {
     },
   });
 }
+
+export function useDeleteRoleMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (roleId: number) => {
+      return fetchJson(`/roles/${roleId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      invalidateDomains(queryClient, ['roles', 'users']).then(() => {
+        toast.success('نقش با موفقیت حذف شد');
+      });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'خطا در حذف نقش');
+    },
+  });
+}
+
+export function useSaveRoleMutation(onDone?: () => void) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ roleId, payload }: { roleId?: number | null; payload: any }) => {
+      if (roleId) {
+        return fetchJson(`/roles/${roleId}`, { method: 'PUT', body: JSON.stringify(payload) });
+      }
+      return fetchJson('/roles', { method: 'POST', body: JSON.stringify(payload) });
+    },
+    onSuccess: (_res, vars) => {
+      invalidateDomains(queryClient, ['roles', 'users']).then(() => {
+        toast.success(vars.roleId ? 'نقش با موفقیت ویرایش شد' : 'نقش جدید با موفقیت ایجاد شد');
+        onDone?.();
+      });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'خطا در ذخیره نقش');
+    },
+  });
+}
+

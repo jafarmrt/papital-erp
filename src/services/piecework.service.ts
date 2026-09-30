@@ -231,7 +231,7 @@ export class PieceworkService {
           const [taskDef] = await executor.select()
             .from(pieceworkTasks)
             .where(eq(pieceworkTasks.id, Number(taskId)));
-          finalRate = taskDef ? taskDef.defaultRate : 0;
+          finalRate = (taskDef && taskDef.defaultRate != null) ? taskDef.defaultRate : 0;
         }
       }
 

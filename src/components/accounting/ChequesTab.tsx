@@ -630,7 +630,7 @@ export function ChequesTab({
                                       label: 'کپی شناسه صیاد',
                                       icon: Copy,
                                       onClick: () => {
-                                        navigator.clipboard.writeText(c.sayadNumber);
+                                        navigator.clipboard.writeText(String(c.sayadNumber));
                                         toast.success('شناسه صیاد کپی شد');
                                       },
                                     },

@@ -38,18 +38,22 @@ async function startServer() {
     process.env.JWT_SECRET = 'papital_workshop_erp_default_secure_jwt_secret_dev_key_32_chars_long';
   }
 
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || '3000', 10);
 
   // Build the shared Express application (security middleware + API routes)
   const app = await createApp();
 
-  // Run database migrations, seed, and plain password migration in background with retry so port 3000 binds immediately
+  // Run database migrations, seed, and plain password migration in background with retry so port binds immediately
   (async () => {
     registerWorkflowListeners();
     registerDomainEventHandlers();
+    let migrationSucceeded = false;
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        await runMigrations();
+        const migResult = await runMigrations();
+        if (!migResult.success) {
+          throw new Error(`Migration failed: ${migResult.errors.join(', ')}`);
+        }
         if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_SEED_IN_PRODUCTION === 'true') {
           await runSeedWithLock();
         } else {
@@ -60,10 +64,11 @@ async function startServer() {
         await EventActionEngineService.seedDefaultRules();
         await WebhookSubscriptionService.seedDefaultSubscriptions();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
-        await AccountingService.syncAllInvoiceVouchers().catch(err => logger.error('Error syncing invoice vouchers on start:', err));
-        await KardexBackfillService.syncMissingInitialTransactions().catch(err => logger.error('Error backfilling missing kardex initial transactions on start:', err));
+        await AccountingService.syncAllInvoiceVouchers().catch((err: unknown) => logger.error('Error syncing invoice vouchers on start:', err));
+        await KardexBackfillService.syncMissingInitialTransactions().catch((err: unknown) => logger.error('Error backfilling missing kardex initial transactions on start:', err));
         OutboxService.startOutboxWorker(3000);
         markStartupComplete();
+        migrationSucceeded = true;
         break;
       } catch (error) {
         logger.error(`Error migrating/seeding database (attempt ${attempt}/5):`, error);
@@ -72,8 +77,15 @@ async function startServer() {
         }
       }
     }
+    if (!migrationSucceeded && process.env.NODE_ENV === 'production') {
+      logger.error('FATAL: Database migrations failed after 5 attempts in production. Aborting process.');
+      process.exit(1);
+    }
   })().catch(err => {
     logger.error('Unhandled error in background migration/seed runner:', err);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
   });
 
   // Serve public static assets (fonts, icons, images) directly

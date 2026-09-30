@@ -762,9 +762,9 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       .from(users)
       .where(eq(users.id, insertedUser.id));
 
-    const t2Time = new Date(userAfterUpdate2.updatedAt).getTime();
-    if (t2Time < t1Time || userAfterUpdate2.updatedAt.startsWith('2000')) {
-      throw new Error(`تریگر set_updated_at مقدار دستی ۲000-01-01 را با زمان فعلی NOW() جایگزین نکرد! (مقدار فعلی: ${userAfterUpdate2.updatedAt})`);
+    const t2Time = new Date(userAfterUpdate2?.updatedAt || '').getTime();
+    if (t2Time < t1Time || (userAfterUpdate2?.updatedAt && userAfterUpdate2.updatedAt.startsWith('2000'))) {
+      throw new Error(`تریگر set_updated_at مقدار دستی ۲000-01-01 را با زمان فعلی NOW() جایگزین نکرد! (مقدار فعلی: ${userAfterUpdate2?.updatedAt})`);
     }
 
     // Clean up

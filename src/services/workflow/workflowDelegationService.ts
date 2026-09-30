@@ -3,7 +3,7 @@ import {
   workflowDelegations, 
   users 
 } from '../../db/schema.js';
-import { eq, or, and, desc, sql } from 'drizzle-orm';
+import { eq, or, and, desc, sql, type SQL } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 
 export class WorkflowDelegationService {
@@ -89,7 +89,7 @@ export class WorkflowDelegationService {
     .leftJoin(sql`users fu`, sql`fu.id = ${workflowDelegations.fromUserId}`)
     .leftJoin(sql`users tu`, sql`tu.id = ${workflowDelegations.toUserId}`);
 
-    const conditions = [];
+    const conditions: SQL[] = [];
     if (!isAdmin) {
       conditions.push(
         or(

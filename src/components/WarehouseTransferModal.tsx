@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
-import { formatPersianNumber } from '../utils';
+import { formatPersianNumber, parseCleanNumber } from '../utils';
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -93,8 +93,8 @@ export default function WarehouseTransferModal({
       setErrorMsg('انبار مبدا و انبار مقصد نمی‌توانند یکسان باشند.');
       return;
     }
-    const numQty = parseFloat(quantity);
-    if (isNaN(numQty) || numQty <= 0) {
+    const numQty = parseCleanNumber(quantity, 0);
+    if (numQty <= 0) {
       setErrorMsg('مقدار انتقال باید یک عدد مثبت باشد.');
       return;
     }

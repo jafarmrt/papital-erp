@@ -234,7 +234,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         avatarUrl: ''
       });
       const attempts = 8;
-      const responses = [];
+      const responses: any[] = [];
       try {
         for (let i = 0; i < attempts; i++) {
           responses.push(await request(app)
