@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, check, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { documents } from './documents';
 import { productionProjects } from './projects';
@@ -17,6 +17,28 @@ export const warehouses = pgTable('warehouses', {
   code: text('code').notNull().unique(),
   isActive: integer('is_active').default(1)
 });
+
+/**
+ * V7 Phase 4.1 (TD-165): جدول رابطه‌ای نرمال‌سازی‌شده موجودی کالا به تفکیک انبارها
+ * جایگزین ساختار متزلزل JSONB با قید دیتابیسی عدم منفی بودن و قابلیت قفل‌گذاری سطری مستقیم
+ */
+export const itemWarehouseStocks = pgTable('item_warehouse_stocks', {
+  id: serial('id').primaryKey(),
+  itemId: integer('item_id').notNull().references(() => items.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'cascade' }),
+  warehouseCode: text('warehouse_code').notNull(),
+  currentStock: numeric('current_stock', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
+  reservedStock: numeric('reserved_stock', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  uniqueItemWarehouse: uniqueIndex('idx_item_warehouse_unique').on(table.itemId, table.warehouseId),
+  idxIwsItemId: index('idx_iws_item_id').on(table.itemId),
+  idxIwsWarehouseId: index('idx_iws_warehouse_id').on(table.warehouseId),
+  idxIwsWarehouseCode: index('idx_iws_warehouse_code').on(table.warehouseCode),
+  checkStockNonNegative: check('chk_iws_current_stock_non_negative', sql`${table.currentStock} >= 0`),
+}));
 
 export const items = pgTable('items', {
   id: serial('id').primaryKey(),

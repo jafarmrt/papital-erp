@@ -12,8 +12,8 @@ import { DomainEventType } from './events/domainEvents.js';
 import { OutboxService } from './events/outboxService.js';
 import { VoucherSyncService } from './accounting/voucherSync.service.js';
 import { VoucherService } from './accounting/voucher.service.js';
-import { NegativeStockPolicyService } from './inventory/negativeStockPolicy.service.js';
 import { resolveWarehouseCode, createWarehouseResolver } from './inventory/warehouseResolver.js';
+import { ItemWarehouseStockService } from './inventory/itemWarehouseStock.service.js';
 import { ItemStockReservationService } from './items/itemStockReservation.service.js';
 import { KardexWacRecalculatorService } from './inventory/kardexWacRecalculator.service.js';
 import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../lib/lockOrder.js';
@@ -1231,7 +1231,8 @@ export class DocumentService {
     const qty = Number(quantity);
     const priceNum = Number(price);
 
-    const finalTargetLoc = await resolveWarehouseCode(tx, targetLoc);
+    const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);
+    const finalTargetLoc = whInfo.code;
 
     // V9-P0: گارد دفاعی — مقدار منفی/نامعتبر جهت in/out را برعکس می‌کند و WAC را خراب می‌کند
     if (!Number.isFinite(qty) || qty <= 0) {
@@ -1266,38 +1267,6 @@ export class DocumentService {
     }
 
     const currentStocks = (itemData.stocks as Record<string, number>) || {};
-    const currentLocStock = Number(currentStocks[finalTargetLoc] || 0);
-
-    if (inOut === 'out') {
-      if (currentLocStock < qty) {
-        const policy = await NegativeStockPolicyService.getPolicy(tx);
-
-        switch (policy) {
-          case 'forbidden':
-            throw new InsufficientStockError(
-              `موجودی کافی در انبار ${finalTargetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
-            );
-
-          case 'warning':
-            logger.warn(
-              `[Stock Warning] Negative stock applied for item ${itemId} (${itemData.name}) at ${finalTargetLoc}: ` +
-              `current=${currentLocStock}, requested=${qty}`
-            );
-            // ادامه عملیات — کسر به مقدار منفی می‌رسد
-            break;
-
-          case 'allowed':
-            // ادامه عملیات بدون هشدار
-            break;
-
-          default:
-            // default = forbidden
-            throw new InsufficientStockError(
-              `موجودی کافی در انبار ${finalTargetLoc} نیست. موجودی: ${currentLocStock}, درخواست: ${qty}`
-            );
-        }
-      }
-    }
 
     const normalizedTxDate = normalizeDateToDbTimestamp(date);
 
@@ -1322,10 +1291,14 @@ export class DocumentService {
       isDeleted: 0,
     }).returning({ id: transactions.id });
 
-    const updatedLocStock = inOut === 'in'
-      ? fin(currentLocStock).add(qty).round(4).toNumber()
-      : fin(currentLocStock).subtract(qty).round(4).toNumber();
-    currentStocks[finalTargetLoc] = updatedLocStock;
+    // V7 Phase 4.1 (TD-165): به‌روزرسانی جدول رابطه‌ای نرمال‌سازی‌شده item_warehouse_stocks تحت قفل سطری
+    const { newLocationStock } = await ItemWarehouseStockService.applyMovement(tx, {
+      itemId,
+      warehouse: whInfo,
+      inOut,
+      quantity: qty,
+    });
+    currentStocks[finalTargetLoc] = newLocationStock;
 
     // Single source of truth: total currentStock is strictly the sum of all location stocks
     const newTotalStock = Object.values(currentStocks)
@@ -1397,13 +1370,18 @@ export class DocumentService {
       .where(eq(items.id, itemId))
       .for('update');
     if (!itemData) return;
-
     const currentStocks = (itemData.stocks as Record<string, number>) || {};
-    const currentLocStock = Number(currentStocks[targetLoc] || 0);
+    const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);
+    const revMovement: 'in' | 'out' = originalDirection === 'in' ? 'out' : 'in';
 
-    currentStocks[targetLoc] = originalDirection === 'in'
-      ? fin(currentLocStock).subtract(qty).round(4).toNumber()
-      : fin(currentLocStock).add(qty).round(4).toNumber();
+    // V7 Phase 4.1 (TD-165): به‌روزرسانی جدول رابطه‌ای نرمال‌سازی‌شده item_warehouse_stocks تحت قفل سطری
+    const { newLocationStock } = await ItemWarehouseStockService.applyMovement(tx, {
+      itemId,
+      warehouse: whInfo,
+      inOut: revMovement,
+      quantity: qty,
+    });
+    currentStocks[whInfo.code] = newLocationStock;
 
     const oldTotalStock = Number(itemData.currentStock || 0);
     const newTotalStock = Object.values(currentStocks)

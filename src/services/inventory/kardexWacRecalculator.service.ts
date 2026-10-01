@@ -6,6 +6,7 @@ import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
+import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
 
@@ -137,6 +138,9 @@ export class KardexWacRecalculatorService {
           lastKardexRebuildAt: nowIso,
         })
         .where(eq(items.id, itemId));
+
+      // V7 Phase 4.1 (TD-165): همگام‌سازی همزمان جدول رابطه‌ای نرمال‌سازی‌شده item_warehouse_stocks
+      await ItemWarehouseStockService.rebuildItemWarehouseStocks(txEngine, itemId, whBreakdown);
 
       logger.info(`[Kardex Rebuild] Item ${itemId} (${item.name}): stock ${oldStock} -> ${newStock}, WAC ${oldWac} -> ${newWac}, processed ${itemTxs.length} transactions`);
 

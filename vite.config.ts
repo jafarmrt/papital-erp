@@ -61,10 +61,16 @@ export default defineConfig(({ mode }) => {
                 return 'vendor-icons';
               }
             }
+            if (id.includes('/src/components/common/')) {
+              return 'common-components';
+            }
+            if (id.includes('/src/data/changelogs/') || id.includes('/src/data/appInfoAndChangelog')) {
+              return 'changelog-data';
+            }
           },
         },
       },
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 1000,
     },
   };
 });

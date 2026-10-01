@@ -75,13 +75,20 @@ export default function ProjectsPage() {
   // Filter calculation
   // V3.2.3 (Playbook Scenario 5) & V4 Phase 6.2 (U-1): فیلتر با debouncedSearchQuery — حذف محاسبات مکرر در هر کی‌استروک
   const filteredProjects = React.useMemo(() => projects.filter(p => {
+    if (!p) return false;
     const q = debouncedSearchQuery.trim().toLowerCase();
+    const code = String(p.project_code || p.projectCode || '').toLowerCase();
+    const title = String(p.title || '').toLowerCase();
+    const custName = String(p.customer_name || p.customerName || '').toLowerCase();
+    const itmName = String(p.item_name || p.itemName || '').toLowerCase();
+    const itmCode = String(p.item_code || p.itemCode || '').toLowerCase();
+
     const matchesSearch = !q ||
-      p.project_code.toLowerCase().includes(q) ||
-      p.title.toLowerCase().includes(q) ||
-      (p.customer_name && p.customer_name.toLowerCase().includes(q)) ||
-      (p.item_name && p.item_name.toLowerCase().includes(q)) ||
-      (p.item_code && p.item_code.toLowerCase().includes(q));
+      code.includes(q) ||
+      title.includes(q) ||
+      custName.includes(q) ||
+      itmName.includes(q) ||
+      itmCode.includes(q);
 
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || p.priority === priorityFilter;
@@ -599,7 +606,7 @@ function ProjectKanbanCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
-            {project.project_code}
+            {project.project_code || project.projectCode}
           </span>
           {project.attachments && project.attachments.length > 0 && (
             <span 

@@ -12,6 +12,46 @@ import { AIUpdateLog } from './types';
  */
 export const v7Updates: AIUpdateLog[] = [
   {
+    version: 'v7.0.9',
+    date: '۱۰ مهر ۱۴۰۵',
+    title: 'نسخه ۷ - ارتقای پایداری خطاها و انبار: رفع چالش‌های بارگذاری چانک در SectionErrorBoundary و اصلاح Lazy-Init جدول نرمال انبار',
+    summary: 'ارتقای پایداری و تاب‌آوری خطا در سطح فرانت‌اند و لایه انبار: ۱) بازطراحی و ارتقای تایپ کامپوننت SectionErrorBoundary به readonly unknown[] برای resetKeys، مقایسه دقیق تغییر طول کلیدها و پیاده‌سازی هوشمند خطایابی و بازیابی خودکار در بارگذاری پویای چانک‌ها (isChunkLoadError) بدون از دست رفتن وضعیت صفحه؛ ۲) ایمن‌سازی ۱۰۰٪ دسترسی به مشخصات متنی پروژه‌ها (project_code, projectCode, title, customer_name, item_name, item_code) با گارد اختیاری در ProjectsPage.tsx؛ ۳) اصلاح رفتار ItemWarehouseStockService.applyMovement در مواجهه با رکوردهای کالا بدون سطر اولیه در item_warehouse_stocks از طریق Lazy-Initialization خودکار بر مبنای items.stocks و items.currentStock؛ ۴) ارتقای نسخه سیستم به v7.0.9.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🛡️ ارتقای تایپ و منطق SectionErrorBoundary.tsx با پشتیبانی از readonly unknown[] و مهار خطاهای بارگذاری پویای ماژول‌ها',
+      '🔄 پیاده‌سازی مکانیزم بارگذاری مجدد خودکار در خطاهای Chunks و Stale Bundles در سطح بخش‌های منفرد',
+      '📦 اصلاح و بهینه‌سازی ItemWarehouseStockService.applyMovement جهت همگام‌سازی و راه‌اندازی سطر انبار در صورت عدم وجود قبلی در جدول نرمال',
+      '🧩 ایمن‌سازی کامل فیلترها و کامپوننت‌های نمایشی صفحه پروژه‌ها (ProjectsPage.tsx) در برابر خطاهای خواندن فیلدهای تعریف‌نشده',
+      '🚀 ارتقای نسخه سامانه به v7.0.9'
+    ],
+    fixes: [
+      'رفع خطای عدم یافتن موجودی کافی انبار در درج اسناد و تست‌های خودکار برای کالاهای فاقد سطر اولیه نرمال',
+      'جلوگیری از سفید شدن صفحه در اثر شکست موقت دریافت چانک‌های پویای فرانت‌اند هنگام بیلد یا بازنشانی کش مرورگر',
+      'جلوگیری از پرتاب خطای Cannot read properties of undefined در فیلتر متنی کارت‌های کانبان پروژه‌ها'
+    ]
+  },
+  {
+    version: 'v7.0.8',
+    date: '۹ مهر ۱۴۰۵',
+    title: 'نسخه ۷ - فاز ۴.۱: نرمال‌سازی مدل داده موجودی انبارها، معرفی جدول item_warehouse_stocks و قید دیتابیسی عدم منفی بودن (P1)',
+    summary: 'پیاده‌سازی موفق زیرفاز ۴.۱ از فاز چهارم نقشه راه جامع نسخه ۷ (V7 Master Roadmap - رفع TD-165 / بند ۸.۳ ممیزی معماری): ۱) طراحی و پیاده‌سازی جدول رابطه‌ای نرمال‌سازی‌شده `item_warehouse_stocks` در اسکیما با فیلدهای `(item_id, warehouse_id, warehouse_code, current_stock, reserved_stock, version, created_at, updatedAt)`، ایندکس یونیک روی زوج `(item_id, warehouse_id)` و ایندکس‌های مجزا روی شناسه کالا و انبار؛ ۲) ایجاد مایگریشن اتمیک Drizzle شماره `0014_item_warehouse_stocks.sql` جهت انتقال کامل و بدون هدررفت داده‌های تاریخی از ستون JSONB `items.stocks` به جدول جدید و ثبت رسمی در ژورنال Drizzle؛ ۳) اعمال قید دیتابیسی `CHECK (current_stock >= 0)` جهت مسدودسازی قطعی موجودی منفی در سطح موتور پایگاه‌داده؛ ۴) توسعه سرویس متمرکز `ItemWarehouseStockService` با متدهای قفل سطری اختصاصی `.for(\'update\')`، اعمال گردش کالا و همگام‌سازی Read-Cache؛ ۵) اتصال سرویس‌های هسته گردش کالا (`DocumentService.applyStockMovement`، `applyStockReversal` و `KardexWacRecalculatorService.rebuildItemFromLedger`) به جدول نرمال جدید ضمن حفظ سازگاری عقب‌رو ۱۰۰٪ ستون JSONB؛ ۶) بسته شدن بدهی فنی TD-165 در رجیستری بدهی‌ها و ارتقای نسخه سامانه به v7.0.8.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🗄️ طراحی جدول رابطه‌ای `item_warehouse_stocks` در اسکیما با قیدهای کلید خارجی و ایندکس یونیک ترکیبی (TD-165)',
+      '📦 نگارش و اجرای مایگریشن رسمی `0014_item_warehouse_stocks.sql` با مهاجرت خودکار داده‌های تاریخی JSONB به جدول رابطه‌ای',
+      '🔒 افزودن قید دیتابیسی سطح موتور PostgreSQL: `CHECK (current_stock >= 0)` برای تضمین فیزیکی عدم منفی شدن موجودی',
+      '⚡ توسعه سرویس متمرکز `ItemWarehouseStockService` با متدهای `resolveWarehouse`، `applyMovement` و `syncJsonbReadCache`',
+      '🔄 اتصال مستقیم `applyStockMovement` و `applyStockReversal` به جدول نرمال همراه با قفل سطری اختصاصی',
+      '🔁 همگام‌سازی خودکار جدول رابطه‌ای انبارها در هنگام بازسازی کاردکس (`KardexWacRecalculatorService`)',
+      '📑 علامت‌گذاری و حل بدهی فنی TD-165 در `TECH_DEBT.md` و ارتقای نسخه به v7.0.8'
+    ],
+    fixes: [
+      'حذف ریسک تخریب یا ناهماهنگی مقادیر موجودی انبار در ساختار غیررابطه‌ای JSONB',
+      'مهار قطعی رخداد موجودی منفی کالا در سطح پایگاه‌داده به کمک قید CHECK فیزیکی',
+      'جلوگیری از بروز قفل‌های گسترده روی کل سطر کالا هنگام تغییر موجودی در یک انبار خاص'
+    ]
+  },
+  {
     version: 'v7.0.7',
     date: '۸ مهر ۱۴۰۵',
     title: 'نسخه ۷ - فاز ۳.۴: تکمیل مهاجرت React Query، توسعه هوک‌های Events/Projects و حذف Pollingهای دستی (P2)',

@@ -118,7 +118,7 @@ export async function validateDbSchema(): Promise<{ valid: boolean; tablesCount:
     'workflow_definition_versions', 'workflow_tasks', 'workflow_delegations', 'outbox_events',
     'event_action_rules', 'event_action_logs', 'dead_letter_events', 'webhook_subscriptions',
     'webhook_deliveries', 'woocommerce_order_logs', 'form_drafts', 'document_ref_counters',
-    'item_code_counters', 'project_bom_allocations', 'idempotency_keys'
+    'item_code_counters', 'project_bom_allocations', 'idempotency_keys', 'item_warehouse_stocks'
   ];
 
   const missingTables: string[] = [];
