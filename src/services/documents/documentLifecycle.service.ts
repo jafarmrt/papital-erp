@@ -1,4 +1,4 @@
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -340,13 +340,31 @@ export class DocumentLifecycleService {
         }
 
         // V9-1.1 & V6.0.5: برگشت اسناد حسابداری متناظر (صدور سند معکوس) در همان تراکنش برای کلیه انواع اسناد
-        const linkedVouchers = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
+        // v7.0.31 (TD-193 / audit P1-8): سند حسابداری اصلی از پیوند صریح source_document_id؛ اسناد تکراری قدیمی
+        // بدون پیوند (هم‌شماره با سند) نیز معکوس می‌شوند مگر حسابدار قبلاً معکوسشان کرده باشد. اسناد معکوس/اصلاحی که
+        // reference_id آن‌ها شناسه «سند حسابداری مبدأ» است دیگر به‌اشتباه به‌عنوان سند این فاکتور انتخاب نمی‌شوند.
+        const primaryVouchers = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
+          .from(journalVouchers)
+          .where(and(eq(journalVouchers.sourceDocumentId, id), eq(journalVouchers.isDeleted, 0)));
+        const legacyVouchers = await tx.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
           .from(journalVouchers)
           .where(and(
             inArray(journalVouchers.referenceModule, ['invoice', 'purchase', 'inventory', 'warehouse', 'document', 'production']),
             eq(journalVouchers.referenceId, id),
+            eq(journalVouchers.referenceNumber, doc.refNumber),
+            isNull(journalVouchers.sourceDocumentId),
             eq(journalVouchers.isDeleted, 0)
           ));
+        const linkedVouchers = [...primaryVouchers];
+        for (const lv of legacyVouchers) {
+          const [alreadyReversed] = await tx.select({ id: journalVouchers.id }).from(journalVouchers)
+            .where(and(
+              eq(journalVouchers.referenceId, lv.id),
+              eq(journalVouchers.referenceNumber, `REV-V${lv.voucherNumber}`),
+              eq(journalVouchers.isDeleted, 0)
+            ));
+          if (!alreadyReversed) linkedVouchers.push(lv);
+        }
 
         for (const lv of linkedVouchers) {
           await VoucherService.reverseVoucher({

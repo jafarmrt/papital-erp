@@ -5,6 +5,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { logger } from '../../middleware/logger.js';
 import { resolveWarehouseCode } from './warehouseResolver.js';
+import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 
 export const KARDEX_BACKFILL_REF = 'موجودی اولیه (تطبیق سیستم)';
 
@@ -16,6 +17,16 @@ export interface KardexBackfillSummary {
 }
 
 export class KardexBackfillService {
+  /**
+   * v7.0.31 (TD-193 / audit P1-8): اجرای دستی (به‌جای هر بوت هر Pod) با قفل مشورتی تا در کل خوشه فقط یک
+   * اجرا فعال باشد. `locked: true` یعنی اجرای دیگری در جریان است و کاری انجام نشد.
+   */
+  static async runExclusive(): Promise<{ locked: true } | ({ locked: false } & KardexBackfillSummary)> {
+    const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.KARDEX_INITIAL_BACKFILL, () => this.syncMissingInitialTransactions());
+    if (!outcome.acquired) return { locked: true };
+    return { locked: false, ...outcome.result };
+  }
+
   static async syncMissingInitialTransactions(): Promise<KardexBackfillSummary> {
     const candidates = await orm.execute(sql`
       SELECT i.id, i.current_stock, i.stocks, i.weighted_average_cost

@@ -2844,6 +2844,163 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.4: v7.0.31 (TD-193 / audit P1-8): یک سند حسابداری فعال برای هر سند انبار، حذف همگام‌سازی از بوت
+  // و همگام‌سازی دستی «فقط اسناد فاقد سند» با قفل مشورتی
+  if (shouldRun('reg_document_voucher_link_td_193', 'td193', 'voucher', 'sync', 'boot')) {
+    const tStart = Date.now();
+    const { createTestItem } = await import('../fixtures/factories.js');
+    const { pool } = await import('../../db/drizzle.js');
+    const fs = await import('fs');
+    const path = await import('path');
+    const createdDocIds: number[] = [];
+    const violations: string[] = [];
+    const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+    try {
+      const [defWh] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 30000 });
+      const today = await businessTodayIsoDate();
+      const makeInvoice = async (skipVoucherSync: boolean) => {
+        const id = await DocumentService.createDocument({
+          docType: 'invoice', status: 'final', date: today, user: 'test-agent', buyerName: 'خریدار آزمون TD-193',
+          location: defWh.code, skipVoucherSync,
+          items: [{ itemId: item.id, quantity: 1, unit_price: 100000, location: defWh.code }]
+        });
+        createdDocIds.push(id);
+        return id;
+      };
+      // اسناد معکوس/اصلاحی (REV-V…) reference_id = شناسه سند حسابداری مبدأ دارند و ممکن است تصادفاً با شناسه سند برابر شوند
+      const vouchersOf = async (docId: number) => (await orm.select().from(journalVouchers)
+        .where(and(eq(journalVouchers.referenceModule, 'invoice'), eq(journalVouchers.referenceId, docId), eq(journalVouchers.isDeleted, 0))))
+        .filter(v => !/^(RE-REV-V|REV-V|CORR-V|VOID-REPOST-V|REPOST-V)/.test(v.referenceNumber || ''));
+      const insertBareVoucher = async (values: { referenceId: number; referenceNumber: string; status: string; voucherType: string }) => {
+        const voucherNumber = await VoucherService.getNextVoucherNumber();
+        const [row] = await orm.insert(journalVouchers).values({
+          voucherNumber, date: today, description: 'سند آزمون TD-193', referenceModule: 'invoice',
+          totalDebit: 1000, totalCredit: 1000, ...values
+        }).returning();
+        return row;
+      };
+
+      // ۱) فاکتور قطعی → سند حسابداری با پیوند صریح به سند
+      const d1 = await makeInvoice(false);
+      const [v1] = await vouchersOf(d1);
+      check(Boolean(v1) && (v1 as any).sourceDocumentId === d1, `سند حسابداری فاکتور باید source_document_id=${d1} داشته باشد: ${JSON.stringify(v1 ? { id: v1.id, src: (v1 as any).sourceDocumentId } : null)}`);
+
+      // ۲) دیتابیس دومین سند فعال برای همان سند را رد می‌کند (ایندکس یکتای جزئی)
+      let duplicateRejected = false;
+      try {
+        await orm.execute(sql`INSERT INTO journal_vouchers (voucher_number, date, description, reference_module, reference_id, reference_number, source_document_id, total_debit, total_credit)
+          VALUES (nextval('journal_voucher_number_seq'), ${today}, 'probe duplicate', 'invoice', ${d1}, 'probe', ${d1}, 0, 0)`);
+      } catch {
+        duplicateRejected = true;
+      }
+      check(duplicateRejected, 'درج دومین سند حسابداری فعال برای یک سند انبار باید توسط ایندکس یکتا رد شود (uq_jv_source_document_active)');
+
+      // ۳) سند معکوسی که reference_id آن (شناسه سند حسابداری مبدأ) با شناسه یک فاکتور برابر است نباید سند آن فاکتور تلقی شود
+      const d2 = await makeInvoice(true);
+      const fakeReversal = await insertBareVoucher({ referenceId: d2, referenceNumber: 'REV-V990001', status: 'approved', voucherType: 'adjustment' });
+      const ensured = await VoucherSyncService.autoCreateVoucherForInvoice(d2, undefined, 'test-agent', undefined, { strict: true });
+      check(Boolean(ensured) && ensured!.id !== fakeReversal.id, `برای فاکتور بدون سند باید سند جدید صادر شود، نه بازگرداندن سند معکوس نامرتبط #${fakeReversal.id} (دریافتی: #${ensured?.id})`);
+      let deleteError = '';
+      try {
+        await DocumentService.deleteDocument(d2, 'test-agent');
+      } catch (err: any) {
+        deleteError = err?.message || String(err);
+      }
+      check(!deleteError, `حذف فاکتور نباید برای سند معکوس نامرتبط خطا دهد: ${deleteError}`);
+      const reversalOfFake = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(eq(journalVouchers.referenceNumber, `REV-V${fakeReversal.voucherNumber}`));
+      check(reversalOfFake.length === 0, 'حذف فاکتور نباید سند معکوس نامرتبط را دوباره معکوس کند');
+      if (ensured) {
+        const reversalOfOwn = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+          .where(eq(journalVouchers.referenceNumber, `REV-V${ensured.voucherNumber}`));
+        check(reversalOfOwn.length === 1, 'حذف فاکتور باید سند حسابداری خودِ فاکتور را معکوس کند');
+      }
+
+      // ۴) همگام‌سازی دستی «فقط اسناد فاقد سند»: سند موجود بازنویسی نمی‌شود و اجرای دوباره سند تکراری نمی‌سازد
+      const d3 = await makeInvoice(true);
+      if (v1) {
+        await orm.update(journalVouchers).set({ description: 'TD193-PRESERVE-MARKER' }).where(eq(journalVouchers.id, v1.id));
+      }
+      const syncMissing = (VoucherSyncService as any).syncMissingDocumentVouchers;
+      check(typeof syncMissing === 'function', 'متد syncMissingDocumentVouchers باید وجود داشته باشد');
+      if (typeof syncMissing === 'function') {
+        await syncMissing.call(VoucherSyncService, { batchSize: 2 });
+        await syncMissing.call(VoucherSyncService, { batchSize: 2 });
+        const d3Vouchers = await vouchersOf(d3);
+        check(d3Vouchers.length === 1, `سند فاقد سند حسابداری باید دقیقاً یک سند بگیرد (${d3Vouchers.length})`);
+        if (v1) {
+          const [v1After] = await orm.select({ description: journalVouchers.description }).from(journalVouchers).where(eq(journalVouchers.id, v1.id));
+          check(v1After?.description === 'TD193-PRESERVE-MARKER', `همگام‌سازی نباید سند حسابداری موجود را بازنویسی کند: «${v1After?.description}»`);
+        }
+
+        // ۵) سند قدیمی بدون پیوند: سند جدید صادر نمی‌شود و برای بررسی حسابدار گزارش می‌شود
+        const d5 = await makeInvoice(true);
+        const [d5Doc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, d5));
+        await insertBareVoucher({ referenceId: d5, referenceNumber: d5Doc.refNumber, status: 'draft', voucherType: 'sales' });
+        const summary = await syncMissing.call(VoucherSyncService, {});
+        const d5Vouchers = await vouchersOf(d5);
+        check(d5Vouchers.length === 1, `برای سند دارای سند حسابداری قدیمی بدون پیوند نباید سند دوم صادر شود: ${JSON.stringify(d5Vouchers.map(v => ({ id: v.id, ref: v.referenceNumber, src: (v as any).sourceDocumentId })))}`);
+        check(Array.isArray(summary?.reviewDocumentIds) && summary.reviewDocumentIds.includes(d5), `سند ${d5} باید در فهرست بررسی حسابدار باشد: ${JSON.stringify(summary?.reviewDocumentIds)}`);
+
+        // ۶) قفل مشورتی: وقتی اجرای دیگری قفل را دارد، کاری انجام نمی‌شود
+        const d6 = await makeInvoice(true);
+        const holder = await pool.connect();
+        try {
+          await holder.query('SELECT pg_advisory_lock(91001)');
+          const lockedRun = await syncMissing.call(VoucherSyncService, {});
+          check(lockedRun?.locked === true, 'با قفل گرفته‌شده توسط نمونه دیگر، اجرا باید locked=true برگرداند');
+          check((await vouchersOf(d6)).length === 0, 'اجرای قفل‌شده نباید سندی صادر کند');
+        } finally {
+          await holder.query('SELECT pg_advisory_unlock(91001)').catch(() => undefined);
+          holder.release();
+        }
+
+        // ۷) گزارش سلامت مالی اسناد تکراری قدیمی را فهرست می‌کند
+        const legacyDuplicate = v1 ? await insertBareVoucher({ referenceId: d1, referenceNumber: (await orm.select({ r: documents.refNumber }).from(documents).where(eq(documents.id, d1)))[0].r, status: 'draft', voucherType: 'sales' }) : null;
+        const health = await AccountingService.runFinancialHealthCheck();
+        const dupTest = health.tests.find((t: any) => t.id === 'duplicate_document_vouchers');
+        check(Boolean(legacyDuplicate) && dupTest?.status === 'error' && (dupTest.items || []).some((i: any) => i.id === legacyDuplicate!.id),
+          `بازرس سلامت مالی باید سند تکراری #${legacyDuplicate?.id} را گزارش کند: ${JSON.stringify(dupTest ? { status: dupTest.status, count: dupTest.count } : null)}`);
+      }
+
+      // ۸) مسیر بوت دیگر همگام‌سازی کامل اسناد و پرکردن کاردکس را اجرا نمی‌کند
+      const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
+      check(!/syncAllInvoiceVouchers\(|syncMissingInitialTransactions\(|syncMissingDocumentVouchers\(/.test(serverSource),
+        'server.ts نباید در مسیر بوت همگام‌سازی اسناد حسابداری یا پرکردن کاردکس را اجرا کند');
+
+      if (violations.length > 0) {
+        throw new Error(violations.join(' | '));
+      }
+      results.push(makeTestCase({
+        id: 'reg_document_voucher_link_td_193',
+        scenarioId: 'document_voucher_uniqueness',
+        name: 'v7.0.31: یکتایی سند حسابداری هر سند انبار، همگام‌سازی دستی فقط اسناد فاقد سند با قفل مشورتی و حذف از بوت (TD-193 / P1-8)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'پیوند source_document_id و ایندکس یکتا، تفکیک سند معکوس از سند فاکتور در صدور و حذف، عدم بازنویسی اسناد موجود، گزارش اسناد قدیمی بدون پیوند، قفل مشورتی و حذف از مسیر بوت تأیید شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_document_voucher_link_td_193',
+        scenarioId: 'document_voucher_uniqueness',
+        name: 'v7.0.31: یکتایی سند حسابداری هر سند انبار، همگام‌سازی دستی فقط اسناد فاقد سند با قفل مشورتی و حذف از بوت (TD-193 / P1-8)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', createdDocIds);
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

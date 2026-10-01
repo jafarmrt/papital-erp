@@ -1,4 +1,5 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
 import { baseRelations } from './baseRelations';
@@ -37,6 +38,10 @@ export const journalVouchers = pgTable('journal_vouchers', {
   referenceModule: text('reference_module').default('manual'), // 'manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory'
   referenceId: integer('reference_id'),
   referenceNumber: text('reference_number').default(''),
+  // v7.0.31 (TD-193 / audit P1-8): سند انبار/فاکتوری که VoucherSync این سند حسابداری را برایش صادر کرده است.
+  // reference_id در اسناد معکوس/اصلاحی شناسه «سند حسابداری مبدأ» است، پس برای یافتن سند یک فاکتور فقط
+  // از این ستون استفاده شود. ایندکس یکتای جزئی uq_jv_source_document_active (مهاجرت 0017).
+  sourceDocumentId: integer('source_document_id').references(baseRelations.documentsId, { onDelete: 'set null' }),
   currency: text('currency').default('IRR'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
@@ -46,6 +51,10 @@ export const journalVouchers = pgTable('journal_vouchers', {
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
+  uq_jv_source_document_active: uniqueIndex('uq_jv_source_document_active')
+    .on(table.sourceDocumentId)
+    .where(sql`${table.isDeleted} = 0 AND ${table.sourceDocumentId} IS NOT NULL`),
+  idx_jv_reference: index('idx_jv_reference').on(table.referenceModule, table.referenceId),
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),
   idx_jv_date: index('idx_jv_date').on(table.date),
   idx_jv_status: index('idx_jv_status').on(table.status),

@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, and } from 'drizzle-orm';
 import { workflowInstances, workflowHistoryLogs, workflowStates } from '../db/schema.js';
@@ -1277,21 +1277,31 @@ router.get('/accounting/reports/health-check', authorizePermission('accounting.r
   res.json(report);
 }));
 
-// اقدام سریع: صدور دسته جمعی اسناد دوبل برای فاکتورها و اسناد نهایی فاقد سند
+// اقدام سریع: صدور اسناد دوبل فقط برای اسناد نهایی فاقد سند (v7.0.31 / TD-193 / audit P1-8)
+// هیچ سند حسابداری موجودی بازنویسی نمی‌شود؛ قفل مشورتی تضمین می‌کند در کل خوشه فقط یک اجرا فعال باشد.
 router.post('/accounting/quick-fix/sync-all-vouchers', authorizePermission('accounting.vouchers'), asyncHandler(async (req, res) => {
-  const syncedCount = await AccountingService.syncAllInvoiceVouchers();
+  const summary = await AccountingService.syncMissingDocumentVouchers({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+  });
+  if (summary.locked) {
+    throw new ConflictError('صدور اسناد معوق هم‌اکنون توسط کاربر یا نمونه دیگری در حال اجراست؛ چند دقیقه بعد دوباره تلاش کنید.');
+  }
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',
     userFullName: req.user?.fullName || '',
     action: 'CREATE',
     entity: 'journal_voucher',
-    entityId: 'QUICK_FIX_SYNC_ALL',
-    description: `اجرای اقدام سریع صدور مکانیزه اسناد دوبل برای ${syncedCount} سند تجاری`,
-    details: { syncedCount },
+    entityId: 'QUICK_FIX_SYNC_MISSING',
+    description: `صدور اسناد دوبل برای اسناد نهایی فاقد سند: ${summary.created} سند صادر شد، ${summary.failed} ناموفق، ${summary.skippedForReview} نیازمند بررسی`,
+    details: { checked: summary.checked, created: summary.created, failed: summary.failed, skippedForReview: summary.skippedForReview, reviewDocumentIds: summary.reviewDocumentIds, errors: summary.errors },
     ipAddress: req.ip || '',
   });
-  res.json({ success: true, message: `${syncedCount} سند تجاری با موفقیت بررسی و سند دوبل آن‌ها صادر/به‌روزرسانی شد`, syncedCount });
+  const parts = [`${summary.created} سند حسابداری برای اسناد نهایی فاقد سند صادر شد`];
+  if (summary.failed > 0) parts.push(`${summary.failed} سند به دلیل خطا صادر نشد`);
+  if (summary.skippedForReview > 0) parts.push(`${summary.skippedForReview} سند دارای سند حسابداری بدون پیوند است و نیازمند بررسی حسابدار است`);
+  res.json({ success: summary.failed === 0, message: parts.join('؛ '), syncedCount: summary.created, ...summary });
 }));
 
 // ==========================================
@@ -1320,7 +1330,7 @@ router.get('/accounting/automation-status', authorizePermission('accounting.repo
            COUNT(DISTINCT CASE WHEN v.id IS NOT NULL THEN d.id END)::int AS with_voucher
     FROM documents d
     LEFT JOIN journal_vouchers v
-      ON v.reference_module = 'invoice' AND v.reference_id = d.id AND v.is_deleted = 0
+      ON v.source_document_id = d.id AND v.is_deleted = 0
     WHERE d.is_deleted = 0 AND d.status IN ('final', 'proforma')
     GROUP BY d.type
   `);

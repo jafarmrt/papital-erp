@@ -120,6 +120,13 @@
       "when": 1789920000000,
       "tag": "0016_outbox_completed_handlers",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790006400000,
+      "tag": "0017_journal_voucher_source_document",
+      "breakpoints": true
     }
   ]
 }

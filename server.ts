@@ -8,14 +8,12 @@ import { createApp, markStartupComplete } from './src/app.js';
 import { runMigrations } from './src/db/migrator.js';
 import { runSeedWithLock } from './src/db/seed.js';
 import { migratePlainPasswords } from './src/db/migratePlainPasswords.js';
-import { AccountingService } from './src/services/accounting.service.js';
 import { registerWorkflowListeners } from './src/services/workflow/workflowEventBus.js';
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
 import { OutboxService } from './src/services/events/outboxService.js';
 import { EventActionEngineService } from './src/services/events/eventActionEngineService.js';
 import { WebhookSubscriptionService } from './src/services/events/webhookSubscriptionService.js';
 import { WorkflowEngineService } from './src/services/workflow/workflowEngineService.js';
-import { KardexBackfillService } from './src/services/inventory/kardexBackfill.service.js';
 import { pool } from './src/db/drizzle.js';
 
 async function startServer() {
@@ -64,8 +62,9 @@ async function startServer() {
         await EventActionEngineService.seedDefaultRules();
         await WebhookSubscriptionService.seedDefaultSubscriptions();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
-        await AccountingService.syncAllInvoiceVouchers().catch((err: unknown) => logger.error('Error syncing invoice vouchers on start:', err));
-        await KardexBackfillService.syncMissingInitialTransactions().catch((err: unknown) => logger.error('Error backfilling missing kardex initial transactions on start:', err));
+        // v7.0.31 (TD-193 / audit P1-8): همگام‌سازی کامل اسناد حسابداری و پرکردن موجودی اولیه کاردکس از مسیر
+        // بوت حذف شدند (زمان آماده‌شدن Pod با رشد داده خطی بود و چند Pod همزمان اسناد تکراری می‌ساختند).
+        // اجرای دستی با قفل مشورتی: POST /api/accounting/quick-fix/sync-all-vouchers و POST /api/inventory/kardex-initial-backfill
         OutboxService.startOutboxWorker(3000);
         markStartupComplete();
         migrationSucceeded = true;

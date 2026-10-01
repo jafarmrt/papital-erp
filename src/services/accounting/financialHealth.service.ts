@@ -37,6 +37,7 @@ export class FinancialHealthService {
       abandonedDraftsRes,
       overdueChequesRes,
       bankMappingRes,
+      duplicateDocVouchersRes,
     ] = await Promise.all([
       // الف: آمار کل رکوردها
       orm.execute(sql`
@@ -124,10 +125,11 @@ export class FinancialHealthService {
           COALESCE(SUM(di.quantity * di.unit_price - di.discount), 0)::float AS total_amount
         FROM documents d
         LEFT JOIN document_items di ON di.document_id = d.id AND di.is_deleted = 0
-        LEFT JOIN journal_vouchers v ON v.reference_module = 'invoice' AND v.reference_id = d.id AND v.is_deleted = 0
+        -- v7.0.31 (TD-193): پیوند صریح سند حسابداری به سند انبار؛ انواع هم‌راستا با AUTO_VOUCHER_DOC_TYPES
+        LEFT JOIN journal_vouchers v ON v.source_document_id = d.id AND v.is_deleted = 0
         WHERE d.is_deleted = 0 
           AND d.status = 'final' 
-          AND d.type IN ('invoice', 'receipt', 'production_receipt', 'purchase', 'return') 
+          AND d.type IN ('invoice', 'receipt', 'production_receipt', 'purchase', 'remittance', 'waste', 'return') 
           AND v.id IS NULL
         GROUP BY d.id, d.type, d.ref_number, d.date, d.buyer_name, d.status
         ORDER BY d.id DESC
@@ -188,6 +190,33 @@ export class FinancialHealthService {
         LEFT JOIN accounts a ON b.account_id = a.id AND a.is_deleted = 0
         WHERE b.is_deleted = 0
         ORDER BY b.id ASC;
+      `),
+
+      // ی: v7.0.31 (TD-193 / P1-8) اسناد حسابداری تکراری قدیمی یک سند انبار/فاکتور (حاصل همزمانی بوت چند Pod)
+      // که پیوند source_document_id نگرفته‌اند و هنوز معکوس نشده‌اند — تصمیم با حسابدار است
+      orm.execute(sql`
+        SELECT
+          v.id,
+          v.voucher_number,
+          v.date,
+          v.status,
+          v.total_debit::float AS amount,
+          d.id AS doc_id,
+          d.type AS doc_type,
+          d.ref_number,
+          p.voucher_number AS primary_voucher_number
+        FROM journal_vouchers v
+        JOIN documents d ON d.id = v.reference_id AND v.reference_number = d.ref_number
+        JOIN journal_vouchers p ON p.source_document_id = d.id AND p.is_deleted = 0
+        WHERE v.is_deleted = 0
+          AND v.reference_module = 'invoice'
+          AND v.source_document_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM journal_vouchers r
+            WHERE r.reference_id = v.id AND r.reference_number = 'REV-V' || v.voucher_number AND r.is_deleted = 0
+          )
+        ORDER BY v.id DESC
+        LIMIT 50;
       `)
     ]);
 
@@ -675,6 +704,61 @@ export class FinancialHealthService {
           totalBankAccounts: bankRows.length,
           unlinkedCount: unlinkedBanks.length,
         },
+      });
+    }
+
+    // =========================================================================
+    // آزمون ۷: v7.0.31 (TD-193) اسناد حسابداری تکراری یک سند انبار/فاکتور (ثبت دوباره درآمد/هزینه)
+    // =========================================================================
+    const duplicateRows = (duplicateDocVouchersRes.rows || []) as Array<{
+      id: number;
+      voucher_number: number;
+      date: string;
+      status: string;
+      amount: number;
+      doc_id: number;
+      doc_type: string;
+      ref_number: string;
+      primary_voucher_number: number;
+    }>;
+
+    if (duplicateRows.length === 0) {
+      tests.push({
+        id: 'duplicate_document_vouchers',
+        category: 'vouchers',
+        title: 'یکتایی سند حسابداری اسناد انبار و فاکتورها',
+        description: 'هر سند انبار یا فاکتور نهایی باید دقیقاً یک سند حسابداری فعال داشته باشد',
+        status: 'healthy',
+        scoreImpact: 0,
+        count: 0,
+        message: 'هیچ سند حسابداری تکراری برای اسناد انبار و فاکتورها یافت نشد.',
+      });
+    } else {
+      const penalty = Math.min(25, duplicateRows.length * 5);
+      overallScore -= penalty;
+      tests.push({
+        id: 'duplicate_document_vouchers',
+        category: 'vouchers',
+        title: 'یکتایی سند حسابداری اسناد انبار و فاکتورها',
+        description: 'هر سند انبار یا فاکتور نهایی باید دقیقاً یک سند حسابداری فعال داشته باشد',
+        status: 'error',
+        scoreImpact: -penalty,
+        count: duplicateRows.length,
+        message: `${duplicateRows.length} سند حسابداری تکراری یافت شد که مبلغ سند انبار/فاکتور را دوباره در دفاتر ثبت کرده است؛ پس از بررسی، سند تکراری را با «صدور سند معکوس» خنثی کنید.`,
+        quickFixHint: 'بررسی و صدور سند معکوس برای اسناد حسابداری تکراری',
+        quickFixAction: 'open_vouchers',
+        items: duplicateRows.map((r) => ({
+          id: r.id,
+          code: `سند حسابداری #${r.voucher_number}`,
+          title: `سند تکراری برای سند شماره ${r.ref_number} (${r.doc_type})`,
+          subtitle: `سند اصلی: #${r.primary_voucher_number} | وضعیت سند تکراری: ${r.status} | تاریخ: ${String(r.date || '').substring(0, 10)}`,
+          amount: r.amount,
+          date: String(r.date || '').substring(0, 10),
+          linkType: 'voucher' as const,
+          linkId: r.id,
+          details: 'این سند پیش از v7.0.31 به‌صورت تکراری صادر شده است و به‌صورت خودکار تغییر داده نمی‌شود.',
+        })),
+        metrics: { duplicateVouchers: duplicateRows.length },
       });
     }
 

@@ -81,6 +81,8 @@
 - **Unified Facade:** `AccountingService` in `src/services/accounting.service.ts` binds all sub-services for 100% backwards compatibility.
 - **AccountNature Consistency:** Standard type is `AccountNature = 'debit' | 'credit' | 'both'`.
 - **Transactional Voucher Generation (DB-008):** `VoucherSync` calls triggered from documents/treasury MUST execute inside the same database transaction (`tx`).
+- **Document ↔ Voucher Link (TD-193, v7.0.31):** Vouchers issued by `VoucherSync` for a document carry `journal_vouchers.source_document_id` (unique among active vouchers, migration 0017). Always find a document's voucher by `source_document_id`, never by (`reference_module`, `reference_id`) — reversal/correction/repost vouchers (`REV-V…`, `CORR-V…`, `VOID-REPOST-V…`, `REPOST-V…`) keep `reference_module='invoice'` but store the ORIGINAL VOUCHER id in `reference_id`.
+- **No Bulk Accounting/Inventory Work at Boot (TD-193):** Server startup must not run bulk voucher sync or Kardex backfill. Bulk voucher issuance runs only manually via `VoucherSyncService.syncMissingDocumentVouchers` (missing vouchers only, never rewrites existing ones) under advisory lock 91001; Kardex initial backfill via `KardexBackfillService.runExclusive` under lock 91002 (`src/lib/advisoryLock.ts`).
 
 ## 12. Kardex Event Sourcing & Inventory Reconciliation
 - **Event-Driven Verification:** Calculate true stock balances from sequential `stock_movements` log.

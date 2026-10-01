@@ -7,7 +7,8 @@ import { InventoryIntegrityService } from '../services/inventory/inventoryIntegr
 import { ItemsService } from '../services/items.service.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { BadRequestError } from '../errors/customErrors.js';
+import { BadRequestError, ConflictError } from '../errors/customErrors.js';
+import { KardexBackfillService } from '../services/inventory/kardexBackfill.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
@@ -140,6 +141,33 @@ router.get(
     });
 
     res.json(report);
+  })
+);
+
+// POST /api/inventory/kardex-initial-backfill
+// v7.0.31 (TD-193 / audit P1-8): ثبت ردیف موجودی اولیه کاردکس برای کالاهای دارای موجودی بدون گردش ورودی؛
+// پیش‌تر در هر بوت هر Pod اجرا می‌شد. اکنون دستی و با قفل مشورتی (فقط یک اجرا در کل خوشه).
+router.post(
+  '/kardex-initial-backfill',
+  authorizePermission('inventory.reconcile'),
+  asyncHandler(async (req, res) => {
+    const outcome = await KardexBackfillService.runExclusive();
+    if (outcome.locked) {
+      throw new ConflictError('ثبت موجودی اولیه کاردکس هم‌اکنون توسط کاربر یا نمونه دیگری در حال اجراست.');
+    }
+    await logActivity({
+      req,
+      action: 'CREATE',
+      entity: 'انبارداری و موجودی',
+      entityId: 'KARDEX_INITIAL_BACKFILL',
+      description: `ثبت موجودی اولیه کاردکس: ${outcome.insertedRows} ردیف جدید، ${outcome.repairedRows} ردیف اصلاح بها (کالاهای بررسی‌شده: ${outcome.candidateItems})`,
+      details: outcome
+    });
+    res.json({
+      success: true,
+      message: `${outcome.insertedRows} ردیف موجودی اولیه در کاردکس ثبت و ${outcome.repairedRows} ردیف بدون بها اصلاح شد.`,
+      data: outcome
+    });
   })
 );
 

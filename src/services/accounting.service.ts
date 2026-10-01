@@ -97,7 +97,7 @@ export class AccountingService {
   static syncSalesInvoiceVoucher = VoucherSyncService.syncSalesInvoiceVoucher.bind(VoucherSyncService);
   static syncPurchaseInvoiceVoucher = VoucherSyncService.syncPurchaseInvoiceVoucher.bind(VoucherSyncService);
   static syncWarehouseDocumentVoucher = VoucherSyncService.syncWarehouseDocumentVoucher.bind(VoucherSyncService);
-  static syncAllInvoiceVouchers = VoucherSyncService.syncAllInvoiceVouchers.bind(VoucherSyncService);
+  static syncMissingDocumentVouchers = VoucherSyncService.syncMissingDocumentVouchers.bind(VoucherSyncService);
 
   // ================= Fiscal Year Closing =================
   static getFiscalYearClosingPreview = FiscalYearService.getFiscalYearClosingPreview.bind(FiscalYearService);

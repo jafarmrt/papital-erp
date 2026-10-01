@@ -91,6 +91,8 @@ export interface JournalVoucher {
   reference_id?: number | null;
   referenceNumber?: string | null;
   reference_number?: string | null;
+  /** v7.0.31 (TD-193): سند انبار/فاکتور مبدأ اسناد صادرشده توسط VoucherSync */
+  sourceDocumentId?: number | null;
   currency?: string | null;
   createdById?: number | null;
   created_by_id?: number | null;

@@ -11,7 +11,8 @@ import {
   appSettings,
   transactions
 } from '../../db/schema.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, isNull, gt, asc, notLike } from 'drizzle-orm';
+import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
@@ -21,6 +22,27 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import { toEnglishDigits } from '../../utils.js';
 import type { JournalVoucher } from '../../types.js';
+
+/** انواع اسنادی که VoucherSync برایشان سند حسابداری خودکار صادر می‌کند */
+export const AUTO_VOUCHER_DOC_TYPES = ['invoice', 'receipt', 'production_receipt', 'purchase', 'remittance', 'waste', 'return'] as const;
+
+/**
+ * پیشوند شماره مرجع اسنادی که از روی یک سند حسابداری دیگر ساخته می‌شوند (معکوس، اصلاحی، ابطال و ثبت مجدد)
+ * و reference_id آن‌ها شناسه سند حسابداری مبدأ است نه شناسه سند انبار (v7.0.31 / TD-193).
+ */
+export const DERIVED_VOUCHER_REF_PREFIXES = ['REV-V', 'RE-REV-V', 'CORR-V', 'VOID-REPOST-V', 'REPOST-V'] as const;
+
+export interface MissingDocumentVoucherSyncSummary {
+  /** true یعنی اجرای دیگری در خوشه در جریان است و این فراخوان کاری انجام نداد */
+  locked: boolean;
+  checked: number;
+  created: number;
+  failed: number;
+  /** اسنادی که سند حسابداری بدون پیوند (قدیمی/دستی) دارند و برای جلوگیری از ثبت دوباره به بررسی حسابدار سپرده شدند */
+  skippedForReview: number;
+  errors: Array<{ documentId: number; message: string }>;
+  reviewDocumentIds: number[];
+}
 
 export class VoucherSyncService {
   /**
@@ -355,10 +377,11 @@ export class VoucherSyncService {
       }
     }
 
+    // v7.0.31 (TD-193 / P1-8): یافتن سند حسابداری فاکتور فقط از پیوند صریح source_document_id؛
+    // reference_id در اسناد معکوس/اصلاحی شناسه سند حسابداری مبدأ است و با شناسه اسناد انبار تداخل دارد.
     const [existingVoucher] = await executor.select().from(journalVouchers)
       .where(and(
-        eq(journalVouchers.referenceModule, 'invoice'),
-        eq(journalVouchers.referenceId, docId),
+        eq(journalVouchers.sourceDocumentId, docId),
         eq(journalVouchers.isDeleted, 0)
       ));
 
@@ -383,6 +406,7 @@ export class VoucherSyncService {
         referenceModule: 'invoice',
         referenceId: docId,
         referenceNumber: doc.refNumber,
+        sourceDocumentId: docId,
         currency: doc.currency || 'IRR',
         userId: options?.userId,
         username: options?.username,
@@ -615,10 +639,11 @@ export class VoucherSyncService {
       ? `ثبت رسید تولید و تحویل محصول نهایی شماره ${doc.refNumber}${matchedProjectName ? ` - پروژه: ${matchedProjectName}` : ''}`
       : `ثبت فاکتور خرید / رسید ورود شماره ${doc.refNumber} - تامین‌کننده: ${doc.buyerName || 'تامین‌کننده'}`;
 
+    // v7.0.31 (TD-193 / P1-8): یافتن سند حسابداری فاکتور فقط از پیوند صریح source_document_id؛
+    // reference_id در اسناد معکوس/اصلاحی شناسه سند حسابداری مبدأ است و با شناسه اسناد انبار تداخل دارد.
     const [existingVoucher] = await executor.select().from(journalVouchers)
       .where(and(
-        eq(journalVouchers.referenceModule, 'invoice'),
-        eq(journalVouchers.referenceId, docId),
+        eq(journalVouchers.sourceDocumentId, docId),
         eq(journalVouchers.isDeleted, 0)
       ));
 
@@ -643,6 +668,7 @@ export class VoucherSyncService {
         referenceModule: 'invoice',
         referenceId: docId,
         referenceNumber: doc.refNumber,
+        sourceDocumentId: docId,
         currency: doc.currency || 'IRR',
         userId: options?.userId,
         username: options?.username,
@@ -1074,10 +1100,11 @@ export class VoucherSyncService {
       return null;
     }
 
+    // v7.0.31 (TD-193 / P1-8): یافتن سند حسابداری فاکتور فقط از پیوند صریح source_document_id؛
+    // reference_id در اسناد معکوس/اصلاحی شناسه سند حسابداری مبدأ است و با شناسه اسناد انبار تداخل دارد.
     const [existingVoucher] = await executor.select().from(journalVouchers)
       .where(and(
-        eq(journalVouchers.referenceModule, 'invoice'),
-        eq(journalVouchers.referenceId, docId),
+        eq(journalVouchers.sourceDocumentId, docId),
         eq(journalVouchers.isDeleted, 0)
       ));
 
@@ -1102,6 +1129,7 @@ export class VoucherSyncService {
         referenceModule: 'invoice',
         referenceId: docId,
         referenceNumber: doc.refNumber,
+        sourceDocumentId: docId,
         currency: doc.currency || 'IRR',
         userId: options?.userId,
         username: options?.username,
@@ -1138,8 +1166,7 @@ export class VoucherSyncService {
 
     const existing = await executor.select().from(journalVouchers)
       .where(and(
-        eq(journalVouchers.referenceModule, 'invoice'),
-        eq(journalVouchers.referenceId, documentId),
+        eq(journalVouchers.sourceDocumentId, documentId),
         eq(journalVouchers.isDeleted, 0)
       ));
     if (existing.length > 0) return VoucherService.getJournalVoucherById(existing[0].id, tx);
@@ -1335,38 +1362,90 @@ export class VoucherSyncService {
   }
 
   /**
-   * Sync all final sales & purchase invoices to update double-entry vouchers
+   * v7.0.31 (TD-193 / audit P1-8): جایگزین syncAllInvoiceVouchers که در هر بوت هر Pod روی کل تاریخ اسناد
+   * قطعی حلقه می‌زد و اسناد پیش‌نویس موجود را بی‌صدا بازنویسی می‌کرد. اکنون (با تصمیم مالک محصول) فقط به‌صورت
+   * دستی اجرا می‌شود، فقط برای اسناد قطعی فاقد سند حسابداری سند می‌سازد و هیچ سند موجودی را تغییر نمی‌دهد؛
+   * دسته‌ای، هر سند در تراکنش جدا تحت قفل سطری سند، و با قفل مشورتی تا در کل خوشه فقط یک اجرا فعال باشد.
    */
-  static async syncAllInvoiceVouchers(tx?: DbExecutor): Promise<number> {
-    try {
-      const executor = tx || orm;
-      const finalDocs = await executor.select({ id: documents.id, type: documents.type })
-        .from(documents)
-        .where(and(
-          inArray(documents.type, ['invoice', 'receipt', 'remittance', 'waste', 'return']),
-          eq(documents.status, 'final'),
-          eq(documents.isDeleted, 0)
-        ));
-      
-      let syncedCount = 0;
-      for (const d of finalDocs) {
-        try {
-          if (d.type === 'invoice') {
-            await this.syncSalesInvoiceVoucher(d.id, undefined, tx);
-          } else if (d.type === 'receipt' || d.type === 'production_receipt' || d.type === 'purchase') {
-            await this.syncPurchaseInvoiceVoucher(d.id, undefined, tx);
-          } else if (['remittance', 'waste', 'return'].includes(d.type)) {
-            await this.syncWarehouseDocumentVoucher(d.id, undefined, tx);
+  static async syncMissingDocumentVouchers(options?: {
+    batchSize?: number;
+    userId?: number;
+    username?: string;
+  }): Promise<MissingDocumentVoucherSyncSummary> {
+    const batchSize = Math.min(1000, Math.max(1, Math.floor(Number(options?.batchSize) || 200)));
+    const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.DOCUMENT_VOUCHER_SYNC, async () => {
+      const summary: MissingDocumentVoucherSyncSummary = {
+        locked: false, checked: 0, created: 0, failed: 0, skippedForReview: 0, errors: [], reviewDocumentIds: [],
+      };
+      let lastId = 0;
+      for (;;) {
+        const batch = await orm.select({ id: documents.id })
+          .from(documents)
+          .leftJoin(journalVouchers, and(
+            eq(journalVouchers.sourceDocumentId, documents.id),
+            eq(journalVouchers.isDeleted, 0)
+          ))
+          .where(and(
+            inArray(documents.type, [...AUTO_VOUCHER_DOC_TYPES]),
+            eq(documents.status, 'final'),
+            eq(documents.isDeleted, 0),
+            isNull(journalVouchers.id),
+            gt(documents.id, lastId)
+          ))
+          .orderBy(asc(documents.id))
+          .limit(batchSize);
+        if (batch.length === 0) break;
+
+        for (const row of batch) {
+          lastId = row.id;
+          summary.checked++;
+          try {
+            const result = await orm.transaction(async (tx) => {
+              // قفل سطری سند: با نهایی‌سازی/حذف همزمان همین سند سریال می‌شود
+              const [doc] = await tx.select({ id: documents.id, status: documents.status, isDeleted: documents.isDeleted, refNumber: documents.refNumber })
+                .from(documents).where(eq(documents.id, row.id)).for('update');
+              if (!doc || doc.isDeleted === 1 || doc.status !== 'final') return 'skipped' as const;
+
+              const [linked] = await tx.select({ id: journalVouchers.id }).from(journalVouchers)
+                .where(and(eq(journalVouchers.sourceDocumentId, row.id), eq(journalVouchers.isDeleted, 0)));
+              if (linked) return 'skipped' as const;
+
+              // سند قدیمی بدون پیوند (مثلاً سند دستی با ماژول invoice): برای جلوگیری از ثبت دوباره، فقط گزارش
+              const legacy = await tx.select({ id: journalVouchers.id }).from(journalVouchers)
+                .where(and(
+                  eq(journalVouchers.referenceModule, 'invoice'),
+                  eq(journalVouchers.referenceId, row.id),
+                  eq(journalVouchers.isDeleted, 0),
+                  isNull(journalVouchers.sourceDocumentId),
+                  ...DERIVED_VOUCHER_REF_PREFIXES.map(prefix => notLike(journalVouchers.referenceNumber, `${prefix}%`))
+                ))
+                .limit(1);
+              if (legacy.length > 0) return 'review' as const;
+
+              const voucher = await this.autoCreateVoucherForInvoice(row.id, options?.userId, options?.username, tx, { strict: true });
+              return voucher ? 'created' as const : 'skipped' as const;
+            });
+            if (result === 'created') summary.created++;
+            if (result === 'review') {
+              summary.skippedForReview++;
+              if (summary.reviewDocumentIds.length < 200) summary.reviewDocumentIds.push(row.id);
+            }
+          } catch (docErr) {
+            summary.failed++;
+            const message = docErr instanceof Error ? docErr.message : String(docErr);
+            if (summary.errors.length < 50) summary.errors.push({ documentId: row.id, message });
+            logger.warn({ message: `[VoucherSync] Could not issue voucher for document ${row.id}`, error: message });
           }
-          syncedCount++;
-        } catch (docErr) {
-          logger.warn({ message: `[VoucherSync] Skipped doc ${d.id}`, error: docErr });
         }
+        if (batch.length < batchSize) break;
       }
-      return syncedCount;
-    } catch (err: unknown) {
-      logger.error({ message: 'Error syncing all invoice vouchers', error: err instanceof Error ? err.message : String(err) });
-      return 0;
+      return summary;
+    });
+
+    if (!outcome.acquired) {
+      return { locked: true, checked: 0, created: 0, failed: 0, skippedForReview: 0, errors: [], reviewDocumentIds: [] };
     }
+    logger.info({ message: `[VoucherSync] Missing document vouchers: checked=${outcome.result.checked} created=${outcome.result.created} failed=${outcome.result.failed} review=${outcome.result.skippedForReview}` });
+    return outcome.result;
   }
 }
