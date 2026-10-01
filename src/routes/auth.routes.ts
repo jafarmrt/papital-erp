@@ -12,87 +12,20 @@ import { logger } from '../middleware/logger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError, BadRequestError, ConflictError, ValidationError } from '../errors/customErrors.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
+import {
+  checkAccountLockout,
+  recordFailedAttempt,
+  resetFailedAttempts,
+  verifyPasswordConstantWork,
+  lockoutMessage,
+  GENERIC_LOGIN_FAILURE_MESSAGE
+} from '../services/auth/loginSecurity.service.js';
 
 const router = Router();
 
-const LOCKOUT_THRESHOLD = 5;
-const LOCKOUT_DURATION_MIN = 30;
-
-export async function checkAccountLockout(username: string): Promise<{ isLocked: boolean; remainingMinutes?: number }> {
-  try {
-    const [u] = await orm.select().from(users).where(eq(users.username, username)).limit(1);
-    if (!u) return { isLocked: false };
-    if (u.lockedUntil) {
-      const lockDate = new Date(u.lockedUntil);
-      const now = new Date();
-      if (lockDate > now) {
-        const remainingMs = lockDate.getTime() - now.getTime();
-        const remainingMinutes = Math.max(1, Math.ceil(remainingMs / (60 * 1000)));
-        return { isLocked: true, remainingMinutes };
-      }
-    }
-    return { isLocked: false };
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Account Lockout Check Error] ${errMsg}`);
-    return { isLocked: false };
-  }
-}
-
-export async function recordFailedAttempt(username: string): Promise<{ locked: boolean; remainingAttempts: number; remainingMinutes?: number }> {
-  try {
-    const [u] = await orm.select().from(users).where(eq(users.username, username)).limit(1);
-    if (!u) return { locked: false, remainingAttempts: 0 };
-    
-    // If account was already locked and lock expired, reset count to 0 first
-    let currentCount = u.failedLoginCount || 0;
-    if (u.lockedUntil && new Date(u.lockedUntil) <= new Date()) {
-      currentCount = 0;
-    }
-    
-    const newFailedCount = currentCount + 1;
-    const isLocked = newFailedCount >= LOCKOUT_THRESHOLD;
-    const lockedUntil = isLocked 
-      ? new Date(Date.now() + LOCKOUT_DURATION_MIN * 60 * 1000).toISOString()
-      : null;
-    
-    await orm.update(users).set({ 
-      failedLoginCount: newFailedCount,
-      lockedUntil: lockedUntil 
-    }).where(eq(users.id, u.id));
-
-    if (isLocked) {
-      logger.warn(`[Account Lockout] User ${username} (ID ${u.id}) locked out for ${LOCKOUT_DURATION_MIN} minutes after ${newFailedCount} failed attempts`);
-      return { locked: true, remainingAttempts: 0, remainingMinutes: LOCKOUT_DURATION_MIN };
-    }
-
-    const remaining = Math.max(0, LOCKOUT_THRESHOLD - newFailedCount);
-    return { locked: false, remainingAttempts: remaining };
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Record Failed Attempt Error] ${errMsg}`);
-    return { locked: false, remainingAttempts: 0 };
-  }
-}
-
-export async function resetFailedAttempts(userIdOrUsername: number | string): Promise<void> {
-  try {
-    if (typeof userIdOrUsername === 'number') {
-      await orm.update(users).set({ 
-        failedLoginCount: 0,
-        lockedUntil: null 
-      }).where(eq(users.id, userIdOrUsername));
-    } else {
-      await orm.update(users).set({ 
-        failedLoginCount: 0,
-        lockedUntil: null 
-      }).where(eq(users.username, String(userIdOrUsername).trim()));
-    }
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Reset Failed Attempts Error] ${errMsg}`);
-  }
-}
+// v7.0.28 (TD-186 / audit P1-5): منطق قفل حساب به سرویس loginSecurity منتقل شد (RULE 01)؛
+// توابع برای سازگاری با تست‌ها و فراخوان‌های موجود دوباره صادر می‌شوند.
+export { checkAccountLockout, recordFailedAttempt, resetFailedAttempts } from '../services/auth/loginSecurity.service.js';
 
 const loginSchema = z.object({
   body: z.object({
@@ -229,7 +162,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
       throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
     }
     const tUsername = (username || '').trim();
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = await bcrypt.hash(password, 10);
 
     let logoPath = logo || '';
     // V3.1.11: لوگوی شرکت مستقیماً به‌صورت Data URL متنی در دیتابیس (appSettings) ذخیره می‌شود
@@ -295,170 +228,101 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   const tUsername = (username || '').trim();
   const clientIp = extractClientIp(req);
   const userAgent = (req.headers['user-agent'] as string) || '';
-  
-  // Check account lockout status (SEC-009)
+
+  // v7.0.28 (TD-186 / audit P1-5): پاسخ‌های یکسان برای کاربر موجود/ناموجود، قفل تدریجی و bcrypt غیرهمگام.
+  // دلیل واقعی شکست فقط در لاگ ممیزی سمت سرور ثبت می‌شود.
+
+  // 1. Progressive lockout (applies equally to unknown usernames)
   const lockout = await checkAccountLockout(tUsername);
   if (lockout.isLocked) {
-    logger.warn(`[Login Rejected] Account ${tUsername} is locked for ${lockout.remainingMinutes} more minutes`);
-    
+    const minutes = lockout.remainingMinutes || 1;
+    logger.warn(`[Login Rejected] Account ${tUsername} is locked for ${minutes} more minute(s)`);
     await logActivity({
       username: tUsername,
       action: 'LOGIN_FAILED',
       entity: 'احراز هویت',
-      description: `تلاش ناموفق برای ورود با حساب قفل‌شده «${tUsername}» (${lockout.remainingMinutes} دقیقه قفل باقی‌مانده)`,
+      description: `تلاش ناموفق برای ورود با نام کاربری مسدود موقت «${tUsername}» (${minutes} دقیقه باقی‌مانده)`,
       ipAddress: clientIp,
-      details: {
-        reason: 'حساب کاربری به دلیل تلاش‌های ناموفق مکرر قفل است',
-        remainingMinutes: lockout.remainingMinutes,
-        status: 'account_locked',
-        method: 'نام کاربری و رمز عبور',
-        userAgent
-      },
+      details: { reason: 'حساب به‌طور موقت مسدود است', remainingMinutes: minutes, status: 'account_locked', method: 'نام کاربری و رمز عبور', userAgent },
       req
     });
-
-    return res.status(429).json({ 
-      error: `حساب کاربری به دلیل تلاش‌های ناموفق مکرر قفل شده است. لطفاً ${lockout.remainingMinutes} دقیقه دیگر تلاش فرمایید.`,
-      locked: true,
-      remainingMinutes: lockout.remainingMinutes
-    });
+    return res.status(429).json({ error: lockoutMessage(minutes), locked: true, remainingMinutes: minutes });
   }
 
   const [user] = await orm.select().from(users).where(eq(users.username, tUsername)).limit(1);
+  const activeUser = user && user.isDeleted !== 1 ? user : undefined;
 
-  // V9-2.2: کاربران حذف‌شده (soft-delete) امکان ورود ندارند
-  if (user && user.isDeleted === 1) {
+  // 2. Same bcrypt work for existing, deleted and unknown usernames (no timing oracle)
+  const isMatch = await verifyPasswordConstantWork(password, activeUser?.password);
+
+  if (activeUser && isMatch) {
+    await resetFailedAttempts(activeUser.id);
+
+    const csrfToken = generateCsrfToken();
+    const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role, csrfToken, tokenVersion: activeUser.tokenVersion || 0 });
+    const { password: _, ...userWithoutPassword } = activeUser;
+
+    // Set secure HttpOnly cookie
+    res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
+
     await logActivity({
-      userId: user.id,
-      username: user.username,
-      userFullName: user.fullName || user.username,
-      action: 'LOGIN_FAILED',
+      userId: activeUser.id,
+      username: activeUser.username,
+      userFullName: activeUser.fullName || activeUser.username,
+      action: 'LOGIN',
       entity: 'احراز هویت',
-      entityId: user.id,
-      description: `تلاش ناموفق برای ورود به حساب کاربری غیرفعال یا حذف‌شده «${user.username}»`,
+      entityId: activeUser.id,
+      description: `ورود موفق کاربر ${activeUser.fullName || activeUser.username} به سامانه`,
       ipAddress: clientIp,
-      details: {
-        reason: 'حساب کاربری غیرفعال یا حذف شده است',
-        status: 'user_deleted',
-        method: 'نام کاربری و رمز عبور',
-        userAgent
-      },
-      req
-    });
-    return res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است' });
-  }
-
-  if (user) {
-    let isMatch = false;
-    const isBcryptHash = user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$'));
-    
-    if (isBcryptHash) {
-      isMatch = bcrypt.compareSync(password, user.password);
-    } else {
-      // Plain-text passwords are strictly disallowed for login (SEC-008). 
-      // All passwords must be bcrypt hashed via startup migration or user reset.
-      isMatch = false;
-    }
-
-    if (isMatch) { 
-      // Reset failed login attempts on successful authentication
-      await resetFailedAttempts(user.id);
-
-      const csrfToken = generateCsrfToken();
-      const token = generateToken({ id: user.id, username: user.username, role: user.role, csrfToken, tokenVersion: user.tokenVersion || 0 });
-      const { password: _, ...userWithoutPassword } = user;
-      
-      // Set secure HttpOnly cookie
-      res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
-
-      await logActivity({
-        userId: user.id,
-        username: user.username,
-        userFullName: user.fullName || user.username,
-        action: 'LOGIN',
-        entity: 'احراز هویت',
-        entityId: user.id,
-        description: `ورود موفق کاربر ${user.fullName || user.username} به سامانه`,
-        ipAddress: clientIp,
-        details: {
-          role: user.role,
-          method: 'نام کاربری و رمز عبور',
-          status: 'success',
-          userAgent
-        },
-        req
-      });
-
-      res.json({ 
-        success: true, 
-        user: { 
-          ...userWithoutPassword, 
-          full_name: user.fullName || user.username, 
-          avatar_url: user.avatarUrl || '',
-          mustResetPassword: Boolean(user.mustResetPassword),
-          must_reset_password: Boolean(user.mustResetPassword)
-        }, 
-        // v7.0.27 (TD-185 / audit P1-4): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
-        ...(shouldExposeTokenInBody() ? { token } : {}),
-        csrfToken
-      });
-    } else {
-      const failStatus = await recordFailedAttempt(tUsername);
-
-      await logActivity({
-        userId: user.id,
-        username: user.username,
-        userFullName: user.fullName || user.username,
-        action: 'LOGIN_FAILED',
-        entity: 'احراز هویت',
-        entityId: user.id,
-        description: failStatus.locked
-          ? `قفل شدن حساب کاربری «${user.username}» پس از ۵ بار تلاش ناموفق پیاپی برای ورود`
-          : `تلاش ناموفق برای ورود با رمز عبور اشتباه توسط کاربر «${user.username}» (${failStatus.remainingAttempts} تلاش باقی‌مانده)`,
-        ipAddress: clientIp,
-        details: {
-          reason: 'رمز عبور اشتباه است',
-          remainingAttempts: failStatus.remainingAttempts,
-          isLocked: failStatus.locked,
-          remainingMinutes: failStatus.remainingMinutes,
-          status: failStatus.locked ? 'account_locked_now' : 'wrong_password',
-          method: 'نام کاربری و رمز عبور',
-          userAgent
-        },
-        req
-      });
-
-      if (failStatus.locked) {
-        return res.status(429).json({ 
-          error: `حساب کاربری شما پس از ۵ تلاش ناموفق به مدت ${failStatus.remainingMinutes} دقیقه قفل شد.`,
-          locked: true,
-          remainingMinutes: failStatus.remainingMinutes
-        });
-      }
-      res.status(401).json({ 
-        error: `نام کاربری یا رمز عبور اشتباه است.${failStatus.remainingAttempts > 0 ? ` (${failStatus.remainingAttempts} تلاش باقی‌مانده)` : ''}`,
-        remainingAttempts: failStatus.remainingAttempts
-      });
-    }
-  } else {
-    await logActivity({
-      username: tUsername,
-      action: 'LOGIN_FAILED',
-      entity: 'احراز هویت',
-      description: `تلاش ناموفق برای ورود با نام کاربری ناموجود «${tUsername}»`,
-      ipAddress: clientIp,
-      details: {
-        reason: 'نام کاربری در سامانه یافت نشد',
-        attemptedUsername: tUsername,
-        status: 'user_not_found',
-        method: 'نام کاربری و رمز عبور',
-        userAgent
-      },
+      details: { role: activeUser.role, method: 'نام کاربری و رمز عبور', status: 'success', userAgent },
       req
     });
 
-    res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است' });
+    return res.json({
+      success: true,
+      user: {
+        ...userWithoutPassword,
+        full_name: activeUser.fullName || activeUser.username,
+        avatar_url: activeUser.avatarUrl || '',
+        mustResetPassword: Boolean(activeUser.mustResetPassword),
+        must_reset_password: Boolean(activeUser.mustResetPassword)
+      },
+      // v7.0.27 (TD-185 / audit P1-4): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
+      ...(shouldExposeTokenInBody() ? { token } : {}),
+      csrfToken
+    });
   }
+
+  // 3. Failure: deleted accounts do not count towards a lock; existing and unknown usernames do
+  const failStatus = user && user.isDeleted === 1
+    ? { locked: false, remainingAttempts: 0, remainingMinutes: undefined }
+    : await recordFailedAttempt(tUsername);
+  const internalReason = !user ? 'user_not_found' : user.isDeleted === 1 ? 'user_deleted' : (failStatus.locked ? 'account_locked_now' : 'wrong_password');
+
+  await logActivity({
+    userId: user?.id,
+    username: user?.username || tUsername,
+    userFullName: user ? (user.fullName || user.username) : undefined,
+    action: 'LOGIN_FAILED',
+    entity: 'احراز هویت',
+    entityId: user?.id,
+    description: `تلاش ناموفق برای ورود با نام کاربری «${tUsername}» (${internalReason})`,
+    ipAddress: clientIp,
+    details: {
+      status: internalReason,
+      isLocked: failStatus.locked,
+      remainingMinutes: failStatus.remainingMinutes,
+      method: 'نام کاربری و رمز عبور',
+      userAgent
+    },
+    req
+  });
+
+  if (failStatus.locked) {
+    const minutes = failStatus.remainingMinutes || 1;
+    return res.status(429).json({ error: lockoutMessage(minutes), locked: true, remainingMinutes: minutes });
+  }
+  return res.status(401).json({ error: GENERIC_LOGIN_FAILURE_MESSAGE });
 }));
 
 // Logout endpoint - Clears the HttpOnly auth cookie

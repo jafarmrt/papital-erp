@@ -658,10 +658,20 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
         throw new Error(`تعداد تلاش‌های باقی‌مانده پس از ۴ خطا باید ۱ باشد، مقدار دریافت شده: ${lastFail.remainingAttempts}`);
       }
 
-      // 3. 5th attempt -> account must be locked for 30 minutes
+      // 3. 5th attempt -> account locked (v7.0.28 / TD-186: progressive lock — 1 minute first)
       const fifthFail = await recordFailedAttempt(testUsername);
-      if (!fifthFail.locked || !fifthFail.remainingMinutes || fifthFail.remainingMinutes <= 0) {
-        throw new Error('تلاش پنجم باید حساب کاربری را قفل کند (30 دقیقه)');
+      if (!fifthFail.locked || fifthFail.remainingMinutes !== 1) {
+        throw new Error(`تلاش پنجم باید حساب کاربری را ۱ دقیقه قفل کند (مقدار: ${fifthFail.remainingMinutes})`);
+      }
+
+      // 3.1 Each further failure doubles the lock (2, 4, ... capped at 30 minutes)
+      const sixthFail = await recordFailedAttempt(testUsername);
+      if (!sixthFail.locked || sixthFail.remainingMinutes !== 2) {
+        throw new Error(`تلاش ششم باید قفل را به ۲ دقیقه افزایش دهد (مقدار: ${sixthFail.remainingMinutes})`);
+      }
+      const { lockMinutesForFailureCount } = await import('../../services/auth/loginSecurity.service.js');
+      if (lockMinutesForFailureCount(4) !== 0 || lockMinutesForFailureCount(7) !== 4 || lockMinutesForFailureCount(20) !== 30) {
+        throw new Error('جدول قفل تدریجی باید ۰، ۴ و حداکثر ۳۰ دقیقه را برای ۴، ۷ و ۲۰ تلاش ناموفق برگرداند.');
       }
 
       // 4. Verify lockout check reports locked
@@ -683,17 +693,17 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
 
     results.push(makeTestCase({
       id: 'sec_rate_limiting_account_lockout',
-      name: 'مکانیزم قفل حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting (SEC-009)',
+      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting (SEC-009 / TD-186)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
       durationMs: Date.now() - t13Start,
-      details: 'قفل‌شدن خودکار پس از ۵ خطای متوالی به مدت ۳۰ دقیقه و بازیابی پس از ورود موفق/ریست تایید گردید.'
+      details: 'قفل تدریجی (۱، ۲، ... حداکثر ۳۰ دقیقه) پس از ۵ خطای متوالی و بازیابی پس از ورود موفق/ریست تایید گردید.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_rate_limiting_account_lockout',
-      name: 'مکانیزم قفل حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting (SEC-009)',
+      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting (SEC-009 / TD-186)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,

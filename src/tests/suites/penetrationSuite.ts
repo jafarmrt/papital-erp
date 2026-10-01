@@ -459,6 +459,51 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     });
 
   // ===============================================================
+  // v7.0.28 (TD-186 / audit P1-5): login failures must not reveal whether a username exists
+  // ===============================================================
+  await runCase(results, 'pen_login_uniform_responses', 'login_uniform_responses',
+    'پن‌تست: پاسخ ورود ناموفق برای کاربر موجود و ناموجود یکسان باشد و قفل تدریجی برای هر دو اعمال شود',
+    async () => {
+      const { resetLoginRateLimiter } = await import('../../app.js');
+      const { resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
+      const realUser = `pen_uni_${Date.now()}`;
+      const ghostUser = `pen_uni_ghost_${Date.now()}`;
+      await orm.insert(users).values({ username: realUser, password: TEST_PASSWORD_HASH, fullName: 'پروب پاسخ یکسان', role: 'operator', avatarUrl: '' });
+      resetLoginRateLimiter();
+      try {
+        const attempt = (username: string, ip: string) => request(app).post('/api/auth/login')
+          .set('X-Forwarded-For', ip).send({ username, password: 'definitely-wrong-pass' });
+
+        // 1. First failure: identical status and body for an existing and an unknown username
+        const realFirst = await attempt(realUser, '198.51.100.101');
+        const ghostFirst = await attempt(ghostUser, '198.51.100.102');
+        if (realFirst.status !== 401 || ghostFirst.status !== 401 || JSON.stringify(realFirst.body) !== JSON.stringify(ghostFirst.body)) {
+          throw new Error(`پاسخ ورود ناموفق باید یکسان باشد: ${realFirst.status} ${JSON.stringify(realFirst.body)} / ${ghostFirst.status} ${JSON.stringify(ghostFirst.body)}`);
+        }
+        if (/تلاش باقی/.test(String(realFirst.body?.error || ''))) {
+          throw new Error('پیام خطا نباید تعداد تلاش‌های باقی‌مانده را افشا کند.');
+        }
+
+        // 2. After the threshold both get the same 429 progressive lock (1 minute)
+        let realLocked: any = null;
+        let ghostLocked: any = null;
+        for (let i = 0; i < 4; i++) {
+          realLocked = await attempt(realUser, `198.51.100.${110 + i}`);
+          ghostLocked = await attempt(ghostUser, `198.51.100.${120 + i}`);
+        }
+        if (realLocked?.status !== 429 || ghostLocked?.status !== 429 || realLocked.body?.remainingMinutes !== 1 || ghostLocked.body?.remainingMinutes !== 1
+          || realLocked.body?.error !== ghostLocked.body?.error) {
+          throw new Error(`پس از ۵ تلاش ناموفق هر دو باید قفل یکسان ۱ دقیقه‌ای بگیرند: ${realLocked?.status}/${ghostLocked?.status} ${JSON.stringify(realLocked?.body)} ${JSON.stringify(ghostLocked?.body)}`);
+        }
+        return 'پیام و وضعیت خطای ورود برای کاربر موجود و ناموجود یکسان بود و پس از ۵ تلاش هر دو قفل تدریجی یکسان ۱ دقیقه‌ای گرفتند.';
+      } finally {
+        await orm.delete(users).where(eq(users.username, realUser));
+        resetPhantomLockouts();
+        resetLoginRateLimiter();
+      }
+    });
+
+  // ===============================================================
   // Path Traversal — /uploads must never escape its root
   // ===============================================================
   await runCase(results, 'pen_path_traversal_uploads', 'path_traversal_blocked',

@@ -275,12 +275,12 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
         return res.status(400).json({ error: 'جهت تغییر کلمه عبور، وارد کردن کلمه عبور فعلی الزامی است' });
       }
       const isBcrypt = u.password && (u.password.startsWith('$2a$') || u.password.startsWith('$2b$') || u.password.startsWith('$2y$'));
-      const isMatch = isBcrypt ? bcrypt.compareSync(current_password, u.password) : false;
+      const isMatch = isBcrypt ? await bcrypt.compare(current_password, u.password) : false;
       if (!isMatch) {
         return res.status(400).json({ error: 'کلمه عبور فعلی اشتباه است' });
       }
-      const salt = bcrypt.genSaltSync(10);
-      updateData.password = bcrypt.hashSync(new_password, salt);
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(new_password, salt);
       updateData.mustResetPassword = 0;
       // V3.0.6 (BUG-08): با تغییر کلمه عبور، تمام sessionهای قبلی (توکن‌های صادرشده)
       // باطل می‌شوند تا توکن‌های سرقت‌شده پس از تغییر رمز نیز بی‌اعتبار باشند.
@@ -563,8 +563,8 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     if (existingUser) {
       if (existingUser.isDeleted === 1) {
         // حساب کاربری قبلاً حذف نرم شده بوده — فعال‌سازی مجدد با مشخصات جدید بدون خطای یکتایی
-        const salt = bcrypt.genSaltSync(10);
-        const hashedPassword = bcrypt.hashSync(password, salt);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
         await orm.update(users).set({
           password: hashedPassword,
@@ -608,8 +608,8 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
       }
     }
 
-    const salt = bcrypt.genSaltSync(10);
-    const hashedPassword = bcrypt.hashSync(password, salt);
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const [info] = await orm.insert(users).values({
       username: tUsername,
@@ -681,8 +681,8 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     const roleChanged = Boolean(role && role !== prevUser.role);
 
     if (passwordChanged) {
-      const salt = bcrypt.genSaltSync(10);
-      updateData.password = bcrypt.hashSync(password, salt);
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
       updateData.mustResetPassword = 0;
     }
 
