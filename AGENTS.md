@@ -88,6 +88,7 @@
 ## 12. Kardex Event Sourcing & Inventory Reconciliation
 - **Event-Driven Verification:** Calculate true stock balances from sequential `stock_movements` log.
 - **Three-Way Sync:** Keep global `current_stock`, warehouse location JSONB `stocks`, and Kardex ledger fully aligned.
+- **Warehouse Stock Reconciliation (TD-200, v7.0.33):** `WarehouseStockReconciliationService` compares `item_warehouse_stocks` with the Kardex ledger (active rows, excluding reversals of soft-deleted rows). Repairs are manual only, dry-run by default, correct quantities only (never WAC), never auto-adjust negative ledger balances or items with unresolvable Kardex locations, and log every change/refusal to `inventory_reconciliation_anomalies`. Data-fixing migrations must never clamp or overwrite silently: add (`existing + EXCLUDED`) and record anomalies.
 
 ## 13. Scalable Changelog Architecture
 - **Version Partitioning:** Changelogs are split by major version in `src/data/changelogs/` (`0.ts` … `6.ts` are archives; `7.ts` is active).

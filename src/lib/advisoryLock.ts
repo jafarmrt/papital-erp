@@ -7,6 +7,7 @@ import { pool } from '../db/drizzle.js';
 export const ADVISORY_LOCK_KEYS = {
   DOCUMENT_VOUCHER_SYNC: 91001,
   KARDEX_INITIAL_BACKFILL: 91002,
+  WAREHOUSE_STOCK_REPAIR: 91003,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

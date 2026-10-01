@@ -15,6 +15,7 @@ import { formatPersianDate, formatPersianNumber, parseCleanNumber } from '../uti
 
 // Subcomponents
 import { Inventory3WayIntegrityTab } from '../components/inventory/Inventory3WayIntegrityTab';
+import { WarehouseStockReconciliationPanel } from '../components/inventory/WarehouseStockReconciliationPanel';
 import { PhysicalAuditSheetTab } from '../components/inventory/PhysicalAuditSheetTab';
 import { PastAuditReportsTab } from '../components/inventory/PastAuditReportsTab';
 import { WarehouseTransfersListTab } from '../components/inventory/WarehouseTransfersListTab';
@@ -497,6 +498,11 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
           onOpenKardexModal={(itemId) => setKardexItemId(itemId)}
           onExportExcel={handleExportIntegrityExcel}
         />
+      )}
+      {activeTab === 'integrity' && (
+        <div className="mt-6">
+          <WarehouseStockReconciliationPanel />
+        </div>
       )}
 
       {activeTab === 'new_audit' && (

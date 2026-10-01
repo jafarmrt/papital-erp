@@ -9,6 +9,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { BadRequestError, ConflictError } from '../errors/customErrors.js';
 import { KardexBackfillService } from '../services/inventory/kardexBackfill.service.js';
+import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
@@ -141,6 +142,67 @@ router.get(
     });
 
     res.json(report);
+  })
+);
+
+// v7.0.33 (TD-200 / audit P1-9): گزارش مغایرت موجودی تفکیکی انبارها با کاردکس و ترمیم دستی
+export const warehouseStockReconQuerySchema = z.object({
+  query: z.object({
+    includeHealthy: z.enum(['true', 'false']).optional(),
+  }).passthrough()
+});
+
+export const warehouseStockRepairSchema = z.object({
+  body: z.object({
+    // پیش‌فرض اجرای آزمایشی است؛ اعمال تغییرات فقط با dryRun=false صریح
+    dryRun: z.boolean().optional().default(true),
+    itemIds: z.array(z.coerce.number().int().positive()).max(5000).optional(),
+  })
+});
+
+// GET /api/inventory/warehouse-stock-reconciliation
+router.get(
+  '/warehouse-stock-reconciliation',
+  authorizePermission('warehouse.view', 'inventory.reconcile', 'audit.view'),
+  validate(warehouseStockReconQuerySchema),
+  asyncHandler(async (req, res) => {
+    const report = await WarehouseStockReconciliationService.getReport({
+      includeHealthy: String(req.query.includeHealthy) === 'true',
+    });
+    res.json(report);
+  })
+);
+
+// POST /api/inventory/warehouse-stock-reconciliation/repair
+router.post(
+  '/warehouse-stock-reconciliation/repair',
+  authorizePermission('inventory.reconcile'),
+  validate(warehouseStockRepairSchema),
+  asyncHandler(async (req, res) => {
+    const { dryRun, itemIds } = req.body as { dryRun: boolean; itemIds?: number[] };
+    const userId = (req as any).user?.id;
+    const username = (req as any).user?.username || 'مدیر سیستم';
+    const result = await WarehouseStockReconciliationService.repair({ dryRun, itemIds, userId, username });
+    if (result.locked) {
+      throw new ConflictError('ترمیم موجودی انبارها هم‌اکنون توسط کاربر یا نمونه دیگری در حال اجراست.');
+    }
+    if (!dryRun) {
+      await logActivity({
+        req,
+        action: 'AUDIT_APPLY',
+        entity: 'انبارداری و موجودی',
+        entityId: result.runId,
+        description: `ترمیم موجودی انبارها از روی کاردکس: ${result.itemsRepaired} کالا، ${result.rowsChanged} ردیف اصلاح شد؛ ${result.negativeLedgerRows} ردیف با مانده منفی و ${result.blockedItems} کالا با محل نامعلوم اصلاح نشدند`,
+        details: { ...result, changes: result.changes.slice(0, 500) }
+      });
+    }
+    res.json({
+      success: true,
+      message: dryRun
+        ? `اجرای آزمایشی: ${result.rowsChanged} ردیف در ${result.itemsRepaired} کالا اصلاح خواهد شد (هیچ تغییری اعمال نشد).`
+        : `${result.rowsChanged} ردیف موجودی در ${result.itemsRepaired} کالا از روی کاردکس اصلاح شد.`,
+      data: { ...result, changes: result.changes.slice(0, 500) }
+    });
   })
 );
 

@@ -66,6 +66,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   woocommerce_order_lifecycle: 'WooCommerce Order Lifecycle: Exact Match, Durable Failure Log, Status Policy & Void (TD-190)',
   document_voucher_uniqueness: 'One Active Voucher per Document, Missing-Only Manual Sync & No Boot-Time Sync (TD-193)',
   structured_vat: 'Structured VAT on Invoices & Vouchers, No Extraction From Notes (TD-197)',
+  warehouse_stock_reconciliation: 'Warehouse Stock vs Kardex Report & Manual Dry-Run Repair (TD-200)',
   outbox_processing_retries: 'Transactional Outbox Batch Processing',
   ledger_invariants_and_repost: 'Ledger Invariants, Immutability & Repost Workflow',
   period_closing_and_conceptual_mappings: 'Period Closing, Financial Statements & Conceptual Account Mappings',

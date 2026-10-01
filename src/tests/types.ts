@@ -53,6 +53,7 @@ export type CriticalScenarioId =
   | 'woocommerce_order_lifecycle'
   | 'document_voucher_uniqueness'
   | 'structured_vat'
+  | 'warehouse_stock_reconciliation'
   | 'outbox_processing_retries'
   | 'ledger_invariants_and_repost'
   | 'period_closing_and_conceptual_mappings'

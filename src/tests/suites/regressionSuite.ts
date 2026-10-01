@@ -3107,6 +3107,140 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.6: v7.0.33 (TD-200 / audit P1-9): گزارش و ترمیم دستی موجودی انبارها از روی کاردکس
+  if (shouldRun('reg_warehouse_stock_reconciliation_td_200', 'td200', 'inventory', 'reconcile', 'kardex')) {
+    const tStart = Date.now();
+    const createdItemIds: number[] = [];
+    const violations: string[] = [];
+    const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+    try {
+      const { WarehouseStockReconciliationService } = await import('../../services/inventory/warehouseStockReconciliation.service.js');
+      const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
+      const { itemWarehouseStocks, inventoryReconciliationAnomalies } = await import('../../db/schema.js');
+      const { pool } = await import('../../db/drizzle.js');
+      const [w1] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const w2 = await createTestWarehouse({ name: `انبار دوم آزمون ${Date.now()}` });
+      const today = `${await businessTodayIsoDate()} 10:00:00`;
+      const kardex = async (itemId: number, type: 'in' | 'out', quantity: number, location: string, extra: Record<string, unknown> = {}) => {
+        const [row] = await orm.insert(transactions).values({ itemId, type, quantity, unitPrice: 1000, totalPrice: quantity * 1000, date: today, documentType: 'audit', documentRef: 'TD200-PROBE', location, isDeleted: 0, ...extra } as any).returning({ id: transactions.id });
+        return row.id;
+      };
+      const setTable = async (itemId: number, warehouseId: number, warehouseCode: string, currentStock: number) => {
+        await orm.insert(itemWarehouseStocks).values({ itemId, warehouseId, warehouseCode, currentStock, reservedStock: 0, version: 1 });
+      };
+      const mkItem = async (stocks: Record<string, number>, currentStock: number) => {
+        const it = await createTestItem({ stocks, currentStock, weightedAverageCost: 12345 });
+        createdItemIds.push(it.id);
+        return it;
+      };
+
+      // I1: کلید تکراری JSON در 0014 بازنویسی شد → جدول ۳ ولی کاردکس ۱۰ (انبار ۱) و ۵ (انبار ۲، بدون ردیف)
+      const i1 = await mkItem({ [w1.code]: 3 }, 3);
+      await kardex(i1.id, 'in', 10, w1.code);
+      await kardex(i1.id, 'in', 5, w2.code);
+      await setTable(i1.id, w1.id, w1.code, 3);
+      // I2: مانده منفی کاردکس که 0014 به صفر رساند
+      const i2 = await mkItem({ [w1.code]: 0 }, 0);
+      await kardex(i2.id, 'in', 2, w1.code);
+      await kardex(i2.id, 'out', 5, w1.code);
+      await setTable(i2.id, w1.id, w1.code, 0);
+      // I3: گردش کاردکس در محلی که به هیچ انباری نگاشت نمی‌شود
+      const i3 = await mkItem({ [w1.code]: 7 }, 7);
+      await kardex(i3.id, 'in', 4, `انبار حذف‌شده ${Date.now()}`);
+      await kardex(i3.id, 'in', 1, w1.code);
+      await setTable(i3.id, w1.id, w1.code, 7);
+      // I4: کد انبار در جدول همان کلید خام JSON (نام انبار) است
+      const i4 = await mkItem({ [w2.name]: 6 }, 6);
+      await kardex(i4.id, 'in', 6, w2.code);
+      await setTable(i4.id, w2.id, w2.name, 6);
+      // I5: حذف سند: ردیف مبدأ حذف نرم + ردیف معکوس فعال → نباید مغایرت تلقی شود
+      const i5 = await mkItem({ [w1.code]: 8 }, 8);
+      await kardex(i5.id, 'in', 8, w1.code);
+      const orig = await kardex(i5.id, 'out', 2, w1.code, { isDeleted: 1 });
+      await kardex(i5.id, 'in', 2, 'default', { reversalOfId: orig });
+      await setTable(i5.id, w1.id, w1.code, 8);
+
+      const testIds = [i1.id, i2.id, i3.id, i4.id, i5.id];
+      const rowFor = (report: any, itemId: number, whId: number) => report.rows.find((r: any) => r.itemId === itemId && r.warehouseId === whId);
+
+      // ۱) گزارش
+      const report = await WarehouseStockReconciliationService.getReport();
+      check(rowFor(report, i1.id, w1.id)?.status === 'mismatch' && rowFor(report, i1.id, w1.id)?.ledgerQty === 10, `I1/انبار۱ باید مغایرت ۱۰ در برابر ۳ باشد: ${JSON.stringify(rowFor(report, i1.id, w1.id))}`);
+      check(rowFor(report, i1.id, w2.id)?.status === 'mismatch' && rowFor(report, i1.id, w2.id)?.tableQty === null, `I1/انبار۲ باید مغایرت بدون ردیف جدول باشد: ${JSON.stringify(rowFor(report, i1.id, w2.id))}`);
+      check(rowFor(report, i2.id, w1.id)?.status === 'negative_ledger', `I2 باید مانده منفی کاردکس گزارش شود: ${JSON.stringify(rowFor(report, i2.id, w1.id))}`);
+      check(report.unresolvedLocations.some((u: any) => u.itemId === i3.id), 'I3 باید محل نامعلوم کاردکس گزارش شود');
+      check(rowFor(report, i4.id, w2.id)?.codeMismatch === true, `I4 باید ناهمخوانی کد انبار گزارش شود: ${JSON.stringify(rowFor(report, i4.id, w2.id))}`);
+      check(!report.rows.some((r: any) => r.itemId === i5.id), `I5 (حذف سند با ردیف معکوس) نباید مغایرت داشته باشد: ${JSON.stringify(report.rows.filter((r: any) => r.itemId === i5.id))}`);
+
+      // ۲) اجرای آزمایشی پیش‌فرض: برنامه تغییرات بدون تغییر داده
+      const dry = await WarehouseStockReconciliationService.repair({ itemIds: testIds });
+      check(dry.dryRun === true && dry.changes.some((c: any) => c.itemId === i1.id && c.warehouseId === w1.id && c.afterQty === 10), `اجرای آزمایشی باید پیش‌فرض و شامل اصلاح I1 باشد: ${JSON.stringify(dry).slice(0, 300)}`);
+      const [i1w1Before] = await orm.select().from(itemWarehouseStocks).where(and(eq(itemWarehouseStocks.itemId, i1.id), eq(itemWarehouseStocks.warehouseId, w1.id)));
+      check(Number(i1w1Before?.currentStock) === 3, 'اجرای آزمایشی نباید داده را تغییر دهد');
+
+      // ۳) قفل مشورتی: اجرای همزمان دیگر کاری انجام نمی‌دهد
+      const holder = await pool.connect();
+      try {
+        await holder.query('SELECT pg_advisory_lock(91003)');
+        const lockedRun = await WarehouseStockReconciliationService.repair({ dryRun: false, itemIds: testIds });
+        check(lockedRun.locked === true && lockedRun.rowsChanged === 0, 'با قفل گرفته‌شده توسط نمونه دیگر نباید ترمیمی انجام شود');
+      } finally {
+        await holder.query('SELECT pg_advisory_unlock(91003)').catch(() => undefined);
+        holder.release();
+      }
+
+      // ۴) ترمیم واقعی
+      const run = await WarehouseStockReconciliationService.repair({ dryRun: false, itemIds: testIds, username: 'test-agent' });
+      const tableOf = async (itemId: number) => orm.select().from(itemWarehouseStocks).where(eq(itemWarehouseStocks.itemId, itemId));
+      const itemOf = async (itemId: number) => (await orm.select().from(items).where(eq(items.id, itemId)))[0];
+      const t1 = await tableOf(i1.id);
+      const i1After = await itemOf(i1.id);
+      check(Number(t1.find(r => r.warehouseId === w1.id)?.currentStock) === 10 && Number(t1.find(r => r.warehouseId === w2.id)?.currentStock) === 5, `I1 باید به ۱۰ و ۵ اصلاح شود: ${JSON.stringify(t1.map(r => [r.warehouseId, r.currentStock]))}`);
+      check(Number(i1After.currentStock) === 15 && (i1After.stocks as any)?.[w1.code] === 10 && (i1After.stocks as any)?.[w2.code] === 5, `کش JSONB و موجودی کل I1 باید بازسازی شوند: ${JSON.stringify({ c: i1After.currentStock, s: i1After.stocks })}`);
+      check(Number(i1After.weightedAverageCost) === 12345, 'ترمیم نباید بهای میانگین موزون را تغییر دهد');
+      check(Number((await tableOf(i2.id))[0]?.currentStock) === 0, 'مانده منفی کاردکس نباید خودکار تعدیل شود');
+      check(Number((await tableOf(i3.id))[0]?.currentStock) === 7, 'کالای دارای محل نامعلوم نباید اصلاح شود');
+      check((await tableOf(i4.id))[0]?.warehouseCode === w2.code, 'کد انبار I4 باید به کد استاندارد اصلاح شود');
+      const anomalies = await orm.select().from(inventoryReconciliationAnomalies).where(eq(inventoryReconciliationAnomalies.runId, run.runId));
+      const kinds = (itemId: number) => anomalies.filter(a => a.itemId === itemId).map(a => a.kind);
+      check(kinds(i1.id).filter(k => k === 'repaired').length === 2, `دو اصلاح I1 باید در جدول ناهنجاری‌ها ثبت شود: ${JSON.stringify(kinds(i1.id))}`);
+      check(kinds(i2.id).includes('negative_ledger') && kinds(i3.id).includes('unresolved_location'), `امتناع‌ها باید ثبت شوند: ${JSON.stringify({ i2: kinds(i2.id), i3: kinds(i3.id) })}`);
+
+      // ۵) گزارش پس از ترمیم
+      const after = await WarehouseStockReconciliationService.getReport();
+      check(!after.rows.some((r: any) => r.itemId === i1.id || r.itemId === i4.id), 'پس از ترمیم I1 و I4 نباید مغایرت داشته باشند');
+
+      if (violations.length > 0) {
+        throw new Error(violations.join(' | '));
+      }
+      results.push(makeTestCase({
+        id: 'reg_warehouse_stock_reconciliation_td_200',
+        scenarioId: 'warehouse_stock_reconciliation',
+        name: 'v7.0.33: گزارش و ترمیم دستی موجودی انبارها از روی کاردکس — بدون تعدیل خودکار منفی‌ها (TD-200 / P1-9)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'مغایرت‌های ناشی از مهاجرت 0014 (بازنویسی کلید تکراری، صفر شدن منفی، کد خام انبار) گزارش شد؛ اجرای آزمایشی پیش‌فرض داده را تغییر نداد؛ ترمیم فقط مقدار را از کاردکس اصلاح کرد، منفی‌ها و محل‌های نامعلوم را دست نزد و همه را در جدول ناهنجاری‌ها ثبت کرد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_warehouse_stock_reconciliation_td_200',
+        scenarioId: 'warehouse_stock_reconciliation',
+        name: 'v7.0.33: گزارش و ترمیم دستی موجودی انبارها از روی کاردکس — بدون تعدیل خودکار منفی‌ها (TD-200 / P1-9)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdItemIds.length > 0) {
+        await cleanTestTableData('transactions', 'item_id', createdItemIds);
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

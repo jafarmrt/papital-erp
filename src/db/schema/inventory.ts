@@ -39,6 +39,26 @@ export const itemWarehouseStocks = pgTable('item_warehouse_stocks', {
   checkStockNonNegative: check('chk_iws_current_stock_non_negative', sql`${table.currentStock} >= 0`),
 }));
 
+// v7.0.33 (TD-200 / audit P1-9): ثبت هر اصلاح یا امتناع از اصلاح در ترمیم موجودی انبارها از روی کاردکس
+// kind: 'repaired' | 'negative_ledger' | 'unresolved_location'
+export const inventoryReconciliationAnomalies = pgTable('inventory_reconciliation_anomalies', {
+  id: serial('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  itemId: integer('item_id').notNull().references(() => items.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'cascade' }),
+  warehouseCode: text('warehouse_code').notNull().default(''),
+  kind: text('kind').notNull(),
+  ledgerQty: numeric('ledger_qty', { precision: 18, scale: 4, mode: 'number' }),
+  beforeQty: numeric('before_qty', { precision: 18, scale: 4, mode: 'number' }),
+  afterQty: numeric('after_qty', { precision: 18, scale: 4, mode: 'number' }),
+  details: text('details').notNull().default(''),
+  createdBy: text('created_by').notNull().default(''),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+}, (table) => ({
+  idxRun: index('idx_inv_recon_anomalies_run').on(table.runId),
+  idxItem: index('idx_inv_recon_anomalies_item').on(table.itemId),
+}));
+
 export const items = pgTable('items', {
   id: serial('id').primaryKey(),
   type: text('type').notNull(),
