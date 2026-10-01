@@ -1,4 +1,4 @@
-# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v4.0.31 / TD-111 + Soft Coverage Gate)
+# .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate)
 # Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) → client-server-build → docker-build-gate
 #
 # Environment & Secrets:
@@ -27,10 +27,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Verify package-lock.json Presence (TD-129)
@@ -43,8 +43,9 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Security Audit Gate (High CVEs)
-        run: npm audit --audit-level=high || true
+      - name: Security Audit Gate (High/Critical CVEs — TD-172)
+        # fail-fast؛ استثناها فقط با ردیف باز در TECH_DEBT.md (scripts/audit-gate.ts)
+        run: npm run audit:gate
 
       - name: TD-111 Version Sync Gate (fail-fast)
         run: npm run check:version
@@ -74,10 +75,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -125,10 +126,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -183,10 +184,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -220,12 +221,17 @@ jobs:
         run: docker build -t papital-erp:${IMAGE_TAG} .
 
       - name: Push Container Image (Conditional on Registry Secrets)
-        if: ${{ secrets.REGISTRY_TOKEN != '' && secrets.REGISTRY_USER != '' }}
+        # v7.0.19 (TD-172): کانتکست secrets در شرط if مجاز نیست و کل workflow را نامعتبر می‌کرد؛
+        # بررسی وجود اعتبارنامه‌ها به داخل اسکریپت منتقل شد.
         env:
           REGISTRY: ${{ vars.DOCKER_REGISTRY || 'registry.example.com' }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
         run: |
+          if [ -z "${REGISTRY_TOKEN}" ] || [ -z "${REGISTRY_USER}" ]; then
+            echo "Registry credentials not configured — skipping image push."
+            exit 0
+          fi
           echo "${REGISTRY_TOKEN}" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
           docker tag papital-erp:${IMAGE_TAG} "${REGISTRY}/erp:${IMAGE_TAG}"
           docker push "${REGISTRY}/erp:${IMAGE_TAG}"
@@ -245,7 +251,7 @@ jobs:
     name: Staging Post-Deployment Smoke Tests
     needs: deploy-staging
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/staging' && secrets.STAGING_ADMIN_TOKEN != ''
+    if: github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -255,4 +261,8 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
           METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
         run: |
+          if [ -z "${ADMIN_TOKEN}" ]; then
+            echo "STAGING_ADMIN_TOKEN not configured — skipping staging smoke tests."
+            exit 0
+          fi
           bash scripts/smoke-test.sh https://staging.erp.example.com

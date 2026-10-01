@@ -23,7 +23,8 @@
 | TD-109 | Runtime Flags Cleanup | پاکسازی کامل سرویس/کلیدهای موقت test_endpoints پس از حذف روت‌های تست | src/lib/runtimeFlags.ts | scheduled:فاز ۲ نسخه ۷ |
 | TD-110 | financialMath Shim | مهاجرت ۵ ایمپورت باقی‌مانده از utils/financialMath به lib/financialDecimal و حذف فایل واسط | src/utils/financialMath.ts | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
 | TD-112 | Workflow Keep-List | روت‌های بدون مصرف‌کننده فرانت‌اند در انتظار رابط کاربری فاز ۳ | workflow.routes.ts | scheduled:فاز ۳ نسخه ۷ |
-| TD-129 | Lockfile Flux | محافظت از وجود package-lock.json در گیت CI و فعال‌سازی کش | فرایند/CI | resolved:v7.0.3 (فاز ۲ نسخه ۷) |
+| TD-129 | Lockfile Flux | محافظت از وجود package-lock.json در گیت CI و فعال‌سازی کش | فرایند/CI | resolved:v7.0.19 — گیت در v7.0.3 اضافه شد ولی خود package-lock.json هرگز commit نشده بود و CI همیشه در گام اول شکست می‌خورد؛ در v7.0.19 فایل قفل (lockfileVersion 3، Node 22) ثبت شد (جزئیات: TD-172) |
+| TD-173 | Security / xlsx CVEs | `xlsx@0.18.5` دارای دو آسیب‌پذیری High بدون اصلاحیه در رجیستری npm (GHSA-4r6h-8v6p-xvw6 Prototype Pollution، GHSA-5pgg-2g8v-p4x9 ReDoS)؛ در ۱۰+ کامپوننت فرانت برای پارس فایل اکسل ورودی کاربر استفاده می‌شود. موقتاً در فهرست استثنای `scripts/audit-gate.ts` ثبت شده است | package.json، src/components/**/*Excel*، scripts/audit-gate.ts | open — مهاجرت به exceljs یا نسخه رسمی SheetJS (CDN) و حذف استثنا از گیت |
 | TD-130 | Hard Delete in updateDocument | بررسی ردیف‌های document_items در ویرایش سند جهت هم‌ترازی با soft-delete | document.service.ts:235 | scheduled:فاز ۱ نسخه ۷ |
 | TD-132 | Dead Dependencies / CVEs | پکیج‌های بی‌استفاده firebase، firebase-admin و @google/genai و کاهش حجم ایمیج | package.json | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
 | TD-134 | Test DB Isolation Off by Default | پیش‌فرض کردن ERP_TEST_SCHEMA_ISOLATION=1 در رانر تست‌ها و حذف sleepها | scripts/run-tests.ts:121 | resolved:v7.0.3 (فاز ۲ نسخه ۷) |
@@ -53,4 +54,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ⚠️ ناسازگاری شناخته‌شده: چند ردیف `resolved` (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) هنوز در جدول فعال بالا مانده‌اند و آمار «۱۶ ردیف فعال» با جدول منطبق نیست؛ جابه‌جایی آن‌ها خارج از دامنه فاز ۰ است.
 
-*آخرین بازبینی: v7.0.18 — ثبت TD-171 (فاز ۰ ممیزی مستقل).*
+*آخرین بازبینی: v7.0.19 — ثبت TD-172 (حل‌شده، آرشیو) و TD-173 (باز)، اصلاح وضعیت TD-129.*

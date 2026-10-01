@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "7.0.18",
+  "version": "7.0.19",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -23,6 +23,7 @@
     "lint": "tsc --noEmit",
     "db:studio": "drizzle-kit studio",
     "check:version": "tsx scripts/check-version-sync.ts",
+    "audit:gate": "npm audit --omit=dev --json | tsx scripts/audit-gate.ts",
     "test:coverage": "c8 --reporter=text --reporter=text-summary --reporter=json-summary --include=src --include=server.ts --exclude=src/tests/** tsx scripts/run-tests.ts"
   },
   "dependencies": {

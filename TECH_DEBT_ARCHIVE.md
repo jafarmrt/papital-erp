@@ -166,6 +166,8 @@
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
 | TD-171 | Governance / Version Sync | تناقض اسناد حاکمیتی (AGENTS.md §۷/§۱۳ چنج‌لاگ فعال را 5.ts و §۲۳ آن را 7.ts می‌دانست؛ §۲۳ «۲ محل همگام» در برابر ۴ محل اسکریپت؛ جدول ناموجود migrations_log) و مقدار کهنه APP_VERSION=7.0.14 در مانیفست K8s که به‌علت اولویت بر package.json نسخه اشتباه را در /health گزارش می‌کرد؛ گیت check:version به‌جای AND از OR استفاده می‌کرد و README را بررسی نمی‌کرد | AGENTS.md، README.md، CHANGELOG.md، deploy/k8s/erp-deployment.yaml:57، scripts/check-version-sync.ts | resolved (v7.0.18) — اصلاح متن اسناد با تأیید مالک محصول، همگام‌سازی APP_VERSION و الزامی‌شدن تگ ایمیج + APP_VERSION + هدر README در گیت |
+| TD-172 | CI/CD Pipeline Integrity | (۱) فایل `package-lock.json` در مخزن وجود نداشت و گام اول CI (TD-129) همیشه شکست می‌خورد، پس هیچ گیت تست/بیلد/داکری هرگز اجرا نشده بود؛ (۲) دو شرط `if` با کانتکست غیرمجاز `secrets.*` کل workflow را از نظر GitHub Actions نامعتبر می‌کرد (تأیید با actionlint)؛ (۳) CI روی Node 20 و Docker روی Node 22؛ (۴) گیت امنیتی `npm audit ... \|\| true` بی‌اثر بود | .github/workflows/ci.yml، package-lock.json، package.json | resolved (v7.0.19) — ثبت lockfile، یکسان‌سازی Node 22، انتقال بررسی secrets به داخل اسکریپت گام‌ها، گیت مسدودکننده `npm run audit:gate` با فهرست استثنای ثبت‌شده (TD-173) |
+
 
 ## 📝 یادداشت مهاجرت
 
