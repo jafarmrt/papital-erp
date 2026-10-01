@@ -17,6 +17,9 @@ import {
 } from './queries/useSettingsQueries';
 import { settingsKeys } from '../lib/queryKeys';
 
+/** مقدار ماسک کلیدهای محرمانه در پاسخ GET /settings برای غیرادمین (هم‌راستا با systemSettings.service.ts) */
+const MASKED_SETTING_VALUE = '********';
+
 export type Warehouse = WarehouseItem;
 
 export { settingsKeys };
@@ -277,8 +280,11 @@ export function useSettings() {
     deleteWarehouseMutation.isPending;
 
   const handleSaveSettings = async () => {
-    await saveSettingsMutation.mutateAsync({
-      settings: [
+    // v7.0.26 (TD-184): فقط کلیدهای تغییرکرده ارسال می‌شوند و مقدار ماسک‌شده کلیدهای محرمانه هرگز ارسال نمی‌شود
+    const serverValues = new Map(
+      (Array.isArray(settingsData) ? settingsData : []).map((s) => [s.key, s.value] as const)
+    );
+    const candidateSettings: { key: string; value: string }[] = [
         { key: 'invoice_start_number', value: invoiceStartNum },
         { key: 'fast_moving_days', value: fastMovingDays },
         { key: 'slow_moving_days', value: slowMovingDays },
@@ -297,8 +303,15 @@ export function useSettings() {
         { key: 'wc_consumer_key', value: wcConsumerKey },
         { key: 'wc_consumer_secret', value: wcConsumerSecret },
         { key: 'wc_webhook_secret', value: wcWebhookSecret }
-      ]
-    });
+    ];
+    const changedSettings = candidateSettings.filter(
+      (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
+    );
+    if (changedSettings.length === 0) {
+      toast.success('تغییری برای ذخیره وجود ندارد');
+      return;
+    }
+    await saveSettingsMutation.mutateAsync({ settings: changedSettings });
   };
 
   const handleCatSubmit = async (e: React.FormEvent) => {

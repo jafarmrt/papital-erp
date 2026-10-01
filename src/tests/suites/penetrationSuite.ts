@@ -345,6 +345,87 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     });
 
   // ===============================================================
+  // v7.0.26 (TD-184 / audit P1-3): key-level settings authorization & masked-secret protection
+  // ===============================================================
+  await runCase(results, 'pen_settings_key_level_authorization', 'settings_key_authorization',
+    'پن‌تست: مدیر تنظیمات کسب‌وکاری را ذخیره کند، کلیدهای محرمانه با ******** بازنویسی نشوند و فقط ادمین آن‌ها را تغییر دهد',
+    async () => {
+      const { appSettings } = await import('../../db/schema.js');
+      const { inArray } = await import('drizzle-orm');
+      const keys = ['company_name', 'wc_consumer_secret', 'wc_store_url', 'runtime_enable_test_endpoints'];
+      const originalRows = await orm.select().from(appSettings).where(inArray(appSettings.key, keys));
+      const managerUser = `pen_mgr_${Date.now()}`;
+      const upsert = async (key: string, value: string) => {
+        await orm.insert(appSettings).values({ key, value }).onConflictDoUpdate({ target: appSettings.key, set: { value } });
+      };
+      try {
+        await upsert('wc_consumer_secret', 'cs_real_secret_value');
+        await upsert('company_name', 'شرکت آزمون قبل');
+        await upsert('wc_store_url', 'https://shop.example.com');
+        await orm.insert(users).values({ username: managerUser, password: TEST_PASSWORD_HASH, fullName: 'مدیر آزمون', role: 'manager', avatarUrl: '' });
+        const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
+        invalidateSettingsCache();
+        const { loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
+        const mgr = await loginTestUserWithSession(app, managerUser);
+
+        // 1. Manager reads masked secret
+        const getRes = await request(app).get('/api/settings').set('Cookie', mgr.cookie);
+        const maskedRow = (Array.isArray(getRes.body) ? getRes.body : []).find((s: any) => s.key === 'wc_consumer_secret');
+        if (maskedRow?.value !== '********') {
+          throw new Error(`کلید محرمانه برای مدیر باید ماسک شود (مقدار: ${maskedRow?.value})`);
+        }
+
+        // 2. Manager re-submits the whole form (masked secret + unchanged system flag) and changes the company name
+        const saveRes = await request(app).post('/api/settings').set('Cookie', mgr.cookie).set('X-CSRF-Token', mgr.csrfToken)
+          .send({ settings: [
+            { key: 'company_name', value: 'شرکت آزمون بعد' },
+            { key: 'wc_consumer_secret', value: '********' },
+            { key: 'runtime_enable_test_endpoints', value: 'false' },
+            { key: 'wc_store_url', value: 'https://shop.example.com' }
+          ] });
+        if (saveRes.status !== 200 || JSON.stringify(saveRes.body?.changedKeys) !== JSON.stringify(['company_name'])) {
+          throw new Error(`ذخیره تنظیمات توسط مدیر باید موفق و فقط company_name تغییر کند: ${saveRes.status} ${JSON.stringify(saveRes.body).slice(0, 200)}`);
+        }
+        const [secretAfter] = await orm.select().from(appSettings).where(eq(appSettings.key, 'wc_consumer_secret'));
+        if (secretAfter?.value !== 'cs_real_secret_value') {
+          throw new Error('مقدار واقعی کلید محرمانه نباید با ******** بازنویسی شود.');
+        }
+
+        // 3. Manager must not change secret integration keys or the store URL
+        const forbiddenRes = await request(app).post('/api/settings').set('Cookie', mgr.cookie).set('X-CSRF-Token', mgr.csrfToken)
+          .send({ settings: [{ key: 'wc_store_url', value: 'https://attacker.example.net' }] });
+        if (forbiddenRes.status !== 403) {
+          throw new Error(`تغییر آدرس فروشگاه ووکامرس توسط مدیر باید 403 بگیرد (وضعیت ${forbiddenRes.status}).`);
+        }
+
+        // 4. Unknown keys are rejected
+        const unknownRes = await request(app).post('/api/settings').set('Cookie', mgr.cookie).set('X-CSRF-Token', mgr.csrfToken)
+          .send({ settings: [{ key: 'negative_stock_policy', value: 'allowed' }] });
+        if (unknownRes.status < 400 || unknownRes.status >= 500) {
+          throw new Error(`کلید ناشناخته باید رد شود (وضعیت ${unknownRes.status}).`);
+        }
+
+        // 5. Admin can change a secret key
+        const adminSession = await getAdminSession();
+        const adminRes = await request(app).post('/api/settings').set('Cookie', adminSession.cookie).set('X-CSRF-Token', adminSession.csrfToken)
+          .send({ settings: [{ key: 'wc_consumer_secret', value: 'cs_rotated_by_admin' }] });
+        const [secretRotated] = await orm.select().from(appSettings).where(eq(appSettings.key, 'wc_consumer_secret'));
+        if (adminRes.status !== 200 || secretRotated?.value !== 'cs_rotated_by_admin') {
+          throw new Error(`ادمین باید بتواند کلید محرمانه را تغییر دهد (وضعیت ${adminRes.status}).`);
+        }
+        return 'مدیر تنظیمات کسب‌وکاری را ذخیره کرد، مقدار ماسک نادیده گرفته شد، تغییر کلید محرمانه توسط مدیر 403 گرفت، کلید ناشناخته رد شد و ادمین کلید محرمانه را تغییر داد.';
+      } finally {
+        await orm.delete(users).where(eq(users.username, managerUser));
+        await orm.delete(appSettings).where(inArray(appSettings.key, keys));
+        for (const row of originalRows) {
+          await orm.insert(appSettings).values({ key: row.key, value: row.value }).onConflictDoNothing();
+        }
+        const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
+        invalidateSettingsCache();
+      }
+    });
+
+  // ===============================================================
   // Path Traversal — /uploads must never escape its root
   // ===============================================================
   await runCase(results, 'pen_path_traversal_uploads', 'path_traversal_blocked',

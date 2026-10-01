@@ -82,6 +82,7 @@ export type CriticalScenarioId =
   | 'xss_sanitized'
   | 'ssrf_blocked'
   | 'rate_limit_no_bypass'
+  | 'settings_key_authorization'
   | 'path_traversal_blocked'
   | 'concurrent_voucher_unique_postgres'
   | 'finalize_race_single_deduction'

@@ -70,3 +70,21 @@ export const authorizePermission = (...permissionKeys: string[]) => {
   };
 };
 
+/**
+ * v7.0.26 (TD-184): بررسی برنامه‌ای «نقش یا مجوز» برای منطق سرویس‌ها (مثلاً مجوز سطح کلید در تنظیمات)
+ * با همان کش نقش‌ها و همان قاعده‌های میدل‌ور authorize.
+ */
+export async function userHasRoleOrPermission(
+  user: { role?: string } | undefined,
+  ...rolesOrPermissions: string[]
+): Promise<boolean> {
+  if (!user?.role) return false;
+  if (user.role === 'admin' || rolesOrPermissions.includes(user.role)) return true;
+  try {
+    const roleData = await getCachedRoleData(user.role);
+    const perms: string[] = roleData?.permissions || [];
+    return perms.includes('*') || rolesOrPermissions.some(k => perms.includes(k));
+  } catch {
+    return false;
+  }
+}

@@ -21,13 +21,14 @@ import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { parsePagination } from '../lib/pagination.js';
-import { ValidationError, ForbiddenError } from '../errors/customErrors.js';
+import { ForbiddenError } from '../errors/customErrors.js';
 import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity } from '../lib/auditLogger.js';
 import { isTestEndpointsEnabled, getTestEndpointsSource } from '../lib/runtimeFlags.js';
 import { runSeed } from '../db/seed.js';
 import { validateDbSchema } from '../db/migrator.js';
-import { appSettingsCache, invalidateSettingsCache } from '../lib/memoryCache.js';
+import { appSettingsCache } from '../lib/memoryCache.js';
 import { BUILD_INFO } from '../lib/version.js';
+import { SystemSettingsService, SENSITIVE_SETTING_PATTERN, MASKED_SETTING_VALUE } from '../services/settings/systemSettings.service.js';
 
 const router = Router();
 
@@ -96,8 +97,7 @@ router.get('/system/env', authorize('admin'), async (req, res) => {
 // V3.0.6 (SEC): مقادیر حساس (secret/token/password) فقط برای ادمین برگردانده می‌شود؛
 // سایر کاربران احراز هویت‌شده مقدار ماسک‌شده دریافت می‌کنند تا از افشای
 // wc_consumer_secret / wc_webhook_secret / erp_webhook_secret_token جلوگیری شود.
-const SENSITIVE_SETTING_PATTERN = /secret|token|password|api_key|consumer_secret/i;
-const MASKED_SETTING_VALUE = '********';
+// v7.0.26 (TD-184): الگوی کلیدهای حساس و مقدار ماسک در سرویس تنظیمات متمرکز شد (consumer_key نیز ماسک می‌شود)
 
 router.get('/settings', async (req, res) => {
   try {
@@ -139,67 +139,18 @@ router.get('/menu-visibility', async (req, res) => {
   }
 });
 
-router.post('/settings', authorize('admin', 'manager'), validate(settingsSchema), async (req, res) => {
-  try {
-    const { settings } = req.body;
-    await orm.transaction(async (tx) => {
-      for (const item of settings) {
-        let val = item.value;
-        if (item.key === 'company_logo') {
-          // V3.1.11: لوگوی شرکت مستقیماً به‌صورت Data URL متنی در دیتابیس ذخیره می‌شود تا در محیط‌های Containerized پاک نشود
-          val = item.value || '';
-        }
-        // V10-1.1: TZ اعتبارسنجی سمت سرور برای ساعت توافقی واحد
-        if (item.key === 'display_timezone') {
-          const { ALLOWED_TIMEZONES } = await import('../lib/businessClock.js');
-          if (!(ALLOWED_TIMEZONES as readonly string[]).includes(String(val).trim())) {
-            throw new ValidationError(`منطقه زمانی '${val}' پشتیبانی نمی‌شود.`);
-          }
-          val = String(val).trim();
-        }
-        // V1.1.1: فلگ‌های runtime — فقط مقدار بولی و فقط توسط admin
-        if (item.key === 'runtime_enable_test_endpoints') {
-          const normalized = String(val).trim().toLowerCase();
-          if (normalized !== 'true' && normalized !== 'false') {
-            throw new ValidationError('مقدار مجاز برای این فلگ فقط true یا false است.');
-          }
-          if (req.user?.role !== 'admin') {
-            throw new ForbiddenError('تغییر فلگ‌های سیستمی فقط برای مدیر سیستم مجاز است.');
-          }
-          val = normalized;
-        }
-        await tx.insert(appSettings).values({ key: item.key, value: val })
-          .onConflictDoUpdate({ target: appSettings.key, set: { value: val } });
-      }
-    });
-
-    // ابطال کش تنظیمات سیستم
-    invalidateSettingsCache();
-
-    // V10-1.1: ابطال کش منطقه زمانی پس از ذخیره تنظیمات
-    const { invalidateTimezoneCache } = await import('../lib/businessClock.js');
-    invalidateTimezoneCache();
-
-    // V1.1.1: ابطال کش فلگ‌های runtime پس از ذخیره تنظیمات
-    const { invalidateRuntimeFlagsCache } = await import('../lib/runtimeFlags.js');
-    invalidateRuntimeFlagsCache();
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      userFullName: req.user?.full_name || '',
-      action: 'SETTING_CHANGE',
-      entity: 'تنظیمات سیستم',
-      description: `تغییر و بروزرسانی ${settings.length} گزینه از تنظیمات سیستم`
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    throw err;
-  }
+// v7.0.26 (TD-184 / audit P1-3): ذخیره فقط کلیدهای تغییرکرده با مجوز سطح کلید در SystemSettingsService
+// (RULE 01: روت فقط اعتبارسنجی و فراخوانی سرویس). مجوز settings.manage هم‌راستا با نمایش منوی تنظیمات است.
+router.post('/settings', authorize('admin', 'manager', 'settings.manage'), validate(settingsSchema), async (req, res) => {
+  const result = await SystemSettingsService.saveSettings(req.body.settings, {
+    id: req.user?.id,
+    username: req.user?.username,
+    fullName: req.user?.full_name,
+    role: req.user?.role,
+  });
+  res.json({ success: true, ...result });
 });
 
-// Activity Logs / Audit Trail
 router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => {
   try {
     // V9-1.3: صفحه‌بندی NaN-safe با سقف
