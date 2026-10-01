@@ -12,7 +12,7 @@ import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
-import { DocumentRefNumberService } from './documentRefNumber.service.js';
+import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE } from './documentRefNumber.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
@@ -225,7 +225,7 @@ export class DocumentCreationService {
         const digits = String(finalRefNumber).replace(/\D/g, '');
         if (digits) {
           const val = parseInt(digits, 10);
-          if (!isNaN(val) && val > 0 && val <= 2147483647) {
+          if (!isNaN(val) && val > 0 && val <= MAX_REF_COUNTER_VALUE) {
             // V3.0.6 (BUG-07): کلید شمارنده دستی نیز باید «سال جلالی» باشد؛
             // قبلاً سال میلادی (new Date().getFullYear) استفاده می‌شد و شمارنده
             // دستی روی ردیفی متفاوت از شماره‌گذاری خودکار sync می‌شد.

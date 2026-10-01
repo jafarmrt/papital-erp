@@ -5,6 +5,9 @@ import { jalaliToIsoDate } from '../../utils.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import type { DbClient } from './types.js';
 
+/** بیشینه مقدار ستون integer شمارنده `document_ref_counters.last_ref_number` */
+export const MAX_REF_COUNTER_VALUE = 2147483647;
+
 export class DocumentRefNumberService {
   /**
    * Resolves fiscal year from a date string/number and the invoice start-number setting.
@@ -58,6 +61,9 @@ export class DocumentRefNumberService {
       .where(and(...conditions));
 
     let maxNum = 0;
+    // v7.0.34 (TD-196): شمارنده در ستون integer نگه داشته می‌شود؛ شماره‌های دستی طولانی (مثلاً ۱۳ رقمی)
+    // که از سقف آن بیشترند در مقداردهی اولیه نادیده گرفته می‌شوند — همان قاعده همگام‌سازی شماره دستی در
+    // createDocument. پیش‌تر چنین سندی شماره‌گذاری خودکار آن نوع سند را در کل سال مالی متوقف می‌کرد.
     for (const doc of existingDocs) {
       // Secondary in-memory validation to guarantee calendar boundary precision
       if (fiscalYear && fiscalYear >= 1300 && fiscalYear <= 1500) {
@@ -68,7 +74,7 @@ export class DocumentRefNumberService {
         const numStr = String(doc.refNumber).replace(/\D/g, '');
         if (numStr) {
           const val = parseInt(numStr, 10);
-          if (!isNaN(val) && val > maxNum) {
+          if (!isNaN(val) && val <= MAX_REF_COUNTER_VALUE && val > maxNum) {
             maxNum = val;
           }
         }

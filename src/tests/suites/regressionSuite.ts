@@ -3241,6 +3241,52 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.7: v7.0.34 (TD-196): شماره دستی طولانی نباید شماره‌گذاری خودکار سال مالی را متوقف کند
+  if (shouldRun('reg_ref_counter_long_manual_ref_td_196', 'td196', 'ref_counters', 'refnumber')) {
+    const tStart = Date.now();
+    const createdDocIds: number[] = [];
+    const testDocType = 'reg_test_td196';
+    try {
+      // ۱) سند با شماره دستی ۱۳ رقمی پیش از اولین شماره خودکار این نوع سند در سال مالی
+      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', refNumber: `MAN-${1790882288234}`, items: [], user: 'test-agent' });
+      createdDocIds.push(manualId);
+      // ۲) شماره‌گذاری خودکار باید کار کند و از سقف شمارنده عبور نکند
+      const peek = await DocumentService.peekNextRef(testDocType, '2026-08-02');
+      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-02', items: [], user: 'test-agent' });
+      createdDocIds.push(autoId);
+      const [autoDoc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, autoId));
+      if (autoDoc?.refNumber !== '1' || peek !== '1') {
+        throw new Error(`شماره خودکار پس از سند با شماره دستی طولانی باید «1» باشد: ${JSON.stringify({ peek, ref: autoDoc?.refNumber })}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_ref_counter_long_manual_ref_td_196',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: 'v7.0.34: شماره دستی طولانی شماره‌گذاری خودکار سال مالی را متوقف نمی‌کند (TD-196)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'پس از ثبت سند با شماره دستی ۱۳ رقمی، مقداردهی اولیه شمارنده آن را نادیده گرفت و شماره خودکار «1» صادر شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_ref_counter_long_manual_ref_td_196',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: 'v7.0.34: شماره دستی طولانی شماره‌گذاری خودکار سال مالی را متوقف نمی‌کند (TD-196)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('documents', 'id', createdDocIds);
+      }
+      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();
