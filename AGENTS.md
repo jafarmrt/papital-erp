@@ -9,7 +9,7 @@
 2. **Update Pattern (Read-Calculate-Update):** Always fetch row via `tx.select()`, compute mutations in TypeScript, and save via `tx.update().set()`.
 3. **Row Locking:** For data updated within the same transaction, use `.for('update')` (NOT `.forUpdate()`).
 4. **Explicit Text Casting for WHERE Queries:** For code columns (e.g. `project_code`), cast with `sql\`${table.projectCode} = ${String(code)}::text\``.
-5. **Drizzle CamelCase Mapping & Dual Field Formatting:** Express API endpoints for production projects/stages must return both `camelCase` and `snake_case` keys via formatters (`formatProject`, `formatStage`).
+5. **Drizzle CamelCase Mapping & Standard Serialization (TD-170):** Express API endpoints for production projects and stages use standardized `camelCase` keys matching the Drizzle schema and typed contracts via `formatProject` and `formatStage` (with backward compatibility aliases for safe consumption).
 6. **Atomic Sequence Numbering:** Sequential numbers (vouchers, treasury transactions, document references) MUST use PostgreSQL Sequences (`SELECT nextval('...')`) or atomic counter tables (`document_counters` UPSERT), NEVER `COUNT(*)` or `MAX() + 1`.
 7. **Module Resolution (`/src/db/drizzle.js`):** Subdirectory services MUST import Drizzle instance explicitly from `../../db/drizzle.js` (or `.ts`) to ensure clean production bundling.
 

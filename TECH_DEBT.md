@@ -16,8 +16,7 @@
 
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
-| TD-032 | UX | password visibility toggle + lockout countdown پیاده شد — فقط تست دستی E2E روی دیوایس موبایل باقی است | LoginPage.tsx | open |
-| TD-080 | Refactoring Budget | چند تابع با cognitive >۱۰۰ پیش‌موجودند: parseCliArgs (۲۵۳)، useCRMData (۱۷۷)، useAccounting (۱۴۹)، سوییت‌های تست (۱۳۰-۱۵۸)، processUnifiedImport (۱۱۷)، CreateInvoicePage/InventoryRebuildModal (۱۰۴-۱۱۱) | scripts/initial-setup.ts، src/hooks، src/pages | in_progress — تفکیک در فاز ۴ نسخه ۷ |
+| TD-080 | Refactoring Budget | خردسازی گادفایل‌ها و توابع با پیچیدگی بالا: (۱) تجزیه کامل src/utils.ts به ۴ ماژول در utils/ [انجام شد: v7.0.16]؛ (۲) تفکیک کامل document.service.ts به ۵ ماژول در services/documents/ [انجام شد: v7.0.17]؛ (۳) تفکیک صفحات DocumentsPage و InvoicesListPage | src/utils.ts، src/services، src/pages | in_progress — فاز ۴.۴ نسخه ۷ |
 | TD-085 | Workflow/Events UX | (۱) پیش‌نمایش شرایط لازم به فارسی از `evaluateRuleBreakdown` قبل از اقدام؛ (۲) نمایش پیشرفت امضا «n از m» در Stepper از `approvalProgressJson`؛ (۳) انتخاب‌گر فیلد payload به‌جای تایپ دستی `{{payload.x}}` در RuleEditorModal؛ (۴) قوانین پیش‌فرض یادآوری SLA | workflow/task/rule UI | scheduled:فاز ۳ نسخه ۷ |
 | TD-106 | Frontend / Type Safety (FE-007) | ۹۱۸ مورد `: any` و ۲۷۹ مورد `as any` در سورس‌کد | سراسر src | scheduled:فاز ۳ نسخه ۷ |
 | TD-108 | FE Helpers (Badges) | ۱۲ کپی `getStatusBadge`/`getPriorityBadge` با الگو یکسان ولی واژگان/رنگ متفاوت — تجمیع در PillBadge | components/pages | scheduled:فاز ۳ نسخه ۷ |
@@ -38,17 +37,17 @@
 | TD-167 | fetchJson Typing & Protocol Fallback | تایپ ضعیف T=any و قورت دادن خطای بدنه نامعتبر در .catch(() => ({})) | src/api.ts:77,190 | resolved:v7.0.5 (فاز ۳ نسخه ۷) |
 | TD-168 | Native parseFloat in Forms | استفاده مستقیم از parseFloat در ۲۴ فیلد فرم‌های مالی و کارمزدی | VoucherItemsTable.tsx, PieceworkLogModal.tsx | resolved:v7.0.6 (فاز ۳ نسخه ۷) |
 | TD-169 | Schema Import Cycle | چرخه ۵ ماژولی در اسکیماهای Drizzle (Tarjan SCC) | src/db/schema/ | resolved:v7.0.12 (فاز ۴.۲ نسخه ۷) |
-| TD-170 | Dual Serialization Debt | بازگرداندن همزمان کلیدهای camelCase و snake_case در روت پروژه‌ها | src/routes/projects.routes.ts:202 | scheduled:فاز ۴ نسخه ۷ (P2) |
+| TD-170 | Dual Serialization Debt | بازگرداندن همزمان کلیدهای camelCase و snake_case در روت پروژه‌ها | src/routes/projects.routes.ts:202 | resolved:v7.0.15 (فاز ۴.۳ نسخه ۷) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۷ ردیف
-- **آرشیو شده (resolved):** ۱۶۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۱۶ ردیف
+- **آرشیو شده (resolved):** ۱۶۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
 ---
 
-*آخرین بازبینی: v7.0.10 — پیاده‌سازی کامل TD-110 و TD-132 در نقشه راه نسخه ۷ (V7_MASTER_ROADMAP.md).*
+*آخرین بازبینی: v7.0.15 — پیاده‌سازی کامل TD-170 در نقشه راه نسخه ۷ (V7_MASTER_ROADMAP.md).*

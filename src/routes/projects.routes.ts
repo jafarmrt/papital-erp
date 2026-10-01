@@ -144,30 +144,33 @@ const updateProjectStageSchema = z.object({
 
 export interface FormattedStage {
   id?: number;
-  project_id: number;
   projectId: number;
-  stage_order: number;
   stageOrder: number;
   title: string;
   status: string;
-  start_date: string;
   startDate: string;
-  end_date: string;
   endDate: string;
-  assigned_personnel: unknown[];
   assignedPersonnel: unknown[];
-  required_resources: unknown[];
   requiredResources: unknown[];
-  progress_percent: number;
   progressPercent: number;
   notes: string;
-  completed_at: string;
   completedAt: string;
-  is_deleted: number;
-  completed_skus_count?: number;
+  isDeleted: number;
   completedSkusCount?: number;
-  applicable_skus_count?: number;
   applicableSkusCount?: number;
+
+  // Compatibility aliases for legacy consumers
+  project_id?: number;
+  stage_order?: number;
+  start_date?: string;
+  end_date?: string;
+  assigned_personnel?: unknown[];
+  required_resources?: unknown[];
+  progress_percent?: number;
+  completed_at?: string;
+  is_deleted?: number;
+  completed_skus_count?: number;
+  applicable_skus_count?: number;
 }
 
 export interface StageLike {
@@ -199,49 +202,53 @@ export interface StageLike {
   applicable_skus_count?: number | null;
 }
 
-function formatStage(s: StageLike | null | undefined): FormattedStage | null {
+export function formatStage(s: StageLike | null | undefined): FormattedStage | null {
   if (!s) return null;
-  const pId = Number(s.projectId ?? s.project_id ?? 0);
-  const sOrder = Number(s.stageOrder ?? s.stage_order ?? 1);
-  const sDate = String(s.startDate ?? s.start_date ?? '');
-  const eDate = String(s.endDate ?? s.end_date ?? '');
-  const cAt = String(s.completedAt ?? s.completed_at ?? '');
-  const assigned = Array.isArray(s.assignedPersonnel) 
+  const projectId = Number(s.projectId ?? s.project_id ?? 0);
+  const stageOrder = Number(s.stageOrder ?? s.stage_order ?? 1);
+  const startDate = String(s.startDate ?? s.start_date ?? '');
+  const endDate = String(s.endDate ?? s.end_date ?? '');
+  const completedAt = String(s.completedAt ?? s.completed_at ?? '');
+  const assignedPersonnel = Array.isArray(s.assignedPersonnel) 
     ? s.assignedPersonnel 
     : (Array.isArray(s.assigned_personnel) ? s.assigned_personnel : []);
-  const resources = Array.isArray(s.requiredResources) 
+  const requiredResources = Array.isArray(s.requiredResources) 
     ? s.requiredResources 
     : (Array.isArray(s.required_resources) ? s.required_resources : []);
-  const prog = Number(s.progressPercent ?? s.progress_percent ?? 0);
+  const progressPercent = Number(s.progressPercent ?? s.progress_percent ?? 0);
   const compSkus = s.completedSkusCount ?? s.completed_skus_count;
   const appSkus = s.applicableSkusCount ?? s.applicable_skus_count;
+  const isDeleted = Number(s.isDeleted ?? s.is_deleted ?? 0);
 
   return {
     id: s.id,
-    project_id: pId,
-    projectId: pId,
-    stage_order: sOrder,
-    stageOrder: sOrder,
+    projectId,
+    stageOrder,
     title: s.title || '',
     status: s.status || 'pending',
-    start_date: sDate,
-    startDate: sDate,
-    end_date: eDate,
-    endDate: eDate,
-    assigned_personnel: assigned,
-    assignedPersonnel: assigned,
-    required_resources: resources,
-    requiredResources: resources,
-    progress_percent: prog,
-    progressPercent: prog,
+    startDate,
+    endDate,
+    assignedPersonnel,
+    requiredResources,
+    progressPercent,
     notes: s.notes || '',
-    completed_at: cAt,
-    completedAt: cAt,
-    is_deleted: Number(s.isDeleted ?? s.is_deleted ?? 0),
-    completed_skus_count: compSkus !== undefined && compSkus !== null ? Number(compSkus) : undefined,
+    completedAt,
+    isDeleted,
     completedSkusCount: compSkus !== undefined && compSkus !== null ? Number(compSkus) : undefined,
+    applicableSkusCount: appSkus !== undefined && appSkus !== null ? Number(appSkus) : undefined,
+
+    // Aliases
+    project_id: projectId,
+    stage_order: stageOrder,
+    start_date: startDate,
+    end_date: endDate,
+    assigned_personnel: assignedPersonnel,
+    required_resources: requiredResources,
+    progress_percent: progressPercent,
+    completed_at: completedAt,
+    is_deleted: isDeleted,
+    completed_skus_count: compSkus !== undefined && compSkus !== null ? Number(compSkus) : undefined,
     applicable_skus_count: appSkus !== undefined && appSkus !== null ? Number(appSkus) : undefined,
-    applicableSkusCount: appSkus !== undefined && appSkus !== null ? Number(appSkus) : undefined
   };
 }
 
@@ -288,7 +295,11 @@ export interface ProjectLike {
   item_image?: string | null;
 }
 
-function formatProject(p: ProjectLike | null | undefined, rawStages: StageLike[] = [], extra: { itemImage?: string | null; itemThumbnail?: string | null; item_image?: string | null } = {}) {
+export function formatProject(
+  p: ProjectLike | null | undefined,
+  rawStages: StageLike[] = [],
+  extra: { itemImage?: string | null; itemThumbnail?: string | null; item_image?: string | null } = {}
+) {
   if (!p) return null;
   const stages = (rawStages || []).map(formatStage).filter((s): s is FormattedStage => s !== null);
   const totalStages = stages.length;
@@ -296,65 +307,82 @@ function formatProject(p: ProjectLike | null | undefined, rawStages: StageLike[]
   
   let overallProgress = 0;
   if (totalStages > 0) {
-    const sumProgress = stages.reduce((acc: number, s) => acc + (s.progress_percent || (s.status === 'completed' ? 100 : 0)), 0);
+    const sumProgress = stages.reduce((acc: number, s) => acc + (s.progressPercent || (s.status === 'completed' ? 100 : 0)), 0);
     overallProgress = Math.round(sumProgress / totalStages);
   }
 
-  const projCode = p.projectCode ?? p.project_code ?? '';
-  const custName = p.customerName ?? p.customer_name ?? '';
-  const itemName = p.itemName ?? p.item_name ?? '';
+  const projectCode = p.projectCode ?? p.project_code ?? '';
+  const customerId = p.customerId ?? p.customer_id ?? null;
+  const customerName = p.customerName ?? p.customer_name ?? '';
+  const itemId = p.itemId ?? p.item_id ?? null;
   const itemCode = p.itemCode ?? p.item_code ?? '';
-
+  const itemName = p.itemName ?? p.item_name ?? '';
+  const quantity = typeof p.quantity === 'number' ? p.quantity : (Number(p.quantity) || 1);
+  const unit = p.unit || 'عدد';
+  const startDate = p.startDate ?? p.start_date ?? '';
+  const endDate = p.endDate ?? p.end_date ?? '';
+  const status = p.status || 'planned';
+  const priority = p.priority || 'medium';
+  const description = p.description || '';
+  const createdAt = p.createdAt ?? p.created_at ?? '';
+  const createdBy = p.createdBy ?? p.created_by ?? '';
   const products = Array.isArray(p.products) ? p.products : [];
   const inventoryControl = p.inventoryControl ?? p.inventory_control ?? {};
   const stageSchedules = p.stageSchedules ?? p.stage_schedules ?? {};
   const customStages = Array.isArray(p.customStages) ? p.customStages : (Array.isArray(p.custom_stages) ? p.custom_stages : []);
+  const attachments = Array.isArray(p.attachments) ? p.attachments : [];
+  const isDeleted = p.isDeleted ?? p.is_deleted ?? 0;
+  const itemImage = extra.item_image || extra.itemThumbnail || extra.itemImage || p.item_image || p.itemThumbnail || p.itemImage || '';
 
   return {
     id: p.id,
-    project_code: projCode,
-    projectCode: projCode,
+    projectCode,
     title: p.title || '',
-    customer_id: p.customerId ?? p.customer_id ?? null,
-    customerId: p.customerId ?? p.customer_id ?? null,
-    customer_name: custName,
-    customerName: custName,
-    item_id: p.itemId ?? p.item_id ?? null,
-    itemId: p.itemId ?? p.item_id ?? null,
-    item_code: itemCode,
-    itemCode: itemCode,
-    item_name: itemName,
-    itemName: itemName,
-    quantity: typeof p.quantity === 'number' ? p.quantity : (Number(p.quantity) || 1),
-    unit: p.unit || 'عدد',
-    start_date: p.startDate ?? p.start_date ?? '',
-    startDate: p.startDate ?? p.start_date ?? '',
-    end_date: p.endDate ?? p.end_date ?? '',
-    endDate: p.endDate ?? p.end_date ?? '',
-    status: p.status || 'planned',
-    priority: p.priority || 'medium',
-    description: p.description || '',
-    created_at: p.createdAt ?? p.created_at ?? '',
-    createdAt: p.createdAt ?? p.created_at ?? '',
-    created_by: p.createdBy ?? p.created_by ?? '',
-    createdBy: p.createdBy ?? p.created_by ?? '',
+    customerId,
+    customerName,
+    itemId,
+    itemCode,
+    itemName,
+    quantity,
+    unit,
+    startDate,
+    endDate,
+    status,
+    priority,
+    description,
+    createdAt,
+    createdBy,
     products,
-    inventory_control: inventoryControl,
-    inventoryControl: inventoryControl,
-    stage_schedules: stageSchedules,
-    stageSchedules: stageSchedules,
-    custom_stages: customStages,
-    customStages: customStages,
-    attachments: Array.isArray(p.attachments) ? p.attachments : [],
-    is_deleted: p.isDeleted ?? p.is_deleted ?? 0,
-    item_image: extra.item_image || extra.itemThumbnail || extra.itemImage || p.item_image || p.itemThumbnail || p.itemImage || '',
+    inventoryControl,
+    stageSchedules,
+    customStages,
+    attachments,
+    isDeleted,
+    itemImage,
     stages,
+    totalStages,
+    completedStages,
+    progressPercent: overallProgress,
+
+    // Aliases
+    project_code: projectCode,
+    customer_id: customerId,
+    customer_name: customerName,
+    item_id: itemId,
+    item_code: itemCode,
+    item_name: itemName,
+    start_date: startDate,
+    end_date: endDate,
+    created_at: createdAt,
+    created_by: createdBy,
+    inventory_control: inventoryControl,
+    stage_schedules: stageSchedules,
+    custom_stages: customStages,
+    is_deleted: isDeleted,
+    item_image: itemImage,
     total_stages: totalStages,
-    totalStages: totalStages,
     completed_stages: completedStages,
-    completedStages: completedStages,
     progress_percent: overallProgress,
-    progressPercent: overallProgress
   };
 }
 
@@ -856,7 +884,7 @@ export const syncProjectStagesAndStatusFromProductProgress = ProjectService.sync
 
 
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
-router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), async (req, res) => {
+router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), validate(paramsIdSchema), async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -973,6 +1001,9 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
 
 // PUT /api/projects/:id/product-progress — بولک آپسِرت وضعیت دودویی هر SKU در هر مرحله
 const updateProductProgressSchema = z.object({
+  params: z.object({
+    id: numericIdString
+  }),
   body: z.object({
     items: z.array(z.object({
       item_id: z.union([z.number(), z.string()]),

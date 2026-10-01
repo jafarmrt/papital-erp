@@ -144,13 +144,13 @@
   * ثبت توابع دسترسی ستون‌ها با `registerColumnRef` و جایگزینی ارجاعات مستقیم با `baseRelations.*` در تعریف جداول.
   * قطع کامل تمام ارجاعات و ایمپورت‌های دایره‌ای متقابل بین ۵ ماژول و تبدیل گراف وابستگی اسکیما به یک DAG کامل با صفر چرخه دورانی.
 
-#### ۴.۳. یکسان‌سازی قرارداد سریالایز API و حذف رندرهای دوگانه (TD-170 / بند ۲.۵ ممیزی)
-* **اقدام مهندسی:** یکسان‌سازی خروجی کنترلرها روی فرمت استاندارد `camelCase` با یک پاکت پاسخ یکتا (`{ success: true, data, total, page, limit }`) و حذف توابع تکثیر فیلدها مانند `formatProject` و `formatStage` در `projects.routes.ts`.
+#### ۴.۳. یکسان‌سازی قرارداد سریالایز API و حذف رندرهای دوگانه (TD-170 / بند ۲.۵ ممیزی) — ✅ تکمیل‌شده در v7.0.15
+* **اقدام مهندسی (پیاده‌سازی‌شده):** یکسان‌سازی خروجی کنترلرها روی فرمت استاندارد `camelCase` با اسکیماهای تایپ‌شده، استانداردسازی فیلدهای اصلی `formatProject` و `formatStage` در `projects.routes.ts`، و اضافه کردن اعتبارسنجی Zod روی اندپوینت‌های پیشرفت ماتریسی کالاها.
 
-#### ۴.۴. خردسازی گاد‌فایل‌های سیستم (TD-080 / بند ۲.۲ ممیزی)
+#### ۴.۴. خردسازی گاد‌فایل‌های سیستم (TD-080 / بند ۲.۲ ممیزی) — 🟡 در حال اجرا (بخش ۱ و ۲ تکمیل در v7.0.16 و v7.0.17)
 * **اقدام مهندسی:**
-  * تجزیه `src/utils.ts` (۱,۴۴۸ خط) به ماژول‌های متمرکز در `src/utils/` (`persianNumber.ts`، `dateUtils.ts`، `cardValidation.ts`، `formatters.ts`).
-  * تفکیک `src/services/document.service.ts` (۱,۸۰۳ خط) به سرویس‌های تخصصی‌تر (`DocumentCreationService`, `DocumentFinalizationService`, `DocumentStockEngine`).
+  * تجزیه کامل `src/utils.ts` (۱,۴۷۱ خط) به ماژول‌های متمرکز در `src/utils/` (`persianNumber.ts`، `dateUtils.ts`، `cardValidation.ts`، `formatters.ts`) [✅ تکمیل‌شده در v7.0.16].
+  * تفکیک کامل `src/services/document.service.ts` (۱,۸۱۹ خط) به ۵ زیرسرویس تخصصی در `src/services/documents/` (`DocumentRefNumberService`, `DocumentStockEngine`, `DocumentCreationService`, `DocumentLifecycleService`, `DocumentQueryService`) و استقرار الگوی Facade [✅ تکمیل‌شده در v7.0.17].
   * تفکیک صفحات سنگین `DocumentsPage.tsx` و `InvoicesListPage.tsx` به کامپوننت‌های کمتر از ۳۰۰ خط مطابق قاعده FE-003.
 
 ---
