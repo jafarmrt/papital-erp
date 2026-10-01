@@ -1,29 +1,41 @@
-# Dockerfile — Papital ERP (PHASE 3 / TD-058)
-# Multi-stage: build (vite client + esbuild server) → minimal production runtime.
+# Dockerfile — Papital ERP (PHASE 3 / TD-058, v7.0.20 / TD-175)
+# Multi-stage: prod-deps (runtime node_modules) + build (vite client + esbuild server) → minimal production runtime.
 # The app runs migrations from dist/drizzle at startup (never db:push).
 # Build:  docker build -t papital-erp:v<version> .
 # Run:    docker run -p 3000:3000 --env-file .env papital-erp:v<version>
+#
+# v7.0.20 (TD-175): the server bundle is built with `--packages=external`, so every npm
+# package (express, pg, drizzle-orm, ...) is `require`d from node_modules at runtime.
+# The runtime stage previously shipped no node_modules and crashed on boot with
+# "Cannot find module 'express'". Production dependencies are now installed in a
+# dedicated stage from the tracked package-lock.json (TD-172) and copied into runtime.
 
-# ---------- Stage 1: build ----------
+# ---------- Stage 1: production dependencies only ----------
+FROM node:22-alpine AS prod-deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+# ---------- Stage 2: build ----------
 FROM node:22-alpine AS build
 WORKDIR /app
 
-# Install all dependencies (dev deps required for vite/esbuild build).
-# NOTE: package-lock.json is not currently tracked in the repository, so npm ci
-# cannot be used here — reproducibility debt is tracked in TECH_DEBT.md (TD-058 note).
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+# All dependencies (dev deps required for vite/esbuild build), reproducible from the lockfile.
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 # Build the client bundle + server bundle + copies drizzle/ into dist/drizzle (Linux build env)
 RUN npm run build
 
-# ---------- Stage 2: runtime ----------
+# ---------- Stage 3: runtime ----------
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Runtime needs: server bundle, client dist, drizzle migrations, package.json (version SSOT)
+# Runtime needs: production node_modules, server bundle, client dist, drizzle migrations,
+# package.json (version SSOT)
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
 

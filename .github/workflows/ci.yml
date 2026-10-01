@@ -207,7 +207,7 @@ jobs:
     name: Docker Container Build Verification
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -219,6 +219,21 @@ jobs:
 
       - name: Verify Docker Image Build
         run: docker build -t papital-erp:${IMAGE_TAG} .
+
+      - name: Runtime Module Resolution Smoke Test (TD-175)
+        # باندل سرور با --packages=external ساخته می‌شود؛ هر پکیجی که در رانتایم require می‌شود
+        # باید در node_modules ایمیج نهایی قابل resolve باشد (جلوگیری از کرش «Cannot find module»).
+        run: |
+          docker run --rm --entrypoint node papital-erp:${IMAGE_TAG} -e "
+            const fs = require('fs');
+            const builtin = new Set(require('module').builtinModules);
+            const src = fs.readFileSync('dist/server.cjs', 'utf8');
+            const mods = [...new Set([...src.matchAll(/require\(\"([^\".][^\"]*)\"\)/g)].map(m => m[1]))]
+              .filter(m => !m.startsWith('node:') && !builtin.has(m.split('/')[0]));
+            const missing = mods.filter(m => { try { require.resolve(m, { paths: ['/app'] }); return false; } catch { return true; } });
+            if (missing.length) { console.error('Missing runtime modules:', missing.join(', ')); process.exit(1); }
+            console.log('All ' + mods.length + ' runtime modules resolvable');
+          "
 
       - name: Push Container Image (Conditional on Registry Secrets)
         # v7.0.19 (TD-172): کانتکست secrets در شرط if مجاز نیست و کل workflow را نامعتبر می‌کرد؛

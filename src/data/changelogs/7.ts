@@ -12,6 +12,23 @@ import { AIUpdateLog } from './types';
  */
 export const v7Updates: AIUpdateLog[] = [
   {
+    version: 'v7.0.20',
+    date: '۹ مهر ۱۴۰۵',
+    title: 'فاز ۰ ممیزی مستقل - بخش ۲ (P0-1): رفع کرش ایمیج تولیدی Docker هنگام بوت',
+    summary: 'رفع یافته بحرانی P0-1 گزارش ممیزی: باندل سرور با فلگ --packages=external ساخته می‌شود و همه پکیج‌های npm را در زمان اجرا از node_modules بارگذاری می‌کند، اما مرحله runtime داکرفایل هیچ node_modules نداشت و ایمیج تولیدی (و در نتیجه همه Podهای کوبرنتیز) با خطای Cannot find module express کرش می‌کرد. این خطا روی ایمیج واقعی بازتولید شد. اقدامات: ۱) افزودن مرحله prod-deps با npm ci --omit=dev از روی package-lock.json ثبت‌شده و کپی node_modules به مرحله runtime؛ ۲) استفاده از npm ci (به‌جای npm install) در مرحله build برای بیلد تکرارپذیر؛ ۳) اعتبارسنجی با اجرای واقعی ایمیج در حالت production روی PostgreSQL 16: اعمال ۱۵ مایگریشن، پاسخ ۲۰۰ از /health/startup پس از حدود ۶ ثانیه، وضعیت healthy در HEALTHCHECK داکر و اجرا با کاربر غیرریشه node؛ ۴) افزودن گام smoke به گیت داکر CI که resolve شدن تمام ۲۴ ماژول رانتایم باندل را داخل ایمیج بررسی می‌کند و اجرای این گیت روی Pull Requestها. همچنین شکست‌های پیشین تست‌ها (TD-174)، ترتیب‌بندی کوئری بوت (TD-176) و حجم ایمیج (TD-177) به‌صورت شفاف در رجیستری بدهی ثبت شدند.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🐳 مرحله prod-deps در Dockerfile و کپی node_modules تولیدی به ایمیج رانتایم',
+      '🔁 جایگزینی npm install با npm ci در بیلد داکر بر پایه lockfile',
+      '🧪 گام Runtime Module Resolution Smoke Test در گیت داکر CI و اجرای آن روی Pull Requestها',
+      '📋 ثبت TD-174 (شکست‌های پیشین تست‌ها)، TD-176 و TD-177 در رجیستری بدهی فنی',
+      '🚀 ارتقای نسخه سیستم به v7.0.20'
+    ],
+    fixes: [
+      'رفع کرش ایمیج تولیدی Docker و CrashLoopBackOff در کوبرنتیز به دلیل نبود node_modules (TD-175)'
+    ]
+  },
+  {
     version: 'v7.0.19',
     date: '۹ مهر ۱۴۰۵',
     title: 'فاز ۰ ممیزی مستقل - بخش ۱ (P0-4): ثبت فایل قفل وابستگی‌ها و احیای پایپ‌لاین CI',
