@@ -22,11 +22,11 @@
 | TD-106 | Frontend / Type Safety (FE-007) | ۹۱۸ مورد `: any` و ۲۷۹ مورد `as any` در سورس‌کد | سراسر src | scheduled:فاز ۳ نسخه ۷ |
 | TD-108 | FE Helpers (Badges) | ۱۲ کپی `getStatusBadge`/`getPriorityBadge` با الگو یکسان ولی واژگان/رنگ متفاوت — تجمیع در PillBadge | components/pages | scheduled:فاز ۳ نسخه ۷ |
 | TD-109 | Runtime Flags Cleanup | پاکسازی کامل سرویس/کلیدهای موقت test_endpoints پس از حذف روت‌های تست | src/lib/runtimeFlags.ts | scheduled:فاز ۲ نسخه ۷ |
-| TD-110 | financialMath Shim | مهاجرت ۵ ایمپورت باقی‌مانده از utils/financialMath به lib/financialDecimal و حذف فایل واسط | src/utils/financialMath.ts | scheduled:فاز ۲ نسخه ۷ |
+| TD-110 | financialMath Shim | مهاجرت ۵ ایمپورت باقی‌مانده از utils/financialMath به lib/financialDecimal و حذف فایل واسط | src/utils/financialMath.ts | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
 | TD-112 | Workflow Keep-List | روت‌های بدون مصرف‌کننده فرانت‌اند در انتظار رابط کاربری فاز ۳ | workflow.routes.ts | scheduled:فاز ۳ نسخه ۷ |
 | TD-129 | Lockfile Flux | محافظت از وجود package-lock.json در گیت CI و فعال‌سازی کش | فرایند/CI | resolved:v7.0.3 (فاز ۲ نسخه ۷) |
 | TD-130 | Hard Delete in updateDocument | بررسی ردیف‌های document_items در ویرایش سند جهت هم‌ترازی با soft-delete | document.service.ts:235 | scheduled:فاز ۱ نسخه ۷ |
-| TD-132 | Dead Dependencies / CVEs | پکیج‌های بی‌استفاده firebase، firebase-admin و @google/genai و کاهش حجم ایمیج | package.json | scheduled:فاز ۲ نسخه ۷ |
+| TD-132 | Dead Dependencies / CVEs | پکیج‌های بی‌استفاده firebase، firebase-admin و @google/genai و کاهش حجم ایمیج | package.json | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
 | TD-134 | Test DB Isolation Off by Default | پیش‌فرض کردن ERP_TEST_SCHEMA_ISOLATION=1 در رانر تست‌ها و حذف sleepها | scripts/run-tests.ts:121 | resolved:v7.0.3 (فاز ۲ نسخه ۷) |
 | TD-160 | TypeScript Strict Mode Disabled | خاموش بودن فلگ‌های strict, strictNullChecks, noImplicitAny در tsconfig.json | tsconfig.json | resolved:v7.0.4 (فاز ۳ نسخه ۷) |
 | TD-161 | Zod Coverage Gap | فقدان اعتبارسنجی Zod روی ۱۱ روت تدارکات (Procurement) و روت‌های داشبورد | src/routes/procurement.routes.ts | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
@@ -44,11 +44,11 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۹ ردیف
-- **آرشیو شده (resolved):** ۱۵۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۱۷ ردیف
+- **آرشیو شده (resolved):** ۱۶۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
 ---
 
-*آخرین بازبینی: v7.0.1 — پیاده‌سازی کامل فاز ۱ نقشه راه نسخه ۷ (V7_MASTER_ROADMAP.md).*
+*آخرین بازبینی: v7.0.10 — پیاده‌سازی کامل TD-110 و TD-132 در نقشه راه نسخه ۷ (V7_MASTER_ROADMAP.md).*

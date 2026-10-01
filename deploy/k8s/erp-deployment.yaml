@@ -42,7 +42,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v7.0.9
+        image: registry.example.com/erp:v7.0.10
         ports:
         - containerPort: 3000
         volumeMounts:

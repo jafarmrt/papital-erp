@@ -7,7 +7,7 @@ import {
   transactions
 } from '../../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
-import { fin } from '../../utils/financialMath.js';
+import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../document.service.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';

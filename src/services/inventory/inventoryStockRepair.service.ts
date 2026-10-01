@@ -1,7 +1,7 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { fin, FinancialMath } from '../../utils/financialMath.js';
+import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 

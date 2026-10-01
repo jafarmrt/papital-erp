@@ -4,7 +4,7 @@ import { eq, asc, and, or, sql, like, gte, lte, lt, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
-import { fin } from '../../utils/financialMath.js';
+import { fin } from '../../lib/financialDecimal.js';
 import type { 
   TrialBalanceRow, 
   FinancialSummaryStats, 

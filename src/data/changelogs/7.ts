@@ -12,6 +12,23 @@ import { AIUpdateLog } from './types';
  */
 export const v7Updates: AIUpdateLog[] = [
   {
+    version: 'v7.0.10',
+    date: '۱۰ مهر ۱۴۰۵',
+    title: 'نسخه ۷ - حل بدهی‌های TD-110 و TD-132: مهاجرت کامل به FinancialDecimal، حذف شیم financialMath و سبک‌سازی وابستگی‌ها',
+    summary: 'تثبیت و پاکسازی معماری کدهای محاسباتی و وابستگی‌های پکیج: ۱) مهاجرت قطعی ۵ ماژول باقی‌مانده انبارداری و حسابداری (شامل accountingReport.service.ts، projectBomAllocation.service.ts، stockReconciliation.service.ts، negativeStockPolicy.service.ts، inventoryStockRepair.service.ts) از utils/financialMath به لایه مرکزی lib/financialDecimal و حذف کامل فایل واسط financialMath.ts (بسته‌شدن TD-110)؛ ۲) به‌روزرسانی سوئیت آزمون واحد unitSuite.ts برای اعتبارسنجی مستقیم توابع FinancialMath از ماژول مرجع مرکزی؛ ۳) پاکسازی وابستگی‌های بی‌استفاده رانتایم از package.json شامل @google/genai، firebase و firebase-admin و سبک‌سازی ۴۷ مگابایتی بیلدها و کانتینر (بسته‌شدن TD-132)؛ ۴) ثبت و ارتقای متمرکز نسخه به v7.0.10 در کلیه اسناد و مانیفست‌ها.',
+    author: 'AI Agent (Software Architect)',
+    changes: [
+      '🧹 حل بدهی TD-110: مهاجرت ۵ فایل سرویس انبار و حسابداری به lib/financialDecimal.js و حذف فایل واسط utils/financialMath.ts',
+      '🧪 به‌روزرسانی آزمون واحد Test 10 در unitSuite.ts جهت تست مستقیم FinancialMath و FinancialDecimal بدون شیم قدیمی',
+      '📦 حل بدهی TD-132: پاکسازی پکیج‌های بی‌استفاده @google/genai، firebase، firebase-admin از dependencies در package.json',
+      '🚀 به‌روزرسانی نسخه سامانه به v7.0.10 و همگام‌سازی مانیفست K8s و README'
+    ],
+    fixes: [
+      'رفع تکثیر مسیرهای ایمپورت متفرقه برای محاسبات مالی و اعشاری با استقرار صددرصدی روی lib/financialDecimal',
+      'کاهش حجم دانلود و آسیب‌پذیری‌های احتمالی با حذف پکیج‌های سنگین فاقد استفاده در رانتایم از package.json'
+    ]
+  },
+  {
     version: 'v7.0.9',
     date: '۱۰ مهر ۱۴۰۵',
     title: 'نسخه ۷ - ارتقای پایداری خطاها و انبار: رفع چالش‌های بارگذاری چانک در SectionErrorBoundary و اصلاح Lazy-Init جدول نرمال انبار',

@@ -1,7 +1,7 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions, users } from '../../db/schema.js';
 import { eq, and, sql, asc } from 'drizzle-orm';
-import { fin, FinancialMath } from '../../utils/financialMath.js';
+import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { NegativeStockPolicyService, type NegativeStockPolicyType } from './negativeStockPolicy.service.js';
 
 export type DiscrepancyType =

@@ -473,7 +473,6 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
   const t10Start = Date.now();
   try {
     const { fin: finLib, FinancialMath: FMLib } = await import('../../lib/financialDecimal.js');
-    const { fin: finUtils, FinancialMath: FMUtils } = await import('../../utils/financialMath.js');
 
     // 1. Acceptance Criteria verification: fin(1_000_000_000).multiply(0.1).divide(3).round(4)
     const testResult1 = finLib(1_000_000_000).multiply(0.1).divide(3).round(4);
@@ -494,15 +493,10 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       throw new Error(`محاسبه میانگین موزون بها نادرست است: ${wac.toNumber()}`);
     }
 
-    // 4. Verification of re-exported utils/financialMath
-    const utilsResult = finUtils(1_000_000_000).multiply(0.1).divide(3).round(4);
-    if (utilsResult.toNumber() !== 33333333.3333) {
-      throw new Error(`محاسبه از مسیر utils/financialMath با شکست مواجه شد: ${utilsResult.toNumber()}`);
-    }
-
-    const legacyAdd = FMUtils.add(0.1, 0.2);
-    if (legacyAdd !== 0.3) {
-      throw new Error(`متد قدیمی FinancialMath.add خروجی ناصحیح دارد: ${legacyAdd}`);
+    // 4. Verification of FinancialMath calculation utilities
+    const fmAdd = FMLib.add(0.1, 0.2);
+    if (fmAdd !== 0.3) {
+      throw new Error(`متد FinancialMath.add خروجی ناصحیح دارد: ${fmAdd}`);
     }
 
     results.push(makeTestCase({
