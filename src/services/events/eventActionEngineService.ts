@@ -460,6 +460,10 @@ export class EventActionEngineService {
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error(`[EventActionEngine Process Error] Error processing event ${event.eventType}: ${error.message}`);
+      // v7.0.25 (TD-183): خطای سطح بالا (مثلاً شکست خواندن قوانین) پیش از اجرای هر اکشنی رخ می‌دهد؛
+      // پرتاب مجدد آن امن است و اجازه می‌دهد Outbox با backoff دوباره تلاش کند. شکست تک‌تک قوانین همچنان
+      // درون allSettled مدیریت و در event_action_logs ثبت می‌شود و باعث تکرار اکشن‌های موفق نمی‌شود.
+      throw error;
     }
   }
 

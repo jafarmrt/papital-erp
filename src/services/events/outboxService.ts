@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { outboxEvents } from '../../db/schema.js';
-import { eq, and, or, lte, lt, sql, desc, type SQL } from 'drizzle-orm';
+import { eq, and, or, lte, lt, sql, desc, isNull, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { domainEventBus } from './domainEventBus.js';
@@ -77,65 +77,49 @@ export class OutboxService {
     let failed = 0;
 
     try {
-      const now = new Date();
-      const nowIso = now.toISOString();
+      const nowIso = new Date().toISOString();
 
-      // Fetch pending events or events whose retry backoff has elapsed
+      // v7.0.25 (TD-183 / audit P1-1): رویدادهای pending یا failed فقط پس از رسیدن زمان backoff
+      // (next_retry_at) انتخاب می‌شوند؛ قبلاً رکوردهای pending بدون توجه به backoff در تیک بعدی اجرا می‌شدند.
+      const dueCondition = and(
+        or(eq(outboxEvents.status, 'pending'), eq(outboxEvents.status, 'failed')),
+        or(isNull(outboxEvents.nextRetryAt), lte(outboxEvents.nextRetryAt, nowIso)),
+        lt(outboxEvents.retryCount, this.MAX_RETRIES)
+      );
+
       const candidateEvents = await orm
         .select()
         .from(outboxEvents)
-        .where(
-          or(
-            eq(outboxEvents.status, 'pending'),
-            and(
-              eq(outboxEvents.status, 'failed'),
-              lte(outboxEvents.nextRetryAt, nowIso),
-              sql`${outboxEvents.retryCount} < ${this.MAX_RETRIES}`
-            )
-          )
-        )
+        .where(dueCondition)
         .orderBy(outboxEvents.id)
         .limit(batchSize);
 
-      if (candidateEvents.length === 0) {
-        this.isProcessingBatch = false;
-        return { processed: 0, succeeded: 0, failed: 0 };
-      }
+      for (const rawEvent of candidateEvents) {
+        // 1. Atomic Claim Attempt: the same due-condition guards against concurrent workers
+        const claimed = await orm
+          .update(outboxEvents)
+          .set({
+            status: 'processing',
+            lockedAt: nowIso,
+            lockedBy: process.env.WORKER_ID || `worker-${process.pid || 1}`
+          })
+          .where(and(eq(outboxEvents.id, rawEvent.id), dueCondition))
+          .returning({ id: outboxEvents.id });
 
-        for (const rawEvent of candidateEvents) {
-          const currentRetry = (rawEvent.retryCount || 0);
+        if (!claimed || claimed.length === 0) {
+          // Event was already claimed by another worker instance in parallel
+          continue;
+        }
 
-          // 1. Atomic Claim Attempt: Mark as 'processing' with conditional check to prevent concurrent worker execution
-          const claimed = await orm
-            .update(outboxEvents)
-            .set({
-              status: 'processing',
-              lockedAt: nowIso,
-              lockedBy: process.env.WORKER_ID || `worker-${process.pid || 1}`
-            })
-            .where(
-              and(
-                eq(outboxEvents.id, rawEvent.id),
-                or(
-                  eq(outboxEvents.status, 'pending'),
-                  and(
-                    eq(outboxEvents.status, 'failed'),
-                    lte(outboxEvents.nextRetryAt, nowIso)
-                  )
-                )
-              )
-            )
-            .returning({ id: outboxEvents.id });
+        processed++;
+        const previouslyCompleted = Array.isArray(rawEvent.completedHandlers) ? rawEvent.completedHandlers : [];
 
-          if (!claimed || claimed.length === 0) {
-            // Event was already claimed by another worker instance in parallel
-            continue;
-          }
+        let completedHandlers: string[] = previouslyCompleted;
+        let failureMessage = '';
+        let failureStack = '';
 
-          processed++;
-
-          try {
-            // 2. Reconstitute BaseDomainEvent structure
+        try {
+          // 2. Reconstitute BaseDomainEvent structure
           const domainEvent: BaseDomainEvent = {
             eventId: rawEvent.eventId,
             eventType: rawEvent.eventType,
@@ -146,9 +130,18 @@ export class OutboxService {
             occurredAt: rawEvent.occurredAt || nowIso
           };
 
-          // 3. Dispatch to DomainEventBus
-          await domainEventBus.publish(domainEvent);
+          // 3. Tracked dispatch: awaits every handler; handlers that succeeded before are skipped
+          const result = await domainEventBus.dispatchTracked(domainEvent, previouslyCompleted);
+          completedHandlers = result.completedHandlers;
+          if (result.failures.length > 0) {
+            failureMessage = result.failures.map(f => `${f.handler}: ${f.error}`).join(' | ');
+          }
+        } catch (err: unknown) {
+          failureMessage = err instanceof Error ? err.message : String(err);
+          failureStack = err instanceof Error ? err.stack || '' : '';
+        }
 
+        if (!failureMessage) {
           // 4. Mark as completed
           await orm
             .update(outboxEvents)
@@ -157,56 +150,57 @@ export class OutboxService {
               processedAt: new Date().toISOString(),
               lastError: null,
               lockedAt: null,
-              lockedBy: null
+              lockedBy: null,
+              completedHandlers
             })
             .where(eq(outboxEvents.id, rawEvent.id));
 
           succeeded++;
           logger.info(`[Transactional Outbox] Successfully dispatched outbox event #${rawEvent.id} (${rawEvent.eventType})`);
-        } catch (err: unknown) {
-          failed++;
-          const newRetryCount = currentRetry + 1;
-          const isFinalFailure = newRetryCount >= this.MAX_RETRIES;
-          const errMsg = err instanceof Error ? err.message : String(err);
-          const errStack = err instanceof Error ? err.stack || '' : '';
-          
-          // Exponential backoff: 5s, 10s, 20s, 40s, 80s (max 300s)
-          const backoffSeconds = Math.min(300, Math.pow(2, newRetryCount) * 5);
-          const nextRetryDate = new Date(Date.now() + backoffSeconds * 1000).toISOString();
-
-          await orm
-            .update(outboxEvents)
-            .set({
-              status: isFinalFailure ? 'failed' : 'pending',
-              retryCount: newRetryCount,
-              nextRetryAt: isFinalFailure ? null : nextRetryDate,
-              lastError: errMsg || 'خطای نامشخص در پردازش رویداد',
-              processedAt: isFinalFailure ? new Date().toISOString() : null,
-              lockedAt: null,
-              lockedBy: null
-            })
-            .where(eq(outboxEvents.id, rawEvent.id));
-
-          if (isFinalFailure) {
-            await DeadLetterQueueService.moveToDeadLetter({
-              originalEventId: rawEvent.eventId,
-              eventType: rawEvent.eventType,
-              aggregateType: rawEvent.aggregateType,
-              aggregateId: rawEvent.aggregateId,
-              source: 'outbox',
-              payload: rawEvent.payload,
-              metadata: rawEvent.metadata,
-              failureReason: `اتمام سقف تلاش‌ها (${this.MAX_RETRIES} تلاش): ${errMsg || 'خطای پردازش'}`,
-              errorStack: errStack,
-              retryCount: newRetryCount
-            }).catch(dlqErr => {
-              const dlqErrMsg = dlqErr instanceof Error ? dlqErr.message : String(dlqErr);
-              logger.error(`[DLQ Auto Move Error] ${dlqErrMsg}`);
-            });
-          }
-
-          logger.error(`[Transactional Outbox] Failed to dispatch event #${rawEvent.id} (Attempt ${newRetryCount}/${this.MAX_RETRIES}): ${errMsg}`);
+          continue;
         }
+
+        failed++;
+        const newRetryCount = (rawEvent.retryCount || 0) + 1;
+        const isFinalFailure = newRetryCount >= this.MAX_RETRIES;
+
+        // Exponential backoff per AGENTS.md §15: 5s, 10s, 20s, 40s ... (max 300s)
+        const backoffSeconds = Math.min(300, 5 * Math.pow(2, newRetryCount - 1));
+        const nextRetryDate = new Date(Date.now() + backoffSeconds * 1000).toISOString();
+
+        await orm
+          .update(outboxEvents)
+          .set({
+            status: isFinalFailure ? 'failed' : 'pending',
+            retryCount: newRetryCount,
+            nextRetryAt: isFinalFailure ? null : nextRetryDate,
+            lastError: failureMessage || 'خطای نامشخص در پردازش رویداد',
+            processedAt: isFinalFailure ? new Date().toISOString() : null,
+            lockedAt: null,
+            lockedBy: null,
+            completedHandlers
+          })
+          .where(eq(outboxEvents.id, rawEvent.id));
+
+        if (isFinalFailure) {
+          await DeadLetterQueueService.moveToDeadLetter({
+            originalEventId: rawEvent.eventId,
+            eventType: rawEvent.eventType,
+            aggregateType: rawEvent.aggregateType,
+            aggregateId: rawEvent.aggregateId,
+            source: 'outbox',
+            payload: rawEvent.payload,
+            metadata: rawEvent.metadata,
+            failureReason: `اتمام سقف تلاش‌ها (${this.MAX_RETRIES} تلاش): ${failureMessage || 'خطای پردازش'}`,
+            errorStack: failureStack,
+            retryCount: newRetryCount
+          }).catch(dlqErr => {
+            const dlqErrMsg = dlqErr instanceof Error ? dlqErr.message : String(dlqErr);
+            logger.error(`[DLQ Auto Move Error] ${dlqErrMsg}`);
+          });
+        }
+
+        logger.error(`[Transactional Outbox] Failed to dispatch event #${rawEvent.id} (Attempt ${newRetryCount}/${this.MAX_RETRIES}${isFinalFailure ? ', moved to DLQ' : `, next retry in ${backoffSeconds}s`}): ${failureMessage}`);
       }
     } catch (globalErr: unknown) {
       const globalErrMsg = globalErr instanceof Error ? globalErr.message : String(globalErr);

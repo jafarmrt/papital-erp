@@ -267,8 +267,23 @@ export class DeadLetterQueueService {
         occurredAt: record.quarantinedAt || nowIso
       };
 
-      // 2. Publish to DomainEventBus directly
-      await domainEventBus.publish(domainEvent);
+      // 2. v7.0.25 (TD-183 / audit P1-1): دیسپچ قابل‌ردیابی — قبلاً publish خطای هندلرها را می‌بلعید و
+      // بازپخش همیشه «موفق» گزارش می‌شد. هندلرهایی که قبلاً برای این رویداد موفق شده‌اند دوباره اجرا نمی‌شوند.
+      const [outboxRow] = await orm
+        .select({ completedHandlers: outboxEvents.completedHandlers })
+        .from(outboxEvents)
+        .where(eq(outboxEvents.eventId, record.originalEventId));
+      const previouslyCompleted = Array.isArray(outboxRow?.completedHandlers) ? outboxRow.completedHandlers : [];
+      const dispatch = await domainEventBus.dispatchTracked(domainEvent, previouslyCompleted);
+      if (outboxRow) {
+        await orm
+          .update(outboxEvents)
+          .set({ completedHandlers: dispatch.completedHandlers })
+          .where(eq(outboxEvents.eventId, record.originalEventId));
+      }
+      if (dispatch.failures.length > 0) {
+        throw new Error(dispatch.failures.map(f => `${f.handler}: ${f.error}`).join(' | '));
+      }
 
       // 3. Mark DLQ as replayed
       const [updatedDlq] = await orm

@@ -100,6 +100,7 @@
 - **DomainEventBus:** Central singleton dispatcher (`src/services/events/domainEventBus.ts`) with non-blocking handlers.
 - **Transactional Outbox:** Write events atomically inside `tx` via `OutboxService.recordEvent(tx, event)`.
 - **Exponential Backoff Worker:** Polls pending events, dispatches, retries (5s, 10s, 20s... max 5 attempts).
+- **Tracked Dispatch (TD-183, v7.0.25):** `publish()` stays fire-and-forget (non-blocking, errors only logged). The outbox worker and DLQ replay MUST use `domainEventBus.dispatchTracked(event, completedHandlers)`, which awaits every handler and reports failures. Every handler is registered with a stable name (`subscribe(type, fn, name)`) and MUST rethrow its errors after logging; succeeded handler names are persisted in `outbox_events.completed_handlers` so retries never re-run a handler that already succeeded.
 - **Dead Letter Queue (DLQ):** Failed events transfer to `dead_letter_queue` with replay/dismiss endpoints.
 - **Automated Event Actions:** `EventActionEngineService` dynamically triggers webhooks, notifications, SMS, or workflows based on rules.
 - **HMAC-SHA256 Signatures:** Webhooks sign payload with HMAC-SHA256 and attach `X-ERP-Signature-256` and `X-ERP-Delivery-Id`.

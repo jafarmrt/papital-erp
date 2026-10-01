@@ -2584,6 +2584,100 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.2: v7.0.25 (TD-183 / audit P1-1): تحویل تضمینی Outbox — شکست هندلر، backoff واقعی، عدم تکرار هندلر موفق و انتقال به DLQ
+  if (shouldRun('reg_outbox_tracked_dispatch_td_183', 'td183', 'outbox', 'dlq', 'events')) {
+    const tStart = Date.now();
+    const { domainEventBus } = await import('../../services/events/domainEventBus.js');
+    const { OutboxService } = await import('../../services/events/outboxService.js');
+    const { outboxEvents, deadLetterEvents } = await import('../../db/schema.js');
+    const probeType = `RegOutboxProbe_${Date.now()}`;
+    const fatalType = `RegOutboxFatal_${Date.now()}`;
+    const createdEventIds: string[] = [];
+    try {
+      const calls = { ok: 0, flaky: 0 };
+      // خواندن از طریق تابع تا narrowing کنترل‌جریان TypeScript شمارنده‌های تغییرکرده در هندلرها را ثابت فرض نکند
+      const count = (key: 'ok' | 'flaky'): number => calls[key];
+      let flakyShouldFail = true;
+      domainEventBus.subscribe(probeType, async () => { calls.ok++; }, 'reg-probe-ok');
+      domainEventBus.subscribe(probeType, async () => {
+        calls.flaky++;
+        if (flakyShouldFail) throw new Error('reg probe transient failure');
+      }, 'reg-probe-flaky');
+      domainEventBus.subscribe(fatalType, async () => { throw new Error('reg probe permanent failure'); }, 'reg-probe-fatal');
+
+      // 0. مسیر publish (غیر Outbox) همچنان غیرمسدودکننده است و خطای هندلر را به فراخوان پرتاب نمی‌کند
+      await domainEventBus.publish(domainEventBus.createEvent(fatalType, 'Item', '0', { probe: true }, {}));
+
+      // 1. اولین تلاش: هندلر موفق اجرا می‌شود، هندلر ناپایدار شکست می‌خورد → pending با backoff آینده
+      const ev = domainEventBus.createEvent(probeType, 'Item', '1', { probe: true }, {});
+      createdEventIds.push(ev.eventId);
+      await OutboxService.saveToOutbox(orm, ev);
+      await OutboxService.processPendingBatch(100);
+      let [row] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, ev.eventId));
+      if (row.status !== 'pending' || row.retryCount !== 1 || !row.nextRetryAt || new Date(`${row.nextRetryAt}Z`).getTime() <= Date.now() - 1000) {
+        throw new Error(`پس از شکست هندلر، رویداد باید pending با retryCount=1 و زمان backoff آینده باشد: ${JSON.stringify({ status: row.status, retryCount: row.retryCount, nextRetryAt: row.nextRetryAt })}`);
+      }
+      if (!row.completedHandlers.includes('reg-probe-ok') || row.completedHandlers.includes('reg-probe-flaky')) {
+        throw new Error(`completed_handlers باید فقط هندلر موفق را داشته باشد: ${JSON.stringify(row.completedHandlers)}`);
+      }
+
+      // 2. اجرای فوری دوباره نباید پیش از رسیدن زمان backoff رویداد را بردارد
+      await OutboxService.processPendingBatch(100);
+      [row] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, ev.eventId));
+      if (row.retryCount !== 1 || count('flaky') !== 1) {
+        throw new Error(`backoff رعایت نشد: retryCount=${row.retryCount}، تعداد اجرای هندلر ناپایدار=${count('flaky')}`);
+      }
+
+      // 3. پس از رسیدن زمان backoff: فقط هندلر ناموفق دوباره اجرا می‌شود و رویداد completed می‌شود
+      flakyShouldFail = false;
+      await orm.update(outboxEvents).set({ nextRetryAt: '2000-01-01 00:00:00' }).where(eq(outboxEvents.eventId, ev.eventId));
+      await OutboxService.processPendingBatch(100);
+      [row] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, ev.eventId));
+      if (row.status !== 'completed' || count('ok') !== 1 || count('flaky') !== 2) {
+        throw new Error(`تلاش مجدد باید فقط هندلر ناموفق را اجرا و رویداد را completed کند: ${JSON.stringify({ status: row.status, calls })}`);
+      }
+
+      // 4. شکست نهایی (آخرین تلاش مجاز) → وضعیت failed و انتقال به DLQ
+      const fatal = domainEventBus.createEvent(fatalType, 'Item', '2', { probe: true }, {});
+      createdEventIds.push(fatal.eventId);
+      await OutboxService.saveToOutbox(orm, fatal);
+      await orm.update(outboxEvents).set({ retryCount: 4 }).where(eq(outboxEvents.eventId, fatal.eventId));
+      await OutboxService.processPendingBatch(100);
+      const [fatalRow] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, fatal.eventId));
+      const dlqRows = await orm.select().from(deadLetterEvents).where(eq(deadLetterEvents.originalEventId, fatal.eventId));
+      if (fatalRow.status !== 'failed' || dlqRows.length !== 1) {
+        throw new Error(`پس از آخرین تلاش ناموفق رویداد باید failed و در DLQ باشد: ${JSON.stringify({ status: fatalRow.status, dlq: dlqRows.length })}`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_outbox_tracked_dispatch_td_183',
+        scenarioId: 'regression_sanity',
+        name: 'v7.0.25: تحویل تضمینی Outbox، backoff واقعی، عدم تکرار هندلر موفق و انتقال به DLQ (TD-183 / P1-1)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'شکست هندلر به Outbox رسید، backoff رعایت شد، فقط هندلر ناموفق دوباره اجرا شد و شکست نهایی به DLQ منتقل شد؛ مسیر publish غیرمسدودکننده ماند.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_outbox_tracked_dispatch_td_183',
+        scenarioId: 'regression_sanity',
+        name: 'v7.0.25: تحویل تضمینی Outbox، backoff واقعی، عدم تکرار هندلر موفق و انتقال به DLQ (TD-183 / P1-1)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdEventIds.length > 0) {
+        await orm.delete(deadLetterEvents).where(inArray(deadLetterEvents.originalEventId, createdEventIds));
+        await orm.delete(outboxEvents).where(inArray(outboxEvents.eventId, createdEventIds));
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

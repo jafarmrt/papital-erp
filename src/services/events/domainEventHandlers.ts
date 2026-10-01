@@ -23,6 +23,10 @@ import { ActionHandlerService } from './actionHandlerService.js';
 export function registerDomainEventHandlers(): void {
   logger.info('[DomainEventHandlers] Registering domain event subscribers...');
 
+  // v7.0.25 (TD-183 / audit P1-1): هر هندلر نام پایدار دارد و خطا را (پس از لاگ) دوباره پرتاب می‌کند تا
+  // Outbox بتواند شکست را تشخیص داده و فقط همان هندلر را با backoff دوباره اجرا کند. در مسیر `publish`
+  // (غیر Outbox) پوشش گذرگاه همچنان خطا را می‌گیرد و فقط لاگ می‌کند (AGENTS.md §15).
+
   // Initialize Subphase 8.3 Idempotent Action Handlers
   ActionHandlerService.initializeBuiltInHandlers();
 
@@ -35,8 +39,9 @@ export function registerDomainEventHandlers(): void {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[EventActionEngine Dispatch Error] ${errMsg}`);
+      throw err;
     }
-  });
+  }, 'event-action-engine');
 
   // -------------------------------------------------------------
   // 0.1 External Webhook Subscriptions Dispatcher (Phase 14)
@@ -47,8 +52,9 @@ export function registerDomainEventHandlers(): void {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[WebhookSubscription Dispatch Error] ${errMsg}`);
+      throw err;
     }
-  });
+  }, 'webhook-subscriptions');
 
   // -------------------------------------------------------------
   // 1. Central Audit Trail for all Domain Events
@@ -96,8 +102,9 @@ export function registerDomainEventHandlers(): void {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Audit Domain Event] Failed to write audit log: ${errMsg}`);
+      throw err;
     }
-  });
+  }, 'domain-audit-log');
 
   // -------------------------------------------------------------
   // 2. Stock Issued -> Reorder Threshold & Inventory Integrity Monitor
@@ -131,8 +138,9 @@ export function registerDomainEventHandlers(): void {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Inventory Reorder Check] Error checking reorderPoint: ${errMsg}`);
+      throw err;
     }
-  });
+  }, 'stock-reorder-monitor');
 
   // -------------------------------------------------------------
   // 3. Purchase Approved -> Warehouse Notification / Auto Inflow
@@ -143,8 +151,9 @@ export function registerDomainEventHandlers(): void {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Purchase Handler] Error: ${errMsg}`);
+      throw err;
     }
-  });
+  }, 'purchase-approved-log');
 
   // -------------------------------------------------------------
   // 4. Invoice Approved -> Order Notification
@@ -155,6 +164,7 @@ export function registerDomainEventHandlers(): void {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error(`[Invoice Handler] Error: ${errMsg}`);
+      throw err;
     }
-  });
+  }, 'invoice-approved-log');
 }

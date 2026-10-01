@@ -16,7 +16,9 @@ export const outboxEvents = pgTable('outbox_events', {
   occurredAt: timestamp('occurred_at', { mode: 'string' }).defaultNow(),
   processedAt: timestamp('processed_at', { mode: 'string' }),
   lockedAt: timestamp('locked_at', { mode: 'string' }),
-  lockedBy: text('locked_by').default('')
+  lockedBy: text('locked_by').default(''),
+  // v7.0.25 (TD-183): نام هندلرهایی که برای این رویداد موفق شده‌اند — تلاش مجدد فقط هندلرهای ناموفق را اجرا می‌کند
+  completedHandlers: jsonb('completed_handlers').$type<string[]>().notNull().default([])
 }, (table) => ({
   idx_outbox_status_next: index('idx_outbox_status_next').on(table.status, table.nextRetryAt),
   idx_outbox_aggregate: index('idx_outbox_aggregate').on(table.aggregateType, table.aggregateId),

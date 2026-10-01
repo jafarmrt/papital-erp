@@ -48,7 +48,7 @@ export class ActionHandlerService {
     // Subscribe to domain event bus
     domainEventBus.subscribe(def.eventType, async (event: BaseDomainEvent) => {
       await this.executeHandler(def, event);
-    });
+    }, `action-handler:${def.handlerName}`);
 
     logger.info(`[ActionHandlerService] Registered handler '${def.handlerName}' for event '${def.eventType}'`);
   }
