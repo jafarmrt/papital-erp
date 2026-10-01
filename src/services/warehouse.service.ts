@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { warehouses } from '../db/schema.js';
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/customErrors.js';
@@ -17,7 +17,8 @@ export class WarehouseService {
    * Retrieves active warehouses
    */
   static async listActive(executor: DbExecutor = orm): Promise<Array<typeof warehouses.$inferSelect>> {
-    return executor.select().from(warehouses).where(eq(warehouses.isActive, 1));
+    // v7.0.36 (P2-3): ترتیب قطعی — رابط کاربری اولین انبار فهرست را پیش‌فرض فرم‌ها قرار می‌دهد
+    return executor.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(asc(warehouses.id));
   }
 
   /**

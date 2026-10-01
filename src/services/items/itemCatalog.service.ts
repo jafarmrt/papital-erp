@@ -1,4 +1,4 @@
-import { eq, and, desc, ilike } from 'drizzle-orm';
+import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, journalVouchers } from '../../db/schema.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -8,7 +8,7 @@ import { ItemPricingService } from './itemPricing.service.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError, NotFoundError, ConflictError } from '../../errors/customErrors.js';
 import { DocumentService } from '../document.service.js';
-import { resolveWarehouseCode } from '../inventory/warehouseResolver.js';
+import { resolveWarehouseCode, getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
@@ -283,7 +283,7 @@ export class ItemCatalogService {
    * Generates formatted rows for Excel export including warehouse stocks and pricing strategy columns.
    */
   static async processUnifiedExport(typeFilter?: string) {
-    const whs = await orm.select().from(warehouses);
+    const whs = await orm.select().from(warehouses).orderBy(asc(warehouses.id));
     const configuredStrategies = await ItemPricingService.getPricingStrategies();
 
     const conditions = [eq(items.isDeleted, 0)];
@@ -379,7 +379,9 @@ export class ItemCatalogService {
     typeFilter: string | undefined,
     req: { user?: { id?: number; username?: string; full_name?: string } }
   ) {
-    const whs = await orm.select().from(warehouses);
+    const whs = await orm.select().from(warehouses).orderBy(asc(warehouses.id));
+    // v7.0.36 (P2-3): انبار پیش‌فرض قطعی (انبار فعال با کمترین شناسه)
+    const importDefaultWhCode = (await getDefaultWarehouseCode(orm)) ?? whs[0]?.code ?? 'main';
     const strategies = await ItemPricingService.getPricingStrategies();
 
     let createdCount = 0;
@@ -421,7 +423,7 @@ export class ItemCatalogService {
         const weight = row['وزن'] || row['weight'] ? Number(row['وزن'] || row['weight']) : null;
         const material = String(row['جنس'] || row['material'] || '').trim();
 
-        const defaultWhCode = whs[0]?.code || 'main';
+        const defaultWhCode = importDefaultWhCode;
         const stockValues: Record<string, number> = {};
         let computedStock = 0;
         let hasCustomStockInRow = false;
@@ -815,7 +817,7 @@ export class ItemCatalogService {
         throw new ConflictError(`محصولی با نام «${name}» قبلاً با کد «${existingName.code}» در سیستم ثبت شده است. ثبت دو محصول با نام مشابه امکان‌پذیر نیست.`);
       }
 
-      const whs = await tx.select({ code: warehouses.code }).from(warehouses);
+      const whs = await tx.select({ code: warehouses.code }).from(warehouses).orderBy(asc(warehouses.id));
       let computedStock = 0;
       const stockValues: Record<string, number> = {};
 
@@ -828,7 +830,7 @@ export class ItemCatalogService {
 
       const currentStockBody = Number(body.current_stock || 0);
       if (computedStock === 0 && currentStockBody > 0 && whs.length > 0) {
-        const defaultWh = whs[0].code;
+        const defaultWh = (await getDefaultWarehouseCode(tx)) ?? whs[0].code;
         stockValues[defaultWh] = currentStockBody;
         computedStock = currentStockBody;
       }
@@ -971,7 +973,7 @@ export class ItemCatalogService {
 
       const canSetOpening = Number(prevItem.currentStock || 0) <= 0 && !txRow && !docRow && !voucherRow;
 
-      const whs = await tx.select({ code: warehouses.code }).from(warehouses);
+      const whs = await tx.select({ code: warehouses.code }).from(warehouses).orderBy(asc(warehouses.id));
       let computedStock = 0;
       const stockValues: Record<string, number> = {};
 
@@ -993,7 +995,7 @@ export class ItemCatalogService {
 
         const currentStockBody = Number(body.current_stock || 0);
         if (computedStock === 0 && currentStockBody > 0 && whs.length > 0) {
-          const defaultWh = whs[0].code;
+          const defaultWh = (await getDefaultWarehouseCode(tx)) ?? whs[0].code;
           stockValues[defaultWh] = currentStockBody;
           computedStock = currentStockBody;
         }

@@ -6,7 +6,7 @@ import {
   warehouses,
   transactions
 } from '../../db/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, asc } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../document.service.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -96,7 +96,8 @@ export class ProjectBomAllocationService {
       const activeWHs = await txEngine
         .select({ code: warehouses.code })
         .from(warehouses)
-        .where(eq(warehouses.isActive, 1));
+        .where(eq(warehouses.isActive, 1))
+        .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی
       const defaultWh = activeWHs[0]?.code || 'main';
 
       const results: ProjectBomAllocationRecord[] = [];
@@ -276,7 +277,8 @@ export class ProjectBomAllocationService {
       const activeWHs = await txEngine
         .select({ code: warehouses.code })
         .from(warehouses)
-        .where(eq(warehouses.isActive, 1));
+        .where(eq(warehouses.isActive, 1))
+        .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی
       const defaultWh = activeWHs[0]?.code || 'main';
 
       const results: ProjectBomAllocationRecord[] = [];

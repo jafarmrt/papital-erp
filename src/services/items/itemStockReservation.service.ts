@@ -1,4 +1,4 @@
-import { sql, eq, and, or, inArray } from 'drizzle-orm';
+import { sql, eq, and, or, inArray, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, warehouses, productionProjects, documents, documentItems } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
@@ -107,7 +107,7 @@ export class ItemStockReservationService {
    */
   static async syncMissingWarehouseStocks(): Promise<void> {
     try {
-      const activeWHs = await orm.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1));
+      const activeWHs = await orm.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(asc(warehouses.id)); // v7.0.36 (P2-3)
       if (activeWHs.length === 0) {
         return;
       }

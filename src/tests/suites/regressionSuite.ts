@@ -3341,6 +3341,51 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.9: v7.0.36 (audit P2-3): انبار پیش‌فرض باید قطعی (انبار فعال با کمترین شناسه) باشد
+  if (shouldRun('reg_default_warehouse_deterministic_p2_3', 'p23', 'warehouse', 'default_warehouse')) {
+    const tStart = Date.now();
+    try {
+      const { ItemWarehouseStockService } = await import('../../services/inventory/itemWarehouseStock.service.js');
+      const { resolveWarehouseCode, createWarehouseResolver } = await import('../../services/inventory/warehouseResolver.js');
+      const { createTestWarehouse } = await import('../fixtures/factories.js');
+      await createTestWarehouse({ name: `انبار دوم P2-3 ${Date.now()}` });
+      const [first] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      // بازنویسی ردیف قدیمی‌ترین انبار، نسخه جدید آن را به انتهای صفحه heap می‌برد؛ بدون ORDER BY ترتیب خواندن عوض می‌شود
+      for (let i = 0; i < 3; i++) {
+        await orm.update(warehouses).set({ name: first.name }).where(eq(warehouses.id, first.id));
+      }
+      const viaService = await ItemWarehouseStockService.resolveWarehouse(orm, '');
+      const viaResolver = await resolveWarehouseCode(orm, '');
+      const viaFactory = (await createWarehouseResolver(orm))('');
+      const listed = await WarehouseService.listActive();
+      const picks = { service: viaService.code, resolver: viaResolver, factory: viaFactory, list: listed[0]?.code };
+      if (Object.values(picks).some(code => code !== first.code)) {
+        throw new Error(`انبار پیش‌فرض باید «${first.code}» (کمترین شناسه فعال) باشد: ${JSON.stringify(picks)}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_default_warehouse_deterministic_p2_3',
+        scenarioId: 'v5_warehouse_resolution_guard',
+        name: 'v7.0.36: انبار پیش‌فرض قطعی پس از بازنویسی ردیف انبارها (P2-3)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'پس از به‌روزرسانی ردیف قدیمی‌ترین انبار، سرویس موجودی، حل‌کننده انبار و فهرست انبارهای فعال همچنان همان انبار را پیش‌فرض برگرداندند.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_default_warehouse_deterministic_p2_3',
+        scenarioId: 'v5_warehouse_resolution_guard',
+        name: 'v7.0.36: انبار پیش‌فرض قطعی پس از بازنویسی ردیف انبارها (P2-3)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

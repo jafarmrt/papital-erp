@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { itemWarehouseStocks, warehouses, items } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
@@ -21,7 +21,8 @@ export class ItemWarehouseStockService {
     const allWarehouses = await tx
       .select({ id: warehouses.id, code: warehouses.code, name: warehouses.name })
       .from(warehouses)
-      .where(eq(warehouses.isActive, 1));
+      .where(eq(warehouses.isActive, 1))
+      .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی = انبار فعال با کمترین شناسه
 
     if (allWarehouses.length === 0) {
       throw new ValidationError('هیچ انبار فعالی در سیستم تعریف نشده است.');

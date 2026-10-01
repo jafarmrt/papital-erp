@@ -51,7 +51,8 @@ export class KardexWacRecalculatorService {
       const activeWHs = await txEngine
         .select({ code: warehouses.code })
         .from(warehouses)
-        .where(eq(warehouses.isActive, 1));
+        .where(eq(warehouses.isActive, 1))
+        .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی
 
       const defaultWhCode = activeWHs[0]?.code || 'main';
 
