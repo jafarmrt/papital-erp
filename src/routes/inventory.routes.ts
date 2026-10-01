@@ -54,8 +54,9 @@ export const transferStockSchema = z.object({
 
 export const negativeStockPolicySchema = z.object({
   body: z.object({
-    policy: z.enum(['forbidden', 'warning', 'allowed'], {
-      message: 'سیاست موجودی منفی باید یکی از مقادیر forbidden، warning یا allowed باشد'
+    // v7.0.22 (TD-180 / audit P0-3): تنها سیاست مجاز «ممنوعیت کامل» است
+    policy: z.literal('forbidden', {
+      message: 'منفی شدن موجودی انبار مجاز نیست و تنها سیاست قابل انتخاب «ممنوعیت کامل» است.'
     })
   })
 });

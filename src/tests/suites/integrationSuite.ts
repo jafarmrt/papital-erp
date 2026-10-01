@@ -9,8 +9,8 @@ import { FormDraftService } from '../../services/drafts/formDraft.service.js';
 import { InsufficientStockError, UnbalancedVoucherError, normalizeError } from '../../errors/customErrors.js';
 import { formatApiError } from '../../utils/errorTranslator.js';
 import { orm } from '../../db/drizzle.js';
-import { items, workflowInstances, workflowHistoryLogs, journalVouchers, journalVoucherItems, outboxEvents, accounts, documents } from '../../db/schema.js';
-import { eq, or } from 'drizzle-orm';
+import { items, workflowInstances, workflowHistoryLogs, journalVouchers, journalVoucherItems, outboxEvents, accounts, documents, appSettings, warehouses, itemWarehouseStocks } from '../../db/schema.js';
+import { eq, or, and } from 'drizzle-orm';
 
 export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -775,13 +775,6 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       user: 'test-user'
     }).returning();
 
-    const [testDoc2] = await orm.insert(documents).values({
-      type: 'exit_permit',
-      refNumber: 'DOC-TEST-NEG-2',
-      date: '2026-08-24',
-      user: 'test-user'
-    }).returning();
-
     // Check excessive deduction (10 > 5) via checkStockDeduction
     const checkForbidden = await NegativeStockPolicyService.checkStockDeduction({
       itemId: testItem2.id,
@@ -817,61 +810,74 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       throw new Error('در سیاست forbidden عملیات applyStockMovement خطای عدم موجودی صادر نکرد.');
     }
 
-    // 2. Set policy to allowed
-    await NegativeStockPolicyService.setPolicy('allowed');
-    const checkAllowed = await NegativeStockPolicyService.checkStockDeduction({
-      itemId: testItem2.id,
-      requestedQty: 10,
-      location: 'main'
-    });
-
-    if (checkAllowed.allowed !== true || checkAllowed.wouldBeNegative !== true) {
-      throw new Error('سیاست مجاز بودن موجودی منفی اجازه کسر با ثبت وضعیت منفی را نداد.');
+    // 2. v7.0.22 (TD-180 / audit P0-3): only 'forbidden' may be selected
+    let setAllowedRejected = false;
+    try {
+      await NegativeStockPolicyService.setPolicy('allowed');
+    } catch (err: any) {
+      setAllowedRejected = err?.code === 'VALIDATION_ERROR' || err?.statusCode === 400 || err?.statusCode === 422;
+    }
+    if (!setAllowedRejected) {
+      throw new Error('انتخاب سیاست «مجاز» باید با خطای اعتبارسنجی رد شود (فقط «ممنوعیت کامل» مجاز است).');
     }
 
-    // Check applyStockMovement with allowed policy succeeds and updates stock to -5
-    await orm.transaction(async (tx) => {
-      await DocumentService.applyStockMovement(tx, {
-        itemId: testItem2.id,
-        documentId: testDoc2.id,
-        inOut: 'out',
-        quantity: 10,
-        price: 1000,
-        date: '2026-08-24',
-        documentType: 'exit_permit',
-        documentRef: 'DOC-TEST-NEG-2',
-        user: 'test-user',
-        targetLoc: 'main'
-      });
-    });
-
-    const [updatedItem2] = await orm.select().from(items).where(eq(items.id, testItem2.id));
-    if (Number(updatedItem2.currentStock) !== -5) {
-      throw new Error(`موجودی کالا پس از کسر در حالت allowed به -۵ نرسید. مقدار فعلی: ${updatedItem2.currentStock}`);
+    // 3. A legacy stored value ('allowed') must be ignored: the effective policy stays 'forbidden'
+    //    and the deduction fails with a readable InsufficientStockError, never a raw CHECK violation (23514)
+    await orm.update(appSettings).set({ value: 'allowed' }).where(eq(appSettings.key, 'negative_stock_policy'));
+    try {
+      const legacyPolicy = await NegativeStockPolicyService.getPolicy();
+      if (legacyPolicy !== 'forbidden') {
+        throw new Error(`مقدار قدیمی ذخیره‌شده «allowed» نباید سیاست مؤثر را تغییر دهد (مقدار فعلی: ${legacyPolicy}).`);
+      }
+      let legacyErrorCode = '';
+      try {
+        await orm.transaction(async (tx) => {
+          await DocumentService.applyStockMovement(tx, {
+            itemId: testItem2.id,
+            documentId: testDoc1.id,
+            inOut: 'out',
+            quantity: 10,
+            price: 1000,
+            date: '2026-08-24',
+            documentType: 'exit_permit',
+            documentRef: 'DOC-TEST-NEG-1',
+            user: 'test-user',
+            targetLoc: 'main'
+          });
+        });
+      } catch (err: any) {
+        legacyErrorCode = String(err?.code || err?.errorCode || err?.cause?.code || '');
+      }
+      if (legacyErrorCode !== 'INSUFFICIENT_STOCK') {
+        throw new Error(`با مقدار قدیمی «allowed» کسر بیش از موجودی باید با خطای INSUFFICIENT_STOCK رد شود (کد دریافتی: ${legacyErrorCode || 'بدون خطا'}).`);
+      }
+    } finally {
+      await NegativeStockPolicyService.setPolicy('forbidden');
     }
 
-    // 3. Reset back to forbidden
-    await NegativeStockPolicyService.setPolicy('forbidden');
+    const [unchangedItem2] = await orm.select().from(items).where(eq(items.id, testItem2.id));
+    if (Number(unchangedItem2.currentStock) !== 5) {
+      throw new Error(`موجودی کالا پس از رد کسر غیرمجاز نباید تغییر کند. مقدار فعلی: ${unchangedItem2.currentStock}`);
+    }
 
-    // V10-0.1: restore stock to non-negative so the 12-point integrity scan
-    // (negative stock = critical) never sees synthetic residue after this suite.
-    await orm.transaction(async (tx) => {
-      await DocumentService.applyStockMovement(tx, {
-        itemId: testItem2.id,
-        documentId: testDoc2.id,
-        inOut: 'in',
-        quantity: 10,
-        price: 1000,
-        date: '2026-08-24',
-        documentType: 'exit_permit',
-        documentRef: 'DOC-TEST-NEG-2',
-        user: 'test-user',
-        targetLoc: 'main'
+    // 4. Defense in depth: a raw CHECK violation on item_warehouse_stocks is normalized to INSUFFICIENT_STOCK
+    const { normalizeError } = await import('../../errors/customErrors.js');
+    const [mainWh] = await orm.select().from(warehouses).where(eq(warehouses.code, 'main'));
+    let checkViolationCode = '';
+    try {
+      await orm.transaction(async (tx) => {
+        await tx.update(itemWarehouseStocks)
+          .set({ currentStock: -1 })
+          .where(and(eq(itemWarehouseStocks.itemId, testItem2.id), eq(itemWarehouseStocks.warehouseId, mainWh.id)));
+        await tx.insert(itemWarehouseStocks).values({
+          itemId: testItem2.id, warehouseId: mainWh.id, warehouseCode: 'main', currentStock: -1, reservedStock: 0, version: 1
+        }).onConflictDoNothing();
       });
-    });
-    const [restoredItem2] = await orm.select().from(items).where(eq(items.id, testItem2.id));
-    if (Number(restoredItem2.currentStock) !== 5) {
-      throw new Error(`بازگردانی موجودی پس از سناریوی allowed ناموفق بود. مقدار فعلی: ${restoredItem2.currentStock}`);
+    } catch (err: unknown) {
+      checkViolationCode = normalizeError(err).code;
+    }
+    if (checkViolationCode !== 'INSUFFICIENT_STOCK') {
+      throw new Error(`نقض قید chk_iws_current_stock_non_negative باید به خطای خوانای INSUFFICIENT_STOCK نگاشت شود (کد دریافتی: ${checkViolationCode || 'بدون خطا'}).`);
     }
 
     results.push(makeTestCase({
@@ -882,7 +888,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t12Start,
-      details: 'سیاست‌های سه‌گانه موجودی منفی (ممنوع، هشدار، مجاز) با موفقیت آزمایش و اعتبارسنجی شدند.'
+      details: 'سیاست «ممنوعیت کامل» اعمال شد؛ انتخاب «مجاز» رد شد؛ مقدار قدیمی ذخیره‌شده نادیده گرفته شد و نقض قید دیتابیس به خطای خوانای کسری موجودی نگاشت شد (TD-180).'
     }));
   } catch (err: any) {
     results.push(makeTestCase({

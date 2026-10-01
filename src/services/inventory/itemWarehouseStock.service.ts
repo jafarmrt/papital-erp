@@ -2,7 +2,6 @@ import { eq, and } from 'drizzle-orm';
 import { itemWarehouseStocks, warehouses, items } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
-import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { logger } from '../../middleware/logger.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 
@@ -105,25 +104,12 @@ export class ItemWarehouseStockService {
     if (inOut === 'in') {
       newLocationStock = fin(previousLocationStock).add(qty).round(4).toNumber();
     } else {
+      // v7.0.22 (TD-180 / audit P0-3): منفی شدن موجودی همیشه ممنوع است (هم‌راستا با قید
+      // دیتابیسی chk_iws_current_stock_non_negative)؛ پیام خوانا به‌جای خطای ۵۰۰ نقض قید.
       if (previousLocationStock < qty) {
-        const policy = await NegativeStockPolicyService.getPolicy(tx);
-        switch (policy) {
-          case 'forbidden':
-            throw new InsufficientStockError(
-              `موجودی کافی در انبار «${warehouse.name}» (${warehouse.code}) نیست. موجودی فعلی: ${previousLocationStock}، درخواست کسر: ${qty}`
-            );
-          case 'warning':
-            logger.warn(
-              `[Stock Warning] Negative stock on item ${itemId} at warehouse ${warehouse.code}: current=${previousLocationStock}, requested=${qty}`
-            );
-            break;
-          case 'allowed':
-            break;
-          default:
-            throw new InsufficientStockError(
-              `موجودی کافی در انبار «${warehouse.name}» (${warehouse.code}) نیست. موجودی فعلی: ${previousLocationStock}، درخواست کسر: ${qty}`
-            );
-        }
+        throw new InsufficientStockError(
+          `موجودی کافی در انبار «${warehouse.name}» (${warehouse.code}) نیست. موجودی فعلی: ${previousLocationStock}، درخواست کسر: ${qty}`
+        );
       }
       newLocationStock = fin(previousLocationStock).subtract(qty).round(4).toNumber();
     }

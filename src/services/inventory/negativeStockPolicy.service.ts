@@ -2,8 +2,20 @@ import { orm, DbExecutor } from '../../db/drizzle.js';
 import { appSettings, items } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { ValidationError } from '../../errors/customErrors.js';
+import { logger } from '../../middleware/logger.js';
 
-export type NegativeStockPolicyType = 'forbidden' | 'warning' | 'allowed';
+/**
+ * v7.0.22 (TD-180 / audit P0-3): سیاست موجودی منفی به تصمیم مالک محصول فقط «ممنوع» است.
+ * قید دیتابیسی chk_iws_current_stock_non_negative (مهاجرت 0014) آخرین خط دفاع است و
+ * گزینه‌های قدیمی «هشدار» و «مجاز» با آن در تضاد بودند (خطای ۵۰۰ هنگام خروج کالا).
+ */
+export const NEGATIVE_STOCK_POLICY = 'forbidden' as const;
+export type NegativeStockPolicyType = typeof NEGATIVE_STOCK_POLICY;
+
+/** مقادیر قدیمی که ممکن است هنوز در app_settings ذخیره شده باشند و نادیده گرفته می‌شوند */
+const LEGACY_POLICY_VALUES = new Set(['warning', 'allowed']);
+let legacyPolicyWarningLogged = false;
 
 export interface NegativeStockCheckResult {
   allowed: boolean;
@@ -32,30 +44,39 @@ export class NegativeStockPolicyService {
   private static readonly SETTING_KEY = 'negative_stock_policy';
 
   /**
-   * Retrieves the configured negative stock policy.
-   * Default is 'forbidden' to protect ERP data integrity.
+   * Returns the effective negative stock policy — always 'forbidden' (TD-180).
+   * A legacy stored value ('warning' / 'allowed') is ignored and reported once per process.
    */
   static async getPolicy(externalTx?: DbExecutor): Promise<NegativeStockPolicyType> {
-    const db = externalTx || orm;
-    try {
-      const [setting] = await db
-        .select()
-        .from(appSettings)
-        .where(eq(appSettings.key, this.SETTING_KEY));
-
-      if (setting?.value && ['forbidden', 'warning', 'allowed'].includes(setting.value)) {
-        return setting.value as NegativeStockPolicyType;
+    if (!legacyPolicyWarningLogged) {
+      const db = externalTx || orm;
+      try {
+        const [setting] = await db
+          .select()
+          .from(appSettings)
+          .where(eq(appSettings.key, this.SETTING_KEY));
+        if (setting?.value && LEGACY_POLICY_VALUES.has(setting.value)) {
+          legacyPolicyWarningLogged = true;
+          logger.warn(
+            `[NegativeStockPolicy] Legacy stored value '${setting.value}' ignored — negative stock is always forbidden (TD-180, DB constraint chk_iws_current_stock_non_negative).`
+          );
+        }
+      } catch {
+        // خواندن تنظیم فقط برای گزارش مقدار قدیمی است؛ سیاست مؤثر در هر حال «ممنوع» است
       }
-      return 'forbidden';
-    } catch {
-      return 'forbidden';
     }
+    return NEGATIVE_STOCK_POLICY;
   }
 
   /**
-   * Updates the negative stock policy in app settings.
+   * Persists the negative stock policy. Only 'forbidden' is accepted (TD-180).
    */
-  static async setPolicy(policy: NegativeStockPolicyType, externalTx?: DbExecutor): Promise<void> {
+  static async setPolicy(policy: string, externalTx?: DbExecutor): Promise<void> {
+    if (policy !== NEGATIVE_STOCK_POLICY) {
+      throw new ValidationError(
+        'منفی شدن موجودی انبار در این سامانه مجاز نیست و تنها سیاست قابل انتخاب «ممنوعیت کامل» است.'
+      );
+    }
     const db = externalTx || orm;
     const [existing] = await db
       .select()
@@ -72,6 +93,7 @@ export class NegativeStockPolicyService {
         .insert(appSettings)
         .values({ key: this.SETTING_KEY, value: policy });
     }
+    legacyPolicyWarningLogged = false;
   }
 
   /**
@@ -122,7 +144,7 @@ export class NegativeStockPolicyService {
     const projectedLoc = loc ? FinancialMath.subtract(locStock, qty) : projectedTotal;
     const wouldBeNegative = projectedTotal < 0 || (loc ? projectedLoc < 0 : false);
 
-    if (wouldBeNegative && policy === 'forbidden') {
+    if (wouldBeNegative) {
       return {
         allowed: false,
         wouldBeNegative: true,

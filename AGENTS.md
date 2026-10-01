@@ -30,7 +30,7 @@
 - **Centralized Stock Movements:** All stock operations, warehouse locations, and WAC calculations MUST route through `DocumentService.applyStockMovement` in `src/services/document.service.ts`.
 - **Document Statuses:** Supported document statuses in API and services: `'draft'`, `'proforma'` (پیش‌فاکتور), and `'final'`.
 - **Soft Delete & Reversal (DB-009):** Never HARD DELETE stock transactions. Set `is_deleted = 1`, issue an atomic reversal transaction with `reversal_of_id`, and recalibrate balances via `DocumentService.applyStockMovement`.
-- **Negative Stock Policy (DB-006):** Reductions (`out`) must validate against `negativeStockPolicy` settings before committing.
+- **Negative Stock Policy (DB-006, TD-180):** Negative stock is **always forbidden** (product-owner decision, v7.0.22). Reductions (`out`) must fail with `InsufficientStockError` before committing; the database constraint `chk_iws_current_stock_non_negative` on `item_warehouse_stocks` is the final safeguard. The legacy `warning` / `allowed` options are removed and must not be reintroduced without dropping that constraint in a new migration.
 
 ## 4. WooCommerce Integration & Webhooks
 - **Public Route Exemption:** Webhook endpoints (`/api/woocommerce/webhook/order`) must be exempted from `authenticateToken` in `src/middleware/auth.ts` for ping/payloads (GET, POST, HEAD).
@@ -133,7 +133,7 @@
 - **PostgreSQL Atomic Sequences (DB-001, DB-003, DB-011):** Sequence IDs generated via `nextval('...')` or `document_counters` UPSERT.
 - **Idempotency OCC Locks (DB-010):** `IdempotencyService` uses `.onConflictDoNothing()` and OCC (`status` and `locked_until` in UPDATE WHERE clause).
 - **Stock Soft Delete & Reversal (DB-009):** `is_deleted = 1` + reversal transaction + balance recalculation.
-- **Negative Stock Guard (DB-006):** Validates against `negativeStockPolicy` before inventory deductions.
+- **Negative Stock Guard (DB-006, TD-180):** Inventory deductions below zero are rejected (policy fixed to `forbidden`, enforced in `ItemWarehouseStockService.applyMovement` and by the DB CHECK constraint).
 
 ## 20. Observability, Error Handling & Lifecycle Rules
 - **AppError Hierarchy (OBS-003):** Typed subclasses (`ValidationError`, `NotFoundError`, `UnauthorizedError`, `ConflictError`, `DatabaseError`).

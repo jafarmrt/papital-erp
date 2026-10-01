@@ -157,8 +157,21 @@ export function normalizeError(err: unknown): NormalizedError {
   }
 
   // Handle Postgres error codes
-  if (errObj) {
-    const code = errObj.code || errObj.routine;
+  // v7.0.22 (TD-180): Drizzle 0.45 خطای pg را در DrizzleQueryError می‌پیچد و کد را در `cause` نگه می‌دارد؛
+  // بدون باز کردن cause هیچ‌یک از نگاشت‌های زیر اجرا نمی‌شد و متن کوئری SQL به کاربر می‌رسید.
+  const pgErr = (errObj && errObj.cause && typeof errObj.cause === 'object' && typeof (errObj.cause as Record<string, unknown>).code === 'string')
+    ? (errObj.cause as Record<string, unknown>)
+    : errObj;
+  if (errObj && pgErr) {
+    const code = pgErr.code || pgErr.routine;
+    if (code === '23514' && pgErr.constraint === 'chk_iws_current_stock_non_negative') {
+      return {
+        message: 'موجودی کافی در انبار برای این عملیات وجود ندارد و منفی شدن موجودی مجاز نیست.',
+        statusCode: 400,
+        code: 'INSUFFICIENT_STOCK',
+        stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+      };
+    }
     if (code === '23505') {
       return {
         message: 'مقدار وارد شده تکراری است',
