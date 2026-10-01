@@ -3386,6 +3386,63 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.10: v7.0.37 (TD-201): حذف سند قطعی نباید در گزارش سه‌جانبه موجودی مغایرت کاذب بسازد
+  if (shouldRun('reg_integrity_report_deleted_document_td_201', 'td201', 'integrity', 'kardex', 'reversal')) {
+    const tStart = Date.now();
+    const createdDocIds: number[] = [];
+    try {
+      const { StockReconciliationService } = await import('../../services/inventory/stockReconciliation.service.js');
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const [w1] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ stocks: {}, currentStock: 0, weightedAverageCost: 0 });
+      const today = await businessTodayIsoDate();
+      const receiptId = await DocumentService.createDocument({
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون TD-201',
+        location: w1.code, items: [{ itemId: item.id, quantity: 10, unit_price: 50000, location: w1.code }]
+      });
+      createdDocIds.push(receiptId);
+      const invoiceId = await DocumentService.createDocument({
+        docType: 'invoice', status: 'final', inOut: 'out', date: today, user: 'test-agent', buyerName: 'خریدار آزمون TD-201',
+        location: w1.code, items: [{ itemId: item.id, quantity: 2, unit_price: 90000, location: w1.code }]
+      });
+      createdDocIds.push(invoiceId);
+      await DocumentService.deleteDocument(invoiceId, 'test-agent');
+
+      const [after] = await orm.select({ s: items.currentStock }).from(items).where(eq(items.id, item.id));
+      const report = await StockReconciliationService.getIntegrityReport({ search: String(item.code) });
+      const audit = report.audits.find(a => a.itemId === item.id);
+      if (Number(after?.s) !== 10 || !audit || audit.kardexNetBalance !== 10 || audit.discrepancies.length > 0) {
+        throw new Error(`پس از حذف فاکتور، موجودی و مانده کاردکس باید ۱۰ و بدون مغایرت باشد: ${JSON.stringify({ stock: after?.s, kardex: audit?.kardexNetBalance, discrepancies: audit?.discrepancies })}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_integrity_report_deleted_document_td_201',
+        scenarioId: 'inventory_integrity_3way_reconciliation',
+        name: 'v7.0.37: گزارش سه‌جانبه موجودی پس از حذف سند قطعی مغایرت کاذب نشان نمی‌دهد (TD-201)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'رسید ۱۰، فاکتور ۲ و حذف فاکتور: موجودی و مانده کاردکس هر دو ۱۰ و کالا بدون مغایرت گزارش شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_integrity_report_deleted_document_td_201',
+        scenarioId: 'inventory_integrity_3way_reconciliation',
+        name: 'v7.0.37: گزارش سه‌جانبه موجودی پس از حذف سند قطعی مغایرت کاذب نشان نمی‌دهد (TD-201)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', createdDocIds);
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

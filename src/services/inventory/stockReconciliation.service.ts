@@ -149,17 +149,22 @@ export class StockReconciliationService {
       .from(warehouses)
       .where(eq(warehouses.isActive, 1));
 
+    // v7.0.37 (TD-201): معنای دفتر هم‌راستا با بازسازی رسمی کاردکس (KardexWacRecalculatorService) — حذف سند
+    // ردیف مبدأ را حذف نرم و ردیف معکوس فعال درج می‌کند؛ ردیف معکوسِ ردیف حذف‌شده نباید دوباره شمرده شود،
+    // وگرنه هر سند قطعی حذف‌شده مغایرت کاذب می‌سازد. transfer_in/transfer_out مانند in/out شمرده می‌شوند.
     // Global Kardex per item
     const kardexAggregates = await orm.execute(sql`
       SELECT 
-        item_id,
-        COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE 0 END), 0) as total_in,
-        COALESCE(SUM(CASE WHEN type = 'out' THEN quantity ELSE 0 END), 0) as total_out,
-        COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE -quantity END), 0) as kardex_balance,
-        COALESCE(SUM(CASE WHEN type = 'in' THEN total_price ELSE 0 END), 0) as total_in_value
-      FROM ${transactions}
-      WHERE is_deleted = 0
-      GROUP BY item_id
+        t.item_id,
+        COALESCE(SUM(CASE WHEN t.type IN ('in', 'transfer_in') THEN t.quantity ELSE 0 END), 0) as total_in,
+        COALESCE(SUM(CASE WHEN t.type IN ('out', 'transfer_out') THEN t.quantity ELSE 0 END), 0) as total_out,
+        COALESCE(SUM(CASE WHEN t.type IN ('in', 'transfer_in') THEN t.quantity WHEN t.type IN ('out', 'transfer_out') THEN -t.quantity ELSE 0 END), 0) as kardex_balance,
+        COALESCE(SUM(CASE WHEN t.type IN ('in', 'transfer_in') THEN t.total_price ELSE 0 END), 0) as total_in_value
+      FROM ${transactions} t
+      LEFT JOIN ${transactions} o ON o.id = t.reversal_of_id
+      WHERE t.is_deleted = 0
+        AND NOT (t.reversal_of_id IS NOT NULL AND COALESCE(o.is_deleted, 0) = 1)
+      GROUP BY t.item_id
     `);
 
     const kardexMap = new Map<number, { totalIn: number; totalOut: number; kardexBalance: number; totalInValue: number }>();
@@ -175,12 +180,14 @@ export class StockReconciliationService {
     // Per-location Kardex breakdown per item
     const kardexLocAggregates = await orm.execute(sql`
       SELECT 
-        item_id,
-        COALESCE(location, '') as loc,
-        COALESCE(SUM(CASE WHEN type = 'in' THEN quantity ELSE -quantity END), 0) as loc_balance
-      FROM ${transactions}
-      WHERE is_deleted = 0
-      GROUP BY item_id, COALESCE(location, '')
+        t.item_id,
+        COALESCE(t.location, '') as loc,
+        COALESCE(SUM(CASE WHEN t.type IN ('in', 'transfer_in') THEN t.quantity WHEN t.type IN ('out', 'transfer_out') THEN -t.quantity ELSE 0 END), 0) as loc_balance
+      FROM ${transactions} t
+      LEFT JOIN ${transactions} o ON o.id = t.reversal_of_id
+      WHERE t.is_deleted = 0
+        AND NOT (t.reversal_of_id IS NOT NULL AND COALESCE(o.is_deleted, 0) = 1)
+      GROUP BY t.item_id, COALESCE(t.location, '')
     `);
 
     const kardexLocMap = new Map<string, number>(); // key: `${itemId}_${loc}` -> balance
