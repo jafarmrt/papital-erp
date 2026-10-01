@@ -2,7 +2,7 @@
 
 سیستم یکپارچه مدیریت کارگاه تولیدی: انبارداری با کاردکس رویدادمحور، فاکتور و پیش‌فاکتور، حسابداری دوبل (کدینگ ۴ سطحی، دفتر روزنامه، تراز آزمایشی)، خزانه‌داری و چک صیادی، CRM و قیف فروش، کنترل پروژه‌های تولید با BOM، منابع انسانی و حقوق و دستمزد، موتور گردش کار (ورکفلو) با کارتابل تاییدات، گذرگاه رویدادها (Outbox/DLQ/Webhook) و گزارش‌های BI.
 
-> **نسخه فعلی:** سری فعال `v7.x.y` (نسخه مستقر: `v7.0.17`) — نقشه راه: `V7_MASTER_ROADMAP.md` • تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/7.ts`
+> **نسخه فعلی:** سری فعال `v7.x.y` (نسخه مستقر: `v7.0.18`) — نقشه راه: `V7_MASTER_ROADMAP.md` • تاریخچه تغییرات: صفحه «معرفی و به‌روزرسانی‌ها» داخل سامانه + `CHANGELOG.md` + `src/data/changelogs/7.ts`
 
 ---
 
@@ -123,7 +123,7 @@ npm run build
 | `GET /metrics` | متریک‌های Prometheus |
 | سرور بالا نمی‌آید: پورت 3000 یا 5433 اشغال/خاموش | ویندوز: `start-local.ps1` دوباره؛ بررسی `dev-server.log` |
 | «داده‌ها پاک شد» بعد از تست | فقط با `ERP_ALLOW_TEST_CLEANUP=1` در dev رخ می‌دهد — این پرچم را روی production هرگز ست نکنید |
-| مهاجرت شکست خورد | تراکنش اتمیک rollback شده؛ لاگ: `[Migrator]` در لاگ سرور + جدول `migrations_log` |
+| مهاجرت شکست خورد | تراکنش اتمیک rollback شده؛ لاگ: `[Migrator]` در لاگ سرور + جدول `drizzle.__drizzle_migrations` |
 | نمایش تاریخ/ساعت ناهماهنگ | تنظیمات سامانه ← منطقه زمانی (`display_timezone`) |
 
 سناریوهای عملیاتی کامل‌تر در تاریخچه Git (`docs/runbook.md` تا قبل از v1.1.0) موجود است؛ خلاصه ضروری در بخش بعد.
@@ -179,7 +179,7 @@ psql -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
 ### Migration شکست‌خورده
 
 ```bash
-psql -c "SELECT * FROM migrations_log ORDER BY applied_at DESC LIMIT 10"
+psql -c "SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10"
 # مهاجرت اتمیک است: یا کامل اجرا شده یا کامل rollback — گام موفق دوباره اجرا نمی‌شود
 systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
 ```

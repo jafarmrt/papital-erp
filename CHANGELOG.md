@@ -14,12 +14,13 @@ going forward.
 | Client-bundled update center (archive) | `src/data/changelogs/3.ts` | completed `3.x.y` release series (`v3.0.0` - `v3.3.22`) |
 | Client-bundled update center (archive) | `src/data/changelogs/4.ts` | completed `4.x.y` release series (`v4.0.0` - `v4.0.42`) |
 | Client-bundled update center (archive) | `src/data/changelogs/5.ts` | completed `5.x.y` release series (`v5.0.0` - `v5.0.20`) |
-| Client-bundled update center (active) | `src/data/changelogs/6.ts` | current `6.x.y` release series (`v6.0.0` onward) |
+| Client-bundled update center (archive) | `src/data/changelogs/6.ts` | completed `6.x.y` release series (`v6.0.0` - `v6.0.28`) |
+| Client-bundled update center (active) | `src/data/changelogs/7.ts` | current `7.x.y` release series (`v7.0.0` onward) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 6.x Series (Active)
+## Version 6.x Series (Archived at v6.0.28 — active series is 7.x, see `src/data/changelogs/7.ts`)
 
 ### v6.0.0 — Official Launch of Version 6 & Version 5 Closure
 - **Version 5 Closure:** Concluded and archived the v5.x series (`v5.0.0` through `v5.0.20`) after successfully completing inter-module integration, the 5-phase invoice-stock fix plan, 15-suite test runner isolation, and conducting the comprehensive independent data-integrity audit.

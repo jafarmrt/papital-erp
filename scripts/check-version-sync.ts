@@ -45,8 +45,23 @@ function main(): void {
   const k8sPath = path.resolve(process.cwd(), 'deploy/k8s/erp-deployment.yaml');
   if (fs.existsSync(k8sPath)) {
     const k8sContent = fs.readFileSync(k8sPath, 'utf-8');
-    if (!k8sContent.includes(`erp:v${pkgVersion}`) && !k8sContent.includes(`APP_VERSION\n          value: "${pkgVersion}"`)) {
-      fail(`واگرایی نسخه در مانیفست کوبرنتیز deploy/k8s/erp-deployment.yaml — نسخه مورد انتظار: ${pkgVersion}`);
+    // v7.0.18: هر دو مقدار الزامی است — APP_VERSION در src/lib/version.ts بر package.json اولویت دارد
+    // و مقدار کهنه آن باعث گزارش نسخه اشتباه در /health می‌شد (قبلاً شرط OR بود).
+    const appVersionMatch = k8sContent.match(/name:\s*APP_VERSION\s*\n\s*value:\s*"([^"]+)"/);
+    if (!k8sContent.includes(`erp:v${pkgVersion}`)) {
+      fail(`واگرایی تگ ایمیج در مانیفست کوبرنتیز deploy/k8s/erp-deployment.yaml — نسخه مورد انتظار: erp:v${pkgVersion}`);
+    }
+    if (appVersionMatch && appVersionMatch[1] !== pkgVersion) {
+      fail(`واگرایی APP_VERSION در مانیفست کوبرنتیز — مقدار فعلی «${appVersionMatch[1]}»، مورد انتظار «${pkgVersion}»`);
+    }
+  }
+
+  // 2.1) بررسی هدر README.md (طبق کامنت بالای همین فایل)
+  const readmePath = path.resolve(process.cwd(), 'README.md');
+  if (fs.existsSync(readmePath)) {
+    const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+    if (!readmeContent.includes(`نسخه مستقر: \`v${pkgVersion}\``)) {
+      fail(`واگرایی نسخه در هدر README.md — نسخه مورد انتظار: v${pkgVersion}`);
     }
   }
 
@@ -61,7 +76,7 @@ function main(): void {
     fail(`نسخه(های) تکراری در چنج‌لاگ 7.ts: ${duplicates.join(', ')}`);
   }
 
-  console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s == v${pkgVersion}`);
+  console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);
   process.exit(0);
 }
 

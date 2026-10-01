@@ -161,6 +161,12 @@
 
 ---
 
+## 🧯 نسخه ۷ — فاز ۰ اصلاحات اضطراری ممیزی مستقل (docs/audit/TECHNICAL_AUDIT_REPORT.md) — آرشیو
+
+| ID | حوزه | شرح | منبع (فایل) | وضعیت |
+|----|------|-----|--------------|-------|
+| TD-171 | Governance / Version Sync | تناقض اسناد حاکمیتی (AGENTS.md §۷/§۱۳ چنج‌لاگ فعال را 5.ts و §۲۳ آن را 7.ts می‌دانست؛ §۲۳ «۲ محل همگام» در برابر ۴ محل اسکریپت؛ جدول ناموجود migrations_log) و مقدار کهنه APP_VERSION=7.0.14 در مانیفست K8s که به‌علت اولویت بر package.json نسخه اشتباه را در /health گزارش می‌کرد؛ گیت check:version به‌جای AND از OR استفاده می‌کرد و README را بررسی نمی‌کرد | AGENTS.md، README.md، CHANGELOG.md، deploy/k8s/erp-deployment.yaml:57، scripts/check-version-sync.ts | resolved (v7.0.18) — اصلاح متن اسناد با تأیید مالک محصول، همگام‌سازی APP_VERSION و الزامی‌شدن تگ ایمیج + APP_VERSION + هدر README در گیت |
+
 ## 📝 یادداشت مهاجرت
 
 - مهاجرت اولیه در **v4.0.28** انجام شد: کلیه ردیف‌های `resolved` رجیستری اصلی

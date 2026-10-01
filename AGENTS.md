@@ -53,7 +53,7 @@
 - **Form State:** Use dedicated `editingId: number | null` and `isEditing = editingId !== null` instead of holding `id: 0`.
 
 ## 7. AI Agent Auto-Changelog Updates & Release Tracking
-- **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to `src/data/changelogs/5.ts` with Jalali date, version bump (v5.x.y), title, summary, changes, and fixes.
+- **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to the **active** changelog file (currently `src/data/changelogs/7.ts`, series `v7.x.y` — see §13 and §23) with Jalali date, version bump, title, summary, changes, and fixes.
 - **Completeness:** All functional, structural, and architectural changes must be recorded.
 
 ## 8. Server Startup & Background Seed Execution
@@ -85,8 +85,8 @@
 - **Three-Way Sync:** Keep global `current_stock`, warehouse location JSONB `stocks`, and Kardex ledger fully aligned.
 
 ## 13. Scalable Changelog Architecture
-- **Version Partitioning:** Changelogs are split by major version (`0.ts`, `1.ts`, `2.ts`, `3.ts`, `4.ts` as archives; `5.ts` active) in `src/data/changelogs/`.
-- **Active File:** For version 5.x releases, append to `src/data/changelogs/5.ts` and bump `package.json` `"version"`.
+- **Version Partitioning:** Changelogs are split by major version in `src/data/changelogs/` (`0.ts` … `6.ts` are archives; `7.ts` is active).
+- **Active File:** For version 7.x releases, append to `src/data/changelogs/7.ts` and bump the version in all synced locations listed in §23.
 
 ## 14. Workflow Engine, Visual Canvas & SLA Analytics
 1. **Rule Engine (`ruleConditionsJson`):** Evaluate context variables using operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`).
@@ -155,7 +155,7 @@
 - **Production Console Drop (FE-002):** `esbuild: { drop: ['console', 'debugger'] }` in production Vite build.
 
 ## 22. Database Migrations, Production Seed Gating & Pool Timeouts
-- **Atomic Migrations (DB-013):** Migrations in `src/db/migrator.ts` execute in atomic transaction tracked in `migrations_log`.
+- **Atomic Migrations (DB-013):** `src/db/migrator.ts` runs the official Drizzle migrator over `drizzle/*.sql` (journal: `drizzle/meta/_journal.json`) in an atomic transaction; applied migrations are tracked in `drizzle.__drizzle_migrations`. Every new migration MUST be registered in the journal.
 - **Production Seed Gating (DB-014):** Seeding disabled in production unless `ALLOW_SEED_IN_PRODUCTION=true`, protected by advisory lock (`pg_try_advisory_lock(89345)`).
 - **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 30000` ms. Bulk tasks use `withLongQueryTimeout(fn)`.
 
@@ -174,9 +174,11 @@
 - **Local Dev & MCP References:**
   - Windows local PostgreSQL & portable `.pgdata` lifecycle: see `docs/LOCAL_DEV_WINDOWS.md`.
   - DBHub read-only MCP configuration: see `docs/LOCAL_MCP_TOOLING.md`.
-- **Release Version Bump = 2 Synced Locations:**
+- **Release Version Bump = 4 Synced Locations (enforced by `npm run check:version`):**
   1. `"version"` in `package.json` (single source of truth; dynamically resolved by `src/lib/version.ts` and `/health`).
   2. Top entry in active changelog `src/data/changelogs/7.ts`.
+  3. `deploy/k8s/erp-deployment.yaml` — both the image tag (`erp:vX.Y.Z`) and the `APP_VERSION` env value (it overrides `package.json` at runtime).
+  4. Header line of `README.md` (`نسخه مستقر: \`vX.Y.Z\``).
 
 ## 24. GitHub Sync Policy
 - **Commit & Push:** In local development or environments with configured Git credentials/SSH keys, commit with descriptive messages and push to `origin/master`.
