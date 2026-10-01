@@ -50,6 +50,7 @@ export type CriticalScenarioId =
   | 'balanced_voucher_postgres'
   | 'voucher_reversal_postgres'
   | 'woocommerce_webhook_idempotency'
+  | 'woocommerce_order_lifecycle'
   | 'outbox_processing_retries'
   | 'ledger_invariants_and_repost'
   | 'period_closing_and_conceptual_mappings'

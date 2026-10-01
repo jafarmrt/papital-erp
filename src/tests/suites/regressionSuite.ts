@@ -2678,6 +2678,172 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.3: v7.0.30 (TD-190 / audit P1-2): چرخه کامل سفارش ووکامرس از مسیر واقعی وب‌هوک امضاشده
+  if (shouldRun('reg_woocommerce_order_lifecycle_td_190', 'td190', 'woocommerce', 'webhook')) {
+    const tStart = Date.now();
+    const { getTestApp } = await import('../fixtures/httpTestHelper.js');
+    const { postSignedWooWebhook, buildWooOrder } = await import('../fixtures/wooWebhookHelper.js');
+    const { createTestItem, createTestCustomer } = await import('../fixtures/factories.js');
+    const { appSettings, woocommerceOrderLogs, customers } = await import('../../db/schema.js');
+    const secretKey = 'wc_webhook_secret';
+    const [originalSecret] = await orm.select().from(appSettings).where(eq(appSettings.key, secretKey));
+    const probeSecret = `whsec_td190_${Date.now()}`;
+    const base = String(7000000 + Math.floor(Math.random() * 900000));
+    // B پیشوند A است: LIKE '%#B%' قبلی فاکتور A را به‌عنوان فاکتور B تشخیص می‌داد (الف)
+    const ids = { P: `${base}1`, A: `${base}3`, B: base, C: `${base}5`, D: `${base}7`, E: `${base}9` };
+    const createdItemIds: number[] = [];
+    const createdCustomerIds: number[] = [];
+    const violations: string[] = [];
+    const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+    try {
+      const app = await getTestApp();
+      await orm.insert(appSettings).values({ key: secretKey, value: probeSecret })
+        .onConflictDoUpdate({ target: appSettings.key, set: { value: probeSecret } });
+      const send = (payload: Record<string, unknown>) => postSignedWooWebhook(app, probeSecret, payload);
+
+      const [defWh] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const whCode = defWh.code;
+      const sku = `WOO-TD190-${base}`;
+      const item = await createTestItem({ code: sku, currentStock: 20, stocks: { [whCode]: 20 }, weightedAverageCost: 40000 });
+      createdItemIds.push(item.id);
+      const stockOf = async () => {
+        const [row] = await orm.select({ s: items.currentStock }).from(items).where(eq(items.id, item.id));
+        return Number(row?.s || 0);
+      };
+      const activeInvoices = async (orderId: string) => orm.select({ id: documents.id, buyerName: documents.buyerName })
+        .from(documents)
+        .where(and(
+          eq(documents.type, 'invoice'),
+          eq(documents.isDeleted, 0),
+          sql`${documents.notes} ~ ${`^سفارش ووکامرس #${orderId}(\\D|$)`}`
+        ));
+      const logOf = async (orderId: string) => {
+        const [row] = await orm.select().from(woocommerceOrderLogs).where(eq(woocommerceOrderLogs.wcOrderId, orderId));
+        return row;
+      };
+      const line = (qty: number) => ({ sku, quantity: qty, price: 900000 });
+
+      // ۱) (د) سفارش پرداخت‌نشده (pending): بدون فاکتور و بدون کسر موجودی، لاگ «در انتظار پرداخت»
+      const rP = await send(buildWooOrder({ id: ids.P, status: 'pending', lines: [line(1)] }));
+      check(rP.status === 200, `وب‌هوک pending باید 200 بدهد (وضعیت ${rP.status})`);
+      check((await activeInvoices(ids.P)).length === 0, 'سفارش pending نباید فاکتور قطعی بگیرد (د)');
+      check(await stockOf() === 20, `سفارش pending نباید موجودی را کسر کند (موجودی ${await stockOf()})`);
+      check((await logOf(ids.P))?.status === 'deferred', `لاگ سفارش pending باید deferred باشد: ${(await logOf(ids.P))?.status}`);
+
+      // ۲) سفارش پرداخت‌شده A: فاکتور قطعی در انبار پیش‌فرض قطعی (و)
+      const rA = await send(buildWooOrder({ id: ids.A, status: 'processing', lines: [line(2)] }));
+      const invA = await activeInvoices(ids.A);
+      check(rA.status === 200 && rA.body?.success === true, `سفارش processing باید موفق شود: ${JSON.stringify(rA.body)}`);
+      check(invA.length === 1, `سفارش A باید دقیقاً یک فاکتور داشته باشد (${invA.length})`);
+      const stockAfterA = await stockOf();
+      check(stockAfterA === 18, `موجودی پس از فاکتور A باید 18 باشد (${stockAfterA})`);
+      if (invA[0]) {
+        const lines = await orm.select({ loc: documentItems.location }).from(documentItems).where(eq(documentItems.documentId, invA[0].id));
+        check(lines.every(l => l.loc === whCode), `قلم فاکتور باید در قدیمی‌ترین انبار فعال (${whCode}) باشد: ${JSON.stringify(lines)}`);
+      }
+
+      // ۳) (الف) سفارش B که شماره‌اش پیشوند A است فاکتور مستقل می‌گیرد؛ (ز) نام فاکتور = نام پرونده مشتری
+      const probePhone = `0912${base.slice(-7)}`;
+      const existingCustomer = await createTestCustomer({ phone: probePhone });
+      createdCustomerIds.push(existingCustomer.id);
+      const orderB = buildWooOrder({ id: ids.B, status: 'processing', lines: [line(1)], phone: probePhone, firstName: 'نام', lastName: 'متفاوت' });
+      await send(orderB);
+      const invB = await activeInvoices(ids.B);
+      check(invB.length === 1, `سفارش B (پیشوند A) باید فاکتور مستقل بگیرد؛ تعداد فاکتور: ${invB.length} (الف)`);
+      check(invB[0]?.buyerName === existingCustomer.name, `فاکتور B باید به پرونده مشتری با همان تلفن نسبت داده شود: «${invB[0]?.buyerName}» (ز)`);
+
+      // ۴) وب‌هوک تکراری (completed) فاکتور دوم نمی‌سازد
+      await send({ ...orderB, status: 'completed' });
+      check((await activeInvoices(ids.B)).length === 1, 'وب‌هوک تکراری نباید فاکتور دوم بسازد');
+      const stockAfterB = await stockOf();
+      check(stockAfterB === 17, `موجودی پس از B باید 17 باشد (${stockAfterB})`);
+
+      // ۵) تطبیق ناقص: یک SKU معتبر + یک SKU ناشناخته → کل سفارش رد، بدون فاکتور، لاگ شکست ماندگار
+      const rC = await send(buildWooOrder({ id: ids.C, status: 'processing', lines: [line(1), { sku: `UNKNOWN-${base}`, quantity: 1, price: 5000 }] }));
+      check(rC.status === 200 && rC.body?.success === false, `تطبیق ناقص باید 200 با success=false بدهد: ${rC.status} ${JSON.stringify(rC.body)}`);
+      check((await activeInvoices(ids.C)).length === 0, 'سفارش با SKU ناشناخته نباید فاکتور (ناقص) بگیرد');
+      check(await stockOf() === 17, `تطبیق ناقص نباید موجودی را کسر کند (${await stockOf()})`);
+      const logC = await logOf(ids.C);
+      check(logC?.status === 'failed' && String(logC?.errorMessage || '').includes(`UNKNOWN-${base}`), `لاگ شکست C باید ماندگار و شامل SKU ناشناخته باشد: ${JSON.stringify(logC)}`);
+
+      // ۶) (ب) شکست کامل (همه SKUها ناشناخته): لاگ failed باید پس از پاسخ ماندگار باشد
+      const rD = await send(buildWooOrder({ id: ids.D, status: 'processing', lines: [{ sku: `NOPE-${base}`, quantity: 1, price: 1000 }] }));
+      check(rD.status === 200, `خطای پردازش نباید پاسخ غیر 2xx بدهد (وضعیت ${rD.status}) (هـ)`);
+      check((await logOf(ids.D))?.status === 'failed', `لاگ شکست D ماندگار نشد: ${JSON.stringify(await logOf(ids.D))} (ب)`);
+
+      // ۷) ابطال خودکار: A لغو شد → حذف نرم فاکتور، برگشت موجودی، سند حسابداری معکوس
+      const docA = invA[0]?.id;
+      await send(buildWooOrder({ id: ids.A, status: 'cancelled', lines: [line(2)] }));
+      check((await activeInvoices(ids.A)).length === 0, 'فاکتور سفارش لغوشده باید ابطال (حذف نرم) شود');
+      check(await stockOf() === 19, `لغو سفارش A باید ۲ عدد را به انبار برگرداند (${await stockOf()})`);
+      check((await logOf(ids.A))?.status === 'voided', `لاگ A باید voided باشد: ${(await logOf(ids.A))?.status}`);
+      if (docA) {
+        const [origVoucher] = await orm.select().from(journalVouchers)
+          .where(and(eq(journalVouchers.referenceModule, 'invoice'), eq(journalVouchers.referenceId, docA), eq(journalVouchers.isDeleted, 0)))
+          .orderBy(journalVouchers.id).limit(1);
+        const reversal = origVoucher
+          ? await orm.select({ id: journalVouchers.id }).from(journalVouchers).where(eq(journalVouchers.referenceNumber, `REV-V${origVoucher.voucherNumber}`))
+          : [];
+        check(Boolean(origVoucher) && reversal.length === 1, 'ابطال فاکتور باید سند حسابداری معکوس صادر کند');
+      }
+
+      // ۸) استرداد: B مسترد شد → فاکتور فعال می‌ماند و برای بررسی حسابدار علامت می‌خورد
+      await send({ ...orderB, status: 'refunded' });
+      check((await activeInvoices(ids.B)).length === 1, 'استرداد نباید فاکتور را خودکار ابطال کند');
+      check((await logOf(ids.B))?.status === 'needs_review', `لاگ B پس از استرداد باید needs_review باشد: ${(await logOf(ids.B))?.status}`);
+
+      // ۹) همزمانی: دو وب‌هوک موازی برای سفارش تازه E → دقیقاً یک فاکتور
+      const orderE = buildWooOrder({ id: ids.E, status: 'processing', lines: [line(1)] });
+      await Promise.all([send(orderE), send(orderE)]);
+      check((await activeInvoices(ids.E)).length === 1, `دو وب‌هوک همزمان باید دقیقاً یک فاکتور بسازند (${(await activeInvoices(ids.E)).length})`);
+      check(await stockOf() === 18, `همزمانی نباید موجودی را دوبار کسر کند (${await stockOf()})`);
+
+      if (violations.length > 0) {
+        throw new Error(violations.join(' | '));
+      }
+      results.push(makeTestCase({
+        id: 'reg_woocommerce_order_lifecycle_td_190',
+        scenarioId: 'woocommerce_order_lifecycle',
+        name: 'v7.0.30: چرخه کامل سفارش ووکامرس — تطبیق دقیق، لاگ شکست ماندگار، سیاست وضعیت‌ها، ابطال و همزمانی (TD-190 / P1-2)',
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'pending بدون فاکتور، تطبیق شماره سفارش دقیق، رد کامل تطبیق ناقص با لاگ ماندگار و پاسخ 200، ابطال خودکار با برگشت موجودی و سند معکوس، علامت بررسی برای استرداد و یک فاکتور برای وب‌هوک‌های همزمان تأیید شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_woocommerce_order_lifecycle_td_190',
+        scenarioId: 'woocommerce_order_lifecycle',
+        name: 'v7.0.30: چرخه کامل سفارش ووکامرس — تطبیق دقیق، لاگ شکست ماندگار، سیاست وضعیت‌ها، ابطال و همزمانی (TD-190 / P1-2)',
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      const orderIdList = Object.values(ids);
+      const logs = await orm.select({ docId: woocommerceOrderLogs.erpDocumentId }).from(woocommerceOrderLogs)
+        .where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
+      await orm.delete(woocommerceOrderLogs).where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
+      const docIds = logs.map(l => l.docId).filter((v): v is number => typeof v === 'number');
+      if (docIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', docIds);
+        await cleanTestTableData('documents', 'id', docIds);
+      }
+      if (createdCustomerIds.length > 0) {
+        await orm.delete(customers).where(inArray(customers.id, createdCustomerIds));
+      }
+      if (originalSecret) {
+        await orm.update(appSettings).set({ value: originalSecret.value }).where(eq(appSettings.key, secretKey));
+      } else {
+        await orm.delete(appSettings).where(eq(appSettings.key, secretKey));
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText, AlertTriangle } from 'lucide-react';
+import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { formatPersianDateTime } from '../../utils';
+import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 
 interface WooCommerceTabProps {
   wcStoreUrl: string;
@@ -197,9 +198,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             <li>در پیشخوان وردپرس به مسیر <strong>ووکامرس &gt; پیکربندی &gt; پیشرفته &gt; وب‌هوک‌ها (Webhooks)</strong> بروید.</li>
             <li>روی دکمه <strong>«افزودن وب‌هوک»</strong> کلیک کنید.</li>
             <li><strong>نام:</strong> دلخواه (مثلاً: <code>همگام‌سازی فاکتور انبار</code>)، <strong>وضعیت:</strong> <code>فعال (Active)</code>.</li>
-            <li><strong>موضوع (Topic):</strong> گزینه‌ی <code>سفارش ایجاد شد (Order Created)</code> یا <code>سفارش بروزرسانی شد</code> را انتخاب کنید.</li>
+            <li><strong>موضوع (Topic):</strong> حتماً <code>سفارش بروزرسانی شد (Order Updated)</code> را انتخاب کنید؛ فاکتور فقط پس از پرداخت (وضعیت «در حال انجام» یا «تکمیل‌شده») صادر و با لغو سفارش ابطال می‌شود و این تغییر وضعیت‌ها فقط با این موضوع ارسال می‌شوند. افزودن وب‌هوک جداگانه برای <code>سفارش ایجاد شد</code> اختیاری است.</li>
             <li><strong>نشانی تحویل (Delivery URL):</strong> آدرس وب‌هوک عمومی کپی‌شده در بالا را پیست کنید.</li>
-            <li><strong>کد محرمانه (Secret):</strong> در صورت تمایل همان کدی که در کادر بالا وارد کردید را در ووکامرس بگذارید.</li>
+            <li><strong>کد محرمانه (Secret):</strong> همان کدی را که در کادر بالا وارد کردید بگذارید؛ بدون این کد سفارش‌ها پردازش نمی‌شوند.</li>
           </ol>
         </div>
       </div>
@@ -323,31 +324,16 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                     <tr key={`wc-log-${log.id || idx}-${idx}`} className="hover:bg-slate-50/80">
                       <td className="p-3 font-mono font-bold text-slate-800 dir-ltr text-right">#{log.wcOrderId}</td>
                       <td className="p-3">
-                        {log.status === 'processed' && (
-                          <span className="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1">
-                            <Check size={12} /> موفق
-                          </span>
-                        )}
-                        {log.status === 'duplicate' && (
-                          <span className="bg-amber-100 text-amber-800 text-[11px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1">
-                            <RefreshCw size={12} /> تکراری (نادیاده گرفته شد)
-                          </span>
-                        )}
-                        {log.status === 'failed' && (
-                          <span className="bg-rose-100 text-rose-800 text-[11px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1">
-                            <AlertTriangle size={12} /> خطا
-                          </span>
-                        )}
+                        <WcOrderLogStatusBadge status={String(log.status || '')} />
                       </td>
                       <td className="p-3 font-medium">
                         {log.buyerName || 'خریدار آنلاین'}
-                        {log.totalAmount ? ` ()` : ''}
                       </td>
                       <td className="p-3 font-mono font-bold text-blue-600 dir-ltr text-right">
-                        {log.documentId ? `#${log.documentId}` : '—'}
+                        {log.erpDocumentId ? `#${log.erpDocumentId}` : '—'}
                       </td>
                       <td className="p-3 text-slate-500 font-mono text-[11px]">
-                        {log.createdAt ? formatPersianDateTime(log.createdAt) : '—'}
+                        {(log.updatedAt || log.createdAt) ? formatPersianDateTime(log.updatedAt || log.createdAt) : '—'}
                       </td>
                       <td className="p-3 text-slate-600 max-w-xs truncate" title={log.errorMessage || ''}>
                         {log.errorMessage ? (

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, desc, like, and } from 'drizzle-orm';
-import { appSettings, items, customers, documents, woocommerceOrderLogs, warehouses } from '../db/schema.js';
+import { appSettings, items, documents, woocommerceOrderLogs } from '../db/schema.js';
 import axios from 'axios';
 import https from 'https';
 import crypto from 'crypto';
@@ -9,14 +9,10 @@ import fs from 'fs';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
-import { DocumentService } from '../services/document.service.js';
-import { IdempotencyService } from '../services/idempotency.service.js';
-import { domainEventBus } from '../services/events/domainEventBus.js';
-import { OutboxService } from '../services/events/outboxService.js';
+import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.service.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
-import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 
 const router = Router();
 
@@ -126,329 +122,6 @@ async function makeWcRequest(
   }
 }
 
-interface WcOrderPayload {
-  id?: string | number;
-  number?: string | number;
-  total?: string | number;
-  currency?: string;
-  line_items?: Array<{
-    id?: number;
-    name?: string;
-    sku?: string;
-    quantity?: number;
-    price?: number | string;
-    total?: number | string;
-    [key: string]: unknown;
-  }>;
-  billing?: {
-    first_name?: string;
-    last_name?: string;
-    phone?: string;
-    city?: string;
-    address_1?: string;
-    address_2?: string;
-    [key: string]: unknown;
-  };
-  shipping?: {
-    first_name?: string;
-    last_name?: string;
-    phone?: string;
-    city?: string;
-    address_1?: string;
-    address_2?: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-/**
- * Helper to process a WooCommerce Order JSON into an ERP Invoice & deduct stock atomically and idempotently.
- */
-async function processWooCommerceOrder(wcOrder: WcOrderPayload) {
-  const wcOrderId = String(wcOrder.id || wcOrder.number || '').trim();
-  if (!wcOrderId) {
-    throw new Error('داده‌های سفارش ووکامرس حاوی شماره سفارش معتبر نیست.');
-  }
-
-  const notesTag = `سفارش ووکامرس #${wcOrderId}`;
-  const idemKey = `wc_order_${wcOrderId}`;
-  const idemScope = 'woocommerce_order_sync';
-
-  // TD-155: Acquire idempotency key BEFORE database transaction to prevent first-time order race condition
-  const acquireResult = await IdempotencyService.acquireKey(idemKey, {
-    scope: idemScope,
-    lockTimeoutSeconds: 45,
-    ttlSeconds: 86400 * 7,
-    requestPayload: { wcOrderId, total: wcOrder.total }
-  });
-
-  if (acquireResult.state === 'cached') {
-    logger.info(`[WooCommerce Webhook] Returning cached idempotency response for order #${wcOrderId}`);
-    return acquireResult.responseBody as {
-      success: boolean;
-      alreadyExists?: boolean;
-      docId?: number;
-      refNumber?: string;
-      message: string;
-    };
-  }
-
-  if (acquireResult.state === 'in_flight') {
-    logger.warn(`[WooCommerce Webhook] Order #${wcOrderId} processing already in progress (in-flight concurrency locked until ${acquireResult.lockedUntil})`);
-    return {
-      success: true,
-      alreadyExists: true,
-      inFlight: true,
-      message: `سفارش ووکامرس #${wcOrderId} هم‌اکنون در جریان پردازش موازی قرار دارد و نیازی به صدور فاکتور مجدد نیست.`
-    };
-  }
-
-  try {
-    // Execute in isolated database transaction with row locks for strict concurrency safety
-    const result = await orm.transaction(async (tx) => {
-    // 1. Check woocommerceOrderLogs with FOR UPDATE lock
-    const existingLogs = await tx.select()
-      .from(woocommerceOrderLogs)
-      .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId))
-      .for('update');
-
-    if (existingLogs.length > 0) {
-      const log = existingLogs[0];
-      if (log.status === 'processed' && log.erpDocumentId) {
-        return {
-          success: true,
-          alreadyExists: true,
-          docId: log.erpDocumentId,
-          message: `فاکتور فروش مربوط به سفارش ووکامرس #${wcOrderId} قبلاً با شناسه ${log.erpDocumentId} ثبت گردیده است.`
-        };
-      }
-    }
-
-    // 2. Check existing documents as additional fallback
-    const existingDocs = await tx.select()
-      .from(documents)
-      .where(and(
-        eq(documents.type, 'invoice'),
-        eq(documents.isDeleted, 0),
-        like(documents.notes, `%${notesTag}%`)
-      ));
-
-    if (existingDocs.length > 0) {
-      const doc = existingDocs[0];
-      if (existingLogs.length === 0) {
-        try {
-          await tx.insert(woocommerceOrderLogs).values({
-            wcOrderId,
-            erpDocumentId: doc.id,
-            status: 'processed',
-            buyerName: doc.buyerName || '',
-            totalAmount: Number(wcOrder.total || 0),
-            payload: wcOrder
-          });
-        } catch (logErr) {
-          logger.warn({ message: `Failed to backfill WooCommerce order log for #${wcOrderId}`, error: logErr });
-        }
-      }
-      return {
-        success: true,
-        alreadyExists: true,
-        docId: doc.id,
-        message: `فاکتور فروش مربوط به سفارش ووکامرس #${wcOrderId} قبلاً در سیستم با شماره فاکتور ${doc.refNumber} ثبت گردیده است.`
-      };
-    }
-
-    const lineItems = wcOrder.line_items || [];
-    if (!Array.isArray(lineItems) || lineItems.length === 0) {
-      throw new Error(`سفارش ووکامرس #${wcOrderId} فاقد اقلام خرید است.`);
-    }
-
-    const billing = wcOrder.billing || {};
-    const shipping = wcOrder.shipping || {};
-    const firstName = (billing.first_name || shipping.first_name || '').trim();
-    const lastName = (billing.last_name || shipping.last_name || '').trim();
-    const buyerName = `${firstName} ${lastName}`.trim() || `خریدار ووکامرس #${wcOrderId}`;
-    const buyerPhone = (billing.phone || shipping.phone || '').trim();
-    const buyerCity = (billing.city || shipping.city || '').trim();
-    const buyerAddress = `${billing.address_1 || shipping.address_1 || ''} ${billing.address_2 || shipping.address_2 || ''}`.trim();
-
-    // Match or create customer
-    if (buyerPhone || buyerName) {
-      const matchedCustomer = await tx.select()
-        .from(customers)
-        .where(and(
-          eq(customers.isDeleted, 0),
-          buyerPhone ? eq(customers.phone, buyerPhone) : eq(customers.name, buyerName)
-        ));
-
-      if (matchedCustomer.length === 0 && buyerName) {
-        try {
-          await tx.insert(customers).values({
-            name: buyerName,
-            phone: buyerPhone,
-            city: buyerCity,
-            address: buyerAddress,
-            notes: `مشتری ثبت‌شده خودکار از فروشگاه ووکامرس`
-          });
-        } catch (custErr) {
-          logger.warn({ message: `Failed to auto-create WooCommerce customer for order #${wcOrderId}`, error: custErr });
-        }
-      }
-    }
-
-    // V10-2.3 (TD-022): تعیین انبار پیش‌فرض فعال با fallback به 'main'
-    const [defLoc] = await tx.select().from(warehouses).where(eq(warehouses.isActive, 1)).limit(1);
-    const targetLoc = defLoc?.code || 'main';
-
-    // V10-2.3 (TD-022): نگاشت ارز سفارش ووکامرس به واژگان استاندارد سیستم (IRR / USD / EUR ...)
-    // در صورت ارسال تومان (IRT / TOMAN)، مبالغ برحسب ریال استاندارد (ضریب ۱۰) و ارز سند IRR ثبت می‌شود
-    const rawCurrency = String(wcOrder.currency || '').trim().toUpperCase();
-    const isToman = rawCurrency === 'IRT' || rawCurrency === 'TOMAN' || rawCurrency === 'تومان';
-    const currencyMultiplier = isToman ? 10 : 1;
-    const systemCurrency = isToman ? 'IRR' : (rawCurrency || 'IRR');
-
-    // Match items by SKU
-    const matchedDocItems: Array<{ itemId: number; quantity: number; unit_price: number; location: string }> = [];
-    const unmappedSkus: string[] = [];
-    let orderTotalNumeric = 0;
-
-    for (const item of lineItems) {
-      const sku = (item.sku || '').trim();
-      const qty = Number(item.quantity || 1);
-      const rawPrice = Number(item.price || (item.total ? Number(item.total) / qty : 0));
-      const unitPrice = Math.round(rawPrice * currencyMultiplier);
-      orderTotalNumeric += qty * unitPrice;
-
-      if (sku) {
-        const erpItems = await tx.select()
-          .from(items)
-          .where(and(eq(items.isDeleted, 0), eq(items.code, sku)));
-
-        if (erpItems.length > 0) {
-          matchedDocItems.push({
-            itemId: erpItems[0].id,
-            quantity: qty,
-            unit_price: unitPrice,
-            location: targetLoc
-          });
-        } else {
-          unmappedSkus.push(`${item.name} (SKU: ${sku})`);
-        }
-      } else {
-        unmappedSkus.push(`${item.name} (فاقد SKU)`);
-      }
-    }
-
-    if (matchedDocItems.length === 0) {
-      const errMessage = `هیچ یک از اقلام سفارش ووکامرس #${wcOrderId} در انبار ERP یافت نشدند. اقلام بدون تطبیق: ${unmappedSkus.join(', ')}`;
-      
-      if (existingLogs.length > 0) {
-        await tx.update(woocommerceOrderLogs)
-          .set({ status: 'failed', errorMessage: errMessage, updatedAt: systemNowUtcIso() })
-          .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId));
-      } else {
-        try {
-          await tx.insert(woocommerceOrderLogs).values({
-            wcOrderId,
-            status: 'failed',
-            buyerName,
-            totalAmount: orderTotalNumeric,
-            payload: wcOrder,
-            errorMessage: errMessage
-          });
-        } catch (logErr) {
-          logger.warn({ message: `Failed to record failed WooCommerce order log for #${wcOrderId}`, error: logErr });
-        }
-      }
-      throw new Error(errMessage);
-    }
-
-    const todayStr = await businessTodayIsoDate();
-    // V9-P0: refNumber و سند فاکتور هر دو داخل همان تراکنش اتمیک پردازش سفارش تولید می‌شوند
-    const nextRef = await DocumentService.getNextRef('invoice', todayStr, tx);
-
-    let notesText = `${notesTag}`;
-    if (unmappedSkus.length > 0) {
-      notesText += ` - اقلام بدون تطبیق انبار: ${unmappedSkus.join(', ')}`;
-    }
-
-    const newDocId = await DocumentService.createDocument({
-      docType: 'invoice',
-      refNumber: nextRef,
-      date: todayStr,
-      user: 'ربات ووکامرس',
-      inOut: 'out',
-      status: 'final',
-      buyer_name: buyerName,
-      buyer_phone: buyerPhone,
-      buyer_city: buyerCity,
-      buyer_address: buyerAddress,
-      notes: notesText,
-      currency: systemCurrency,
-      items: matchedDocItems,
-      location: targetLoc,
-      externalTx: tx
-    });
-
-    // Record or update in woocommerceOrderLogs
-    if (existingLogs.length > 0) {
-      await tx.update(woocommerceOrderLogs)
-        .set({
-          status: 'processed',
-          erpDocumentId: newDocId,
-          buyerName,
-          totalAmount: orderTotalNumeric,
-          payload: wcOrder,
-          errorMessage: '',
-          updatedAt: systemNowUtcIso()
-        })
-        .where(eq(woocommerceOrderLogs.wcOrderId, wcOrderId));
-    } else {
-      await tx.insert(woocommerceOrderLogs).values({
-        wcOrderId,
-        erpDocumentId: newDocId,
-        status: 'processed',
-        buyerName,
-        totalAmount: orderTotalNumeric,
-        payload: wcOrder
-      });
-    }
-
-    // Emit Domain Event & Outbox Event
-    const event = domainEventBus.createEvent(
-      'woocommerce.order.synced',
-      'WooCommerce',
-      wcOrderId,
-      {
-        wcOrderId,
-        docId: newDocId,
-        refNumber: nextRef,
-        buyerName,
-        totalAmount: orderTotalNumeric
-      }
-    );
-
-    domainEventBus.emit('woocommerce.order.synced', event);
-    await OutboxService.saveToOutbox(tx, event);
-
-      return {
-        success: true,
-        docId: newDocId,
-        refNumber: nextRef,
-        message: `فاکتور فروش شماره ${nextRef} جهت سفارش ووکامرس #${wcOrderId} با موفقیت صادر گردید و موجودی انبار کسر شد.`
-      };
-    });
-
-    // Save final response in idempotency registry so future webhook duplicate retries are instantly answered
-    await IdempotencyService.saveResponse(idemKey, 200, result, { scope: idemScope });
-
-    return result;
-  } catch (error) {
-    // If failure was not already an active in-flight or conflict, mark idempotency as failed so it can be retried later
-    await IdempotencyService.markFailed(idemKey, error, { scope: idemScope });
-    throw error;
-  }
-}
-
 // ==========================================
 // UNAUTHENTICATED WEBHOOK ENDPOINT (GET/POST/HEAD)
 // ==========================================
@@ -532,21 +205,16 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
       });
     }
 
-    const wcStatus = payload.status;
-    // Process when order status is valid for stock deduction & invoicing
-    if (['processing', 'completed', 'on-hold', 'pending'].includes(wcStatus)) {
-      const result = await processWooCommerceOrder(payload);
-      return res.status(200).json(result);
-    } else {
-      return res.status(200).json({
-        success: true,
-        message: `سفارش ووکامرس #${payload.id} در وضعیت «${wcStatus}» قرار دارد و نیازی به صدور فاکتور در این مرحله نیست.`
-      });
-    }
+    // v7.0.30 (TD-190 / audit P1-2): سیاست وضعیت سفارش (فاکتور / ابطال / بررسی / انتظار پرداخت) در سرویس اعمال می‌شود
+    const result = await WooOrderSyncService.handleOrder(payload);
+    return res.status(200).json(result);
   } catch (error) {
     logger.error({ message: 'WooCommerce Webhook error', error });
-    // Return 200 with success: false to prevent WooCommerce from retrying continuously, but include error message
-    res.status(200).json({ success: false, error: error.message || 'خطا در پردازش وب‌هوک ووکامرس' });
+    // تصمیم مالک محصول (v7.0.30): همیشه 200 — ووکامرس تحویل ناموفق را دوباره ارسال نمی‌کند و پس از ۵ پاسخ
+    // غیر 2xx پیاپی وب‌هوک را غیرفعال می‌کند. شکست در woocommerce_order_logs ماندگار است و از ERP با
+    // «همگام‌سازی دستی سفارش» دوباره پردازش می‌شود.
+    const message = error instanceof Error ? error.message : 'خطا در پردازش وب‌هوک ووکامرس';
+    res.status(200).json({ success: false, status: 'failed', message, error: message });
   }
 };
 
@@ -612,7 +280,7 @@ router.post('/sync-order-by-id', authorize('admin', 'manager', 'woocommerce.mana
     }
 
     const wcOrder = await makeWcRequest('GET', `orders/${orderId}`, url, key, secret);
-    const result = await processWooCommerceOrder(wcOrder);
+    const result = await WooOrderSyncService.handleOrder(wcOrder);
 
     res.json(result);
   } catch (error) {
