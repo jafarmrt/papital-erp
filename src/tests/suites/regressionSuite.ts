@@ -3287,6 +3287,60 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.8: v7.0.35 (audit P2-2): اولین حرکت همزمان یک کالا در یک انبار نباید با 23505 شکست بخورد
+  if (shouldRun('reg_first_movement_race_p2_2', 'p22', 'race', 'item_warehouse_stocks', 'concurrency')) {
+    const tStart = Date.now();
+    const createdItemIds: number[] = [];
+    try {
+      const { ItemWarehouseStockService } = await import('../../services/inventory/itemWarehouseStock.service.js');
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { itemWarehouseStocks } = await import('../../db/schema.js');
+      const [w1] = await orm.select({ id: warehouses.id, code: warehouses.code, name: warehouses.name })
+        .from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const trials = 5;
+      const parallel = 6;
+      const failures: string[] = [];
+      for (let t = 0; t < trials; t++) {
+        const item = await createTestItem({ stocks: {}, currentStock: 0 });
+        createdItemIds.push(item.id);
+        // سرویس به‌تنهایی (بدون قفل قبلی ردیف کالا توسط فراخواننده) باید ایمن باشد
+        const outcomes = await Promise.allSettled(Array.from({ length: parallel }, () =>
+          orm.transaction(tx => ItemWarehouseStockService.applyMovement(tx, { itemId: item.id, warehouse: w1, inOut: 'in', quantity: 1 }))
+        ));
+        const rejected = outcomes.filter(o => o.status === 'rejected') as PromiseRejectedResult[];
+        const [row] = await orm.select({ s: itemWarehouseStocks.currentStock }).from(itemWarehouseStocks)
+          .where(and(eq(itemWarehouseStocks.itemId, item.id), eq(itemWarehouseStocks.warehouseId, w1.id)));
+        if (rejected.length > 0 || Number(row?.s) !== parallel) {
+          failures.push(`trial ${t + 1}: rejected=${rejected.length} stock=${row?.s} ${rejected[0] ? String(rejected[0].reason?.cause?.code || rejected[0].reason?.message).slice(0, 80) : ''}`);
+        }
+      }
+      if (failures.length > 0) {
+        throw new Error(`اولین حرکت همزمان کالا در انبار ناموفق بود (${failures.length}/${trials}): ${failures.join(' | ')}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_first_movement_race_p2_2',
+        scenarioId: 'concurrent_stock_issues_postgres',
+        name: 'v7.0.35: ایمنی همزمانی اولین حرکت کالا در یک انبار در ItemWarehouseStockService (P2-2)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: `${trials} آزمایش × ${parallel} تراکنش همزمان اولین ورود کالا به انبار بدون خطای یکتایی و با جمع درست موجودی انجام شد.`
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_first_movement_race_p2_2',
+        scenarioId: 'concurrent_stock_issues_postgres',
+        name: 'v7.0.35: ایمنی همزمانی اولین حرکت کالا در یک انبار در ItemWarehouseStockService (P2-2)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

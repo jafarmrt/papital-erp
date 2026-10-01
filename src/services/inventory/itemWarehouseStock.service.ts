@@ -64,20 +64,13 @@ export class ItemWarehouseStockService {
       throw new ValidationError(`مقدار گردش انبار باید عددی مثبت باشد: ${quantity}`);
     }
 
-    // Lock the normalized stock row for update
-    const [existing] = await tx
-      .select()
-      .from(itemWarehouseStocks)
-      .where(and(
-        eq(itemWarehouseStocks.itemId, itemId),
-        eq(itemWarehouseStocks.warehouseId, warehouse.id)
-      ))
-      .for('update');
+    // v7.0.35 (audit P2-2): ردیف (کالا × انبار) ابتدا با INSERT ... ON CONFLICT DO NOTHING تضمین و سپس قفل
+    // سطری واقعی گرفته می‌شود. پیش‌تر SELECT ... FOR UPDATE روی ردیف ناموجود قفلی نمی‌گرفت و دو تراکنش همزمانِ
+    // اولین حرکت یک کالا در یک انبار هر دو INSERT می‌کردند و یکی با خطای 23505 شکست می‌خورد.
+    const { row: existing, created } = await ItemWarehouseStockService.lockOrCreateRow(tx, itemId, warehouse);
 
-    let previousLocationStock = 0;
-    if (existing) {
-      previousLocationStock = Number(existing.currentStock || 0);
-    } else {
+    let previousLocationStock = Number(existing.currentStock || 0);
+    if (created) {
       // Lazy migration / initialize from items.stocks JSONB or items.currentStock under lock
       const [it] = await tx
         .select({ stocks: items.stocks, currentStock: items.currentStock })
@@ -85,6 +78,7 @@ export class ItemWarehouseStockService {
         .where(eq(items.id, itemId))
         .for('update');
 
+      previousLocationStock = 0;
       if (it) {
         const stocksJson = (it.stocks as Record<string, number>) || {};
         const valByCode = stocksJson[warehouse.code] ?? stocksJson[warehouse.code.toLowerCase()];
@@ -114,34 +108,56 @@ export class ItemWarehouseStockService {
       newLocationStock = fin(previousLocationStock).subtract(qty).round(4).toNumber();
     }
 
-    const nowIso = new Date().toISOString();
-
-    if (existing) {
-      await tx
-        .update(itemWarehouseStocks)
-        .set({
-          currentStock: newLocationStock,
-          warehouseCode: warehouse.code,
-          version: existing.version + 1,
-          updatedAt: nowIso,
-        })
-        .where(eq(itemWarehouseStocks.id, existing.id));
-    } else {
-      await tx
-        .insert(itemWarehouseStocks)
-        .values({
-          itemId,
-          warehouseId: warehouse.id,
-          warehouseCode: warehouse.code,
-          currentStock: newLocationStock,
-          reservedStock: 0,
-          version: 1,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        });
-    }
+    await tx
+      .update(itemWarehouseStocks)
+      .set({
+        currentStock: newLocationStock,
+        warehouseCode: warehouse.code,
+        version: created ? existing.version : existing.version + 1,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(itemWarehouseStocks.id, existing.id));
 
     return { newLocationStock, previousLocationStock };
+  }
+
+  /**
+   * v7.0.35 (audit P2-2): ردیف موجودی (کالا × انبار) را در صورت نبود با موجودی صفر درج می‌کند (ON CONFLICT DO
+   * NOTHING روی ایندکس یکتای idx_item_warehouse_unique) و سپس آن را FOR UPDATE قفل می‌کند. درج همزمان تا پایان
+   * تراکنش اول منتظر می‌ماند، پس فراخوان دوم همیشه ردیف commitشده و قفل واقعی را می‌گیرد. `created` یعنی ردیف
+   * در همین تراکنش ساخته شد و مقدار اولیه آن هنوز تعیین نشده است.
+   */
+  private static async lockOrCreateRow(
+    tx: DbClient,
+    itemId: number,
+    warehouse: WarehouseInfo
+  ): Promise<{ row: typeof itemWarehouseStocks.$inferSelect; created: boolean }> {
+    const nowIso = new Date().toISOString();
+    const inserted = await tx
+      .insert(itemWarehouseStocks)
+      .values({
+        itemId,
+        warehouseId: warehouse.id,
+        warehouseCode: warehouse.code,
+        currentStock: 0,
+        reservedStock: 0,
+        version: 1,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      })
+      .onConflictDoNothing({ target: [itemWarehouseStocks.itemId, itemWarehouseStocks.warehouseId] })
+      .returning({ id: itemWarehouseStocks.id });
+
+    const [row] = await tx
+      .select()
+      .from(itemWarehouseStocks)
+      .where(and(
+        eq(itemWarehouseStocks.itemId, itemId),
+        eq(itemWarehouseStocks.warehouseId, warehouse.id)
+      ))
+      .for('update');
+
+    return { row, created: inserted.length > 0 };
   }
 
   /**
@@ -197,39 +213,16 @@ export class ItemWarehouseStockService {
         const wh = await ItemWarehouseStockService.resolveWarehouse(tx, rawWh);
         const stockNum = fin(Number(qty) || 0).round(4).toNumber();
 
-        const [existing] = await tx
-          .select({ id: itemWarehouseStocks.id, version: itemWarehouseStocks.version })
-          .from(itemWarehouseStocks)
-          .where(and(
-            eq(itemWarehouseStocks.itemId, itemId),
-            eq(itemWarehouseStocks.warehouseId, wh.id)
-          ))
-          .for('update');
-
-        if (existing) {
-          await tx
-            .update(itemWarehouseStocks)
-            .set({
-              currentStock: stockNum,
-              warehouseCode: wh.code,
-              version: existing.version + 1,
-              updatedAt: nowIso,
-            })
-            .where(eq(itemWarehouseStocks.id, existing.id));
-        } else {
-          await tx
-            .insert(itemWarehouseStocks)
-            .values({
-              itemId,
-              warehouseId: wh.id,
-              warehouseCode: wh.code,
-              currentStock: stockNum,
-              reservedStock: 0,
-              version: 1,
-              createdAt: nowIso,
-              updatedAt: nowIso,
-            });
-        }
+        const { row: existing, created } = await ItemWarehouseStockService.lockOrCreateRow(tx, itemId, wh);
+        await tx
+          .update(itemWarehouseStocks)
+          .set({
+            currentStock: stockNum,
+            warehouseCode: wh.code,
+            version: created ? existing.version : existing.version + 1,
+            updatedAt: nowIso,
+          })
+          .where(eq(itemWarehouseStocks.id, existing.id));
       } catch (err: any) {
         logger.warn(`[ItemWarehouseStockService] Could not resolve warehouse "${rawWh}" for item ${itemId}: ${err.message}`);
       }
