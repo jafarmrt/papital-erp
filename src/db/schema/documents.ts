@@ -1,20 +1,17 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey } from 'drizzle-orm/pg-core';
 import type { FinancialAttachment } from '../../types';
-import { crmLeads } from './crm';
-import { productionProjects } from './projects';
-import { items } from './inventory';
 import { users } from './auth';
+import { registerColumnRef, baseRelations } from './baseRelations';
 
 export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
   type: text('type').notNull(),
   refNumber: text('ref_number').notNull(),
   date: timestamp('date', { withTimezone: false, mode: 'string' }).notNull(),
-  // V10-4.3: لینک رسمی سند به پرونده فروش CRM — جایگزین اتکا به تگ متنی «CRM #n» در یادداشت‌ها
-  // (پسوند AnyPgColumn برای شکستن استنتاج چرخه‌ای documents↔crmLeads)
-  crmLeadId: integer('crm_lead_id').references((): AnyPgColumn => crmLeads.id),
-  // V3.1.46 (TD-070): لینک رسمی سند انبار/فاکتور به پروژه تولید — منبع یگانه ردیابی سند↔پروژه
-  projectId: integer('project_id').references((): AnyPgColumn => productionProjects.id),
+  // V10-4.3 / TD-169: لینک رسمی سند به پرونده فروش CRM — ارجاع از طریق baseRelations
+  crmLeadId: integer('crm_lead_id').references(baseRelations.crmLeadsId),
+  // V3.1.46 (TD-070) / TD-169: لینک رسمی سند انبار/فاکتور به پروژه تولید — ارجاع از طریق baseRelations
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   user: text('user'),
   notes: text('notes'),
   buyerName: text('buyer_name').default(''),
@@ -34,6 +31,7 @@ export const documents = pgTable('documents', {
   idx_buyer_name: index('idx_docs_buyer_name').on(table.buyerName),
   idx_docs_project: index('idx_docs_project').on(table.projectId),
 }));
+registerColumnRef('documents.id', () => documents.id);
 
 export const documentRefCounters = pgTable('document_ref_counters', {
   docType: varchar('doc_type', { length: 20 }).notNull(),
@@ -46,7 +44,7 @@ export const documentRefCounters = pgTable('document_ref_counters', {
 export const documentItems = pgTable('document_items', {
   id: serial('id').primaryKey(),
   documentId: integer('document_id').notNull().references(() => documents.id),
-  itemId: integer('item_id').notNull().references((): AnyPgColumn => items.id),
+  itemId: integer('item_id').notNull().references(baseRelations.itemsId),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
   unitPrice: numeric('unit_price', { precision: 18, scale: 4, mode: 'number' }).default(0),
   discount: numeric('discount', { precision: 18, scale: 4, mode: 'number' }).default(0),

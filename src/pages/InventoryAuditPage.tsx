@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
-import { fetchJson } from '../api';
+import { fetchJson, isAbortError } from '../api';
 import { formatPersianDate, formatPersianNumber, parseCleanNumber } from '../utils';
 
 // Subcomponents
@@ -49,8 +49,20 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
 
   // Tab 2: Physical Audit Form State
   const [selectedLocation, setSelectedLocation] = useState('انبار مرکزی');
-  const [nextRef] = useState('AUD-1001');
+  const [nextRef, setNextRef] = useState('AUD-1002');
   const [notes, setNotes] = useState('');
+
+  const fetchNextRef = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const data = await fetchJson<{ nextRef: string }>('/documents/next-ref?type=audit', { signal });
+      if (data?.nextRef) {
+        const num = String(data.nextRef);
+        setNextRef(num.startsWith('AUD-') ? num : `AUD-${num}`);
+      }
+    } catch (err: any) {
+      if (isAbortError(err) || signal?.aborted) return;
+    }
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [items, setItems] = useState<any[]>([]);
@@ -155,8 +167,9 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
     const controller = new AbortController();
     loadIntegrityReport(controller.signal);
     fetchAllItems(controller.signal);
+    fetchNextRef(controller.signal);
     return () => controller.abort();
-  }, [loadIntegrityReport, fetchAllItems]);
+  }, [loadIntegrityReport, fetchAllItems, fetchNextRef]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -164,13 +177,14 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
       loadIntegrityReport(controller.signal);
     } else if (activeTab === 'new_audit') {
       loadPhysicalAuditItems(controller.signal);
+      fetchNextRef(controller.signal);
     } else if (activeTab === 'reports') {
       loadPastAudits(controller.signal);
     } else if (activeTab === 'transfers') {
       loadTransfers(controller.signal);
     }
     return () => controller.abort();
-  }, [activeTab, selectedLocation, loadIntegrityReport, loadPhysicalAuditItems, loadPastAudits, loadTransfers]);
+  }, [activeTab, selectedLocation, loadIntegrityReport, loadPhysicalAuditItems, loadPastAudits, loadTransfers, fetchNextRef]);
 
   // Physical Audit Change Handlers
   const handlePhysicalChange = (itemId: number, value: string) => {
@@ -274,6 +288,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
       loadPhysicalAuditItems();
       fetchAllItems();
       loadIntegrityReport();
+      fetchNextRef();
     } catch (err: any) {
       setErrorMsg(err.message || 'خطا در ثبت سند انبارگردانی');
     } finally {

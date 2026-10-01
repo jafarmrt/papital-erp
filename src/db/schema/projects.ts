@@ -1,16 +1,15 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, unique, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, unique } from 'drizzle-orm/pg-core';
 import type { FinancialAttachment } from '../../types';
-import { customers } from './crm';
-import { items, transactions } from './inventory';
 import { users } from './auth';
+import { registerColumnRef, baseRelations } from './baseRelations';
 
 export const productionProjects = pgTable('production_projects', {
   id: serial('id').primaryKey(),
   projectCode: text('project_code').notNull().unique(),
   title: text('title').notNull(),
-  customerId: integer('customer_id').references(() => customers.id),
+  customerId: integer('customer_id').references(baseRelations.customersId),
   customerName: text('customer_name').default(''),
-  itemId: integer('item_id').references((): AnyPgColumn => items.id),
+  itemId: integer('item_id').references(baseRelations.itemsId),
   itemCode: text('item_code').default(''),
   itemName: text('item_name').default(''),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull().default(1),
@@ -34,6 +33,7 @@ export const productionProjects = pgTable('production_projects', {
   idx_proj_status: index('idx_proj_status').on(table.status),
   idx_proj_deleted: index('idx_proj_deleted').on(table.isDeleted),
 }));
+registerColumnRef('productionProjects.id', () => productionProjects.id);
 
 export const projectStages = pgTable('project_stages', {
   id: serial('id').primaryKey(),
@@ -59,7 +59,7 @@ export const projectStages = pgTable('project_stages', {
 export const projectProductStageProgress = pgTable('project_product_stage_progress', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').notNull().references(() => productionProjects.id),
-  itemId: integer('item_id').notNull().references((): AnyPgColumn => items.id),
+  itemId: integer('item_id').notNull().references(baseRelations.itemsId),
   itemCode: text('item_code').notNull().default(''), // snapshot کد کالا (SKU)
   itemName: text('item_name').default(''),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
@@ -80,12 +80,12 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   id: serial('id').primaryKey(),
   projectId: integer('project_id').notNull().references(() => productionProjects.id),
   projectCode: text('project_code').notNull(),
-  itemId: integer('item_id').notNull().references((): AnyPgColumn => items.id),
+  itemId: integer('item_id').notNull().references(baseRelations.itemsId),
   itemCode: text('item_code').notNull(),
   itemName: text('item_name').notNull(),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
   unit: text('unit').default('عدد'),
-  sourceTransactionId: integer('source_transaction_id').references((): AnyPgColumn => transactions.id),
+  sourceTransactionId: integer('source_transaction_id').references(baseRelations.transactionsId),
   sourceLocation: text('source_location').default('main'),
   status: text('status').notNull().default('allocated'), // 'allocated', 'consumed', 'released'
   userId: integer('user_id').references(() => users.id),

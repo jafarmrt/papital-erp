@@ -1,6 +1,6 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { personnel } from './personnel';
+import { registerColumnRef, baseRelations } from './baseRelations';
 
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
@@ -24,6 +24,7 @@ export const customers = pgTable('customers', {
   idx_customers_party_type: index('idx_customers_party_type').on(table.partyType),
   idx_customers_is_deleted: index('idx_customers_is_deleted').on(table.isDeleted),
 }));
+registerColumnRef('customers.id', () => customers.id);
 
 export const crmLeads = pgTable('crm_leads', {
   id: serial('id').primaryKey(),
@@ -38,8 +39,8 @@ export const crmLeads = pgTable('crm_leads', {
   currency: text('currency').default('IRR'),
   probability: integer('probability').default(50),
   assignedTo: text('assigned_to').default(''),
-  // V10-4.1: فروشنده مسئول از پرسنل — لینک رسمی با حفظ snapshot متنی
-  assignedPersonnelId: integer('assigned_personnel_id').references((): AnyPgColumn => personnel.id),
+  // V10-4.1 / TD-169: فروشنده مسئول از پرسنل — ارجاع از طریق baseRelations
+  assignedPersonnelId: integer('assigned_personnel_id').references(baseRelations.personnelId),
   expectedCloseDate: text('expected_close_date').default(''),
   notes: text('notes').default(''),
   status: text('status').default('active'), // 'active', 'won', 'lost', 'archived'
@@ -57,6 +58,7 @@ export const crmLeads = pgTable('crm_leads', {
   idx_crm_deleted: index('idx_crm_deleted').on(table.isDeleted),
   idx_crm_proforma: index('idx_crm_proforma').on(table.proformaId),
 }));
+registerColumnRef('crmLeads.id', () => crmLeads.id);
 
 export const crmActivities = pgTable('crm_activities', {
   id: serial('id').primaryKey(),
@@ -68,8 +70,8 @@ export const crmActivities = pgTable('crm_activities', {
   result: text('result').default(''),
   loggedBy: text('logged_by').default(''),
   assignedTo: text('assigned_to').default(''),
-  // V10-4.1: مسئول تسک از پرسنل
-  assignedPersonnelId: integer('assigned_personnel_id').references((): AnyPgColumn => personnel.id),
+  // V10-4.1 / TD-169: مسئول تسک از پرسنل — ارجاع از طریق baseRelations
+  assignedPersonnelId: integer('assigned_personnel_id').references(baseRelations.personnelId),
   mentions: jsonb('mentions').default([]),
   activityDate: text('activity_date').default(''),
   activityDateIso: text('activity_date_iso').default(''),

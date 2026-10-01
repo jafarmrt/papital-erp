@@ -1,8 +1,7 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
-import { documents } from './documents';
-import { pieceworkPayrolls } from './personnel';
+import { baseRelations } from './baseRelations';
 
 export const accounts = pgTable('accounts', {
   id: serial('id').primaryKey(),
@@ -151,9 +150,9 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   trackingNumber: text('tracking_number').default(''),
   voucherId: integer('voucher_id').references(() => journalVouchers.id),
   chequeId: integer('cheque_id').references(() => cheques.id),
-  documentId: integer('document_id').references((): AnyPgColumn => documents.id),
-  // V10-4.4: لینک رسمی تراکنش خزانه به فیش حقوقی (پرداخت حقوق فقط از این مسیر)
-  payrollId: integer('payroll_id').references((): AnyPgColumn => pieceworkPayrolls.id),
+  documentId: integer('document_id').references(baseRelations.documentsId),
+  // V10-4.4 / TD-169: لینک رسمی تراکنش خزانه به فیش حقوقی (پرداخت حقوق فقط از این مسیر)
+  payrollId: integer('payroll_id').references(baseRelations.pieceworkPayrollsId),
   // V1.4.0: ابطال با سند معکوس (DB-009) — تراکنش معکوس به اصل اشاره می‌کند
   reversalOfId: integer('reversal_of_id'),
   description: text('description').default(''),

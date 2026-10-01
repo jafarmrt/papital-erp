@@ -1,6 +1,6 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { users } from './auth';
-import { productionProjects } from './projects';
+import { baseRelations } from './baseRelations';
 
 export const dailyWorkLogs = pgTable('daily_work_logs', {
   id: serial('id').primaryKey(),
@@ -15,7 +15,7 @@ export const dailyWorkLogs = pgTable('daily_work_logs', {
   workMode: text('work_mode').default('onsite'), // 'onsite', 'remote', 'hybrid'
   title: text('title').notNull(),
   content: text('content').notNull(),
-  projectId: integer('project_id').references((): AnyPgColumn => productionProjects.id),
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   projectName: text('project_name').default(''),
   tags: jsonb('tags').default([]),
   mentions: jsonb('mentions').default([]), // array of user IDs

@@ -1,7 +1,6 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, check, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, check, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { documents } from './documents';
-import { productionProjects } from './projects';
+import { registerColumnRef, baseRelations } from './baseRelations';
 
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
@@ -66,11 +65,12 @@ export const items = pgTable('items', {
   idx_category: index('items_category').on(table.category),
   nameTrgmIdx: index('items_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`)
 }));
+registerColumnRef('items.id', () => items.id);
 
 export const transactions = pgTable('transactions', {
   id: serial('id').primaryKey(),
   itemId: integer('item_id').notNull().references(() => items.id),
-  documentId: integer('document_id').references((): AnyPgColumn => documents.id),
+  documentId: integer('document_id').references(baseRelations.documentsId),
   type: text('type').notNull(), // 'in' or 'out'
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
   unitPrice: numeric('unit_price', { precision: 18, scale: 4, mode: 'number' }).default(0),
@@ -91,6 +91,7 @@ export const transactions = pgTable('transactions', {
   idx_date: index('tx_date').on(table.date),
   idx_type_deleted: index('tx_type_deleted').on(table.type, table.isDeleted),
 }));
+registerColumnRef('transactions.id', () => transactions.id);
 
 // V10-2.1: شمارنده اتمیک کد کالا — جایگزین الگوی ممنوع MAX()+1 (DB-001)
 export const itemCodeCounters = pgTable('item_code_counters', {
@@ -121,7 +122,7 @@ export const pendingMaterials = pgTable('pending_materials', {
   unit: text('unit').notNull(),
   category: text('category').default(''),
   type: text('type').default('raw_material'),
-  projectId: integer('project_id').references((): AnyPgColumn => productionProjects.id),
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   projectTitle: text('project_title').default(''),
   requestedBy: text('requested_by').default(''),
   status: text('status').default('pending'), // 'pending', 'approved', 'rejected'

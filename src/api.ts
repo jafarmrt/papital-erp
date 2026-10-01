@@ -23,6 +23,22 @@ export class ProtocolError extends ApiError {
   }
 }
 
+export function isAbortError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === 'object') {
+    const e = err as any;
+    if (e.name === 'AbortError') return true;
+    if (typeof e.message === 'string' && (
+      e.message.includes('The operation was aborted') ||
+      e.message.toLowerCase().includes('aborted') ||
+      e.message.toLowerCase().includes('user aborted')
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+
 let inMemoryCsrfToken: string | null = null;
 let inMemoryAuthToken: string | null = null;
 
@@ -152,8 +168,10 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       headers,
     });
   } catch (err: any) {
-    if (err?.name === 'AbortError' || options?.signal?.aborted) {
-      throw err;
+    if (isAbortError(err) || options?.signal?.aborted) {
+      const abortErr = new Error('The operation was aborted.');
+      abortErr.name = 'AbortError';
+      throw (err?.name === 'AbortError' ? err : abortErr);
     }
     if (retries > 0) {
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -168,6 +186,11 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       const text = await res.text();
       data = text ? JSON.parse(text) : {};
     } catch (parseErr: any) {
+      if (isAbortError(parseErr) || options?.signal?.aborted) {
+        const abortErr = new Error('The operation was aborted.');
+        abortErr.name = 'AbortError';
+        throw (parseErr?.name === 'AbortError' ? parseErr : abortErr);
+      }
       throw new ProtocolError(
         `پاسخ خطای سرور با فرمت معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
         res.status
@@ -224,6 +247,11 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       jsonResponse = (text ? JSON.parse(text) : {}) as T;
     }
   } catch (parseErr: any) {
+    if (isAbortError(parseErr) || options?.signal?.aborted) {
+      const abortErr = new Error('The operation was aborted.');
+      abortErr.name = 'AbortError';
+      throw (parseErr?.name === 'AbortError' ? parseErr : abortErr);
+    }
     throw new ProtocolError(
       `پاسخ سرور قابل تفسیر به JSON نیست (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
       res.status

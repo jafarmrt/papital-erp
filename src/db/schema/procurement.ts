@@ -1,13 +1,13 @@
 import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
-import { productionProjects } from './projects';
 import { users } from './auth';
 import { workflowInstances } from './workflow';
+import { baseRelations } from './baseRelations';
 
 export const purchaseRequisitions = pgTable('purchase_requisitions', {
   id: serial('id').primaryKey(),
   code: text('code').notNull().unique(),
   title: text('title').notNull(),
-  projectId: integer('project_id').references((): AnyPgColumn => productionProjects.id),
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   projectCode: text('project_code').default(''),
   projectName: text('project_name').default(''),
   status: text('status').notNull().default('pending'),

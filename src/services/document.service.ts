@@ -517,6 +517,18 @@ export class DocumentService {
       if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
         finalRefNumber = await DocumentService.getNextRef(docType, date, tx);
       } else {
+        // V7 Collision Prevention: If custom refNumber already exists in documents, auto-resolve to next valid atomic number
+        const [existingDoc] = await tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(and(eq(documents.refNumber, String(finalRefNumber)), eq(documents.isDeleted, 0)));
+        if (existingDoc) {
+          finalRefNumber = await DocumentService.getNextRef(docType, date, tx);
+          if (docType === 'audit' && !String(finalRefNumber).startsWith('AUD-')) {
+            finalRefNumber = `AUD-${finalRefNumber}`;
+          }
+        }
+
         // Sync document_ref_counters with custom refNumber if it has numeric digits
         const digits = String(finalRefNumber).replace(/\D/g, '');
         if (digits) {

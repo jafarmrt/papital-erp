@@ -37,7 +37,7 @@
 | TD-166 | Missing FK Index | فقدان نمایه B-Tree روی documents(project_id) | src/db/schema/documents.ts:85 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
 | TD-167 | fetchJson Typing & Protocol Fallback | تایپ ضعیف T=any و قورت دادن خطای بدنه نامعتبر در .catch(() => ({})) | src/api.ts:77,190 | resolved:v7.0.5 (فاز ۳ نسخه ۷) |
 | TD-168 | Native parseFloat in Forms | استفاده مستقیم از parseFloat در ۲۴ فیلد فرم‌های مالی و کارمزدی | VoucherItemsTable.tsx, PieceworkLogModal.tsx | resolved:v7.0.6 (فاز ۳ نسخه ۷) |
-| TD-169 | Schema Import Cycle | چرخه ۵ ماژولی در اسکیماهای Drizzle (Tarjan SCC) | src/db/schema/ | scheduled:فاز ۴ نسخه ۷ (P2) |
+| TD-169 | Schema Import Cycle | چرخه ۵ ماژولی در اسکیماهای Drizzle (Tarjan SCC) | src/db/schema/ | resolved:v7.0.12 (فاز ۴.۲ نسخه ۷) |
 | TD-170 | Dual Serialization Debt | بازگرداندن همزمان کلیدهای camelCase و snake_case در روت پروژه‌ها | src/routes/projects.routes.ts:202 | scheduled:فاز ۴ نسخه ۷ (P2) |
 
 ---

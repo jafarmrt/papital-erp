@@ -1,3 +1,4 @@
+export * from './baseRelations';
 export * from './auth';
 export * from './settings';
 export * from './crm';
@@ -10,3 +11,4 @@ export * from './dailyLogs';
 export * from './workflow';
 export * from './procurement';
 export * from './events';
+

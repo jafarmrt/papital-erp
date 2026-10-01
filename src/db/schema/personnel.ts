@@ -1,7 +1,7 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
-import { productionProjects } from './projects';
+import { registerColumnRef, baseRelations } from './baseRelations';
 
 export const personnel = pgTable('personnel', {
   id: serial('id').primaryKey(),
@@ -43,6 +43,7 @@ export const personnel = pgTable('personnel', {
   idx_personnel_status: index('idx_personnel_status').on(table.employmentStatus),
   idx_personnel_deleted: index('idx_personnel_deleted').on(table.isDeleted),
 }));
+registerColumnRef('personnel.id', () => personnel.id);
 
 export const taskCategories = pgTable('task_categories', {
   id: serial('id').primaryKey(),
@@ -131,12 +132,13 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   idx_ppay_status: index('idx_ppay_status').on(table.status),
   idx_ppay_deleted: index('idx_ppay_deleted').on(table.isDeleted),
 }));
+registerColumnRef('pieceworkPayrolls.id', () => pieceworkPayrolls.id);
 
 export const pieceworkLogs = pgTable('piecework_logs', {
   id: serial('id').primaryKey(),
   personnelId: integer('personnel_id').notNull().references(() => personnel.id),
   taskId: integer('task_id').notNull().references(() => pieceworkTasks.id),
-  projectId: integer('project_id').references((): AnyPgColumn => productionProjects.id),
+  projectId: integer('project_id').references(baseRelations.productionProjectsId),
   date: text('date').notNull(),
   dateIso: text('date_iso').default(''),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { fetchJson } from '../api';
+import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
 import { getTodayJalaliDate, getFutureJalaliDate } from '../utils';
 import toast from 'react-hot-toast';
@@ -97,9 +97,10 @@ export function useCRMData(user: any) {
       // Fetch stats
       try {
         const statsRes = await fetchJson('/crm/stats', { signal });
+        if (signal?.aborted) return;
         setStats(statsRes || {});
       } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+        if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM stats:', e);
       }
 
@@ -108,11 +109,12 @@ export function useCRMData(user: any) {
 
       try {
         const leadsRes = await fetchJson(`/crm/leads?${params.toString()}`, { signal });
+        if (signal?.aborted) return;
         const rawLeads = Array.isArray(leadsRes?.data) ? leadsRes.data : (Array.isArray(leadsRes) ? leadsRes : []);
         const mappedLeads = rawLeads.map((l: CRMLead) => ({ ...l, stage: normalizeLeadStage(l.stage) }));
         setLeads(mappedLeads);
       } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+        if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM leads:', e);
         toast.error('خطا در دریافت سرنخ‌های CRM');
       }
@@ -121,9 +123,10 @@ export function useCRMData(user: any) {
 
       try {
         const actRes = await fetchJson(`/crm/activities?${actParams.toString()}`, { signal });
+        if (signal?.aborted) return;
         setActivities(Array.isArray(actRes) ? actRes : []);
       } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+        if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM activities:', e);
         toast.error('خطا در دریافت فعالیت‌های CRM');
       }
@@ -131,46 +134,51 @@ export function useCRMData(user: any) {
       // Load customers
       try {
         const custRes = await fetchJson('/customers?limit=1000', { signal });
+        if (signal?.aborted) return;
         if (Array.isArray(custRes)) {
           setCustomersList(custRes);
         } else if (custRes && Array.isArray(custRes.data)) {
           setCustomersList(custRes.data);
         }
       } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+        if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load customers for CRM:', e);
       }
 
       // V10-4.1: بارگذاری پرسنل فعال — فروشنده مسئول از پرسنل انتخاب می‌شود
       try {
         const perRes = await fetchJson('/personnel?limit=1000', { signal });
+        if (signal?.aborted) return;
         const perData = Array.isArray(perRes) ? perRes : (Array.isArray(perRes?.data) ? perRes.data : []);
         const activePeople = perData.filter((p: any) => (p.employmentStatus || 'فعال') === 'فعال');
         setPersonnelList(activePeople);
       } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+        if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load personnel for CRM:', e);
       }
 
       // کاربران سیستم صرفاً برای منشن‌ها
       try {
         const usersRes = await fetchJson('/users/list-simple', { signal }).catch((err) => {
-          if (err?.name === 'AbortError') throw err;
+          if (isAbortError(err) || signal?.aborted) throw err;
           return fetchJson('/users', { signal });
         });
+        if (signal?.aborted) return;
         if (Array.isArray(usersRes)) {
           setMentionUsers(usersRes);
         }
       } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+        if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load mention users:', e);
       }
     } catch (err: any) {
-      if (err?.name === 'AbortError') return;
+      if (isAbortError(err) || signal?.aborted) return;
       console.error('Error loading CRM data:', err);
       toast.error('خطا در دریافت اطلاعات CRM');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [searchTerm, filterSeller, filterStage, filterCustomer, fromDate, toDate]);
 
