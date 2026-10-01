@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Phase21TestRunner } from '../src/tests/testRunner.js';
 import { setupTestSchema } from '../src/tests/setup/testDb.js';
+import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
 
 async function main() {
   const rawArgs = process.argv.slice(2);
@@ -153,6 +154,9 @@ Available Suites:
       const ctx = await setupTestSchema();
       teardown = ctx.teardown;
     }
+
+    // v7.0.24 (TD-174): همان داده‌های پایه‌ای که server.ts هنگام راه‌اندازی می‌سازد (seed ایدم‌پوتنت)
+    await bootstrapTestMasterData();
 
     const report = await Phase21TestRunner.runAllTests(layerArg, testFilter);
 

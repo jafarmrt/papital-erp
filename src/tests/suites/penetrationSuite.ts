@@ -125,7 +125,8 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       if (res.status >= 500) {
         throw new Error(`سرور با خطای 500 شکست خورد: ${JSON.stringify(res.body).slice(0, 200)}`);
       }
-      const probe = await orm.execute(sql`SELECT to_regclass('public.users') IS NOT NULL AS exists`);
+      // v7.0.24 (TD-174): نام بدون پیشوند اسکیما تا در اجرای ایزوله CI جدول users اسکیمای فعال بررسی شود
+      const probe = await orm.execute(sql`SELECT to_regclass('users') IS NOT NULL AS exists`);
       const rows: any[] = (probe as any).rows || [];
       if (!rows[0]?.exists) {
         throw new Error('جدول users حذف شده است!');

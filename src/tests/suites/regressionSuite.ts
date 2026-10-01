@@ -1136,7 +1136,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
     results.push(makeTestCase({
       id: 'reg_fiscal_year_isolation_and_calendar_td_141_142',
-      scenarioId: 'period_closing_and_conceptual_mappings',
+      scenarioId: 'v6_fiscal_year_closing_isolation', // v7.0.24 (TD-174): سناریوی ثبت‌شده اختصاصی TD-141/142 (قبلاً NOT_RUN گزارش می‌شد)
       name: 'V6 Phase 1.3: رفع شکست بستن سال مالی در ایزولاسیون تراکنش و تطبیق تقویم تراز آزمایشی (TD-141/142)',
       layer: 'regression',
       executionType: 'real_database',
@@ -1147,7 +1147,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'reg_fiscal_year_isolation_and_calendar_td_141_142',
-      scenarioId: 'period_closing_and_conceptual_mappings',
+      scenarioId: 'v6_fiscal_year_closing_isolation', // v7.0.24 (TD-174): سناریوی ثبت‌شده اختصاصی TD-141/142 (قبلاً NOT_RUN گزارش می‌شد)
       name: 'V6 Phase 1.3: رفع شکست بستن سال مالی در ایزولاسیون تراکنش و تطبیق تقویم تراز آزمایشی (TD-141/142)',
       layer: 'regression',
       executionType: 'real_database',

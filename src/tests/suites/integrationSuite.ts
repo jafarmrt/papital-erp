@@ -555,9 +555,40 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       throw new Error('اسناد ثبت‌شده و قطعی باید در برابر ویرایش و حذف مستقیم محافظت شوند');
     }
 
-    // Invariant 3: Repost Workflow
+    // Invariant 3 (v7.0.24 / TD-174): طبق قاعده C-03 & P0-06 سرویس اسناد، سند «قطعی» قابل ابطال/بازثبت نیست
+    // و اصلاح آن فقط با سند معکوس انجام می‌شود؛ تلاش برای بازثبت باید رد شود.
+    let permanentRepostBlocked = false;
+    try {
+      await AccountingService.repostVoucher({
+        voucherId: postedVoucher.id,
+        reason: 'تلاش غیرمجاز بازثبت سند قطعی',
+        newItems: [
+          { accountId: accA.id, debit: 950000, credit: 0 },
+          { accountId: accB.id, debit: 0, credit: 950000 }
+        ]
+      });
+    } catch (e: any) {
+      if (e.message.includes('غیرقابل ابطال یا بازثبت')) {
+        permanentRepostBlocked = true;
+      }
+    }
+    if (!permanentRepostBlocked) {
+      throw new Error('سند قطعی نباید قابل ابطال و بازثبت باشد (قاعده C-03 & P0-06).');
+    }
+
+    // Invariant 4: Repost Workflow on an approved (not yet permanent) voucher
+    const approvedVoucher = await AccountingService.createJournalVoucher({
+      date: '1403/05/12',
+      description: 'سند تاییدشده جهت آزمون ابطال و بازثبت',
+      status: 'approved',
+      items: [
+        { accountId: accA.id, debit: 800000, credit: 0 },
+        { accountId: accB.id, debit: 0, credit: 800000 }
+      ]
+    });
+
     const repostResult = await AccountingService.repostVoucher({
-      voucherId: postedVoucher.id,
+      voucherId: approvedVoucher.id,
       reason: 'تغییر سرفصل و مبلغ به دلیل اصلاحیه فاکتور',
       newItems: [
         { accountId: accA.id, debit: 950000, credit: 0 },
@@ -568,10 +599,10 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
 
     const isRepostValid = (
       repostResult.voidVoucher &&
-      repostResult.voidVoucher.referenceId === postedVoucher.id &&
+      repostResult.voidVoucher.referenceId === approvedVoucher.id &&
       repostResult.voidVoucher.totalDebit === 800000 &&
       repostResult.repostedVoucher &&
-      repostResult.repostedVoucher.referenceId === postedVoucher.id &&
+      repostResult.repostedVoucher.referenceId === approvedVoucher.id &&
       repostResult.repostedVoucher.totalDebit === 950000
     );
 

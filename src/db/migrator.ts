@@ -105,6 +105,8 @@ export async function runMigrations(): Promise<MigrationResult> {
  * Diagnostic tool validating the integrity, table presence, and numeric precision of the schema.
  * Aligned with the canonical single source of truth (src/db/schema.ts).
  */
+// v7.0.24 (TD-174): اسکیمای فعال (current_schema) به‌جای 'public' ثابت — در پروداکشن همان public است
+// و در اجرای ایزوله تست‌ها (ERP_TEST_SCHEMA_ISOLATION=1، همانند CI) اسکیمای جعبه‌شنی تست بررسی می‌شود.
 export async function validateDbSchema(): Promise<{ valid: boolean; tablesCount: number; floatColumns: string[]; missingTables: string[]; details: any }> {
   const expectedTables = [
     'users', 'roles', 'categories', 'warehouses', 'app_settings', 'customers',
@@ -127,7 +129,7 @@ export async function validateDbSchema(): Promise<{ valid: boolean; tablesCount:
   try {
     const tableRes = await pool.query(`
       SELECT table_name FROM information_schema.tables 
-      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
     `);
     const existingTableNames = new Set(tableRes.rows.map((r: any) => r.table_name));
 
@@ -141,7 +143,7 @@ export async function validateDbSchema(): Promise<{ valid: boolean; tablesCount:
     const colRes = await pool.query(`
       SELECT table_name, column_name, data_type 
       FROM information_schema.columns 
-      WHERE table_schema = 'public' 
+      WHERE table_schema = current_schema()
         AND data_type IN ('double precision', 'real', 'float')
     `);
 

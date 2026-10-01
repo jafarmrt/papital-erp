@@ -234,8 +234,32 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     // Step 4: Auto-Create Accounting Journal Voucher for Sales Invoice
     const autoVoucher = await VoucherSyncService.autoCreateVoucherForInvoice(salesDoc.id);
 
-    if (!autoVoucher || !autoVoucher.voucherNumber || Number(autoVoucher.totalDebit) !== 12500000) {
+    if (!autoVoucher || !autoVoucher.voucherNumber) {
       throw new Error('صدور سند حسابداری خودکار برای فاکتور فروش با خطا مواجه شد');
+    }
+
+    // v7.0.24 (TD-174): از v5.0.17 (TD-120) سند فروش علاوه بر دریافتنی/درآمد، ردیف‌های بهای تمام‌شده
+    // (بدهکار بهای تمام‌شده / بستانکار موجودی) را هم دارد؛ بنابراین جمع بدهکار سند = مبلغ فروش + بهای تمام‌شده.
+    // به‌جای مقایسه جمع کل با مبلغ فروش، تک‌تک ردیف‌ها و توازن سند بررسی می‌شوند.
+    const { AccountMappingService } = await import('../../services/accounting/accountMapping.service.js');
+    const receivableAcc = await AccountMappingService.getTradeReceivablesAccount();
+    const revenueAcc = await AccountMappingService.getSalesRevenueAccount();
+    const cogsAcc = await AccountMappingService.getCostOfGoodsSoldAccount();
+    const voucherLines = Array.isArray(autoVoucher.items) ? autoVoucher.items : [];
+    const sumFor = (accountId: number | undefined, side: 'debit' | 'credit') => voucherLines
+      .filter(line => Number(line.accountId ?? line.account_id) === Number(accountId))
+      .reduce((total, line) => total + Number(line[side] || 0), 0);
+
+    const expectedSales = 5 * 2500000;
+    const expectedCogs = 5 * Number(updatedProduct.weightedAverageCost || 0);
+    if (Number(autoVoucher.totalDebit) !== Number(autoVoucher.totalCredit)) {
+      throw new Error(`سند خودکار فروش متوازن نیست: بدهکار ${autoVoucher.totalDebit} / بستانکار ${autoVoucher.totalCredit}`);
+    }
+    if (sumFor(receivableAcc?.id, 'debit') !== expectedSales || sumFor(revenueAcc?.id, 'credit') !== expectedSales) {
+      throw new Error(`ردیف‌های دریافتنی/درآمد سند خودکار فروش باید ${expectedSales} باشند (دریافتنی: ${sumFor(receivableAcc?.id, 'debit')}، درآمد: ${sumFor(revenueAcc?.id, 'credit')})`);
+    }
+    if (sumFor(cogsAcc?.id, 'debit') !== expectedCogs) {
+      throw new Error(`ردیف بهای تمام‌شده سند خودکار فروش باید ${expectedCogs} باشد (مقدار: ${sumFor(cogsAcc?.id, 'debit')})`);
     }
 
     results.push(makeTestCase({
@@ -246,7 +270,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - j2Start,
-      details: `فاکتور فروش #${salesDoc.refNumber} تایید گردید؛ موجودی ۵ عدد کسر شد (۱۰ عدد باقیمانده) و سند حسابداری #${autoVoucher.voucherNumber} به مبلغ ۱۲,۵۰۰,۰۰۰ ریال متوازن صادر گردید.`
+      details: `فاکتور فروش #${salesDoc.refNumber} تایید گردید؛ موجودی ۵ عدد کسر شد (۱۰ عدد باقیمانده) و سند حسابداری #${autoVoucher.voucherNumber} با دریافتنی/درآمد ۱۲,۵۰۰,۰۰۰ ریال و ردیف بهای تمام‌شده متوازن صادر گردید.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({

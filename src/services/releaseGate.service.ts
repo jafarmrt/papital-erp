@@ -71,7 +71,7 @@ export class ReleaseGateService {
     // Fetch schema & table counts
     const tablesRes = await pool.query(`
       SELECT count(*) as count FROM information_schema.tables 
-      WHERE table_schema = 'public'
+      WHERE table_schema = current_schema()
     `);
     const totalTables = Number(tablesRes.rows[0]?.count || 0);
 
