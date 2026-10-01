@@ -426,6 +426,39 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     });
 
   // ===============================================================
+  // v7.0.27 (TD-185 / audit P1-4): JWT is not exposed in the login response body by default
+  // ===============================================================
+  await runCase(results, 'pen_login_token_not_in_body', 'token_not_exposed_in_body',
+    'پن‌تست: توکن JWT به‌صورت پیش‌فرض در بدنه پاسخ ورود برگردانده نشود (فقط کوکی HttpOnly)',
+    async () => {
+      const probeUser = `pen_tok_${Date.now()}`;
+      const previousFlag = process.env.EXPOSE_TOKEN_IN_BODY;
+      await orm.insert(users).values({ username: probeUser, password: TEST_PASSWORD_HASH, fullName: 'پروب توکن', role: 'operator', avatarUrl: '' });
+      try {
+        delete process.env.EXPOSE_TOKEN_IN_BODY;
+        const res = await request(app).post('/api/auth/login').set('X-Forwarded-For', '198.51.100.91').send({ username: probeUser, password: TEST_PASSWORD });
+        const setCookie = String(res.headers['set-cookie'] || '');
+        if (res.status !== 200 || !setCookie.includes('auth_token=') || !/HttpOnly/i.test(setCookie)) {
+          throw new Error(`ورود موفق باید کوکی HttpOnly صادر کند (وضعیت ${res.status}).`);
+        }
+        if (Object.prototype.hasOwnProperty.call(res.body || {}, 'token')) {
+          throw new Error('بدنه پاسخ ورود نباید شامل فیلد token باشد (AGENTS.md §5).');
+        }
+
+        process.env.EXPOSE_TOKEN_IN_BODY = 'true';
+        const resFlag = await request(app).post('/api/auth/login').set('X-Forwarded-For', '198.51.100.92').send({ username: probeUser, password: TEST_PASSWORD });
+        if (resFlag.status !== 200 || typeof resFlag.body?.token !== 'string' || resFlag.body.token.length < 20) {
+          throw new Error('با EXPOSE_TOKEN_IN_BODY=true (سازگاری پیش‌نمایش) باید فیلد token برگردانده شود.');
+        }
+        return 'به‌صورت پیش‌فرض فقط کوکی HttpOnly صادر شد و فیلد token در بدنه نبود؛ با فلگ سازگاری، token برگردانده شد.';
+      } finally {
+        if (previousFlag === undefined) delete process.env.EXPOSE_TOKEN_IN_BODY;
+        else process.env.EXPOSE_TOKEN_IN_BODY = previousFlag;
+        await orm.delete(users).where(eq(users.username, probeUser));
+      }
+    });
+
+  // ===============================================================
   // Path Traversal — /uploads must never escape its root
   // ===============================================================
   await runCase(results, 'pen_path_traversal_uploads', 'path_traversal_blocked',

@@ -96,6 +96,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   ssrf_blocked: 'Penetration: SSRF Metadata-Target Blocking (SEC-010)',
   rate_limit_no_bypass: 'Penetration: XFF-Spoofing Rate-Limit Resistance (SEC-009)',
   settings_key_authorization: 'Penetration: Key-Level Settings Authorization & Masked-Secret Protection (TD-184)',
+  token_not_exposed_in_body: 'Penetration: JWT Not Exposed in Login Response Body by Default (TD-185)',
   path_traversal_blocked: 'Penetration: /uploads Path Traversal Containment (TST-004)',
   concurrent_voucher_unique_postgres: 'Critical Path: Concurrent Voucher SEQUENCE Uniqueness (DB-001)',
   finalize_race_single_deduction: 'Critical Path: Concurrent Finalize Single Stock Deduction (DB-002)',

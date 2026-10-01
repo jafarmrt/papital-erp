@@ -39,6 +39,7 @@
 
 ## 5. Security, Authentication & Audit Logging
 - **HttpOnly Cookies:** JWT tokens are issued and stored exclusively via secure HttpOnly cookies (`auth_token`, `secure: true`, `sameSite: 'none'`, `path: '/'`). Browser JS MUST NOT store or read raw tokens in `localStorage`. All client fetch calls MUST specify `credentials: 'include'`.
+- **No Token in Response Bodies (TD-185, v7.0.27):** Login/setup responses MUST NOT include the JWT by default. The only exception is the opt-in compatibility flag `EXPOSE_TOKEN_IN_BODY=true` for preview environments whose browsers block the iframe cookie (BUG-08); production deployments must leave it unset.
 - **Session Verification & Logout:** Use `/api/auth/me` to verify session on load, and `/api/auth/logout` to clear the cookie.
 - **Route Middleware Order:** Administrative/utility/seed routes MUST be registered AFTER `router.use(authenticateToken)` and protected via `authorize('admin')`.
 - **Audit Logging & Snapshots:** All state mutations (customers, items, prices, documents, stocks, permissions) MUST log via `logActivity` in `src/lib/auditLogger.ts` with before/after snapshots.

@@ -76,6 +76,15 @@ export const getAuthCookieOptions = (req?: any) => {
   };
 };
 
+/**
+ * v7.0.27 (TD-185 / audit P1-4): تحویل JWT در بدنه پاسخ ورود/راه‌اندازی به‌صورت پیش‌فرض خاموش است
+ * (AGENTS.md §5: جاوااسکریپت مرورگر نباید به توکن خام دسترسی داشته باشد). فقط برای محیط‌هایی که مرورگر
+ * کوکی iframe را مسدود می‌کند (مثل پیش‌نمایش AI Studio — BUG-08) با EXPOSE_TOKEN_IN_BODY=true فعال می‌شود.
+ */
+export function shouldExposeTokenInBody(): boolean {
+  return String(process.env.EXPOSE_TOKEN_IN_BODY || '').trim().toLowerCase() === 'true';
+}
+
 export const generateCsrfToken = (): string => {
   return crypto.randomBytes(32).toString('hex');
 };

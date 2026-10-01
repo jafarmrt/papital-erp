@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, invalidateUserAuthCache } from '../middleware/auth.js';
+import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
@@ -272,11 +272,11 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     // Set secure HttpOnly cookie
     res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions(req));
 
-    // V3.0.6 (BUG-08): تحویل توکن از طریق کوکی HttpOnly و فیلد token برای محیط‌های پیش‌نمایش
+    // V3.0.6 (BUG-08) / v7.0.27 (TD-185): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
     res.json({ 
       success: true, 
       user: { ...userWithoutPassword, full_name: user.fullName || user.username },
-      token,
+      ...(shouldExposeTokenInBody() ? { token } : {}),
       csrfToken
     });
   } finally {
@@ -398,7 +398,8 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
           mustResetPassword: Boolean(user.mustResetPassword),
           must_reset_password: Boolean(user.mustResetPassword)
         }, 
-        token,
+        // v7.0.27 (TD-185 / audit P1-4): توکن فقط در کوکی HttpOnly؛ فیلد token تنها با EXPOSE_TOKEN_IN_BODY=true
+        ...(shouldExposeTokenInBody() ? { token } : {}),
         csrfToken
       });
     } else {

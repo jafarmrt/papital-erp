@@ -38,7 +38,7 @@ import inventoryRoutes from './routes/inventory.routes.js';
 import eventsRoutes from './routes/events.routes.js';
 import draftsRoutes from './routes/drafts.routes.js';
 import procurementRoutes from './routes/procurement.routes.js';
-import { authenticateToken, getJwtSecret, csrfProtection } from './middleware/auth.js';
+import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
@@ -84,6 +84,10 @@ export function markStartupComplete(): void {
 export async function createApp(): Promise<express.Express> {
   // Enforce valid JWT_SECRET (>=32 chars) on app construction
   getJwtSecret();
+  // v7.0.27 (TD-185): هشدار صریح هنگام فعال بودن تحویل توکن در بدنه پاسخ (فقط برای پیش‌نمایش‌های iframe)
+  if (shouldExposeTokenInBody()) {
+    logger.warn('[Auth] EXPOSE_TOKEN_IN_BODY=true — the JWT is returned in login/setup response bodies (preview-only compatibility; AGENTS.md §5).');
+  }
 
   const app = express();
   // v7.0.23 (TD-181 / audit P0-5): فقط پراکسی‌های شناخته‌شده (TRUST_PROXY) قابل‌اعتمادند؛ req.ip آدرس واقعی کلاینت
