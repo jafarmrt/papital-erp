@@ -2,7 +2,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { getTestApp, getAdminSession, ensureAdminTestUser, cleanupHttpTestUsers, AdminSession, TestApp } from '../fixtures/httpTestHelper.js';
-import { TEST_PASSWORD_HASH } from '../fixtures/factories.js';
+import { TEST_PASSWORD, TEST_PASSWORD_HASH } from '../fixtures/factories.js';
 import { orm } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { sql, eq } from 'drizzle-orm';
@@ -256,6 +256,91 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         throw new Error(`هیچ 429ای صادر نشد — مهاجم می‌تواند با جعل XFF محدودیت را دور بزند (${responses.map(r => r.status).join(',')})`);
       }
       return `${tooMany} درخواست از ${attempts} تلاش با 429 مسدود شد — قفل brute-force با چرخش XFF دور زده نمی‌شود (کاربر پروب سینتتیک؛ ادمین واقعی دست‌نخورده).`;
+    });
+
+  // ===============================================================
+  // v7.0.23 (TD-181 / audit P0-5): trust only known proxies for the client IP
+  // ===============================================================
+  await runCase(results, 'pen_trust_proxy_untrusted_peer', 'rate_limit_no_bypass',
+    'پن‌تست: X-Forwarded-For از کلاینت مستقیم (غیرپراکسی) نباید معتبر شمرده شود و TRUST_PROXY=true ممنوع است',
+    async () => {
+      const trustFn = app.get('trust proxy fn') as (addr: string, i: number) => boolean;
+      if (typeof trustFn !== 'function') {
+        throw new Error('تابع trust proxy در اپلیکیشن Express پیکربندی نشده است.');
+      }
+      if (trustFn('203.0.113.7', 0) !== false) {
+        throw new Error('آدرس عمومی 203.0.113.7 نباید به‌عنوان پراکسی قابل‌اعتماد پذیرفته شود (جعل XFF ممکن می‌شود).');
+      }
+      if (trustFn('127.0.0.1', 0) !== true) {
+        throw new Error('Nginx محلی (loopback) باید پراکسی قابل‌اعتماد باشد تا IP واقعی کلاینت استخراج شود.');
+      }
+      const { resolveTrustProxySetting } = await import('../../lib/trustProxy.js');
+      let unsafeRejected = false;
+      try {
+        resolveTrustProxySetting('true');
+      } catch {
+        unsafeRejected = true;
+      }
+      if (!unsafeRejected) {
+        throw new Error('مقدار ناامن TRUST_PROXY=true باید رد شود.');
+      }
+      return 'آدرس‌های عمومی پراکسی محسوب نمی‌شوند، loopback قابل‌اعتماد است و TRUST_PROXY=true رد می‌شود.';
+    });
+
+  await runCase(results, 'pen_login_limiter_per_client_behind_proxy', 'rate_limit_no_bypass',
+    'پن‌تست: پشت پراکسی، ورودهای موفق شمرده نشوند و brute-force یک کلاینت سایر کاربران را مسدود نکند',
+    async () => {
+      const { resetLoginRateLimiter } = await import('../../app.js');
+      const okUser = `pen_rl_ok_${Date.now()}`;
+      await orm.insert(users).values({
+        username: okUser,
+        password: TEST_PASSWORD_HASH,
+        fullName: 'پروب تست ورود موفق',
+        role: 'operator',
+        avatarUrl: ''
+      });
+      resetLoginRateLimiter();
+      try {
+        // 1. Twelve successful logins from one office IP (via the local proxy) must all succeed
+        for (let i = 0; i < 12; i++) {
+          const res = await request(app)
+            .post('/api/auth/login')
+            .set('X-Forwarded-For', '198.51.100.10')
+            .send({ username: okUser, password: TEST_PASSWORD });
+          if (res.status !== 200) {
+            throw new Error(`ورود موفق شماره ${i + 1} نباید محدود شود (وضعیت ${res.status}) — ورودهای موفق نباید سطل محدودیت را پر کنند.`);
+          }
+        }
+
+        // 2. Client A brute-forces (non-existent usernames => no account lockout) and must get throttled
+        let throttledA = false;
+        for (let i = 0; i < 12; i++) {
+          const res = await request(app)
+            .post('/api/auth/login')
+            .set('X-Forwarded-For', '198.51.100.66')
+            .send({ username: `pen_rl_ghost_${i}_${Date.now()}`, password: 'definitely-wrong-pass' });
+          if (res.status === 429) {
+            throttledA = true;
+            break;
+          }
+        }
+        if (!throttledA) {
+          throw new Error('brute-force کلاینت A پس از ۱۰ تلاش ناموفق باید با 429 مسدود شود.');
+        }
+
+        // 3. Client B behind the same proxy must still be able to log in
+        const resB = await request(app)
+          .post('/api/auth/login')
+          .set('X-Forwarded-For', '198.51.100.77')
+          .send({ username: okUser, password: TEST_PASSWORD });
+        if (resB.status !== 200) {
+          throw new Error(`کاربر B پشت همان پراکسی نباید به‌خاطر brute-force کلاینت A مسدود شود (وضعیت ${resB.status}).`);
+        }
+      } finally {
+        await orm.delete(users).where(eq(users.username, okUser));
+        resetLoginRateLimiter();
+      }
+      return '۱۲ ورود موفق بدون محدودیت انجام شد؛ کلاینت مهاجم مسدود شد و کاربر دیگر پشت همان پراکسی وارد شد.';
     });
 
   // ===============================================================

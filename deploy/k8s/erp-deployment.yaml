@@ -42,7 +42,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v7.0.22
+        image: registry.example.com/erp:v7.0.23
         ports:
         - containerPort: 3000
         volumeMounts:
@@ -54,7 +54,7 @@ spec:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "7.0.22"
+          value: "7.0.23"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -70,6 +70,9 @@ spec:
             secretKeyRef:
               name: erp-secrets
               key: allowed-origins
+        # v7.0.23 (TD-181): Ingress controllers live in cluster-private ranges; trust them for the real client IP
+        - name: TRUST_PROXY
+          value: "loopback, linklocal, uniquelocal"
         - name: ERP_SETUP_TOKEN
           valueFrom:
             secretKeyRef:

@@ -42,6 +42,7 @@ import { authenticateToken, getJwtSecret, csrfProtection } from './middleware/au
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
+import { resolveTrustProxySetting } from './lib/trustProxy.js';
 
 let isStartupComplete = false;
 let activeLoginLimiter: any = null;
@@ -85,7 +86,9 @@ export async function createApp(): Promise<express.Express> {
   getJwtSecret();
 
   const app = express();
-  app.set('trust proxy', 1);
+  // v7.0.23 (TD-181 / audit P0-5): فقط پراکسی‌های شناخته‌شده (TRUST_PROXY) قابل‌اعتمادند؛ req.ip آدرس واقعی کلاینت
+  // پشت Nginx/Ingress است و X-Forwarded-For ارسالی از کلاینت مستقیم نادیده گرفته می‌شود (قبلاً trust proxy = 1).
+  app.set('trust proxy', resolveTrustProxySetting());
 
   // Use Helmet middleware for security headers (SEC-007)
   // V1.3.7: upgrade-insecure-requests / HSTS فقط روی اتصال HTTPS فعال می‌شوند —
@@ -230,14 +233,16 @@ export async function createApp(): Promise<express.Express> {
       logger.warn(`[Login Brute Force] IP ${req.ip} blocked after failed attempts`);
       res.status(429).json({ error: 'تلاش‌های ورود بیش از حد مجاز. لطفاً ۱۵ دقیقه صبر کنید.' });
     },
-    // TST-005 Hardening: authentication throttling MUST be keyed on the actual
-    // socket peer address. Spoofable X-Forwarded-For values must never allow a
-    // brute-force attacker to rotate throttle buckets.
+    // v7.0.23 (TD-181 / audit P0-5): فقط تلاش‌های ناموفق شمرده می‌شوند — قبلاً ورودهای موفق هم
+    // سطل را پر می‌کردند و پشت پراکسی، کل سازمان پس از ۱۰ ورود به مدت ۱۵ دقیقه مسدود می‌شد.
+    skipSuccessfulRequests: true,
+    // TST-005 Hardening (بازطراحی v7.0.23): کلید محدودیت، آدرس واقعی کلاینت (req.ip) است که Express فقط
+    // از پراکسی‌های قابل‌اعتماد TRUST_PROXY استخراج می‌کند؛ X-Forwarded-For جعلی از کلاینت مستقیم اثری ندارد.
     keyGenerator: (req: any) => {
-      const raw = req.socket?.remoteAddress || req.ip || 'unknown';
+      const raw = req.ip || req.socket?.remoteAddress || 'unknown';
       const v4 = typeof raw === 'string' && raw.startsWith('::ffff:') ? raw.slice('::ffff:'.length) : raw;
       if (typeof v4 === 'string' && v4.includes(':')) {
-        // Genuine IPv6 peer — delegate to library-safe IPv6 bucketing
+        // Genuine IPv6 client — delegate to library-safe IPv6 bucketing
         return `v6:${ipKeyGenerator(v4)}`;
       }
       return String(v4 || 'unknown');
