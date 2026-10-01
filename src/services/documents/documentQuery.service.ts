@@ -152,11 +152,14 @@ export class DocumentQueryService {
         }
       }, 0);
 
+      // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته (همان بدهکار مشتری در سند حسابداری)
+      const vatAmount = Number(d.vatAmount) || 0;
+      const payableAmount = fin(totalAmount).add(vatAmount).toNumber();
       const safePaidAmount = Math.max(0, paidAmount);
-      const remainingAmount = Math.max(0, fin(totalAmount).subtract(safePaidAmount).toNumber());
+      const remainingAmount = Math.max(0, fin(payableAmount).subtract(safePaidAmount).toNumber());
       let settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
 
-      if (totalAmount > 0 && safePaidAmount >= totalAmount - 0.01) {
+      if (payableAmount > 0 && safePaidAmount >= payableAmount - 0.01) {
         settlementStatus = 'fully_paid';
       } else if (safePaidAmount > 0) {
         settlementStatus = 'partially_paid';
@@ -178,6 +181,9 @@ export class DocumentQueryService {
         totalAmount,
         totalDiscount,
         grossAmount,
+        vatPercent: Number(d.vatPercent) || 0,
+        vatAmount,
+        payableAmount,
         paidAmount: safePaidAmount,
         remainingAmount,
         settlementStatus,
@@ -297,11 +303,14 @@ export class DocumentQueryService {
       }
     }, 0);
 
+    // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته
+    const vatAmount = Number(doc.vatAmount) || 0;
+    const payableAmount = fin(totalCalculated).add(vatAmount).toNumber();
     const safePaidAmount = Math.max(0, paidAmount);
-    const remainingAmount = Math.max(0, fin(totalCalculated).subtract(safePaidAmount).toNumber());
+    const remainingAmount = Math.max(0, fin(payableAmount).subtract(safePaidAmount).toNumber());
     let settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
 
-    if (totalCalculated > 0 && safePaidAmount >= totalCalculated - 0.01) {
+    if (payableAmount > 0 && safePaidAmount >= payableAmount - 0.01) {
       settlementStatus = 'fully_paid';
     } else if (safePaidAmount > 0) {
       settlementStatus = 'partially_paid';
@@ -329,6 +338,12 @@ export class DocumentQueryService {
       grossAmount,
       total_amount: totalCalculated,
       totalAmount: totalCalculated,
+      vatPercent: Number(doc.vatPercent) || 0,
+      vat_percent: Number(doc.vatPercent) || 0,
+      vatAmount,
+      vat_amount: vatAmount,
+      payableAmount,
+      payable_amount: payableAmount,
       paidAmount: safePaidAmount,
       remainingAmount,
       settlementStatus,
@@ -352,6 +367,8 @@ export class DocumentQueryService {
       buyerPhone: doc.buyerPhone,
       currency: doc.currency,
       totalAmount: doc.totalAmount,
+      vatAmount: doc.vatAmount ?? 0,
+      payableAmount: doc.payableAmount ?? doc.totalAmount,
       paidAmount: doc.paidAmount || 0,
       remainingAmount: doc.remainingAmount || 0,
       settlementStatus: doc.settlementStatus || 'unpaid',

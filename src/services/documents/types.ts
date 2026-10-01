@@ -80,6 +80,11 @@ export interface UpdateDocumentInput {
   currency?: string;
   attachments?: any[];
   items?: DocumentLineItemInput[];
+  /** v7.0.32 (TD-197): مالیات ساختاریافته اسناد فروش */
+  vatPercent?: number | string | null;
+  vat_percent?: number | string | null;
+  vatAmount?: number | string | null;
+  vat_amount?: number | string | null;
   expectedVersion?: number;
   version?: number;
 }
@@ -131,6 +136,13 @@ export interface FormattedDocument {
   totalQuantity: number;
   totalAmount: number;
   total_amount?: number;
+  /** v7.0.32 (TD-197): مالیات ساختاریافته و مبلغ قابل وصول (جمع خالص اقلام + مالیات) */
+  vatPercent?: number;
+  vat_percent?: number;
+  vatAmount?: number;
+  vat_amount?: number;
+  payableAmount?: number;
+  payable_amount?: number;
   totalDiscount: number;
   grossAmount: number;
   paidAmount?: number;

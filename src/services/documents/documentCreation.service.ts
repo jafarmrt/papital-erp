@@ -14,6 +14,7 @@ import { ItemStockReservationService } from '../items/itemStockReservation.servi
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { DocumentRefNumberService } from './documentRefNumber.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
+import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 
 export class DocumentCreationService {
@@ -71,6 +72,24 @@ export class DocumentCreationService {
 
       const newVer = nextVersion(existingDoc.version);
 
+      // v7.0.32 (TD-197 / audit P1-7): مالیات ساختاریافته پیش‌فاکتور/پیش‌نویس در ویرایش نیز ذخیره می‌شود؛
+      // اگر فقط درصد داده شود یا اقلام تغییر کند، مبلغ از جمع خالص اقلام جدید (یا فعلی) دوباره محاسبه می‌شود.
+      const vatInput = parseVatInput(body);
+      const linesChanged = Array.isArray(docLines);
+      let vatLines: Array<{ quantity: unknown; unitPrice?: unknown; unit_price?: unknown; price?: unknown; discount?: unknown }> = linesChanged ? docLines! : [];
+      if (!linesChanged && vatInput.vatAmount === undefined && vatInput.vatPercent !== undefined) {
+        vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
+          .from(documentItems)
+          .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      }
+      const docVat = resolveDocumentVat({
+        docType: existingDoc.type,
+        input: body,
+        lines: vatLines,
+        existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: Number(existingDoc.vatAmount) || 0 },
+        linesChanged,
+      });
+
       // Atomic update with OCC WHERE clause to guarantee no concurrent modification slipped through
       const [updatedDoc] = await tx.update(documents).set({
         refNumber: refNumber ? String(refNumber) : existingDoc.refNumber,
@@ -83,6 +102,8 @@ export class DocumentCreationService {
         buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
         status: status || existingDoc.status,
         currency: currency || existingDoc.currency,
+        vatPercent: docVat.vatPercent,
+        vatAmount: docVat.vatAmount,
         attachments: body.attachments !== undefined ? body.attachments : (existingDoc.attachments || []),
         version: newVer
       }).where(and(eq(documents.id, id), eq(documents.version, existingDoc.version)))
@@ -249,19 +270,10 @@ export class DocumentCreationService {
 
       const normalizedDocDate = normalizeDateToDbTimestamp(date);
 
-      // P1-01 (F9 & DOC-02): حفظ درصد یا مبلغ ارزش افزوده در یادداشت سند در صورت عدم وجود جهت انتقال بی‌نقص به فاکتور نهایی
-      let finalNotes = notes || '';
-      const inputVatPercent = body.vat_percent !== undefined ? body.vat_percent : body.vatPercent;
-      const inputVatAmount = body.vat_amount !== undefined ? body.vat_amount : body.vatAmount;
-      if (inputVatPercent !== undefined && inputVatPercent !== null && !isNaN(Number(inputVatPercent)) && Number(inputVatPercent) > 0) {
-        if (!finalNotes.includes('ارزش افزوده') && !finalNotes.includes('مالیات') && !/vat/i.test(finalNotes)) {
-          finalNotes = finalNotes ? `${finalNotes} | [ارزش افزوده: ${Number(inputVatPercent)}%]` : `[ارزش افزوده: ${Number(inputVatPercent)}%]`;
-        }
-      } else if (inputVatAmount !== undefined && inputVatAmount !== null && !isNaN(Number(inputVatAmount)) && Number(inputVatAmount) > 0) {
-        if (!finalNotes.includes('ارزش افزوده') && !finalNotes.includes('مالیات') && !/vat/i.test(finalNotes)) {
-          finalNotes = finalNotes ? `${finalNotes} | [ارزش افزوده: ${Number(inputVatAmount)}]` : `[ارزش افزوده: ${Number(inputVatAmount)}]`;
-        }
-      }
+      // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
+      // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
+      const finalNotes = notes || '';
+      const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [] });
 
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
@@ -276,6 +288,8 @@ export class DocumentCreationService {
         buyerAddress: finalBuyerAddress,
         status: docStatus,
         currency: currency || 'IRR',
+        vatPercent: docVat.vatPercent,
+        vatAmount: docVat.vatAmount,
         attachments: body.attachments || [],
         projectId: finalProjectId ?? undefined,
         isDeleted: 0
@@ -502,14 +516,11 @@ export class DocumentCreationService {
       }
 
       if (docStatus === 'final' && !body.skipVoucherSync) {
-        const vatPercent = body.vat_percent !== undefined ? body.vat_percent : body.vatPercent;
-        const vatAmount = body.vat_amount !== undefined ? body.vat_amount : body.vatAmount;
         const isStrict = body.strict !== false;
         if (docType === 'invoice' || docType === 'proforma') {
+          // مبلغ مالیات از ستون ذخیره‌شده vat_amount همین سند خوانده می‌شود (TD-197)
           await VoucherSyncService.syncSalesInvoiceVoucher(docId, {
             username: user,
-            vatPercent: vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined,
-            vatAmount: vatAmount !== undefined && vatAmount !== null ? Number(vatAmount) : undefined,
             strict: isStrict,
           }, tx);
         } else if (['receipt', 'production_receipt', 'purchase'].includes(docType)) {

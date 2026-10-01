@@ -20,7 +20,6 @@ import { logger } from '../../middleware/logger.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
-import { toEnglishDigits } from '../../utils.js';
 import type { JournalVoucher } from '../../types.js';
 
 /** انواع اسنادی که VoucherSync برایشان سند حسابداری خودکار صادر می‌کند */
@@ -49,8 +48,6 @@ export class VoucherSyncService {
    * Automatic Double-Entry Journal Voucher for Sales Invoices
    */
   static async syncSalesInvoiceVoucher(docId: number, options?: {
-    vatPercent?: number;
-    vatAmount?: number;
     exchangeRate?: number;
     userId?: number;
     username?: string;
@@ -111,31 +108,10 @@ export class VoucherSyncService {
     const netAmountRaw = fin(grossAmountNum).subtract(totalDiscountNum);
     const netAmount = netAmountRaw.isNegative() ? 0 : netAmountRaw.round(4).toNumber();
 
-    let vatAmount = 0;
-    if (options?.vatAmount !== undefined && options.vatAmount !== null && !isNaN(Number(options.vatAmount))) {
-      vatAmount = Number(options.vatAmount) || 0;
-    } else if (options?.vatPercent && !isNaN(Number(options.vatPercent))) {
-      vatAmount = fin(netAmount).multiply(Number(options.vatPercent)).divide(100).round(0).toNumber();
-    } else if (doc.notes && (doc.notes.includes('ارزش افزوده') || doc.notes.includes('مالیات') || /vat/i.test(doc.notes))) {
-      // P1-01 (F9 & DOC-02): نرمال‌سازی ارقام فارسی و جداکننده‌ها برای استخراج دقیق ارزش افزوده از یادداشت سند
-      const normalizedNotes = toEnglishDigits(doc.notes).replace(/٬/g, ',');
-
-      // ۱) اولویت بررسی درصد ارزش افزوده: مثلاً «ارزش افزوده: ۱۰٪»، «مالیات: 10%» یا «۱۰ درصد»
-      const percentMatch = normalizedNotes.match(/(?:ارزش\s*(?:بر\s*)?افزوده|مالیات(?:\s*و\s*عوارض)?|vat)\s*[:=]?\s*([\d.]+)\s*(?:%|٪|درصد)/i) ||
-                           normalizedNotes.match(/([\d.]+)\s*(?:%|٪|درصد)\s*(?:ارزش\s*(?:بر\s*)?افزوده|مالیات(?:\s*و\s*عوارض)?|vat)/i);
-      if (percentMatch && percentMatch[1]) {
-        const pct = Number(percentMatch[1]);
-        if (pct > 0 && pct <= 100) {
-          vatAmount = fin(netAmount).multiply(pct).divide(100).round(0).toNumber();
-        }
-      } else {
-        // ۲) در غیر این صورت، مبلغ مقطوع ریالی: مثلاً «ارزش افزوده: ۵۰,۰۰۰»
-        const match = normalizedNotes.match(/(?:ارزش\s*(?:بر\s*)?افزوده|مالیات(?:\s*و\s*عوارض)?|vat)\s*[:=]?\s*([\d,.]+)/i);
-        if (match && match[1]) {
-          vatAmount = Number(match[1].replace(/,/g, '')) || 0;
-        }
-      }
-    }
+    // v7.0.32 (TD-197 / audit P1-7): مبلغ مالیات فقط از ستون ساختاریافته خود فاکتور خوانده می‌شود. پیش‌تر از
+    // متن آزاد یادداشت با Regex استخراج می‌شد و یادداشتی مانند «مالیات ۲ قلم آخر محاسبه نشود» مالیات ۲ ریالی
+    // در دفاتر ثبت می‌کرد که در خود فاکتور وجود نداشت.
+    const vatAmount = fin(Number(doc.vatAmount) || 0).round(4).toNumber();
 
     const finalPayable = fin(netAmount).add(vatAmount).round(4).toNumber();
 

@@ -56,6 +56,18 @@ const refineDocumentItems = (ctx: z.RefinementCtx, docLines: Array<Record<string
   }
 };
 
+// v7.0.32 (TD-197 / audit P1-7): مالیات ساختاریافته اسناد فروش — رشته فقط به‌صورت عدد نامنفی پذیرفته می‌شود
+const vatPercentInput = z.union([
+  z.number().min(0).max(100),
+  z.string().regex(/^\d+(\.\d+)?$/, 'درصد مالیات بر ارزش افزوده نامعتبر است'),
+  z.null()
+]).optional();
+const vatAmountInput = z.union([
+  z.number().min(0),
+  z.string().regex(/^\d+(\.\d+)?$/, 'مبلغ مالیات بر ارزش افزوده نامعتبر است'),
+  z.null()
+]).optional();
+
 export const documentCreateSchema = z.object({
   body: z.object({
     docType: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste'], {
@@ -80,8 +92,8 @@ export const documentCreateSchema = z.object({
     location: z.string().max(100).nullable().optional(),
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
-    vatPercent: z.union([z.number().min(0).max(100), z.string(), z.null()]).optional(),
-    vatAmount: z.union([z.number().min(0), z.string(), z.null()]).optional(),
+    vatPercent: vatPercentInput,
+    vatAmount: vatAmountInput,
     attachments: z.array(z.any()).optional()
   }).superRefine((body, ctx) => {
     // اسناد انبارگردانی از physical_stock استفاده می‌کنند و مقدار صفر در آن‌ها مجاز است
@@ -92,8 +104,8 @@ export const documentCreateSchema = z.object({
 export const finalizeDocumentSchema = z.object({
   body: z.object({
     user: z.string().max(100).optional(),
-    vatPercent: z.union([z.number().min(0).max(100), z.string(), z.null()]).optional(),
-    vatAmount: z.union([z.number().min(0), z.string(), z.null()]).optional(),
+    vatPercent: vatPercentInput,
+    vatAmount: vatAmountInput,
   }).optional(),
   params: z.object({
     id: numericIdString
@@ -128,6 +140,8 @@ export const documentUpdateSchema = z.object({
     ),
     currency: z.string().max(10).nullable().optional(),
     notes: z.string().max(2000).nullable().optional(),
+    vatPercent: vatPercentInput,
+    vatAmount: vatAmountInput,
     location: z.string().max(100).nullable().optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),

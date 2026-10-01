@@ -24,6 +24,10 @@ export const documents = pgTable('documents', {
   buyerAddress: text('buyer_address').default(''),
   status: text('status').default('final'),
   currency: text('currency').default('IRR'),
+  // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده ساختاریافته؛ تنها منبع مبلغ مالیات سند حسابداری فروش.
+  // vat_amount مبلغ نهایی مالیات (به ارز سند) است؛ vat_percent فقط برای نمایش/ویرایش فرم نگه داشته می‌شود.
+  vatPercent: numeric('vat_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
+  vatAmount: numeric('vat_amount', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),

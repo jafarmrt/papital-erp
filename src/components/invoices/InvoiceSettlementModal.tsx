@@ -63,6 +63,8 @@ interface InvoiceSettlementModalProps {
     currency?: string;
     totalAmount?: number;
     total_amount?: number;
+    /** v7.0.32 (TD-197): خالص اقلام + مالیات ساختاریافته */
+    payableAmount?: number;
     paidAmount?: number;
     remainingAmount?: number;
     settlementStatus?: string;
@@ -91,7 +93,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   useEffect(() => {
     if (!isOpen || !doc) return;
 
-    const totalAmt = Number(doc.totalAmount ?? doc.total_amount ?? 0);
+    const totalAmt = Number(doc.payableAmount ?? doc.totalAmount ?? doc.total_amount ?? 0);
     const paidAmt = Number(doc.paidAmount ?? 0);
     const remain = Math.max(0, doc.remainingAmount !== undefined ? doc.remainingAmount : (totalAmt - paidAmt));
     
@@ -132,7 +134,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
 
   if (!isOpen || !doc) return null;
 
-  const totalAmount = Number(doc.totalAmount ?? doc.total_amount ?? 0);
+  const totalAmount = Number(doc.payableAmount ?? doc.totalAmount ?? doc.total_amount ?? 0);
   const paidAmount = Number(doc.paidAmount ?? 0);
   const remainingAmount = Math.max(0, doc.remainingAmount !== undefined ? doc.remainingAmount : (totalAmount - paidAmount));
   const currency = doc.currency || 'IRR';

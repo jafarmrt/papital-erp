@@ -127,6 +127,13 @@
       "when": 1790006400000,
       "tag": "0017_journal_voucher_source_document",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790092800000,
+      "tag": "0018_documents_structured_vat",
+      "breakpoints": true
     }
   ]
 }

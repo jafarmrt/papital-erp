@@ -136,6 +136,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setBuyerAddress(doc.buyer_address || '');
       setNotes(doc.notes || '');
       setCurrency(doc.currency || 'IRR');
+      // v7.0.32 (TD-197): بازیابی مالیات ساختاریافته پیش‌فاکتور در حالت ویرایش
+      const loadedVatPercent = Number(doc.vatPercent ?? doc.vat_percent ?? 0) || 0;
+      setApplyVat(loadedVatPercent > 0);
+      if (loadedVatPercent > 0) setVatRate(loadedVatPercent);
       if (doc.location) setLocation(doc.location);
 
       if (Array.isArray(doc.items)) {
@@ -379,7 +383,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         buyer_city: buyerCity,
         buyer_phone: buyerPhone,
         buyer_address: buyerAddress,
-        notes: applyVat ? (notes ? `${notes}\n[ارزش افزوده: ${vatAmount.toLocaleString('fa-IR')} ${currency} (${vatRate}٪)]` : `[ارزش افزوده: ${vatAmount.toLocaleString('fa-IR')} ${currency} (${vatRate}٪)]`) : notes,
+        // v7.0.32 (TD-197): مالیات در فیلدهای ساختاریافته vatPercent/vatAmount ذخیره می‌شود، نه در متن یادداشت
+        notes,
         location,
         currency,
         crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,

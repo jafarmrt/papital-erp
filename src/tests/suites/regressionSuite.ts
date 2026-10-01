@@ -3001,6 +3001,112 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.5: v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده ساختاریافته — بدون استخراج از متن یادداشت
+  if (shouldRun('reg_structured_vat_td_197', 'td197', 'vat', 'tax', 'voucher')) {
+    const tStart = Date.now();
+    const { createTestItem } = await import('../fixtures/factories.js');
+    const { journalVoucherItems: jvItems } = await import('../../db/schema.js');
+    const createdDocIds: number[] = [];
+    const violations: string[] = [];
+    const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+    try {
+      const [defWh] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 20000 });
+      const today = await businessTodayIsoDate();
+      const lines = [{ itemId: item.id, quantity: 2, unit_price: 100000, location: defWh.code }]; // خالص ۲۰۰٬۰۰۰
+      const create = async (extra: Record<string, unknown>) => {
+        const id = await DocumentService.createDocument({
+          docType: 'invoice', status: 'final', date: today, user: 'test-agent', buyerName: 'خریدار آزمون TD-197',
+          location: defWh.code, items: lines, ...extra
+        } as any);
+        createdDocIds.push(id);
+        return id;
+      };
+      const docRow = async (id: number) => (await orm.select().from(documents).where(eq(documents.id, id)))[0] as any;
+      const voucherVat = async (docId: number) => {
+        const [v] = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+          .where(and(eq(journalVouchers.sourceDocumentId, docId), eq(journalVouchers.isDeleted, 0)));
+        if (!v) return { exists: false, vat: 0, receivable: 0 };
+        const rows = await orm.select().from(jvItems).where(eq(jvItems.voucherId, v.id));
+        const vat = rows.filter(r => r.detailedName === 'مالیات بر ارزش افزوده').reduce((a, r) => a + Number(r.credit || 0), 0);
+        const receivable = rows.filter(r => r.detailedType === 'customer').reduce((a, r) => a + Number(r.debit || 0), 0);
+        return { exists: true, vat, receivable };
+      };
+
+      // ۱) یادداشت آزاد درباره مالیات بدون مالیات ساختاریافته → هیچ مالیاتی در سند حسابداری
+      const docA = await create({ notes: 'مالیات ۲ قلم آخر محاسبه نشود - vat 1403 پرداخت شد' });
+      const vA = await voucherVat(docA);
+      check(vA.exists && vA.vat === 0, `یادداشت آزاد نباید به مالیات تبدیل شود (مالیات ثبت‌شده: ${vA.vat})`);
+      check(vA.receivable === 200000, `بدهکار مشتری باید برابر خالص فاکتور (۲۰۰٬۰۰۰) باشد: ${vA.receivable}`);
+      // همگام‌سازی دوباره بدون گزینه (مسیری که پیش‌تر هنگام راه‌اندازی اجرا می‌شد)
+      await VoucherSyncService.syncSalesInvoiceVoucher(docA);
+      check((await voucherVat(docA)).vat === 0, 'همگام‌سازی دوباره نباید مالیات را از یادداشت استخراج کند');
+
+      // ۲) درصد مالیات → مبلغ ذخیره‌شده روی فاکتور و همان مبلغ در سند حسابداری، بدون نوشتن در یادداشت
+      const docB = await create({ vatPercent: 9, notes: 'فاکتور آزمون' });
+      const rowB = await docRow(docB);
+      check(Number(rowB?.vatPercent) === 9 && Number(rowB?.vatAmount) === 18000, `مالیات فاکتور باید ساختاریافته ذخیره شود (۹٪، ۱۸٬۰۰۰): ${JSON.stringify({ p: rowB?.vatPercent, a: rowB?.vatAmount })}`);
+      check(!String(rowB?.notes || '').includes('ارزش افزوده'), `مالیات نباید در یادداشت نوشته شود: «${rowB?.notes}»`);
+      const vB = await voucherVat(docB);
+      check(vB.vat === 18000 && vB.receivable === 218000, `سند حسابداری باید مالیات ۱۸٬۰۰۰ و بدهکار ۲۱۸٬۰۰۰ داشته باشد: ${JSON.stringify(vB)}`);
+      const formattedB: any = await DocumentService.getDocumentById(docB);
+      check(formattedB?.payableAmount === 218000 && formattedB?.remainingAmount === 218000, `مبلغ قابل وصول فاکتور باید شامل مالیات باشد: ${JSON.stringify({ payable: formattedB?.payableAmount, remaining: formattedB?.remainingAmount })}`);
+
+      // ۳) پیش‌فاکتور با مبلغ مالیات → نهایی‌سازی بدون گزینه از مقدار ذخیره‌شده استفاده می‌کند
+      const docC = await create({ docType: 'proforma', status: 'proforma', vatAmount: 50000 });
+      await DocumentService.finalizeDocument(docC, 'test-agent');
+      check(Number((await docRow(docC))?.vatAmount) === 50000 && (await voucherVat(docC)).vat === 50000, 'نهایی‌سازی پیش‌فاکتور باید مالیات ذخیره‌شده (۵۰٬۰۰۰) را ثبت کند');
+
+      // ۴) ویرایش پیش‌فاکتور با درصد مالیات → ذخیره و ثبت در نهایی‌سازی
+      const docD = await create({ docType: 'proforma', status: 'proforma' });
+      await DocumentService.updateDocument(docD, { vatPercent: 10 } as any);
+      check(Number((await docRow(docD))?.vatAmount) === 20000, `ویرایش پیش‌فاکتور باید مالیات ۱۰٪ (۲۰٬۰۰۰) را ذخیره کند: ${(await docRow(docD))?.vatAmount}`);
+      await DocumentService.finalizeDocument(docD, 'test-agent');
+      check((await voucherVat(docD)).vat === 20000, 'سند حسابداری پیش‌فاکتور ویرایش‌شده باید مالیات ۲۰٬۰۰۰ داشته باشد');
+
+      // ۵) اعتبارسنجی سرویس: درصد بیش از ۱۰۰ و مبلغ منفی رد می‌شوند
+      for (const bad of [{ vatPercent: 150 }, { vatAmount: -5 }]) {
+        let rejected = false;
+        try {
+          await create(bad);
+        } catch {
+          rejected = true;
+        }
+        check(rejected, `مالیات نامعتبر باید رد شود: ${JSON.stringify(bad)}`);
+      }
+
+      if (violations.length > 0) {
+        throw new Error(violations.join(' | '));
+      }
+      results.push(makeTestCase({
+        id: 'reg_structured_vat_td_197',
+        scenarioId: 'structured_vat',
+        name: 'v7.0.32: مالیات بر ارزش افزوده ساختاریافته در فاکتور و سند حسابداری، بدون استخراج از یادداشت (TD-197 / P1-7)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'یادداشت آزاد به مالیات تبدیل نشد، درصد/مبلغ مالیات روی فاکتور ذخیره و عیناً در سند حسابداری ثبت شد، ویرایش و نهایی‌سازی پیش‌فاکتور از مقدار ذخیره‌شده استفاده کرد و مبلغ قابل وصول شامل مالیات بود.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_structured_vat_td_197',
+        scenarioId: 'structured_vat',
+        name: 'v7.0.32: مالیات بر ارزش افزوده ساختاریافته در فاکتور و سند حسابداری، بدون استخراج از یادداشت (TD-197 / P1-7)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', createdDocIds);
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

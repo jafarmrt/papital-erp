@@ -62,7 +62,10 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
 
   const totalGrossAmount = (printedDoc.items || []).reduce((a: any, b: any) => a + (Number(b.quantity || 0) * Number(b.unit_price || 0)), 0);
   const totalDiscountAmount = (printedDoc.items || []).reduce((a: any, b: any) => a + Number(b.discount || 0), 0);
-  const totalNetAmount = totalGrossAmount - totalDiscountAmount;
+  // v7.0.32 (TD-197): مالیات ساختاریافته سند؛ مبلغ قابل پرداخت = خالص اقلام + مالیات (همان بدهکار مشتری در سند حسابداری)
+  const vatAmount = Number(printedDoc.vatAmount ?? printedDoc.vat_amount ?? 0) || 0;
+  const vatPercent = Number(printedDoc.vatPercent ?? printedDoc.vat_percent ?? 0) || 0;
+  const totalNetAmount = totalGrossAmount - totalDiscountAmount + vatAmount;
   const totalQuantityCount = (printedDoc.items || []).reduce((a: any, b: any) => a + Number(b.quantity || 0), 0);
 
   return (
@@ -215,7 +218,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
       <table className="w-full mt-2 border-collapse print:text-[13px] break-inside-avoid">
         <tbody>
           <tr>
-            <td className="border p-2 align-top h-20" colSpan={hasMonetaryValues ? 4 : 1} rowSpan={hasMonetaryValues ? 3 : 1}>
+            <td className="border p-2 align-top h-20" colSpan={hasMonetaryValues ? 4 : 1} rowSpan={hasMonetaryValues ? (vatAmount > 0 ? 4 : 3) : 1}>
               <div className="font-bold text-slate-700 mb-1">یادداشت‌ها و توضیحات سند:</div>
               <p className="text-xs text-slate-600 leading-relaxed">{printedDoc.notes || 'توضیحات خاصی ثبت نشده است.'}</p>
             </td>
@@ -237,6 +240,16 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
               </td>
               <td className="border p-2 text-left font-bold font-mono text-rose-700">
                 {formatPersianPrice(totalDiscountAmount)}
+              </td>
+            </tr>
+          )}
+          {hasMonetaryValues && vatAmount > 0 && (
+            <tr>
+              <td className="border p-2 bg-gray-50 font-bold text-amber-700 text-xs" style={{ backgroundColor: '#f9fafb', printColorAdjust: 'exact' }}>
+                مالیات بر ارزش افزوده{vatPercent > 0 ? ` (${formatPersianNumber(vatPercent)}٪)` : ''} ({currencyLabel}):
+              </td>
+              <td className="border p-2 text-left font-bold font-mono text-amber-700">
+                {formatPersianPrice(vatAmount)}
               </td>
             </tr>
           )}

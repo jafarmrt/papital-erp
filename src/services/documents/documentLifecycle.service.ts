@@ -2,6 +2,7 @@ import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
+import { resolveDocumentVat } from './documentVat.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
@@ -169,9 +170,19 @@ export class DocumentLifecycleService {
           }
 
           // Step 3: Document Status Commitment & Domain Event Outbox
+          // v7.0.32 (TD-197 / audit P1-7): مالیاتی که هنگام نهایی‌سازی ارسال شود روی خود سند ذخیره می‌شود تا
+          // فاکتور و سند حسابداری همیشه از یک مقدار (documents.vat_amount) استفاده کنند.
+          const finalVat = resolveDocumentVat({
+            docType: targetType,
+            input: { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount },
+            lines: docLines,
+            existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: Number(doc.vatAmount) || 0 },
+          });
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,
+            vatPercent: finalVat.vatPercent,
+            vatAmount: finalVat.vatAmount,
             version: nextVersion(doc.version)
           }).where(eq(documents.id, id));
 
@@ -219,8 +230,6 @@ export class DocumentLifecycleService {
             await VoucherSyncService.syncSalesInvoiceVoucher(id, {
               username: safeUser,
               strict: isStrict,
-              vatAmount: options?.vatAmount,
-              vatPercent: options?.vatPercent,
               exchangeRate: options?.exchangeRate,
             }, tx);
           } else if (isPurchase) {

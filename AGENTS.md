@@ -50,6 +50,7 @@
 ## 6. Localization & UI Guidelines
 - **Dates & Numbers:** Server dates must use `src/lib/businessClock.ts`. UI dates use `Intl.DateTimeFormat('fa-IR')`. Numbers formatted via `formatPersianPrice` or `formatPersianNumber`. Iranian identifiers (national ID, phones) preserve leading zeros via `formatPersianPhone` and `formatPersianNationalId`.
 - **Dynamic Currencies:** Respect `currency` on records (IRR, USD, EUR, AED, GBP); do not hardcode "ریال".
+- **Structured VAT (TD-197, v7.0.32):** Sales VAT lives only in `documents.vat_percent` / `documents.vat_amount` (resolved via `src/services/documents/documentVat.ts` on create, update and finalize). The sales voucher reads `vat_amount` only — NEVER parse amounts, rates or taxes out of free-text `notes`, and never write VAT into notes. Payable amount = net of lines + `vat_amount`.
 - **Double Submissions:** Always use `isSaving` or `loading` to disable submit buttons.
 - **Large Selects:** Use `SearchableSelect` (`src/components/SearchableSelect.tsx`) for large datasets.
 - **Form State:** Use dedicated `editingId: number | null` and `isEditing = editingId !== null` instead of holding `id: 0`.
