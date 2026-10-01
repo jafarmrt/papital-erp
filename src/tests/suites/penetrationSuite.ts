@@ -504,6 +504,62 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
     });
 
   // ===============================================================
+  // v7.0.29 (TD-188 / audit P1-6): data export never contains credentials or secrets
+  // ===============================================================
+  await runCase(results, 'pen_data_export_no_secrets', 'data_export_no_secrets',
+    'پن‌تست: خروجی داده‌ها شامل هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه نباشد و دفاتر حسابداری را داشته باشد',
+    async () => {
+      const { appSettings, personnel } = await import('../../db/schema.js');
+      const secretKey = 'wc_webhook_secret';
+      const [originalSecret] = await orm.select().from(appSettings).where(eq(appSettings.key, secretKey));
+      const probeSecret = `whsec_probe_${Date.now()}`;
+      const probeNobitex = `nbx_probe_${Date.now()}`;
+      await orm.insert(appSettings).values({ key: secretKey, value: probeSecret }).onConflictDoUpdate({ target: appSettings.key, set: { value: probeSecret } });
+      const [probePersonnel] = await orm.insert(personnel).values({ fullName: 'پروب خروجی داده', nobitexPassword: probeNobitex }).returning({ id: personnel.id });
+      const operatorUser = `pen_exp_${Date.now()}`;
+      await orm.insert(users).values({ username: operatorUser, password: TEST_PASSWORD_HASH, fullName: 'اپراتور خروجی', role: 'operator', avatarUrl: '' });
+      try {
+        const adminSession = await getAdminSession();
+        const res = await request(app).get('/api/export-backup').set('Cookie', adminSession.cookie);
+        if (res.status !== 200) {
+          throw new Error(`مسیر خروجی داده‌ها برای ادمین باید ۲۰۰ برگرداند (وضعیت ${res.status}).`);
+        }
+        const raw = JSON.stringify(res.body);
+        if (/\$2[aby]\$\d{2}\$/.test(raw)) {
+          throw new Error('خروجی داده‌ها نباید شامل هش رمز عبور bcrypt باشد.');
+        }
+        if (raw.includes(probeSecret) || raw.includes(probeNobitex)) {
+          throw new Error('خروجی داده‌ها نباید کلید محرمانه وب‌هوک یا رمز صرافی پرسنل را شامل شود.');
+        }
+        const data = res.body?.data || {};
+        for (const table of ['journalVouchers', 'journalVoucherItems', 'accounts', 'cheques', 'treasuryTransactions', 'pieceworkPayrolls', 'itemWarehouseStocks']) {
+          if (!Array.isArray(data[table])) {
+            throw new Error(`جدول ${table} باید در خروجی داده‌ها وجود داشته باشد.`);
+          }
+        }
+        if ((data.users || []).some((u: any) => Object.prototype.hasOwnProperty.call(u, 'password'))) {
+          throw new Error('ردیف‌های کاربران در خروجی نباید فیلد password داشته باشند.');
+        }
+
+        const { loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
+        const op = await loginTestUserWithSession(app, operatorUser);
+        const forbidden = await request(app).get('/api/export-backup').set('Cookie', op.cookie);
+        if (forbidden.status !== 403) {
+          throw new Error(`کاربر غیرادمین نباید به خروجی داده‌ها دسترسی داشته باشد (وضعیت ${forbidden.status}).`);
+        }
+        return 'خروجی داده‌ها بدون هش رمز، رمز صرافی و کلید محرمانه و همراه با دفاتر حسابداری و کارمزدی تولید شد و برای غیرادمین 403 بود.';
+      } finally {
+        await orm.delete(users).where(eq(users.username, operatorUser));
+        await orm.delete(personnel).where(eq(personnel.id, probePersonnel.id));
+        if (originalSecret) {
+          await orm.update(appSettings).set({ value: originalSecret.value }).where(eq(appSettings.key, secretKey));
+        } else {
+          await orm.delete(appSettings).where(eq(appSettings.key, secretKey));
+        }
+      }
+    });
+
+  // ===============================================================
   // Path Traversal — /uploads must never escape its root
   // ===============================================================
   await runCase(results, 'pen_path_traversal_uploads', 'path_traversal_blocked',

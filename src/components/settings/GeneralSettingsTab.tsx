@@ -240,19 +240,22 @@ export function GeneralSettingsTab({
       {/* کارت پشتیبان‌گیری و خروجی دیتابیس */}
       <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-5 space-y-3 shadow-2xs">
         <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-          <Database className="text-emerald-600" size={18} /> پشتیبان‌گیری و خروجی کامل اطلاعات برنامه (JSON Backup)
+          <Database className="text-emerald-600" size={18} /> خروجی داده‌های کسب‌وکاری
         </h3>
         <p className="text-xs text-slate-600 leading-relaxed">
-          جهت نصب نسخه جدید برنامه با تمامی اطلاعات فعلی (کاربران، مشتریان، انبار، کالاها، پروژه‌ها و فاکتورها) بر روی سرور یا سیستم دیگر، فایل پشتیبان زیر را دانلود کنید.
+          این فایل شامل اطلاعات کالاها، انبار، اسناد، مشتریان، پروژه‌ها، دفاتر حسابداری و کارمزدی برای گزارش‌گیری و بایگانی است. رمزهای عبور و کلیدهای محرمانه در آن ذخیره نمی‌شوند.
+        </p>
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+          توجه: این فایل نسخه پشتیبان قابل بازگردانی نیست. پشتیبان کامل پایگاه‌داده باید توسط مدیر سرور با اسکریپت پشتیبان‌گیری برنامه گرفته شود (راهنما در مستندات نصب).
         </p>
 
         <div className="pt-2">
           <a
-            href="/api/system/export-backup"
-            download={`erp-backup-${new Date().toISOString().split('T')[0]}.json`}
+            href="/api/export-backup"
+            download={`erp-data-export-${new Date().toISOString().split('T')[0]}.json`}
             className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md w-full sm:w-auto inline-flex"
           >
-            <Download size={18} /> دانلود فایل پشتیبان کامل دیتابیس
+            <Download size={18} /> دانلود خروجی داده‌ها
           </a>
         </div>
       </div>

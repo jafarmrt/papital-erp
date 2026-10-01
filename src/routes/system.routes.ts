@@ -29,6 +29,7 @@ import { validateDbSchema } from '../db/migrator.js';
 import { appSettingsCache } from '../lib/memoryCache.js';
 import { BUILD_INFO } from '../lib/version.js';
 import { SystemSettingsService, SENSITIVE_SETTING_PATTERN, MASKED_SETTING_VALUE } from '../services/settings/systemSettings.service.js';
+import { DataExportService } from '../services/system/dataExport.service.js';
 
 const router = Router();
 
@@ -822,90 +823,25 @@ router.get('/global-search', async (req, res) => {
 });
 
 // Export full database dump as JSON
+// v7.0.29 (TD-188 / audit P1-6): خروجی امن داده‌ها (بدون هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه؛
+// شامل دفاتر حسابداری و کارمزدی) — نسخه پشتیبان قابل بازگردانی نیست؛ پشتیبان واقعی: scripts/backup.sh
 router.get('/export-backup', authorize('admin'), async (req, res) => {
-  try {
-    const [
-      allUsers,
-      allPersonnel,
-      allCustomers,
-      allItems,
-      allCategories,
-      allWarehouses,
-      allItemPrices,
-      allProjects,
-      allProjectStages,
-      allTransfers,
-      allCrmLeads,
-      allCrmActivities,
-      allDailyLogs,
-      allDocs,
-      allDocItems,
-      allTx,
-      allActivityLogs,
-      allSettings
-    ] = await Promise.all([
-      orm.select().from(users),
-      orm.select().from(personnel),
-      orm.select().from(customers),
-      orm.select().from(items),
-      orm.select().from(categories),
-      orm.select().from(warehouses),
-      orm.select().from(itemPrices),
-      orm.select().from(productionProjects),
-      orm.select().from(projectStages),
-      orm.select().from(transfers),
-      orm.select().from(crmLeads),
-      orm.select().from(crmActivities),
-      orm.select().from(dailyWorkLogs),
-      orm.select().from(documents),
-      orm.select().from(documentItems),
-      orm.select().from(transactions),
-      orm.select().from(activityLogs),
-      orm.select().from(appSettings)
-    ]);
+  const exportData = await DataExportService.buildExport();
+  const tableCount = Object.keys((exportData.data as Record<string, unknown>) || {}).length;
 
-    const backupData = {
-      exportedAt: new Date().toISOString(),
-      version: BUILD_INFO.version,
-      buildInfo: BUILD_INFO,
-      data: {
-        users: allUsers,
-        personnel: allPersonnel,
-        customers: allCustomers,
-        items: allItems,
-        categories: allCategories,
-        warehouses: allWarehouses,
-        itemPrices: allItemPrices,
-        productionProjects: allProjects,
-        projectStages: allProjectStages,
-        transfers: allTransfers,
-        crmLeads: allCrmLeads,
-        crmActivities: allCrmActivities,
-        dailyWorkLogs: allDailyLogs,
-        documents: allDocs,
-        documentItems: allDocItems,
-        transactions: allTx,
-        activityLogs: allActivityLogs,
-        appSettings: allSettings
-      }
-    };
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'admin',
+    userFullName: req.user?.full_name || '',
+    action: 'EXPORT',
+    entity: 'سیستم:خروجی_داده‌ها',
+    description: `دریافت خروجی داده‌های کسب‌وکاری شامل ${tableCount} جدول (بدون رمزهای عبور و کلیدهای محرمانه)`,
+    ipAddress: extractClientIp(req)
+  });
 
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'admin',
-      userFullName: req.user?.full_name || '',
-      action: 'EXPORT',
-      entity: 'سیستم:نسخه_پشتیبان',
-      description: `استخراج نسخه پشتیبان کامل پایگاه داده شامل ${Object.keys(backupData.data).length} جدول و موجودیت سیستم`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
-    });
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="erp-backup-${new Date().toISOString().split('T')[0]}.json"`);
-    res.json(backupData);
-  } catch (error) {
-    throw error;
-  }
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="erp-data-export-${new Date().toISOString().split('T')[0]}.json"`);
+  res.json(exportData);
 });
 
 export default router;

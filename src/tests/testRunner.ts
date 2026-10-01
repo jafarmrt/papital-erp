@@ -98,6 +98,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   settings_key_authorization: 'Penetration: Key-Level Settings Authorization & Masked-Secret Protection (TD-184)',
   token_not_exposed_in_body: 'Penetration: JWT Not Exposed in Login Response Body by Default (TD-185)',
   login_uniform_responses: 'Penetration: Uniform Login Failures & Lockout for Unknown Usernames (TD-186)',
+  data_export_no_secrets: 'Penetration: Data Export Without Credentials & Complete Ledger (TD-188)',
   path_traversal_blocked: 'Penetration: /uploads Path Traversal Containment (TST-004)',
   concurrent_voucher_unique_postgres: 'Critical Path: Concurrent Voucher SEQUENCE Uniqueness (DB-001)',
   finalize_race_single_deduction: 'Critical Path: Concurrent Finalize Single Stock Deduction (DB-002)',

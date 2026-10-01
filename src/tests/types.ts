@@ -85,6 +85,7 @@ export type CriticalScenarioId =
   | 'settings_key_authorization'
   | 'token_not_exposed_in_body'
   | 'login_uniform_responses'
+  | 'data_export_no_secrets'
   | 'path_traversal_blocked'
   | 'concurrent_voucher_unique_postgres'
   | 'finalize_race_single_deduction'
