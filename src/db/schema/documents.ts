@@ -7,6 +7,10 @@ export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
   type: text('type').notNull(),
   refNumber: text('ref_number').notNull(),
+  // v7.0.21 (TD-178 / audit P0-2): سال مالی «پارتیشن شماره‌گذاری» — همان سالی که شمارنده document_ref_counters
+  // هنگام تخصیص شماره عطف استفاده کرده است. یکتایی شماره عطف روی (type, ref_fiscal_year, ref_number) است
+  // (ایندکس uq_documents_type_fy_ref_active در مهاجرت 0015). در صورت تهی بودن، تریگر دیتابیس آن را از date پر می‌کند.
+  refFiscalYear: integer('ref_fiscal_year'),
   date: timestamp('date', { withTimezone: false, mode: 'string' }).notNull(),
   // V10-4.3 / TD-169: لینک رسمی سند به پرونده فروش CRM — ارجاع از طریق baseRelations
   crmLeadId: integer('crm_lead_id').references(baseRelations.crmLeadsId),

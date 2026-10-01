@@ -1,6 +1,6 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { categories, items, documents, documentItems, transactions, warehouses, journalVouchers, journalVoucherItems, accounts, documentRefCounters } from '../../db/schema.js';
 import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
 import { normalizeDateToDbTimestamp, jalaliToIsoDate } from '../../utils.js';
@@ -2513,6 +2513,74 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
       await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocTypeInv));
       await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocTypeRec));
+    }
+  }
+
+  // Test 27.1: v7.0.21 (TD-178 / audit P0-2): شماره عطف یکسان در دو سال مالی متوالی نباید با قید یکتایی برخورد کند
+  if (shouldRun('reg_fiscal_year_ref_unique_scope_td_178', 'td178', 'ref_counters', 'duplicate_refs', 'fiscal_year')) {
+    const tStart = Date.now();
+    const createdDocIds: number[] = [];
+    const testDocType = 'reg_test_fy178';
+    try {
+      // 1. شماره‌گذاری خودکار در سال ۱۴۰۴ و سپس سال ۱۴۰۵ — هر دو باید «1» باشند و هر دو با موفقیت درج شوند
+      const doc1404 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2025-08-01', items: [], user: 'test-agent' });
+      createdDocIds.push(doc1404);
+      const doc1405 = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', items: [], user: 'test-agent' });
+      createdDocIds.push(doc1405);
+
+      const rows = await orm
+        .select({ id: documents.id, refNumber: documents.refNumber, refFiscalYear: documents.refFiscalYear })
+        .from(documents)
+        .where(inArray(documents.id, createdDocIds));
+      const r1404 = rows.find(r => r.id === doc1404);
+      const r1405 = rows.find(r => r.id === doc1405);
+      if (r1404?.refNumber !== '1' || r1404?.refFiscalYear !== 1404) {
+        throw new Error(`سند سال ۱۴۰۴ باید شماره «1» و سال مالی 1404 داشته باشد: ${JSON.stringify(r1404)}`);
+      }
+      if (r1405?.refNumber !== '1' || r1405?.refFiscalYear !== 1405) {
+        throw new Error(`سند سال ۱۴۰۵ باید شماره «1» و سال مالی 1405 داشته باشد (برخورد بین‌سالی): ${JSON.stringify(r1405)}`);
+      }
+
+      // 2. شماره تکراری در همان سال مالی همچنان باید توسط دیتابیس رد شود
+      let sameYearRejected = false;
+      try {
+        const [dup] = await orm.insert(documents).values({
+          type: testDocType, refNumber: '1', refFiscalYear: 1405, date: '2026-09-01 10:00:00', user: 'test-agent', status: 'draft'
+        }).returning({ id: documents.id });
+        createdDocIds.push(dup.id);
+      } catch {
+        sameYearRejected = true;
+      }
+      if (!sameYearRejected) {
+        throw new Error('درج شماره عطف تکراری در همان سال مالی و همان نوع سند نباید مجاز باشد (قید uq_documents_type_fy_ref_active).');
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_fiscal_year_ref_unique_scope_td_178',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: 'v7.0.21: یکتایی شماره عطف در دامنه سال مالی و عدم برخورد شماره «1» سال جدید با سال قبل (TD-178 / P0-2)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'شماره «1» در سال‌های ۱۴۰۴ و ۱۴۰۵ هر دو صادر شد و درج تکراری در همان سال توسط ایندکس یکتای سال‌محور رد شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_fiscal_year_ref_unique_scope_td_178',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: 'v7.0.21: یکتایی شماره عطف در دامنه سال مالی و عدم برخورد شماره «1» سال جدید با سال قبل (TD-178 / P0-2)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('documents', 'id', createdDocIds);
+      }
+      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
     }
   }
 

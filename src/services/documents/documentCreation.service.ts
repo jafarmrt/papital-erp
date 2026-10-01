@@ -175,15 +175,24 @@ export class DocumentCreationService {
           throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
         }
       }
+      // v7.0.21 (TD-178 / audit P0-2): سال مالی پارتیشن شماره‌گذاری — دقیقاً همان مقداری که
+      // DocumentRefNumberService.getNextRef برای همین `date` استفاده می‌کند؛ یکتایی شماره عطف در این دامنه است.
+      const refFiscalYear = resolveJalaliFiscalYear(date ?? null);
       let finalRefNumber = refNumber;
       if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
         finalRefNumber = await DocumentRefNumberService.getNextRef(docType, date, tx);
       } else {
         // V7 Collision Prevention: If custom refNumber already exists in documents, auto-resolve to next valid atomic number
+        // v7.0.21 (TD-178): بررسی تکرار فقط در دامنه یکتایی واقعی (نوع سند + سال مالی شماره‌گذاری)
         const [existingDoc] = await tx
           .select({ id: documents.id })
           .from(documents)
-          .where(and(eq(documents.refNumber, String(finalRefNumber)), eq(documents.isDeleted, 0)));
+          .where(and(
+            eq(documents.type, docType),
+            eq(documents.refFiscalYear, refFiscalYear),
+            eq(documents.refNumber, String(finalRefNumber)),
+            eq(documents.isDeleted, 0)
+          ));
         if (existingDoc) {
           finalRefNumber = await DocumentRefNumberService.getNextRef(docType, date, tx);
           if (docType === 'audit' && !String(finalRefNumber).startsWith('AUD-')) {
@@ -199,7 +208,7 @@ export class DocumentCreationService {
             // V3.0.6 (BUG-07): کلید شمارنده دستی نیز باید «سال جلالی» باشد؛
             // قبلاً سال میلادی (new Date().getFullYear) استفاده می‌شد و شمارنده
             // دستی روی ردیفی متفاوت از شماره‌گذاری خودکار sync می‌شد.
-            const year = resolveJalaliFiscalYear(date ?? null);
+            const year = refFiscalYear;
             const [existingCounter] = await tx
               .select()
               .from(documentRefCounters)
@@ -257,6 +266,7 @@ export class DocumentCreationService {
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
         refNumber: String(finalRefNumber),
+        refFiscalYear,
         date: normalizedDocDate,
         user,
         notes: finalNotes,
