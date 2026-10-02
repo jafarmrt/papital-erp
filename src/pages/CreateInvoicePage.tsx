@@ -13,6 +13,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
 import { useServerDraft } from '../hooks/useServerDraft';
 import { getSellableStock } from '../lib/stockAvailability';
+import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
 
@@ -464,11 +465,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     }
   };
 
-  const totalSum = docItems.reduce((acc, curr) => acc + (curr.quantity * curr.unitPrice), 0);
-  const totalDiscount = docItems.reduce((acc, curr) => acc + curr.discount, 0);
-  const netSubtotal = Math.max(0, totalSum - totalDiscount);
-  const vatAmount = applyVat ? Math.round((netSubtotal * vatRate) / 100) : 0;
-  const finalPrice = netSubtotal + vatAmount;
+  // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
+  const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0);
 
   if (printedDoc) {
     return (

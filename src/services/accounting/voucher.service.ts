@@ -11,11 +11,9 @@ import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 
-/**
- * v7.0.49 (audit P2-5، تصمیم مالک محصول): بیشترین اختلاف مجاز جمع بدهکار و بستانکار یک سند (۰٫۰۱)، یکسان در
- * ایجاد، ویرایش، اصلاح، بازثبت و قطعی‌سازی. پیش‌تر ایجاد با ۰٫۰۰۰۱ و قطعی‌سازی با ۰٫۰۱ سنجیده می‌شد.
- */
-export const VOUCHER_BALANCE_TOLERANCE = 0.01;
+// v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
+import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
+export { VOUCHER_BALANCE_TOLERANCE };
 
 /** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
 const VOUCHER_ITEM_INSERT_CHUNK = 500;

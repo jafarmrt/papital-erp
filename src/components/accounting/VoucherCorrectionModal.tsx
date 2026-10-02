@@ -4,6 +4,7 @@ import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDat
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { Account, Customer, Personnel, JournalVoucher } from '../../types';
 import { AccountSearchSelect } from './AccountSearchSelect';
+import { computeVoucherBalance } from '../../lib/voucherBalance';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -87,16 +88,8 @@ export function VoucherCorrectionModal({
     return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
   }, [safeAccounts]);
 
-  const totalDebit = useMemo(() => {
-    return items.reduce((sum, it) => sum + (Number(it.debit) || 0), 0);
-  }, [items]);
-
-  const totalCredit = useMemo(() => {
-    return items.reduce((sum, it) => sum + (Number(it.credit) || 0), 0);
-  }, [items]);
-
-  const balanceDifference = Math.abs(totalDebit - totalCredit);
-  const isBalanced = balanceDifference < 0.01 && totalDebit > 0;
+  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس یگانه سرور
+  const { totalDebit, totalCredit, difference: balanceDifference, isBalanced } = useMemo(() => computeVoucherBalance(items), [items]);
 
   if (!isOpen || !voucher) return null;
 

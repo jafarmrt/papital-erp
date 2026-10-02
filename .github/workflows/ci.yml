@@ -57,6 +57,10 @@ jobs:
         # تعداد تخلف هر قاعده نباید از eslint-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
         run: npm run lint:eslint
 
+      - name: Frontend & Unit Tests (Vitest, v7.0.76 / audit P3-6)
+        # فقط تست‌های تازه واحد و فرانت (src/tests/vitest)؛ مجموعه‌های پایگاه‌داده با رانر قبلی در job بعدی
+        run: npm run test:vitest
+
   test:
     name: Database & Domain Test Suites
     needs: lint-and-typecheck

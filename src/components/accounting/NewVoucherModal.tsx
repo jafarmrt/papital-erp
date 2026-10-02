@@ -5,6 +5,7 @@ import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
 import VoucherItemsTable, { VoucherItemDraft } from './VoucherItemsTable';
+import { computeVoucherBalance } from '../../lib/voucherBalance';
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
 import toast from 'react-hot-toast';
@@ -144,17 +145,8 @@ export function NewVoucherModal({
     return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
   }, [safeAccounts]);
 
-  const totalDebit = useMemo(() => {
-    return items.reduce((sum, it) => sum + (Number(it.debit) || 0), 0);
-  }, [items]);
-
-  const totalCredit = useMemo(() => {
-    return items.reduce((sum, it) => sum + (Number(it.credit) || 0), 0);
-  }, [items]);
-
-  const difference = Math.abs(totalDebit - totalCredit);
-  const isBalanced = totalDebit > 0 && difference === 0;
-  const debitSurplus = totalDebit - totalCredit; // > 0 means debit is higher, need credit
+  // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور (قبلاً اختلاف دقیقاً صفر با جمع اعشاری جاوااسکریپت)
+  const { difference, isBalanced, debitSurplus } = useMemo(() => computeVoucherBalance(items), [items]);
 
   const addRow = (initialData?: Partial<VoucherItemDraft>) => {
     const newRowIndex = items.length;
