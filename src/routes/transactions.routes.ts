@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { orm } from '../db/drizzle.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { authorize } from '../middleware/authorize.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
 import { validate } from '../middleware/validate.js';
 import { transactions, items, users } from '../db/schema.js';
 import { eq, desc, sql, and, gte, lte, or, ilike, type SQL } from 'drizzle-orm';
@@ -26,7 +28,9 @@ const listTransactionsSchema = z.object({
   }).passthrough()
 }).passthrough();
 
-router.get('/transactions', validate(listTransactionsSchema), async (req, res) => {
+// v7.0.53 (audit P2-10، تصمیم مالک محصول): فهرست کاردکس (با بهای تمام‌شده) فقط برای دارندگان warehouse.view یا
+// accounting.view؛ پیش‌تر هر کاربر واردشده آن را می‌گرفت
+router.get('/transactions', authorize('warehouse.view', 'accounting.view'), validate(listTransactionsSchema), async (req, res) => {
   try {
     // V9-1.3: صفحه‌بندی NaN-safe با سقف
     const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
@@ -61,7 +65,7 @@ router.get('/transactions', validate(listTransactionsSchema), async (req, res) =
       conditions.push(lte(transactions.date, endCondition));
     }
     if (search && search.trim() !== '') {
-      const s = `%${search.trim()}%`;
+      const s = containsLikePattern(search.trim());
       conditions.push(or(
         ilike(items.name, s),
         ilike(items.code, s),
@@ -135,9 +139,12 @@ router.get('/transactions', validate(listTransactionsSchema), async (req, res) =
       return res.json(mappedResult);
     }
 
+    // v7.0.53 (TD-221): همان join‌های کوئری اصلی؛ شرط جستجو روی users.full_name است و بدون این join هر جستجو
+    // در کاردکس با خطای 500 (missing FROM-clause entry for table "users") شکست می‌خورد
     let countQuery = orm.select({ count: sql`count(*)`.mapWith(Number) })
       .from(transactions)
-      .innerJoin(items, eq(transactions.itemId, items.id));
+      .innerJoin(items, eq(transactions.itemId, items.id))
+      .leftJoin(users, eq(users.username, transactions.createdBy));
 
     if (whereClause) {
       countQuery = countQuery.where(whereClause) as any;

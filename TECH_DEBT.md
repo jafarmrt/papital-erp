@@ -33,14 +33,16 @@
 | TD-199 | Pre-v7.0.32 Proformas Keep VAT Only in Notes | با تصمیم مالک محصول داده قدیمی منتقل نشد؛ پیش‌فاکتورهایی که پیش از v7.0.32 با مالیات ثبت شده‌اند مالیات را فقط در متن یادداشت دارند و اگر بدون ویرایش نهایی شوند، فاکتور و سند حسابداری بدون مالیات صادر می‌شوند | documents (vat_percent / vat_amount) | open — پیش از نهایی‌سازی، پیش‌فاکتور قدیمی را در فرم ویرایش باز و مالیات را دوباره فعال کنید؛ یا گزارش پیش‌فاکتورهای باز دارای برچسب مالیات در یادداشت |
 | TD-210 | Money Columns as JS double (P2-6) | ستون‌های مالی `numeric(18,4)` با `mode: 'number'` به double جاوااسکریپت تبدیل می‌شوند (۱۵ تا ۱۷ رقم معنادار) و تجمیع‌های گزارشی در JS انجام می‌شود | src/db/schema/*.ts، گزارش‌های حسابداری | scheduled:فاز ۳ نسخه ۷ — با تصمیم مالک محصول (v7.0.44) به فاز ۳ موکول شد؛ با ابعاد یک کارگاه مبالغ از محدوده دقت double فراتر نمی‌روند |
 | TD-211 | Attachments as Base64 in JSONB (P2-9) | پیوست‌های اسناد، اسناد حسابداری، چک‌ها، پرسنل و پروژه‌ها به‌صورت Base64 در ستون‌های `attachments` ذخیره و در هر `select()` بدون انتخاب ستون خوانده می‌شوند | src/db/schema/*.ts (attachments) | scheduled:فاز ۲ نسخه ۷ — جهت مصوب (v7.0.44): ذخیره روی دیسک سرور در پوشه‌ای جدا از public/uploads و دریافت فقط از مسیر نیازمند ورود و مجوز، بدون سرویس جدید؛ تکلیف پیوست‌های موجود نیازمند تصمیم مالک محصول |
+| TD-222 | Unescaped LIKE Input (remaining) | ۲۴ نقطه دیگر الگوی LIKE/ILIKE را مستقیم از ورودی کاربر می‌سازند (`%${search}%`)؛ `%` و `_` نویسه عام می‌شوند (نتیجه نادرست، نه تزریق SQL — مقدار پارامتری است). جستجوی سراسری و کاردکس در v7.0.53 اصلاح شدند | crm.routes.ts، customers.routes.ts، items.crud.routes.ts، voucher.service.ts، chequeLifecycle.service.ts، accountingReport.service.ts، procurement.service.ts، documentQuery.service.ts، deadLetterQueueService.ts، eventSourcingReplayService.ts | open — جایگزینی با `containsLikePattern` (src/lib/sqlLike.ts) |
+| TD-223 | Read Endpoints Without Permission Scope (beyond P2-10) | حدود ۴۰ مسیر GET فقط احراز هویت دارند و هیچ `authorize` ندارند؛ از جمله داده حساس: فهرست و خروجی اکسل طرف‌حساب‌ها (`/customers`، `/customers/export-excel`)، فهرست و جزئیات اسناد و فاکتورها (`/documents`، `/documents/:id`)، قیمت‌های کالا (`/items/prices/all`)، پرسنل (`/personnel`) و فیش‌های حقوقی با مبالغ (`/piecework/payrolls`؛ اطلاعات بانکی ماسک می‌شود)، فهرست کاربران (`/users`). برخی برای فهرست‌های انتخابی فرم‌ها لازم‌اند | src/routes/*.routes.ts | open — نیازمند نگاشت مسیر به مجوز با تصمیم مالک محصول (بخش‌های بند P2-10 در v7.0.53 انجام شد) |
 | TD-130 | Hard Delete in updateDocument | بررسی ردیف‌های document_items در ویرایش سند جهت هم‌ترازی با soft-delete | document.service.ts:235 | scheduled:فاز ۱ نسخه ۷ |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۸ ردیف
-- **آرشیو شده (resolved):** ۱۸۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۲۰ ردیف
+- **آرشیو شده (resolved):** ۱۹۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -49,4 +51,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v7.0.52 — اصلاح فوری TD-219 (پسرفت v7.0.48، آرشیو).*
+*آخرین بازبینی: v7.0.53 — زیرفاز ۲.۵ ممیزی، بخش ب: حل TD-220 / P2-10 و TD-221 (آرشیو)؛ ثبت TD-222 و TD-223 (فعال).*

@@ -4409,6 +4409,141 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.23: v7.0.53 (audit P2-10): جستجوی سراسری، کاردکس و آمار داشبورد انبار فقط برای دارنده مجوز همان بخش؛
+  // نویسه‌های % و _ در جستجوی سراسری و کاردکس نویسه عام نیستند
+  if (shouldRun('reg_read_endpoint_scope_p2_10', 'p210', 'authorize', 'search')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.53: جستجوی سراسری بخش‌به‌بخش با مجوز، کاردکس با warehouse.view/accounting.view و آمار داشبورد با reports.view (P2-10)';
+    const createdRoleIds: number[] = [];
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession, loginTestUser } = await import('../fixtures/httpTestHelper.js');
+      const { createTestRole, createTestUser, createTestCustomer, createTestItem, createTestDocument } = await import('../fixtures/factories.js');
+      const { withTestMarker } = await import('../fixtures/testMarker.js');
+      const { productionProjects } = await import('../../db/schema.js');
+      const app = await getTestApp();
+      const admin = await getAdminSession();
+
+      const sessionFor = async (permissions: string[]): Promise<string> => {
+        const role = await createTestRole({ permissions });
+        createdRoleIds.push(role.id);
+        const user = await createTestUser({ role: role.code });
+        return loginTestUser(app, user.username);
+      };
+      const logger = await sessionFor(['daily_logs.view', 'daily_logs.create']);
+      const customerViewer = await sessionFor(['customers.view']);
+      const warehouseViewer = await sessionFor(['warehouse.view']);
+      const accountingViewer = await sessionFor(['accounting.view']);
+      const reportsViewer = await sessionFor(['reports.view']);
+
+      // داده با نشانه یکتا در هر چهار بخش؛ دو طرف حساب برای آزمون نویسه «_»
+      const token = `P210Q${Date.now()}`;
+      await createTestCustomer({ name: withTestMarker(`${token}_A`) });
+      await createTestCustomer({ name: withTestMarker(`${token}xA`) });
+      await createTestItem({ name: withTestMarker(`کالای ${token}`) });
+      await createTestDocument({ refNumber: `DOC_${token}`, buyerName: withTestMarker(`خریدار ${token}`) }, []);
+      await orm.insert(productionProjects).values({ projectCode: `PRJ_${token}`, title: withTestMarker(`پروژه ${token}`) });
+
+      const search = async (cookie: string, q: string) => {
+        const r = await request(app).get(`/api/global-search?q=${encodeURIComponent(q)}`).set('Cookie', cookie);
+        const body = r.body || {};
+        return {
+          status: r.status,
+          items: Array.isArray(body.items) ? body.items.length : -1,
+          customers: Array.isArray(body.customers) ? body.customers.length : -1,
+          documents: Array.isArray(body.documents) ? body.documents.length : -1,
+          projects: Array.isArray(body.projects) ? body.projects.length : -1
+        };
+      };
+      const fmt = (o: unknown) => JSON.stringify(o);
+
+      // الف) جستجوی سراسری
+      const asAdmin = await search(admin.cookie, token);
+      if (asAdmin.status !== 200 || asAdmin.items < 1 || asAdmin.customers < 2 || asAdmin.documents < 1 || asAdmin.projects < 1) {
+        throw new Error(`کنترل: مدیر سیستم باید هر چهار بخش را بیابد ${fmt(asAdmin)}`);
+      }
+      const asLogger = await search(logger, token);
+      if (asLogger.status !== 200 || asLogger.items !== 0 || asLogger.customers !== 0 || asLogger.documents !== 0 || asLogger.projects !== 0) {
+        throw new Error(`کاربر بدون مجوز مشاهده نباید نتیجه‌ای از کالا، طرف حساب، سند یا پروژه بگیرد ${fmt(asLogger)}`);
+      }
+      const asCustomerViewer = await search(customerViewer, token);
+      if (asCustomerViewer.status !== 200 || asCustomerViewer.customers !== 2 || asCustomerViewer.items !== 0
+        || asCustomerViewer.documents !== 0 || asCustomerViewer.projects !== 0) {
+        throw new Error(`دارنده customers.view فقط باید بخش طرف حساب را بگیرد ${fmt(asCustomerViewer)}`);
+      }
+      const underscore = await search(admin.cookie, `${token}_A`);
+      if (underscore.customers !== 1) {
+        throw new Error(`«_» در جستجوی سراسری نویسه عام شد: «${token}_A» باید فقط یک طرف حساب بیابد (${underscore.customers})`);
+      }
+
+      // ب) کاردکس
+      const kardex: Record<string, number> = {};
+      for (const [name, cookie] of [['logger', logger], ['reports', reportsViewer], ['warehouse', warehouseViewer], ['accounting', accountingViewer]] as const) {
+        kardex[name] = (await request(app).get('/api/transactions?limit=1').set('Cookie', cookie)).status;
+      }
+      if (kardex.logger !== 403 || kardex.reports !== 403 || kardex.warehouse !== 200 || kardex.accounting !== 200) {
+        throw new Error(`کاردکس فقط برای warehouse.view یا accounting.view: ${fmt(kardex)}`);
+      }
+      // جستجو در کاردکس: پاسخ 200 (پیش‌تر هر جستجو 500 می‌داد، TD-221) و «%%%» نویسه عام نیست
+      const kardexItem = await createTestItem({ name: withTestMarker(`کالای کاردکس ${token}`), stocks: {} });
+      const kardexRef = `KDX_${token}`;
+      await orm.transaction(async (tx) => {
+        await DocumentService.applyStockMovement(tx as any, {
+          itemId: kardexItem.id, inOut: 'in', quantity: 2, price: 1000, date: await businessTodayIsoDate(),
+          documentType: 'receipt', documentRef: kardexRef, user: 'p210_probe', targetLoc: ''
+        });
+      });
+      const kardexSearch = await request(app).get(`/api/transactions?limit=5&search=${encodeURIComponent(kardexRef)}`).set('Cookie', admin.cookie);
+      const kardexFound: any[] = Array.isArray(kardexSearch.body?.data) ? kardexSearch.body.data : [];
+      if (kardexSearch.status !== 200 || kardexFound.length !== 1 || kardexFound[0]?.item_id !== kardexItem.id || Number(kardexSearch.body?.total) !== 1) {
+        throw new Error(`جستجوی کاردکس با شماره سند باید همان یک گردش را بدهد (وضعیت ${kardexSearch.status}، ${JSON.stringify(kardexSearch.body).slice(0, 200)})`);
+      }
+      const kardexPercent = await request(app).get('/api/transactions?limit=5&search=%25%25%25').set('Cookie', admin.cookie);
+      const kardexRows: any[] = Array.isArray(kardexPercent.body?.data) ? kardexPercent.body.data : [];
+      if (kardexPercent.status !== 200 || kardexRows.length !== 0) {
+        throw new Error(`«%%%» در جستجوی کاردکس نویسه عام شد (وضعیت ${kardexPercent.status}، ${kardexRows.length} ردیف)`);
+      }
+
+      // ج) آمار داشبورد انبار
+      const dash: Record<string, number> = {};
+      for (const [name, cookie] of [['logger', logger], ['warehouse', warehouseViewer], ['reports', reportsViewer]] as const) {
+        dash[`${name}:stats`] = (await request(app).get('/api/stats').set('Cookie', cookie)).status;
+        dash[`${name}:bi`] = (await request(app).get('/api/dashboard-bi-stats').set('Cookie', cookie)).status;
+      }
+      if (dash['logger:stats'] !== 403 || dash['logger:bi'] !== 403 || dash['warehouse:stats'] !== 403 || dash['warehouse:bi'] !== 403
+        || dash['reports:stats'] !== 200 || dash['reports:bi'] !== 200) {
+        throw new Error(`آمار داشبورد انبار فقط برای reports.view: ${fmt(dash)}`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_read_endpoint_scope_p2_10',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: `جستجو: ${fmt({ asLogger, asCustomerViewer })}؛ کاردکس: ${fmt(kardex)}؛ داشبورد: ${fmt(dash)}`
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_read_endpoint_scope_p2_10',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdRoleIds.length > 0) {
+        const { roles } = await import('../../db/schema.js');
+        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

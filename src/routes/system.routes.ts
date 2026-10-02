@@ -16,7 +16,8 @@ import {
   documentRefCounters, itemCodeCounters, purchaseRequisitions
 } from '../db/schema.js';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorize, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
@@ -664,6 +665,10 @@ router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) =
 // آزمون‌ها فقط از طریق CLI استاندارد `npm run test` انجام می‌شود.
 
 // Global Multi-Entity Search Route
+// v7.0.53 (audit P2-10، تصمیم مالک محصول): هر بخش نتیجه فقط برای دارنده مجوز مشاهده همان بخش جستجو و برگردانده
+// می‌شود (کالا: products.view، طرف حساب: customers.view، سند و فاکتور: documents.view، پروژه: projects.view)؛
+// بخش بدون مجوز خالی است، نه خطا. پیش‌تر هر کاربر واردشده (مثلاً «کاربر ثبت گزارش») همه بخش‌ها را می‌گرفت.
+// نویسه‌های % و _ ورودی هم escape می‌شوند.
 router.get('/global-search', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
@@ -671,7 +676,13 @@ router.get('/global-search', async (req, res) => {
       return res.json({ items: [], customers: [], documents: [], projects: [] });
     }
 
-    const searchTerm = `%${q}%`;
+    const searchTerm = containsLikePattern(q);
+    const [canItems, canCustomers, canDocuments, canProjects] = await Promise.all([
+      userHasRoleOrPermission(req.user, 'products.view'),
+      userHasRoleOrPermission(req.user, 'customers.view'),
+      userHasRoleOrPermission(req.user, 'documents.view'),
+      userHasRoleOrPermission(req.user, 'projects.view')
+    ]);
 
     // 1. Products & Raw Materials
     let matchingItems: Array<{
@@ -684,33 +695,35 @@ router.get('/global-search', async (req, res) => {
       currentStock: number | null;
       thumbnail: string | null;
     }> = [];
-    try {
-      matchingItems = await orm.select({
-        id: items.id,
-        name: items.name,
-        code: items.code,
-        type: items.type,
-        category: items.category,
-        unit: items.unit,
-        currentStock: items.currentStock,
-        thumbnail: items.thumbnail
-      })
-      .from(items)
-      .where(
-        and(
-          eq(items.isDeleted, 0),
-          or(
-            ilike(items.name, searchTerm),
-            ilike(items.code, searchTerm),
-            ilike(items.category, searchTerm),
-            ilike(items.material, searchTerm),
-            ilike(items.color, searchTerm)
+    if (canItems) {
+      try {
+        matchingItems = await orm.select({
+          id: items.id,
+          name: items.name,
+          code: items.code,
+          type: items.type,
+          category: items.category,
+          unit: items.unit,
+          currentStock: items.currentStock,
+          thumbnail: items.thumbnail
+        })
+        .from(items)
+        .where(
+          and(
+            eq(items.isDeleted, 0),
+            or(
+              ilike(items.name, searchTerm),
+              ilike(items.code, searchTerm),
+              ilike(items.category, searchTerm),
+              ilike(items.material, searchTerm),
+              ilike(items.color, searchTerm)
+            )
           )
         )
-      )
-      .limit(10);
-    } catch (e) {
-      logger.error({ message: 'Error fetching search items', error: e });
+        .limit(10);
+      } catch (e) {
+        logger.error({ message: 'Error fetching search items', error: e });
+      }
     }
 
     // 2. Customers
@@ -721,29 +734,31 @@ router.get('/global-search', async (req, res) => {
       province: string | null;
       address: string | null;
     }> = [];
-    try {
-      matchingCustomers = await orm.select({
-        id: customers.id,
-        name: customers.name,
-        city: customers.city,
-        province: customers.province,
-        address: customers.address
-      })
-      .from(customers)
-      .where(
-        and(
-          eq(customers.isDeleted, 0),
-          or(
-            ilike(customers.name, searchTerm),
-            ilike(customers.city, searchTerm),
-            ilike(customers.province, searchTerm),
-            ilike(customers.phone, searchTerm)
+    if (canCustomers) {
+      try {
+        matchingCustomers = await orm.select({
+          id: customers.id,
+          name: customers.name,
+          city: customers.city,
+          province: customers.province,
+          address: customers.address
+        })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.isDeleted, 0),
+            or(
+              ilike(customers.name, searchTerm),
+              ilike(customers.city, searchTerm),
+              ilike(customers.province, searchTerm),
+              ilike(customers.phone, searchTerm)
+            )
           )
         )
-      )
-      .limit(5);
-    } catch (e) {
-      logger.error({ message: 'Error fetching search customers', error: e });
+        .limit(5);
+      } catch (e) {
+        logger.error({ message: 'Error fetching search customers', error: e });
+      }
     }
 
     // 3. Documents & Invoices
@@ -754,28 +769,30 @@ router.get('/global-search', async (req, res) => {
       type: string;
       date: string;
     }> = [];
-    try {
-      matchingDocuments = await orm.select({
-        id: documents.id,
-        ref_number: documents.refNumber,
-        buyer_name: documents.buyerName,
-        type: documents.type,
-        date: documents.date
-      })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.isDeleted, 0),
-          or(
-            ilike(documents.refNumber, searchTerm),
-            ilike(documents.buyerName, searchTerm),
-            ilike(documents.notes, searchTerm)
+    if (canDocuments) {
+      try {
+        matchingDocuments = await orm.select({
+          id: documents.id,
+          ref_number: documents.refNumber,
+          buyer_name: documents.buyerName,
+          type: documents.type,
+          date: documents.date
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.isDeleted, 0),
+            or(
+              ilike(documents.refNumber, searchTerm),
+              ilike(documents.buyerName, searchTerm),
+              ilike(documents.notes, searchTerm)
+            )
           )
         )
-      )
-      .limit(5);
-    } catch (e) {
-      logger.error({ message: 'Error fetching search documents', error: e });
+        .limit(5);
+      } catch (e) {
+        logger.error({ message: 'Error fetching search documents', error: e });
+      }
     }
 
     // 4. Projects
@@ -786,28 +803,30 @@ router.get('/global-search', async (req, res) => {
       status: string | null;
       customer_name: string | null;
     }> = [];
-    try {
-      matchingProjects = await orm.select({
-        id: productionProjects.id,
-        project_code: productionProjects.projectCode,
-        title: productionProjects.title,
-        status: productionProjects.status,
-        customer_name: productionProjects.customerName
-      })
-      .from(productionProjects)
-      .where(
-        and(
-          eq(productionProjects.isDeleted, 0),
-          or(
-            ilike(productionProjects.title, searchTerm),
-            ilike(productionProjects.projectCode, searchTerm),
-            ilike(productionProjects.customerName, searchTerm)
+    if (canProjects) {
+      try {
+        matchingProjects = await orm.select({
+          id: productionProjects.id,
+          project_code: productionProjects.projectCode,
+          title: productionProjects.title,
+          status: productionProjects.status,
+          customer_name: productionProjects.customerName
+        })
+        .from(productionProjects)
+        .where(
+          and(
+            eq(productionProjects.isDeleted, 0),
+            or(
+              ilike(productionProjects.title, searchTerm),
+              ilike(productionProjects.projectCode, searchTerm),
+              ilike(productionProjects.customerName, searchTerm)
+            )
           )
         )
-      )
-      .limit(5);
-    } catch (e) {
-      logger.error({ message: 'Error fetching search projects', error: e });
+        .limit(5);
+      } catch (e) {
+        logger.error({ message: 'Error fetching search projects', error: e });
+      }
     }
 
     res.json({

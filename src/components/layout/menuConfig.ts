@@ -80,7 +80,8 @@ export function getMenuGroups(
       groupIcon: Package,
       items: [
         // V10-5.0: محتوای فعلی داشبورد BI انبار؛ داشبورد سراسری آینده در «/» جای می‌گیرد
-        { name: 'وضعیت انبار', path: '/inventory-status', icon: Warehouse, visible: true },
+        // v7.0.53 (audit P2-10): آمار داشبورد انبار فقط با reports.view (همان مجوز API)
+        { name: 'وضعیت انبار', path: '/inventory-status', icon: Warehouse, visible: hasPerm('reports.view') },
         { name: 'محصولات و مواد اولیه', path: '/products', icon: Package, visible: hasPerm('products.view') },
         { name: 'ورود و خروج انبار', path: '/receipts', icon: FileInput, visible: hasPerm('warehouse.in') || hasPerm('documents.view') || hasPerm('documents.create') },
         { name: 'تأیید مواد اولیه جدید', path: '/pending-materials', icon: CheckSquare, visible: hasPerm('products.view') },
@@ -136,7 +137,8 @@ export function getMenuGroups(
       groupIcon: History,
       items: [
         { name: 'گزارش اقلام رزروی', path: '/reserved-items', icon: Lock, visible: hasPerm('products.view') || hasPerm('reports.view') || hasPerm('warehouse.view') },
-        { name: 'گزارش تراکنش‌ها', path: '/transactions', icon: History, visible: hasPerm('reports.view') },
+        // v7.0.53 (audit P2-10): کاردکس با warehouse.view یا accounting.view (همان مجوز API)
+        { name: 'گزارش تراکنش‌ها', path: '/transactions', icon: History, visible: hasPerm('warehouse.view') || hasPerm('accounting.view') },
       ]
     },
     {

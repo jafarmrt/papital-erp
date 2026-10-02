@@ -36,6 +36,13 @@ export default function Dashboard() {
     Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
 
+  // v7.0.53 (audit P2-10): کارت «وضعیت انبار» فقط برای دارندگان reports.view (مجوز آمار داشبورد انبار)
+  const hasReportsPermission = Boolean(
+    userPermissions?.isAdmin ||
+    user?.role === 'admin' ||
+    Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('reports.view')
+  );
+
   // Convert CRM activities and Daily Logs into Calendar Event items
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
     const items: CalendarEventItem[] = [];
@@ -149,30 +156,32 @@ export default function Dashboard() {
           </div>
 
           {/* Warehouse BI & Analytics Quick Link Card */}
-          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-5 border border-slate-700/80 shadow-md flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
-                <Warehouse size={22} />
+          {hasReportsPermission && (
+            <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-5 border border-slate-700/80 shadow-md flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
+                  <Warehouse size={22} />
+                </div>
+                <div className="truncate">
+                  <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
+                    <span>دیده‌بان وضعیت انبار و هوش تجاری</span>
+                    <Sparkles size={13} className="text-amber-400" />
+                  </h3>
+                  <p className="text-[11px] text-slate-300 mt-0.5 truncate">
+                    مشاهده ارزش مالی انبار، آلارم‌های نقطه سفارش و تفکیک موجودی
+                  </p>
+                </div>
               </div>
-              <div className="truncate">
-                <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
-                  <span>دیده‌بان وضعیت انبار و هوش تجاری</span>
-                  <Sparkles size={13} className="text-amber-400" />
-                </h3>
-                <p className="text-[11px] text-slate-300 mt-0.5 truncate">
-                  مشاهده ارزش مالی انبار، آلارم‌های نقطه سفارش و تفکیک موجودی
-                </p>
-              </div>
-            </div>
 
-            <button
-              onClick={() => navigate('/inventory-status')}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0"
-            >
-              <span>مشاهده</span>
-              <ArrowLeft size={13} />
-            </button>
-          </div>
+              <button
+                onClick={() => navigate('/inventory-status')}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0"
+              >
+                <span>مشاهده</span>
+                <ArrowLeft size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

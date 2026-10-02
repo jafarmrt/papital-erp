@@ -91,7 +91,11 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
         <Routes>
           <Route path="/" element={<Dashboard />} />
         {/* V10-5.0: وضعیت انبار = داشبورد تحلیلی و هوش تجاری انبار */}
-        <Route path="/inventory-status" element={<InventoryStatusPage />} />
+        <Route path="/inventory-status" element={
+          <ProtectedRoute requiredPerm="reports.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+            <InventoryStatusPage />
+          </ProtectedRoute>
+        } />
         <Route path="/crm" element={
           <ProtectedRoute requiredPerm="crm.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <CRMPage user={user} />
@@ -186,7 +190,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           </ProtectedRoute>
         } />
         <Route path="/transactions" element={
-          <ProtectedRoute requiredPerm="reports.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute requiredPerm={['warehouse.view', 'accounting.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <TransactionsPage />
           </ProtectedRoute>
         } />
