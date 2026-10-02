@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { extractDateString } from '../../utils';
 import { useSearch } from '../../SearchContext';
@@ -16,8 +16,19 @@ export function useInvoiceListQuery() {
   const [endDate, setEndDate] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+
+  // TD-235 (بند ۵): صفحه به کلید فیلترها گره خورده است؛ با تغییر فیلتر یا جستجو همان رندر صفحه ۱ را می‌خواهد
+  // (پیش‌تر یک effect پس از رندر صفحه را ۱ می‌کرد و در این فاصله یک درخواست اضافه با صفحه قبلی می‌رفت).
+  const filterKey = JSON.stringify([debouncedSearchQuery, filterType, filterStatus, startDate, endDate, pageSize]);
+  const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+  const page = pageState.key === filterKey ? pageState.page : 1;
+  const setPage = useCallback((next: SetStateAction<number>) => {
+    setPageState(prev => {
+      const current = prev.key === filterKey ? prev.page : 1;
+      return { key: filterKey, page: typeof next === 'function' ? next(current) : next };
+    });
+  }, [filterKey]);
 
   const queryClient = useQueryClient();
 
@@ -35,11 +46,6 @@ export function useInvoiceListQuery() {
   const result = docsQuery.data as InvoiceListResponse | null | undefined;
   const totalPages = result?.totalPages || 1;
   const loading = docsQuery.isFetching;
-
-  // Reset page to 1 on filter or debounced search change
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearchQuery, filterType, filterStatus, startDate, endDate, pageSize]);
 
   const loadData = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documents.all });

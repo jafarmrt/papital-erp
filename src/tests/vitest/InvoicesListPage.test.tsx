@@ -128,7 +128,7 @@ describe('InvoicesListPage — invoices list (TD-080 part 3 characterization)', 
     await screen.findByText('INV-۱۰۰۱');
     fireEvent.click(within(rowOf('INV-۱۰۰۱')).getByTitle('مشاهده ریز اقلام و ارقام سند'));
     expect(await screen.findByText('گردنبند نقره')).toBeTruthy();
-    expect(fetchJson).toHaveBeenCalledWith('/documents/1');
+    expect(fetchJson).toHaveBeenCalledWith('/documents/1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(screen.getByText('صورتحساب فروش کالا')).toBeTruthy();
     expect(screen.getByText('ریز اقلام و ردیف‌های سند (۲ قلم)')).toBeTruthy();
     expect(screen.getByText('مجموع تعداد: ۳ واحد')).toBeTruthy();

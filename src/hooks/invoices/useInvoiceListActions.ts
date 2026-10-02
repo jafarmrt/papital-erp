@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { confirmAction } from '../../components/ConfirmDialogHost';
 import { fetchJson } from '../../api';
@@ -19,6 +19,7 @@ export function useInvoiceListActions(loadData: () => void) {
   const [settlementDoc, setSettlementDoc] = useState<InvoiceListDocument | null>(null);
   const [, setDetailsLoading] = useState(false);
   const [, setPrintLoading] = useState(false);
+  const detailsRequestRef = useRef<AbortController | null>(null);
 
   const handleUpdateNotes = async (id: number) => {
     try {
@@ -48,19 +49,28 @@ export function useInvoiceListActions(loadData: () => void) {
     }
   };
 
+  // TD-235 (بند ۶): بارگذاری قبلی لغو می‌شود و پاسخ فقط وقتی نشان داده می‌شود که همان سند هنوز در پنجره باز باشد
+  // (پیش‌تر پاسخ دیررس سند قبلی جای سند تازه را می‌گرفت یا پنجره بسته را دوباره باز می‌کرد).
   const handleOpenDetails = async (docSummary: InvoiceListDocument) => {
+    detailsRequestRef.current?.abort();
+    const controller = new AbortController();
+    detailsRequestRef.current = controller;
     try {
       setDetailsLoading(true);
       setSelectedDocDetails(docSummary);
-      const fullDoc = await fetchJson(`/documents/${docSummary.id}`);
-      if (fullDoc) {
-        setSelectedDocDetails(fullDoc);
+      const fullDoc = await fetchJson(`/documents/${docSummary.id}`, { signal: controller.signal });
+      if (fullDoc && !controller.signal.aborted) {
+        setSelectedDocDetails(current => (current && current.id === docSummary.id ? fullDoc : current));
       }
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('Error loading document details:', err);
       toast.error('خطا در بارگذاری جزئیات کامل اقلام سند');
     } finally {
-      setDetailsLoading(false);
+      if (detailsRequestRef.current === controller) {
+        detailsRequestRef.current = null;
+        setDetailsLoading(false);
+      }
     }
   };
 
