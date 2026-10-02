@@ -1,0 +1,221 @@
+/**
+ * TD-080 (بخش ۳): منطق خالص صفحه «لیست اسناد، فاکتورها و رسیدهای انبار» — منتقل‌شده بدون تغییر رفتار
+ * از InvoicesListPage. هر جمع و هر نگاشت دقیقاً همان عبارت جای اصلی خود را دارد (از جمله تفاوت‌ها:
+ * جمع ردیف‌های جدول با `|| 0` و جمع‌های مودال جزئیات بدون آن).
+ */
+
+/** یک ردیف کالا در سند (پاسخ GET /documents/:id یا لیست) */
+export interface InvoiceListLine {
+  id?: number;
+  item_id?: number;
+  code?: string;
+  name?: string;
+  unit?: string;
+  quantity?: number | string | null;
+  unit_price?: number | string | null;
+  discount?: number | string | null;
+}
+
+/** یک سند در لیست GET /documents (و همان سند با اقلام کامل در مودال جزئیات) */
+export interface InvoiceListDocument {
+  id: number;
+  type?: string;
+  status?: string;
+  ref_number?: string;
+  date?: string;
+  currency?: string;
+  user?: string;
+  buyer_name?: string | null;
+  buyer_phone?: string | null;
+  buyer_city?: string | null;
+  notes?: string;
+  items?: InvoiceListLine[];
+  itemsCount?: number;
+  totalQuantity?: number | string;
+  totalAmount?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  settlementStatus?: string;
+}
+
+/** پاسخ صفحه‌بندی‌شده GET /documents */
+export interface InvoiceListResponse {
+  data?: InvoiceListDocument[];
+  total?: number;
+  totalPages?: number;
+}
+
+/** reducer جمع خالص یک ردیف: (تعداد × قیمت واحد) − تخفیف */
+export const addLineNet = (acc: number, i: InvoiceListLine): number =>
+  acc + (Number(i.quantity || 0) * Number(i.unit_price || 0)) - Number(i.discount || 0);
+
+/** reducer جمع ناخالص: تعداد × قیمت واحد */
+export const addLineGross = (acc: number, i: InvoiceListLine): number =>
+  acc + (Number(i.quantity || 0) * Number(i.unit_price || 0));
+
+/** reducer جمع تخفیف */
+export const addLineDiscount = (acc: number, i: InvoiceListLine): number => acc + Number(i.discount || 0);
+
+/** reducer جمع تعداد */
+export const addLineQuantity = (acc: number, i: InvoiceListLine): number => acc + Number(i.quantity || 0);
+
+/** مبلغ کل سند: totalAmount سرور، وگرنه جمع خالص اقلام */
+export function documentAmountOf(d: InvoiceListDocument): number {
+  return Number(d.totalAmount !== undefined
+    ? d.totalAmount
+    : (d.items?.reduce(addLineNet, 0) || 0)
+  );
+}
+
+export interface InvoiceListSummary {
+  salesTotals: Record<string, number>;
+  salesCount: number;
+  purchaseTotals: Record<string, number>;
+  purchaseCount: number;
+  proformaTotals: Record<string, number>;
+  proformaCount: number;
+  otherCount: number;
+}
+
+/**
+ * کارت‌های خلاصه بالای صفحه — V9 Phase 3: گروه‌بندی مبالغ بر اساس ارز هر سند
+ * (رفع جمع‌شدن ارزهای ناهمگون در یک عدد واحد با برچسب ثابت «ریال»)
+ */
+export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceListSummary {
+  const salesTotals: Record<string, number> = {};
+  let salesCount = 0;
+  const purchaseTotals: Record<string, number> = {};
+  let purchaseCount = 0;
+  const proformaTotals: Record<string, number> = {};
+  let proformaCount = 0;
+  let otherCount = 0;
+
+  const addTo = (bucket: Record<string, number>, cur: string, amount: number) => {
+    bucket[cur] = (bucket[cur] || 0) + amount;
+  };
+
+  for (const d of docs) {
+    const docAmount = documentAmountOf(d);
+    const cur = String(d.currency || 'IRR');
+
+    if (d.status === 'proforma' || d.type === 'proforma') {
+      addTo(proformaTotals, cur, docAmount);
+      proformaCount++;
+    } else if (d.type === 'invoice') {
+      addTo(salesTotals, cur, docAmount);
+      salesCount++;
+    } else if (d.type === 'receipt') {
+      addTo(purchaseTotals, cur, docAmount);
+      purchaseCount++;
+    } else {
+      otherCount++;
+    }
+  }
+
+  return {
+    salesTotals,
+    salesCount,
+    purchaseTotals,
+    purchaseCount,
+    proformaTotals,
+    proformaCount,
+    otherCount
+  };
+}
+
+export type InvoiceTypeBadgeKind = 'stock' | 'receipt' | 'invoice' | 'proforma' | 'remittance' | 'return' | 'waste';
+
+export interface InvoiceRowFigures {
+  isReceipt: boolean;
+  isInvoice: boolean;
+  isProforma: boolean;
+  badgeKind: InvoiceTypeBadgeKind;
+  itemsCount: number;
+  totalQty: number | string;
+  totalDocAmount: number;
+  isCommercial: boolean;
+  settlementStatus: string;
+  remainingAmt: number;
+}
+
+/** ارقام و نوع یک ردیف جدول اسناد (تعداد، مبلغ، وضعیت تسویه و مانده) */
+export function resolveInvoiceRowFigures(doc: InvoiceListDocument): InvoiceRowFigures {
+  const isReceipt = doc.type === 'receipt';
+  const isInvoice = doc.type === 'invoice';
+  const isProforma = doc.status === 'proforma' || doc.type === 'proforma';
+  const isRemittance = doc.type === 'remittance';
+  const isReturn = doc.type === 'return';
+  const isWaste = doc.type === 'waste';
+
+  let badgeKind: InvoiceTypeBadgeKind = 'stock';
+  if (isReceipt) badgeKind = 'receipt';
+  else if (isInvoice) badgeKind = 'invoice';
+  else if (isProforma) badgeKind = 'proforma';
+  else if (isRemittance) badgeKind = 'remittance';
+  else if (isReturn) badgeKind = 'return';
+  else if (isWaste) badgeKind = 'waste';
+
+  // Numerical Calculations
+  const itemsCount = doc.itemsCount !== undefined ? doc.itemsCount : (doc.items?.length || 0);
+  const totalQty = doc.totalQuantity !== undefined
+    ? doc.totalQuantity
+    : (doc.items?.reduce(addLineQuantity, 0) || 0);
+
+  const totalDocAmount = documentAmountOf(doc);
+
+  // Settlement calculations
+  const isCommercial = (isInvoice || isReceipt) && totalDocAmount > 0;
+  const settlementStatus = doc.settlementStatus || (isCommercial ? 'unpaid' : 'none');
+  const paidAmt = Number(doc.paidAmount || 0);
+  const remainingAmt = doc.remainingAmount !== undefined ? Number(doc.remainingAmount) : Math.max(0, totalDocAmount - paidAmt);
+
+  return { isReceipt, isInvoice, isProforma, badgeKind, itemsCount, totalQty, totalDocAmount, isCommercial, settlementStatus, remainingAmt };
+}
+
+/** برچسب و رنگ نشان نوع سند در جدول (آیکون در کامپوننت) */
+export const INVOICE_TYPE_BADGES: Record<InvoiceTypeBadgeKind, { label: string; bg: string }> = {
+  stock: { label: 'سند انبار', bg: 'bg-slate-100 text-slate-800 border-slate-200' },
+  receipt: { label: 'رسید ورود (خرید کالا)', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold' },
+  invoice: { label: 'فاکتور فروش', bg: 'bg-blue-50 text-blue-800 border-blue-200 font-bold' },
+  proforma: { label: 'پیش‌فاکتور', bg: 'bg-amber-50 text-amber-800 border-amber-200 font-bold' },
+  remittance: { label: 'حواله خروج / مصرف', bg: 'bg-purple-50 text-purple-800 border-purple-200 font-bold' },
+  return: { label: 'برگشت از فروش', bg: 'bg-orange-50 text-orange-800 border-orange-200 font-bold' },
+  waste: { label: 'حواله ضایعات', bg: 'bg-rose-50 text-rose-800 border-rose-200 font-bold' },
+};
+
+/** متن طرف حساب در ردیف جدول */
+export function partyLabelOf(doc: InvoiceListDocument, figures: Pick<InvoiceRowFigures, 'isReceipt' | 'isInvoice' | 'isProforma'>): string | null | undefined {
+  const { isReceipt, isInvoice, isProforma } = figures;
+  return isReceipt ? `تامین‌کننده: ${doc.buyer_name}` : isInvoice || isProforma ? `مشتری: ${doc.buyer_name}` : doc.buyer_name;
+}
+
+/** عنوان سربرگ مودال جزئیات سند */
+export function detailsTitleOf(type: string | undefined): string {
+  return type === 'receipt' ? 'رسید ورود و فاکتور خرید' : type === 'invoice' ? 'صورتحساب فروش کالا' : 'جزئیات سند انبارداری';
+}
+
+/** «نوع سند» در کارت اطلاعات مودال جزئیات */
+export function detailsTypeLabelOf(type: string | undefined): string | undefined {
+  return type === 'receipt' ? 'رسید ورود (خرید کالا)' : type === 'invoice' ? 'فاکتور فروش' : type;
+}
+
+/** «نوع سند» در مودال گردش‌کار */
+export function workflowTypeLabelOf(type: string | undefined): string | undefined {
+  return type === 'invoice' ? 'فاکتور فروش' : type === 'receipt' ? 'رسید ورود' : type;
+}
+
+/** برچسب و رنگ‌های وضعیت تسویه در کارت تسویه مودال جزئیات */
+export function detailsSettlementViewOf(settlementStatus: string | undefined): { label: string; iconClass: string; badgeClass: string } {
+  if (settlementStatus === 'fully_paid') {
+    return { label: 'تسویه کامل', iconClass: 'bg-emerald-100 text-emerald-700', badgeClass: 'bg-emerald-100 text-emerald-800' };
+  }
+  if (settlementStatus === 'partially_paid') {
+    return { label: 'تسویه ناقص', iconClass: 'bg-amber-100 text-amber-700', badgeClass: 'bg-amber-100 text-amber-800' };
+  }
+  return { label: 'تسویه نشده', iconClass: 'bg-rose-100 text-rose-700', badgeClass: 'bg-rose-100 text-rose-800' };
+}
+
+/** مانده تسویه در مودال جزئیات: remainingAmount سرور، وگرنه totalAmount − paidAmount (حداقل صفر) */
+export function detailsRemainingOf(doc: InvoiceListDocument): number {
+  return doc.remainingAmount !== undefined ? doc.remainingAmount : Math.max(0, (doc.totalAmount || 0) - (doc.paidAmount || 0));
+}

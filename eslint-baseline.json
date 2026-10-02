@@ -1,7 +1,7 @@
 {
-  "@typescript-eslint/no-explicit-any": 1581,
-  "@typescript-eslint/no-floating-promises": 244,
-  "@typescript-eslint/no-misused-promises": 13,
-  "max-lines": 153,
-  "react-hooks/exhaustive-deps": 55
+  "@typescript-eslint/no-explicit-any": 1555,
+  "@typescript-eslint/no-floating-promises": 241,
+  "@typescript-eslint/no-misused-promises": 11,
+  "max-lines": 152,
+  "react-hooks/exhaustive-deps": 54
 }

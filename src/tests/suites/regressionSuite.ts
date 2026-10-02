@@ -3891,16 +3891,27 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         });
         return { status: child.status, output: `${child.stdout || ''}${child.stderr || ''}` };
       };
-      const basePort = 39000 + Math.floor(Math.random() * 500);
+      // پورت آزاد از سیستم‌عامل: پورت تصادفی ۳۹۰۰۰ تا ۳۹۴۹۹ در بازه پورت‌های موقت لینوکس است و گاهی پورت محلی یکی از
+      // اتصال‌های باز همین پردازه بود؛ سرور فرزند با EADDRINUSE (نه شکست مهاجرت) متوقف می‌شد و تست تصادفی شکست می‌خورد
+      const net = await import('net');
+      const freePort = () => new Promise<number>((resolve, reject) => {
+        const probe = net.createServer();
+        probe.once('error', reject);
+        probe.listen(0, '0.0.0.0', () => {
+          const address = probe.address();
+          const port = typeof address === 'object' && address ? address.port : 0;
+          probe.close(() => resolve(port));
+        });
+      });
 
       // ۱) شکست نهایی مهاجرت در محیط توسعه: پیش‌تر سرور بدون اسکیما به کار ادامه می‌داد
-      const migration = runServer(null, basePort);
+      const migration = runServer(null, await freePort());
       if (migration.status !== 1 || !migration.output.includes('FATAL: Database migrations failed after 5 attempts')) {
         throw new Error(`پس از شکست نهایی مهاجرت پردازه باید با کد ۱ متوقف شود: ${JSON.stringify({ status: migration.status, tail: migration.output.slice(-500) })}`);
       }
 
       // ۲) خطای مدیریت‌نشده پس از راه‌اندازی در محیط توسعه: پیش‌تر فقط لاگ می‌شد
-      const uncaught = runServer('./src/tests/fixtures/uncaughtAfterStartupProbe.ts', basePort + 1);
+      const uncaught = runServer('./src/tests/fixtures/uncaughtAfterStartupProbe.ts', await freePort());
       if (uncaught.status !== 1 || !uncaught.output.includes('UNCAUGHT_PROBE_FIRING')
         || !uncaught.output.includes('Initiating graceful shutdown (exit code 1)')
         || uncaught.output.includes('FATAL: Database migrations failed after 5 attempts')) {
