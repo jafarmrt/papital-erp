@@ -739,7 +739,8 @@ export class PieceworkService {
             allowReversalOfReversal: true
           });
         } else {
-          // If draft, soft-delete it
+          // If draft, soft-delete it — v7.0.49 (audit P2-5): نه در سال مالی بسته‌شده
+          await VoucherService.checkFiscalPeriodOpen(linkedVoucher.date, tx);
           await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, linkedVoucher.id));
         }
       }

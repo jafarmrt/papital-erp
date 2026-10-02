@@ -3,6 +3,7 @@ import { journalVouchers } from '../../db/schema.js';
 import { inArray, sql, and, eq } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
+import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AccountingReportService } from './accountingReport.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { ConflictError } from '../../errors/customErrors.js';
@@ -297,6 +298,10 @@ export class FiscalYearService {
         );
       }
 
+      // v7.0.49 (audit P2-5): قفل انحصاری ردیف سال در fiscal_periods — منتظر اسنادی می‌ماند که هم‌اکنون در این سال
+      // ثبت می‌شوند و تا پایان این تراکنش هیچ سند تازه‌ای وارد سال نمی‌شود؛ مانده‌ها پس از این قفل محاسبه می‌شوند
+      await FiscalPeriodService.lockForClosing(tx, Number(data.year));
+
       // C-02 & P0-05: محاسبه تراز اختتامیه و ارقام به صورت تازه در داخل تراکنش و زیر چتر قفل
       const preview = await this.getFiscalYearClosingPreview({
         year: data.year,
@@ -532,6 +537,11 @@ export class FiscalYearService {
         }, tx);
         createdVouchers.push(v4);
       }
+
+      // v7.0.49 (audit P2-5): وضعیت بسته سال در fiscal_periods (در همان تراکنش، پیش از آزاد شدن قفل)
+      const closingVoucher = createdVouchers.find(v => v.referenceNumber === `CLOSING-${data.year}`)
+        ?? [...createdVouchers].reverse().find(v => v.voucherType === 'closing');
+      await FiscalPeriodService.markClosed(tx, Number(data.year), closingVoucher?.id ?? null, data.username);
     }); // پایان تراکنش اتمیک بستن سال
 
     return {

@@ -62,6 +62,20 @@ export const journalVouchers = pgTable('journal_vouchers', {
   idx_jv_deleted: index('idx_jv_deleted').on(table.isDeleted),
 }));
 
+/**
+ * v7.0.49 (audit P2-5): وضعیت هر سال مالی (سال جلالی). بسته‌بودن سال دیگر از متن شماره مرجع سند اختتامیه
+ * (LIKE '%CLOSING-…%') استنباط نمی‌شود؛ ثبت هر سند حسابداری ردیف سال خود را FOR SHARE و بستن سال آن را
+ * FOR UPDATE قفل می‌کند تا هیچ سندی همزمان با بستن سال وارد آن نشود.
+ */
+export const fiscalPeriods = pgTable('fiscal_periods', {
+  fiscalYear: integer('fiscal_year').primaryKey(),
+  status: text('status').notNull().default('open'), // 'open' | 'closed'
+  closedAt: timestamp('closed_at', { mode: 'string' }),
+  closedBy: text('closed_by'),
+  closingVoucherId: integer('closing_voucher_id').references(() => journalVouchers.id),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+});
+
 export const journalVoucherItems = pgTable('journal_voucher_items', {
   id: serial('id').primaryKey(),
   voucherId: integer('voucher_id').notNull().references(() => journalVouchers.id),

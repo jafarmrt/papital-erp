@@ -4004,6 +4004,148 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.21: v7.0.49 (audit P2-5): وضعیت سال مالی از fiscal_periods؛ بدون استنباط از متن مرجع، بدون دور زدن با
+  // سند از نوع اختتامیه، و بستن سال منتظر سندی می‌ماند که همزمان در همان سال ثبت می‌شود
+  if (shouldRun('reg_fiscal_periods_p2_5', 'p25', 'fiscal', 'closing')) {
+    const tStart = Date.now();
+    const createdVoucherIds: number[] = [];
+    try {
+      const { FiscalYearService } = await import('../../services/accounting/fiscalYear.service.js');
+      const { VoucherService } = await import('../../services/accounting/voucher.service.js');
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const { normalizeDateToIso } = await import('../../lib/businessClock.js');
+      const { fiscalPeriods } = await import('../../db/schema.js');
+      await ChartOfAccountsService.seedStandardAccounts();
+      const allAccounts = await ChartOfAccountsService.getAllAccounts();
+      const revAccount = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
+      const assetAccount = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
+      if (!revAccount || !assetAccount) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
+      const baseYear = 1440 + Math.floor(Math.random() * 25) * 2;
+      const voucher = (year: number, amount: number, extra: Record<string, unknown> = {}) => ({
+        date: normalizeDateToIso(`${year}-06-15`) as string,
+        voucherType: 'general' as const,
+        status: 'approved' as const,
+        description: `سند آزمون P2-5 سال ${year}`,
+        referenceModule: 'manual',
+        referenceNumber: `TEST-P25-${year}`,
+        items: [
+          { accountId: assetAccount.id, detailedType: 'other', detailedName: 'دارایی آزمون', debit: amount, credit: 0, description: 'بدهکار' },
+          { accountId: revAccount.id, detailedType: 'other', detailedName: 'درآمد آزمون', debit: 0, credit: amount, description: 'بستانکار' },
+        ],
+        ...extra
+      });
+      const problems: string[] = [];
+
+      // ۱) سندی از نوع «اختتامیه» با مرجع CLOSE-…-سال که از فرایند بستن سال نیامده، سال را نمی‌بندد
+      const yearA = baseYear;
+      const fake = await VoucherService.createJournalVoucher(voucher(yearA, 1000, { voucherType: 'closing', referenceNumber: `CLOSE-NOTE-${yearA}` }) as any);
+      createdVoucherIds.push(fake.id);
+      try {
+        const v = await VoucherService.createJournalVoucher(voucher(yearA, 500) as any);
+        createdVoucherIds.push(v.id);
+      } catch (e: any) {
+        problems.push(`سال ${yearA} فقط با متن مرجع یک سند بسته فرض شد: ${e.message}`);
+      }
+
+      // ۲) بستن واقعی سال B همزمان با تراکنشی که در سال B سند ثبت کرده و هنوز commit نشده است
+      const yearB = baseYear + 1;
+      const holdMs = 1500;
+      const inflight = orm.transaction(async (tx) => {
+        const v = await VoucherService.createJournalVoucher(voucher(yearB, 2000) as any, tx);
+        createdVoucherIds.push(v.id);
+        await new Promise(r => setTimeout(r, holdMs));
+      });
+      await new Promise(r => setTimeout(r, 300));
+      let closing: any = null;
+      try {
+        closing = await FiscalYearService.executeFiscalYearClosing({ year: yearB, closingDate: `${yearB}-12-29`, openingDateNewYear: `${yearB + 1}-01-01`, createOpeningVoucher: true, username: 'test-agent' });
+        createdVoucherIds.push(...(closing.closingVouchers || []).map((v: any) => v.id));
+      } catch (e: any) {
+        problems.push(`بستن سال ${yearB} شکست خورد: ${e.message}`);
+      }
+      await inflight;
+      // مانده تجمعی درآمد تا پایان سال B پس از بستن باید صفر باشد (بستن سال همه مانده‌های موقت تا تاریخ اختتامیه
+      // را می‌بندد): سند ثبت‌شده همزمان باید در اسناد اختتامیه دیده شده باشد
+      const to = normalizeDateToIso(`${yearB + 1}-01-01`) as string;
+      const revBal: any = await orm.execute(sql`
+        SELECT COALESCE(SUM(i.credit - i.debit), 0) AS bal
+        FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
+        WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND v.status IN ('approved', 'permanent')
+          AND i.account_id = ${revAccount.id} AND v.date < ${to}`);
+      const revenueLeft = Number((revBal.rows ?? revBal)[0]?.bal ?? 0);
+      if (Math.abs(revenueLeft) > 0.0001) {
+        problems.push(`پس از بستن سال ${yearB} مانده درآمد ${revenueLeft} باقی ماند؛ سند ثبت‌شده همزمان در بستن سال دیده نشد`);
+      }
+      const [period] = await orm.select().from(fiscalPeriods).where(eq(fiscalPeriods.fiscalYear, yearB));
+      if (period?.status !== 'closed' || !period.closingVoucherId) {
+        problems.push(`وضعیت سال ${yearB} در fiscal_periods باید بسته با شناسه سند اختتامیه باشد: ${JSON.stringify(period)}`);
+      }
+
+      // ۳) پس از بستن، هیچ سندی (حتی از نوع اختتامیه) وارد سال B نمی‌شود
+      for (const type of ['general', 'closing'] as const) {
+        try {
+          const v = await VoucherService.createJournalVoucher(voucher(yearB, 100, { voucherType: type, referenceNumber: `TEST-P25-AFTER-${type}` }) as any);
+          createdVoucherIds.push(v.id);
+          problems.push(`ثبت سند ${type} در سال بسته ${yearB} پذیرفته شد`);
+        } catch (e: any) {
+          if (!String(e?.message || '').includes('بسته')) problems.push(`خطای نامرتبط برای سند ${type}: ${e.message}`);
+        }
+      }
+
+      // ۴) آستانه یکسان تراز ۰٫۰۱ در ایجاد سند (پیش‌تر ۰٫۰۰۰۱ در ایجاد و ۰٫۰۱ در قطعی‌سازی)
+      const yearC = baseYear + 2;
+      const tolerance = (diff: number) => ({
+        ...voucher(yearC, 0),
+        items: [
+          { accountId: assetAccount.id, detailedType: 'other', detailedName: 'دارایی آزمون', debit: 1000 + diff, credit: 0, description: 'بدهکار' },
+          { accountId: revAccount.id, detailedType: 'other', detailedName: 'درآمد آزمون', debit: 0, credit: 1000, description: 'بستانکار' },
+        ]
+      });
+      try {
+        const v = await VoucherService.createJournalVoucher(tolerance(0.005) as any);
+        createdVoucherIds.push(v.id);
+      } catch (e: any) {
+        problems.push(`سند با اختلاف ۰٫۰۰۵ باید پذیرفته شود: ${e.message}`);
+      }
+      let overRejected = false;
+      try {
+        const v = await VoucherService.createJournalVoucher(tolerance(0.02) as any);
+        createdVoucherIds.push(v.id);
+      } catch {
+        overRejected = true;
+      }
+      if (!overRejected) problems.push('سند با اختلاف ۰٫۰۲ باید رد شود');
+
+      if (problems.length > 0) throw new Error(problems.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_fiscal_periods_p2_5',
+        scenarioId: 'v6_fiscal_year_closing_isolation',
+        name: 'v7.0.49: وضعیت سال مالی در fiscal_periods، قفل بین بستن سال و ثبت همزمان و آستانه یکسان تراز (P2-5)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سند «اختتامیه» دستی سال را نبست، بستن سال منتظر سند همزمان ماند و آن را بست، پس از بستن هیچ سندی وارد سال نشد و آستانه تراز ۰٫۰۱ در ایجاد سند اعمال شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_fiscal_periods_p2_5',
+        scenarioId: 'v6_fiscal_year_closing_isolation',
+        name: 'v7.0.49: وضعیت سال مالی در fiscal_periods، قفل بین بستن سال و ثبت همزمان و آستانه یکسان تراز (P2-5)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdVoucherIds.length > 0) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
+        await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

@@ -6,6 +6,13 @@ import { updateRequestContext } from '../../lib/requestContext.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
+import { FiscalPeriodService } from './fiscalPeriod.service.js';
+
+/**
+ * v7.0.49 (audit P2-5، تصمیم مالک محصول): بیشترین اختلاف مجاز جمع بدهکار و بستانکار یک سند (۰٫۰۱)، یکسان در
+ * ایجاد، ویرایش، اصلاح، بازثبت و قطعی‌سازی. پیش‌تر ایجاد با ۰٫۰۰۰۱ و قطعی‌سازی با ۰٫۰۱ سنجیده می‌شد.
+ */
+export const VOUCHER_BALANCE_TOLERANCE = 0.01;
 
 export class VoucherService {
   static async getNextVoucherNumber(tx?: DbExecutor): Promise<number> {
@@ -17,43 +24,18 @@ export class VoucherService {
   /**
    * Check whether the fiscal year corresponding to the voucher date is closed.
    * If closed, operations modifying or creating vouchers are prohibited.
+   * v7.0.49 (audit P2-5): وضعیت از جدول fiscal_periods (نه LIKE روی شماره مرجع اسناد اختتامیه)؛ با tx ردیف سال
+   * تا پایان تراکنش FOR SHARE قفل می‌شود تا بستن همزمان همان سال منتظر این سند بماند.
    */
   static async checkFiscalPeriodOpen(date: string, tx?: DbExecutor): Promise<void> {
-    if (!date) return;
-    const executor = tx || orm;
-    // V10-1.2: year extraction unified on the Jalali fiscal key (business clock rule),
-    // because dates are now stored in normalized Gregorian ISO format.
-    const { resolveJalaliFiscalYear } = await import('../../lib/businessClock.js');
-    const year = String(resolveJalaliFiscalYear(date));
-
-    const [closingVoucher] = await executor.select()
-      .from(journalVouchers)
-      .where(and(
-        eq(journalVouchers.isDeleted, 0),
-        eq(journalVouchers.voucherType, 'closing'),
-        or(
-          like(journalVouchers.referenceNumber, `%CLOSING-${year}%`),
-          like(journalVouchers.referenceNumber, `%CLOSE-%${year}%`)
-        )
-      ))
-      .limit(1);
-
-    if (closingVoucher) {
-      throw new BusinessLogicError(`سال مالی ${year} با ثبت سند اختتامیه شماره #${closingVoucher.voucherNumber} بسته شده است و امکان صدور یا ویرایش سند در این سال مالی وجود ندارد`);
-    }
+    await FiscalPeriodService.assertOpen(date, tx);
   }
 
   /**
    * Helper to check if a specific date or fiscal period is closed.
    */
   static async isPeriodClosed(date: string, tx?: DbExecutor): Promise<boolean> {
-    if (!date) return false;
-    try {
-      await this.checkFiscalPeriodOpen(date, tx);
-      return false;
-    } catch {
-      return true;
-    }
+    return FiscalPeriodService.isClosed(date, tx);
   }
 
   static async getJournalVouchers(params: {
@@ -274,9 +256,9 @@ export class VoucherService {
       sumCredit = sumCredit.add(c);
     }
 
-    // Verify double-entry balance with precision tolerance (< 0.0001)
+    // Verify double-entry balance — v7.0.49 (audit P2-5): آستانه واحد VOUCHER_BALANCE_TOLERANCE در ثبت و قطعی‌سازی
     const diff = sumDebit.subtract(sumCredit).abs();
-    if (diff.greaterThan(0.0001)) {
+    if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
       throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
     }
 
@@ -284,9 +266,9 @@ export class VoucherService {
       const voucherDate = normalizeDateToIso(data.date?.trim()) || (await businessTodayIsoDate());
 
       // Check if fiscal year is closed
-      if (data.voucherType !== 'closing') {
-        await this.checkFiscalPeriodOpen(voucherDate, tx);
-      }
+      // v7.0.49 (audit P2-5): اسناد اختتامیه هم بررسی می‌شوند؛ در فرایند بستن سال، سال تا پایان همان تراکنش باز
+      // است و پس از بستن هیچ سندی (از جمله سند از نوع اختتامیه) وارد آن نمی‌شود
+      await this.checkFiscalPeriodOpen(voucherDate, tx);
 
       const voucherNum = await this.getNextVoucherNumber(tx);
       const [voucher] = await tx.insert(journalVouchers).values({
@@ -389,7 +371,7 @@ export class VoucherService {
           sumCredit = sumCredit.add(c);
         }
         const diff = sumDebit.subtract(sumCredit).abs();
-        if (diff.greaterThan(0.0001)) {
+        if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
           throw new UnbalancedVoucherError(`سند تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()} و جمع بستانکار: ${sumCredit.toDisplayString()} می‌باشد (اختلاف: ${diff.toDisplayString()})`);
         }
 
@@ -697,7 +679,7 @@ export class VoucherService {
         sumCredit = sumCredit.add(c);
       }
       const diff = sumDebit.subtract(sumCredit).abs();
-      if (diff.greaterThan(0.0001)) {
+      if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
         throw new Error(`سند اصلاحی تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()}، جمع بستانکار: ${sumCredit.toDisplayString()} (اختلاف: ${diff.toDisplayString()})`);
       }
 
@@ -880,7 +862,7 @@ export class VoucherService {
         sumCredit = sumCredit.add(c);
       }
       const diff = sumDebit.subtract(sumCredit).abs();
-      if (diff.greaterThan(0.0001)) {
+      if (diff.greaterThan(VOUCHER_BALANCE_TOLERANCE)) {
         throw new Error(`سند بازثبت‌شده تراز نیست! جمع بدهکار: ${sumDebit.toDisplayString()}، جمع بستانکار: ${sumCredit.toDisplayString()} (اختلاف: ${diff.toDisplayString()})`);
       }
 
@@ -951,7 +933,7 @@ export class VoucherService {
 
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
-      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > 0.01) {
+      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
         throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
       }
 
@@ -978,7 +960,7 @@ export class VoucherService {
         const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
         if (existing && existing.isDeleted === 0 && existing.status !== 'permanent') {
           await this.checkFiscalPeriodOpen(existing.date, tx);
-          if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) <= 0.01) {
+          if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) <= VOUCHER_BALANCE_TOLERANCE) {
             await tx.update(journalVouchers).set({
               status: 'permanent',
               approvedById: userId || null,
@@ -1033,7 +1015,7 @@ export class VoucherService {
       await this.checkFiscalPeriodOpen(existing.date, tx);
 
       if (status === 'permanent') {
-        if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > 0.01) {
+        if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
           throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
         }
       }
