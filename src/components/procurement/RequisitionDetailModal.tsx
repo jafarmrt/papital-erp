@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, FileText, CheckCircle2, Clock, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck } from 'lucide-react';
+import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Check, Ban, Loader2, PackageCheck, Truck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
+import { PillBadge } from '../common/PillBadge';
+import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 
 interface RequisitionDetailModalProps {
   isOpen: boolean;
@@ -119,39 +121,6 @@ export function RequisitionDetailModal({
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-      case 'under_review':
-      case 'manager_approval':
-        return <span className="px-2.5 py-1 bg-amber-100 text-amber-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-600" /> در انتظار بررسی و تایید</span>;
-      case 'ordered':
-      case 'approved':
-        return <span className="px-2.5 py-1 bg-sky-100 text-sky-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><ShoppingCart className="w-3.5 h-3.5 text-sky-600" /> تایید شده (در حال خرید)</span>;
-      case 'received':
-      case 'completed':
-        return <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> خرید و تحویل انبار شده</span>;
-      case 'rejected':
-      case 'cancelled':
-        return <span className="px-2.5 py-1 bg-rose-100 text-rose-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><Ban className="w-3.5 h-3.5 text-rose-600" /> رد شده / لغو</span>;
-      default:
-        return <span className="px-2.5 py-1 bg-slate-100 text-slate-800 font-bold rounded-lg text-xs">{status}</span>;
-    }
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return <span className="px-2 py-0.5 bg-rose-500 text-white font-black rounded text-[10px] animate-pulse">فوری / اضطراری</span>;
-      case 'high':
-        return <span className="px-2 py-0.5 bg-amber-500 text-slate-950 font-bold rounded text-[10px]">اولویت بالا</span>;
-      case 'low':
-        return <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold rounded text-[10px]">اولویت پایین</span>;
-      default:
-        return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded text-[10px]">اولویت عادی</span>;
-    }
-  };
-
   const items = Array.isArray(requisition.items) ? requisition.items : [];
   const totalRequested = items.reduce((s, i) => s + (Number(i.requestedQty || 0) * Number(i.unitPriceEstimate || 0)), 0);
 
@@ -175,8 +144,8 @@ export function RequisitionDetailModal({
                 <h3 className="font-black text-slate-900 text-base">
                   جزئیات درخواست خرید {requisition.code}
                 </h3>
-                {getPriorityBadge(requisition.priority)}
-                {getStatusBadge(requisition.status)}
+                <PillBadge variants={REQUISITION_PRIORITY_DETAIL_BADGES} value={requisition.priority} fallback={REQUISITION_PRIORITY_DETAIL_FALLBACK} />
+                <PillBadge variants={REQUISITION_STATUS_BADGES} value={requisition.status} fallback={REQUISITION_STATUS_FALLBACK} />
               </div>
               <p className="text-xs text-slate-500 mt-0.5">{requisition.title}</p>
             </div>

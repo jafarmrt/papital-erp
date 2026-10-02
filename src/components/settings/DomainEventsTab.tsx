@@ -6,7 +6,6 @@ import { DeadLetterQueueSubTab } from './DeadLetterQueueSubTab';
 import { EventSourcingReplaySubTab } from './EventSourcingReplaySubTab';
 import { WebhookManagementSubTab } from './WebhookManagementSubTab';
 import {
-  OutboxEvent,
   useDomainEventsQuery,
   useOutboxStatsQuery,
   useOutboxEventsQuery,
@@ -15,6 +14,16 @@ import {
   useRetryFailedOutboxMutation,
   useRetrySingleOutboxEventMutation,
 } from '../../hooks/queries/useEventQueries';
+import { PillBadge, type PillBadgeVariants } from '../common/PillBadge';
+
+// v7.0.86 (TD-108): نشان وضعیت رویداد صندوق خروجی
+const OUTBOX_BADGE_BASE = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border';
+const OUTBOX_STATUS_BADGES: PillBadgeVariants = {
+  completed: { label: 'پردازش‌شده', icon: CheckCircle2, iconClassName: 'w-3 h-3', className: `${OUTBOX_BADGE_BASE} bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800` },
+  pending: { label: 'در صف انتظار', icon: Clock, iconClassName: 'w-3 h-3', className: `${OUTBOX_BADGE_BASE} bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800` },
+  processing: { label: 'در حال پردازش', icon: RefreshCw, iconClassName: 'w-3 h-3 animate-spin', className: `${OUTBOX_BADGE_BASE} bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 animate-pulse` },
+  failed: { label: 'ناموفق', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: `${OUTBOX_BADGE_BASE} bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800` },
+};
 
 export function DomainEventsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'rules' | 'outbox' | 'dlq' | 'replay' | 'webhooks' | 'events'>('rules');
@@ -153,41 +162,6 @@ export function DomainEventsTab() {
       return <CreditCard className="w-4 h-4 text-amber-500" />;
     }
     return <Zap className="w-4 h-4 text-purple-500" />;
-  };
-
-  const getStatusBadge = (status: OutboxEvent['status']) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            <CheckCircle2 className="w-3 h-3" />
-            <span>پردازش‌شده</span>
-          </span>
-        );
-      case 'pending':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-            <Clock className="w-3 h-3" />
-            <span>در صف انتظار</span>
-          </span>
-        );
-      case 'processing':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 animate-pulse">
-            <RefreshCw className="w-3 h-3 animate-spin" />
-            <span>در حال پردازش</span>
-          </span>
-        );
-      case 'failed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-            <AlertTriangle className="w-3 h-3" />
-            <span>ناموفق</span>
-          </span>
-        );
-      default:
-        return null;
-    }
   };
 
   return (
@@ -451,7 +425,7 @@ export function DomainEventsTab() {
                               <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md font-mono">
                                 {evt.aggregateType}#{evt.aggregateId}
                               </span>
-                              {getStatusBadge(evt.status)}
+                              <PillBadge variants={OUTBOX_STATUS_BADGES} value={evt.status} />
                               {evt.retryCount > 0 && (
                                 <span className="text-[10px] px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 rounded-md font-bold">
                                   تلاش {evt.retryCount}/۵

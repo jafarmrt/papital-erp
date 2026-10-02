@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ShoppingBag, ShoppingCart, Clock, CheckCircle2, Search, Plus, Layers, RefreshCw, Eye, Trash2, Building2, Ban, Check, FileText, Truck, PackageCheck } from 'lucide-react';
+import { ShoppingBag, ShoppingCart, Search, Plus, Layers, RefreshCw, Eye, Trash2, Building2, Check, FileText, Truck, PackageCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
@@ -9,6 +9,8 @@ import { SplitOrderModal } from './SplitOrderModal';
 import { CreateRequisitionModal } from './CreateRequisitionModal';
 import { ConsolidateRequisitionsModal } from './ConsolidateRequisitionsModal';
 import { ProcurementOrderList } from './ProcurementOrderList';
+import { PillBadge } from '../common/PillBadge';
+import { REQUISITION_PRIORITY_BADGES, REQUISITION_PRIORITY_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 
 interface ProcurementDeskProps {
@@ -189,39 +191,6 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
       toast.error(err.message || 'خطا در حذف درخواست خرید');
     } finally {
       setIsDeletingRequisition(false);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-      case 'under_review':
-      case 'manager_approval':
-        return <span className="px-2.5 py-1 bg-amber-100 text-amber-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-600" /> در انتظار بررسی و تایید</span>;
-      case 'ordered':
-      case 'approved':
-        return <span className="px-2.5 py-1 bg-sky-100 text-sky-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><ShoppingCart className="w-3.5 h-3.5 text-sky-600" /> تایید شده (در حال خرید)</span>;
-      case 'received':
-      case 'completed':
-        return <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> خرید و تحویل انبار شده</span>;
-      case 'rejected':
-      case 'cancelled':
-        return <span className="px-2.5 py-1 bg-rose-100 text-rose-900 font-bold rounded-lg text-xs flex items-center gap-1.5"><Ban className="w-3.5 h-3.5 text-rose-600" /> رد شده / لغو</span>;
-      default:
-        return <span className="px-2.5 py-1 bg-slate-100 text-slate-800 font-bold rounded-lg text-xs">{status}</span>;
-    }
-  };
-
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return <span className="px-2 py-0.5 bg-rose-500 text-white font-black rounded text-[10px] animate-pulse">فوری</span>;
-      case 'high':
-        return <span className="px-2 py-0.5 bg-amber-500 text-slate-950 font-bold rounded text-[10px]">بالا</span>;
-      case 'low':
-        return <span className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold rounded text-[10px]">پایین</span>;
-      default:
-        return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-bold rounded text-[10px]">عادی</span>;
     }
   };
 
@@ -613,7 +582,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                           <td className="p-3">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-mono font-black text-slate-900 text-sm">{req.code}</span>
-                              {getPriorityBadge(req.priority)}
+                              <PillBadge variants={REQUISITION_PRIORITY_BADGES} value={req.priority} fallback={REQUISITION_PRIORITY_FALLBACK} />
                             </div>
                             <span className="text-[11px] text-slate-400">ثبت: {req.requestedByName || 'نامشخص'}</span>
                           </td>
@@ -645,7 +614,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                           </td>
 
                           <td className="p-3 text-center">
-                            {getStatusBadge(req.status)}
+                            <PillBadge variants={REQUISITION_STATUS_BADGES} value={req.status} fallback={REQUISITION_STATUS_FALLBACK} />
                           </td>
 
                           <td className="p-3 text-center">

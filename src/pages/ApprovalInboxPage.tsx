@@ -35,6 +35,7 @@ import TransitionExecuteModal from '../components/approval/TransitionExecuteModa
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
 import { PurchaseRequisition } from '../types';
+import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
 
 type DocumentDetails = ApprovalDocumentDetails;
 
@@ -97,24 +98,21 @@ interface InboxItem {
   createdAt?: string | Date;
 }
 
-const getPriorityBadge = (priority?: string) => {
-  const p = (priority || 'medium').toLowerCase();
-  switch (p) {
-    case 'critical':
-    case 'خیلی زیاد':
-      return { label: 'اولویت بسیار بالا', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800' };
-    case 'high':
-    case 'بالا':
-    case 'زیاد':
-      return { label: 'اولویت بالا', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800' };
-    case 'low':
-    case 'پایین':
-    case 'کم':
-      return { label: 'اولویت عادی', color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700' };
-    default:
-      return { label: 'اولویت متوسط', color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800' };
-  }
+// v7.0.86 (TD-108): نشان اولویت کارتابل؛ برچسب‌های فارسی هم پذیرفته می‌شوند
+const APPROVAL_PRIORITY_BASE = 'px-2 py-0.5 rounded-md text-[10px] font-bold border';
+const approvalCritical: PillBadgeVariant = { label: 'اولویت بسیار بالا', className: `${APPROVAL_PRIORITY_BASE} bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800` };
+const approvalHigh: PillBadgeVariant = { label: 'اولویت بالا', className: `${APPROVAL_PRIORITY_BASE} bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
+const approvalLow: PillBadgeVariant = { label: 'اولویت عادی', className: `${APPROVAL_PRIORITY_BASE} bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700` };
+const APPROVAL_PRIORITY_BADGES: PillBadgeVariants = {
+  critical: approvalCritical, 'خیلی زیاد': approvalCritical,
+  high: approvalHigh, 'بالا': approvalHigh, 'زیاد': approvalHigh,
+  low: approvalLow, 'پایین': approvalLow, 'کم': approvalLow,
 };
+const APPROVAL_PRIORITY_FALLBACK: PillBadgeVariant = { label: 'اولویت متوسط', className: `${APPROVAL_PRIORITY_BASE} bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800` };
+
+function ApprovalPriorityBadge({ priority }: { priority?: string }) {
+  return <PillBadge variants={APPROVAL_PRIORITY_BADGES} value={(priority || 'medium').toLowerCase()} fallback={APPROVAL_PRIORITY_FALLBACK} />;
+}
 
 export function ApprovalInboxPage() {
   const [inboxView, setInboxView] = useState<'tasks' | 'instances'>('tasks');
@@ -592,7 +590,6 @@ export function ApprovalInboxPage() {
                 const typeMeta = getEntityTypeLabel(t.instance?.entityType || 'document');
                 const TypeIcon = typeMeta.icon;
                 const overdue = isOverdue(t.dueAt);
-                const priorityMeta = getPriorityBadge(t.priority || t.entityContext?.priority);
                 const amount = t.entityContext?.amount || t.entityContext?.totalAmount;
                 const requesterName = t.instance?.startedByName || t.entityContext?.buyerName || t.entityContext?.createdByName || 'ثبت‌کننده سیستم';
                 const isCompletedTask = t.status === 'approved' || t.status === 'rejected' || t.status === 'completed';
@@ -622,9 +619,7 @@ export function ApprovalInboxPage() {
                               {t.status === 'approved' ? 'تکمیل شده (تایید)' : 'تکمیل شده (رد)'}
                             </span>
                           ) : (
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${priorityMeta.color}`}>
-                              {priorityMeta.label}
-                            </span>
+                            <ApprovalPriorityBadge priority={t.priority || t.entityContext?.priority} />
                           )}
 
                           {t.isDelegated && (
@@ -731,7 +726,6 @@ export function ApprovalInboxPage() {
                 const typeMeta = getEntityTypeLabel(itemEntityType);
                 const TypeIcon = typeMeta.icon;
                 const currentState = item?.currentState;
-                const priorityMeta = getPriorityBadge(item?.entityContext?.priority);
                 const amount = item?.entityContext?.amount || item?.entityContext?.totalAmount;
                 const requesterName = item?.instance?.startedByName || item?.entityContext?.buyerName || item?.entityContext?.createdByName || 'ثبت‌کننده سیستم';
                 const itemKey = item?.instance?.id || item?.id || idx;
@@ -750,9 +744,7 @@ export function ApprovalInboxPage() {
                         </span>
 
                         <div className="flex items-center gap-1">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${priorityMeta.color}`}>
-                            {priorityMeta.label}
-                          </span>
+                          <ApprovalPriorityBadge priority={item?.entityContext?.priority} />
 
                           {currentState && (
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStateColorClass(currentState.color)}`}>

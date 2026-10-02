@@ -2,6 +2,32 @@ import { useState, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle2, PlayCircle, Tag, BarChart3 } from 'lucide-react';
 import { ProductionProject, ProjectStage, ProjectProductItem } from '../../types';
 import { toPersianDigits } from '../../utils';
+import { PillBadge, type PillBadgeVariants } from '../common/PillBadge';
+
+// v7.0.86 (TD-108): نشان وضعیت مرحله در گانت (بر پایه وضعیت و درصد پیشرفت)
+const STAGE_BADGE_BASE = 'px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1 border';
+const STAGE_STATUS_BADGES: PillBadgeVariants = {
+  completed: { label: 'تکمیل شده', icon: CheckCircle2, iconClassName: 'w-3 h-3 text-emerald-600', className: `${STAGE_BADGE_BASE} bg-emerald-100 text-emerald-800 font-bold border-emerald-300` },
+  in_progress: { icon: PlayCircle, iconClassName: 'w-3 h-3 text-blue-600', className: `${STAGE_BADGE_BASE} bg-blue-100 text-blue-800 font-bold border-blue-300` },
+  pending: { label: 'در انتظار شروع', icon: Clock, iconClassName: 'w-3 h-3 text-slate-400', className: `${STAGE_BADGE_BASE} bg-slate-100 text-slate-600 font-semibold border-slate-200` },
+};
+
+function stageBadgeKey(status: string, progress: number): 'completed' | 'in_progress' | 'pending' {
+  if (status === 'completed' || progress === 100) return 'completed';
+  if (status === 'in_progress' || progress > 0) return 'in_progress';
+  return 'pending';
+}
+
+function StageStatusBadge({ status, progress }: { status: string; progress: number }) {
+  const key = stageBadgeKey(status, progress);
+  return (
+    <PillBadge
+      variants={STAGE_STATUS_BADGES}
+      value={key}
+      label={key === 'in_progress' ? `در حال انجام (${toPersianDigits(progress)}٪)` : undefined}
+    />
+  );
+}
 
 interface ProjectGanttTabProps {
   project: ProductionProject;
@@ -128,31 +154,6 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
       criticalCount: critical
     };
   }, [stages, project.end_date]);
-
-  const getStatusBadge = (status: string, progress: number) => {
-    if (status === 'completed' || progress === 100) {
-      return (
-        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold flex items-center gap-1 border border-emerald-300">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-          تکمیل شده
-        </span>
-      );
-    }
-    if (status === 'in_progress' || progress > 0) {
-      return (
-        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md text-[10px] font-bold flex items-center gap-1 border border-blue-300">
-          <PlayCircle className="w-3 h-3 text-blue-600" />
-          در حال انجام ({toPersianDigits(progress)}٪)
-        </span>
-      );
-    }
-    return (
-      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[10px] font-semibold flex items-center gap-1 border border-slate-200">
-        <Clock className="w-3 h-3 text-slate-400" />
-        در انتظار شروع
-      </span>
-    );
-  };
 
   return (
     <div className="space-y-4 text-xs animate-fadeIn font-farsi">
@@ -407,7 +408,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {getStatusBadge(stg.status, prog)}
+                      <StageStatusBadge status={stg.status} progress={prog} />
                       <span className="font-mono font-bold text-slate-700 w-10 text-left">
                         {toPersianDigits(prog)}٪
                       </span>
@@ -478,7 +479,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                     </div>
 
                     <div className="flex items-center gap-2 self-end sm:self-center">
-                      {getStatusBadge(stg.status, prog)}
+                      <StageStatusBadge status={stg.status} progress={prog} />
                       <span className="font-mono font-bold text-slate-700 w-10 text-left">
                         {toPersianDigits(prog)}٪
                       </span>

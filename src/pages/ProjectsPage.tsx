@@ -20,6 +20,23 @@ import {
   useDeleteProjectMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
+import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
+
+// v7.0.86 (TD-108): نشان اولویت و وضعیت پروژه
+const PROJECT_PRIORITY_BASE = 'px-2 py-0.5 rounded font-bold text-[10px]';
+const PROJECT_PRIORITY_BADGES: PillBadgeVariants = {
+  urgent: { label: 'فوری', className: `${PROJECT_PRIORITY_BASE} bg-rose-100 text-rose-800` },
+  high: { label: 'مهم', className: `${PROJECT_PRIORITY_BASE} bg-amber-100 text-amber-800` },
+  medium: { label: 'متوسط', className: `${PROJECT_PRIORITY_BASE} bg-blue-100 text-blue-800` },
+};
+const PROJECT_PRIORITY_FALLBACK: PillBadgeVariant = { label: 'عادی', className: `${PROJECT_PRIORITY_BASE} bg-slate-100 text-slate-700` };
+const PROJECT_STATUS_BASE = 'px-2.5 py-1 rounded-full font-bold text-[11px] flex items-center gap-1';
+const PROJECT_STATUS_BADGES: PillBadgeVariants = {
+  completed: { label: 'تکمیل شده', icon: CheckCircle2, iconClassName: 'w-3.5 h-3.5', className: `${PROJECT_STATUS_BASE} bg-emerald-100 text-emerald-800` },
+  in_progress: { label: 'در حال انجام', icon: PlayCircle, iconClassName: 'w-3.5 h-3.5', className: `${PROJECT_STATUS_BASE} bg-blue-100 text-blue-800` },
+  paused: { label: 'متوقف شده', icon: Clock, iconClassName: 'w-3.5 h-3.5', className: `${PROJECT_STATUS_BASE} bg-amber-100 text-amber-800` },
+};
+const PROJECT_STATUS_FALLBACK: PillBadgeVariant = { label: 'برنامه‌ریزی‌شده', icon: Clock, iconClassName: 'w-3.5 h-3.5', className: `${PROJECT_STATUS_BASE} bg-slate-100 text-slate-700` };
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
@@ -106,32 +123,6 @@ export default function ProjectsPage() {
     in_progress: filteredProjects.filter(p => p.status === 'in_progress'),
     completed: filteredProjects.filter(p => p.status === 'completed'),
   }), [filteredProjects]);
-
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px]">فوری</span>;
-      case 'high':
-        return <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">مهم</span>;
-      case 'medium':
-        return <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">متوسط</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">عادی</span>;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> تکمیل شده</span>;
-      case 'in_progress':
-        return <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-bold text-[11px] flex items-center gap-1"><PlayCircle className="w-3.5 h-3.5" /> در حال انجام</span>;
-      case 'paused':
-        return <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px] flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> متوقف شده</span>;
-      default:
-        return <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> برنامه‌ریزی‌شده</span>;
-    }
-  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-xs animate-fadeIn">
@@ -333,7 +324,7 @@ export default function ProjectsPage() {
                   onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
                   onEdit={() => handleOpenEditModal(p)}
                   onDelete={() => handleDeleteProject(p.id, p.project_code)}
-                  priorityBadge={getPriorityBadge(p.priority)}
+                  priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
                 />
               ))}
             </div>
@@ -361,7 +352,7 @@ export default function ProjectsPage() {
                   onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
                   onEdit={() => handleOpenEditModal(p)}
                   onDelete={() => handleDeleteProject(p.id, p.project_code)}
-                  priorityBadge={getPriorityBadge(p.priority)}
+                  priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
                 />
               ))}
             </div>
@@ -389,7 +380,7 @@ export default function ProjectsPage() {
                   onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
                   onEdit={() => handleOpenEditModal(p)}
                   onDelete={() => handleDeleteProject(p.id, p.project_code)}
-                  priorityBadge={getPriorityBadge(p.priority)}
+                  priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
                 />
               ))}
             </div>
@@ -442,7 +433,7 @@ export default function ProjectsPage() {
                         <span className="font-mono text-[11px] font-bold text-slate-600">{formatPersianNumber(p.progress_percent || 0)}%</span>
                       </div>
                     </td>
-                    <td className="p-3.5">{getStatusBadge(p.status)}</td>
+                    <td className="p-3.5"><PillBadge variants={PROJECT_STATUS_BADGES} value={p.status} fallback={PROJECT_STATUS_FALLBACK} /></td>
                     <td className="p-3.5">
                       <div className="flex items-center justify-center gap-1">
                         <button

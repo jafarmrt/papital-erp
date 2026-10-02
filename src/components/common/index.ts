@@ -12,3 +12,4 @@ export * from './RtlTooltip';
 export * from './HelpBadge';
 export { executePrint, useDocumentPrint } from '../../utils/printHelper';
 export type { PrintOptions } from '../../utils/printHelper';
+export * from './PillBadge';

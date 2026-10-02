@@ -20,6 +20,15 @@ import {
 import { fetchJson } from '../../../api.js';
 import type { FinancialHealthReport, HealthCheckTestResult } from '../../../types.js';
 import { formatPersianPrice, toPersianDigits } from '../../../utils.js';
+import { PillBadge, type PillBadgeVariants } from '../../common/PillBadge';
+
+// v7.0.86 (TD-108): نشان نتیجه هر آزمون سلامت مالی
+const HEALTH_BADGE_BASE = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
+const HEALTH_STATUS_BADGES: PillBadgeVariants = {
+  healthy: { label: 'منطبق و تراز', icon: CheckCircle2, iconClassName: 'w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400', className: `${HEALTH_BADGE_BASE} bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300` },
+  warning: { label: 'نیازمند بازبینی', icon: AlertTriangle, iconClassName: 'w-3.5 h-3.5 text-amber-600 dark:text-amber-400', className: `${HEALTH_BADGE_BASE} bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300` },
+  error: { label: 'مغایرت بحرانی', icon: AlertOctagon, iconClassName: 'w-3.5 h-3.5 text-rose-600 dark:text-rose-400', className: `${HEALTH_BADGE_BASE} bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300` },
+};
 
 export function AccountingAuditChecklistView() {
   const [report, setReport] = useState<FinancialHealthReport | null>(null);
@@ -88,32 +97,6 @@ export function AccountingAuditChecklistView() {
     if (score >= 75) return 'text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10';
     if (score >= 50) return 'text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10';
     return 'text-rose-600 dark:text-rose-400 border-rose-500/40 bg-rose-500/10';
-  };
-
-  const getStatusBadge = (status: HealthCheckTestResult['status']) => {
-    switch (status) {
-      case 'healthy':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            منطبق و تراز
-          </span>
-        );
-      case 'warning':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            نیازمند بازبینی
-          </span>
-        );
-      case 'error':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300">
-            <AlertOctagon className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-            مغایرت بحرانی
-          </span>
-        );
-    }
   };
 
   const getCategoryIcon = (cat: HealthCheckTestResult['category']) => {
@@ -346,7 +329,7 @@ export function AccountingAuditChecklistView() {
                       <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
                         {test.title}
                       </h4>
-                      {getStatusBadge(test.status)}
+                      <PillBadge variants={HEALTH_STATUS_BADGES} value={test.status} />
                       {test.scoreImpact < 0 && (
                         <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950 px-1.5 py-0.5 rounded">
                           {toPersianDigits(test.scoreImpact)} امتیاز

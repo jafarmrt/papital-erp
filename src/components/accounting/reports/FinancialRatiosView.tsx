@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { Activity, Coins, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, RefreshCw, BarChart2, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../../utils';
 import type { FinancialRatiosReport } from '../../../types';
+import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../../common/PillBadge';
+
+// v7.0.86 (TD-108): نشان وضعیت نسبت‌های مالی؛ وضعیت نامشخص «بحرانی» نمایش داده می‌شود
+const RATIO_BADGE_BASE = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border';
+const RATIO_STATUS_BADGES: PillBadgeVariants = {
+  excellent: { label: 'عالی', icon: CheckCircle2, iconClassName: 'w-3 h-3', className: `${RATIO_BADGE_BASE} bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800` },
+  good: { label: 'مطلوب', icon: CheckCircle2, iconClassName: 'w-3 h-3', className: `${RATIO_BADGE_BASE} bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800` },
+  warning: { label: 'هشدار', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: `${RATIO_BADGE_BASE} bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800` },
+};
+const RATIO_STATUS_DANGER: PillBadgeVariant = { label: 'بحرانی', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: `${RATIO_BADGE_BASE} bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
 
 interface FinancialRatiosViewProps {
   ratiosData: FinancialRatiosReport | null;
@@ -17,40 +27,6 @@ export function FinancialRatiosView({
   const handleCurrencyChange = (cur: string) => {
     setSelectedCurrency(cur);
     onFetchFinancialRatios(cur === 'all' ? undefined : cur);
-  };
-
-  const getStatusBadge = (status?: 'excellent' | 'good' | 'warning' | 'danger') => {
-    switch (status) {
-      case 'excellent':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            <CheckCircle2 className="w-3 h-3" />
-            عالی
-          </span>
-        );
-      case 'good':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-            <CheckCircle2 className="w-3 h-3" />
-            مطلوب
-          </span>
-        );
-      case 'warning':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-            <AlertTriangle className="w-3 h-3" />
-            هشدار
-          </span>
-        );
-      case 'danger':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-            <AlertTriangle className="w-3 h-3" />
-            بحرانی
-          </span>
-        );
-    }
   };
 
   const overallScore = ratiosData?.status?.overallScore ?? 75;
@@ -119,19 +95,19 @@ export function FinancialRatiosView({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full md:w-auto">
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
             <span className="text-[11px] text-indigo-200 block">نقدینگی</span>
-            {getStatusBadge(ratiosData?.status?.liquidity)}
+            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.liquidity} fallback={RATIO_STATUS_DANGER} />
           </div>
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
             <span className="text-[11px] text-indigo-200 block">اهرم بدهی</span>
-            {getStatusBadge(ratiosData?.status?.solvency)}
+            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.solvency} fallback={RATIO_STATUS_DANGER} />
           </div>
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
             <span className="text-[11px] text-indigo-200 block">سودآوری</span>
-            {getStatusBadge(ratiosData?.status?.profitability)}
+            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.profitability} fallback={RATIO_STATUS_DANGER} />
           </div>
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
             <span className="text-[11px] text-indigo-200 block">کارایی</span>
-            {getStatusBadge(ratiosData?.status?.efficiency)}
+            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.efficiency} fallback={RATIO_STATUS_DANGER} />
           </div>
         </div>
       </div>
@@ -146,7 +122,7 @@ export function FinancialRatiosView({
           <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold text-slate-500">نسبت جاری (Current)</span>
-              {getStatusBadge(ratiosData?.status?.liquidity)}
+              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.liquidity} fallback={RATIO_STATUS_DANGER} />
             </div>
             <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
               {formatPersianNumber(ratiosData?.currentRatio ?? 0)}
@@ -190,7 +166,7 @@ export function FinancialRatiosView({
           <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold text-slate-500">نسبت بدهی (Debt Ratio)</span>
-              {getStatusBadge(ratiosData?.status?.solvency)}
+              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.solvency} fallback={RATIO_STATUS_DANGER} />
             </div>
             <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
               {formatPersianNumber(ratiosData?.debtRatio ?? 0)}٪
@@ -242,7 +218,7 @@ export function FinancialRatiosView({
           <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold text-slate-500">حاشیه سود خالص</span>
-              {getStatusBadge(ratiosData?.status?.profitability)}
+              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.profitability} fallback={RATIO_STATUS_DANGER} />
             </div>
             <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
               {formatPersianNumber(ratiosData?.netProfitMargin ?? 0)}٪
@@ -278,7 +254,7 @@ export function FinancialRatiosView({
           <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold text-slate-500">گردش کل دارایی‌ها (Asset Turnover)</span>
-              {getStatusBadge(ratiosData?.status?.efficiency)}
+              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.efficiency} fallback={RATIO_STATUS_DANGER} />
             </div>
             <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
               {formatPersianNumber(ratiosData?.assetTurnover ?? 0)} <span className="text-xs font-normal text-slate-400">مرتبه</span>
