@@ -8,6 +8,7 @@ import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../.
 import type { Cheque, ChequeStatus } from '../../../types.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
+import { money } from '../../../lib/money.js';
 
 import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
@@ -111,6 +112,7 @@ export class ChequeLifecycleService {
 
     return rawList.map(c => ({
       ...c,
+      amount: c.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
       type: c.type as Cheque['type'],
       status: c.status as Cheque['status'],
       partyType: c.partyType as Cheque['partyType'],
@@ -259,7 +261,7 @@ export class ChequeLifecycleService {
         branch: data.branch?.trim() || '',
         issueDate: data.issueDate.trim(),
         dueDate: data.dueDate.trim(),
-        amount,
+        amount: money(amount),
         currency: data.currency || 'IRR',
         partyType: data.partyType || 'customer',
         partyId: data.partyId || null,
@@ -281,6 +283,7 @@ export class ChequeLifecycleService {
 
     return {
       ...inserted,
+      amount: inserted.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
       type: inserted.type as Cheque['type'],
       status: inserted.status as Cheque['status'],
       partyType: (inserted.partyType || 'customer') as Cheque['partyType'],
@@ -362,19 +365,19 @@ export class ChequeLifecycleService {
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);
-      const amount = Number(existing.amount) || 0;
+      const amount = money(existing.amount);
 
       if (data.status === 'passed' && bankRecord) {
         const bank = bankRecord;
         // V1.4.0: ریاضی مالی با fin() — حذف خطای float
-        const curBal = fin(Number(bank.currentBalance) || 0);
+        const curBal = fin(bank.currentBalance);
         const newBal = existing.type === 'received'
           ? curBal.add(amount)
           : curBal.subtract(amount);
         if (newBal.lessThan(0)) {
-          throw new ValidationError(`مانده حساب «${bank.title}» برای پرداخت کافی نیست (مانده: ${newBal.toNumber()})`);
+          throw new ValidationError(`مانده حساب «${bank.title}» برای پرداخت کافی نیست (مانده: ${newBal.toDisplayString()})`);
         }
-        await txEngine.update(bankAccounts).set({ currentBalance: newBal.toNumber() }).where(eq(bankAccounts.id, bank.id));
+        await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, bank.id));
 
         if (existing.type === 'received' && bank.accountId) {
           // P2-01: اگر چک مستقیماً از وضعیت نزد صندوق (received/in_treasury/in_safe) وصول شده باشد،
@@ -583,6 +586,7 @@ export class ChequeLifecycleService {
 
       return {
         ...updated,
+        amount: updated.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
         type: updated.type as Cheque['type'],
         status: updated.status as Cheque['status'],
         partyType: (updated.partyType || 'customer') as Cheque['partyType'],

@@ -1,8 +1,9 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
 import { baseRelations } from './baseRelations';
+import { moneyNumeric } from './moneyColumn';
 
 export const accounts = pgTable('accounts', {
   id: serial('id').primaryKey(),
@@ -32,8 +33,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
   date: text('date').notNull(),
   voucherType: text('voucher_type').default('general'), // 'general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment'
   status: text('status').default('approved'), // 'draft', 'approved', 'permanent'
-  totalDebit: numeric('total_debit', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
-  totalCredit: numeric('total_credit', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
+  totalDebit: moneyNumeric('total_debit').notNull().default(sql`0`),
+  totalCredit: moneyNumeric('total_credit').notNull().default(sql`0`),
   description: text('description').notNull(),
   referenceModule: text('reference_module').default('manual'), // 'manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory'
   referenceId: integer('reference_id'),
@@ -84,10 +85,10 @@ export const journalVoucherItems = pgTable('journal_voucher_items', {
   detailedType: text('detailed_type').default('none'), // 'none', 'customer', 'personnel', 'project', 'bank_account', 'other'
   detailedId: integer('detailed_id'),
   detailedName: text('detailed_name').default(''),
-  debit: numeric('debit', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
-  credit: numeric('credit', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
+  debit: moneyNumeric('debit').notNull().default(sql`0`),
+  credit: moneyNumeric('credit').notNull().default(sql`0`),
   currency: text('currency').default('IRR'),
-  exchangeRate: numeric('exchange_rate', { precision: 18, scale: 4, mode: 'number' }).default(1),
+  exchangeRate: moneyNumeric('exchange_rate').default(sql`1`),
   description: text('description').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
@@ -108,8 +109,8 @@ export const bankAccounts = pgTable('bank_accounts', {
   shebaNumber: text('sheba_number').default(''),
   cardNumber: text('card_number').default(''),
   branch: text('branch').default(''),
-  initialBalance: numeric('initial_balance', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  currentBalance: numeric('current_balance', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  initialBalance: moneyNumeric('initial_balance').default(sql`0`),
+  currentBalance: moneyNumeric('current_balance').default(sql`0`),
   currency: text('currency').default('IRR'),
   accountId: integer('account_id').references(() => accounts.id),
   isActive: integer('is_active').default(1),
@@ -132,7 +133,7 @@ export const cheques = pgTable('cheques', {
   branch: text('branch').default(''),
   issueDate: text('issue_date').notNull(),
   dueDate: text('due_date').notNull(),
-  amount: numeric('amount', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  amount: moneyNumeric('amount').notNull(),
   currency: text('currency').default('IRR'),
   partyType: text('party_type').default('customer'), // 'customer', 'personnel', 'supplier', 'other'
   partyId: integer('party_id'),
@@ -163,9 +164,9 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   type: text('type').notNull(), // 'receipt', 'payment'
   date: text('date').notNull(),
   method: text('method').notNull(), // 'cash', 'bank_transfer', 'pos', 'cheque'
-  amount: numeric('amount', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  amount: moneyNumeric('amount').notNull(),
   currency: text('currency').default('IRR'),
-  exchangeRate: numeric('exchange_rate', { precision: 18, scale: 4, mode: 'number' }).default(1),
+  exchangeRate: moneyNumeric('exchange_rate').default(sql`1`),
   bankAccountId: integer('bank_account_id').references(() => bankAccounts.id),
   partyType: text('party_type').default('customer'), // 'customer', 'personnel', 'supplier', 'other'
   partyId: integer('party_id'),

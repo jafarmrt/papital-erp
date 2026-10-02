@@ -16,7 +16,8 @@ import { LockHierarchyLevel, withOrderedLocks } from '../../lib/lockOrder.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { money } from '../../lib/money.js';
 import { businessTodayJalaliDash } from '../../lib/businessClock.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
@@ -59,8 +60,8 @@ export class PayrollPaymentService {
 
     // ۱. بررسی اقلام ثبت‌شده در حساب معین مساعده پرسنلی (1301)
     const advanceAcc = await AccountMappingService.getEmployeeAdvanceAccount(executor);
-    let ledgerDebits = 0;
-    let ledgerCredits = 0;
+    let ledgerDebits = fin(0);
+    let ledgerCredits = fin(0);
     let hasLedgerEntries = false;
 
     if (advanceAcc) {
@@ -81,19 +82,19 @@ export class PayrollPaymentService {
       if (items.length > 0) {
         hasLedgerEntries = true;
         for (const item of items) {
-          ledgerDebits += Number(item.debit) || 0;
-          ledgerCredits += Number(item.credit) || 0;
+          ledgerDebits = ledgerDebits.add(item.debit);
+          ledgerCredits = ledgerCredits.add(item.credit);
         }
       }
     }
 
     if (hasLedgerEntries) {
-      const outstanding = Math.max(0, ledgerDebits - ledgerCredits);
+      const outstanding = ledgerDebits.subtract(ledgerCredits);
       return {
         personnelId,
-        totalAdvances: ledgerDebits,
-        totalDeducted: ledgerCredits,
-        outstandingAdvance: outstanding
+        totalAdvances: ledgerDebits.toNumber(),
+        totalDeducted: ledgerCredits.toNumber(),
+        outstandingAdvance: outstanding.isNegative() ? 0 : outstanding.toNumber()
       };
     }
 
@@ -113,7 +114,7 @@ export class PayrollPaymentService {
         )
       ));
 
-    const totalAdv = treasuryAdvances.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const totalAdv = FinancialMath.sum(treasuryAdvances.map(t => t.amount));
 
     const pastPayrolls = await executor
       .select({ advanceDeduction: pieceworkPayrolls.advanceDeduction })
@@ -124,14 +125,14 @@ export class PayrollPaymentService {
         inArray(pieceworkPayrolls.status, ['approved', 'partially_paid', 'paid'])
       ));
 
-    const totalDed = pastPayrolls.reduce((sum, p) => sum + (Number(p.advanceDeduction) || 0), 0);
-    const outstanding = Math.max(0, totalAdv - totalDed);
+    const totalDed = FinancialMath.sum(pastPayrolls.map(p => p.advanceDeduction));
+    const outstanding = totalAdv.subtract(totalDed);
 
     return {
       personnelId,
-      totalAdvances: totalAdv,
-      totalDeducted: totalDed,
-      outstandingAdvance: outstanding
+      totalAdvances: totalAdv.toNumber(),
+      totalDeducted: totalDed.toNumber(),
+      outstandingAdvance: outstanding.isNegative() ? 0 : outstanding.toNumber()
     };
   }
 
@@ -206,14 +207,14 @@ export class PayrollPaymentService {
       }
 
       // ۵. کنترل موجودی حساب بانکی
-      const currentBal = fin(Number(bank.currentBalance) || 0);
+      const currentBal = fin(bank.currentBalance);
       const newBal = currentBal.subtract(payAmount).round(4);
       if (newBal.isNegative()) {
         throw new ValidationError(
           `مانده حساب «${bank.title}» برای این پرداخت کافی نیست (مانده فعلی: ${currentBal.toNumber().toLocaleString('fa-IR')} ریال)`
         );
       }
-      await tx.update(bankAccounts).set({ currentBalance: newBal.toNumber() }).where(eq(bankAccounts.id, bank.id));
+      await tx.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, bank.id));
 
       // ۶. شماره تراکنش اتمیک
       const txNum = await TreasuryTransactionService.generateTransactionNumber('payment', tx);
@@ -276,9 +277,9 @@ export class PayrollPaymentService {
         type: 'payment',
         date: payDate.trim(),
         method: input.method || 'bank_transfer',
-        amount: payAmount.toNumber(),
+        amount: money(payAmount),
         currency: 'IRR',
-        exchangeRate: 1,
+        exchangeRate: money(1),
         bankAccountId: bank.id,
         partyType: 'personnel',
         partyId: payroll.personnelId,

@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { eq, and, sql, inArray } from 'drizzle-orm';
@@ -2875,7 +2876,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         const voucherNumber = await VoucherService.getNextVoucherNumber();
         const [row] = await orm.insert(journalVouchers).values({
           voucherNumber, date: today, description: 'سند آزمون TD-193', referenceModule: 'invoice',
-          totalDebit: 1000, totalCredit: 1000, ...values
+          totalDebit: money(1000), totalCredit: money(1000), ...values
         }).returning();
         return row;
       };
@@ -6063,6 +6064,103 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdReqIds.length > 0) {
         await cleanTestTableData('purchase_requisitions', 'id', createdReqIds);
       }
+    }
+  }
+
+  // Test 27.30: v7.0.67 (audit P2-6 / TD-210): مبلغ ۱۸ رقمی numeric(18,4) در ستون‌های حسابداری و خزانه بدون عبور
+  // از double ذخیره، خوانده و جمع می‌شود؛ پاسخ JSON همچنان عدد است.
+  if (shouldRun('reg_money_decimal_accounting_p2_6', 'p26', 'td210', 'money', 'decimal')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.67: مبلغ ۱۸ رقمی با اعشار در سند حسابداری و مانده بانک دقیق ذخیره و جمع می‌شود و در JSON عدد است (P2-6)';
+    const createdVoucherIds: number[] = [];
+    const createdTxIds: number[] = [];
+    let createdBankId: number | null = null;
+    try {
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const { TreasuryTransactionService } = await import('../../services/accounting/treasury/treasuryTransaction.service.js');
+      const { bankAccounts, treasuryTransactions } = await import('../../db/schema.js');
+      const { money } = await import('../../lib/money.js');
+      const { sanitizeSensitiveData } = await import('../../lib/auditLogger.js');
+      const { fin } = await import('../../lib/financialDecimal.js');
+      const violations: string[] = [];
+      const BIG = '12345678901234.5678'; // ۱۸ رقم معنادار؛ double فقط ۱۲۳۴۵۶۷۸۹۰۱۲۳۴٫۵۶۸ را نگه می‌دارد
+
+      // الف) سند حسابداری دوطرفه با مبلغ بزرگ
+      const allAccs = await ChartOfAccountsService.getAllAccounts();
+      const leaf = allAccs.filter(a => a.level === 'detailed' || a.level === 'subsidiary');
+      const voucher = await VoucherService.createJournalVoucher({
+        date: await businessTodayIsoDate(),
+        voucherType: 'general',
+        status: 'draft',
+        description: 'ERP-TEST-MARKER سند آزمون دقت مبلغ P2-6',
+        items: [
+          { accountId: leaf[0].id, debit: BIG, credit: 0 },
+          { accountId: leaf[1].id, debit: 0, credit: BIG },
+        ],
+      });
+      createdVoucherIds.push(voucher.id);
+      const [header] = await orm.select().from(journalVouchers).where(eq(journalVouchers.id, voucher.id));
+      const rows = await orm.select().from(journalVoucherItems).where(eq(journalVoucherItems.voucherId, voucher.id));
+      if (fin(header.totalDebit).toString() !== BIG) violations.push(`جمع بدهکار سند ${fin(header.totalDebit).toString()} ذخیره شد`);
+      const debitRow = rows.find(r => !fin(r.debit).isZero());
+      if (!debitRow || fin(debitRow.debit).toString() !== BIG) violations.push(`ردیف بدهکار ${debitRow ? fin(debitRow.debit).toString() : '-'} ذخیره شد`);
+      const twice = fin(debitRow?.debit).add(debitRow?.debit ?? 0).toString();
+      if (twice !== '24691357802469.1356') violations.push(`جمع دو ردیف ${twice} شد`);
+
+      // ب) مانده بانک: افزودن ۰٫۰۰۰۱ به مانده ۱۸ رقمی نباید با گرد شدن double از دست برود
+      const [bank] = await orm.insert(bankAccounts).values({
+        code: `ERP-TEST-P26-${Date.now()}`,
+        title: 'ERP-TEST-MARKER صندوق آزمون دقت P2-6',
+        type: 'cash',
+        currency: 'IRR',
+        initialBalance: money(0),
+        currentBalance: money(BIG),
+      }).returning();
+      createdBankId = bank.id;
+      const receipt = await TreasuryTransactionService.createTreasuryTransaction({
+        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id,
+        partyName: 'ERP-TEST-MARKER', createVoucher: false,
+      });
+      createdTxIds.push(receipt.id);
+      const [bankAfter] = await orm.select().from(bankAccounts).where(eq(bankAccounts.id, bank.id));
+      if (fin(bankAfter.currentBalance).toString() !== '12345678901234.5679') violations.push(`مانده بانک پس از دریافت ${fin(bankAfter.currentBalance).toString()} شد`);
+      const [txRow] = await orm.select().from(treasuryTransactions).where(eq(treasuryTransactions.id, receipt.id));
+      if (fin(txRow.amount).toString() !== '0.0001') violations.push(`مبلغ تراکنش ${fin(txRow.amount).toString()} ذخیره شد`);
+      if (typeof receipt.amount !== 'number') violations.push(`مبلغ تراکنش در خروجی سرویس از نوع ${typeof receipt.amount} است`);
+
+      // ج) قرارداد API و لاگ ممیزی: مبلغ عدد است
+      const json = JSON.parse(JSON.stringify({ amount: bankAfter.currentBalance })) as { amount: unknown };
+      if (typeof json.amount !== 'number') violations.push(`مبلغ در JSON از نوع ${typeof json.amount} است`);
+      const audited = sanitizeSensitiveData({ amount: money('2.5') }) as { amount: unknown };
+      if (audited.amount !== 2.5) violations.push(`مبلغ در اسنپ‌شات ممیزی ${JSON.stringify(audited.amount)} شد`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_money_decimal_accounting_p2_6',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سند ۱۲۳۴۵۶۷۸۹۰۱۲۳۴٫۵۶۷۸ دقیق ذخیره و جمع شد؛ مانده بانک پس از دریافت ۰٫۰۰۰۱ برابر ...۵۶۷۹ شد؛ JSON و اسنپ‌شات ممیزی عدد دارند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_money_decimal_accounting_p2_6',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      await cleanTestTableData('treasury_transactions', 'id', createdTxIds);
+      if (createdBankId !== null) await cleanTestTableData('bank_accounts', 'id', [createdBankId]);
+      await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
+      await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
     }
   }
 

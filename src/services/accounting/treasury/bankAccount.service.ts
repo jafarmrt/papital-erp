@@ -7,9 +7,12 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
+import { fin } from '../../../lib/financialDecimal.js';
+import { money } from '../../../lib/money.js';
 
 export class BankAccountService {
-  static async getBankAccounts(): Promise<BankAccount[]> {
+  /** v7.0.67 (P2-6): مانده‌ها با Decimal محاسبه می‌شوند؛ خروجی API (getBankAccounts) عدد است. */
+  private static async computeBankBalances() {
     const rawList = await orm.select({
       id: bankAccounts.id,
       code: bankAccounts.code,
@@ -76,7 +79,7 @@ export class BankAccountService {
     }
 
     return rawList.map(b => {
-      const initBal = Number(b.initialBalance) || 0;
+      const initBal = fin(b.initialBalance);
 
       // Match journal items for this bank account (deduplicated by item id)
       const matchingItemsMap = new Map<number, typeof vItems[0]>();
@@ -88,70 +91,82 @@ export class BankAccountService {
         }
       }
 
-      let totalDebit = 0;
-      let totalCredit = 0;
+      let totalDebit = fin(0);
+      let totalCredit = fin(0);
       for (const it of matchingItemsMap.values()) {
-        totalDebit += Number(it.debit) || 0;
-        totalCredit += Number(it.credit) || 0;
+        totalDebit = totalDebit.add(it.debit);
+        totalCredit = totalCredit.add(it.credit);
       }
 
       // Match treasury transactions
-      let receipts = 0;
-      let payments = 0;
+      let receipts = fin(0);
+      let payments = fin(0);
       for (const tx of rawTxs) {
         if (tx.bankAccountId === b.id) {
           if (tx.type === 'receipt') {
-            receipts += Number(tx.amount) || 0;
+            receipts = receipts.add(tx.amount);
           } else if (tx.type === 'payment') {
-            payments += Number(tx.amount) || 0;
+            payments = payments.add(tx.amount);
           }
         }
       }
 
-      const treasuryBalance = initBal + receipts - payments;
+      const treasuryBalance = initBal.add(receipts).subtract(payments);
       // V2.0.0: اگر سند افتتاحیه برای این حساب صادر شده، مانده اولیه داخل دفتر است
       // و دیگر به ledgerBalance اضافه نمی‌شود (حساب‌های قدیمیِ بدون سند با فرمول قدیمی)
       const hasOpeningVoucher = openingVoucherBanks.has(b.id);
-      const ledgerBalance = (hasOpeningVoucher ? 0 : initBal) + totalDebit - totalCredit;
-      const discrepancy = Math.abs(ledgerBalance - treasuryBalance);
+      const ledgerBalance = (hasOpeningVoucher ? fin(0) : initBal).add(totalDebit).subtract(totalCredit);
+      const discrepancy = ledgerBalance.subtract(treasuryBalance).abs();
+      const hasLedgerRows = !totalDebit.isZero() || !totalCredit.isZero();
 
       let syncStatus: 'synced' | 'discrepant' | 'unlinked' = 'synced';
-      let dynamicCurrentBalance = ledgerBalance;
+      let currentBalance = ledgerBalance;
 
-      if (!b.accountId && totalDebit === 0 && totalCredit === 0) {
+      if (!b.accountId && !hasLedgerRows) {
         syncStatus = 'unlinked';
-        dynamicCurrentBalance = treasuryBalance;
-      } else if (discrepancy < 0.01) {
+        currentBalance = treasuryBalance;
+      } else if (discrepancy.lessThan(0.01)) {
         syncStatus = 'synced';
-        dynamicCurrentBalance = ledgerBalance;
+        currentBalance = ledgerBalance;
       } else {
         syncStatus = 'discrepant';
-        dynamicCurrentBalance = (totalDebit > 0 || totalCredit > 0) ? ledgerBalance : treasuryBalance;
+        currentBalance = hasLedgerRows ? ledgerBalance : treasuryBalance;
       }
 
-      return {
-        ...b,
-        type: b.type as BankAccount['type'],
-        initialBalance: initBal,
-        currentBalance: dynamicCurrentBalance,
-        ledgerBalance,
-        treasuryBalance,
-        totalDebit,
-        totalCredit,
-        discrepancy,
-        syncStatus,
-        bank_name: b.bankName || '',
-        account_number: b.accountNumber || '',
-        sheba_number: b.shebaNumber || '',
-        card_number: b.cardNumber || '',
-        initial_balance: initBal,
-        current_balance: dynamicCurrentBalance,
-        account_id: b.accountId,
-        account_name: b.accountName || undefined,
-        account_code: b.accountCode || undefined,
-        is_active: b.isActive ?? 1,
-      } as BankAccount;
+      return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus };
     });
+  }
+
+  static async getBankAccounts(): Promise<BankAccount[]> {
+    return (await this.computeBankBalances()).map(c => this.toBankAccountDto(c));
+  }
+
+  // قرارداد API: مبالغ در پاسخ عدد هستند (P2-6)
+  private static toBankAccountDto(
+    { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus }: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>[number]
+  ): BankAccount {
+    return ({
+      ...b,
+      type: b.type as BankAccount['type'],
+      initialBalance: initBal.toNumber(),
+      currentBalance: currentBalance.toNumber(),
+      ledgerBalance: ledgerBalance.toNumber(),
+      treasuryBalance: treasuryBalance.toNumber(),
+      totalDebit: totalDebit.toNumber(),
+      totalCredit: totalCredit.toNumber(),
+      discrepancy: discrepancy.toNumber(),
+      syncStatus,
+      bank_name: b.bankName || '',
+      account_number: b.accountNumber || '',
+      sheba_number: b.shebaNumber || '',
+      card_number: b.cardNumber || '',
+      initial_balance: initBal.toNumber(),
+      current_balance: currentBalance.toNumber(),
+      account_id: b.accountId,
+      account_name: b.accountName || undefined,
+      account_code: b.accountCode || undefined,
+      is_active: b.isActive ?? 1,
+    }) as BankAccount;
   }
 
   static async recalculateAndSyncBankBalances(): Promise<{
@@ -163,22 +178,23 @@ export class BankAccountService {
     totalDiscrepancy: number;
     accounts: BankAccount[];
   }> {
-    const banks = await this.getBankAccounts();
+    const computed = await this.computeBankBalances();
+    const banks = computed.map(c => this.toBankAccountDto(c));
     let syncedCount = 0;
     let discrepantCount = 0;
     let unlinkedCount = 0;
-    let totalCashAndBankLedger = 0;
-    let totalCashAndBankTreasury = 0;
-    let totalDiscrepancy = 0;
+    let totalCashAndBankLedger = fin(0);
+    let totalCashAndBankTreasury = fin(0);
+    let totalDiscrepancy = fin(0);
 
-    for (const bank of banks) {
+    for (const bank of computed) {
       await orm.update(bankAccounts).set({
-        currentBalance: bank.currentBalance
-      }).where(eq(bankAccounts.id, bank.id));
+        currentBalance: money(bank.currentBalance)
+      }).where(eq(bankAccounts.id, bank.row.id));
 
-      totalCashAndBankLedger += (bank.ledgerBalance || 0);
-      totalCashAndBankTreasury += (bank.treasuryBalance || 0);
-      totalDiscrepancy += (bank.discrepancy || 0);
+      totalCashAndBankLedger = totalCashAndBankLedger.add(bank.ledgerBalance);
+      totalCashAndBankTreasury = totalCashAndBankTreasury.add(bank.treasuryBalance);
+      totalDiscrepancy = totalDiscrepancy.add(bank.discrepancy);
 
       if (bank.syncStatus === 'synced') syncedCount++;
       else if (bank.syncStatus === 'discrepant') discrepantCount++;
@@ -189,9 +205,9 @@ export class BankAccountService {
       syncedCount,
       discrepantCount,
       unlinkedCount,
-      totalCashAndBankLedger,
-      totalCashAndBankTreasury,
-      totalDiscrepancy,
+      totalCashAndBankLedger: totalCashAndBankLedger.toNumber(),
+      totalCashAndBankTreasury: totalCashAndBankTreasury.toNumber(),
+      totalDiscrepancy: totalDiscrepancy.toNumber(),
       accounts: banks.map(b => ({
         id: b.id,
         code: b.code,
@@ -255,11 +271,11 @@ export class BankAccountService {
     username?: string;
     strict?: boolean;
   }, externalTx?: DbExecutor): Promise<BankAccount> {
-    const initialBal = Number(data.initialBalance) || 0;
+    const initialBal = money(data.initialBalance);
     const isStrict = data.strict !== false;
 
     // V4.0.5 (F-3 / TD-093): قانون صریح — اگر موجودی اولیه غیرصفر باشد، انتساب به سرفصل معین حسابداری برای صدور سند افتتاحیه الزامی است
-    if (initialBal !== 0 && !data.accountId && isStrict) {
+    if (!initialBal.isZero() && !data.accountId && isStrict) {
       throw new ValidationError('برای ثبت حساب بانکی یا صندوق با موجودی اولیه غیرصفر، انتخاب سرفصل معین حسابداری الزامی است.');
     }
 
@@ -288,7 +304,7 @@ export class BankAccountService {
 
       // V2.0.0: سند افتتاحیه موجودی اولیه — DR معین بانک / CR سرمایه اولیه (4001)
       // ورکفلو شرطی: اگر تعریف workflow فعال برای «bank_account» باشد، سند پس از تأیید نهایی صادر می‌شود
-      if (initialBal !== 0) {
+      if (!initialBal.isZero()) {
         const { WorkflowEngineService } = await import('../../workflow/workflowEngineService.js');
         const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
           entityType: 'bank_account',
@@ -336,8 +352,8 @@ export class BankAccountService {
       return null;
     }
 
-    const initialBal = Number(bank.initialBalance) || 0;
-    if (initialBal === 0) return null; // بدون مانده — سند نیاز ندارد
+    const initialBal = fin(bank.initialBalance);
+    if (initialBal.isZero()) return null; // بدون مانده — سند نیاز ندارد
     if (!bank.accountId) {
       if (isStrict) {
         throw new ValidationError(`حساب «${bank.title}» دارای موجودی اولیه است اما به سرفصل معین حسابداری متصل نشده است.`);
@@ -360,8 +376,8 @@ export class BankAccountService {
       throw new ValidationError('حساب «سرمایه اولیه» (4001) برای صدور سند افتتاحیه یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید.');
     }
 
-    const amount = Math.abs(initialBal);
-    const isDebitBank = initialBal > 0; // موجودی مثبت = بدهکار بانک
+    const amount = initialBal.abs();
+    const isDebitBank = initialBal.isPositive(); // موجودی مثبت = بدهکار بانک
 
     const created = await VoucherService.createJournalVoucher({
       date: await businessTodayJalaliDash(),
@@ -443,15 +459,15 @@ export class BankAccountService {
 
       // V2.0.0: تغییر موجودی اولیه → سند اصلاحی مابه‌التفاوت (فقط برای حساب‌های کدینگ‌شده)
       if (data.initialBalance !== undefined) {
-        const newInitial = Number(data.initialBalance) || 0;
-        const oldInitial = Number(existing.initialBalance) || 0;
-        const delta = Math.round((newInitial - oldInitial) * 10000) / 10000;
+        const newInitial = fin(data.initialBalance).round(4);
+        const oldInitial = fin(existing.initialBalance);
+        const delta = newInitial.subtract(oldInitial).round(4);
         // اصلاح currentBalance با دلتا
-        if (delta !== 0) {
-          const newCur = Math.round(((Number(updated.currentBalance) || 0) + delta) * 10000) / 10000;
-          await tx.update(bankAccounts).set({ currentBalance: newCur, initialBalance: newInitial }).where(eq(bankAccounts.id, id));
+        if (!delta.isZero()) {
+          const newCur = fin(updated.currentBalance).add(delta).round(4);
+          await tx.update(bankAccounts).set({ currentBalance: money(newCur), initialBalance: money(newInitial) }).where(eq(bankAccounts.id, id));
         }
-        if (delta !== 0) {
+        if (!delta.isZero()) {
           if (!updated.accountId && isStrict) {
             throw new ValidationError('برای به‌روزرسانی موجودی اولیه حساب خزانه، اتصال به سرفصل معین حسابداری الزامی است.');
           }
@@ -470,12 +486,13 @@ export class BankAccountService {
               if (!capitalAcc) {
                 throw new ValidationError('حساب «سرمایه اولیه» (4001) برای اصلاح سند افتتاحیه یافت نشد — از تنظیمات حسابداری پیکربندی کنید.');
               }
-              const amount = Math.abs(delta);
+              const amount = delta.abs();
+              const isIncrease = delta.isPositive();
               const adjVoucher = await VoucherService.createJournalVoucher({
                 date: await businessTodayJalaliDash(),
                 voucherType: 'adjustment',
                 status: 'draft',
-                description: `اصلاح موجودی اولیه ${updated.title} (${delta > 0 ? '+' : ''}${delta})`,
+                description: `اصلاح موجودی اولیه ${updated.title} (${isIncrease ? '+' : ''}${delta.toString()})`,
                 referenceModule: 'treasury_opening',
                 referenceId: id,
                 referenceNumber: updated.code,
@@ -488,8 +505,8 @@ export class BankAccountService {
                     detailedType: 'bank_account',
                     detailedId: id,
                     detailedName: updated.title,
-                    debit: delta > 0 ? amount : 0,
-                    credit: delta > 0 ? 0 : amount,
+                    debit: isIncrease ? amount : 0,
+                    credit: isIncrease ? 0 : amount,
                     currency: updated.currency || 'IRR',
                     description: `اصلاح موجودی اولیه ${updated.title}`
                   },
@@ -497,8 +514,8 @@ export class BankAccountService {
                     accountId: capitalAcc.id,
                     detailedType: 'other',
                     detailedName: 'سرمایه اولیه',
-                    debit: delta > 0 ? 0 : amount,
-                    credit: delta > 0 ? amount : 0,
+                    debit: isIncrease ? 0 : amount,
+                    credit: isIncrease ? amount : 0,
                     currency: updated.currency || 'IRR',
                     description: `اصلاح سهم سرمایه بابت موجودی اولیه ${updated.title}`
                   }
@@ -508,7 +525,7 @@ export class BankAccountService {
               if (!adjVoucher && isStrict) {
                 throw new ValidationError(`ثبت سند اصلاحی موجودی اولیه برای حساب «${updated.title}» ناموفق بود.`);
               }
-            } else if (newInitial !== 0) {
+            } else if (!newInitial.isZero()) {
               // حساب قدیمی بدون سند افتتاحیه → اکنون سند افتتاحیه صادر کن
               await this.issueTreasuryOpeningVoucher(id, {
                 userId: data.userId,

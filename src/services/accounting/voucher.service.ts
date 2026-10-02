@@ -3,7 +3,8 @@ import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.
 import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-orm';
 import type { JournalVoucher, JournalVoucherItem, FinancialAttachment } from '../../types.js';
 import { updateRequestContext } from '../../lib/requestContext.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
+import { money, moneyOr } from '../../lib/money.js';
 import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
@@ -124,6 +125,10 @@ export class VoucherService {
         const list = itemsMap.get(item.voucherId) || [];
         list.push({
           ...item,
+          // قرارداد API: مبلغ در پاسخ عدد است (P2-6)
+          debit: item.debit.toNumber(),
+          credit: item.credit.toNumber(),
+          exchangeRate: item.exchangeRate?.toNumber() ?? null,
           detailedType: item.detailedType as JournalVoucherItem['detailedType'],
           detailed_type: item.detailedType as JournalVoucherItem['detailedType'],
           account_id: item.accountId,
@@ -141,10 +146,10 @@ export class VoucherService {
       voucher_type: v.voucherType as JournalVoucher['voucherType'],
       voucherType: v.voucherType as JournalVoucher['voucherType'],
       status: v.status as JournalVoucher['status'],
-      total_debit: Number(v.totalDebit),
-      total_credit: Number(v.totalCredit),
-      totalDebit: Number(v.totalDebit),
-      totalCredit: Number(v.totalCredit),
+      total_debit: v.totalDebit.toNumber(),
+      total_credit: v.totalCredit.toNumber(),
+      totalDebit: v.totalDebit.toNumber(),
+      totalCredit: v.totalCredit.toNumber(),
       referenceModule: (v.referenceModule || 'manual') as JournalVoucher['referenceModule'],
       reference_module: (v.referenceModule || 'manual') as JournalVoucher['referenceModule'],
       reference_id: v.referenceId,
@@ -193,10 +198,10 @@ export class VoucherService {
       voucher_type: v.voucherType as JournalVoucher['voucherType'],
       voucherType: v.voucherType as JournalVoucher['voucherType'],
       status: v.status as JournalVoucher['status'],
-      total_debit: Number(v.totalDebit),
-      total_credit: Number(v.totalCredit),
-      totalDebit: Number(v.totalDebit),
-      totalCredit: Number(v.totalCredit),
+      total_debit: v.totalDebit.toNumber(),
+      total_credit: v.totalCredit.toNumber(),
+      totalDebit: v.totalDebit.toNumber(),
+      totalCredit: v.totalCredit.toNumber(),
       referenceModule: (v.referenceModule || 'manual') as JournalVoucher['referenceModule'],
       reference_module: (v.referenceModule || 'manual') as JournalVoucher['referenceModule'],
       reference_id: v.referenceId,
@@ -204,8 +209,9 @@ export class VoucherService {
       created_by_username: v.createdByUsername || '',
       items: rawItems.map(item => ({
         ...item,
-        debit: Number(item.debit),
-        credit: Number(item.credit),
+        debit: item.debit.toNumber(),
+        credit: item.credit.toNumber(),
+        exchangeRate: item.exchangeRate?.toNumber() ?? null,
         detailedType: item.detailedType as JournalVoucherItem['detailedType'],
         detailed_type: item.detailedType as JournalVoucherItem['detailedType'],
         account_id: item.accountId,
@@ -235,8 +241,8 @@ export class VoucherService {
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
       detailedId?: number | null;
       detailedName?: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency?: string;
       exchangeRate?: number;
       description?: string;
@@ -279,8 +285,8 @@ export class VoucherService {
         date: voucherDate,
         voucherType: data.voucherType || 'general',
         status: data.status || 'draft',
-        totalDebit: sumDebit.toNumber(),
-        totalCredit: sumCredit.toNumber(),
+        totalDebit: money(sumDebit),
+        totalCredit: money(sumCredit),
         description: data.description.trim(),
         referenceModule: data.referenceModule || 'manual',
         referenceId: data.referenceId || null,
@@ -306,10 +312,10 @@ export class VoucherService {
           detailedType: item.detailedType || 'none',
           detailedId: item.detailedId || null,
           detailedName: item.detailedName?.trim() || '',
-          debit: Number(item.debit) || 0,
-          credit: Number(item.credit) || 0,
+          debit: money(item.debit),
+          credit: money(item.credit),
           currency: item.currency || 'IRR',
-          exchangeRate: Number(item.exchangeRate) || 1,
+          exchangeRate: moneyOr(item.exchangeRate, 1),
           description: item.description?.trim() || data.description.trim(),
         });
       }
@@ -334,8 +340,8 @@ export class VoucherService {
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
       detailedId?: number | null;
       detailedName?: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency?: string;
       exchangeRate?: number;
       description?: string;
@@ -391,10 +397,10 @@ export class VoucherService {
             detailedType: item.detailedType || 'none',
             detailedId: item.detailedId || null,
             detailedName: item.detailedName?.trim() || '',
-            debit: fin(item.debit).toNumber(),
-            credit: fin(item.credit).toNumber(),
+            debit: money(item.debit),
+            credit: money(item.credit),
             currency: item.currency || 'IRR',
-            exchangeRate: Number(item.exchangeRate) || 1,
+            exchangeRate: moneyOr(item.exchangeRate, 1),
             description: item.description?.trim() || data.description || existing.description,
             isDeleted: 0,
           });
@@ -411,8 +417,8 @@ export class VoucherService {
         ...(data.description ? { description: data.description.trim() } : {}),
         ...(data.status ? { status: data.status } : {}),
         ...(storedAttachments !== undefined ? { attachments: storedAttachments } : {}),
-        totalDebit: sumDebit.toNumber(),
-        totalCredit: sumCredit.toNumber(),
+        totalDebit: money(sumDebit),
+        totalCredit: money(sumCredit),
       }).where(eq(journalVouchers.id, id));
     };
 
@@ -526,8 +532,8 @@ export class VoucherService {
         date: reversalDate,
         voucherType: 'adjustment',
         status: 'approved',
-        totalDebit: original.totalCredit,
-        totalCredit: original.totalDebit,
+        totalDebit: money(original.totalCredit),
+        totalCredit: money(original.totalDebit),
         description: desc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
@@ -547,10 +553,10 @@ export class VoucherService {
           detailedType: item.detailedType || 'none',
           detailedId: item.detailedId || null,
           detailedName: item.detailedName || '',
-          debit: item.credit, // Inverted
-          credit: item.debit, // Inverted
+          debit: money(item.credit), // Inverted
+          credit: money(item.debit), // Inverted
           currency: item.currency || 'IRR',
-          exchangeRate: item.exchangeRate || 1,
+          exchangeRate: moneyOr(item.exchangeRate, 1),
           description: `برگشت ردیف ${item.rowOrder || row - 1}: ${item.description || original.description}`,
         });
       }
@@ -582,8 +588,8 @@ export class VoucherService {
         detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
         detailedId?: number | null;
         detailedName?: string;
-        debit: number;
-        credit: number;
+        debit: DecimalValue;
+        credit: DecimalValue;
         currency?: string;
         exchangeRate?: number;
         description?: string;
@@ -646,8 +652,8 @@ export class VoucherService {
         date: correctionDate,
         voucherType: 'adjustment',
         status: 'approved',
-        totalDebit: original.totalCredit,
-        totalCredit: original.totalDebit,
+        totalDebit: money(original.totalCredit),
+        totalCredit: money(original.totalDebit),
         description: revDesc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
@@ -666,10 +672,10 @@ export class VoucherService {
           detailedType: item.detailedType || 'none',
           detailedId: item.detailedId || null,
           detailedName: item.detailedName || '',
-          debit: item.credit,
-          credit: item.debit,
+          debit: money(item.credit),
+          credit: money(item.debit),
           currency: item.currency || 'IRR',
-          exchangeRate: item.exchangeRate || 1,
+          exchangeRate: moneyOr(item.exchangeRate, 1),
           description: `برگشت ردیف ${item.rowOrder || revRow - 1}: ${item.description || original.description}`,
         });
       }
@@ -700,8 +706,8 @@ export class VoucherService {
         date: correctionDate,
         voucherType: original.voucherType || 'general',
         status: 'approved',
-        totalDebit: sumDebit.toNumber(),
-        totalCredit: sumCredit.toNumber(),
+        totalDebit: money(sumDebit),
+        totalCredit: money(sumCredit),
         description: corrDesc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
@@ -720,10 +726,10 @@ export class VoucherService {
           detailedType: item.detailedType || 'none',
           detailedId: item.detailedId || null,
           detailedName: item.detailedName?.trim() || '',
-          debit: fin(item.debit).toNumber(),
-          credit: fin(item.credit).toNumber(),
+          debit: money(item.debit),
+          credit: money(item.credit),
           currency: item.currency || 'IRR',
-          exchangeRate: Number(item.exchangeRate) || 1,
+          exchangeRate: moneyOr(item.exchangeRate, 1),
           description: item.description?.trim() || corrDesc,
         });
       }
@@ -758,8 +764,8 @@ export class VoucherService {
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
       detailedId?: number | null;
       detailedName?: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency?: string;
       exchangeRate?: number;
       description?: string;
@@ -829,8 +835,8 @@ export class VoucherService {
         date: repostDate,
         voucherType: 'adjustment',
         status: 'approved',
-        totalDebit: original.totalCredit,
-        totalCredit: original.totalDebit,
+        totalDebit: money(original.totalCredit),
+        totalCredit: money(original.totalDebit),
         description: voidDesc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
@@ -849,10 +855,10 @@ export class VoucherService {
           detailedType: item.detailedType || 'none',
           detailedId: item.detailedId || null,
           detailedName: item.detailedName || '',
-          debit: item.credit,
-          credit: item.debit,
+          debit: money(item.credit),
+          credit: money(item.debit),
           currency: item.currency || 'IRR',
-          exchangeRate: item.exchangeRate || 1,
+          exchangeRate: moneyOr(item.exchangeRate, 1),
           description: `ابطال ردیف ${item.rowOrder || voidRow - 1}: ${item.description || original.description}`,
         });
       }
@@ -883,8 +889,8 @@ export class VoucherService {
         date: repostDate,
         voucherType: original.voucherType || 'general',
         status: 'approved',
-        totalDebit: sumDebit.toNumber(),
-        totalCredit: sumCredit.toNumber(),
+        totalDebit: money(sumDebit),
+        totalCredit: money(sumCredit),
         description: repostDesc,
         referenceModule: original.referenceModule || 'manual',
         referenceId: original.id,
@@ -903,10 +909,10 @@ export class VoucherService {
           detailedType: item.detailedType || 'none',
           detailedId: item.detailedId || null,
           detailedName: item.detailedName?.trim() || '',
-          debit: fin(item.debit).toNumber(),
-          credit: fin(item.credit).toNumber(),
+          debit: money(item.debit),
+          credit: money(item.credit),
           currency: item.currency || 'IRR',
-          exchangeRate: Number(item.exchangeRate) || 1,
+          exchangeRate: moneyOr(item.exchangeRate, 1),
           description: item.description?.trim() || repostDesc,
         });
       }

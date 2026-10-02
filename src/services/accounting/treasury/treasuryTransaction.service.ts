@@ -7,7 +7,8 @@ import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
 import { OutboxService } from '../../events/outboxService.js';
-import { fin } from '../../../lib/financialDecimal.js';
+import { fin, type DecimalValue } from '../../../lib/financialDecimal.js';
+import { money, moneyOr } from '../../../lib/money.js';
 import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
@@ -266,6 +267,8 @@ export class TreasuryTransactionService {
 
     return rawList.map(t => ({
       ...t,
+      amount: t.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
+      exchangeRate: t.exchangeRate?.toNumber() ?? null,
       type: t.type as 'receipt' | 'payment',
       method: t.method as TreasuryTransaction['method'],
       partyType: t.partyType as TreasuryTransaction['partyType'],
@@ -327,7 +330,7 @@ export class TreasuryTransactionService {
       const txNum = await this.generateTransactionNumber(data.type, txEngine);
 
       const isCheque = data.method === 'cheque';
-      const currentBal = Number(bank.currentBalance) || 0;
+      const currentBal = fin(bank.currentBalance);
 
       // V6 Sub-phase 1.2 (TD-148): منع تغییر مستقیم مانده حساب بانکی در روش پرداخت یا دریافت با چک.
       // وجه چک تا لحظه وصول/پاس شدن در سررسید از حساب جاری بانک کسر یا واریز نمی‌شود.
@@ -335,13 +338,13 @@ export class TreasuryTransactionService {
       if (!isCheque) {
         // V9-1.3: محاسبه موجودی بانک با FinancialDecimal — حذف خطای شناور float
         const newBal = data.type === 'receipt'
-          ? fin(currentBal).add(amount).round(4).toNumber()
-          : fin(currentBal).subtract(amount).round(4).toNumber();
+          ? currentBal.add(amount).round(4)
+          : currentBal.subtract(amount).round(4);
         // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
-        if (newBal < 0) {
-          throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBal.toLocaleString('fa-IR')})`);
+        if (newBal.isNegative()) {
+          throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBalFa(currentBal)})`);
         }
-        await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, data.bankAccountId));
+        await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, data.bankAccountId));
       }
 
       let voucherId: number | null = null;
@@ -435,9 +438,9 @@ export class TreasuryTransactionService {
         type: data.type,
         date: resolvedDate,
         method: data.method,
-        amount,
+        amount: money(amount),
         currency: txCurrency,
-        exchangeRate: Number(data.exchangeRate) || 1,
+        exchangeRate: moneyOr(data.exchangeRate, 1),
         bankAccountId: data.bankAccountId,
         partyType: data.partyType || 'other',
         partyId: data.partyId || null,
@@ -473,6 +476,8 @@ export class TreasuryTransactionService {
 
       return {
         ...tx,
+        amount: tx.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
+        exchangeRate: tx.exchangeRate?.toNumber() ?? null,
         type: tx.type as 'receipt' | 'payment',
         method: tx.method as TreasuryTransaction['method'],
         partyType: tx.partyType as TreasuryTransaction['partyType'],
@@ -525,16 +530,16 @@ export class TreasuryTransactionService {
       // 2) اصلاح مانده: معکوس اثر اصل
       // V6 Sub-phase 1.2 (TD-148): اگر روش تراکنش چک بوده، مانده بانک در ثبت اصل تغییر نکرده بود؛
       // بنابراین در ابطال نیز مانده حساب بانکی نباید تغییر کند
-      const amount = Number(original.amount) || 0;
+      const amount = money(original.amount);
       if (original.method !== 'cheque') {
-        const currentBal = Number(bank.currentBalance) || 0;
+        const currentBal = fin(bank.currentBalance);
         const newBal = original.type === 'receipt'
-          ? fin(currentBal).subtract(amount).round(4).toNumber()
-          : fin(currentBal).add(amount).round(4).toNumber();
-        if (newBal < 0) {
-          throw new ValidationError(`ابطال ممکن نیست: مانده فعلی «${bank.title}» (${currentBal.toLocaleString('fa-IR')}) برای برگشت این وجه کافی نیست`);
+          ? currentBal.subtract(amount).round(4)
+          : currentBal.add(amount).round(4);
+        if (newBal.isNegative()) {
+          throw new ValidationError(`ابطال ممکن نیست: مانده فعلی «${bank.title}» (${currentBalFa(currentBal)}) برای برگشت این وجه کافی نیست`);
         }
-        await txEngine.update(bankAccounts).set({ currentBalance: newBal }).where(eq(bankAccounts.id, bank.id));
+        await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, bank.id));
       }
 
       // 3) تراکنش معکوس با شماره سری جدید
@@ -565,7 +570,7 @@ export class TreasuryTransactionService {
         method: original.method,
         amount,
         currency: original.currency || bank.currency || 'IRR',
-        exchangeRate: original.exchangeRate || 1,
+        exchangeRate: moneyOr(original.exchangeRate, 1),
         bankAccountId: original.bankAccountId,
         partyType: original.partyType,
         partyId: original.partyId,
@@ -610,6 +615,8 @@ export class TreasuryTransactionService {
 
       return {
         ...reversalTx,
+        amount: reversalTx.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
+        exchangeRate: reversalTx.exchangeRate?.toNumber() ?? null,
         type: reversalTx.type as 'receipt' | 'payment',
         method: reversalTx.method as TreasuryTransaction['method'],
         partyType: reversalTx.partyType as TreasuryTransaction['partyType'],
@@ -666,13 +673,13 @@ export class TreasuryTransactionService {
       }
 
       // مانده‌ها با fin()
-      const fromNewBal = fin(Number(from.currentBalance) || 0).subtract(amount).round(4).toNumber();
-      if (fromNewBal < 0) {
+      const fromNewBal = fin(from.currentBalance).subtract(amount).round(4);
+      if (fromNewBal.isNegative()) {
         throw new ValidationError(`مانده حساب مبدأ «${from.title}» کافی نیست (مانده فعلی: ${currentBalFa(from.currentBalance)})`);
       }
-      const toNewBal = fin(Number(to.currentBalance) || 0).add(amount).round(4).toNumber();
-      await txEngine.update(bankAccounts).set({ currentBalance: fromNewBal }).where(eq(bankAccounts.id, from.id));
-      await txEngine.update(bankAccounts).set({ currentBalance: toNewBal }).where(eq(bankAccounts.id, to.id));
+      const toNewBal = fin(to.currentBalance).add(amount).round(4);
+      await txEngine.update(bankAccounts).set({ currentBalance: money(fromNewBal) }).where(eq(bankAccounts.id, from.id));
+      await txEngine.update(bankAccounts).set({ currentBalance: money(toNewBal) }).where(eq(bankAccounts.id, to.id));
 
       const payNum = await this.generateTransactionNumber('payment', txEngine);
       const recNum = await this.generateTransactionNumber('receipt', txEngine);
@@ -726,9 +733,9 @@ export class TreasuryTransactionService {
         type: 'payment',
         date: resolvedDate,
         method: 'bank_transfer',
-        amount,
+        amount: money(amount),
         currency,
-        exchangeRate: 1,
+        exchangeRate: money(1),
         bankAccountId: from.id,
         partyType: 'other',
         partyId: null,
@@ -745,9 +752,9 @@ export class TreasuryTransactionService {
         type: 'receipt',
         date: resolvedDate,
         method: 'bank_transfer',
-        amount,
+        amount: money(amount),
         currency,
-        exchangeRate: 1,
+        exchangeRate: money(1),
         bankAccountId: to.id,
         partyType: 'other',
         partyId: null,
@@ -779,7 +786,9 @@ export class TreasuryTransactionService {
       );
       await OutboxService.saveToOutbox(txEngine, transferEvent);
 
-      return { payment: payTx as unknown as TreasuryTransaction, receipt: recTx as unknown as TreasuryTransaction, voucherId };
+      // قرارداد API: مبلغ عدد (P2-6)
+      const asDto = (t: typeof payTx) => ({ ...t, amount: t.amount.toNumber(), exchangeRate: t.exchangeRate?.toNumber() ?? null }) as unknown as TreasuryTransaction;
+      return { payment: asDto(payTx), receipt: asDto(recTx), voucherId };
     });
   }
 
@@ -832,6 +841,6 @@ export class TreasuryTransactionService {
 }
 
 // V1.5.0: helper کوچک نمایش مانده در پیام خطا
-function currentBalFa(val: unknown): string {
-  return (Number(val) || 0).toLocaleString('fa-IR');
+function currentBalFa(val: DecimalValue): string {
+  return fin(val).toNumber().toLocaleString('fa-IR');
 }

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import { getRequestContext } from '../lib/requestContext.js';
+import { FinancialDecimal } from '../lib/financialDecimal.js';
 
 const { combine, timestamp, printf, colorize } = winston.format;
 
@@ -40,6 +41,7 @@ function sanitizeObject(obj: any): any {
     return sanitizeString(obj);
   }
   if (typeof obj !== 'object') return obj;
+  if (obj instanceof FinancialDecimal) return obj.toNumber(); // v7.0.67 (P2-6)
   if (Array.isArray(obj)) return obj.map(sanitizeObject);
 
   const sanitized: any = {};

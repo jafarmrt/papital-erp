@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import request from 'supertest';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { getTestApp, getAdminSession, AdminSession, TestApp } from '../fixtures/httpTestHelper.js';
@@ -214,7 +215,7 @@ export async function runCriticalPathTests(): Promise<TestCaseResult[]> {
         bankName: 'ERP-TEST-MARKER بانک آزمایشی',
         issueDate: new Date().toISOString().split('T')[0],
         dueDate: new Date().toISOString().split('T')[0],
-        amount: 500000,
+        amount: money(500000),
         partyName: 'ERP-TEST-MARKER طرف حساب چک آزمایشی',
         status: 'received'
       }).returning();

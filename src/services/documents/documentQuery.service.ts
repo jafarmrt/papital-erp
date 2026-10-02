@@ -2,6 +2,7 @@ import { sql, eq, and, desc, inArray, gte, lte, or, ilike } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, treasuryTransactions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
+import type { Money } from '../../lib/money.js';
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
@@ -90,7 +91,7 @@ export class DocumentQueryService {
     }> = [];
     let treasurySettlements: Array<{
       documentId: number | null;
-      amount: number;
+      amount: Money;
       type: string;
       status: string | null;
     }> = [];
@@ -144,14 +145,7 @@ export class DocumentQueryService {
       // V3.0.0 Phase 1: وضعیت تسویه فاکتور و تجمیع تراکنش‌های خزانه
       const docSettlements = treasurySettlements.filter(t => t.documentId === d.id);
       const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(d.type);
-      const paidAmount = docSettlements.reduce((sum, t) => {
-        const amt = Number(t.amount || 0);
-        if (isPurchase) {
-          return sum + (t.type === 'payment' ? amt : -amt);
-        } else {
-          return sum + (t.type === 'receipt' ? amt : -amt);
-        }
-      }, 0);
+      const paidAmount = settledAmount(docSettlements, isPurchase);
 
       // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته (همان بدهکار مشتری در سند حسابداری)
       const vatAmount = Number(d.vatAmount) || 0;
@@ -295,14 +289,7 @@ export class DocumentQueryService {
     ));
 
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
-    const paidAmount = settlements.reduce((sum, t) => {
-      const amt = Number(t.amount || 0);
-      if (isPurchase) {
-        return sum + (t.type === 'payment' ? amt : -amt);
-      } else {
-        return sum + (t.type === 'receipt' ? amt : -amt);
-      }
-    }, 0);
+    const paidAmount = settledAmount(settlements, isPurchase);
 
     // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته
     const vatAmount = Number(doc.vatAmount) || 0;
@@ -348,7 +335,8 @@ export class DocumentQueryService {
       paidAmount: safePaidAmount,
       remainingAmount,
       settlementStatus,
-      settlements,
+      // قرارداد API: مبلغ عدد (P2-6)
+      settlements: settlements.map(t => ({ ...t, amount: t.amount.toNumber() })),
       items: formattedItems
     };
   }
@@ -392,4 +380,12 @@ export class DocumentQueryService {
     }
     return null;
   }
+}
+
+/** v7.0.67 (P2-6): جمع خالص تسویه‌های خزانه یک سند با Decimal؛ خرید با پرداخت و فروش با دریافت تسویه می‌شود. */
+function settledAmount(rows: Array<{ amount: Money; type: string }>, isPurchase: boolean): number {
+  const settling = isPurchase ? 'payment' : 'receipt';
+  return rows
+    .reduce((sum, t) => (t.type === settling ? sum.add(t.amount) : sum.subtract(t.amount)), fin(0))
+    .toNumber();
 }

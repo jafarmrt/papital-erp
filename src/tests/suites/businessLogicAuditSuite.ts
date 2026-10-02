@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import bcrypt from 'bcryptjs';
 import { orm } from '../../db/drizzle.js';
@@ -156,7 +157,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
           title: 'حساب تستی ممیزی V10',
           type: 'bank',
           accountId: acc ? acc.id : null,
-          currentBalance: 0,
+          currentBalance: money(0),
           isDeleted: 0
         }).returning({ id: bankAccounts.id });
         bankAcc = createdBank;

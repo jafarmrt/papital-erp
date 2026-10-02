@@ -5,6 +5,7 @@ import { systemNowUtcIso } from '../lib/businessClock.js';
 import { sql, lt, and, notInArray, count, type SQL } from 'drizzle-orm';
 import type { Request } from 'express';
 import { ValidationError } from '../errors/customErrors.js';
+import { FinancialDecimal } from './financialDecimal.js';
 
 // Regex patterns to identify sensitive keys that MUST NEVER be stored in audit logs
 const SENSITIVE_KEY_REGEX = /^(password|pass|new_password|current_password|newpassword|currentpassword|old_password|oldpassword|confirmpassword|confirm_password|token|access_token|accesstoken|refresh_token|refreshtoken|auth_token|authtoken|secret|jwt|apikey|api_key|authorization|cookie|card_number|credit_card|cvv|ssn)$/i;
@@ -30,6 +31,11 @@ export function sanitizeSensitiveData<T = unknown>(obj: T, depth = 0, seen = new
 
   if (typeof obj !== 'object') {
     return obj;
+  }
+
+  // v7.0.67 (P2-6): مبلغ Decimal/Money در اسنپ‌شات ممیزی عدد است (نه ساختار داخلی Decimal)
+  if (obj instanceof FinancialDecimal) {
+    return obj.toNumber() as unknown as T;
   }
 
   // Prevent circular references
