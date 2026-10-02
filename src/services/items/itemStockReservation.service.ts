@@ -7,6 +7,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 
 import { fin } from '../../lib/financialDecimal.js';
+import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 
 export interface ReservedItemDetail {
   id: string;
@@ -521,10 +522,11 @@ export class ItemStockReservationService {
           unit: items.unit,
           currentStock: items.currentStock,
           weightedAverageCost: items.weightedAverageCost,
-          stocks: items.stocks,
         })
         .from(items)
         .where(eq(items.isDeleted, 0));
+      // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)
+      const tableStockMap = await ItemWarehouseStockService.getStocksForItems(client, allItems.map(i => i.id));
 
       const itemsByCodeMap = new Map<string, typeof allItems[0]>();
       const itemsByIdMap = new Map<number, typeof allItems[0]>();
@@ -585,7 +587,7 @@ export class ItemStockReservationService {
           category: it.category || 'عمومی',
           unit: it.unit || 'عدد',
           currentStock: Number(it.currentStock || 0),
-          stocks: (it.stocks as Record<string, number>) || {},
+          stocks: tableStockMap.get(it.id)?.byCode ?? {},
           buyPrice: Number(it.weightedAverageCost || 0),
           sellPrice: Number(it.weightedAverageCost || 0),
           proformaReservedQty: 0,

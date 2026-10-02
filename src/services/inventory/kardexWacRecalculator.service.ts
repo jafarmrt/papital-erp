@@ -148,7 +148,8 @@ export class KardexWacRecalculatorService {
       const newWac = runningWac.toNumber();
       const nowIso = new Date().toISOString();
 
-      // جدول نرمال از دفتر کاردکس و سپس کش JSONB و موجودی کل از جدول نرمال
+      // جدول نرمال از دفتر کاردکس (موجودی کل را تریگر پایگاه‌داده از همین جدول می‌نویسد — TD-214)
+      const stockBefore = await ItemWarehouseStockService.getStockSnapshot(txEngine, itemId);
       await ItemWarehouseStockService.setItemWarehouseStocks(txEngine, itemId, qtyByWarehouseId);
       const snapshot = await ItemWarehouseStockService.getStockSnapshot(txEngine, itemId);
       const whBreakdown = snapshot.byCode;
@@ -157,9 +158,7 @@ export class KardexWacRecalculatorService {
       await txEngine
         .update(items)
         .set({
-          currentStock: newStock,
           weightedAverageCost: newWac,
-          stocks: whBreakdown,
           lastKardexRebuildAt: nowIso,
           version: nextVersion(item.version),
         })
@@ -199,7 +198,7 @@ export class KardexWacRecalculatorService {
           before: {
             stock: oldStock,
             wac: oldWac,
-            stocks: item.stocks
+            stocks: stockBefore.byCode
           },
           after: {
             stock: newStock,

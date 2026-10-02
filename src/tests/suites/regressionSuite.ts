@@ -35,7 +35,8 @@ import {
   TreasuryTxCandidate
 } from '../../components/accounting/reconciliation/bankStatementMatcher.js';
 import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../lib/lockOrder.js';
-import { syncFixtureItemStocks } from '../fixtures/factories.js';
+import { seedFixtureItemStocks } from '../fixtures/factories.js';
+import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -620,19 +621,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error('برای انبار نامعتبر، خطای ValidationError پرتاب نشد.');
     }
 
-    // 4) Check single source of truth: current_stock = sum(stocks) across items
+    // 4) Check single source of truth: current_stock = SUM(item_warehouse_stocks) across items (v7.0.48 / TD-214)
     const stockDriftCheck = await orm.execute(sql`
       SELECT COUNT(*)::int AS drift_count
-      FROM items i,
-      LATERAL (
-        SELECT COALESCE(SUM(v::numeric), 0) AS total_wh
-        FROM jsonb_each_text(i.stocks) e(k, v)
-      ) s
-      WHERE i.is_deleted = 0 AND i.current_stock IS DISTINCT FROM s.total_wh
+      FROM items i
+      WHERE i.current_stock IS DISTINCT FROM COALESCE((SELECT SUM(s.current_stock) FROM item_warehouse_stocks s WHERE s.item_id = i.id), 0)
     `);
     const driftCount = Number((stockDriftCheck.rows[0] as any)?.drift_count || 0);
     if (driftCount > 0) {
-      throw new Error(`تعداد ${driftCount} کالا دارای مغایرت بین موجودی کل (current_stock) و جمع انبارها (stocks) هستند.`);
+      throw new Error(`تعداد ${driftCount} کالا دارای مغایرت بین موجودی کل (current_stock) و جمع جدول موجودی انبارها هستند.`);
     }
 
     results.push(makeTestCase({
@@ -1383,12 +1380,11 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       unit: 'عدد',
       category: 'گردنبند',
       currentStock: 20,
-      stocks: initialStocks,
       weightedAverageCost: 500000,
       version: 1,
       isDeleted: 0
     }).returning();
-    await syncFixtureItemStocks(testItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
+    await seedFixtureItemStocks(testItem.id, initialStocks); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
     // Execute transfer of 8 units from wh1 to wh2
     const transferResult = await InventoryStockRepairService.executeWarehouseTransfer({
@@ -1406,7 +1402,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
     // Fetch refreshed item
     const [refreshedItem] = await orm.select().from(items).where(eq(items.id, testItem.id));
-    const finalStocks = (refreshedItem.stocks as Record<string, number>) || {};
+    const finalStocks = (await ItemWarehouseStockService.getStockSnapshot(orm, testItem.id)).byCode;
 
     if (refreshedItem.currentStock !== 20) {
       throw new Error(`موجودی کل کالا پس از انتقال داخلی باید بدون تغییر (۲۰ عدد) باقی بماند، اما مقدار ${refreshedItem.currentStock} است.`);
@@ -1543,11 +1539,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       unit: 'عدد',
       category: 'گردنبند',
       currentStock: 10,
-      stocks: { main: 10 },
       weightedAverageCost: 200000,
       isDeleted: 0
     }).returning();
-    await syncFixtureItemStocks(testItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
+    await seedFixtureItemStocks(testItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
     // 2. Create active proforma reserving 7 units
     const proformaId = await DocumentService.createDocument({
@@ -1678,8 +1673,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       unit: 'عدد',
       currentStock: 10,
       weightedAverageCost: 100000,
-      stocks: { main: 10 }
     }).returning();
+    await seedFixtureItemStocks(testItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
     const [testDoc] = await orm.insert(documents).values({
       type: 'receipt',
@@ -1819,10 +1814,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       type: 'product',
       unit: 'عدد',
       currentStock: 10,
-      stocks: { main: 10 },
       weightedAverageCost: 400000,
       isDeleted: 0,
     }).returning();
+    await seedFixtureItemStocks(testItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
     // 2. Create customer
     const testCustomerName = `مشتری مرجوعی تست ${Date.now()}`;
@@ -3131,33 +3126,34 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const setTable = async (itemId: number, warehouseId: number, warehouseCode: string, currentStock: number) => {
         await orm.insert(itemWarehouseStocks).values({ itemId, warehouseId, warehouseCode, currentStock, reservedStock: 0, version: 1 });
       };
-      const mkItem = async (stocks: Record<string, number>, currentStock: number) => {
-        const it = await createTestItem({ stocks, currentStock, weightedAverageCost: 12345 }, orm, { legacyJsonOnly: true });
+      // v7.0.48 (TD-214): بدون ستون JSONB؛ وضعیت جدول هر کالا صریحاً با setTable ساخته می‌شود
+      const mkItem = async () => {
+        const it = await createTestItem({ stocks: {}, weightedAverageCost: 12345 });
         createdItemIds.push(it.id);
         return it;
       };
 
       // I1: کلید تکراری JSON در 0014 بازنویسی شد → جدول ۳ ولی کاردکس ۱۰ (انبار ۱) و ۵ (انبار ۲، بدون ردیف)
-      const i1 = await mkItem({ [w1.code]: 3 }, 3);
+      const i1 = await mkItem();
       await kardex(i1.id, 'in', 10, w1.code);
       await kardex(i1.id, 'in', 5, w2.code);
       await setTable(i1.id, w1.id, w1.code, 3);
       // I2: مانده منفی کاردکس که 0014 به صفر رساند
-      const i2 = await mkItem({ [w1.code]: 0 }, 0);
+      const i2 = await mkItem();
       await kardex(i2.id, 'in', 2, w1.code);
       await kardex(i2.id, 'out', 5, w1.code);
       await setTable(i2.id, w1.id, w1.code, 0);
       // I3: گردش کاردکس در محلی که به هیچ انباری نگاشت نمی‌شود
-      const i3 = await mkItem({ [w1.code]: 7 }, 7);
+      const i3 = await mkItem();
       await kardex(i3.id, 'in', 4, `انبار حذف‌شده ${Date.now()}`);
       await kardex(i3.id, 'in', 1, w1.code);
       await setTable(i3.id, w1.id, w1.code, 7);
       // I4: کد انبار در جدول همان کلید خام JSON (نام انبار) است
-      const i4 = await mkItem({ [w2.name]: 6 }, 6);
+      const i4 = await mkItem();
       await kardex(i4.id, 'in', 6, w2.code);
       await setTable(i4.id, w2.id, w2.name, 6);
       // I5: حذف سند: ردیف مبدأ حذف نرم + ردیف معکوس فعال → نباید مغایرت تلقی شود
-      const i5 = await mkItem({ [w1.code]: 8 }, 8);
+      const i5 = await mkItem();
       await kardex(i5.id, 'in', 8, w1.code);
       const orig = await kardex(i5.id, 'out', 2, w1.code, { isDeleted: 1 });
       await kardex(i5.id, 'in', 2, 'default', { reversalOfId: orig });
@@ -3199,7 +3195,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const t1 = await tableOf(i1.id);
       const i1After = await itemOf(i1.id);
       check(Number(t1.find(r => r.warehouseId === w1.id)?.currentStock) === 10 && Number(t1.find(r => r.warehouseId === w2.id)?.currentStock) === 5, `I1 باید به ۱۰ و ۵ اصلاح شود: ${JSON.stringify(t1.map(r => [r.warehouseId, r.currentStock]))}`);
-      check(Number(i1After.currentStock) === 15 && (i1After.stocks as any)?.[w1.code] === 10 && (i1After.stocks as any)?.[w2.code] === 5, `کش JSONB و موجودی کل I1 باید بازسازی شوند: ${JSON.stringify({ c: i1After.currentStock, s: i1After.stocks })}`);
+      const i1Stocks = (await ItemWarehouseStockService.getStockSnapshot(orm, i1.id)).byCode;
+      check(Number(i1After.currentStock) === 15 && i1Stocks[w1.code] === 10 && i1Stocks[w2.code] === 5, `موجودی کل و تفکیکی I1 باید ۱۵ (۱۰ و ۵) باشد: ${JSON.stringify({ c: i1After.currentStock, s: i1Stocks })}`);
       check(Number(i1After.weightedAverageCost) === 12345, 'ترمیم نباید بهای میانگین موزون را تغییر دهد');
       check(Number((await tableOf(i2.id))[0]?.currentStock) === 0, 'مانده منفی کاردکس نباید خودکار تعدیل شود');
       check(Number((await tableOf(i3.id))[0]?.currentStock) === 7, 'کالای دارای محل نامعلوم نباید اصلاح شود');
@@ -3757,16 +3754,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const today = await businessTodayIsoDate();
       const user = { id: undefined, username: 'test-agent', fullName: 'آزمون P2-1' };
 
-      // سه‌جانبه: جدول (با کد استاندارد انبار) = کش JSONB = موجودی کل = مانده کاردکس (معنای رسمی دفتر)
+      // سه‌جانبه: جدول (با کد استاندارد انبار) = موجودی کل = مانده کاردکس (معنای رسمی دفتر)؛ ستون JSONB از v7.0.48 حذف شد
       const assertInvariant = async (itemId: number, label: string, expected: Record<string, number>) => {
         const tableRows = await orm.select({ code: warehouses.code, qty: itemWarehouseStocks.currentStock })
           .from(itemWarehouseStocks).innerJoin(warehouses, eq(warehouses.id, itemWarehouseStocks.warehouseId))
           .where(eq(itemWarehouseStocks.itemId, itemId));
         const table: Record<string, number> = {};
         for (const r of tableRows) if (Number(r.qty) !== 0) table[r.code] = Number(r.qty);
-        const [it] = await orm.select({ stocks: items.stocks, total: items.currentStock }).from(items).where(eq(items.id, itemId));
-        const json: Record<string, number> = {};
-        for (const [k, v] of Object.entries((it.stocks as Record<string, number>) || {})) if (Number(v) !== 0) json[k] = Number(v);
+        const [it] = await orm.select({ total: items.currentStock }).from(items).where(eq(items.id, itemId));
         const ledger: any = await orm.execute(sql`
           SELECT COALESCE(SUM(CASE WHEN t.type IN ('in', 'transfer_in') THEN t.quantity WHEN t.type IN ('out', 'transfer_out') THEN -t.quantity ELSE 0 END), 0) AS net
           FROM transactions t LEFT JOIN transactions o ON o.id = t.reversal_of_id
@@ -3774,8 +3769,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         const kardexNet = Number((ledger.rows ?? ledger)[0]?.net ?? 0);
         const expectedTotal = Object.values(expected).reduce((a, b) => a + b, 0);
         const sorted = (o: Record<string, number>) => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
-        if (sorted(table) !== sorted(expected) || sorted(json) !== sorted(expected) || Number(it.total) !== expectedTotal || kardexNet !== expectedTotal) {
-          throw new Error(`${label}: انتظار ${JSON.stringify(expected)}؛ جدول=${JSON.stringify(table)}، کش=${JSON.stringify(json)}، کل=${it.total}، کاردکس=${kardexNet}`);
+        if (sorted(table) !== sorted(expected) || Number(it.total) !== expectedTotal || kardexNet !== expectedTotal) {
+          throw new Error(`${label}: انتظار ${JSON.stringify(expected)}؛ جدول=${JSON.stringify(table)}، کل=${it.total}، کاردکس=${kardexNet}`);
         }
         steps.push(label);
       };
@@ -3844,31 +3839,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
-  // Test 27.18: v7.0.45 (audit P2-1): مهاجرت 0020 داده قدیمی را با ثبت ناهنجاری به جدول می‌برد و بازسازی کاردکس
-  // گردش در محل نامعلوم را بی‌صدا کنار نمی‌گذارد
-  if (shouldRun('reg_stock_backfill_and_rebuild_guard_p2_1', 'p21', 'backfill', 'migration')) {
+  // Test 27.18: v7.0.45 (audit P2-1): بازسازی کاردکس گردش در محل نامعلوم را بی‌صدا کنار نمی‌گذارد
+  // (بخش پرکردن جدول از JSONB قدیمی همین آزمون در v7.0.45 اجرا شد؛ تابع آن با حذف ستون در مهاجرت 0021 حذف شد)
+  if (shouldRun('reg_kardex_rebuild_unresolved_guard_p2_1', 'p21', 'rebuild', 'kardex')) {
     const tStart = Date.now();
     try {
       const { createTestItem } = await import('../fixtures/factories.js');
-      const { itemWarehouseStocks, inventoryReconciliationAnomalies } = await import('../../db/schema.js');
       const [w1] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
-      const runId = `test-p2-1-${Date.now()}`;
-
-      // داده قدیمی: دو کلید هم‌انبار (کد و نام)، کلید نامعلوم، مقدار منفی؛ بدون ردیف جدول
-      const legacy = await createTestItem({ stocks: { [w1.code]: 3, [w1.name]: 2, 'انبار-ناموجود-P21': 5 }, currentStock: 10 }, orm, { legacyJsonOnly: true });
-      await orm.execute(sql`SELECT erp_backfill_item_warehouse_stocks(${legacy.id}::integer, ${runId})`);
-      const rows = await orm.select().from(itemWarehouseStocks).where(eq(itemWarehouseStocks.itemId, legacy.id));
-      const [after] = await orm.select({ stocks: items.stocks, total: items.currentStock }).from(items).where(eq(items.id, legacy.id));
-      const kinds = (await orm.select({ kind: inventoryReconciliationAnomalies.kind }).from(inventoryReconciliationAnomalies)
-        .where(and(eq(inventoryReconciliationAnomalies.runId, runId), eq(inventoryReconciliationAnomalies.itemId, legacy.id)))).map(k => k.kind).sort();
-      const expectedKinds = ['backfill_duplicate_json_keys', 'backfill_row_created', 'backfill_unresolved_json_key', 'cache_rebuilt_from_table'];
-      if (rows.length !== 1 || Number(rows[0].currentStock) !== 5 || rows[0].warehouseId !== w1.id
-        || JSON.stringify(after.stocks) !== JSON.stringify({ [w1.code]: 5 }) || Number(after.total) !== 5
-        || JSON.stringify(kinds) !== JSON.stringify(expectedKinds)) {
-        throw new Error(`پرکردن جدول از JSONB قدیمی نادرست است: ${JSON.stringify({ rows: rows.map(r => [r.warehouseId, r.currentStock]), stocks: after.stocks, total: after.total, kinds })}`);
-      }
-
-      // بازسازی کاردکس کالای دارای گردش در محل نامعلوم رد شود (پیش‌تر این گردش بی‌صدا از جدول کنار گذاشته می‌شد)
+      const legacy = await createTestItem({ stocks: { [w1.code]: 5 } });
       const today = `${await businessTodayIsoDate()} 10:00:00`;
       await orm.insert(transactions).values({ itemId: legacy.id, type: 'in', quantity: 5, unitPrice: 1000, totalPrice: 5000, date: today, documentType: 'audit', documentRef: 'P21-PROBE', location: w1.code, isDeleted: 0 } as any);
       await orm.insert(transactions).values({ itemId: legacy.id, type: 'in', quantity: 2, unitPrice: 1000, totalPrice: 2000, date: today, documentType: 'audit', documentRef: 'P21-PROBE', location: 'محل-نامعلوم-P21', isDeleted: 0 } as any);
@@ -3882,22 +3860,21 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (!rebuildRefused || Number(afterRebuild.total) !== 5) {
         throw new Error(`بازسازی کاردکس با گردش در محل نامعلوم باید رد شود و موجودی دست نخورد: ${JSON.stringify({ rebuildRefused, total: afterRebuild.total })}`);
       }
-
       results.push(makeTestCase({
-        id: 'reg_stock_backfill_and_rebuild_guard_p2_1',
+        id: 'reg_kardex_rebuild_unresolved_guard_p2_1',
         scenarioId: 'inventory_integrity_3way_reconciliation',
-        name: 'v7.0.45: انتقال داده قدیمی JSONB به جدول با ثبت ناهنجاری و رد بازسازی کاردکس در محل نامعلوم (P2-1)',
+        name: 'v7.0.45: رد بازسازی کاردکس کالای دارای گردش در محل نامعلوم بدون تغییر موجودی (P2-1)',
         layer: 'regression',
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'کلیدهای هم‌انبار جمع، کلید نامعلوم ثبت ناهنجاری، کش از جدول بازسازی و بازسازی کاردکس دارای محل نامعلوم بدون تغییر موجودی رد شد.'
+        details: 'بازسازی کاردکس کالای دارای گردش در محل نامعلوم با خطای روشن رد شد و موجودی ۵ دست نخورد.'
       }));
     } catch (err: any) {
       results.push(makeTestCase({
-        id: 'reg_stock_backfill_and_rebuild_guard_p2_1',
+        id: 'reg_kardex_rebuild_unresolved_guard_p2_1',
         scenarioId: 'inventory_integrity_3way_reconciliation',
-        name: 'v7.0.45: انتقال داده قدیمی JSONB به جدول با ثبت ناهنجاری و رد بازسازی کاردکس در محل نامعلوم (P2-1)',
+        name: 'v7.0.45: رد بازسازی کاردکس کالای دارای گردش در محل نامعلوم بدون تغییر موجودی (P2-1)',
         layer: 'regression',
         executionType: 'real_database',
         passed: false,
@@ -3974,6 +3951,59 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.20: v7.0.48 (TD-214): پس از حذف ستون JSONB، پاسخ‌های API موجودی هر انبار را از جدول نرمال می‌دهند
+  // و فهرست انبارگردانی برای انباری که کالا در آن موجودی ندارد صفر نشان می‌دهد (نه موجودی کل)
+  if (shouldRun('reg_stock_api_from_table_td_214', 'td214', 'stocks', 'api')) {
+    const tStart = Date.now();
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const [w1] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const w2 = await createTestWarehouse({ name: `انبار دوم TD-214 ${Date.now()}` });
+      const w3 = await createTestWarehouse({ name: `انبار سوم TD-214 ${Date.now()}` });
+      const item = await createTestItem({ stocks: { [w1.code]: 3, [w2.code]: 4 } });
+
+      const list = await request(app).get('/api/items?limit=0').set('Cookie', session.cookie);
+      const rows: any[] = Array.isArray(list.body?.data) ? list.body.data : (Array.isArray(list.body) ? list.body : []);
+      const row = rows.find(r => r.id === item.id);
+      if (list.status !== 200 || !row || row.current_stock !== 7 || row.stocks?.[w1.code] !== 3 || row.stocks?.[w2.code] !== 4
+        || row[`stock_${w1.code}`] !== 3 || row[`stock_${w2.code}`] !== 4) {
+        throw new Error(`فهرست کالاها باید موجودی هر انبار را از جدول بدهد: ${JSON.stringify({ status: list.status, row: row && { current_stock: row.current_stock, stocks: row.stocks } })}`);
+      }
+
+      const audit = await request(app).get(`/api/documents/audit-items?location=${encodeURIComponent(w3.code)}`).set('Cookie', session.cookie);
+      const auditRow = (Array.isArray(audit.body) ? audit.body : []).find((r: any) => r.id === item.id);
+      if (audit.status !== 200 || !auditRow || auditRow.system_stock !== 0) {
+        throw new Error(`موجودی سیستمی انبارگردانی در انبار بدون موجودی باید صفر باشد: ${JSON.stringify({ status: audit.status, system_stock: auditRow?.system_stock })}`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_stock_api_from_table_td_214',
+        scenarioId: 'inventory_integrity_3way_reconciliation',
+        name: 'v7.0.48: موجودی انبارها در API از جدول نرمال و صفر برای انبار بدون موجودی در فهرست انبارگردانی (TD-214)',
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'GET /api/items نقشه stocks و stock_<کد> را از جدول داد (۳ و ۴، کل ۷) و فهرست انبارگردانی انبار سوم موجودی سیستمی صفر نشان داد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_stock_api_from_table_td_214',
+        scenarioId: 'inventory_integrity_3way_reconciliation',
+        name: 'v7.0.48: موجودی انبارها در API از جدول نرمال و صفر برای انبار بدون موجودی در فهرست انبارگردانی (TD-214)',
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();
@@ -4000,11 +4030,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         type: 'product',
         unit: 'عدد',
         currentStock: 25,
-        stocks: { main: 25 },
         weightedAverageCost: 100000,
         isDeleted: 0
       }).returning({ id: items.id });
-      await syncFixtureItemStocks(itemA.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
+      await seedFixtureItemStocks(itemA.id, { main: 25 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
       createdItemIds.push(itemA.id);
 
       const [itemB] = await orm.insert(items).values({
@@ -4013,11 +4042,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         type: 'product',
         unit: 'عدد',
         currentStock: 30,
-        stocks: { main: 30 },
         weightedAverageCost: 200000,
         isDeleted: 0
       }).returning({ id: items.id });
-      await syncFixtureItemStocks(itemB.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
+      await seedFixtureItemStocks(itemB.id, { main: 30 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
       createdItemIds.push(itemB.id);
 
       const [draftDoc] = await orm.insert(documents).values({
@@ -4130,10 +4158,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         category: 'انگشتر',
         type: 'product',
         currentStock: 100,
-        stocks: { main: 100 },
         weightedAverageCost: 50000,
         isDeleted: 0
       }).returning();
+      await seedFixtureItemStocks(testItem.id, { main: 100 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
       createdItemIds.push(testItem.id);
 
       // 2. Create a test draft document
@@ -4631,9 +4659,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         unit: 'عدد',
         type: 'product',
         currentStock: 50,
-        stocks: { main: 50 },
         isDeleted: 0
       }).returning();
+      await seedFixtureItemStocks(item1.id, { main: 50 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
       createdItemIds.push(item1.id);
 
       const [item2] = await orm.insert(items).values({
@@ -4643,9 +4671,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         unit: 'عدد',
         type: 'product',
         currentStock: 50,
-        stocks: { main: 50 },
         isDeleted: 0
       }).returning();
+      await seedFixtureItemStocks(item2.id, { main: 50 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
       createdItemIds.push(item2.id);
 
       // 2. Create a draft document with item1

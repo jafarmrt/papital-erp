@@ -305,7 +305,6 @@ export class DocumentCreationService {
             id: items.id,
             weightedAverageCost: items.weightedAverageCost,
             currentStock: items.currentStock,
-            stocks: items.stocks,
           })
           .from(items)
           .where(and(inArray(items.id, sortedAuditItemIds), eq(items.isDeleted, 0)))
@@ -400,7 +399,6 @@ export class DocumentCreationService {
               code: items.code,
               name: items.name,
               unit: items.unit,
-              stocks: items.stocks,
               currentStock: items.currentStock,
             })
             .from(items)

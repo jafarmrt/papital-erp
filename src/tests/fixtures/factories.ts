@@ -1,12 +1,13 @@
 import { orm } from '../../db/drizzle.js';
 import bcrypt from 'bcryptjs';
-import { sql, eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import {
   users,
   roles,
   customers,
   items,
   warehouses,
+  itemWarehouseStocks,
   documents,
   documentItems,
   journalVouchers,
@@ -89,41 +90,56 @@ export async function createTestCustomer(overrides: Partial<typeof customers.$in
 
 /**
  * Item / Inventory Product Factory
+ * v7.0.48 (TD-214): ستون items.stocks حذف شد؛ `stocks` فقط ورودی آزمون است (کلید = کد یا نام انبار) و ردیف‌های
+ * item_warehouse_stocks را می‌سازد. items.current_stock را تریگر پایگاه‌داده از همان ردیف‌ها حساب می‌کند. بدون
+ * `stocks`، موجودی پیش‌فرض (currentStock یا ۱۰۰) در انبار پیش‌فرض ثبت می‌شود.
  */
 export async function createTestItem(
-  overrides: Partial<typeof items.$inferInsert> = {},
-  db: any = orm,
-  options: { legacyJsonOnly?: boolean } = {}
+  overrides: Partial<typeof items.$inferInsert> & { stocks?: Record<string, number> } = {},
+  db: any = orm
 ) {
   const suffix = uniqueSuffix();
+  const { stocks: stocksOverride, ...columnOverrides } = overrides;
   const itemData = {
-    type: overrides.type || 'product',
-    name: overrides.name || withTestMarker(`کالای آزمایشی ${suffix}`),
-    code: overrides.code || `ITEM_${suffix}`,
-    unit: overrides.unit || 'عدد',
-    category: overrides.category || 'دستبند',
-    currentStock: overrides.currentStock ?? 100,
-    weightedAverageCost: overrides.weightedAverageCost ?? 50000,
-    reorderPoint: overrides.reorderPoint ?? 10,
-    stocks: overrides.stocks || { main: overrides.currentStock ?? 100 },
-    version: overrides.version ?? 1,
+    type: columnOverrides.type || 'product',
+    name: columnOverrides.name || withTestMarker(`کالای آزمایشی ${suffix}`),
+    code: columnOverrides.code || `ITEM_${suffix}`,
+    unit: columnOverrides.unit || 'عدد',
+    category: columnOverrides.category || 'دستبند',
+    weightedAverageCost: columnOverrides.weightedAverageCost ?? 50000,
+    reorderPoint: columnOverrides.reorderPoint ?? 10,
+    version: columnOverrides.version ?? 1,
     isDeleted: 0,
-    ...overrides
+    ...columnOverrides
   };
 
   const [inserted] = await db.insert(items).values(itemData).returning();
-  // legacyJsonOnly: وضعیت داده پیش از مهاجرت 0020 (فقط JSONB، بدون ردیف جدول) برای آزمون ابزارهای تطبیق
-  if (options.legacyJsonOnly) return inserted;
-  return syncFixtureItemStocks(inserted.id, db);
+  const stocks = stocksOverride ?? { '': Number(columnOverrides.currentStock ?? 100) };
+  return seedFixtureItemStocks(inserted.id, stocks, db);
 }
 
 /**
- * v7.0.45 (audit P2-1): جدول item_warehouse_stocks تنها منبع موجودی است و موتور گردش دیگر مقدار اولیه را از JSONB
- * نمی‌خواند. کالای آزمایشی که مستقیم با JSONB درج می‌شود همانند داده قدیمی پس از مهاجرت 0020 همگام می‌شود
- * (ساخت ردیف‌های جدول از JSONB و بازسازی کش از جدول).
+ * v7.0.48 (TD-214): موجودی آزمون یک کالا را مستقیم در item_warehouse_stocks می‌نشاند (کلید = کد یا نام انبار؛
+ * '' = انبار پیش‌فرض). مقدار صفر یا منفی نادیده گرفته می‌شود؛ کلید ناشناخته خطای آزمون است.
  */
-export async function syncFixtureItemStocks(itemId: number, db: any = orm) {
-  await db.execute(sql`SELECT erp_backfill_item_warehouse_stocks(${itemId}::integer, 'test-fixture')`);
+export async function seedFixtureItemStocks(itemId: number, stocks: Record<string, number>, db: any = orm) {
+  const all = await db.select({ id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive })
+    .from(warehouses).orderBy(asc(warehouses.id));
+  const defaultWh = all.find((w: any) => w.isActive === 1) ?? all[0];
+  const qtyByWarehouse = new Map<number, { code: string; qty: number }>();
+  for (const [key, rawQty] of Object.entries(stocks)) {
+    const qty = Number(rawQty) || 0;
+    if (qty <= 0) continue;
+    const k = key.trim().toLowerCase();
+    const wh = !k ? defaultWh : all.find((w: any) => w.code.toLowerCase() === k) ?? all.find((w: any) => (w.name || '').trim().toLowerCase() === k);
+    if (!wh) throw new Error(`seedFixtureItemStocks: انبار «${key}» وجود ندارد`);
+    const prev = qtyByWarehouse.get(wh.id);
+    qtyByWarehouse.set(wh.id, { code: wh.code, qty: (prev?.qty ?? 0) + qty });
+  }
+  for (const [warehouseId, { code, qty }] of qtyByWarehouse) {
+    await db.insert(itemWarehouseStocks)
+      .values({ itemId, warehouseId, warehouseCode: code, currentStock: qty, reservedStock: 0, version: 1 });
+  }
   const [synced] = await db.select().from(items).where(eq(items.id, itemId));
   return synced;
 }

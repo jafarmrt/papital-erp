@@ -42,7 +42,6 @@ export interface WarehouseStockReconRow {
   warehouseName: string;
   ledgerQty: number;
   tableQty: number | null;
-  jsonQty: number | null;
   storedCode: string | null;
   status: ReconRowStatus;
   codeMismatch: boolean;
@@ -102,7 +101,7 @@ export interface WarehouseStockRepairResult {
 
 type WarehouseRef = LedgerWarehouseRef;
 
-type ItemSnapshot = { id: number; code: string | null; name: string; currentStock: number | null; stocks: unknown };
+type ItemSnapshot = { id: number; code: string | null; name: string; currentStock: number | null };
 
 interface ItemAnalysis {
   item: ItemSnapshot;
@@ -155,16 +154,6 @@ function analyzeItem(
     ledgerByWh.set(wh.id, fin(ledgerByWh.get(wh.id) ?? 0).add(l.qty).round(4).toNumber());
   }
 
-  const jsonByWh = new Map<number, number>();
-  const stocks = (item.stocks && typeof item.stocks === 'object' ? item.stocks : {}) as Record<string, unknown>;
-  for (const [key, val] of Object.entries(stocks)) {
-    const wh = resolve(key);
-    const num = Number(val);
-    if (wh && Number.isFinite(num)) {
-      jsonByWh.set(wh.id, fin(jsonByWh.get(wh.id) ?? 0).add(num).round(4).toNumber());
-    }
-  }
-
   const tableByWh = new Map(tableRows.map(r => [r.warehouseId, r]));
   const warehouseIds = new Set<number>([...ledgerByWh.keys(), ...tableByWh.keys()]);
   const blocked = unresolved.length > 0;
@@ -192,7 +181,6 @@ function analyzeItem(
       warehouseName: wh.name,
       ledgerQty,
       tableQty,
-      jsonQty: jsonByWh.has(whId) ? jsonByWh.get(whId)! : null,
       storedCode: table ? table.warehouseCode : null,
       status,
       codeMismatch,
@@ -200,8 +188,8 @@ function analyzeItem(
   }
 
   const tableSumNum = tableSum.round(4).toNumber();
-  const jsonDiffers = rows.some(r => Math.abs((r.jsonQty ?? 0) - (r.tableQty ?? 0)) > EPSILON);
-  const cacheMismatch = Math.abs(Number(item.currentStock || 0) - tableSumNum) > EPSILON || jsonDiffers;
+  // v7.0.48 (TD-214): current_stock را تریگر پایگاه‌داده از جدول نرمال می‌سازد؛ مغایرت یعنی نقص آن تریگر
+  const cacheMismatch = Math.abs(Number(item.currentStock || 0) - tableSumNum) > EPSILON;
   return { item, rows, unresolved, tableSum: tableSumNum, cacheMismatch };
 }
 
@@ -221,7 +209,7 @@ export class WarehouseStockReconciliationService {
     const itemConds = [eq(items.isDeleted, 0)];
     if (itemIds && itemIds.length > 0) itemConds.push(inArray(items.id, itemIds));
     const itemRows: ItemSnapshot[] = await executor
-      .select({ id: items.id, code: items.code, name: items.name, currentStock: items.currentStock, stocks: items.stocks })
+      .select({ id: items.id, code: items.code, name: items.name, currentStock: items.currentStock })
       .from(items)
       .where(and(...itemConds))
       .orderBy(asc(items.id));
@@ -341,7 +329,9 @@ export class WarehouseStockReconciliationService {
             result.rowsChanged += changes.length;
             result.changes.push(...changes);
 
-            const after = await tx.select({ currentStock: items.currentStock, stocks: items.stocks }).from(items).where(eq(items.id, itemId));
+            const [after] = await tx.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, itemId));
+            const afterStocks = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+            const beforeStocks = Object.fromEntries(analysis.rows.filter(r => r.tableQty !== null).map(r => [r.warehouseCode, r.tableQty]));
             await logActivity({
               tx,
               userId: options.userId,
@@ -352,8 +342,8 @@ export class WarehouseStockReconciliationService {
               description: `ترمیم موجودی انبارهای کالا ${analysis.item.name} (${analysis.item.code || itemId}) از روی کاردکس`,
               details: {
                 runId,
-                before: { currentStock: analysis.item.currentStock, stocks: analysis.item.stocks },
-                after: { currentStock: after[0]?.currentStock, stocks: after[0]?.stocks },
+                before: { currentStock: analysis.item.currentStock, stocks: beforeStocks },
+                after: { currentStock: after?.currentStock, stocks: afterStocks.byCode },
                 changes,
               },
             });
@@ -366,7 +356,7 @@ export class WarehouseStockReconciliationService {
                 itemCode: analysis.item.code,
                 itemName: analysis.item.name,
                 oldStock: Number(analysis.item.currentStock || 0),
-                newStock: Number(after[0]?.currentStock || 0),
+                newStock: Number(after?.currentStock || 0),
                 reason: 'ترمیم موجودی انبارها از روی کاردکس (TD-200)',
               },
               { userId: options.userId, userName: username }
@@ -428,12 +418,9 @@ export class WarehouseStockReconciliationService {
       }
     }
 
-    // کش JSONB و موجودی کل از جدول نرمال (با کد استاندارد انبار) بازسازی می‌شوند؛ بهای میانگین موزون دست نمی‌خورد
-    const snapshot = await ItemWarehouseStockService.getStockSnapshot(tx, a.item.id);
+    // موجودی کل را تریگر پایگاه‌داده از جدول نرمال می‌نویسد (TD-214)؛ بهای میانگین موزون دست نمی‌خورد
     const [itemRow] = await tx.select({ version: items.version }).from(items).where(eq(items.id, a.item.id));
     await tx.update(items).set({
-      stocks: snapshot.byCode,
-      currentStock: snapshot.total,
       version: nextVersion(itemRow?.version ?? 1),
     }).where(eq(items.id, a.item.id));
     return changes;

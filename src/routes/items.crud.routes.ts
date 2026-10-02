@@ -14,6 +14,7 @@ import { WorkflowEngineService } from '../services/workflow/workflowEngineServic
 import { logger } from '../middleware/logger.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
+import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 
 const router = Router();
 
@@ -97,6 +98,8 @@ router.get('/items/reorder-alerts', async (req, res) => {
     const fetchedItems = await orm.select().from(items)
       .where(and(...conditions))
       .orderBy(items.currentStock);
+    // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)
+    const alertStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
 
     const mapped = fetchedItems.map(it => {
       const curStock = Number(it.currentStock || 0);
@@ -104,8 +107,10 @@ router.get('/items/reorder-alerts', async (req, res) => {
       const wac = Number(it.weightedAverageCost || 0);
       const deficit = Math.max(0, reorderPt - curStock);
 
+      const st = alertStockMap.get(it.id)?.byCode ?? {};
       const obj: Record<string, unknown> = {
         ...it,
+        stocks: st,
         current_stock: curStock,
         reorder_point: reorderPt,
         weighted_average_cost: wac,
@@ -114,11 +119,8 @@ router.get('/items/reorder-alerts', async (req, res) => {
         is_zero_stock: curStock <= 0
       };
 
-      const st = it.stocks as Record<string, unknown> | null;
-      if (st) {
-        for (const k of Object.keys(st)) {
-          obj[`stock_${k}`] = Number(st[k] || 0);
-        }
+      for (const k of Object.keys(st)) {
+        obj[`stock_${k}`] = Number(st[k] || 0);
       }
       return obj;
     });
@@ -166,6 +168,8 @@ router.get('/items', async (req, res) => {
 
     const fetchedItems = await query;
     const reservedMap = await ItemsService.getReservedStocksMap();
+    // v7.0.48 (TD-214): نقشه موجودی انبارها (stocks و stock_<کد>) از جدول نرمال؛ شکل پاسخ برای رابط کاربری حفظ شده است
+    const listStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(it => it.id));
 
     const itemIds = fetchedItems.map(it => it.id);
     let txItemSet = new Set<number>();
@@ -212,7 +216,7 @@ router.get('/items', async (req, res) => {
       const resInfo = reservedMap[codeUpper] || { totalReserved: 0, reservations: [] };
       const curStock = Number(it.currentStock || 0);
       const reservedStock = Number(resInfo.totalReserved || 0);
-      const st = (it.stocks as Record<string, unknown> | null) || {};
+      const st: Record<string, number> = listStockMap.get(it.id)?.byCode ?? {};
 
       let locStock: number | null = null;
       if (resolvedQueryLoc) {
@@ -230,6 +234,7 @@ router.get('/items', async (req, res) => {
 
       const obj: Record<string, unknown> = {
         ...it,
+        stocks: st,
         current_stock: curStock,
         reorder_point: it.reorderPoint,
         weighted_average_cost: it.weightedAverageCost,
@@ -240,10 +245,8 @@ router.get('/items', async (req, res) => {
         canSetOpeningBalance: canSetOpening,
         can_set_opening_balance: canSetOpening
       };
-      if (st) {
-        for (const k of Object.keys(st)) {
-          obj[`stock_${k}`] = Number(st[k]);
-        }
+      for (const k of Object.keys(st)) {
+        obj[`stock_${k}`] = Number(st[k]);
       }
       return obj;
     });
@@ -421,6 +424,7 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
 router.delete('/items/:id', authorize('admin', 'products.delete'), validate(paramsIdSchema), async (req, res) => {
   try {
     const itemId = Number(req.params.id);
+    const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
     const delItem = await ItemCatalogService.deleteItem(itemId);
 
     await logActivity({
@@ -438,7 +442,7 @@ router.delete('/items/:id', authorize('admin', 'products.delete'), validate(para
           category: delItem.category,
           unit: delItem.unit,
           currentStock: delItem.currentStock,
-          stocks: delItem.stocks,
+          stocks: stockBeforeDelete.byCode,
           weightedAverageCost: delItem.weightedAverageCost,
           reorderPoint: delItem.reorderPoint
         },

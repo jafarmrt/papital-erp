@@ -422,67 +422,62 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
   }
 
   // Test 9: Stock Consistency Trigger Verification (DB-004)
+  // v7.0.48 (TD-214): ستون JSONB items.stocks حذف شد و items.current_stock را فقط پایگاه‌داده از مجموع
+  // item_warehouse_stocks می‌سازد: هر تغییر در جدول نرمال آن را به‌روز می‌کند و نوشتن مستقیم در آن اصلاح می‌شود.
   const t9Start = Date.now();
   try {
-    const triggerItemCode = `TRG-TEST-${Date.now()}`;
-    
-    // 1. Insert with mismatched current_stock (100) vs stocks (main: 50, wh1: 30 -> sum: 80)
+    const { itemWarehouseStocks: iws } = await import('../../db/schema.js');
+    const { createTestWarehouse } = await import('../fixtures/factories.js');
+    const columns: any = await orm.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'items' AND column_name = 'stocks'`);
+    if ((columns.rows ?? columns).length > 0) {
+      throw new Error('ستون items.stocks هنوز وجود دارد');
+    }
+
+    const [mainWh] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+    const secondWh = await createTestWarehouse({ name: `انبار دوم تریگر ${Date.now()}` });
     const [insertedItem] = await orm.insert(items).values({
-      code: triggerItemCode,
+      code: `TRG-TEST-${Date.now()}`,
       name: 'کالای تست تریگر همگامی موجودی',
       type: 'product',
       unit: 'عدد',
-      currentStock: 100, // Deliberate mismatch
-      stocks: { main: 50, wh1: 30 },
+      currentStock: 100, // بدون ردیف جدول، باید صفر شود
       isDeleted: 0
     }).returning();
+    const stockOf = async () => Number((await orm.select({ s: items.currentStock }).from(items).where(eq(items.id, insertedItem.id)))[0]?.s);
 
-    // Query back to verify trigger corrected current_stock on INSERT
-    const [fetchedInserted] = await orm.select().from(items).where(eq(items.id, insertedItem.id));
-    if (Number(fetchedInserted.currentStock) !== 80) {
-      throw new Error(`تریگر همگامی در INSERT کار نکرد: مقدار انتظار ۸۰، مقدار دریافتی ${fetchedInserted.currentStock}`);
-    }
+    const checks: string[] = [];
+    if (await stockOf() !== 0) checks.push(`درج کالا با current_stock=100 بدون ردیف جدول: ${await stockOf()} (انتظار ۰)`);
 
-    // 2. Update stocks to { main: 40, wh1: 20, safe: 15 } (sum: 75) without updating current_stock
-    await orm.update(items)
-      .set({
-        stocks: { main: 40, wh1: 20, safe: 15 }
-      })
-      .where(eq(items.id, insertedItem.id));
+    await orm.insert(iws).values({ itemId: insertedItem.id, warehouseId: mainWh.id, warehouseCode: mainWh.code, currentStock: 50 });
+    await orm.insert(iws).values({ itemId: insertedItem.id, warehouseId: secondWh.id, warehouseCode: secondWh.code, currentStock: 30 });
+    if (await stockOf() !== 80) checks.push(`پس از درج ردیف‌های ۵۰ و ۳۰: ${await stockOf()} (انتظار ۸۰)`);
 
-    const [fetchedUpdated] = await orm.select().from(items).where(eq(items.id, insertedItem.id));
-    if (Number(fetchedUpdated.currentStock) !== 75) {
-      throw new Error(`تریگر همگامی در UPDATE stocks کار نکرد: مقدار انتظار ۷۵، مقدار دریافتی ${fetchedUpdated.currentStock}`);
-    }
+    await orm.update(items).set({ currentStock: 999 }).where(eq(items.id, insertedItem.id));
+    if (await stockOf() !== 80) checks.push(`نوشتن مستقیم ۹۹۹: ${await stockOf()} (انتظار ۸۰)`);
 
-    // 3. Update with empty stocks {} -> currentStock should become 0
-    await orm.update(items)
-      .set({
-        stocks: {}
-      })
-      .where(eq(items.id, insertedItem.id));
+    await orm.update(iws).set({ currentStock: 40 }).where(and(eq(iws.itemId, insertedItem.id), eq(iws.warehouseId, mainWh.id)));
+    if (await stockOf() !== 70) checks.push(`پس از تغییر ردیف ۵۰ به ۴۰: ${await stockOf()} (انتظار ۷۰)`);
 
-    const [fetchedEmptyStocks] = await orm.select().from(items).where(eq(items.id, insertedItem.id));
-    if (Number(fetchedEmptyStocks.currentStock) !== 0) {
-      throw new Error(`تریگر همگامی در خالی بودن stocks کار نکرد: مقدار انتظار ۰، مقدار دریافتی ${fetchedEmptyStocks.currentStock}`);
-    }
+    await orm.delete(iws).where(and(eq(iws.itemId, insertedItem.id), eq(iws.warehouseId, secondWh.id)));
+    if (await stockOf() !== 40) checks.push(`پس از حذف ردیف ۳۰: ${await stockOf()} (انتظار ۴۰)`);
 
-    // Cleanup test item
+    await orm.delete(iws).where(eq(iws.itemId, insertedItem.id));
     await orm.delete(items).where(eq(items.id, insertedItem.id));
+    if (checks.length > 0) throw new Error(checks.join('؛ '));
 
     results.push(makeTestCase({
       id: 'db_stock_consistency_trigger_validation',
-      name: 'تضمین اتمیک یکپارچگی current_stock و SUM(stocks) با PostgreSQL Trigger (DB-004)',
+      name: 'v7.0.48: موجودی کل کالا همیشه برابر مجموع جدول موجودی انبارها با تریگر PostgreSQL (DB-004 / TD-214)',
       layer: 'database',
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t9Start,
-      details: 'همگامی خودکار و اصلاح تناقض‌های current_stock بر مبنای SUM(stocks) در INSERT و UPDATE توسط تریگر trg_sync_item_current_stock تأیید شد.'
+      details: 'ستون items.stocks وجود ندارد؛ current_stock با درج، تغییر و حذف ردیف‌های item_warehouse_stocks به‌روز شد و نوشتن مستقیم ۹۹۹ به مجموع جدول اصلاح شد.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'db_stock_consistency_trigger_validation',
-      name: 'تضمین اتمیک یکپارچگی current_stock و SUM(stocks) با PostgreSQL Trigger (DB-004)',
+      name: 'v7.0.48: موجودی کل کالا همیشه برابر مجموع جدول موجودی انبارها با تریگر PostgreSQL (DB-004 / TD-214)',
       layer: 'database',
       executionType: 'real_database',
       passed: false,
@@ -650,15 +645,16 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         .filter(Boolean)
         .join(' | ');
 
-    // 1. Test invalid JSONB array in items.stocks (should fail check constraint chk_items_stocks_object)
+    // 1. Test invalid JSONB array in production_projects.inventory_control (should fail check constraint chk_pp_inv_control_object)
+    // v7.0.48 (TD-214): ستون items.stocks و قید chk_items_stocks_object با مهاجرت 0021 حذف شدند
     try {
       await orm.execute(sql`
-        INSERT INTO items (type, name, code, unit, stocks)
-        VALUES ('product', 'Test Invalid Stocks JSON', ${'TEST-JSON-FAIL-' + Date.now()}, 'عدد', '[1,2,3]'::jsonb)
+        INSERT INTO production_projects (project_code, title, inventory_control)
+        VALUES (${'TEST-JSON-FAIL-' + Date.now()}, 'Test Invalid Inventory Control JSON', '[1,2,3]'::jsonb)
       `);
     } catch (err: any) {
       const flat = flattenErr(err);
-      if (flat.includes('chk_items_stocks_object') || flat.includes('violates check constraint')) {
+      if (flat.includes('chk_pp_inv_control_object') || flat.includes('violates check constraint')) {
         invalidJsonRejected = true;
       } else {
         throw new Error(`شکست ناکارآمد در درج JSON غیرمجاز: ${flat}`);
@@ -666,7 +662,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     }
 
     if (!invalidJsonRejected) {
-      throw new Error('درج کالا با stocks غیرمجاز (آرایه به جای آبجکت) توسط قید chk_items_stocks_object رد نشد!');
+      throw new Error('درج پروژه با inventory_control غیرمجاز (آرایه به جای آبجکت) توسط قید chk_pp_inv_control_object رد نشد!');
     }
 
     // 2. Test negative weighted_average_cost in items (should fail check constraint chk_items_wac_nonneg)

@@ -293,6 +293,8 @@ export class ItemCatalogService {
     }
 
     const fetchedItems = await orm.select().from(items).where(and(...conditions)).orderBy(desc(items.id));
+    // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال
+    const exportStockMap = await ItemWarehouseStockService.getStocksForItems(orm, fetchedItems.map(i => i.id));
     const allPrices = await orm.select().from(itemPrices).where(eq(itemPrices.isDeleted, 0));
 
     const priceMap = new Map<number, Map<string, { price: number; currency: string }>>();
@@ -336,7 +338,7 @@ export class ItemCatalogService {
         'موجودی کل': Number(it.currentStock || 0),
       };
 
-      const st = (it.stocks as Record<string, unknown>) || {};
+      const st = exportStockMap.get(it.id)?.byCode ?? {};
       for (const w of whs) {
         row[`موجودی انبار ${w.name}`] = Number(st[w.code] || 0);
       }
@@ -609,7 +611,6 @@ export class ItemCatalogService {
             weight: weight !== null && !isNaN(weight) ? weight : null,
             material: material || null,
             image: image || '',
-            stocks: {},
             currentStock: 0,
             isDeleted: 0
           }).returning({ id: items.id });
@@ -859,8 +860,6 @@ export class ItemCatalogService {
         weight: weight ? Number(weight) : null,
         material: material || null,
         size: size || null,
-        currentStock: 0,
-        stocks: {},
         isDeleted: 0
       }).returning();
 

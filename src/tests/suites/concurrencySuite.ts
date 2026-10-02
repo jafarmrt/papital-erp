@@ -5,7 +5,8 @@ import { eq, and, or, sql } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
 import { IdempotencyService } from '../../services/idempotency.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../lib/lockOrder.js';
-import { syncFixtureItemStocks, createTestUser } from '../fixtures/factories.js';
+import { seedFixtureItemStocks, createTestUser } from '../fixtures/factories.js';
+import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 
 export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -80,31 +81,20 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       type: 'product',
       unit: 'عدد',
       currentStock: 10,
-      stocks: { main: 10 },
       weightedAverageCost: 1000,
       isDeleted: 0
     }).returning({ id: items.id });
+    await seedFixtureItemStocks(raceItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
-    const outcomes = await Promise.allSettled([
-      orm.transaction(async (tx) => {
-        const [it] = await tx.select({ currentStock: items.currentStock, stocks: items.stocks }).from(items).where(eq(items.id, raceItem.id)).for('update');
-        if (!it || Number(it.currentStock) < 8) throw new Error('INSUFFICIENT_STOCK_8');
-        // تریگر trg_sync_item_current_stock مانده را از jsonb بازمحاسبه می‌کند —
-        // هر دو ستون باید با هم آپدیت شوند (الگوی production)
-        const remaining = Number(it.currentStock) - 8;
-        const newStocks = { ...((it.stocks as Record<string, number>) || {}), main: remaining };
-        await tx.update(items).set({ currentStock: remaining, stocks: newStocks }).where(eq(items.id, raceItem.id));
-        return 'ok8';
-      }),
-      orm.transaction(async (tx) => {
-        const [it] = await tx.select({ currentStock: items.currentStock, stocks: items.stocks }).from(items).where(eq(items.id, raceItem.id)).for('update');
-        if (!it || Number(it.currentStock) < 5) throw new Error('INSUFFICIENT_STOCK_5');
-        const remaining = Number(it.currentStock) - 5;
-        const newStocks = { ...((it.stocks as Record<string, number>) || {}), main: remaining };
-        await tx.update(items).set({ currentStock: remaining, stocks: newStocks }).where(eq(items.id, raceItem.id));
-        return 'ok5';
-      })
-    ]);
+    // v7.0.48 (TD-214): کسر از مسیر واقعی تولید — قفل سطری کالا و سپس applyMovement روی جدول موجودی انبارها
+    // (current_stock را تریگر پایگاه‌داده از همان جدول می‌سازد)
+    const deduct = (qty: number, label: string) => orm.transaction(async (tx) => {
+      await tx.select({ id: items.id }).from(items).where(eq(items.id, raceItem.id)).for('update');
+      const wh = await ItemWarehouseStockService.resolveWarehouse(tx, 'main');
+      await ItemWarehouseStockService.applyMovement(tx, { itemId: raceItem.id, warehouse: wh, inOut: 'out', quantity: qty });
+      return label;
+    });
+    const outcomes = await Promise.allSettled([deduct(8, 'ok8'), deduct(5, 'ok5')]);
     const ok8 = outcomes[0].status === 'fulfilled' && outcomes[0].value === 'ok8';
     const ok5 = outcomes[1].status === 'fulfilled' && outcomes[1].value === 'ok5';
     const blocked8 = outcomes[0].status === 'rejected';
@@ -641,11 +631,10 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       type: 'product',
       unit: 'عدد',
       currentStock: 100,
-      stocks: { main: 100 },
       weightedAverageCost: 1000,
       isDeleted: 0
     }).returning({ id: items.id });
-    await syncFixtureItemStocks(rlkItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
+    await seedFixtureItemStocks(rlkItem.id, { main: 100 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
     const [rlkDoc] = await orm.insert(documents).values({
       type: 'invoice',

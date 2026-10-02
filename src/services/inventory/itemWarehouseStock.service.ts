@@ -1,5 +1,5 @@
 import { eq, and, asc, inArray } from 'drizzle-orm';
-import { itemWarehouseStocks, warehouses, items } from '../../db/schema.js';
+import { itemWarehouseStocks, warehouses } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
 import type { DbExecutor } from '../../db/drizzle.js';
@@ -142,6 +142,8 @@ export class ItemWarehouseStockService {
   /**
    * v7.0.45 (audit P2-1): موجودی فعلی کالا در هر انبار، فقط از جدول نرمال (منبع حقیقت) با کد استاندارد انبار
    * (از جدول انبارها، نه ستون کپی warehouse_code که در مهاجرت 0014 گاهی نام انبار گرفته است).
+   * v7.0.48 (TD-214): ستون JSONB items.stocks حذف شد؛ پاسخ‌های API نقشه موجودی انبارها را از همین تابع می‌سازند و
+   * items.current_stock را فقط تریگر پایگاه‌داده (مهاجرت 0021) از همین جدول می‌نویسد.
    */
   public static async getStockSnapshot(tx: DbClient, itemId: number): Promise<StockSnapshot> {
     const map = await ItemWarehouseStockService.getStocksForItems(tx, [itemId]);
@@ -178,26 +180,6 @@ export class ItemWarehouseStockService {
       result.get(id)!.total = total.round(4).toNumber();
     }
     return result;
-  }
-
-  /**
-   * کش خواندنی JSONB (items.stocks) و موجودی کل (items.current_stock) را از جدول نرمال بازسازی و ذخیره می‌کند.
-   * v7.0.45 (audit P2-1): هیچ مسیری مستقیم در این دو ستون نمی‌نویسد؛ هر تغییر موجودی پس از اعمال روی جدول نرمال
-   * همین تابع را صدا می‌زند (یا مقدار getStockSnapshot را در همان UPDATE می‌نویسد).
-   */
-  public static async syncJsonbReadCache(
-    tx: DbClient,
-    itemId: number
-  ): Promise<{ stocksJson: Record<string, number>; totalStock: number }> {
-    const snapshot = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
-    await tx
-      .update(items)
-      .set({
-        stocks: snapshot.byCode,
-        currentStock: snapshot.total,
-      })
-      .where(eq(items.id, itemId));
-    return { stocksJson: snapshot.byCode, totalStock: snapshot.total };
   }
 
   /**

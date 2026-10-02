@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, check, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, timestamp, index, varchar, primaryKey, check, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
 
@@ -64,6 +64,7 @@ export const items = pgTable('items', {
   type: text('type').notNull(),
   name: text('name').notNull(),
   code: text('code').notNull(),
+  // v7.0.48 (TD-214): مجموع item_warehouse_stocks که فقط پایگاه‌داده (تریگر مهاجرت 0021) آن را می‌نویسد؛ کد برنامه نباید در آن بنویسد
   currentStock: numeric('current_stock', { precision: 18, scale: 4, mode: 'number' }).default(0),
   unit: text('unit').notNull(),
   category: text('category').default(''),
@@ -71,7 +72,6 @@ export const items = pgTable('items', {
   thumbnail: text('thumbnail').default(''),
   reorderPoint: numeric('reorder_point', { precision: 18, scale: 4, mode: 'number' }).default(0),
   weightedAverageCost: numeric('weighted_average_cost', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  stocks: jsonb('stocks').default({}), // Replaces dynamic columns stock_safe, etc.
   color: text('color'),
   weight: numeric('weight', { precision: 18, scale: 4, mode: 'number' }),
   material: text('material'),

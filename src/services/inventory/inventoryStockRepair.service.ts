@@ -87,13 +87,10 @@ export class InventoryStockRepairService {
       const after = await ItemWarehouseStockService.getStockSnapshot(txEngine, params.itemId);
       const updatedStocks = after.byCode;
 
+      // v7.0.48 (TD-214): current_stock را تریگر پایگاه‌داده از item_warehouse_stocks می‌نویسد
       await txEngine
         .update(items)
-        .set({
-          stocks: updatedStocks,
-          currentStock: after.total,
-          version: nextVersion(item.version)
-        })
+        .set({ version: nextVersion(item.version) })
         .where(eq(items.id, params.itemId));
 
       const itemUnitPrice = Number(item.weightedAverageCost) || 0;

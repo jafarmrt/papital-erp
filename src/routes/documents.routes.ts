@@ -16,6 +16,7 @@ import { eq, and } from 'drizzle-orm';
 import { getTodayJalaliDate } from '../utils.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
+import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -411,13 +412,12 @@ router.get('/documents/audit-items', validate(auditItemsQuerySchema), asyncHandl
     .from(items)
     .where(eq(items.isDeleted, 0))
     .orderBy(items.code);
+  // v7.0.48 (TD-214): موجودی ثبت‌شده همین انبار از جدول نرمال؛ انبار بدون ردیف یعنی صفر (پیش‌تر اگر کلید JSONB
+  // این انبار وجود نداشت موجودی کل کالا نمایش داده می‌شد — همان خطای انبارگردانی v7.0.45)
+  const auditStockMap = await ItemWarehouseStockService.getStocksForItems(orm, allItems.map(i => i.id));
 
   const formatted = allItems.map((item) => {
-    const stocksObj = (item.stocks as Record<string, number>) || {};
-    let locStock = Number(item.currentStock || 0);
-    if (location && stocksObj[location] !== undefined) {
-      locStock = Number(stocksObj[location]);
-    }
+    const locStock = location ? (auditStockMap.get(item.id)?.byCode[location] ?? 0) : Number(item.currentStock || 0);
     return {
       id: item.id,
       code: item.code,

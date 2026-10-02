@@ -145,7 +145,6 @@ export class PendingMaterialsService {
         unit: finalUnit,
         category: finalCategory,
         currentStock: 0,
-        stocks: {},
         reorderPoint: Number(overrides?.reorderPoint ?? existing.reorderPoint) || 0,
         weightedAverageCost: Number(overrides?.weightedAverageCost ?? existing.weightedAverageCost) || 0,
         color: overrides?.color ?? existing.color ?? '',

@@ -14,7 +14,8 @@ import { DataReconciliationService } from '../../services/reconciliation/dataRec
 import { getMenuGroups } from '../../components/layout/menuConfig.js';
 import { cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { jalaliToIsoDate } from '../../utils.js';
-import { syncFixtureItemStocks } from '../fixtures/factories.js';
+import { seedFixtureItemStocks } from '../fixtures/factories.js';
+import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 
 /**
  * Business Logic & System Invariants Audit Suite
@@ -646,11 +647,10 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       category: 'گردنبند',
       unit: 'عدد',
       currentStock: 5,
-      stocks: { [orchWh]: 5 },
       weightedAverageCost: 100000,
       isDeleted: 0,
     }).returning({ id: items.id });
-    await syncFixtureItemStocks(insertedItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
+    await seedFixtureItemStocks(insertedItem.id, { [orchWh]: 5 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
     orchItemId = insertedItem.id;
 
     // 9.1 Test Empty Document Finalization Guard (Must throw ValidationError & remain draft)
@@ -743,11 +743,11 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     }
 
     // Verify Step 2: Inventory deducted atomically (5 - 2 = 3)
-    const [itemFinalStock] = await orm.select({ currentStock: items.currentStock, stocks: items.stocks }).from(items).where(eq(items.id, orchItemId));
+    const [itemFinalStock] = await orm.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, orchItemId));
     if (Number(itemFinalStock?.currentStock) !== 3) {
       throw new Error(`Inventory deduction failed: stock=${itemFinalStock?.currentStock}, expected=3`);
     }
-    const locStocks = (itemFinalStock?.stocks as Record<string, number>) || {};
+    const locStocks = (await ItemWarehouseStockService.getStockSnapshot(orm, orchItemId)).byCode;
     if (Number(locStocks[orchWh]) !== 3) {
       throw new Error(`Location stock breakdown mismatch: ${orchWh}=${locStocks[orchWh]}, expected=3`);
     }

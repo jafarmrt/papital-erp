@@ -118,7 +118,6 @@ export class NegativeStockPolicyService {
         name: items.name,
         code: items.code,
         currentStock: items.currentStock,
-        stocks: items.stocks,
       })
       .from(items)
       .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)))
@@ -184,16 +183,17 @@ export class NegativeStockPolicyService {
         name: items.name,
         unit: items.unit,
         currentStock: items.currentStock,
-        stocks: items.stocks,
       })
       .from(items)
       .where(eq(items.isDeleted, 0));
+    // v7.0.48 (TD-214): موجودی انبارها از جدول نرمال (ستون JSONB حذف شد)
+    const stockMap = await ItemWarehouseStockService.getStocksForItems(orm, activeItems.map(i => i.id));
 
     const violations: NegativeStockViolationItem[] = [];
 
     for (const item of activeItems) {
       const currentStock = fin(item.currentStock).toNumber();
-      const stocksObj = (item.stocks as Record<string, number>) || {};
+      const stocksObj = stockMap.get(item.id)?.byCode ?? {};
       const negativeLocs: string[] = [];
 
       for (const [loc, qty] of Object.entries(stocksObj)) {

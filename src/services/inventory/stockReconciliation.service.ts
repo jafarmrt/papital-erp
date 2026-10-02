@@ -3,6 +3,7 @@ import { items, warehouses, transactions, users } from '../../db/schema.js';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { NegativeStockPolicyService, type NegativeStockPolicyType } from './negativeStockPolicy.service.js';
+import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 
 export type DiscrepancyType =
   | 'scalar_vs_wh_sum'
@@ -138,7 +139,6 @@ export class StockReconciliationService {
         unit: items.unit,
         currentStock: items.currentStock,
         weightedAverageCost: items.weightedAverageCost,
-        stocks: items.stocks,
       })
       .from(items)
       .where(and(...conditions))
@@ -148,6 +148,8 @@ export class StockReconciliationService {
       .select({ code: warehouses.code, name: warehouses.name })
       .from(warehouses)
       .where(eq(warehouses.isActive, 1));
+    // v7.0.48 (TD-214): موجودی تفکیکی انبارها از جدول نرمال (منبع حقیقت؛ ستون JSONB حذف شد)
+    const tableStockMap = await ItemWarehouseStockService.getStocksForItems(orm, activeItems.map(i => i.id));
 
     // v7.0.37 (TD-201): معنای دفتر هم‌راستا با بازسازی رسمی کاردکس (KardexWacRecalculatorService) — حذف سند
     // ردیف مبدأ را حذف نرم و ردیف معکوس فعال درج می‌کند؛ ردیف معکوسِ ردیف حذف‌شده نباید دوباره شمرده شود،
@@ -223,7 +225,7 @@ export class StockReconciliationService {
 
       const scalarStock = fin(item.currentStock).toNumber();
       const recordedWac = fin(item.weightedAverageCost).toNumber();
-      const whBreakdown = (item.stocks as Record<string, number>) || {};
+      const whBreakdown = tableStockMap.get(item.id)?.byCode ?? {};
 
       let whSum = 0;
       for (const [wCode, val] of Object.entries(whBreakdown)) {

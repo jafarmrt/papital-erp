@@ -11,6 +11,7 @@ import { formatApiError } from '../../utils/errorTranslator.js';
 import { orm } from '../../db/drizzle.js';
 import { items, workflowInstances, workflowHistoryLogs, journalVouchers, journalVoucherItems, outboxEvents, accounts, documents, appSettings, warehouses, itemWarehouseStocks } from '../../db/schema.js';
 import { eq, or, and } from 'drizzle-orm';
+import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 
 export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -123,29 +124,13 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       stocks: { main: 10 }
     });
 
+    // v7.0.48 (TD-214): کسر از مسیر واقعی تولید — قفل سطری کالا و applyMovement روی جدول موجودی انبارها
     const issueStockTx = (requestedQty: number) =>
       orm.transaction(async (tx) => {
-        const [itemRow] = await tx
-          .select()
-          .from(items)
-          .where(eq(items.id, testItem.id))
-          .for('update');
-
-        if (!itemRow || (itemRow.currentStock ?? 0) < requestedQty) {
-          throw new Error('موجودی انبار ناکافی است');
-        }
-
-        const newStock = (itemRow.currentStock ?? 0) - requestedQty;
-        await tx
-          .update(items)
-          .set({
-            currentStock: newStock,
-            stocks: { main: newStock },
-            version: (itemRow.version || 1) + 1
-          })
-          .where(eq(items.id, testItem.id));
-
-        return newStock;
+        await tx.select({ id: items.id }).from(items).where(eq(items.id, testItem.id)).for('update');
+        const wh = await ItemWarehouseStockService.resolveWarehouse(tx, 'main');
+        const { newLocationStock } = await ItemWarehouseStockService.applyMovement(tx, { itemId: testItem.id, warehouse: wh, inOut: 'out', quantity: requestedQty });
+        return newLocationStock;
       });
 
     // Execute two concurrent stock issues (7 units each -> total 14 > 10)

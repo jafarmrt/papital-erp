@@ -132,11 +132,8 @@ export class DocumentStockEngine {
       quantity: qty,
     });
 
-    // v7.0.45 (audit P2-1): کش JSONB و موجودی کل فقط از جدول نرمال ساخته می‌شوند. پیش‌تر موجودی کل از جمع کلیدهای
-    // JSONB حساب می‌شد و کلیدهای قدیمی (نام انبار به‌جای کد) یا انتقال‌هایی که فقط JSONB را تغییر داده بودند،
-    // موجودی را دوبار می‌شمردند یا مقدار کهنه جدول را دوباره در JSONB می‌نوشتند.
+    // v7.0.45 (audit P2-1): موجودی کل فقط از جدول نرمال؛ پیش‌تر از جمع کلیدهای JSONB حساب می‌شد
     const after = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
-    const currentStocks = after.byCode;
     const newTotalStock = after.total;
 
     let newWAC = Number(itemData.weightedAverageCost || 0);
@@ -147,8 +144,7 @@ export class DocumentStockEngine {
     await tx
       .update(items)
       .set({
-        stocks: currentStocks,
-        currentStock: newTotalStock,
+        // v7.0.48 (TD-214): current_stock را تریگر پایگاه‌داده از item_warehouse_stocks می‌نویسد
         weightedAverageCost: newWAC,
         version: nextVersion(itemData.version)
       })
@@ -212,7 +208,6 @@ export class DocumentStockEngine {
     });
 
     const after = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
-    const currentStocks = after.byCode;
     const newTotalStock = after.total;
 
     let newWAC = Number(itemData.weightedAverageCost || 0);
@@ -234,8 +229,7 @@ export class DocumentStockEngine {
     await tx
       .update(items)
       .set({
-        stocks: currentStocks,
-        currentStock: newTotalStock,
+        // v7.0.48 (TD-214): current_stock را تریگر پایگاه‌داده از item_warehouse_stocks می‌نویسد
         weightedAverageCost: newWAC,
         version: nextVersion(itemData.version)
       })

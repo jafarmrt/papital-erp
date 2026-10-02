@@ -123,7 +123,6 @@ export class DocumentLifecycleService {
                 code: items.code,
                 name: items.name,
                 unit: items.unit,
-                stocks: items.stocks,
                 currentStock: items.currentStock,
               }).from(items).where(eq(items.id, item.itemId)).for('update');
 

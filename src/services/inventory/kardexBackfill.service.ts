@@ -4,8 +4,8 @@ import { and, eq, sql } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { logger } from '../../middleware/logger.js';
-import { resolveWarehouseCode } from './warehouseResolver.js';
 import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
+import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 
 export const KARDEX_BACKFILL_REF = 'موجودی اولیه (تطبیق سیستم)';
 
@@ -29,7 +29,7 @@ export class KardexBackfillService {
 
   static async syncMissingInitialTransactions(): Promise<KardexBackfillSummary> {
     const candidates = await orm.execute(sql`
-      SELECT i.id, i.current_stock, i.stocks, i.weighted_average_cost
+      SELECT i.id, i.current_stock, i.weighted_average_cost
       FROM ${items} i
       LEFT JOIN (
         SELECT item_id, SUM(quantity) as total_in
@@ -47,12 +47,8 @@ export class KardexBackfillService {
     let repairedRows = 0;
 
     await orm.transaction(async (tx) => {
-      const defaultWhCode = await resolveWarehouseCode(tx, '').catch(() => 'main');
-
       for (const row of candidateRows) {
         const itemId = Number(row.id);
-        const totalStock = Number(row.current_stock || 0);
-        const stocksObj = (row.stocks as Record<string, number>) || {};
         const wac = Number(row.weighted_average_cost || 0);
 
         const [lockedItem] = await tx
@@ -78,44 +74,28 @@ export class KardexBackfillService {
 
         const effectiveWac = wac > 0 ? fin(wac).round(4).toNumber() : 0;
 
-        if (Object.keys(stocksObj).length > 0) {
-          for (const [whCode, qtyVal] of Object.entries(stocksObj)) {
-            const qty = Number(qtyVal || 0);
-            if (qty > 0) {
-              const targetWh = await resolveWarehouseCode(tx, whCode).catch(() => defaultWhCode);
-              await tx.insert(transactions).values({
-                itemId,
-                type: 'in',
-                quantity: qty,
-                unitPrice: effectiveWac,
-                totalPrice: fin(effectiveWac).multiply(qty).round(4).toNumber(),
-                date: todayStr,
-                documentType: 'audit',
-                documentRef: KARDEX_BACKFILL_REF,
-                location: targetWh,
-                notes: 'ثبت موجودی اولیه جهت گردش کالا',
-                createdBy: 'سیستم',
-                isDeleted: 0
-              });
-              insertedRows++;
-            }
+        // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)؛ چون current_stock مجموع همین جدول است،
+        // کالای دارای موجودی همیشه ردیف جدول دارد و محل کاردکس همان کد استاندارد انبار ردیف است.
+        const tableStock = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+        for (const [whCode, qtyVal] of Object.entries(tableStock.byCode)) {
+          const qty = Number(qtyVal || 0);
+          if (qty > 0) {
+            await tx.insert(transactions).values({
+              itemId,
+              type: 'in',
+              quantity: qty,
+              unitPrice: effectiveWac,
+              totalPrice: fin(effectiveWac).multiply(qty).round(4).toNumber(),
+              date: todayStr,
+              documentType: 'audit',
+              documentRef: KARDEX_BACKFILL_REF,
+              location: whCode,
+              notes: 'ثبت موجودی اولیه جهت گردش کالا',
+              createdBy: 'سیستم',
+              isDeleted: 0
+            });
+            insertedRows++;
           }
-        } else if (totalStock > 0) {
-          await tx.insert(transactions).values({
-            itemId,
-            type: 'in',
-            quantity: totalStock,
-            unitPrice: effectiveWac,
-            totalPrice: fin(effectiveWac).multiply(totalStock).round(4).toNumber(),
-            date: todayStr,
-            documentType: 'audit',
-            documentRef: KARDEX_BACKFILL_REF,
-            location: defaultWhCode,
-            notes: 'ثبت موجودی اولیه جهت گردش کالا',
-            createdBy: 'سیستم',
-            isDeleted: 0
-          });
-          insertedRows++;
         }
       }
 
