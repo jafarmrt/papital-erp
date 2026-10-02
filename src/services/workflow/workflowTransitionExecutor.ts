@@ -30,6 +30,7 @@ export interface WorkflowStateSnapshot {
   title: string;
   stateType?: string | null;
   slaHours?: number | null;
+  stepOrder?: number | null;
   positionX?: number | null;
   positionY?: number | null;
   isDeleted?: number;
@@ -765,10 +766,33 @@ export class WorkflowTransitionExecutor {
       userPermissions
     );
 
+    // v7.0.88 (TD-085): ساختاری که ویجت مراحل ورکفلو (WorkflowInstanceData) می‌خواند؛ پیش از این نمونه تخت برمی‌گشت
+    // و ویجت هیچ‌وقت فرایند در جریان را نمی‌دید. مراحل از تصویر نسخه خود فرایند خوانده می‌شوند.
+    const [def] = await txExecutor.select({
+      id: workflowDefinitions.id,
+      code: workflowDefinitions.code,
+      title: workflowDefinitions.title,
+      entityType: workflowDefinitions.entityType,
+      version: workflowDefinitions.version
+    }).from(workflowDefinitions).where(eq(workflowDefinitions.id, inst.workflowDefinitionId));
+    const snapshot = inst.snapshotDsl as WorkflowSnapshotDsl | null;
+    const states: WorkflowStateSnapshot[] = isUsableSnapshot(snapshot)
+      ? snapshot.states!
+      : await txExecutor.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, inst.workflowDefinitionId));
+    const allStates = [...states].sort((a, b) => (Number(a.stepOrder) || 0) - (Number(b.stepOrder) || 0) || a.id - b.id);
+    let currentState = allStates.find((st) => st.id === inst.currentStateId);
+    if (!currentState) {
+      [currentState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, inst.currentStateId));
+    }
+
     return {
-      ...inst,
-      history,
+      instance: inst,
+      definition: def ? { ...def, version: inst.definitionVersion ?? def.version } : undefined,
+      currentState: currentState ?? null,
+      allStates,
       availableTransitions,
+      history,
+      approvalProgress: (inst.approvalProgressJson as Record<string, unknown> | null) || {},
       entityContext
     };
   }

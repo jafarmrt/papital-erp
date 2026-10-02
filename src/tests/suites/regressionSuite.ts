@@ -7329,5 +7329,107 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.88 (TD-085): پاسخ GET /workflow/instance همان ساختاری است که ویجت مراحل ورکفلو می‌خواند
+  // (instance، definition، allStates، currentState، availableTransitions، approvalProgress، history)
+  if (shouldRun('reg_workflow_instance_widget_contract_td_085', 'td085', 'workflow', 'stepper')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.88: ویجت مراحل ورکفلو فرایند در جریان را می‌بیند؛ پاسخ API ساختار instance/currentState/allStates دارد (TD-085)';
+    const {
+      workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks,
+    } = await import('../../db/schema.js');
+    const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+    const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const entityType = `reg_td085_${suffix}`;
+    let defId: number | undefined;
+    try {
+      const violations: string[] = [];
+      const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+        code: `REG_TD085_${suffix}`, title: 'ورکفلو آزمون ویجت', entityType,
+        states: [
+          { stateKey: 'draft', title: 'پیش‌نویس', stateType: 'initial', stepOrder: 1 },
+          { stateKey: 'review', title: 'بررسی', stateType: 'normal', stepOrder: 2 },
+          { stateKey: 'done', title: 'تایید نهایی', stateType: 'terminal', stepOrder: 3 },
+        ],
+        transitions: [
+          { fromStateKey: 'draft', toStateKey: 'review', actionKey: 'send', title: 'ارسال' },
+          { fromStateKey: 'review', toStateKey: 'done', actionKey: 'approve', title: 'تایید' },
+        ],
+      });
+      defId = saved?.definition?.id;
+      if (!defId) throw new Error('تعریف ذخیره نشد');
+      const instance = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '1' });
+
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const get = () => request(app).get(`/api/workflow/instance/${entityType}/1`).set('Cookie', session.cookie);
+
+      const res = await get();
+      const body = res.body || {};
+      if (res.status !== 200) violations.push(`HTTP ${res.status}`);
+      if (body.instance?.id !== instance.id) violations.push(`instance.id=${body.instance?.id} (انتظار ${instance.id})`);
+      if (body.definition?.id !== defId || body.definition?.code !== `REG_TD085_${suffix}`) violations.push('definition ناقص است');
+      const titles = Array.isArray(body.allStates) ? body.allStates.map((s: { title: string }) => s.title) : [];
+      if (titles.join('|') !== 'پیش‌نویس|بررسی|تایید نهایی') violations.push(`allStates به ترتیب مراحل نیست: ${titles.join('|') || '-'}`);
+      if (body.currentState?.title !== 'پیش‌نویس' || body.currentState?.id !== instance.currentStateId) violations.push(`currentState=${body.currentState?.title ?? '-'}`);
+      const actions = Array.isArray(body.availableTransitions) ? body.availableTransitions : [];
+      if (actions.length !== 1 || actions[0]?.title !== 'ارسال') violations.push(`availableTransitions=${actions.length}`);
+      if (!body.approvalProgress || typeof body.approvalProgress !== 'object') violations.push('approvalProgress نیست');
+      if (!Array.isArray(body.history) || body.history.length !== 1) violations.push(`history=${Array.isArray(body.history) ? body.history.length : '-'}`);
+
+      if (actions[0]?.id) {
+        const exec = await request(app).post('/api/workflow/transition').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken)
+          .send({ instanceId: instance.id, transitionId: actions[0].id, comment: 'آزمون' });
+        if (exec.status !== 200) violations.push(`اجرای اقدام: HTTP ${exec.status}`);
+        const after = (await get()).body || {};
+        if (after.currentState?.title !== 'بررسی') violations.push(`پس از ارسال currentState=${after.currentState?.title ?? '-'}`);
+        if ((after.availableTransitions || [])[0]?.title !== 'تایید') violations.push('اقدام مرحله بعد دیده نمی‌شود');
+      }
+      const none = await request(app).get(`/api/workflow/instance/${entityType}/999`).set('Cookie', session.cookie);
+      if (none.status !== 200 || none.body?.instance !== null) violations.push(`بدون فرایند: ${JSON.stringify(none.body).slice(0, 80)}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_workflow_instance_widget_contract_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'پاسخ API فرایند، مراحل به ترتیب، مرحله جاری و اقدام مجاز را داشت و پس از اجرا مرحله بعد را نشان داد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_workflow_instance_widget_contract_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (defId) {
+        const instanceIds = (await orm.select({ id: workflowInstances.id }).from(workflowInstances)
+          .where(eq(workflowInstances.workflowDefinitionId, defId))).map((r) => r.id);
+        if (instanceIds.length > 0) {
+          await orm.delete(workflowTasks).where(inArray(workflowTasks.instanceId, instanceIds));
+          await orm.delete(workflowPendingApprovals).where(inArray(workflowPendingApprovals.instanceId, instanceIds));
+          await orm.delete(workflowHistoryLogs).where(inArray(workflowHistoryLogs.instanceId, instanceIds));
+          await orm.delete(workflowInstances).where(inArray(workflowInstances.id, instanceIds));
+        }
+        await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
+        await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+        await orm.delete(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, defId));
+        await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
+      }
+    }
+  }
+
   return results;
 }

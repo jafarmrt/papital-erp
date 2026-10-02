@@ -219,9 +219,10 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
           {instance.status === 'IN_PROGRESS' && wfData?.approvalProgress && Object.keys(wfData.approvalProgress).length > 0 && (
             <div className="mb-3 space-y-2">
               {Object.entries(wfData.approvalProgress).map(([trId, prog]: [string, any]) => {
-                const tr = (allStates || []).flatMap(() => availableTransitions || []).find((t: any) => String(t.id) === String(trId));
+                const tr = availableTransitions.find((t) => String(t.id) === String(trId));
                 const sigs = prog.signatures || [];
-                const reqCount = tr?.kValue || 2;
+                // v7.0.88 (TD-085): تعداد لازم همان است که سرور هنگام ثبت امضا محاسبه کرده (requiredCount)
+                const reqCount = Number(prog.requiredCount) || tr?.kValue || 2;
                 const ruleType = prog.ruleType || tr?.approvalRuleType || 'MULTI';
                 const ruleLabel = ruleType === 'AND_ALL' || ruleType === 'ALL' ? 'اتفاق آرا (AND_ALL)' :
                                   ruleType === 'OR_ANY' || ruleType === 'ANY' ? 'اولین تایید (OR_ANY)' :
@@ -284,7 +285,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                   const trProgress = progressMap[tr.id] || { signatures: [] };
                   const sigCount = trProgress.signatures?.length || 0;
                   const isMulti = tr.approvalRuleType && tr.approvalRuleType !== 'SINGLE';
-                  const reqK = tr.approvalRuleType === 'OR_ANY' || tr.approvalRuleType === 'ANY' ? 1 : (tr.kValue || 2);
+                  const reqK = Number(trProgress.requiredCount) || (tr.approvalRuleType === 'OR_ANY' || tr.approvalRuleType === 'ANY' ? 1 : (tr.kValue || 2));
 
                   return (
                     <button

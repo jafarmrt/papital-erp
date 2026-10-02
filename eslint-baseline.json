@@ -1,5 +1,5 @@
 {
-  "@typescript-eslint/no-explicit-any": 1597,
+  "@typescript-eslint/no-explicit-any": 1596,
   "@typescript-eslint/no-floating-promises": 251,
   "@typescript-eslint/no-misused-promises": 13,
   "max-lines": 154,
