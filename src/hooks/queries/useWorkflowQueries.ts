@@ -171,6 +171,46 @@ export function useWorkflowDefinitionDetailQuery(id?: number) {
   });
 }
 
+export interface WorkflowVersionSnapshotState {
+  id: number;
+  stateKey: string;
+  title: string;
+  stateType?: string | null;
+}
+
+export interface WorkflowVersionSnapshotTransition {
+  id: number;
+  fromStateId: number;
+  toStateId: number;
+  title: string;
+  requiredRole?: string | null;
+}
+
+export interface WorkflowDefinitionVersion {
+  id: number;
+  definitionId: number;
+  version: number;
+  title: string;
+  description: string;
+  createdAt: string;
+  dslJson: {
+    states?: WorkflowVersionSnapshotState[];
+    transitions?: WorkflowVersionSnapshotTransition[];
+  };
+}
+
+/** v7.0.87 (TD-112): تاریخچه فقط‌خواندنی نسخه‌های یک تعریف؛ ذخیره تعریف آن را تازه می‌کند (پیشوند کلید definitions) */
+export function useWorkflowDefinitionVersionsQuery(id?: number) {
+  return useQuery({
+    queryKey: ['workflow', 'definitions', id, 'versions'],
+    queryFn: async (): Promise<WorkflowDefinitionVersion[]> => {
+      const res = await fetchJson(`/workflow/definitions/${id}/versions`);
+      return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+    },
+    enabled: Boolean(id)
+  });
+}
+
 export function useSaveWorkflowDefinitionMutation() {
   const queryClient = useQueryClient();
 

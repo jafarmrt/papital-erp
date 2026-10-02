@@ -54,17 +54,13 @@ export class WorkflowEngineService {
   static addTransition = WorkflowDefinitionService.addTransition;
   static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows;
 
-  // --- Versioning & Rollback ---
+  // --- Version History (read-only, TD-112) ---
   static getDefinitionVersions = WorkflowVersionService.getDefinitionVersions;
   static getDefinitionVersionDetail = WorkflowVersionService.getDefinitionVersionDetail;
-  static publishVersion = WorkflowVersionService.publishVersion;
-  static rollbackToVersion = WorkflowVersionService.rollbackToVersion;
 
   // --- SLA & Analytics Delegation ---
   static getSlaAnalytics = WorkflowSlaEvaluator.getSlaAnalytics;
   static evaluateSlaStatus = WorkflowSlaEvaluator.evaluateSlaStatus;
-  static getBottleneckAnalytics = WorkflowSlaEvaluator.getBottleneckAnalytics;
-  static getSlaComplianceStats = WorkflowSlaEvaluator.getSlaComplianceStats;
   static getWorkflowAnalytics = WorkflowSlaEvaluator.getWorkflowAnalytics;
 
   // --- Task & Approval Inbox Management ---

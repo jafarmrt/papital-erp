@@ -94,12 +94,7 @@ export interface WorkflowVersionDTO {
 }
 
 export interface IWorkflowVersionService {
-  /**
-   * Creates an immutable published version snapshot from a definition dslJson.
-   * Invariant: Versions are append-only and strictly immutable once created.
-   */
-  publishVersion(definitionId: number, title?: string, description?: string): Promise<WorkflowVersionDTO>;
-
+  // v7.0.87 (TD-112): versions are recorded on every definition save (append-only, immutable); no manual publish or rollback.
   /**
    * Retrieves a specific version of a workflow definition.
    */

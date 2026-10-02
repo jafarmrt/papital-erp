@@ -19,6 +19,7 @@ import { updateRequestContext } from '../../lib/requestContext.js';
 import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
+import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
 
@@ -341,35 +342,25 @@ export class WorkflowTransitionExecutor {
       ));
 
       let snapshotDsl: WorkflowSnapshotDsl;
+      const storedSnapshot = versionSnapshotEntry?.dslJson as WorkflowSnapshotDsl | null | undefined;
 
-      if (versionSnapshotEntry && versionSnapshotEntry.dslJson) {
-        snapshotDsl = versionSnapshotEntry.dslJson as WorkflowSnapshotDsl;
+      if (isUsableSnapshot(storedSnapshot)) {
+        snapshotDsl = storedSnapshot;
       } else {
-        // Fallback: build snapshot DSL from active states & transitions and persist as published version entry
-        const allStates = await tx.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, def.id));
-        const allTransitions = await tx.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, def.id));
-
-        snapshotDsl = {
-          definitionId: def.id,
-          code: def.code,
-          title: def.title,
-          entityType: def.entityType,
-          version: targetVersionNumber,
-          states: allStates,
-          transitions: allTransitions,
-          publishedAt: new Date().toISOString()
-        };
-
-        // Auto-persist missing version snapshot
-        await tx.insert(workflowDefinitionVersions).values({
-          definitionId: def.id,
-          version: targetVersionNumber,
-          title: def.title,
-          description: `نسخه اولیه تولیدشده سیستمی (${targetVersionNumber})`,
-          dslJson: snapshotDsl,
-          createdBy: params.userId || null,
-          createdAt: new Date().toISOString()
-        });
+        // v7.0.87 (TD-112): بدون نسخه، یا نسخه قدیمی که payload خام طراح را (بدون شناسه پایگاه‌داده) نگه می‌داشت:
+        // تصویر از جدول‌های جاری ساخته می‌شود؛ ردیف نسخه فقط وقتی نبود ثبت می‌شود (نسخه ثبت‌شده هرگز بازنویسی نمی‌شود)
+        snapshotDsl = await buildDefinitionSnapshot(tx, def.id, targetVersionNumber);
+        if (!versionSnapshotEntry) {
+          await tx.insert(workflowDefinitionVersions).values({
+            definitionId: def.id,
+            version: targetVersionNumber,
+            title: def.title,
+            description: `نسخه اولیه تولیدشده سیستمی (${targetVersionNumber})`,
+            dslJson: snapshotDsl,
+            createdBy: params.userId || null,
+            createdAt: new Date().toISOString()
+          });
+        }
       }
 
       // Fetch initial state (prefer snapshotDsl states if available)
@@ -461,8 +452,8 @@ export class WorkflowTransitionExecutor {
       let toState: WorkflowStateSnapshot | undefined;
       let definition: { id: number; code?: string; title?: string } | undefined;
 
-      if (snapshot && Array.isArray(snapshot.transitions) && snapshot.transitions.length > 0) {
-        transition = snapshot.transitions.find((t: WorkflowTransitionSnapshot) => t.id === params.transitionId);
+      if (isUsableSnapshot(snapshot)) {
+        transition = snapshot.transitions!.find((t: WorkflowTransitionSnapshot) => t.id === params.transitionId);
         fromState = snapshot.states?.find((s: WorkflowStateSnapshot) => s.id === transition?.fromStateId);
         toState = snapshot.states?.find((s: WorkflowStateSnapshot) => s.id === transition?.toStateId);
         definition = { id: instance.workflowDefinitionId, code: snapshot.code, title: snapshot.title };
@@ -692,8 +683,8 @@ export class WorkflowTransitionExecutor {
 
     const snapshot = instance.snapshotDsl as WorkflowSnapshotDsl | null;
     let transition: WorkflowTransitionSnapshot | undefined;
-    if (snapshot && Array.isArray(snapshot.transitions)) {
-      transition = snapshot.transitions.find((t: WorkflowTransitionSnapshot) => t.id === params.transitionId);
+    if (isUsableSnapshot(snapshot)) {
+      transition = snapshot.transitions!.find((t: WorkflowTransitionSnapshot) => t.id === params.transitionId);
     }
     if (!transition) {
       const [dbTr] = await orm.select().from(workflowTransitions).where(eq(workflowTransitions.id, params.transitionId));
@@ -768,7 +759,7 @@ export class WorkflowTransitionExecutor {
       inst.currentStateId, 
       userRole, 
       userId, 
-      (inst.snapshotDsl as WorkflowSnapshotDsl | null)?.transitions, 
+      snapshotTransitionsOf(inst.snapshotDsl), 
       entityContext, 
       txExecutor,
       userPermissions

@@ -111,7 +111,7 @@
 ## 14. Workflow Engine, Visual Canvas & SLA Analytics
 1. **Rule Engine (`ruleConditionsJson`):** Evaluate context variables using operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`).
 2. **Parallel Approvals (`approvalProgressJson`):** Support `SINGLE`, `AND_ALL`, `OR_ANY`, and `K_OF_N` multi-signature rules.
-3. **Immutable DSL Versioning (`snapshotDsl`):** Store immutable JSON snapshot and version upon instance creation (`startInstance`).
+3. **Immutable DSL Versioning (`snapshotDsl`, v7.0.87, TD-112, product-owner decision — read-only history):** Every definition save (`saveWorkflowDefinition` / `createDefinition`) writes states, transitions and a new `workflow_definition_versions` row in ONE transaction (`recordDefinitionVersion` in `src/services/workflow/workflowSnapshot.ts`: snapshot of the tables with database ids, `workflow_definitions.version` bumped). `startInstance` stores the latest version's snapshot on the instance; a running instance keeps executing against its own snapshot. A snapshot without database ids (pre-v7.0.87 version 1 rows holding the raw designer payload) is never used (`isUsableSnapshot`; the current tables are read instead). Version history is read-only (`GET /workflow/definitions/:id/versions[/:version]`, «تاریخچه نسخه‌ها» on the workflow page); there is no publish or rollback.
 4. **Canvas Position Persistence:** Persist node coordinates (`positionX`, `positionY`) and `slaHours` in `workflow_states`.
 5. **SLA Analytics:** SLA compliance and bottleneck states derived from `workflow_history_logs` (`now() - updatedAt` vs `slaHours`).
 

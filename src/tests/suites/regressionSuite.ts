@@ -7188,5 +7188,146 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.87 (TD-112): هر ذخیره تعریف ورکفلو یک نسخه کامل با شناسه‌های پایگاه‌داده ثبت می‌کند؛ فرایند تازه از آخرین نسخه
+  // و فرایند در جریان از نسخه خودش پیش می‌رود؛ روت‌های انتشار، بازگردانی، گلوگاه و انطباق حذف شده‌اند
+  if (shouldRun('reg_workflow_versions_on_save_td_112', 'td112', 'workflow', 'version')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.87: ذخیره طراحی ورکفلو نسخه تازه با شناسه‌های واقعی ثبت می‌کند و فرایندها گیر نمی‌کنند؛ فقط تاریخچه خواندنی است (TD-112)';
+    const {
+      workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks,
+    } = await import('../../db/schema.js');
+    const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+    const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const entityType = `reg_td112_${suffix}`;
+    let defId: number | undefined;
+    try {
+      const violations: string[] = [];
+      // همان شکل payload طراح و seed: وضعیت‌ها با کلید، انتقال‌ها با کلید مبدأ و مقصد
+      const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+        code: `REG_TD112_${suffix}`, title: 'ورکفلو آزمون TD-112', entityType, description: 'v1',
+        states: [
+          { stateKey: 'draft', title: 'پیش‌نویس', stateType: 'initial' },
+          { stateKey: 'done', title: 'تایید', stateType: 'terminal' },
+        ],
+        transitions: [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'approve', title: 'تایید' }],
+      });
+      defId = saved?.definition?.id;
+      if (!defId) throw new Error('تعریف ذخیره نشد');
+
+      const availableFor = async (entityId: string) => {
+        const st = await WorkflowTransitionExecutor.getInstanceByEntity(entityType, entityId, undefined, 'admin', ['*']);
+        return (st?.availableTransitions || []) as Array<{ id: number; actionKey: string }>;
+      };
+
+      const first = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '1' });
+      const firstAvailable = await availableFor('1');
+      if (firstAvailable.length !== 1) violations.push(`فرایند نسخه ۱: ${firstAvailable.length} اقدام مجاز (انتظار ۱)`);
+
+      // ویرایش در طراح: وضعیت‌های بارگذاری‌شده با id، یک وضعیت و یک انتقال تازه
+      const loadedStates = await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+      await WorkflowDefinitionService.saveWorkflowDefinition({
+        id: defId, code: `REG_TD112_${suffix}`, title: 'ورکفلو آزمون TD-112', entityType, description: 'v2',
+        states: [
+          ...loadedStates.map((s) => ({ id: s.id, stateKey: s.stateKey, title: s.title, stateType: s.stateType ?? undefined })),
+          { stateKey: 'rejected', title: 'رد', stateType: 'terminal' },
+        ],
+        transitions: [
+          { fromStateKey: 'draft', toStateKey: 'done', actionKey: 'approve', title: 'تایید' },
+          { fromStateKey: 'draft', toStateKey: 'rejected', actionKey: 'reject', title: 'رد' },
+        ],
+      });
+
+      const versions = await orm.select().from(workflowDefinitionVersions)
+        .where(eq(workflowDefinitionVersions.definitionId, defId));
+      const [def] = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
+      if (versions.length !== 2 || def?.version !== 2) {
+        violations.push(`پس از دو ذخیره: ${versions.length} نسخه، نسخه جاری ${def?.version} (انتظار ۲ و ۲)`);
+      }
+      const v2 = versions.find((v) => v.version === 2);
+      const v2Dsl = (v2?.dslJson || {}) as { states?: Array<{ id?: unknown }>; transitions?: Array<{ id?: unknown; fromStateId?: unknown }> };
+      if ((v2Dsl.states || []).length !== 3 || (v2Dsl.transitions || []).some((t) => typeof t.id !== 'number' || typeof t.fromStateId !== 'number')) {
+        violations.push('نسخه ۲ همه وضعیت‌ها و انتقال‌ها را با شناسه پایگاه‌داده ندارد');
+      }
+
+      await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '2' });
+      const secondAvailable = await availableFor('2');
+      if (secondAvailable.length !== 2) violations.push(`فرایند تازه پس از ویرایش: ${secondAvailable.length} اقدام مجاز (انتظار ۲)`);
+
+      const firstAfter = await availableFor('1');
+      if (firstAfter.length !== 1) {
+        violations.push(`فرایند در جریان پس از ویرایش: ${firstAfter.length} اقدام مجاز (انتظار ۱ از نسخه خودش)`);
+      } else {
+        await WorkflowTransitionExecutor.executeTransition({
+          instanceId: first.id, transitionId: firstAfter[0].id, userRole: 'admin', userPermissions: ['*'],
+        });
+        const [done] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, first.id));
+        if (done?.status === 'IN_PROGRESS') violations.push('فرایند در جریان با اقدام نسخه خودش پایان نیافت');
+      }
+
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const list = await request(app).get(`/api/workflow/definitions/${defId}/versions`).set('Cookie', session.cookie);
+      if (list.status !== 200 || !Array.isArray(list.body) || list.body.length !== 2) {
+        violations.push(`فهرست نسخه‌ها: HTTP ${list.status}، ${Array.isArray(list.body) ? list.body.length : '-'} ردیف`);
+      }
+      const one = await request(app).get(`/api/workflow/definitions/${defId}/versions/1`).set('Cookie', session.cookie);
+      if (one.status !== 200 || one.body?.version !== 1) violations.push(`دیدن نسخه ۱: HTTP ${one.status}`);
+      for (const [method, url] of [
+        ['post', `/api/workflow/definitions/${defId}/rollback`],
+        ['post', `/api/workflow/definitions/${defId}/publish`],
+        ['get', '/api/workflow/analytics/bottlenecks'],
+        ['get', '/api/workflow/analytics/compliance'],
+      ] as const) {
+        const call = method === 'post'
+          ? request(app).post(url).set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({ version: 1 })
+          : request(app).get(url).set('Cookie', session.cookie);
+        const res = await call;
+        if (res.status !== 404) violations.push(`${method.toUpperCase()} ${url.replace(String(defId), ':id')} هنوز پاسخ می‌دهد (HTTP ${res.status})`);
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_workflow_versions_on_save_td_112',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'دو ذخیره دو نسخه ساخت؛ فرایند تازه و فرایند در جریان هر کدام با نسخه خود پیش رفتند؛ روت‌های حذف‌شده ۴۰۴ دادند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_workflow_versions_on_save_td_112',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (defId) {
+        const instanceIds = (await orm.select({ id: workflowInstances.id }).from(workflowInstances)
+          .where(eq(workflowInstances.workflowDefinitionId, defId))).map((r) => r.id);
+        if (instanceIds.length > 0) {
+          await orm.delete(workflowTasks).where(inArray(workflowTasks.instanceId, instanceIds));
+          await orm.delete(workflowPendingApprovals).where(inArray(workflowPendingApprovals.instanceId, instanceIds));
+          await orm.delete(workflowHistoryLogs).where(inArray(workflowHistoryLogs.instanceId, instanceIds));
+          await orm.delete(workflowInstances).where(inArray(workflowInstances.id, instanceIds));
+        }
+        await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
+        await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+        await orm.delete(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, defId));
+        await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
+      }
+    }
+  }
+
   return results;
 }

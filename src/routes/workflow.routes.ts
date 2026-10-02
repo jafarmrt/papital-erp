@@ -304,43 +304,6 @@ router.get('/definitions/:id/versions/:version', authorizePermission('workflow.m
 }));
 
 /**
- * POST /api/workflow/definitions/:id/rollback
- * Rollback workflow definition to a previous version
- */
-router.post('/definitions/:id/rollback', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { version } = req.body;
-    if (!version) {
-      return res.status(400).json({ error: 'شماره نسخه جهت بازگردانی الزامی است' });
-    }
-    const result = await WorkflowEngineService.rollbackToVersion(id, Number(version), req.user?.id);
-    res.json({ success: true, message: `ورکفلو با موفقیت به نسخه ${version} بازگردانی شد`, data: result });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /definitions/:id/rollback] Error: ${errMsg}`);
-    throw err;
-  }
-}));
-
-/**
- * POST /api/workflow/definitions/:id/publish
- * Publish a new immutable version snapshot for a workflow definition
- */
-router.post('/definitions/:id/publish', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { title, description } = req.body;
-    const published = await WorkflowEngineService.publishVersion(id, title, description, req.user?.id);
-    res.json({ success: true, message: `نسخه ${published.version} فرآیند کاری با موفقیت انتشار یافت`, data: published });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /definitions/:id/publish] Error: ${errMsg}`);
-    throw err;
-  }
-}));
-
-/**
  * POST /api/workflow/definitions
  * Save or update workflow definition (Visual Designer)
  */
@@ -407,36 +370,6 @@ router.get('/analytics/sla', authorizePermission('workflow.manage', 'workflow.ad
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route /analytics/sla] Error: ${errMsg}`);
-    throw err;
-  }
-}));
-
-/**
- * GET /api/workflow/analytics/bottlenecks
- * Get identified bottleneck states
- */
-router.get('/analytics/bottlenecks', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const bottlenecks = await WorkflowEngineService.getBottleneckAnalytics();
-    res.json({ success: true, count: bottlenecks.length, data: bottlenecks });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /analytics/bottlenecks] Error: ${errMsg}`);
-    throw err;
-  }
-}));
-
-/**
- * GET /api/workflow/analytics/compliance
- * Get SLA compliance KPI rate
- */
-router.get('/analytics/compliance', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const compliance = await WorkflowEngineService.getSlaComplianceStats();
-    res.json({ success: true, data: compliance });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /analytics/compliance] Error: ${errMsg}`);
     throw err;
   }
 }));

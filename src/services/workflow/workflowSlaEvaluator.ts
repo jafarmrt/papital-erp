@@ -180,19 +180,6 @@ export class WorkflowSlaEvaluator {
     return match || null;
   }
 
-  static async getBottleneckAnalytics() {
-    const analytics = await this.getSlaAnalytics();
-    return analytics.stateSlaReport.filter(s => s.isBottleneck);
-  }
-
-  static async getSlaComplianceStats() {
-    const analytics = await this.getSlaAnalytics();
-    return {
-      slaComplianceRate: analytics.kpi.slaComplianceRate,
-      overdueInstancesCount: analytics.kpi.overdueInstancesCount
-    };
-  }
-
   static async getWorkflowAnalytics() {
     return this.getSlaAnalytics();
   }

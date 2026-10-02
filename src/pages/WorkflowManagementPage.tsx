@@ -8,12 +8,14 @@ import {
   Boxes,
   RefreshCw,
   X,
-  UserCheck
+  UserCheck,
+  History
 } from 'lucide-react';
 import { useWorkflowDefinitionsQuery, useSaveWorkflowDefinitionMutation } from '../hooks/queries/useWorkflowQueries';
 import { WorkflowDesignerCanvas } from '../components/workflow/WorkflowDesignerCanvas';
 import { WorkflowSlaAnalyticsTab } from '../components/workflow/WorkflowSlaAnalyticsTab';
 import { WorkflowDelegationTab } from '../components/workflow/WorkflowDelegationTab';
+import { WorkflowVersionHistoryModal } from '../components/workflow/WorkflowVersionHistoryModal';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 
@@ -23,6 +25,7 @@ export const WorkflowManagementPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'list' | 'designer' | 'sla' | 'delegations'>('list');
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<number | null>(null);
+  const [historyDefinition, setHistoryDefinition] = useState<{ id: number; title: string } | null>(null);
 
   // New Template Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -245,7 +248,14 @@ export const WorkflowManagementPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end pt-2 border-t border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <button
+                      onClick={() => setHistoryDefinition({ id: def.id, title: def.title })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span>تاریخچه نسخه‌ها</span>
+                    </button>
                     <button
                       onClick={() => handleEditDefinition(def.id)}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 rounded-lg transition-colors"
@@ -277,6 +287,14 @@ export const WorkflowManagementPage: React.FC = () => {
 
       {/* Tab 4: Delegations */}
       {activeTab === 'delegations' && <WorkflowDelegationTab />}
+
+      {historyDefinition && (
+        <WorkflowVersionHistoryModal
+          definitionId={historyDefinition.id}
+          title={historyDefinition.title}
+          onClose={() => setHistoryDefinition(null)}
+        />
+      )}
 
       {/* Create Workflow Definition Modal */}
       {isCreateModalOpen && (
