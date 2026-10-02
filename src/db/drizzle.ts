@@ -22,6 +22,12 @@ const connectionTimeoutMillis = parseInt(process.env.DB_CONN_TIMEOUT || '5000', 
 const statementTimeoutMs = parseInt(process.env.DB_STATEMENT_TIMEOUT || '60000', 10);
 const idleInTxTimeoutMs = parseInt(process.env.DB_IDLE_IN_TX_TIMEOUT || '60000', 10);
 
+// v7.0.39 (TD-176 / audit P2-11): زمان‌های انتظار جلسه در بسته راه‌اندازی اتصال ارسال می‌شوند، نه با یک SET
+// بدون انتظار در رویداد connect (که هشدار منسوخ‌شدن pg را می‌داد و در pg@9 خطا می‌شود).
+// اگر DATABASE_URL خودش پارامتر options داشته باشد، pg همان را جایگزین این مقدار می‌کند.
+export const SESSION_STARTUP_OPTIONS =
+  `-c statement_timeout=${statementTimeoutMs} -c idle_in_transaction_session_timeout=${idleInTxTimeoutMs}`;
+
 const isSsl = rawDbUrl.includes('sslmode=require') || 
               rawDbUrl.includes('neon.tech') || 
               rawDbUrl.includes('supabase.co');
@@ -41,6 +47,7 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
         password: process.env.SQL_PASSWORD,
         database: process.env.SQL_DB_NAME,
         ssl: (process.env.SQL_SSL === 'true' || process.env.POSTGRES_SSL === 'true') ? sslConfig : undefined,
+        options: SESSION_STARTUP_OPTIONS,
         max: maxPoolSize,
         idleTimeoutMillis,
         connectionTimeoutMillis,
@@ -52,6 +59,7 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
       realPool = new Pool({
         connectionString: rawDbUrl,
         ssl: sslConfig,
+        options: SESSION_STARTUP_OPTIONS,
         max: maxPoolSize,
         idleTimeoutMillis,
         connectionTimeoutMillis,
@@ -61,12 +69,11 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
       });
     }
 
-    realPool.on('connect', (client: pkg.PoolClient) => {
-      client.query(`SET statement_timeout = ${statementTimeoutMs}; SET idle_in_transaction_session_timeout = ${idleInTxTimeoutMs};`).catch((err: unknown) => {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.warn({ message: `Failed to set session timeouts: ${errorMsg}` });
-      });
+    if (/[?&]options=/.test(rawDbUrl)) {
+      logger.warn({ message: '[PostgreSQL Pool] DATABASE_URL has its own "options" parameter; session timeouts (DB_STATEMENT_TIMEOUT / DB_IDLE_IN_TX_TIMEOUT) must be included in it.' });
+    }
 
+    realPool.on('connect', (client: pkg.PoolClient) => {
       client.on('error', (err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
         if (

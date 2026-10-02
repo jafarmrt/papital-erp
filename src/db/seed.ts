@@ -1,31 +1,28 @@
 import { orm } from './drizzle.js';
 import { runMigrations } from './migrator.js';
 import { categories, appSettings, roles, pieceworkTasks } from './schema.js';
-import { eq, sql, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
 import { INITIAL_PIECEWORK_TASKS } from '../data/pieceworkTasksData.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowDefinitionService } from '../services/workflow/workflowDefinitionService.js';
 import { logger } from '../middleware/logger.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
+import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
 
 /**
  * Executes system seed with PostgreSQL Advisory Lock (89345) to ensure multi-instance safety.
+ * v7.0.39 (TD-194): قفل و آزادسازی روی همان اتصال اختصاصی (withAdvisoryLock)؛ پیش‌تر دو کوئری جدای orm
+ * ممکن بود روی دو اتصال متفاوت استخر اجرا شوند و قفل روی اتصال اول باقی بماند.
  */
 export async function runSeedWithLock(): Promise<{ success: boolean; message: string }> {
   try {
-    const lockResult: any = await orm.execute(sql`SELECT pg_try_advisory_lock(89345) AS acquired`);
-    const acquired = Boolean(lockResult.rows?.[0]?.acquired ?? lockResult?.[0]?.acquired);
-    if (!acquired) {
+    const outcome = await withAdvisoryLock(ADVISORY_LOCK_KEYS.SEED, () => runSeed());
+    if (!outcome.acquired) {
       logger.info('[Seed] Another instance is seeding — skipping');
       return { success: true, message: 'Another instance is seeding — skipped' };
     }
-
-    try {
-      return await runSeed();
-    } finally {
-      await orm.execute(sql`SELECT pg_advisory_unlock(89345)`);
-    }
+    return outcome.result;
   } catch (err: any) {
     logger.error('[Seed] Error during locked seed execution:', err);
     throw err;

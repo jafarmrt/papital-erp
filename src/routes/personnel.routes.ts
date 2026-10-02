@@ -718,22 +718,4 @@ router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'
 });
 
 // Asynchronous background remediation: Ensure existing records have leading zeros for phone and nationalId
-(async () => {
-  try {
-    const list = await orm.select().from(personnel);
-    for (const p of list) {
-      const fixedPhone = p.phone ? normalizePhoneNumber(p.phone) : '';
-      const fixedNationalId = p.nationalId ? normalizeNationalId(p.nationalId) : '';
-      if ((p.phone && fixedPhone !== p.phone) || (p.nationalId && fixedNationalId !== p.nationalId)) {
-        await orm.update(personnel).set({
-          phone: fixedPhone || p.phone,
-          nationalId: fixedNationalId || p.nationalId
-        }).where(eq(personnel.id, p.id));
-      }
-    }
-  } catch (err) {
-    logger.warn('Personnel leading zeros migration check notice:', err);
-  }
-})().catch(() => {});
-
 export default router;

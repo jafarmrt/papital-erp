@@ -125,7 +125,8 @@ export type CriticalScenarioId =
   | 'v5_audit_gateway_and_test_cleanup'
   | 'v6_treasury_cheque_isolation'
   | 'v6_fiscal_year_closing_isolation'
-  | 'test_runner_real_database_guard';
+  | 'test_runner_real_database_guard'
+  | 'startup_db_session_hygiene';
 
 
 export interface TestCaseResult {

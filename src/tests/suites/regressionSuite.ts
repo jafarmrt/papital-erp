@@ -3488,6 +3488,150 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.12: v7.0.39 (TD-176 / audit P2-11): زمان‌های انتظار جلسه باید در بسته راه‌اندازی اتصال تنظیم شوند، نه با SET بدون انتظار
+  if (shouldRun('reg_pool_session_timeouts_td_176', 'td176', 'pool', 'statement_timeout')) {
+    const tStart = Date.now();
+    try {
+      const res: any = await orm.execute(sql`SELECT name, setting, source FROM pg_settings WHERE name IN ('statement_timeout', 'idle_in_transaction_session_timeout') ORDER BY name`);
+      const rows: Array<{ name: string; setting: string; source: string }> = res.rows ?? res;
+      const expected: Record<string, string> = {
+        statement_timeout: String(parseInt(process.env.DB_STATEMENT_TIMEOUT || '60000', 10)),
+        idle_in_transaction_session_timeout: String(parseInt(process.env.DB_IDLE_IN_TX_TIMEOUT || '60000', 10))
+      };
+      const bad = rows.filter(r => r.source !== 'client' || r.setting !== expected[r.name]);
+      if (rows.length !== 2 || bad.length > 0) {
+        throw new Error(`زمان‌های انتظار جلسه باید از بسته راه‌اندازی (source=client) با مقدار پیکربندی‌شده بیایند: ${JSON.stringify(rows)}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_pool_session_timeouts_td_176',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.39: زمان‌های انتظار جلسه از پارامترهای راه‌اندازی اتصال استخر (TD-176)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'statement_timeout و idle_in_transaction_session_timeout روی اتصال استخر با منبع client (بسته راه‌اندازی) و مقدار پیکربندی‌شده گزارش شدند.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_pool_session_timeouts_td_176',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.39: زمان‌های انتظار جلسه از پارامترهای راه‌اندازی اتصال استخر (TD-176)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
+  // Test 27.13: v7.0.39 (TD-176): ساخت برنامه (ایمپورت روت‌ها) نباید پیش از مهاجرت‌ها کوئری پایگاه‌داده اجرا کند
+  if (shouldRun('reg_app_build_no_db_access_td_176', 'td176', 'startup', 'personnel')) {
+    const tStart = Date.now();
+    try {
+      const { spawnSync } = await import('child_process');
+      const path = await import('path');
+      const tsxBin = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
+      // پورت ۱ همیشه بسته است: هر کوئری فوراً با ECONNREFUSED شکست می‌خورد و در خروجی دیده می‌شود
+      const child = spawnSync(tsxBin, ['src/tests/fixtures/appBuildProbe.ts'], {
+        cwd: process.cwd(),
+        env: { ...process.env, DATABASE_URL: 'postgresql://probe:probe@127.0.0.1:1/probe', NODE_ENV: 'test' },
+        encoding: 'utf-8',
+        timeout: 120_000
+      });
+      const output = `${child.stdout || ''}${child.stderr || ''}`;
+      if (!output.includes('APP_BUILD_PROBE_DONE') || /Failed query|ECONNREFUSED/.test(output)) {
+        throw new Error(`ساخت برنامه نباید به پایگاه‌داده دسترسی داشته باشد: ${JSON.stringify({ status: child.status, tail: output.slice(-600) })}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_app_build_no_db_access_td_176',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.39: ساخت برنامه بدون هیچ کوئری پایگاه‌داده پیش از مهاجرت‌ها (TD-176)',
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'ساخت برنامه در پردازه جدا با پایگاه‌داده غیرقابل‌دسترس بدون هیچ کوئری ناموفق کامل شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_app_build_no_db_access_td_176',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.39: ساخت برنامه بدون هیچ کوئری پایگاه‌داده پیش از مهاجرت‌ها (TD-176)',
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
+  // Test 27.14: v7.0.39 (TD-194): قفل مشورتی seed باید روی همان اتصالی آزاد شود که گرفته شده است
+  if (shouldRun('reg_seed_advisory_lock_released_td_194', 'td194', 'seed', 'advisory')) {
+    const tStart = Date.now();
+    try {
+      const { runSeedWithLock } = await import('../../db/seed.js');
+      const { pool } = await import('../../db/drizzle.js');
+      const pg = (await import('pg')).default;
+      const heldSeedLocks = async (): Promise<number> => {
+        const r: any = await orm.execute(sql`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND classid = 0 AND objid = 89345 AND granted`);
+        return Number((r.rows ?? r)[0]?.n ?? 0);
+      };
+      // استخر اتصال تضمین نمی‌کند کوئری بعدی روی همان اتصال قبلی اجرا شود (زیر بار، اتصال دیگری می‌دهد).
+      // برای قطعی‌کردن آزمون، هر آزادسازی قفل مشورتی که از مسیر عمومی استخر (pool.query) برود روی اتصال دیگری اجرا می‌شود؛
+      // کد درست قفل را روی اتصال اختصاصی خودش آزاد می‌کند و از این مسیر عبور نمی‌کند.
+      const poolTarget = pool as unknown as { query: (...args: any[]) => Promise<any> };
+      const originalQuery = poolTarget.query;
+      let reroutedUnlocks = 0;
+      poolTarget.query = async (...args: any[]) => {
+        const text = typeof args[0] === 'string' ? args[0] : args[0]?.text;
+        if (typeof text === 'string' && text.includes('pg_advisory_unlock')) {
+          reroutedUnlocks++;
+          const other = new pg.Client({ connectionString: process.env.DATABASE_URL });
+          await other.connect();
+          try {
+            return await other.query(args[0], args[1]);
+          } finally {
+            await other.end();
+          }
+        }
+        return originalQuery(...args);
+      };
+      try {
+        await runSeedWithLock();
+      } finally {
+        delete (poolTarget as { query?: unknown }).query;
+      }
+      const held = await heldSeedLocks();
+      if (held > 0) {
+        throw new Error(`پس از پایان seed قفل 89345 هنوز در ${held} جلسه نگه داشته شده است (آزادسازی از مسیر عمومی استخر: ${reroutedUnlocks})`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_seed_advisory_lock_released_td_194',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.39: آزادسازی قفل مشورتی seed روی همان اتصال (TD-194)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'حتی وقتی استخر برای کوئری بعدی اتصال دیگری می‌دهد، قفل 89345 پس از seed روی همان اتصال قفل‌گیرنده آزاد شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_seed_advisory_lock_released_td_194',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.39: آزادسازی قفل مشورتی seed روی همان اتصال (TD-194)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

@@ -2,9 +2,10 @@ import { pool } from '../db/drizzle.js';
 
 /**
  * v7.0.31 (TD-193 / audit P1-8): کلیدهای قفل مشورتی کارهای نگهداشتی که در کل خوشه فقط یک اجرای
- * همزمان مجاز دارند. (کلید 89345 متعلق به seed است — src/db/seed.ts)
+ * همزمان مجاز دارند.
  */
 export const ADVISORY_LOCK_KEYS = {
+  SEED: 89345,
   DOCUMENT_VOUCHER_SYNC: 91001,
   KARDEX_INITIAL_BACKFILL: 91002,
   WAREHOUSE_STOCK_REPAIR: 91003,
