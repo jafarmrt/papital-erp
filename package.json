@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "7.0.55",
+  "version": "7.0.56",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -19,6 +19,7 @@
     "test:ci": "tsx scripts/run-tests.ts --summary --report-file=dist/test-report.json",
     "test:full": "tsx scripts/run-tests.ts",
     "db:baseline": "tsx scripts/build-baseline.ts",
+    "attachments:migrate": "tsx scripts/migrate-attachments.ts",
     "db:cleanup-test": "tsx scripts/cleanup-test-data.ts",
     "lint": "tsc --noEmit",
     "db:studio": "drizzle-kit studio",

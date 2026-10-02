@@ -17,6 +17,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
+import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 
 export class DocumentCreationService {
   /**
@@ -91,6 +92,11 @@ export class DocumentCreationService {
         linesChanged,
       });
 
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      const storedAttachments = body.attachments !== undefined
+        ? await AttachmentStorageService.normalizeForRecord(tx, 'document', id, body.attachments, user || existingDoc.user || '')
+        : (existingDoc.attachments || []);
+
       // Atomic update with OCC WHERE clause to guarantee no concurrent modification slipped through
       const [updatedDoc] = await tx.update(documents).set({
         refNumber: refNumber ? String(refNumber) : existingDoc.refNumber,
@@ -105,7 +111,7 @@ export class DocumentCreationService {
         currency: currency || existingDoc.currency,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
-        attachments: body.attachments !== undefined ? body.attachments : (existingDoc.attachments || []),
+        attachments: storedAttachments,
         version: newVer
       }).where(and(eq(documents.id, id), eq(documents.version, existingDoc.version)))
         .returning({ id: documents.id, version: documents.version });
@@ -291,11 +297,13 @@ export class DocumentCreationService {
         currency: currency || 'IRR',
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
-        attachments: body.attachments || [],
+        attachments: [],
         projectId: finalProjectId ?? undefined,
         isDeleted: 0
       }).returning({ id: documents.id });
       const docId = insertedDoc.id;
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      await AttachmentStorageService.attachToNewRecord(tx, 'document', docId, body.attachments, user || '');
 
       if (docType === 'audit') {
         // H-06 & TD-159: اخذ قفل سطری ردیف‌های کالا بر اساس شناسه مرتب‌شده جهت جلوگیری از بن‌بست همروندی (Deadlock)

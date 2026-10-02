@@ -4547,6 +4547,176 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.24: v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک و ستون attachments فقط فراداده؛ دریافت فایل فقط با مجوز
+  // خواندن رکورد مالک؛ SVG دانلود می‌شود نه نمایش؛ انتقال پیوست‌های قدیمی Base64 (آزمایشی سپس واقعی)
+  if (shouldRun('reg_attachments_on_disk_p2_9', 'p29', 'attachments')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.56: پیوست‌ها روی دیسک با دریافت مجوزدار و انتقال پیوست‌های قدیمی داخل پایگاه‌داده (P2-9)';
+    const fsMod = await import('fs');
+    const pathMod = await import('path');
+    const osMod = await import('os');
+    const previousAttachmentsDir = process.env.ATTACHMENTS_DIR;
+    const tempRoot = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), 'erp-attachments-'));
+    process.env.ATTACHMENTS_DIR = tempRoot;
+    const createdVoucherIds: number[] = [];
+    try {
+      const { VoucherService } = await import('../../services/accounting/voucher.service.js');
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const { createTestDocument, createTestRole, createTestUser } = await import('../fixtures/factories.js');
+      const { getTestApp, getAdminSession, loginTestUser } = await import('../fixtures/httpTestHelper.js');
+      const request = (await import('supertest')).default;
+      const app = await getTestApp();
+      const admin = await getAdminSession();
+
+      const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      const svgBytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'utf8');
+      const pngDataUrl = `data:image/png;base64,${pngBytes.toString('base64')}`;
+      const svgDataUrl = `data:image/svg+xml;base64,${svgBytes.toString('base64')}`;
+
+      // الف) ثبت سند حسابداری با دو پیوست: ستون attachments نباید داده Base64 داشته باشد
+      await ChartOfAccountsService.seedStandardAccounts();
+      const allAccounts = await ChartOfAccountsService.getAllAccounts();
+      const debitAcc = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
+      const creditAcc = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
+      if (!debitAcc || !creditAcc) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
+      const created: any = await VoucherService.createJournalVoucher({
+        date: await businessTodayIsoDate(),
+        voucherType: 'general',
+        status: 'draft',
+        description: 'سند آزمون پیوست P2-9',
+        referenceModule: 'manual',
+        referenceNumber: `TEST-P29-${Date.now()}`,
+        username: 'p29_probe',
+        attachments: [
+          { id: 'att_png', name: 'receipt.png', url: pngDataUrl, type: 'image/png', size: pngBytes.length },
+          { id: 'att_svg', name: 'logo.svg', url: svgDataUrl, type: 'image/svg+xml', size: svgBytes.length },
+        ],
+        items: [
+          { accountId: debitAcc.id, detailedType: 'other', detailedName: 'آزمون', debit: 100, credit: 0, description: 'بدهکار' },
+          { accountId: creditAcc.id, detailedType: 'other', detailedName: 'آزمون', debit: 0, credit: 100, description: 'بستانکار' },
+        ],
+      } as any);
+      createdVoucherIds.push(created.id);
+      const [voucherRow] = await orm.select({ attachments: journalVouchers.attachments }).from(journalVouchers).where(eq(journalVouchers.id, created.id));
+      const storedList: any[] = Array.isArray(voucherRow?.attachments) ? voucherRow.attachments as any[] : [];
+      if (JSON.stringify(storedList).includes('data:')) {
+        throw new Error('ستون attachments سند حسابداری هنوز داده Base64 پیوست را نگه می‌دارد');
+      }
+      const pngItem = storedList.find(a => a.name === 'receipt.png');
+      const svgItem = storedList.find(a => a.name === 'logo.svg');
+      if (!pngItem?.url?.startsWith('/api/attachments/') || !svgItem?.url?.startsWith('/api/attachments/') || pngItem.type !== 'image/png') {
+        throw new Error(`فراداده پیوست‌ها نادرست است: ${JSON.stringify(storedList).slice(0, 300)}`);
+      }
+
+      const { fileAttachments, roles } = await import('../../db/schema.js');
+      const { AttachmentStorageService } = await import('../../services/attachments/attachmentStorage.service.js');
+      const registry = await orm.select().from(fileAttachments)
+        .where(and(eq(fileAttachments.entityType, 'journal_voucher'), eq(fileAttachments.entityId, created.id)));
+      const pngRow = registry.find(r => pngItem.url.endsWith(r.id));
+      if (registry.length !== 2 || !pngRow || !fsMod.readFileSync(AttachmentStorageService.absolutePath(pngRow.storagePath)).equals(pngBytes)) {
+        throw new Error(`فایل پیوست روی دیسک یا ثبت آن نادرست است (${registry.length} ردیف)`);
+      }
+
+      // ب) دریافت فایل: مدیر 200 با همان بایت‌ها؛ SVG فقط دانلود؛ بدون مجوز حسابداری 403؛ بدون نشست 401
+      const binary = (res: any, cb: any) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      };
+      const pngRes = await request(app).get(pngItem.url).set('Cookie', admin.cookie).buffer(true).parse(binary);
+      if (pngRes.status !== 200 || pngRes.headers['content-type'] !== 'image/png'
+        || !String(pngRes.headers['content-disposition'] || '').startsWith('inline') || !Buffer.from(pngRes.body).equals(pngBytes)) {
+        throw new Error(`دریافت تصویر پیوست نادرست است (وضعیت ${pngRes.status}، ${pngRes.headers['content-type']})`);
+      }
+      const svgRes = await request(app).get(svgItem.url).set('Cookie', admin.cookie).buffer(true).parse(binary);
+      if (svgRes.status !== 200 || !String(svgRes.headers['content-disposition'] || '').startsWith('attachment')
+        || svgRes.headers['x-content-type-options'] !== 'nosniff') {
+        throw new Error(`SVG باید فقط دانلود شود (وضعیت ${svgRes.status}، ${svgRes.headers['content-disposition']})`);
+      }
+      const noPermRole = await createTestRole({ permissions: ['daily_logs.view'] });
+      const accountingRole = await createTestRole({ permissions: ['accounting.view'] });
+      const noPermCookie = await loginTestUser(app, (await createTestUser({ role: noPermRole.code })).username);
+      const accountingCookie = await loginTestUser(app, (await createTestUser({ role: accountingRole.code })).username);
+      const statuses = {
+        noPermission: (await request(app).get(pngItem.url).set('Cookie', noPermCookie)).status,
+        accounting: (await request(app).get(pngItem.url).set('Cookie', accountingCookie)).status,
+        anonymous: (await request(app).get(pngItem.url)).status,
+        publicUploads: (await request(app).get(`/uploads/.attachments/${pngRow.storagePath}`)).status,
+      };
+      await orm.delete(roles).where(inArray(roles.id, [noPermRole.id, accountingRole.id]));
+      if (statuses.noPermission !== 403 || statuses.accounting !== 200 || statuses.anonymous !== 401 || statuses.publicUploads !== 404) {
+        throw new Error(`کنترل دسترسی دریافت پیوست نادرست است: ${JSON.stringify(statuses)}`);
+      }
+
+      // ج) ویرایش: حذف SVG از فهرست آن را جدا می‌کند؛ آدرس javascript: رد می‌شود
+      await VoucherService.updateJournalVoucher(created.id, { attachments: [pngItem] } as any);
+      const svgAfter = await request(app).get(svgItem.url).set('Cookie', admin.cookie);
+      const pngAfter = await request(app).get(pngItem.url).set('Cookie', admin.cookie);
+      if (svgAfter.status !== 404 || pngAfter.status !== 200) {
+        throw new Error(`پس از حذف SVG از فهرست: SVG ${svgAfter.status} (انتظار 404)، PNG ${pngAfter.status} (انتظار 200)`);
+      }
+      let rejected = false;
+      try {
+        await VoucherService.updateJournalVoucher(created.id, { attachments: [{ id: 'x', name: 'bad', url: 'javascript:alert(1)' }] } as any);
+      } catch {
+        rejected = true;
+      }
+      if (!rejected) throw new Error('آدرس javascript: برای پیوست پذیرفته شد');
+
+      // د) انتقال پیوست قدیمی Base64 داخل سند انبار: آزمایشی بدون تغییر، سپس واقعی و تکرارپذیر
+      const { document: legacyDoc } = await createTestDocument({ refNumber: `DOC_P29_${Date.now()}` }, []);
+      const legacyList = [{ id: 'legacy1', name: 'old-receipt.png', url: pngDataUrl, type: 'image/png' }];
+      await orm.update(documents).set({ attachments: legacyList as any }).where(eq(documents.id, legacyDoc.id));
+      const scope = { entityType: 'document' as const, ids: [legacyDoc.id] };
+      const dry = await AttachmentStorageService.migrateInlineAttachments({ apply: false, actor: 'p29', scope });
+      const [afterDry] = await orm.select({ attachments: documents.attachments }).from(documents).where(eq(documents.id, legacyDoc.id));
+      if (dry.files !== 1 || !JSON.stringify(afterDry?.attachments).includes('data:image/png')) {
+        throw new Error(`اجرای آزمایشی انتقال باید یک فایل بشمارد و چیزی را تغییر ندهد: ${JSON.stringify(dry)}`);
+      }
+      const applied = await AttachmentStorageService.migrateInlineAttachments({ apply: true, actor: 'p29', scope });
+      const [afterApply] = await orm.select({ attachments: documents.attachments }).from(documents).where(eq(documents.id, legacyDoc.id));
+      const migrated: any = Array.isArray(afterApply?.attachments) ? (afterApply.attachments as any[])[0] : null;
+      if (applied.files !== 1 || applied.failures.length !== 0 || !migrated?.url?.startsWith('/api/attachments/')) {
+        throw new Error(`انتقال واقعی پیوست قدیمی انجام نشد: ${JSON.stringify({ applied, migrated }).slice(0, 300)}`);
+      }
+      const migratedRes = await request(app).get(migrated.url).set('Cookie', admin.cookie).buffer(true).parse(binary);
+      if (migratedRes.status !== 200 || !Buffer.from(migratedRes.body).equals(pngBytes)) {
+        throw new Error(`فایل منتقل‌شده با محتوای اصلی یکسان نیست (وضعیت ${migratedRes.status})`);
+      }
+      const again = await AttachmentStorageService.migrateInlineAttachments({ apply: true, actor: 'p29', scope });
+      if (again.files !== 0) throw new Error('اجرای دوباره انتقال باید کاری انجام ندهد');
+
+      results.push(makeTestCase({
+        id: 'reg_attachments_on_disk_p2_9',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: `پیوست‌ها روی دیسک و ثبت‌شده؛ دسترسی: ${JSON.stringify(statuses)}؛ انتقال قدیمی: آزمایشی ${dry.files}، واقعی ${applied.files}، تکرار ${again.files}`
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_attachments_on_disk_p2_9',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdVoucherIds.length > 0) {
+        await orm.update(journalVouchers).set({ isDeleted: 1 }).where(inArray(journalVouchers.id, createdVoucherIds));
+      }
+      if (previousAttachmentsDir === undefined) delete process.env.ATTACHMENTS_DIR;
+      else process.env.ATTACHMENTS_DIR = previousAttachmentsDir;
+      fsMod.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

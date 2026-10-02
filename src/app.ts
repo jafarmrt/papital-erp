@@ -38,6 +38,7 @@ import inventoryRoutes from './routes/inventory.routes.js';
 import eventsRoutes from './routes/events.routes.js';
 import draftsRoutes from './routes/drafts.routes.js';
 import procurementRoutes from './routes/procurement.routes.js';
+import attachmentsRoutes from './routes/attachments.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
@@ -365,10 +366,17 @@ export async function createApp(): Promise<express.Express> {
   app.use('/api/events', eventsRoutes);
   app.use('/api', draftsRoutes);
   app.use('/api/procurement', procurementRoutes);
+  app.use('/api', attachmentsRoutes);
 
   const uploadsStatic = express.static(path.join(process.cwd(), 'public', 'uploads'));
   app.use('/uploads', (req, res, next) => {
     const p = (req.path || '').toLowerCase();
+    // v7.0.56 (audit P2-9): فایل پیوست‌ها فقط از GET /api/attachments/:id با بررسی مجوز رکورد مالک سرو می‌شوند
+    let decodedPath = p;
+    try { decodedPath = decodeURIComponent(p); } catch { /* keep raw */ }
+    if (p.startsWith('/.attachments') || decodedPath.startsWith('/.attachments')) {
+      return res.status(404).end();
+    }
     // Public assets and media images (catalog items, transfers, logos, product photos)
     const isImageFile = /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(p);
     if (

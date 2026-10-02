@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
 import { businessNowIsoDateTime } from '../lib/businessClock.js';
+import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -134,9 +135,11 @@ export class ProjectService {
       inventoryControl: input.inventoryControl || {},
       stageSchedules: input.stageSchedules || {},
       customStages: input.customStages || [],
-      attachments: (Array.isArray(input.attachments) ? input.attachments : []) as any,
+      attachments: [],
       isDeleted: 0
     }).returning();
+    // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+    newProject.attachments = await AttachmentStorageService.attachToNewRecord(executor, 'production_project', newProject.id, input.attachments, input.createdBy || '');
 
     let createdStages: Array<typeof projectStages.$inferSelect> = [];
     if (Array.isArray(input.initialStages) && input.initialStages.length > 0) {
@@ -224,7 +227,10 @@ export class ProjectService {
     if (input.inventoryControl !== undefined) updateData.inventoryControl = input.inventoryControl;
     if (input.stageSchedules !== undefined) updateData.stageSchedules = input.stageSchedules;
     if (input.customStages !== undefined) updateData.customStages = input.customStages;
-    if (input.attachments !== undefined) updateData.attachments = Array.isArray(input.attachments) ? input.attachments : [];
+    if (input.attachments !== undefined) {
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      updateData.attachments = await AttachmentStorageService.normalizeForRecord(executor, 'production_project', id, input.attachments);
+    }
 
     const [current] = await executor.update(productionProjects).set(updateData).where(eq(productionProjects.id, id)).returning();
 

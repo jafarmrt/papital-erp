@@ -11,4 +11,4 @@ export * from './dailyLogs';
 export * from './workflow';
 export * from './procurement';
 export * from './events';
-
+export * from './attachments';

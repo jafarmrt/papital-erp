@@ -10,6 +10,7 @@ import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } fro
 import { fin } from '../../../lib/financialDecimal.js';
 
 import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
+import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 
 /**
  * V1.4.0 — ماشین وضعیت چک صیادی
@@ -269,9 +270,11 @@ export class ChequeLifecycleService {
         voucherId,
         description: data.description?.trim() || '',
         statusHistory: initialHistory,
-        attachments: data.attachments || [],
+        attachments: [],
         createdById: data.userId || null,
       }).returning();
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      row.attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'cheque', row.id, data.attachments, data.username);
       return row;
     });
 

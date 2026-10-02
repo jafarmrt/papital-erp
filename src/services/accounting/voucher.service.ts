@@ -7,6 +7,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessClock.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
+import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 
 /**
  * v7.0.49 (audit P2-5، تصمیم مالک محصول): بیشترین اختلاف مجاز جمع بدهکار و بستانکار یک سند (۰٫۰۱)، یکسان در
@@ -285,10 +286,12 @@ export class VoucherService {
         referenceNumber: data.referenceNumber?.trim() || '',
         sourceDocumentId: data.sourceDocumentId ?? null,
         currency: data.currency || 'IRR',
-        attachments: data.attachments || [],
+        attachments: [],
         createdById: data.userId || null,
         createdByUsername: data.username || '',
       }).returning();
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      voucher.attachments = await AttachmentStorageService.attachToNewRecord(tx, 'journal_voucher', voucher.id, data.attachments, data.username);
 
       updateRequestContext({ entityId: `voucher:${voucherNum}`, transactionId: `vch_num_${voucherNum}` });
 
@@ -397,13 +400,16 @@ export class VoucherService {
         }
       }
 
+      const storedAttachments = data.attachments !== undefined
+        ? await AttachmentStorageService.normalizeForRecord(tx, 'journal_voucher', id, data.attachments)
+        : undefined;
       await tx.update(journalVouchers).set({
         ...(updatedDate ? { date: updatedDate } : {}),
         ...(data.voucherType ? { voucherType: data.voucherType } : {}),
         ...(data.manualVoucherNumber !== undefined ? { manualVoucherNumber: data.manualVoucherNumber.trim() } : {}),
         ...(data.description ? { description: data.description.trim() } : {}),
         ...(data.status ? { status: data.status } : {}),
-        ...(data.attachments !== undefined ? { attachments: data.attachments } : {}),
+        ...(storedAttachments !== undefined ? { attachments: storedAttachments } : {}),
         totalDebit: sumDebit.toNumber(),
         totalCredit: sumCredit.toNumber(),
       }).where(eq(journalVouchers.id, id));

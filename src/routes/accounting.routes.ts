@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { AccountMappingService } from '../services/accounting/accountMapping.service.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
@@ -186,7 +187,7 @@ export const vouchersQuerySchema = z.object({
   }).optional()
 });
 
-router.get('/accounting/vouchers', authorizePermission('accounting.vouchers', 'accounting.reports', 'accounting.view'), validate(vouchersQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/vouchers', authorizePermission(...RECORD_READ_PERMISSIONS.journal_voucher), validate(vouchersQuerySchema), asyncHandler(async (req, res) => {
   const { page, limit, search, status, voucherType, startDate, endDate } = (req.query as any) || {};
   const result = await AccountingService.getJournalVouchers({
     page: page ? Number(page) : undefined,
@@ -200,7 +201,7 @@ router.get('/accounting/vouchers', authorizePermission('accounting.vouchers', 'a
   res.json(result);
 }));
 
-router.get('/accounting/vouchers/:id', authorizePermission('accounting.vouchers', 'accounting.reports', 'accounting.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/accounting/vouchers/:id', authorizePermission(...RECORD_READ_PERMISSIONS.journal_voucher), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const voucher = await AccountingService.getJournalVoucherById(id);
   if (!voucher) throw new NotFoundError('سند حسابداری یافت نشد');
@@ -766,7 +767,7 @@ export const treasuryQuerySchema = z.object({
   }).optional()
 });
 
-router.get('/accounting/treasury', authorizePermission('accounting.treasury', 'accounting.reports', 'accounting.view'), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
   const { type, bankAccountId, startDate, endDate } = (req.query as any) || {};
   const list = await AccountingService.getTreasuryTransactions({
     type: type as any,
@@ -980,7 +981,7 @@ export const chequesQuerySchema = z.object({
   }).optional()
 });
 
-router.get('/accounting/cheques', authorizePermission('accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'), validate(chequesQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/cheques', authorizePermission(...RECORD_READ_PERMISSIONS.cheque), validate(chequesQuerySchema), asyncHandler(async (req, res) => {
   const { type, status, startDate, endDate, search } = (req.query as any) || {};
   const list = await AccountingService.getCheques({
     type: type as any,

@@ -11,6 +11,7 @@ import { fin } from '../../../lib/financialDecimal.js';
 import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
+import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { jalaliToIsoDate } from '../../../utils.js';
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -446,9 +447,11 @@ export class TreasuryTransactionService {
         documentId: data.documentId || null,
         description: data.description?.trim() || '',
         status: 'completed',
-        attachments: data.attachments || [],
+        attachments: [],
         createdById: data.userId || null,
       }).returning();
+      // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
+      tx.attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'treasury_transaction', tx.id, data.attachments, data.username);
 
       // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with treasury transaction)
       const treasuryEvent = domainEventBus.createEvent(

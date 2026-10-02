@@ -4,6 +4,7 @@ import { orm } from '../db/drizzle.js';
 import { productionProjects, projectStages, items, projectProductStageProgress } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
+import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -528,7 +529,7 @@ export async function getProjectProgressMatrixStatus(
 }
 
 // GET /api/projects - List all production projects with summary progress
-router.get('/projects', authorizePermission('projects.view', 'projects.create', 'projects.edit', 'documents.view', 'documents.create', 'warehouse.in', 'warehouse.out', 'warehouse.view'), async (req, res) => {
+router.get('/projects', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), async (req, res) => {
   try {
     const { status, priority, search } = req.query;
 
@@ -593,7 +594,7 @@ router.get('/projects', authorizePermission('projects.view', 'projects.create', 
 });
 
 // GET /api/projects/:id - Get single project details with stages
-router.get('/projects/:id', authorizePermission('projects.view', 'projects.create', 'projects.edit', 'documents.view', 'documents.create', 'warehouse.in', 'warehouse.out', 'warehouse.view'), validate(paramsIdSchema), async (req, res) => {
+router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });

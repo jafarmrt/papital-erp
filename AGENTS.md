@@ -73,6 +73,7 @@
 
 ## 10. Transfers & Image Management
 - **Dual-Route API:** Transfer routes in `src/routes/transfers.routes.ts` accept both `POST` and `PUT` across `/transfers` and `/transfers/:code`.
+- **Attachments on Disk (v7.0.56, audit P2-9, product-owner decision):** Attachment files of documents, journal vouchers, cheques, treasury transactions, projects and payrolls live in `public/uploads/.attachments/` (never served by `/uploads`) and are registered in `file_attachments`; the JSONB `attachments` columns hold metadata and `/api/attachments/<id>` only — never Base64. Every save path passes incoming attachments through `AttachmentStorageService` (`attachToNewRecord` after insert, `normalizeForRecord` on update). Files are downloaded only via `GET /api/attachments/:id`, which requires the read permission of the owning record (`RECORD_READ_PERMISSIONS` in `src/lib/recordReadPermissions.ts`, also used by those records' read routes).
 - **Modal Viewports:** Large modals must use fixed headers/footers with internal scrollable bodies (`max-h-[85vh]` or `max-h-[90vh]`) for iframe preview compatibility.
 
 ## 11. Modular Accounting Services & Facade Pattern
