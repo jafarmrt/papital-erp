@@ -1,4 +1,5 @@
 import { pool } from '../db/drizzle.js';
+import { getMigrationsJournalSchema } from '../db/migrator.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { DataReconciliationService } from './reconciliation/dataReconciliation.service.js';
@@ -193,7 +194,8 @@ export class ReleaseGateService {
     const overallStatus = passedCount === totalCount ? 'RELEASE_READY' : 'REJECTED';
 
     // V3.0.9 (TD-063): تمام متریک‌های سیستم اندازه‌گیری زنده هستند — هیچ مقداری ثابت نیست
-    const migrationsRes = await pool.query(`SELECT count(*) as count FROM drizzle.__drizzle_migrations`);
+    const journalSchema = getMigrationsJournalSchema().replace(/"/g, '""');
+    const migrationsRes = await pool.query(`SELECT count(*) as count FROM "${journalSchema}".__drizzle_migrations`);
     return {
       timestamp: new Date().toISOString(),
       version: BUILD_INFO.version,

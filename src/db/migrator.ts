@@ -47,6 +47,29 @@ export function getMigrationsFolder(): string {
 }
 
 /**
+ * v7.0.42 (TD-192): اسکیمای دفتر ثبت مهاجرت‌های اجراشده (`<schema>.__drizzle_migrations`).
+ * در پروداکشن همیشه 'drizzle' است؛ اسکیمای ایزوله تست‌ها (src/tests/setup/testDb.ts) دفتر خودش را دارد،
+ * وگرنه اجرای دوم تست‌ها روی همان پایگاه‌داده «همه مهاجرت‌ها اعمال شده» می‌دید و اسکیمای تازه خالی می‌ماند.
+ */
+const DEFAULT_MIGRATIONS_JOURNAL_SCHEMA = 'drizzle';
+let migrationsJournalSchema = DEFAULT_MIGRATIONS_JOURNAL_SCHEMA;
+
+export function getMigrationsJournalSchema(): string {
+  return migrationsJournalSchema;
+}
+
+/** دفتر مهاجرت را به اسکیمای داده‌شده می‌برد و مقدار قبلی را برای بازگردانی برمی‌گرداند */
+export function setMigrationsJournalSchema(schema: string | null): string {
+  const previous = migrationsJournalSchema;
+  migrationsJournalSchema = schema || DEFAULT_MIGRATIONS_JOURNAL_SCHEMA;
+  return previous;
+}
+
+function journalTable(): string {
+  return `"${migrationsJournalSchema.replace(/"/g, '""')}".__drizzle_migrations`;
+}
+
+/**
  * Runs Drizzle ORM migrations using the official Drizzle Migrator pipeline.
  * Ensures the single source of truth (drizzle/*.sql) is applied cleanly and idempotently.
  */
@@ -65,18 +88,18 @@ export async function runMigrations(): Promise<MigrationResult> {
     // محاسبه می‌شود (قبلاً ثابت ۱ گزارش می‌شد).
     let before = 0;
     try {
-      const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
+      const res = await pool.query(`SELECT count(*)::int AS count FROM ${journalTable()}`);
       before = Number(res.rows[0]?.count || 0);
     } catch {
       // Table may not exist on a fresh database yet — before stays 0
     }
 
     // Execute official Drizzle migration runner (records applied migrations in __drizzle_migrations)
-    await migrate(orm, { migrationsFolder });
+    await migrate(orm, { migrationsFolder, migrationsSchema: migrationsJournalSchema });
 
     let after = before;
     try {
-      const res = await pool.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
+      const res = await pool.query(`SELECT count(*)::int AS count FROM ${journalTable()}`);
       after = Number(res.rows[0]?.count || 0);
     } catch {
       // Keep after = before on query failure

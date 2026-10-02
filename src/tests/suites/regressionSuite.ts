@@ -3689,6 +3689,57 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.16: v7.0.42 (TD-192): هر اسکیمای ایزوله تست باید همه مهاجرت‌ها را دریافت کند، حتی اگر پیش‌تر روی همان پایگاه‌داده تست اجرا شده باشد
+  if (shouldRun('reg_test_schema_own_migration_journal_td_192', 'td192', 'isolation', 'journal')) {
+    const tStart = Date.now();
+    try {
+      const { setupTestSchema } = await import('../setup/testDb.js');
+      const { getMigrationsJournalSchema } = await import('../../db/migrator.js');
+      const { pool } = await import('../../db/drizzle.js');
+      const outerJournal = getMigrationsJournalSchema();
+      // اسکیمای ایزوله دوم روی همان پایگاه‌داده (معادل اجرای دوباره تست‌ها پس از یک اجرای کامل)
+      const inner = await setupTestSchema();
+      let present: Record<string, boolean> = {};
+      try {
+        const checks = ['items', 'documents', 'journal_vouchers', 'item_warehouse_stocks', 'inventory_reconciliation_anomalies'];
+        for (const table of checks) {
+          const r = await pool.query('SELECT to_regclass($1) IS NOT NULL AS ok', [`"${inner.schema}".${table}`]);
+          present[table] = Boolean(r.rows[0]?.ok);
+        }
+      } finally {
+        await inner.teardown();
+      }
+      const missing = Object.entries(present).filter(([, ok]) => !ok).map(([t]) => t);
+      if (missing.length > 0) {
+        throw new Error(`اسکیمای ایزوله دوم بدون جداول مهاجرت ماند: ${missing.join(', ')}`);
+      }
+      if (getMigrationsJournalSchema() !== outerJournal) {
+        throw new Error(`پس از پایان اسکیمای ایزوله، دفتر مهاجرت باید به «${outerJournal}» برگردد نه «${getMigrationsJournalSchema()}»`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_test_schema_own_migration_journal_td_192',
+        scenarioId: 'test_runner_real_database_guard',
+        name: 'v7.0.42: هر اسکیمای ایزوله تست دفتر مهاجرت خودش را دارد و همه جداول را می‌گیرد (TD-192)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'یک اسکیمای ایزوله دوم روی همان پایگاه‌داده همه جداول را دریافت کرد و دفتر مهاجرت پس از حذف آن به اسکیمای قبلی بازگشت.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_test_schema_own_migration_journal_td_192',
+        scenarioId: 'test_runner_real_database_guard',
+        name: 'v7.0.42: هر اسکیمای ایزوله تست دفتر مهاجرت خودش را دارد و همه جداول را می‌گیرد (TD-192)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

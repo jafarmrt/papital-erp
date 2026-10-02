@@ -1,6 +1,6 @@
 import { pool } from '../../db/drizzle.js';
 import { logger } from '../../middleware/logger.js';
-import { runMigrations } from '../../db/migrator.js';
+import { runMigrations, setMigrationsJournalSchema } from '../../db/migrator.js';
 
 /**
  * TST-007 — Test Isolation via Dedicated PostgreSQL Schema
@@ -26,6 +26,9 @@ interface PoolWithEvents {
 
 export async function setupTestSchema(): Promise<TestSchemaContext> {
   const schema = `test_${Date.now()}`;
+  // v7.0.42 (TD-192): افزونه pg_trgm (مهاجرت 0000) در public، همانند پروداکشن؛ در غیر این صورت داخل اولین
+  // اسکیمای موقت نصب می‌شد و اسکیمای ایزوله بعدی روی همان پایگاه‌داده به gin_trgm_ops دسترسی نداشت
+  await pool.query('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public');
   await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
 
   const setSearchPath = (client: { query: (q: string) => unknown }) => {
@@ -45,6 +48,9 @@ export async function setupTestSchema(): Promise<TestSchemaContext> {
   typedPool.on('acquire', acquireHandler);
   typedPool.on('error', errorHandler);
 
+  // v7.0.42 (TD-192): دفتر ثبت مهاجرت‌ها داخل همین اسکیمای موقت (و حذف همراه آن)
+  const previousJournalSchema = setMigrationsJournalSchema(schema);
+
   // Force search_path on currently-live pooled clients as well
   try {
     const live = await pool.query(`SELECT COALESCE(array_agg(backends.pid), '{}') AS pids
@@ -56,6 +62,7 @@ export async function setupTestSchema(): Promise<TestSchemaContext> {
     try {
       typedPool.removeListener('acquire', acquireHandler);
       typedPool.removeListener('error', errorHandler);
+      setMigrationsJournalSchema(previousJournalSchema);
       await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
       logger.info(`[TestDb] Isolated schema ${schema} dropped cleanly.`);
     } catch (err: any) {
