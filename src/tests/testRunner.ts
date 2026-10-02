@@ -137,7 +137,8 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v5_cogs_and_warehouse_voucher: 'Accounting & Vouchers: Cost of Goods Sold Sync & Warehouse WIP Account Mapping (V5 Phase 4 / TD-120, TD-121)',
   v5_audit_gateway_and_test_cleanup: 'DB & Inventory: Explicit Test Cleanup Cast & Centralized Audit Movement Gateway (V5 Phase 5 / TD-122, TD-124)',
   v6_treasury_cheque_isolation: 'Treasury & Cheques: Cheque Method Bank Balance Drain Prevention & Receivable/Payable Isolation (V6 Sub-phase 1.2 / TD-148)',
-  v6_fiscal_year_closing_isolation: 'Accounting & Year Closing: Fiscal Year Closing Transaction Isolation & Trial Balance Calendar Normalization (V6 Sub-phase 1.3 / TD-141, TD-142)'
+  v6_fiscal_year_closing_isolation: 'Accounting & Year Closing: Fiscal Year Closing Transaction Isolation & Trial Balance Calendar Normalization (V6 Sub-phase 1.3 / TD-141, TD-142)',
+  test_runner_real_database_guard: 'Test Infrastructure: Runner Refuses the In-Memory Mock Database for Every Suite (P2-12)'
 };
 
 
@@ -157,27 +158,31 @@ function isTestCleanupAllowed(): boolean {
   );
 }
 
+export const MOCK_DATABASE_REFUSAL =
+  'FATAL: DATABASE_URL is missing/placeholder — test runner would run against the in-memory mock pool ' +
+  'and produce misleading results. Configure a real PostgreSQL DATABASE_URL and re-run.';
+
+/**
+ * V3.0.9 (TD-063) + v7.0.38 (P2-12): fail-fast شفاف روی DB جعلی برای همه لایه‌ها، از جمله unit.
+ * تست‌های «واحد» صندوق ارسال و ایدم‌پوتنسی به پایگاه‌داده می‌نویسند و رانر پیش از اجرای سوئیت‌ها
+ * اسکیمای تست و داده پایه را می‌سازد؛ روی mockPool همه این‌ها «۰ → ۰» و PASS جعلی گزارش می‌شدند.
+ */
+export async function assertRealTestDatabase(): Promise<void> {
+  const { isMockDatabase } = await import('../db/drizzle.js');
+  if (isMockDatabase()) {
+    throw new Error(MOCK_DATABASE_REFUSAL);
+  }
+}
+
 export class Phase21TestRunner {
   static async runAllTests(layerFilter?: TestLayer, testFilter?: string): Promise<TestSuiteReport> {
     assertRunnerEnvironment();
+    await assertRealTestDatabase();
 
-    // V5.0.19: True Unit Test Isolation — unit tests have zero database dependencies.
-    // They test pure mathematical calculations, regexes, Iranian identity/phone/bank validators,
-    // and in-memory rule engine expressions. Skip DB reachability & fixture checks for unit layer.
+    // V5.0.19: unit layer skips fixture checks and cleanup (its DB use is limited to its own rows).
     const isPureUnitRun = layerFilter === 'unit';
 
     if (!isPureUnitRun) {
-      // V3.0.9 (TD-063): fail-fast شفاف روی DB جعلی — اجرای سوییت روی mockPool
-      // حافظه‌ای نتیجه گمراه‌کننده می‌دهد (بخشی PASS جعلی). بدون DATABASE_URL واقعی
-      // رانر با پیام صریح شکست می‌خورد.
-      const { isMockDatabase } = await import('../db/drizzle.js');
-      if (isMockDatabase()) {
-        throw new Error(
-          'FATAL: DATABASE_URL is missing/placeholder — test runner would run against the in-memory mock pool ' +
-          'and produce misleading results. Configure a real PostgreSQL DATABASE_URL and re-run.'
-        );
-      }
-
       // Ensure database schema migrations are applied and previous test artifacts are purged
       try {
         await ensureTestDatabaseReady();

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { Phase21TestRunner } from '../src/tests/testRunner.js';
+import { Phase21TestRunner, assertRealTestDatabase } from '../src/tests/testRunner.js';
 import { setupTestSchema } from '../src/tests/setup/testDb.js';
 import { bootstrapTestMasterData } from '../src/tests/setup/testBootstrap.js';
 
@@ -150,6 +150,9 @@ Available Suites:
   let teardown: (() => Promise<void>) | null = null;
 
   try {
+    // v7.0.38 (P2-12): پیش از ساخت اسکیما و seed؛ وگرنه مهاجرت و داده پایه روی mockPool «موفق» گزارش می‌شوند
+    await assertRealTestDatabase();
+
     if (isolationEnabled) {
       const ctx = await setupTestSchema();
       teardown = ctx.teardown;

@@ -3443,6 +3443,51 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.11: v7.0.38 (audit P2-12): رانر تست بدون پایگاه‌داده واقعی (mockPool) باید پیش از ساخت اسکیما و اجرای هر سوئیتی رد شود
+  if (shouldRun('reg_test_runner_mock_db_refusal_p2_12', 'p212', 'runner', 'mock')) {
+    const tStart = Date.now();
+    try {
+      const { spawnSync } = await import('child_process');
+      const path = await import('path');
+      const { MOCK_DATABASE_REFUSAL } = await import('../testRunner.js');
+      const tsxBin = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
+      // dotenv مقدار موجود (حتی رشته خالی) را بازنویسی نمی‌کند، پس .env محلی هم پایگاه‌داده واقعی را برنمی‌گرداند
+      const child = spawnSync(tsxBin, ['scripts/run-tests.ts', '--suite', 'unit', '--summary'], {
+        cwd: process.cwd(),
+        env: { ...process.env, DATABASE_URL: '', NODE_ENV: 'test' },
+        encoding: 'utf-8',
+        timeout: 120_000
+      });
+      const output = `${child.stdout || ''}${child.stderr || ''}`;
+      const refused = output.includes(MOCK_DATABASE_REFUSAL);
+      const ranSuites = output.includes('Passed Tests') || output.includes('Migrator] Drizzle database migrations completed');
+      if (child.status === 0 || !refused || ranSuites) {
+        throw new Error(`رانر روی mockPool باید با کد خروج غیرصفر و پیش از مهاجرت/اجرای سوئیت متوقف شود: ${JSON.stringify({ status: child.status, refused, ranSuites, tail: output.slice(-400) })}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_test_runner_mock_db_refusal_p2_12',
+        scenarioId: 'test_runner_real_database_guard',
+        name: 'v7.0.38: رانر تست بدون پایگاه‌داده واقعی حتی برای سوئیت unit رد می‌شود (P2-12)',
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: `اجرای «--suite unit» با DATABASE_URL خالی با کد ${child.status} و پیام صریح، بدون مهاجرت روی mockPool و بدون گزارش نتیجه متوقف شد.`
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_test_runner_mock_db_refusal_p2_12',
+        scenarioId: 'test_runner_real_database_guard',
+        name: 'v7.0.38: رانر تست بدون پایگاه‌داده واقعی حتی برای سوئیت unit رد می‌شود (P2-12)',
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();
