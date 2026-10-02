@@ -127,15 +127,16 @@ export function resolveJalaliFiscalYear(dateLike?: string | number | null): numb
   const jalaliMatch = s.match(/^(1[345]\d{2})[-/]/);
   if (jalaliMatch) return parseInt(jalaliMatch[1], 10);
 
-  // ISO میلادی → جدول تبدیل تقریبی (روز قبل از فروردین/بعد از اسفند خطای حداکثر ±۱ سال نیست؛
-  // دقت روزانه نیازی نیست چون فقط partition key است)
+  // ISO میلادی → سال جلالی با روز دقیق نوروز همان سال.
+  // v7.0.62 (TD-179): پیش‌تر نوروز همیشه ۲۱ مارس فرض می‌شد و اسناد روز ۲۰ مارس سال‌هایی مثل ۱۴۰۳ و ۱۴۰۷
+  // در سال مالی قبل شماره می‌خوردند. همتای SQL: erp_ref_fiscal_year در مهاجرت 0024.
   const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     const [, gy, gm, gd] = isoMatch;
     const gY = parseInt(gy, 10), gM = parseInt(gm, 10), gD = parseInt(gd, 10);
     let jy = gY - 621;
-    // Nowruz حدود 21 مارس؛ قبل از آن هنوز سال مالی جلالی قبل است
-    const beforeNowruz = gM < 3 || (gM === 3 && gD < 21);
+    const nowruz = jalaliToGregorian(jy, 1, 1);
+    const beforeNowruz = gM < nowruz.gm || (gM === nowruz.gm && gD < nowruz.gd);
     if (beforeNowruz) jy -= 1;
     return jy;
   }

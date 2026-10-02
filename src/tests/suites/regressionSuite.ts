@@ -3338,6 +3338,96 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.7c: v7.0.62 (TD-179): روز دقیق نوروز در سال مالی شماره‌گذاری (TS و SQL) و اصلاح ردیف‌های مرزی قدیمی
+  if (shouldRun('reg_ref_fiscal_year_exact_nowruz_td_179', 'td179', 'nowruz', 'ref_fiscal_year')) {
+    const tStart = Date.now();
+    const createdDocIds: number[] = [];
+    const testDocType = 'reg_test_td179';
+    const testName = 'v7.0.62: سند ۲۰ مارس ۲۰۲۴ (نوروز ۱۴۰۳) در سال ۱۴۰۳ شماره می‌خورد و ردیف‌های مرزی قدیمی با گزارش اصلاح می‌شوند (TD-179)';
+    try {
+      const violations: string[] = [];
+      // ۱) سمت برنامه
+      const expected: Record<string, number> = { '2024-03-19': 1402, '2024-03-20': 1403, '2025-03-20': 1403, '2025-03-21': 1404, '2028-03-20': 1407, '2026-03-20': 1404 };
+      for (const [d, fy] of Object.entries(expected)) {
+        const got = resolveJalaliFiscalYear(d);
+        if (got !== fy) violations.push(`resolveJalaliFiscalYear(${d}) = ${got}، انتظار ${fy}`);
+      }
+      // ۲) سمت پایگاه‌داده باید برای همه روزهای ۱۹ تا ۲۳ مارس ۱۹۲۱ تا ۲۱۲۱ با برنامه یکی باشد
+      const sqlRows = await orm.execute(sql`
+        SELECT y::int AS y, dd::int AS dd, erp_ref_fiscal_year(make_timestamp(y::int, 3, dd::int, 12, 0, 0)) AS fy
+          FROM generate_series(1921, 2121) y, generate_series(19, 23) dd`);
+      const mismatches = (sqlRows.rows as Array<{ y: number; dd: number; fy: number }>).filter(r => {
+        const iso = `${r.y}-03-${String(r.dd).padStart(2, '0')}`;
+        return resolveJalaliFiscalYear(iso) !== Number(r.fy);
+      });
+      if (mismatches.length > 0) violations.push(`erp_ref_fiscal_year با برنامه در ${mismatches.length} روز متفاوت است: ${JSON.stringify(mismatches.slice(0, 3))}`);
+
+      // ۳) اصلاح ردیف‌های مرزی قدیمی: سال مالی تقریبی ۱۴۰۲ برای ۲۰ مارس ۲۰۲۴
+      const mk = async (refNumber: string, date: string) => {
+        const id = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date, refNumber, items: [], user: 'test-agent' });
+        createdDocIds.push(id);
+        return id;
+      };
+      const boundary = await mk('TD179-7', '2024-03-20');
+      const occupant = await mk('TD179-8', '2024-04-01');
+      // سند هم‌شماره در سال ۱۴۰۲ ساخته و سپس به روز مرزی منتقل می‌شود تا وضعیت پیش از v7.0.62 بازسازی شود
+      const conflicting = await mk('TD179-8', '2024-03-10');
+      const regular = await mk('TD179-9', '2024-03-25');
+      await orm.update(documents).set({ refFiscalYear: 1402, date: '2024-03-20 00:00:00' }).where(inArray(documents.id, [boundary, conflicting]));
+      await orm.insert(documentRefCounters).values({ docType: testDocType, fiscalYear: 1403, lastRefNumber: 3 })
+        .onConflictDoUpdate({ target: [documentRefCounters.docType, documentRefCounters.fiscalYear], set: { lastRefNumber: 3 } });
+
+      await orm.execute(sql`SELECT erp_correct_ref_fiscal_year_boundaries()`);
+      await orm.execute(sql`SELECT erp_correct_ref_fiscal_year_boundaries()`); // اجرای دوباره نباید چیزی را تکرار کند
+
+      const rows = await orm.select({ id: documents.id, fy: documents.refFiscalYear, ref: documents.refNumber }).from(documents).where(inArray(documents.id, createdDocIds));
+      const byId = new Map(rows.map(r => [r.id, r]));
+      if (byId.get(boundary)?.fy !== 1403 || byId.get(boundary)?.ref !== 'TD179-7') violations.push(`سند مرزی باید با همان شماره به ۱۴۰۳ برود: ${JSON.stringify(byId.get(boundary))}`);
+      if (byId.get(conflicting)?.fy !== 1402) violations.push(`سند هم‌شماره نباید منتقل شود: ${JSON.stringify(byId.get(conflicting))}`);
+      if (byId.get(occupant)?.fy !== 1403 || byId.get(regular)?.fy !== 1403) violations.push('اسناد غیرمرزی نباید تغییر کنند');
+      const report = await orm.execute(sql`SELECT document_id, status FROM ref_fiscal_year_corrections WHERE document_id = ANY(${sql.param(createdDocIds)}::int[]) ORDER BY id`);
+      const statuses = (report.rows as Array<{ document_id: number; status: string }>).map(r => `${r.document_id}:${r.status}`);
+      if (JSON.stringify(statuses) !== JSON.stringify([`${boundary}:corrected`, `${conflicting}:conflict`])) violations.push(`گزارش اصلاح نادرست است: ${JSON.stringify(statuses)}`);
+      const [counter] = await orm.select().from(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, 1403)));
+      if ((counter?.lastRefNumber ?? 0) < 7) violations.push(`شمارنده ۱۴۰۳ باید دست‌کم به شماره سند منتقل‌شده (۷) برسد: ${counter?.lastRefNumber}`);
+
+      // ۴) گزارش در بازرس سلامت مالی
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const health = await FinancialHealthService.runHealthCheck();
+      const fyTest = health.tests.find(t => t.id === 'ref_fiscal_year_boundary_corrections');
+      if (!fyTest || fyTest.status !== 'warning' || !fyTest.items?.some(i => i.linkId === conflicting)) violations.push(`بازرس سلامت مالی باید سند منتقل‌نشده را هشدار دهد: ${JSON.stringify(fyTest?.metrics)}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_ref_fiscal_year_exact_nowruz_td_179',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سال مالی برنامه و تابع SQL برای ۱۹ تا ۲۳ مارس ۱۹۲۱ تا ۲۱۲۱ یکسان است؛ سند مرزی با همان شماره به ۱۴۰۳ رفت، سند هم‌شماره منتقل نشد و هر دو در گزارش و بازرس سلامت مالی آمدند.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_ref_fiscal_year_exact_nowruz_td_179',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('ref_fiscal_year_corrections', 'document_id', createdDocIds);
+        await cleanTestTableData('documents', 'id', createdDocIds);
+      }
+      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+    }
+  }
+
   // Test 27.8: v7.0.35 (audit P2-2): اولین حرکت همزمان یک کالا در یک انبار نباید با 23505 شکست بخورد
   if (shouldRun('reg_first_movement_race_p2_2', 'p22', 'race', 'item_warehouse_stocks', 'concurrency')) {
     const tStart = Date.now();

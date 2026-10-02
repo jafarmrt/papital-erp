@@ -41,6 +41,19 @@ export const documents = pgTable('documents', {
 }));
 registerColumnRef('documents.id', () => documents.id);
 
+// v7.0.62 (TD-179): گزارش اصلاح سال مالی شماره‌گذاری اسناد روز مرزی نوروز (مهاجرت 0024). فقط گزارش؛ شماره عطف تغییر نمی‌کند.
+export const refFiscalYearCorrections = pgTable('ref_fiscal_year_corrections', {
+  id: serial('id').primaryKey(),
+  documentId: integer('document_id').notNull().references(() => documents.id),
+  docType: text('doc_type').notNull(),
+  refNumber: text('ref_number').notNull(),
+  documentDate: timestamp('document_date', { withTimezone: false, mode: 'string' }).notNull(),
+  oldFiscalYear: integer('old_fiscal_year').notNull(),
+  newFiscalYear: integer('new_fiscal_year').notNull(),
+  status: text('status').notNull(), // 'corrected' | 'conflict'
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+});
+
 export const documentRefCounters = pgTable('document_ref_counters', {
   docType: varchar('doc_type', { length: 20 }).notNull(),
   fiscalYear: integer('fiscal_year').notNull(),

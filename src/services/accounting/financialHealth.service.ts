@@ -1,5 +1,6 @@
 import { orm } from '../../db/drizzle.js';
-import { sql } from 'drizzle-orm';
+import { sql, asc } from 'drizzle-orm';
+import { refFiscalYearCorrections } from '../../db/schema.js';
 import type {
   FinancialHealthReport,
   HealthCheckTestResult,
@@ -761,6 +762,40 @@ export class FinancialHealthService {
         metrics: { duplicateVouchers: duplicateRows.length },
       });
     }
+
+    // =========================================================================
+    // آزمون ۸: v7.0.62 (TD-179) اصلاح سال مالی شماره‌گذاری اسناد روز مرزی نوروز (مهاجرت 0024)
+    // =========================================================================
+    const fyCorrections = await orm.select().from(refFiscalYearCorrections).orderBy(asc(refFiscalYearCorrections.id));
+    const fyConflicts = fyCorrections.filter((c) => c.status === 'conflict');
+    const fyPenalty = Math.min(10, fyConflicts.length * 2);
+    overallScore -= fyPenalty;
+    tests.push({
+      id: 'ref_fiscal_year_boundary_corrections',
+      category: 'documents',
+      title: 'سال مالی شماره‌گذاری اسناد روز نوروز',
+      description: 'اسنادی که پیش از v7.0.62 در روز ۲۰ مارس سال‌هایی با نوروز ۲۰ مارس ثبت شده بودند در سال مالی قبل شماره خورده بودند؛ سال مالی آن‌ها بدون تغییر شماره عطف اصلاح شد',
+      status: fyConflicts.length > 0 ? 'warning' : 'healthy',
+      scoreImpact: -fyPenalty,
+      count: fyConflicts.length,
+      message: fyCorrections.length === 0
+        ? 'هیچ سندی در روز مرزی نوروز با سال مالی نادرست یافت نشد.'
+        : `${fyCorrections.length - fyConflicts.length} سند به سال مالی درست منتقل شد${fyConflicts.length > 0 ? `؛ ${fyConflicts.length} سند به‌دلیل هم‌شماره بودن با سندی در سال مالی جدید منتقل نشد و باید بررسی شود` : ''}.`,
+      quickFixAction: fyConflicts.length > 0 ? 'open_documents' : undefined,
+      items: fyCorrections.map((c) => ({
+        id: c.id,
+        code: `سند ${c.refNumber}`,
+        title: c.status === 'conflict'
+          ? `منتقل نشد: هم‌شماره با سندی از نوع ${c.docType} در سال ${c.newFiscalYear}`
+          : `از سال ${c.oldFiscalYear} به ${c.newFiscalYear} منتقل شد`,
+        subtitle: `نوع: ${c.docType} | تاریخ: ${String(c.documentDate || '').substring(0, 10)}`,
+        date: String(c.documentDate || '').substring(0, 10),
+        linkType: 'document' as const,
+        linkId: c.documentId,
+        details: 'شماره عطف سند تغییر نکرده است.',
+      })),
+      metrics: { corrected: fyCorrections.length - fyConflicts.length, conflicts: fyConflicts.length },
+    });
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

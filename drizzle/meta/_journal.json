@@ -169,6 +169,13 @@
       "when": 1790524800000,
       "tag": "0023_file_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790611200000,
+      "tag": "0024_ref_fiscal_year_exact_nowruz",
+      "breakpoints": true
     }
   ]
 }
