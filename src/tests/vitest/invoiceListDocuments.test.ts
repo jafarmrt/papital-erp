@@ -33,9 +33,9 @@ describe('invoice list line reducers', () => {
     expect(lines.reduce(addLineQuantity, 0)).toBe(5);
   });
 
-  it('yields NaN for non-numeric input (the list then falls back to 0, the details modal does not)', () => {
+  it('counts non-numeric input as 0 (v7.0.98: the details modal no longer shows NaN)', () => {
     const bad: InvoiceListLine[] = [{ quantity: 'abc', unit_price: 1 }];
-    expect(bad.reduce(addLineNet, 0)).toBeNaN();
+    expect(bad.reduce(addLineNet, 0)).toBe(0);
     expect(documentAmountOf({ id: 1, items: bad })).toBe(0);
   });
 });

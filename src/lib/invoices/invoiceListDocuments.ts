@@ -2,7 +2,10 @@
  * TD-080 (بخش ۳): منطق خالص صفحه «لیست اسناد، فاکتورها و رسیدهای انبار» — منتقل‌شده بدون تغییر رفتار
  * از InvoicesListPage. هر جمع و هر نگاشت دقیقاً همان عبارت جای اصلی خود را دارد (از جمله تفاوت‌ها:
  * جمع ردیف‌های جدول با `|| 0` و جمع‌های مودال جزئیات بدون آن).
+ * v7.0.98 (TD-235 بند ۴): جمع و تفریق مبالغ و تعدادها با FinancialDecimal است، نه `+` جاوااسکریپت
+ * (مثلاً ۰٫۱ + ۰٫۲ دلار دقیقاً ۰٫۳ می‌شود)؛ مقدار نامعتبر صفر حساب می‌شود.
  */
+import { fin } from '../financialDecimal';
 
 /** یک ردیف کالا در سند (پاسخ GET /documents/:id یا لیست) */
 export interface InvoiceListLine {
@@ -49,17 +52,17 @@ export interface InvoiceListResponse {
 
 /** reducer جمع خالص یک ردیف: (تعداد × قیمت واحد) − تخفیف */
 export const addLineNet = (acc: number, i: InvoiceListLine): number =>
-  acc + (Number(i.quantity || 0) * Number(i.unit_price || 0)) - Number(i.discount || 0);
+  fin(acc).add(fin(i.quantity).multiply(i.unit_price)).subtract(i.discount).toNumber();
 
 /** reducer جمع ناخالص: تعداد × قیمت واحد */
 export const addLineGross = (acc: number, i: InvoiceListLine): number =>
-  acc + (Number(i.quantity || 0) * Number(i.unit_price || 0));
+  fin(acc).add(fin(i.quantity).multiply(i.unit_price)).toNumber();
 
 /** reducer جمع تخفیف */
-export const addLineDiscount = (acc: number, i: InvoiceListLine): number => acc + Number(i.discount || 0);
+export const addLineDiscount = (acc: number, i: InvoiceListLine): number => fin(acc).add(i.discount).toNumber();
 
 /** reducer جمع تعداد */
-export const addLineQuantity = (acc: number, i: InvoiceListLine): number => acc + Number(i.quantity || 0);
+export const addLineQuantity = (acc: number, i: InvoiceListLine): number => fin(acc).add(i.quantity).toNumber();
 
 /** مبلغ کل سند: totalAmount سرور، وگرنه جمع خالص اقلام */
 export function documentAmountOf(d: InvoiceListDocument): number {
@@ -75,7 +78,7 @@ export function documentAmountOf(d: InvoiceListDocument): number {
  */
 export function documentPayableOf(d: InvoiceListDocument): number {
   if (d.payableAmount !== undefined && d.payableAmount !== null) return Number(d.payableAmount);
-  return documentAmountOf(d) + Number(d.vatAmount || 0);
+  return fin(documentAmountOf(d)).add(d.vatAmount).toNumber();
 }
 
 /**
@@ -120,7 +123,7 @@ export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceL
   let otherCount = 0;
 
   const addTo = (bucket: Record<string, number>, cur: string, amount: number) => {
-    bucket[cur] = (bucket[cur] || 0) + amount;
+    bucket[cur] = fin(bucket[cur]).add(amount).toNumber();
   };
 
   for (const d of docs) {
@@ -197,7 +200,7 @@ export function resolveInvoiceRowFigures(doc: InvoiceListDocument): InvoiceRowFi
   const isCommercial = (isInvoice || isReceipt) && totalDocAmount > 0;
   const settlementStatus = doc.settlementStatus || (isCommercial ? 'unpaid' : 'none');
   const paidAmt = Number(doc.paidAmount || 0);
-  const remainingAmt = doc.remainingAmount !== undefined ? Number(doc.remainingAmount) : Math.max(0, totalDocAmount - paidAmt);
+  const remainingAmt = doc.remainingAmount !== undefined ? Number(doc.remainingAmount) : Math.max(0, fin(totalDocAmount).subtract(paidAmt).toNumber());
 
   return { isReceipt, isInvoice, isProforma, badgeKind, itemsCount, totalQty, totalDocAmount, isCommercial, settlementStatus, remainingAmt };
 }
@@ -247,5 +250,5 @@ export function detailsSettlementViewOf(settlementStatus: string | undefined): {
 
 /** مانده تسویه در مودال جزئیات: remainingAmount سرور، وگرنه مبلغ قابل پرداخت − paidAmount (حداقل صفر، v7.0.94) */
 export function detailsRemainingOf(doc: InvoiceListDocument): number {
-  return doc.remainingAmount !== undefined ? doc.remainingAmount : Math.max(0, documentPayableOf(doc) - (doc.paidAmount || 0));
+  return doc.remainingAmount !== undefined ? doc.remainingAmount : Math.max(0, fin(documentPayableOf(doc)).subtract(doc.paidAmount).toNumber());
 }
