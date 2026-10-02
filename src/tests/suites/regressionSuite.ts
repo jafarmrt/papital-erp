@@ -7040,5 +7040,92 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
+  if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.83: پاک‌سازی پیوست‌ها فقط فایل بدون ثبت و قدیمی را پاک می‌کند؛ اجرای آزمایشی چیزی پاک نمی‌کند (TD-224)';
+    const fs = await import('fs');
+    const path = await import('path');
+    const os = await import('os');
+    const crypto = await import('crypto');
+    const { fileAttachments } = await import('../../db/schema.js');
+    const prevRoot = process.env.ATTACHMENTS_DIR;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-td224-'));
+    const ids = { active: crypto.randomUUID(), detached: crypto.randomUUID(), orphan: crypto.randomUUID(), recent: crypto.randomUUID() };
+    try {
+      process.env.ATTACHMENTS_DIR = root;
+      const { AttachmentOrphanCleanupService } = await import('../../services/attachments/attachmentOrphanCleanup.service.js');
+      const dir = path.join(root, 'document');
+      fs.mkdirSync(dir, { recursive: true });
+      const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const write = (name: string, aged: boolean) => {
+        const p = path.join(dir, name);
+        fs.writeFileSync(p, 'ERP-TEST-MARKER TD-224');
+        if (aged) fs.utimesSync(p, old, old);
+        return p;
+      };
+      const files = {
+        active: write(`${ids.active}.pdf`, true),
+        detached: write(`${ids.detached}.pdf`, true),
+        orphan: write(`${ids.orphan}.pdf`, true),
+        recent: write(`${ids.recent}.pdf`, false),
+        foreign: write('README.txt', true),
+      };
+      const row = (id: string, isDeleted: number) => ({
+        id, entityType: 'document', entityId: 0, storagePath: `document/${id}.pdf`, originalName: 'td224.pdf',
+        mimeType: 'application/pdf', sizeBytes: 22, sha256: 'x', createdBy: 'ERP-TEST-MARKER', isDeleted,
+      });
+      await orm.insert(fileAttachments).values([row(ids.active, 0), row(ids.detached, 1)]);
+
+      const violations: string[] = [];
+      const dry = await AttachmentOrphanCleanupService.cleanupOrphanFiles({ apply: false, actor: 'td224' });
+      if (!dry.dryRun || dry.unregistered.removed !== 0 || !fs.existsSync(files.orphan)) violations.push(`اجرای آزمایشی نباید چیزی پاک کند: ${JSON.stringify(dry.unregistered)}`);
+      if (!dry.unregistered.paths.includes(`document/${ids.orphan}.pdf`)) violations.push('فایل بدون ثبت در گزارش آزمایشی نیست');
+
+      const applied = await AttachmentOrphanCleanupService.cleanupOrphanFiles({ apply: true, actor: 'td224' });
+      if (fs.existsSync(files.orphan)) violations.push('فایل بدون ثبت قدیمی پاک نشد');
+      if (applied.unregistered.removed !== 1) violations.push(`تعداد پاک‌شده: ${applied.unregistered.removed} (انتظار ۱)`);
+      if (!fs.existsSync(files.active)) violations.push('فایل ثبت‌شده پاک شد');
+      if (!fs.existsSync(files.detached)) violations.push('فایل پیوست جداشده پاک شد');
+      if (!fs.existsSync(files.recent)) violations.push('فایل بدون ثبت تازه (تراکنش در جریان) پاک شد');
+      if (!fs.existsSync(files.foreign)) violations.push('فایلی با نام غیر از الگوی ذخیره پاک شد');
+      if (applied.detached.files !== 1 || applied.recentUnregistered !== 1) violations.push(`گزارش جداشده/تازه: ${applied.detached.files}/${applied.recentUnregistered} (انتظار ۱/۱)`);
+
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const session = await getAdminSession();
+      const res = await request(await getTestApp()).post('/api/attachments/cleanup-orphans')
+        .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({});
+      if (res.status !== 200 || res.body?.dryRun !== true) violations.push(`مسیر مدیر: HTTP ${res.status} dryRun=${res.body?.dryRun}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_attachment_orphan_cleanup_td_224',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'فقط فایل بدون ثبت قدیمی پاک شد؛ فایل ثبت‌شده، جداشده، تازه و ناشناس ماندند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_attachment_orphan_cleanup_td_224',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (prevRoot === undefined) delete process.env.ATTACHMENTS_DIR; else process.env.ATTACHMENTS_DIR = prevRoot;
+      await orm.delete(fileAttachments).where(inArray(fileAttachments.id, [ids.active, ids.detached]));
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+
   return results;
 }

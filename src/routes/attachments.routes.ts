@@ -8,6 +8,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError } from '../errors/customErrors.js';
 import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { AttachmentStorageService, INLINE_SAFE_MIME_TYPES } from '../services/attachments/attachmentStorage.service.js';
+import { AttachmentOrphanCleanupService } from '../services/attachments/attachmentOrphanCleanup.service.js';
 
 /**
  * v7.0.56 (audit P2-9): دریافت فایل پیوست فقط با نشست معتبر و مجوز خواندن رکورد مالک آن (RECORD_READ_PERMISSIONS).
@@ -21,6 +22,13 @@ const attachmentIdSchema = z.object({
 
 const migrateInlineSchema = z.object({
   body: z.object({ apply: z.boolean().optional() }).optional().default({})
+});
+
+const cleanupOrphansSchema = z.object({
+  body: z.object({
+    apply: z.boolean().optional(),
+    minAgeMinutes: z.number().int().min(0).max(525600).optional(),
+  }).optional().default({})
 });
 
 function contentDisposition(kind: 'inline' | 'attachment', name: string): string {
@@ -60,6 +68,16 @@ router.post('/attachments/migrate-inline', authorize('admin'), validate(migrateI
   const report = await AttachmentStorageService.migrateInlineAttachments({
     apply: req.body?.apply === true,
     actor: req.user?.username || 'admin',
+  });
+  res.json(report);
+}));
+
+// v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت (پیش‌فرض آزمایشی؛ همان `npm run attachments:cleanup`)
+router.post('/attachments/cleanup-orphans', authorize('admin'), validate(cleanupOrphansSchema), asyncHandler(async (req, res) => {
+  const report = await AttachmentOrphanCleanupService.cleanupOrphanFiles({
+    apply: req.body?.apply === true,
+    actor: req.user?.username || 'admin',
+    minAgeMinutes: req.body?.minAgeMinutes,
   });
   res.json(report);
 }));
