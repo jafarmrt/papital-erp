@@ -162,6 +162,7 @@
 - **AbortController (FE-008):** Asynchronous fetch loops in `useEffect` must pass abort signal and abort on cleanup.
 - **Type Safety (FE-007):** Replace loose `any` types with explicit TypeScript interfaces.
 - **Production Console Drop (FE-002):** `esbuild: { drop: ['console', 'debugger'] }` in production Vite build.
+- **ESLint Ratchet (v7.0.65, audit P3-4):** `npm run lint:eslint` (CI gate) runs ESLint (`eslint.config.js`: `no-floating-promises`, `no-misused-promises`, `no-explicit-any`, `react-hooks/rules-of-hooks`, `react-hooks/exhaustive-deps`, `max-lines` 400 / 300 for `.tsx`) and fails when any rule count exceeds `eslint-baseline.json`. New code must not add violations; when a change removes violations, run `npm run lint:eslint -- --update` and commit the lower baseline. Never raise the baseline.
 
 ## 22. Database Migrations, Production Seed Gating & Pool Timeouts
 - **Atomic Migrations (DB-013):** `src/db/migrator.ts` runs the official Drizzle migrator over `drizzle/*.sql` (journal: `drizzle/meta/_journal.json`) in an atomic transaction; applied migrations are tracked in `drizzle.__drizzle_migrations`. Every new migration MUST be registered in the journal. `runMigrations()` never throws: every caller MUST check `result.success` and stop on failure (v7.0.50, TD-217 — `setupTestSchema`, `ensureTestDatabaseReady`/`assertTestDatabaseReady`, `runSeed`, `server.ts`).

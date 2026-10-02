@@ -53,6 +53,10 @@ jobs:
       - name: TypeScript Static Type Checking & Linting
         run: npm run lint
 
+      - name: ESLint Ratchet Gate (v7.0.65 / audit P3-4)
+        # تعداد تخلف هر قاعده نباید از eslint-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
+        run: npm run lint:eslint
+
   test:
     name: Database & Domain Test Suites
     needs: lint-and-typecheck

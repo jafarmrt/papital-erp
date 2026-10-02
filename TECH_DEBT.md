@@ -18,7 +18,7 @@
 |----|------|-----|--------------|-------|
 | TD-080 | Refactoring Budget | خردسازی گادفایل‌ها و توابع با پیچیدگی بالا: (۱) تجزیه کامل src/utils.ts به ۴ ماژول در utils/ [انجام شد: v7.0.16]؛ (۲) تفکیک کامل document.service.ts به ۵ ماژول در services/documents/ [انجام شد: v7.0.17]؛ (۳) تفکیک صفحات DocumentsPage و InvoicesListPage | src/utils.ts، src/services، src/pages | in_progress — فاز ۴.۴ نسخه ۷ |
 | TD-085 | Workflow/Events UX | (۱) پیش‌نمایش شرایط لازم به فارسی از `evaluateRuleBreakdown` قبل از اقدام؛ (۲) نمایش پیشرفت امضا «n از m» در Stepper از `approvalProgressJson`؛ (۳) انتخاب‌گر فیلد payload به‌جای تایپ دستی `{{payload.x}}` در RuleEditorModal؛ (۴) قوانین پیش‌فرض یادآوری SLA | workflow/task/rule UI | scheduled:فاز ۳ ممیزی |
-| TD-106 | Frontend / Type Safety (FE-007) | ۹۱۸ مورد `: any` و ۲۷۹ مورد `as any` در سورس‌کد | سراسر src | scheduled:فاز ۳ ممیزی |
+| TD-106 | Frontend / Type Safety (FE-007) | استفاده از `any` (۱۵۹۸ مورد `no-explicit-any` در `eslint-baseline.json`، v7.0.65) و روشن نبودن `strict: true` | سراسر src | scheduled:فاز ۳ ممیزی |
 | TD-108 | FE Helpers (Badges) | ۱۲ کپی `getStatusBadge`/`getPriorityBadge` با الگو یکسان ولی واژگان/رنگ متفاوت — تجمیع در PillBadge | components/pages | scheduled:فاز ۳ ممیزی |
 | TD-109 | Runtime Flags Cleanup | پاکسازی کامل سرویس/کلیدهای موقت test_endpoints پس از حذف روت‌های تست | src/lib/runtimeFlags.ts | scheduled:فاز ۳ ممیزی |
 | TD-112 | Workflow Keep-List | روت‌های بدون مصرف‌کننده فرانت‌اند در انتظار رابط کاربری فاز ۳ | workflow.routes.ts | scheduled:فاز ۳ ممیزی |
@@ -37,7 +37,7 @@
 ## 📊 آمار رجیستری
 
 - **فعال:** ۱۵ ردیف
-- **آرشیو شده (resolved):** ۱۹۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **آرشیو شده (resolved):** ۲۰۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -46,4 +46,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v7.0.64 — بستن TD-130 (آرشیو)؛ برچسب‌های زمان‌بندی به «فاز ۳ ممیزی» (V7_MASTER_ROADMAP.md).*
+*آخرین بازبینی: v7.0.65 — ESLint با فایل پایه (TD-228، آرشیو)؛ شمارش any در TD-106 از `eslint-baseline.json` خوانده می‌شود.*

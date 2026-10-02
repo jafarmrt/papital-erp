@@ -1397,6 +1397,58 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // v7.0.65 (audit P3-4): ESLint قواعد Promise رهاشده، any و وابستگی hook را می‌گیرد و گیت ratchet افزایش را رد می‌کند
+  const tEslintStart = Date.now();
+  const eslintTestName = 'v7.0.65: ESLint Promise رهاشده، any و وابستگی ناقص hook را می‌گیرد و گیت فایل پایه افزایش تخلف را رد می‌کند (P3-4)';
+  try {
+    const { ESLint } = await import('eslint');
+    const ratchet = await import('../../../scripts/eslint-ratchet.js');
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const violations: string[] = [];
+    // متن نمونه با مسیر یک فایل موجود پروژه بررسی می‌شود (قواعد نوع‌محور فایل عضو پروژه TypeScript لازم دارند)
+    const tsProbe = await eslint.lintText(
+      'async function save(): Promise<number> { return 1; }\nexport function run(): void { save(); }\nexport const x: any = 1;\n',
+      { filePath: 'src/lib/sqlLike.ts' }
+    );
+    const tsRules = tsProbe[0].messages.map(m => m.ruleId);
+    if (!tsRules.includes('@typescript-eslint/no-floating-promises')) violations.push(`Promise رهاشده گرفته نشد: ${JSON.stringify(tsRules)}`);
+    if (!tsRules.includes('@typescript-eslint/no-explicit-any')) violations.push(`any گرفته نشد: ${JSON.stringify(tsRules)}`);
+    const tsxProbe = await eslint.lintText(
+      "import { useEffect, useState } from 'react';\nexport function Probe({ id }: { id: number }) {\n  const [v, setV] = useState(0);\n  useEffect(() => { setV(id); }, []);\n  return <span>{v}</span>;\n}\n",
+      { filePath: 'src/components/documents/ExchangeRateField.tsx' }
+    );
+    if (!tsxProbe[0].messages.some(m => m.ruleId === 'react-hooks/exhaustive-deps')) violations.push(`وابستگی ناقص useEffect گرفته نشد: ${JSON.stringify(tsxProbe[0].messages.map(m => m.ruleId))}`);
+
+    const cmp = ratchet.compareWithBaseline({ 'max-lines': 3, 'no-x': 1 }, { 'max-lines': 2, 'no-x': 2 });
+    if (cmp.increased.length !== 1 || cmp.increased[0].rule !== 'max-lines' || cmp.decreased.length !== 1) violations.push(`مقایسه با فایل پایه نادرست است: ${JSON.stringify(cmp)}`);
+    const fs = await import('fs');
+    const baseline = JSON.parse(fs.readFileSync(ratchet.BASELINE_FILE, 'utf8')) as Record<string, number>;
+    for (const rule of ['@typescript-eslint/no-floating-promises', '@typescript-eslint/no-misused-promises', '@typescript-eslint/no-explicit-any', 'react-hooks/exhaustive-deps', 'max-lines']) {
+      if (typeof baseline[rule] !== 'number') violations.push(`قاعده ${rule} در فایل پایه نیست`);
+    }
+
+    if (violations.length > 0) throw new Error(violations.join(' | '));
+    results.push(makeTestCase({
+      id: 'unit_eslint_ratchet_p3_4',
+      name: eslintTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tEslintStart,
+      details: `فایل پایه: ${JSON.stringify(baseline)}`
+    }));
+  } catch (err) {
+    results.push(makeTestCase({
+      id: 'unit_eslint_ratchet_p3_4',
+      name: eslintTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tEslintStart,
+      error: err instanceof Error ? err.message : String(err)
+    }));
+  }
+
   return results;
 }
 
