@@ -6,6 +6,7 @@ import { updateRequestContext } from '../lib/requestContext.js';
 import { orm } from '../db/drizzle.js';
 import { users } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { safeCompareTokens } from '../lib/timingSafeCompare.js';
 
 declare global {
   namespace Express {
@@ -29,6 +30,13 @@ export const INSECURE_DEFAULT_SECRETS = new Set([
   'secretsecretsecretsecretsecret32',
   'default_secret_key_change_me_in_prod'
 ]);
+
+/**
+ * v7.0.41 (audit P2-11): الگوریتم امضای توکن نشست صریحاً HS256 است و راستی‌آزمایی فقط همین را می‌پذیرد
+ * (دفاع در عمق؛ jsonwebtoken با کلید متنی به‌طور پیش‌فرض HS384 و HS512 را هم قبول می‌کند).
+ */
+export const JWT_ALGORITHM = 'HS256' as const;
+export const JWT_VERIFY_OPTIONS: jwt.VerifyOptions = { algorithms: [JWT_ALGORITHM] };
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET || '';
@@ -168,7 +176,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   }
 
   const jwtSecret = getJwtSecret();
-  jwt.verify(token, jwtSecret, async (err: any, decoded: any) => {
+  jwt.verify(token, jwtSecret, JWT_VERIFY_OPTIONS, async (err: any, decoded: any) => {
     if (err || !decoded) {
       return res.status(401).json({ error: 'توکن نامعتبر است یا منقضی شده' });
     }
@@ -268,7 +276,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
     let expectedCsrfToken = req.csrfToken || req.user?.csrfToken;
     if (!expectedCsrfToken) {
       try {
-        const decoded = jwt.verify(cookieToken, getJwtSecret()) as any;
+        const decoded = jwt.verify(cookieToken, getJwtSecret(), JWT_VERIFY_OPTIONS) as any;
         expectedCsrfToken = decoded?.csrfToken;
       } catch {
         // If JWT signature is invalid, authenticateToken handles 401
@@ -286,7 +294,8 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
     }
 
     const requestCsrf = (req.headers['x-csrf-token'] || req.headers['x-xsrf-token']) as string;
-    if (!requestCsrf || requestCsrf !== expectedCsrfToken) {
+    // v7.0.41 (audit P2-11): مقایسه در زمان ثابت
+    if (!requestCsrf || !safeCompareTokens(requestCsrf, expectedCsrfToken)) {
       return res.status(403).json({
         error: 'CSRF token invalid',
         message: 'توکن امنیتی CSRF نامعتبر است یا ارسال نشده است'
@@ -299,7 +308,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction) 
 
 export const generateToken = (payload: AuthUserPayload | { id: number; username: string; role: string; fullName?: string; full_name?: string; csrfToken?: string; tokenVersion?: number }) => {
   const jwtSecret = getJwtSecret();
-  return jwt.sign(payload, jwtSecret, { expiresIn: '24h' });
+  return jwt.sign(payload, jwtSecret, { expiresIn: '24h', algorithm: JWT_ALGORITHM });
 };
 
 export { authorize, authorizePermission } from './authorize.js';

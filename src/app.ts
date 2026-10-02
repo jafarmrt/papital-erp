@@ -218,7 +218,8 @@ export async function createApp(): Promise<express.Express> {
       if (token && typeof token === 'string' && token.length >= 10) {
         return `session:${token.slice(-16)}`;
       }
-      const rawIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || req.ip || '127.0.0.1';
+      // v7.0.41 (TD-182): req.ip بر پایه TRUST_PROXY؛ X-Forwarded-For خام قابل جعل است
+      const rawIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
       return `ip:${ipKeyGenerator(rawIp)}`;
     },
     validate: {

@@ -4,7 +4,7 @@ import { authorize } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { ItemsService } from '../services/items.service.js';
-import { logActivity } from '../lib/auditLogger.js';
+import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 
 const router = Router();
@@ -29,7 +29,7 @@ router.get('/items/unified-export', authorize('admin', 'manager', 'products.view
       action: 'EXPORT',
       entity: 'کالاها_و_محصولات',
       description: `استخراج خروجی اکسل کالاها و خدمات (فیلتر: ${typeFilter || 'همه'}) شامل ${result?.rows?.length || 0} ردیف`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+      ipAddress: extractClientIp(req)
     });
     res.json(result);
   } catch (err) {
@@ -50,7 +50,7 @@ router.post('/items/unified-import', authorize('admin', 'manager', 'products.cre
       action: 'IMPORT',
       entity: 'کالاها_و_محصولات',
       description: `واردات دسته‌ای کالاها و خدمات از طریق اکسل شامل ${rows.length} ردیف داده`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+      ipAddress: extractClientIp(req)
     });
     res.json(result);
   } catch (err) {

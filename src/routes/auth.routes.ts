@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, appSettings } from '../db/schema.js';
-import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
+import { generateToken, generateCsrfToken, AUTH_COOKIE_NAME, getAuthCookieOptions, authenticateToken, getJwtSecret, JWT_VERIFY_OPTIONS, invalidateUserAuthCache, shouldExposeTokenInBody } from '../middleware/auth.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { logActivity, extractClientIp } from '../lib/auditLogger.js';
@@ -339,7 +339,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
   try {
     const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
     if (rawToken) {
-      const payload = jwt.verify(rawToken, getJwtSecret()) as { id?: number; username?: string; role?: string };
+      const payload = jwt.verify(rawToken, getJwtSecret(), JWT_VERIFY_OPTIONS) as { id?: number; username?: string; role?: string };
       targetUserId = targetUserId || payload?.id;
       targetUsername = targetUsername || payload?.username;
 

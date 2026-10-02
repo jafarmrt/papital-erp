@@ -57,19 +57,13 @@ export function sanitizeSensitiveData<T = unknown>(obj: T, depth = 0, seen = new
 }
 
 /**
- * Safely extracts client IP address from express request, honoring proxies.
+ * آدرس IP کلاینت برای لاگ ممیزی.
+ * v7.0.41 (TD-182): فقط req.ip که Express آن را بر اساس TRUST_PROXY (src/lib/trustProxy.ts) فقط از پراکسی‌های
+ * قابل‌اعتماد استخراج می‌کند؛ هدرهای X-Forwarded-For / X-Real-IP خام در کنترل کلاینت‌اند و خوانده نمی‌شوند.
  */
 export function extractClientIp(req?: Request | { headers?: Record<string, unknown>; socket?: { remoteAddress?: string }; ip?: string } | null): string {
   if (!req) return '';
-  const headers = req.headers as Record<string, string | string[] | undefined> | undefined;
-  const forwarded = headers?.['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0].trim();
-  }
-  if (Array.isArray(forwarded) && forwarded.length > 0) {
-    return String(forwarded[0]).trim();
-  }
-  return (headers?.['x-real-ip'] as string) || req.socket?.remoteAddress || req.ip || '';
+  return req.ip || req.socket?.remoteAddress || '';
 }
 
 /**

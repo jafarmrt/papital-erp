@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { AccountMappingService } from '../services/accounting/accountMapping.service.js';
-import { logActivity } from '../lib/auditLogger.js';
+import { logActivity, extractClientIp } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -49,7 +49,7 @@ const seedAccountsHandler = asyncHandler(async (req, res) => {
     entity: 'حسابداری:کدینگ_پیش‌فرض',
     description: 'استقرار و همگام‌سازی ساختار کدینگ استاندارد حساب‌ها',
     details: result,
-    ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+    ipAddress: extractClientIp(req)
   });
   res.json({ message: 'کدینگ استاندارد حساب‌ها با موفقیت مستقر و همگام شد', ...result });
 });
@@ -164,7 +164,7 @@ router.post('/accounting/mappings', authorizePermission('accounting.coa'), async
     entity: 'حسابداری:نگاشت_مفهومی_سرفصل‌ها',
     description: 'به‌روزرسانی تنظیمات نگاشت مفهومی حساب‌ها و سرفصل‌های پیش‌فرض',
     details: { changes: req.body, result: updated, disabled: disabled || [] },
-    ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+    ipAddress: extractClientIp(req)
   });
   res.json({ message: 'تنظیمات نگاشت سرفصل‌ها با موفقیت ذخیره شد', data: updated, disabled: disabled || [] });
 }));
@@ -495,7 +495,7 @@ router.post('/accounting/vouchers/batch-approve', authorizePermission('accountin
     entityId: ids.join(','),
     description: `تایید حسابداری گروهی ${result.approvedCount} سند پیش‌نویس`,
     details: { ids, count: result.approvedCount },
-    ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || '',
+    ipAddress: extractClientIp(req),
   });
 
   res.json({ message: `${result.approvedCount} سند پیش‌نویس با موفقیت تایید حسابداری شدند.`, ...result });

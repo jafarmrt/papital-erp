@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { getJwtSecret, AUTH_COOKIE_NAME } from './auth.js';
+import { getJwtSecret, AUTH_COOKIE_NAME, JWT_VERIFY_OPTIONS } from './auth.js';
 import { AuthUserPayload } from '../types.js';
 import { logger } from './logger.js';
 import { safeCompareTokens } from '../lib/timingSafeCompare.js';
@@ -45,7 +45,7 @@ export const metricsAuthMiddleware = (req: Request, res: Response, next: NextFun
   // 4. Verify the candidate JWT
   try {
     const jwtSecret = getJwtSecret();
-    const decoded = jwt.verify(candidateJwt, jwtSecret) as AuthUserPayload;
+    const decoded = jwt.verify(candidateJwt, jwtSecret, JWT_VERIFY_OPTIONS) as AuthUserPayload;
 
     if (!decoded || !decoded.id) {
       return res.status(401).json({ error: 'توکن احراز هویت نامعتبر است.' });

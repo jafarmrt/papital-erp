@@ -72,7 +72,7 @@ router.get('/system/env', authorize('admin'), async (req, res) => {
     action: 'VIEW',
     entity: 'سیستم:تنظیمات_محیطی',
     description: 'استعلام وضعیت متغیرهای محیطی و اتصال به پایگاه‌داده',
-    ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+    ipAddress: extractClientIp(req)
   });
   const effectiveTestEndpoints = await isTestEndpointsEnabled();
   res.json({
@@ -593,7 +593,7 @@ router.get('/system/reconciliation-check', authorize('admin'), async (req, res) 
       action: 'AUDIT',
       entity: 'سیستم:ممیزی_و_تطبیق_داده‌ها',
       description: `اجرای ممیزی خودکار یکپارچگی سیستم - امتیاز سلامت: ${healthScorePercentage}% (${okChecks} از ${checks.length} چک موفق)`,
-      ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || ''
+      ipAddress: extractClientIp(req)
     });
 
     res.json({

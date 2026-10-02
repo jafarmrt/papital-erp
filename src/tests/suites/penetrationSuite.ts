@@ -113,6 +113,62 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       return `درخواست بین-سایتی بدون توکن CSRF با ${res.status} مسدود شد.`;
     });
 
+  // v7.0.41 (audit P2-11): توکن نشست فقط با الگوریتم HS256 پذیرفته شود
+  await runCase(results, 'pen_jwt_algorithm_pinned', 'jwt_forgery_rejected',
+    'پن‌تست: توکن نشست با کلید درست ولی الگوریتم دیگر (HS512) باید رد شود',
+    async () => {
+      if (!adminCookie) throw new Error('کوکی ادمین برای آزمون در دسترس نیست');
+      const original = jwt.decode(adminCookie.replace(/^auth_token=/, '')) as Record<string, unknown> | null;
+      if (!original?.id) throw new Error('محتوای توکن نشست ادمین قابل خواندن نیست');
+      const { iat: _iat, exp: _exp, ...claims } = original;
+      const otherAlg = jwt.sign(claims, process.env.JWT_SECRET as string, { algorithm: 'HS512', expiresIn: '1h' });
+      const control = await request(app).get('/api/auth/me').set('Cookie', adminCookie);
+      const res = await request(app).get('/api/auth/me').set('Cookie', `auth_token=${otherAlg}`);
+      if (control.status !== 200) {
+        throw new Error(`نشست اصلی ادمین باید پذیرفته شود: status=${control.status}`);
+      }
+      if (res.status !== 401) {
+        throw new Error(`توکن امضاشده با HS512 پذیرفته شد! status=${res.status}`);
+      }
+      return 'همان ادعاهای نشست با الگوریتم HS512 با 401 رد شد و نشست HS256 پذیرفته ماند.';
+    });
+
+  // v7.0.41 (audit P2-11): توکن CSRF در زمان ثابت مقایسه شود
+  await runCase(results, 'pen_csrf_constant_time_compare', 'csrf_enforced',
+    'پن‌تست: توکن CSRF نادرست رد شود و مقایسه آن در زمان ثابت (timingSafeEqual) انجام شود',
+    async () => {
+      if (!adminCookie) throw new Error('کوکی ادمین برای آزمون در دسترس نیست');
+      const cryptoModule = (await import('crypto')).default as unknown as { timingSafeEqual: (a: NodeJS.ArrayBufferView, b: NodeJS.ArrayBufferView) => boolean };
+      const nodeCrypto = await import('crypto');
+      const probeToken = 'f'.repeat(64);
+      // فقط مقایسه‌هایی شمرده شوند که هش توکن CSRF آزمون در آن‌هاست (امضای JWT هم از timingSafeEqual استفاده می‌کند)
+      const probeHash = nodeCrypto.createHash('sha256').update(probeToken).digest();
+      const toBuffer = (v: NodeJS.ArrayBufferView) => Buffer.from(v.buffer, v.byteOffset, v.byteLength);
+      const originalTimingSafeEqual = cryptoModule.timingSafeEqual;
+      let constantTimeCalls = 0;
+      cryptoModule.timingSafeEqual = (a, b) => {
+        if (toBuffer(a).equals(probeHash) || toBuffer(b).equals(probeHash)) constantTimeCalls++;
+        return originalTimingSafeEqual(a, b);
+      };
+      let res;
+      try {
+        res = await request(app)
+          .post('/api/customers')
+          .set('Cookie', adminCookie)
+          .set('x-csrf-token', probeToken)
+          .send({ name: 'CSRF Timing Probe' });
+      } finally {
+        cryptoModule.timingSafeEqual = originalTimingSafeEqual;
+      }
+      if (res.status !== 403) {
+        throw new Error(`توکن CSRF نادرست رد نشد! status=${res.status}`);
+      }
+      if (constantTimeCalls === 0) {
+        throw new Error('توکن CSRF با مقایسه معمولی رشته (غیر زمان‌ثابت) سنجیده شد');
+      }
+      return `توکن CSRF نادرست با 403 رد شد و مقایسه با timingSafeEqual (${constantTimeCalls} فراخوانی) انجام شد.`;
+    });
+
   // ===============================================================
   // SQL Injection — parameterized routes & queries must hold
   // ===============================================================
@@ -286,6 +342,29 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         throw new Error('مقدار ناامن TRUST_PROXY=true باید رد شود.');
       }
       return 'آدرس‌های عمومی پراکسی محسوب نمی‌شوند، loopback قابل‌اعتماد است و TRUST_PROXY=true رد می‌شود.';
+    });
+
+  // v7.0.41 (TD-182): IP لاگ ممیزی نباید از مقدار ابتدای X-Forwarded-For که در کنترل کلاینت است خوانده شود
+  await runCase(results, 'pen_audit_ip_not_spoofable', 'rate_limit_no_bypass',
+    'پن‌تست: IP ثبت‌شده در لاگ ممیزی از پراکسی قابل‌اعتماد گرفته شود، نه از X-Forwarded-For جعلی کلاینت',
+    async () => {
+      const { activityLogs } = await import('../../db/schema.js');
+      const probeUser = `pen_ip_probe_${Date.now()}`;
+      // کلاینت 203.0.113.66 را جعل می‌کند؛ پراکسی محلی (loopback، قابل‌اعتماد) آدرس واقعی 198.51.100.7 را اضافه کرده است
+      const res = await request(app)
+        .post('/api/login')
+        .set('X-Forwarded-For', '203.0.113.66, 198.51.100.7')
+        .send({ username: probeUser, password: 'wrong-password-ip-probe' });
+      if (res.status !== 401) {
+        throw new Error(`ورود ناموفق باید 401 بدهد: status=${res.status}`);
+      }
+      const [log] = await orm.select({ ip: activityLogs.ipAddress }).from(activityLogs)
+        .where(eq(activityLogs.username, probeUser)).limit(1);
+      if (!log) throw new Error('لاگ ممیزی ورود ناموفق ثبت نشد');
+      if (log.ip !== '198.51.100.7') {
+        throw new Error(`IP لاگ ممیزی باید آدرس اعلام‌شده پراکسی قابل‌اعتماد (198.51.100.7) باشد، نه «${log.ip}»`);
+      }
+      return 'IP جعلی ابتدای X-Forwarded-For نادیده گرفته شد و آدرس اعلام‌شده پراکسی قابل‌اعتماد در لاگ ممیزی ثبت شد.';
     });
 
   await runCase(results, 'pen_login_limiter_per_client_behind_proxy', 'rate_limit_no_bypass',
