@@ -134,6 +134,7 @@ export async function runStressTests(): Promise<TestCaseResult[]> {
         unit: 'عدد',
         currentStock: 1000,
         stocks: { main: 1000 },
+        weightedAverageCost: 1000, // v7.0.46 (P2-4): خروج کالای بدون بهای تمام‌شده رد می‌شود
         isDeleted: 0
       }).returning();
       await syncFixtureItemStocks(testItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB

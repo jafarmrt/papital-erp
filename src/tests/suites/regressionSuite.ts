@@ -3907,6 +3907,73 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.19: v7.0.46 (audit P2-4): خروج کالای بدون بهای تمام‌شده رد شود (فروش، حواله خروج)؛ کسری انبارگردانی با بهای صفر
+  if (shouldRun('reg_zero_cost_outflow_p2_4', 'p24', 'cogs', 'wac')) {
+    const tStart = Date.now();
+    try {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { itemPrices } = await import('../../db/schema.js');
+      const [w1] = await orm.select().from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const today = await businessTodayIsoDate();
+      const noCost = await createTestItem({ stocks: { [w1.code]: 5 }, currentStock: 5, weightedAverageCost: 0 });
+      // قیمت فهرست فروش: پیش‌تر مبنای بهای کسری انبارگردانی کالای بدون بهای تمام‌شده قرار می‌گرفت
+      await orm.insert(itemPrices).values({ itemId: noCost.id, title: 'قیمت فروش آزمون P2-4', price: 70000 });
+
+      const rejectedFor: string[] = [];
+      for (const [docType, label] of [['invoice', 'فروش'], ['remittance', 'حواله خروج']] as const) {
+        try {
+          await DocumentService.createDocument({ docType, status: 'final', inOut: 'out', date: today, user: 'test-agent', buyerName: 'خریدار آزمون P2-4', location: w1.code, items: [{ itemId: noCost.id, quantity: 1, unit_price: 90000, location: w1.code }] });
+        } catch (e: any) {
+          if (String(e?.message || '').includes('بهای تمام‌شده ندارد')) rejectedFor.push(label);
+          else throw e;
+        }
+      }
+      if (rejectedFor.length !== 2) {
+        throw new Error(`خروج کالای بدون بهای تمام‌شده باید در فروش و حواله خروج رد شود؛ رد شده در: ${rejectedFor.join('، ') || 'هیچ'}`);
+      }
+
+      // کسری انبارگردانی (۵ ← ۳) مجاز است و با بهای صفر ثبت می‌شود، نه قیمت فهرست
+      await DocumentService.createDocument({ docType: 'audit', status: 'final', date: today, user: 'test-agent', location: w1.code, items: [{ itemId: noCost.id, quantity: 0, physical_stock: 3, location: w1.code }] });
+      const outs = await orm.select({ unitPrice: transactions.unitPrice, quantity: transactions.quantity }).from(transactions)
+        .where(and(eq(transactions.itemId, noCost.id), eq(transactions.type, 'out'), eq(transactions.isDeleted, 0)));
+      const [after] = await orm.select({ total: items.currentStock }).from(items).where(eq(items.id, noCost.id));
+      if (outs.length !== 1 || Number(outs[0].quantity) !== 2 || Number(outs[0].unitPrice) !== 0 || Number(after.total) !== 3) {
+        throw new Error(`کسری انبارگردانی کالای بدون بهای تمام‌شده باید ۲ عدد با بهای صفر ثبت شود: ${JSON.stringify({ outs, total: after.total })}`);
+      }
+
+      // کالای دارای بهای تمام‌شده همچنان با بهای میانگین موزون فروخته می‌شود
+      const withCost = await createTestItem({ stocks: { [w1.code]: 5 }, currentStock: 5, weightedAverageCost: 40000 });
+      await DocumentService.createDocument({ docType: 'invoice', status: 'final', inOut: 'out', date: today, user: 'test-agent', buyerName: 'خریدار آزمون P2-4', location: w1.code, items: [{ itemId: withCost.id, quantity: 1, unit_price: 90000, location: w1.code }] });
+      const [sold] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions)
+        .where(and(eq(transactions.itemId, withCost.id), eq(transactions.type, 'out'), eq(transactions.isDeleted, 0)));
+      if (Number(sold?.unitPrice) !== 40000) {
+        throw new Error(`بهای تمام‌شده فروش کالای دارای بها باید ۴۰۰۰۰ باشد: ${sold?.unitPrice}`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_zero_cost_outflow_p2_4',
+        scenarioId: 'v5_cogs_and_warehouse_voucher',
+        name: 'v7.0.46: رد خروج کالای بدون بهای تمام‌شده در فروش و حواله؛ کسری انبارگردانی با بهای صفر (P2-4)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'فروش و حواله خروج کالای با بهای میانگین صفر رد شد، کسری انبارگردانی ۲ عدد با بهای صفر (نه قیمت فهرست) ثبت شد و فروش کالای دارای بها با بهای میانگین ثبت شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_zero_cost_outflow_p2_4',
+        scenarioId: 'v5_cogs_and_warehouse_voucher',
+        name: 'v7.0.46: رد خروج کالای بدون بهای تمام‌شده در فروش و حواله؛ کسری انبارگردانی با بهای صفر (P2-4)',
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

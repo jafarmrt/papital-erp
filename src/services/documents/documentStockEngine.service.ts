@@ -33,6 +33,9 @@ export interface ApplyStockReversalParams {
   location: string;
 }
 
+/** نوع سند انبارگردانی و اصلاح موجودی (شمارش، ورود اکسل، موجودی اولیه و افتتاحیه) در کاردکس */
+export const STOCK_COUNT_DOCUMENT_TYPE = 'audit';
+
 export class DocumentStockEngine {
   /**
    * Applies stock movement for a single document item (creates transaction and updates item stocks/WAC).
@@ -86,7 +89,23 @@ export class DocumentStockEngine {
 
     const currentItemWac = Number(itemData.weightedAverageCost) || 0;
     // P1-02 (H-01, F2 & INV-01): ثبت بهای تمام‌شده تاریخی خروج در تراکنش انبار جهت حفظ انضباط دفاتر دوبل
-    const txUnitPrice = inOut === 'out' ? (currentItemWac > 0 ? currentItemWac : price) : price;
+    // v7.0.46 (audit P2-4، تصمیم مالک محصول): پیش‌تر برای کالای بدون بهای تمام‌شده (WAC صفر) قیمت سند (قیمت فروش)
+    // به‌عنوان بهای تمام‌شده خروج ثبت می‌شد و سود ناخالص صفر نشان داده می‌شد. اکنون خروج چنین کالایی رد می‌شود،
+    // جز کسری انبارگردانی و کاهش موجودی از ورود اکسل (documentType = 'audit') که با بهای صفر ثبت می‌شوند تا
+    // اصلاح شمارش قفل نشود.
+    let txUnitPrice = price;
+    if (inOut === 'out') {
+      if (currentItemWac > 0) {
+        txUnitPrice = currentItemWac;
+      } else if (documentType === STOCK_COUNT_DOCUMENT_TYPE) {
+        txUnitPrice = 0;
+      } else {
+        throw new ValidationError(
+          `کالای «${itemData.name}» (${itemData.code}) هنوز بهای تمام‌شده ندارد و خروج آن ثبت نمی‌شود. ` +
+          'ابتدا رسید یا خرید این کالا را با قیمت ثبت کنید یا بهای تمام‌شده اولیه آن را در تعریف کالا وارد کنید.'
+        );
+      }
+    }
     const txTotalPrice = fin(txUnitPrice).multiply(qty).round(4).toNumber();
 
     const [insertedTx] = await tx.insert(transactions).values({
