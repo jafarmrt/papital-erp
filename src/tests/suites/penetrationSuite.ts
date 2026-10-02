@@ -169,6 +169,18 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
       return `توکن CSRF نادرست با 403 رد شد و مقایسه با timingSafeEqual (${constantTimeCalls} فراخوانی) انجام شد.`;
     });
 
+  // v7.0.43 (audit P3-11): مسیر API ناموجود باید 404 JSON بدهد، نه صفحه برنامه
+  await runCase(results, 'pen_unknown_api_route_json_404', 'unknown_api_route_json_404',
+    'پن‌تست: مسیر API ناموجود برای کاربر واردشده پاسخ 404 با بدنه JSON بدهد',
+    async () => {
+      if (!adminCookie) throw new Error('کوکی ادمین برای آزمون در دسترس نیست');
+      const res = await request(app).get('/api/__no_such_endpoint_p3_11').set('Cookie', adminCookie);
+      if (res.status !== 404 || !String(res.headers['content-type'] || '').includes('application/json') || !res.body?.error) {
+        throw new Error(`پاسخ مسیر ناموجود باید 404 JSON باشد: status=${res.status} type=${res.headers['content-type']}`);
+      }
+      return 'مسیر API ناموجود پاسخ 404 با بدنه JSON گرفت و به برنامه تک‌صفحه‌ای نرسید.';
+    });
+
   // ===============================================================
   // SQL Injection — parameterized routes & queries must hold
   // ===============================================================

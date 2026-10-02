@@ -126,7 +126,8 @@ export type CriticalScenarioId =
   | 'v6_treasury_cheque_isolation'
   | 'v6_fiscal_year_closing_isolation'
   | 'test_runner_real_database_guard'
-  | 'startup_db_session_hygiene';
+  | 'startup_db_session_hygiene'
+  | 'unknown_api_route_json_404';
 
 
 export interface TestCaseResult {

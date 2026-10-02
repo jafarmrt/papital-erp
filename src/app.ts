@@ -388,6 +388,12 @@ export async function createApp(): Promise<express.Express> {
     });
   });
 
+  // v7.0.43 (audit P3-11): مسیر API ناموجود پاسخ 404 JSON می‌گیرد؛ پیش‌تر در پروداکشن به catch-all برنامه
+  // تک‌صفحه‌ای (server.ts) می‌رسید و index.html با کد 200 برمی‌گشت که کلاینت آن را پاسخ موفق تلقی می‌کرد.
+  app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'مسیر درخواستی در API وجود ندارد', path: (req.originalUrl || '').split('?')[0] });
+  });
+
   app.use(errorHandler);
 
   return app;
