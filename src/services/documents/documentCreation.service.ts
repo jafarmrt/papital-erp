@@ -22,6 +22,18 @@ import { AttachmentStorageService } from '../attachments/attachmentStorage.servi
 import { money, type Money } from '../../lib/money.js';
 import { fin } from '../../lib/financialDecimal.js';
 
+type DocumentLineRow = typeof documentItems.$inferInsert;
+
+/** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی اقلام سند */
+const DOCUMENT_LINE_INSERT_CHUNK = 500;
+
+/** v7.0.72 (audit P3-5): اقلام سند با INSERT چندردیفی پس از حلقه (قبلاً یک INSERT برای هر قلم) */
+async function insertDocumentLines(tx: DbClient, rows: DocumentLineRow[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += DOCUMENT_LINE_INSERT_CHUNK) {
+    await tx.insert(documentItems).values(rows.slice(i, i + DOCUMENT_LINE_INSERT_CHUNK));
+  }
+}
+
 export class DocumentCreationService {
   /**
    * Updates the notes of a specific document.
@@ -143,6 +155,7 @@ export class DocumentCreationService {
         const docLocation = location ? String(location).trim() : '';
         const resolveWh = await createWarehouseResolver(tx);
 
+        const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, quantity, unit_price, unitPrice, discount, location: itemLoc } = item;
           const price = unit_price ?? unitPrice ?? 0;
@@ -157,7 +170,7 @@ export class DocumentCreationService {
             throw new ValidationError(`قیمت واحد برای کالای با شناسه ${itemId} نمی‌تواند منفی یا نامعتبر باشد.`);
           }
 
-          await tx.insert(documentItems).values({
+          lineRows.push({
             documentId: id,
             itemId: Number(itemId),
             quantity: qty,
@@ -166,6 +179,7 @@ export class DocumentCreationService {
             location: targetLoc
           });
         }
+        await insertDocumentLines(tx, lineRows);
       }
     });
   }
@@ -353,6 +367,7 @@ export class DocumentCreationService {
           }
         }
 
+        const auditLineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, physical_stock, location: itemLoc } = item;
           const targetLoc = resolveWh(itemLoc || docLocation || '');
@@ -366,7 +381,7 @@ export class DocumentCreationService {
           const physicalQty = Number(physical_stock || 0);
           const variance = physicalQty - dbStock;
 
-          await tx.insert(documentItems).values({
+          auditLineRows.push({
             documentId: docId,
             itemId: Number(itemId),
             quantity: physicalQty,
@@ -400,6 +415,7 @@ export class DocumentCreationService {
             });
           }
         }
+        await insertDocumentLines(tx, auditLineRows);
       } else {
         // TD-164: ایجاد حل‌کننده انبار قبل از ورود به حلقه‌ها
         const resolveWh = await createWarehouseResolver(tx);
@@ -467,6 +483,7 @@ export class DocumentCreationService {
           }
         }
 
+        const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
           const price = unit_price !== undefined ? unit_price : (camelUnitPrice !== undefined ? camelUnitPrice : (directPrice || 0));
@@ -490,7 +507,7 @@ export class DocumentCreationService {
             });
           }
 
-          await tx.insert(documentItems).values({
+          lineRows.push({
             documentId: docId,
             itemId: Number(itemId),
             quantity: qty,
@@ -499,6 +516,7 @@ export class DocumentCreationService {
             location: targetLoc
           });
         }
+        await insertDocumentLines(tx, lineRows);
       }
 
       // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with document creation)

@@ -6398,6 +6398,97 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+
+  // Test: v7.0.72 (audit P3-5): ردیف‌های سند حسابداری و اقلام سند انبار با یک INSERT چندردیفی درج می‌شوند
+  if (shouldRun('reg_batch_insert_voucher_document_lines_p3_5', 'p35', 'batch', 'insert')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.72: سند حسابداری ۲۰ ردیفی و سند انبار ۲۰ قلمی هر کدام با یک INSERT ردیف‌ها ثبت می‌شوند و ترتیب ردیف‌ها حفظ می‌شود (P3-5)';
+    let voucherId: number | null = null;
+    let documentId: number | null = null;
+    try {
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const violations: string[] = [];
+      // شمارنده INSERT روی جدول‌های ردیف، با پراکسی روی همان تراکنش
+      const countingTx = <T extends object>(tx: T, counts: Map<unknown, number>): T => new Proxy(tx, {
+        get(target, prop, receiver) {
+          const value = Reflect.get(target, prop, receiver);
+          if (prop === 'insert' && typeof value === 'function') {
+            return (table: unknown) => {
+              counts.set(table, (counts.get(table) ?? 0) + 1);
+              return value.call(target, table);
+            };
+          }
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+      });
+
+      const allAccs = await ChartOfAccountsService.getAllAccounts();
+      const leaf = allAccs.filter(a => a.level === 'subsidiary');
+      const voucherItems = Array.from({ length: 20 }, (_, i) => i % 2 === 0
+        ? { accountId: leaf[0].id, debit: 1000 + i, credit: 0, description: `ردیف ${i + 1}` }
+        : { accountId: leaf[1].id, debit: 0, credit: 1000 + i - 1, description: `ردیف ${i + 1}` });
+      const voucherCounts = new Map<unknown, number>();
+      await orm.transaction(async (tx) => {
+        const v = await VoucherService.createJournalVoucher({
+          date: await businessTodayIsoDate(), voucherType: 'general', status: 'draft',
+          description: 'ERP-TEST-MARKER سند آزمون درج دسته‌ای P3-5', items: voucherItems,
+        }, countingTx(tx, voucherCounts));
+        voucherId = v.id;
+      });
+      if (voucherCounts.get(journalVoucherItems) !== 1) violations.push(`INSERT ردیف‌های سند حسابداری: ${voucherCounts.get(journalVoucherItems)} (انتظار ۱)`);
+      const vRows = await orm.select({ id: journalVoucherItems.id, rowOrder: journalVoucherItems.rowOrder, description: journalVoucherItems.description })
+        .from(journalVoucherItems).where(eq(journalVoucherItems.voucherId, voucherId!)).orderBy(journalVoucherItems.id);
+      if (vRows.length !== 20 || vRows.some((r, i) => r.rowOrder !== i + 1 || r.description !== `ردیف ${i + 1}`)) {
+        violations.push(`ترتیب ردیف‌های سند حسابداری: ${JSON.stringify(vRows.map(r => r.rowOrder))}`);
+      }
+
+      const item = await createTestItem({});
+      const docCounts = new Map<unknown, number>();
+      await orm.transaction(async (tx) => {
+        documentId = await DocumentService.createDocument({
+          docType: 'receipt', status: 'draft', inOut: 'in', date: await businessTodayIsoDate(), user: 'test-agent',
+          buyerName: 'تأمین‌کننده آزمون P3-5',
+          items: Array.from({ length: 20 }, (_, i) => ({ itemId: item.id, quantity: i + 1, unit_price: 1000 })),
+          externalTx: countingTx(tx, docCounts),
+        });
+      });
+      if (docCounts.get(documentItems) !== 1) violations.push(`INSERT اقلام سند انبار: ${docCounts.get(documentItems)} (انتظار ۱)`);
+      const dRows = await orm.select({ quantity: documentItems.quantity }).from(documentItems)
+        .where(eq(documentItems.documentId, documentId!)).orderBy(documentItems.id);
+      if (dRows.length !== 20 || dRows.some((r, i) => Number(r.quantity) !== i + 1)) violations.push(`ترتیب اقلام سند انبار: ${JSON.stringify(dRows.map(r => r.quantity))}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_batch_insert_voucher_document_lines_p3_5',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: '۲۰ ردیف سند حسابداری و ۲۰ قلم سند انبار هر کدام با یک INSERT و به همان ترتیب ثبت شدند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_batch_insert_voucher_document_lines_p3_5',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (voucherId !== null) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', [voucherId]);
+        await cleanTestTableData('journal_vouchers', 'id', [voucherId]);
+      }
+      if (documentId !== null) await cleanTestTableData('document_items', 'document_id', [documentId]);
+    }
+  }
+
   return results;
 }
 

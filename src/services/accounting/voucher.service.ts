@@ -17,6 +17,16 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
  */
 export const VOUCHER_BALANCE_TOLERANCE = 0.01;
 
+/** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
+const VOUCHER_ITEM_INSERT_CHUNK = 500;
+
+/** v7.0.72 (audit P3-5): ردیف‌های سند حسابداری با INSERT چندردیفی (قبلاً یک INSERT برای هر ردیف) */
+async function insertVoucherItems(tx: DbExecutor, rows: Array<typeof journalVoucherItems.$inferInsert>): Promise<void> {
+  for (let i = 0; i < rows.length; i += VOUCHER_ITEM_INSERT_CHUNK) {
+    await tx.insert(journalVoucherItems).values(rows.slice(i, i + VOUCHER_ITEM_INSERT_CHUNK));
+  }
+}
+
 export class VoucherService {
   static async getNextVoucherNumber(tx?: DbExecutor): Promise<number> {
     const executor = tx || orm;
@@ -303,22 +313,19 @@ export class VoucherService {
       updateRequestContext({ entityId: `voucher:${voucherNum}`, transactionId: `vch_num_${voucherNum}` });
 
       // Insert items
-      let row = 1;
-      for (const item of data.items) {
-        await tx.insert(journalVoucherItems).values({
-          voucherId: voucher.id,
-          accountId: item.accountId,
-          rowOrder: row++,
-          detailedType: item.detailedType || 'none',
-          detailedId: item.detailedId || null,
-          detailedName: item.detailedName?.trim() || '',
-          debit: money(item.debit),
-          credit: money(item.credit),
-          currency: item.currency || 'IRR',
-          exchangeRate: moneyOr(item.exchangeRate, 1),
-          description: item.description?.trim() || data.description.trim(),
-        });
-      }
+      await insertVoucherItems(tx, data.items.map((item, idx) => ({
+        voucherId: voucher.id,
+        accountId: item.accountId,
+        rowOrder: idx + 1,
+        detailedType: item.detailedType || 'none',
+        detailedId: item.detailedId || null,
+        detailedName: item.detailedName?.trim() || '',
+        debit: money(item.debit),
+        credit: money(item.credit),
+        currency: item.currency || 'IRR',
+        exchangeRate: moneyOr(item.exchangeRate, 1),
+        description: item.description?.trim() || data.description.trim(),
+      })));
 
       return voucher.id;
     };
@@ -388,23 +395,20 @@ export class VoucherService {
         // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
         await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
 
-        let row = 1;
-        for (const item of data.items) {
-          await tx.insert(journalVoucherItems).values({
-            voucherId: id,
-            accountId: item.accountId,
-            rowOrder: row++,
-            detailedType: item.detailedType || 'none',
-            detailedId: item.detailedId || null,
-            detailedName: item.detailedName?.trim() || '',
-            debit: money(item.debit),
-            credit: money(item.credit),
-            currency: item.currency || 'IRR',
-            exchangeRate: moneyOr(item.exchangeRate, 1),
-            description: item.description?.trim() || data.description || existing.description,
-            isDeleted: 0,
-          });
-        }
+        await insertVoucherItems(tx, data.items.map((item, idx) => ({
+          voucherId: id,
+          accountId: item.accountId,
+          rowOrder: idx + 1,
+          detailedType: item.detailedType || 'none',
+          detailedId: item.detailedId || null,
+          detailedName: item.detailedName?.trim() || '',
+          debit: money(item.debit),
+          credit: money(item.credit),
+          currency: item.currency || 'IRR',
+          exchangeRate: moneyOr(item.exchangeRate, 1),
+          description: item.description?.trim() || data.description || existing.description,
+          isDeleted: 0,
+        })));
       }
 
       const storedAttachments = data.attachments !== undefined
@@ -544,22 +548,19 @@ export class VoucherService {
       }).returning();
 
       // Invert rows: debit becomes credit, credit becomes debit
-      let row = 1;
-      for (const item of originalItems) {
-        await tx.insert(journalVoucherItems).values({
-          voucherId: voucher.id,
-          accountId: item.accountId,
-          rowOrder: row++,
-          detailedType: item.detailedType || 'none',
-          detailedId: item.detailedId || null,
-          detailedName: item.detailedName || '',
-          debit: money(item.credit), // Inverted
-          credit: money(item.debit), // Inverted
-          currency: item.currency || 'IRR',
-          exchangeRate: moneyOr(item.exchangeRate, 1),
-          description: `برگشت ردیف ${item.rowOrder || row - 1}: ${item.description || original.description}`,
-        });
-      }
+      await insertVoucherItems(tx, originalItems.map((item, idx) => ({
+        voucherId: voucher.id,
+        accountId: item.accountId,
+        rowOrder: idx + 1,
+        detailedType: item.detailedType || 'none',
+        detailedId: item.detailedId || null,
+        detailedName: item.detailedName || '',
+        debit: money(item.credit), // Inverted
+        credit: money(item.debit), // Inverted
+        currency: item.currency || 'IRR',
+        exchangeRate: moneyOr(item.exchangeRate, 1),
+        description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
+      })));
 
       return voucher.id;
     };
@@ -663,22 +664,19 @@ export class VoucherService {
         createdByUsername: params.username || '',
       }).returning();
 
-      let revRow = 1;
-      for (const item of original.items!) {
-        await tx.insert(journalVoucherItems).values({
-          voucherId: revVoucher.id,
-          accountId: item.accountId,
-          rowOrder: revRow++,
-          detailedType: item.detailedType || 'none',
-          detailedId: item.detailedId || null,
-          detailedName: item.detailedName || '',
-          debit: money(item.credit),
-          credit: money(item.debit),
-          currency: item.currency || 'IRR',
-          exchangeRate: moneyOr(item.exchangeRate, 1),
-          description: `برگشت ردیف ${item.rowOrder || revRow - 1}: ${item.description || original.description}`,
-        });
-      }
+      await insertVoucherItems(tx, original.items!.map((item, idx) => ({
+        voucherId: revVoucher.id,
+        accountId: item.accountId,
+        rowOrder: idx + 1,
+        detailedType: item.detailedType || 'none',
+        detailedId: item.detailedId || null,
+        detailedName: item.detailedName || '',
+        debit: money(item.credit),
+        credit: money(item.debit),
+        currency: item.currency || 'IRR',
+        exchangeRate: moneyOr(item.exchangeRate, 1),
+        description: `برگشت ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
+      })));
 
       // 2. Validate new items
       let sumDebit = fin(0);
@@ -717,22 +715,19 @@ export class VoucherService {
         createdByUsername: params.username || '',
       }).returning();
 
-      let corrRow = 1;
-      for (const item of params.newItems) {
-        await tx.insert(journalVoucherItems).values({
-          voucherId: corrVoucher.id,
-          accountId: item.accountId,
-          rowOrder: corrRow++,
-          detailedType: item.detailedType || 'none',
-          detailedId: item.detailedId || null,
-          detailedName: item.detailedName?.trim() || '',
-          debit: money(item.debit),
-          credit: money(item.credit),
-          currency: item.currency || 'IRR',
-          exchangeRate: moneyOr(item.exchangeRate, 1),
-          description: item.description?.trim() || corrDesc,
-        });
-      }
+      await insertVoucherItems(tx, params.newItems.map((item, idx) => ({
+        voucherId: corrVoucher.id,
+        accountId: item.accountId,
+        rowOrder: idx + 1,
+        detailedType: item.detailedType || 'none',
+        detailedId: item.detailedId || null,
+        detailedName: item.detailedName?.trim() || '',
+        debit: money(item.debit),
+        credit: money(item.credit),
+        currency: item.currency || 'IRR',
+        exchangeRate: moneyOr(item.exchangeRate, 1),
+        description: item.description?.trim() || corrDesc,
+      })));
 
       return {
         revId: revVoucher.id,
@@ -846,22 +841,19 @@ export class VoucherService {
         createdByUsername: params.username || '',
       }).returning();
 
-      let voidRow = 1;
-      for (const item of original.items || []) {
-        await tx.insert(journalVoucherItems).values({
-          voucherId: voidVoucher.id,
-          accountId: item.accountId,
-          rowOrder: voidRow++,
-          detailedType: item.detailedType || 'none',
-          detailedId: item.detailedId || null,
-          detailedName: item.detailedName || '',
-          debit: money(item.credit),
-          credit: money(item.debit),
-          currency: item.currency || 'IRR',
-          exchangeRate: moneyOr(item.exchangeRate, 1),
-          description: `ابطال ردیف ${item.rowOrder || voidRow - 1}: ${item.description || original.description}`,
-        });
-      }
+      await insertVoucherItems(tx, (original.items || []).map((item, idx) => ({
+        voucherId: voidVoucher.id,
+        accountId: item.accountId,
+        rowOrder: idx + 1,
+        detailedType: item.detailedType || 'none',
+        detailedId: item.detailedId || null,
+        detailedName: item.detailedName || '',
+        debit: money(item.credit),
+        credit: money(item.debit),
+        currency: item.currency || 'IRR',
+        exchangeRate: moneyOr(item.exchangeRate, 1),
+        description: `ابطال ردیف ${item.rowOrder || idx + 1}: ${item.description || original.description}`,
+      })));
 
       // 2. Validate Reposted Voucher Items Balance
       let sumDebit = fin(0);
@@ -900,22 +892,19 @@ export class VoucherService {
         createdByUsername: params.username || '',
       }).returning();
 
-      let repostRow = 1;
-      for (const item of params.newItems) {
-        await tx.insert(journalVoucherItems).values({
-          voucherId: repostedVoucher.id,
-          accountId: item.accountId,
-          rowOrder: repostRow++,
-          detailedType: item.detailedType || 'none',
-          detailedId: item.detailedId || null,
-          detailedName: item.detailedName?.trim() || '',
-          debit: money(item.debit),
-          credit: money(item.credit),
-          currency: item.currency || 'IRR',
-          exchangeRate: moneyOr(item.exchangeRate, 1),
-          description: item.description?.trim() || repostDesc,
-        });
-      }
+      await insertVoucherItems(tx, params.newItems.map((item, idx) => ({
+        voucherId: repostedVoucher.id,
+        accountId: item.accountId,
+        rowOrder: idx + 1,
+        detailedType: item.detailedType || 'none',
+        detailedId: item.detailedId || null,
+        detailedName: item.detailedName?.trim() || '',
+        debit: money(item.debit),
+        credit: money(item.credit),
+        currency: item.currency || 'IRR',
+        exchangeRate: moneyOr(item.exchangeRate, 1),
+        description: item.description?.trim() || repostDesc,
+      })));
 
       return {
         voidId: voidVoucher.id,
