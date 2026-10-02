@@ -5,6 +5,7 @@ import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { 
   TrialBalanceRow, 
   FinancialSummaryStats, 
@@ -639,7 +640,7 @@ export class AccountingReportService {
       periodConditions.push(eq(journalVoucherItems.detailedId, params.detailedId));
     }
     if (params.detailedName) {
-      periodConditions.push(like(journalVoucherItems.detailedName, `%${params.detailedName.trim()}%`));
+      periodConditions.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
     }
     if (params.startDate) {
       periodConditions.push(gte(journalVouchers.date, params.startDate));
@@ -688,7 +689,7 @@ export class AccountingReportService {
       if (params.accountId) priorConds.push(eq(journalVoucherItems.accountId, params.accountId));
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
-      if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, `%${params.detailedName.trim()}%`));
+      if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
       if (params.currency && params.currency !== 'all') priorConds.push(or(
         eq(journalVoucherItems.currency, params.currency),
         eq(journalVouchers.currency, params.currency)
@@ -954,7 +955,7 @@ export class AccountingReportService {
         or(
           eq(journalVoucherItems.detailedId, effectivePartyId),
           eq(journalVoucherItems.detailedName, effectivePartyName),
-          like(journalVoucherItems.detailedName, `%${effectivePartyName}%`)
+          like(journalVoucherItems.detailedName, containsLikePattern(effectivePartyName))
         )!
       );
     } else if (effectivePartyId) {
@@ -963,7 +964,7 @@ export class AccountingReportService {
       partyMatchConditions.push(
         or(
           eq(journalVoucherItems.detailedName, effectivePartyName),
-          like(journalVoucherItems.detailedName, `%${effectivePartyName}%`)
+          like(journalVoucherItems.detailedName, containsLikePattern(effectivePartyName))
         )!
       );
     }

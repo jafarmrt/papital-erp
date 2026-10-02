@@ -10,6 +10,7 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { orm } from '../../db/drizzle.js';
 import { purchaseRequisitions, documents } from '../../db/schema.js';
 import { eq, and, ilike } from 'drizzle-orm';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 
 export interface WorkflowTransitionEventPayload {
   instanceId: number;
@@ -188,7 +189,7 @@ export function registerWorkflowListeners() {
           if (payload.toStateKey === 'received' || (payload as any).actionKey === 'receive_items') {
             const [reqRecord] = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, reqId));
             if (reqRecord) {
-              const docNotesPattern = `%[تدارکات: درخواست ${reqRecord.code}]%`;
+              const docNotesPattern = containsLikePattern(`[تدارکات: درخواست ${reqRecord.code}]`);
               const draftOrders = await orm.select().from(documents).where(and(
                 ilike(documents.notes, docNotesPattern),
                 eq(documents.status, 'draft'),

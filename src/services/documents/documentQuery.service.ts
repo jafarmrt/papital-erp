@@ -4,6 +4,7 @@ import { documents, documentItems, items, transactions, treasuryTransactions } f
 import { fin } from '../../lib/financialDecimal.js';
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { NotFoundError } from '../../errors/customErrors.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { 
   GetDocumentsFilter, 
   FormattedDocument, 
@@ -45,7 +46,7 @@ export class DocumentQueryService {
       conditions.push(lte(documents.date, endCondition));
     }
     if (filter.search && filter.search.trim() !== '') {
-      const s = `%${filter.search.trim()}%`;
+      const s = containsLikePattern(filter.search.trim());
       conditions.push(or(
         ilike(documents.refNumber, s),
         ilike(documents.buyerName, s),

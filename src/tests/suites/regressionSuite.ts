@@ -4717,6 +4717,83 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.25: v7.0.57 (TD-222): «_» و «%» در جستجوی فهرست طرف‌حساب‌ها، کالاها، اسناد و اسناد حسابداری نویسه عام نیستند
+  if (shouldRun('reg_like_wildcards_escaped_td_222', 'td222', 'search', 'like')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.57: «_» و «%» در جستجوی طرف‌حساب، کالا، سند و سند حسابداری نویسه عام نیستند (TD-222)';
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { createTestCustomer, createTestItem, createTestDocument } = await import('../fixtures/factories.js');
+      const { withTestMarker } = await import('../fixtures/testMarker.js');
+      const { VoucherService } = await import('../../services/accounting/voucher.service.js');
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const app = await getTestApp();
+      const admin = await getAdminSession();
+      const token = `TD222Q${Date.now()}`;
+      await ChartOfAccountsService.seedStandardAccounts();
+      const allAccounts = await ChartOfAccountsService.getAllAccounts();
+      const debitAcc = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
+      const creditAcc = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
+      if (!debitAcc || !creditAcc) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
+      // در هر بخش دو ردیف: «<نشانه>_A» و «<نشانه>xA»؛ جستجوی «<نشانه>_A» باید فقط اولی را بیابد
+      for (const suffix of ['_A', 'xA']) {
+        await createTestCustomer({ name: withTestMarker(`${token}${suffix}`) });
+        await createTestItem({ name: withTestMarker(`${token}${suffix}`) });
+        await createTestDocument({ refNumber: `DOC_${token}${suffix}`, buyerName: withTestMarker(`${token}${suffix}`) }, []);
+        await VoucherService.createJournalVoucher({
+          date: await businessTodayIsoDate(),
+          voucherType: 'general',
+          status: 'draft',
+          description: withTestMarker(`${token}${suffix}`),
+          referenceModule: 'manual',
+          referenceNumber: `TEST-TD222-${suffix}`,
+          items: [
+            { accountId: debitAcc.id, detailedType: 'other', detailedName: 'آزمون', debit: 10, credit: 0 },
+            { accountId: creditAcc.id, detailedType: 'other', detailedName: 'آزمون', debit: 0, credit: 10 },
+          ],
+        } as any);
+      }
+      const rows = (body: any): any[] => Array.isArray(body?.data) ? body.data : (Array.isArray(body) ? body : []);
+      const q = encodeURIComponent(`${token}_A`);
+      const counts = {
+        customers: rows((await request(app).get(`/api/customers?search=${q}`).set('Cookie', admin.cookie)).body).length,
+        items: rows((await request(app).get(`/api/items?search=${q}`).set('Cookie', admin.cookie)).body).length,
+        documents: rows((await request(app).get(`/api/documents?search=${q}`).set('Cookie', admin.cookie)).body).length,
+        vouchers: rows(await VoucherService.getJournalVouchers({ search: `${token}_A` } as any)).length,
+        percentCustomers: rows((await request(app).get(`/api/customers?search=${encodeURIComponent(`${token}%A`)}`).set('Cookie', admin.cookie)).body).length,
+      };
+      const wrong = Object.entries({ customers: 1, items: 1, documents: 1, vouchers: 1, percentCustomers: 0 })
+        .filter(([k, want]) => (counts as Record<string, number>)[k] !== want);
+      if (wrong.length > 0) {
+        throw new Error(`نویسه عام در جستجو: ${JSON.stringify(counts)} (انتظار هر بخش ۱ و برای «%» صفر)`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_like_wildcards_escaped_td_222',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: JSON.stringify(counts)
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_like_wildcards_escaped_td_222',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      await orm.update(journalVouchers).set({ isDeleted: 1 }).where(sql`${journalVouchers.referenceNumber} LIKE 'TEST-TD222-%'`);
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

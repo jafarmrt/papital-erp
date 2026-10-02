@@ -9,6 +9,7 @@ import { ValidationError, NotFoundError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecutor.js';
 import { DocumentService } from './document.service.js';
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
 
 type DbClient = DbExecutor;
 
@@ -265,7 +266,7 @@ export class ProcurementService {
     }
 
     if (filter.search && filter.search.trim()) {
-      const q = `%${filter.search.trim()}%`;
+      const q = containsLikePattern(filter.search.trim());
       conditions.push(
         or(
           ilike(purchaseRequisitions.code, q),
@@ -581,7 +582,7 @@ export class ProcurementService {
       }
 
       const relatedDocs = await orm.select().from(documents).where(and(
-        ilike(documents.notes, `%${req.code}%`),
+        ilike(documents.notes, containsLikePattern(req.code)),
         eq(documents.isDeleted, 0)
       ));
       for (const rd of relatedDocs) {
@@ -1104,7 +1105,7 @@ export class ProcurementService {
         }
       }
       const otherDocs = await orm.select().from(documents).where(and(
-        ilike(documents.notes, `%${linkedReq.code}%`),
+        ilike(documents.notes, containsLikePattern(linkedReq.code)),
         eq(documents.isDeleted, 0)
       ));
       for (const od of otherDocs) {

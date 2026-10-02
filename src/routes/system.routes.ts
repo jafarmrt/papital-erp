@@ -203,7 +203,7 @@ router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => 
     }
     if (search) {
       conditions.push(
-        sql`(${activityLogs.description} ILIKE ${'%' + search + '%'} OR ${activityLogs.userFullName} ILIKE ${'%' + search + '%'} OR ${activityLogs.username} ILIKE ${'%' + search + '%'} OR ${activityLogs.entity} ILIKE ${'%' + search + '%'})`
+        sql`(${activityLogs.description} ILIKE ${containsLikePattern(search)} OR ${activityLogs.userFullName} ILIKE ${containsLikePattern(search)} OR ${activityLogs.username} ILIKE ${containsLikePattern(search)} OR ${activityLogs.entity} ILIKE ${containsLikePattern(search)})`
       );
     }
 

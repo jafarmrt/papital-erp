@@ -4,6 +4,7 @@ import { eq, and, sql, desc, count, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 
 export interface DLQQueryFilters {
   status?: string;
@@ -161,7 +162,7 @@ export class DeadLetterQueueService {
         conditions.push(eq(deadLetterEvents.source, filters.source));
       }
       if (filters.search) {
-        const searchPattern = `%${filters.search}%`;
+        const searchPattern = containsLikePattern(filters.search);
         conditions.push(
           sql`(${deadLetterEvents.originalEventId} ILIKE ${searchPattern} OR ${deadLetterEvents.eventType} ILIKE ${searchPattern} OR ${deadLetterEvents.aggregateId} ILIKE ${searchPattern} OR ${deadLetterEvents.failureReason} ILIKE ${searchPattern})`
         );

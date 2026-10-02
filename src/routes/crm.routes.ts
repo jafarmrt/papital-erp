@@ -13,6 +13,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -301,7 +302,7 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
   }
 
   if (search && typeof search === 'string' && search.trim() !== '') {
-    const s = `%${search.trim()}%`;
+    const s = containsLikePattern(search.trim());
     conditions.push(
       or(
         ilike(crmLeads.title, s),

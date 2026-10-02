@@ -15,6 +15,7 @@ import { logger } from '../middleware/logger.js';
 import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
 
 const router = Router();
 
@@ -89,9 +90,9 @@ router.get('/items/reorder-alerts', async (req, res) => {
 
     if (search) {
       conditions.push(or(
-        ilike(items.name, `%${search}%`),
-        ilike(items.code, `%${search}%`),
-        ilike(items.category, `%${search}%`)
+        ilike(items.name, containsLikePattern(search)),
+        ilike(items.code, containsLikePattern(search)),
+        ilike(items.category, containsLikePattern(search))
       )!);
     }
 
@@ -153,8 +154,8 @@ router.get('/items', async (req, res) => {
 
     if (search) {
       conditions.push(or(
-        ilike(items.name, `%${search}%`),
-        ilike(items.code, `%${search}%`)
+        ilike(items.name, containsLikePattern(search)),
+        ilike(items.code, containsLikePattern(search))
       )!);
     }
 

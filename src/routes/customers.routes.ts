@@ -10,6 +10,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
+import { containsLikePattern } from '../lib/sqlLike.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -107,11 +108,11 @@ router.get('/customers', asyncHandler(async (req, res) => {
   if (search) {
     conditionsList.push(
       or(
-        ilike(customers.name, `%${search}%`),
-        ilike(customers.phone, `%${search}%`),
-        ilike(customers.contactName, `%${search}%`),
-        ilike(customers.supplierCategory, `%${search}%`),
-        sql`${customers.contacts}::text ILIKE ${'%' + search + '%'}`
+        ilike(customers.name, containsLikePattern(search)),
+        ilike(customers.phone, containsLikePattern(search)),
+        ilike(customers.contactName, containsLikePattern(search)),
+        ilike(customers.supplierCategory, containsLikePattern(search)),
+        sql`${customers.contacts}::text ILIKE ${containsLikePattern(search)}`
       ) as any
     );
   }

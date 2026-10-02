@@ -1180,6 +1180,56 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // v7.0.57 (TD-222): الگوی LIKE / ILIKE از ورودی فقط با containsLikePattern / startsWithLikePattern ساخته می‌شود
+  const tLikeStart = Date.now();
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const roots = ['src/routes', 'src/services', 'src/lib', 'src/db'].map(d => path.join(process.cwd(), d));
+    const forbidden: Array<[RegExp, string]> = [
+      [/`%\$\{/, 'الگوی `%${…}%`'],
+      [/'%'\s*\+/, "الحاق '%' + …"],
+      [/\bi?like\(\s*[\w.]+\s*,\s*`/, 'template literal مستقیم در like / ilike'],
+    ];
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith('.ts') && entry.name !== 'sqlLike.ts') {
+          fs.readFileSync(full, 'utf8').split('\n').forEach((line, i) => {
+            for (const [re, label] of forbidden) {
+              if (re.test(line)) offenders.push(`${path.relative(process.cwd(), full)}:${i + 1} (${label})`);
+            }
+          });
+        }
+      }
+    };
+    roots.filter(r => fs.existsSync(r)).forEach(walk);
+    if (offenders.length > 0) {
+      throw new Error(`${offenders.length} الگوی LIKE بدون escape: ${offenders.slice(0, 5).join('، ')}`);
+    }
+    results.push(makeTestCase({
+      id: 'unit_like_patterns_escaped_td_222',
+      name: 'v7.0.57: هیچ الگوی LIKE / ILIKE مستقیم از ورودی ساخته نمی‌شود (TD-222)',
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tLikeStart,
+      details: 'routes، services، lib و db بدون الگوی %${…} یا الحاق \'%\''
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_like_patterns_escaped_td_222',
+      name: 'v7.0.57: هیچ الگوی LIKE / ILIKE مستقیم از ورودی ساخته نمی‌شود (TD-222)',
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tLikeStart,
+      error: err.message
+    }));
+  }
+
   return results;
 }
 

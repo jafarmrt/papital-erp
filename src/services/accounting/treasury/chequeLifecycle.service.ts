@@ -11,6 +11,7 @@ import { fin } from '../../../lib/financialDecimal.js';
 
 import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
+import { containsLikePattern } from '../../../lib/sqlLike.js';
 
 /**
  * V1.4.0 — ماشین وضعیت چک صیادی
@@ -66,7 +67,7 @@ export class ChequeLifecycleService {
       conditions.push(lte(cheques.dueDate, params.endDate));
     }
     if (params.search && params.search.trim()) {
-      const q = `%${params.search.trim()}%`;
+      const q = containsLikePattern(params.search.trim());
       conditions.push(
         or(
           like(cheques.chequeNumber, q),

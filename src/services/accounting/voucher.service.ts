@@ -8,6 +8,7 @@ import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessCloc
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 
 /**
  * v7.0.49 (audit P2-5، تصمیم مالک محصول): بیشترین اختلاف مجاز جمع بدهکار و بستانکار یک سند (۰٫۰۱)، یکسان در
@@ -67,7 +68,7 @@ export class VoucherService {
       conditions.push(lte(journalVouchers.date, params.endDate));
     }
     if (params.search && params.search.trim()) {
-      const q = `%${params.search.trim()}%`;
+      const q = containsLikePattern(params.search.trim());
       conditions.push(
         or(
           like(journalVouchers.description, q),

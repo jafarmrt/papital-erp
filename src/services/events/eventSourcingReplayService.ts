@@ -6,6 +6,7 @@ import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { EventActionEngineService } from './eventActionEngineService.js';
 import { RuleExpression } from '../ruleEngine.service.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 
 export interface TimelineEventItem {
   id: string | number;
@@ -72,7 +73,7 @@ export class EventSourcingReplayService {
    */
   static async searchAggregates(aggregateType: string, search: string = '', limit: number = 20) {
     try {
-      const searchPattern = `%${search}%`;
+      const searchPattern = containsLikePattern(search);
 
       switch (aggregateType) {
         case 'document': {
@@ -206,7 +207,7 @@ export class EventSourcingReplayService {
             eq(outboxEvents.aggregateType, aggregateType),
             or(
               eq(outboxEvents.aggregateId, aggIdStr),
-              ilike(outboxEvents.aggregateId, `%${aggIdStr}%`)
+              ilike(outboxEvents.aggregateId, containsLikePattern(aggIdStr))
             )
           )
         )
@@ -239,7 +240,7 @@ export class EventSourcingReplayService {
             eq(deadLetterEvents.aggregateType, aggregateType),
             or(
               eq(deadLetterEvents.aggregateId, aggIdStr),
-              ilike(deadLetterEvents.aggregateId, `%${aggIdStr}%`)
+              ilike(deadLetterEvents.aggregateId, containsLikePattern(aggIdStr))
             )
           )
         );
@@ -267,7 +268,7 @@ export class EventSourcingReplayService {
         .where(
           or(
             eq(activityLogs.entityId, aggIdStr),
-            ilike(activityLogs.description, `%${aggIdStr}%`)
+            ilike(activityLogs.description, containsLikePattern(aggIdStr))
           )
         )
         .orderBy(desc(activityLogs.timestamp))

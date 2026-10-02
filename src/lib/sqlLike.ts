@@ -11,3 +11,8 @@ export function escapeLikePattern(value: string): string {
 export function containsLikePattern(value: string): string {
   return `%${escapeLikePattern(value)}%`;
 }
+
+/** الگوی «شروع شدن با» برای LIKE / ILIKE: `<ورودی escape‌شده>%` */
+export function startsWithLikePattern(value: string): string {
+  return `${escapeLikePattern(value)}%`;
+}

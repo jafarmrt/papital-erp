@@ -13,6 +13,7 @@ import { nextVersion } from '../../lib/occHelper.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
+import { startsWithLikePattern } from '../../lib/sqlLike.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
@@ -90,7 +91,7 @@ export class ItemCatalogService {
       const rows = await db
         .select({ code: items.code })
         .from(items)
-        .where(ilike(items.code, `${ctx.base}%`));
+        .where(ilike(items.code, startsWithLikePattern(String(ctx.base))));
       for (const r of rows) {
         const tail = String(r.code).slice(String(ctx.base).length).replace(/[^0-9].*$/, '');
         const n = parseInt(tail, 10);
@@ -100,7 +101,7 @@ export class ItemCatalogService {
       const rows = await db
         .select({ code: items.code })
         .from(items)
-        .where(ilike(items.code, `${ctx.prefix}%`));
+        .where(ilike(items.code, startsWithLikePattern(String(ctx.prefix))));
       for (const r of rows) {
         // هم سازگار با داده قدیمی دوخط‌تیره (B-H--101) و هم قالب جدید تک‌خط (B-H-101)
         let tail = String(r.code).slice(String(ctx.prefix!).length).replace(/^-+/, '');
