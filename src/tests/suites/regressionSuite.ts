@@ -6489,11 +6489,73 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.73 (audit P3-14): پرچم‌های عددی is_* / has_* فقط ۰ یا ۱ می‌پذیرند (CHECK، بدون تغییر نوع ستون)
+  if (shouldRun('reg_flag_check_constraints_p3_14', 'p314', 'flag', 'check')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.73: همه ستون‌های پرچم عددی is_*/has_* قید CHECK معتبرشده (۰/۱) دارند و مقدار ۲ رد می‌شود (P3-14)';
+    try {
+      const violations: string[] = [];
+      const missing = await orm.execute(sql`
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+        WHERE c.table_schema = current_schema() AND t.table_type = 'BASE TABLE'
+          AND c.data_type IN ('smallint', 'integer', 'bigint')
+          AND (c.column_name LIKE 'is\_%' OR c.column_name LIKE 'has\_%')
+          AND NOT EXISTS (
+            SELECT 1 FROM pg_constraint pc
+            JOIN pg_class rel ON rel.oid = pc.conrelid
+            WHERE rel.relname = c.table_name AND rel.relnamespace = current_schema()::regnamespace
+              AND pc.conname = 'chk_' || c.table_name || '_' || c.column_name || '_flag'
+              AND pc.contype = 'c' AND pc.convalidated
+          )
+        ORDER BY 1, 2`);
+      const missingRows = (missing as unknown as { rows: Array<{ table_name: string; column_name: string }> }).rows;
+      if (missingRows.length > 0) violations.push(`بدون CHECK معتبر: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
+
+      const isCheckViolation = (err: unknown): boolean => {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e?.code === '23514' || e?.cause?.code === '23514';
+      };
+      const ROLLBACK = new Error('ROLLBACK_P3_14');
+      const expectRejected = async (label: string, write: (tx: Parameters<Parameters<typeof orm.transaction>[0]>[0]) => Promise<unknown>) => {
+        try {
+          await orm.transaction(async (tx) => { await write(tx); throw ROLLBACK; });
+        } catch (err) {
+          if (err === ROLLBACK) violations.push(`${label}: مقدار ۲ پذیرفته شد`);
+          else if (!isCheckViolation(err)) violations.push(`${label}: خطای غیرمنتظره ${err instanceof Error ? err.message : String(err)}`);
+        }
+      };
+      const [acc] = await orm.select({ id: accounts.id }).from(accounts).orderBy(accounts.id).limit(1);
+      const [wh] = await orm.select({ id: warehouses.id }).from(warehouses).orderBy(warehouses.id).limit(1);
+      if (!acc || !wh) throw new Error('حساب یا انبار پایه برای آزمون یافت نشد');
+      await expectRejected('accounts.is_deleted', (tx) => tx.update(accounts).set({ isDeleted: 2 }).where(eq(accounts.id, acc.id)));
+      await expectRejected('warehouses.is_active', (tx) => tx.update(warehouses).set({ isActive: 2 }).where(eq(warehouses.id, wh.id)));
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_flag_check_constraints_p3_14',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'همه پرچم‌های عددی قید CHECK معتبرشده دارند و به‌روزرسانی با مقدار ۲ با خطای 23514 رد شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_flag_check_constraints_p3_14',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    }
+  }
+
   return results;
 }
-
-
-
-
-
-
