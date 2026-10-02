@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '../utils';
@@ -37,7 +37,7 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [asyncOptions, setAsyncOptions] = useState<Option[]>([]);
+  const [asyncResults, setAsyncResults] = useState<unknown[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState<string>('');
   
@@ -107,12 +107,8 @@ export function SearchableSelect({
         .then((res: any) => {
           if (controller.signal.aborted) return;
           const data = res.data || res;
-          if (Array.isArray(data) && mapResultToOption) {
-            setAsyncOptions(data.slice(0, limit).map((item: any) => {
-              const opt = mapResultToOption(item);
-              opt._raw = item;
-              return opt;
-            }));
+          if (Array.isArray(data)) {
+            setAsyncResults(data.slice(0, limit));
           }
         })
         .catch(err => {
@@ -130,7 +126,18 @@ export function SearchableSelect({
       clearTimeout(delayDebounceFn);
       controller.abort();
     };
-  }, [search, fetchUrl, mapResultToOption, maxResults]);
+    // TD-234 (بند ۱): mapResultToOption در وابستگی‌ها نیست؛ والدی که تابع درجا می‌سازد با هر رندر جستجو را دوباره نمی‌فرستد.
+    // نگاشت نتایج در useMemo زیر انجام می‌شود تا برچسب‌ها با تغییر تابع (مثلاً رزرو پروژه) تازه بمانند.
+  }, [search, fetchUrl, maxResults]);
+
+  const asyncOptions = useMemo<Option[]>(() => {
+    if (!asyncResults || !mapResultToOption) return [];
+    return asyncResults.map((item: unknown) => {
+      const opt = mapResultToOption(item);
+      opt._raw = item;
+      return opt;
+    });
+  }, [asyncResults, mapResultToOption]);
 
   const limit = maxResults || 4;
 

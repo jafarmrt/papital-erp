@@ -94,7 +94,7 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
   const handleFetchReturnInvoice = async () => {
     if (!returnInvoiceRef) return;
     try {
-      const doc = await fetchJson(`/documents/by-ref/${returnInvoiceRef}?type=invoice`);
+      const doc = await fetchJson(`/documents/by-ref/${encodeURIComponent(returnInvoiceRef.trim())}?type=invoice`);
       if (doc && doc.items) {
         setReturnInvoiceId(typeof doc.id === 'number' ? doc.id : null);
         setBuyerName(doc.buyer_name || '');
@@ -150,6 +150,9 @@ export function useStockDocumentForm(currentUser: User, refData: StockDocumentRe
     setSelectedItemObj(null);
     setSelectedProjectId('');
     setSelectedProjectObj(null);
+    // TD-234 (بند ۳): ارز و نرخ تسعیر هم مثل بقیه فرم پاک می‌شوند
+    setCurrency('IRR');
+    setExchangeRate(0);
   }, [actionType]);
 
   useEffect(() => {

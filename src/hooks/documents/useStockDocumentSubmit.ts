@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { User } from '../../types';
-import { extractDateString, errorMessageOf } from '../../utils';
+import { extractDateString, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { deductProjectReservations } from '../../lib/documents/stockReservations';
@@ -22,7 +22,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
     notes, docItems, selectedProjectId, selectedProjectObj, attachments, getItemReservationSummary,
     setIsSaving, setDocItems, fetchNextRef, setReturnInvoiceRef, setReturnInvoiceId, setBuyerName,
     setSelectedSupplierObj, setNotes, setUnitPrice, setQuantity, setSelectedProjectId,
-    setSelectedProjectObj, setAttachments,
+    setSelectedProjectObj, setAttachments, setCurrency, setExchangeRate,
   } = form;
 
   // بازخوانی لیست پروژه‌ها پس از عملیات تخصیص
@@ -74,7 +74,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
 
     setIsSaving(true);
     try {
-      const formattedDate = extractDateString(date) || new Date().toISOString().split('T')[0];
+      // TD-234 (بند ۴): تاریخ جایگزین امروزِ ساعت کسب‌وکار است، نه تاریخ UTC مرورگر
+      const formattedDate = extractDateString(date) || getTodayJalaliDate();
 
       let finalNotes = notes || '';
       if (actionType === 'out' && selectedProjectObj) {
@@ -157,6 +158,8 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       setSelectedProjectId('');
       setSelectedProjectObj(null);
       setAttachments([]);
+      setCurrency('IRR'); // TD-234 (بند ۳): نرخ تسعیر سند قبلی برای سند بعدی نمی‌ماند
+      setExchangeRate(0);
       reloadReferenceLists(); // Refresh project list and reservations
     } catch (err: unknown) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت سند');
