@@ -45,6 +45,7 @@
 - **No Token in Response Bodies (TD-185, v7.0.27):** Login/setup responses MUST NOT include the JWT by default. The only exception is the opt-in compatibility flag `EXPOSE_TOKEN_IN_BODY=true` for preview environments whose browsers block the iframe cookie (BUG-08); production deployments must leave it unset.
 - **Session Verification & Logout:** Use `/api/auth/me` to verify session on load, and `/api/auth/logout` to clear the cookie.
 - **Route Middleware Order:** Administrative/utility/seed routes MUST be registered AFTER `router.use(authenticateToken)` and protected via `authorize('admin')`.
+- **Role vs Permission Namespaces (v7.0.51, audit P2-10):** Permission keys always contain a dot (`customers.manage`); role codes never do (`ROLE_CODE_PATTERN = /^[a-z0-9_-]+$/`, enforced on role creation). `authorize` / `authorizePermission` / `userHasRoleOrPermission` match the user's role code only against dot-less guard entries and the role's permissions only against permission keys; `admin` always passes.
 - **Audit Logging & Snapshots:** All state mutations (customers, items, prices, documents, stocks, permissions) MUST log via `logActivity` in `src/lib/auditLogger.ts` with before/after snapshots.
 - **Log Sanitization:** Sensitive fields (`password`, `token`, `secret`, `jwt`, `cookie`) MUST be sanitized to `[PROTECTED]`.
 - **Soft Deletes:** Always filter with `.where(eq(table.isDeleted, 0))` on reads.

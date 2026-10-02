@@ -4,7 +4,7 @@ import { eq, desc, and, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
@@ -344,6 +344,10 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
     const { name, code, description, permissions } = req.body;
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
+    // v7.0.51 (audit P2-10): کد نقش نقطه ندارد تا با کلید مجوز (مثل customers.manage) اشتباه گرفته نشود
+    if (!ROLE_CODE_PATTERN.test(slugCode)) {
+      return res.status(400).json({ error: 'کد نقش فقط می‌تواند حروف کوچک انگلیسی، عدد، خط تیره و زیرخط داشته باشد (نقطه مخصوص نام مجوزهاست)' });
+    }
 
     // Check code uniqueness
     const existing = await orm.select().from(roles).where(eq(roles.code, slugCode));

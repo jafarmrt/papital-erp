@@ -15,24 +15,39 @@ async function getCachedRoleData(roleCode: string) {
   }, 60_000);
 }
 
+/**
+ * v7.0.51 (audit P2-10): کد نقش و کلید مجوز دو فضای نام جدا هستند. کلید مجوز همیشه نقطه دارد (`customers.manage`)
+ * و کد نقش هرگز (`ROLE_CODE_PATTERN`، بررسی در ساخت نقش). پیش‌تر کد نقش کاربر با همه ورودی‌های گارد مقایسه می‌شد،
+ * پس نقشی با کد `customers.manage` هر مسیری را که این مجوز لازم داشت باز می‌کرد، بدون آن‌که مجوز را داشته باشد.
+ * اکنون کد نقش فقط با ورودی‌های بدون نقطه (نام نقش) و مجوزهای نقش فقط با کلیدهای مجوز سنجیده می‌شوند.
+ */
+export const ROLE_CODE_PATTERN = /^[a-z0-9_-]+$/;
+
+export function isPermissionKey(entry: string): boolean {
+  return entry.includes('.');
+}
+
+async function roleOrPermissionGranted(role: string, entries: string[]): Promise<boolean> {
+  // Admin always has full access
+  if (role === 'admin') return true;
+  const roleCodes = entries.filter(e => !isPermissionKey(e));
+  if (roleCodes.includes(role)) return true;
+  const roleData = await getCachedRoleData(role);
+  const perms: string[] = roleData?.permissions || [];
+  const permissionKeys = entries.filter(isPermissionKey);
+  return perms.includes('*') || permissionKeys.some(k => perms.includes(k));
+}
+
 export const authorize = (...allowedRolesOrPermissions: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) {
       return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
     }
-    // Admin always has full access
-    if (user.role === 'admin' || allowedRolesOrPermissions.includes(user.role)) {
-      return next();
-    }
 
     try {
-      const roleData = await getCachedRoleData(user.role);
-      if (roleData) {
-        const perms: string[] = roleData.permissions;
-        if (perms.includes('*') || allowedRolesOrPermissions.some(k => perms.includes(k))) {
-          return next();
-        }
+      if (await roleOrPermissionGranted(user.role, allowedRolesOrPermissions)) {
+        return next();
       }
     } catch (e) {
       // Continue to 403 if lookup fails
@@ -49,17 +64,8 @@ export const authorizePermission = (...permissionKeys: string[]) => {
       return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
     }
 
-    // Admin has unrestricted access to everything
-    if (user.role === 'admin' || permissionKeys.includes(user.role)) {
-      return next();
-    }
-
     try {
-      const roleData = await getCachedRoleData(user.role);
-      const perms: string[] = roleData?.permissions || [];
-
-      const hasPermission = perms.includes('*') || permissionKeys.some(key => perms.includes(key) || user.role === key);
-      if (hasPermission) {
+      if (await roleOrPermissionGranted(user.role, permissionKeys)) {
         return next();
       }
 
@@ -79,11 +85,8 @@ export async function userHasRoleOrPermission(
   ...rolesOrPermissions: string[]
 ): Promise<boolean> {
   if (!user?.role) return false;
-  if (user.role === 'admin' || rolesOrPermissions.includes(user.role)) return true;
   try {
-    const roleData = await getCachedRoleData(user.role);
-    const perms: string[] = roleData?.permissions || [];
-    return perms.includes('*') || rolesOrPermissions.some(k => perms.includes(k));
+    return await roleOrPermissionGranted(user.role, rolesOrPermissions);
   } catch {
     return false;
   }

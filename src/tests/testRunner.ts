@@ -105,6 +105,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   data_export_no_secrets: 'Penetration: Data Export Without Credentials & Complete Ledger (TD-188)',
   path_traversal_blocked: 'Penetration: /uploads Path Traversal Containment (TST-004)',
   unknown_api_route_json_404: 'API Contract: Unknown /api Route Returns JSON 404, Never the SPA Page (P3-11)',
+  route_authorization_scope: 'Authorization: Separate Role/Permission Namespaces & Permission-Scoped Read Endpoints (P2-10)',
   concurrent_voucher_unique_postgres: 'Critical Path: Concurrent Voucher SEQUENCE Uniqueness (DB-001)',
   finalize_race_single_deduction: 'Critical Path: Concurrent Finalize Single Stock Deduction (DB-002)',
   cheque_invalid_transition: 'Critical Path: Cheque Invalid State Transition Rejection',

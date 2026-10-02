@@ -4249,6 +4249,105 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.22: v7.0.51 (audit P2-10): کد نقش و کلید مجوز دو فضای نام جدا هستند؛ نقشی با کد هم‌نام یک مجوز
+  // (مثل customers.manage) آن مجوز را نمی‌گیرد و نقش تازه با کد نقطه‌دار ساخته نمی‌شود
+  if (shouldRun('reg_role_permission_namespace_p2_10', 'p210', 'authorize', 'roles')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.51: کد نقش هم‌نام مجوز، آن مجوز را در authorize و authorizePermission و userHasRoleOrPermission نمی‌گیرد (P2-10)';
+    const createdRoleIds: number[] = [];
+    try {
+      const { authorize, authorizePermission, userHasRoleOrPermission } = await import('../../middleware/authorize.js');
+      const { createTestRole } = await import('../fixtures/factories.js');
+      const { roles } = await import('../../db/schema.js');
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+
+      const runGuard = async (guard: any, role: string): Promise<number> => {
+        let status = 0;
+        const req: any = { user: { id: -1, username: 'p210_probe', role } };
+        const res: any = {
+          status(code: number) { status = code; return this; },
+          json() { return this; }
+        };
+        await guard(req, res, () => { status = 200; });
+        return status;
+      };
+
+      // الف) کاربری که کد نقشش دقیقاً نام مجوز است (نقشی که پیش‌تر ساخته شده) و خود مجوز را ندارد
+      const dotted = 'customers.manage';
+      const guarded = await runGuard(authorize('admin', 'manager', 'sales_manager', 'customers.manage'), dotted);
+      if (guarded !== 403) {
+        throw new Error(`authorize به نقشی با کد «${dotted}» بدون داشتن مجوز دسترسی داد (وضعیت ${guarded})`);
+      }
+      const guardedPerm = await runGuard(authorizePermission('customers.manage'), dotted);
+      if (guardedPerm !== 403) {
+        throw new Error(`authorizePermission به نقشی با کد «${dotted}» بدون داشتن مجوز دسترسی داد (وضعیت ${guardedPerm})`);
+      }
+      if (await userHasRoleOrPermission({ role: dotted }, 'customers.manage')) {
+        throw new Error(`userHasRoleOrPermission نقشی با کد «${dotted}» را دارنده همان مجوز دانست`);
+      }
+
+      // ب) کنترل: دارنده واقعی مجوز و نقشِ نام‌برده در گارد همچنان مجازند؛ نقش بدون مجوز و خارج از فهرست رد می‌شود
+      const holder = await createTestRole({ permissions: ['customers.manage'] });
+      createdRoleIds.push(holder.id);
+      const plain = await createTestRole({ permissions: ['daily_logs.view'] });
+      createdRoleIds.push(plain.id);
+      const checks: Array<[string, number, number]> = [
+        ['دارنده مجوز در authorize', await runGuard(authorize('admin', 'manager', 'customers.manage'), holder.code), 200],
+        ['دارنده مجوز در authorizePermission', await runGuard(authorizePermission('customers.manage'), holder.code), 200],
+        ['نقش نام‌برده در گارد', await runGuard(authorize('admin', 'manager'), 'manager'), 200],
+        ['نقش بدون مجوز', await runGuard(authorize('admin', 'manager', 'customers.manage'), plain.code), 403],
+        ['مدیر سیستم', await runGuard(authorizePermission('customers.manage'), 'admin'), 200]
+      ];
+      const wrong = checks.filter(([, got, want]) => got !== want);
+      if (wrong.length > 0) {
+        throw new Error(`رفتار گارد برای نقش‌های عادی تغییر کرد: ${wrong.map(([n, got, want]) => `${n}: ${got} به‌جای ${want}`).join('، ')}`);
+      }
+
+      // ج) ساخت نقش تازه با کد نقطه‌دار از API رد می‌شود
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const probeCode = `p210.probe_${Date.now()}`;
+      const created = await request(app)
+        .post('/api/roles')
+        .set('Cookie', session.cookie)
+        .set('x-csrf-token', session.csrfToken)
+        .send({ name: 'نقش آزمون P2-10', code: probeCode, permissions: [] });
+      const [probeRow] = await orm.select({ id: roles.id }).from(roles).where(eq(roles.code, probeCode));
+      if (probeRow) createdRoleIds.push(probeRow.id);
+      if (created.status !== 400 || probeRow) {
+        throw new Error(`نقش با کد نقطه‌دار «${probeCode}» ساخته شد (وضعیت ${created.status})`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_role_permission_namespace_p2_10',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'نقش با کد customers.manage در هر سه مسیر بررسی دسترسی رد شد؛ دارنده واقعی مجوز، نقش نام‌برده و مدیر سیستم مجاز ماندند؛ ساخت نقش با کد نقطه‌دار 400 داد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_role_permission_namespace_p2_10',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdRoleIds.length > 0) {
+        const { roles } = await import('../../db/schema.js');
+        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+      }
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();
