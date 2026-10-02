@@ -8,6 +8,18 @@ import type { DbClient } from './types.js';
 /** بیشینه مقدار ستون integer شمارنده `document_ref_counters.last_ref_number` */
 export const MAX_REF_COUNTER_VALUE = 2147483647;
 
+/**
+ * v7.0.60 (audit P3-10): شماره ترتیبی یک شماره عطف فقط پسوند عددی آن است.
+ * پیش‌تر همه غیرارقام حذف می‌شد و «INV-1403-0005» به 14030005 تبدیل می‌شد و شمارنده را جلو می‌برد.
+ * شماره‌ای که به رقم ختم نمی‌شود شماره ترتیبی ندارد (null).
+ */
+export function extractRefSerial(refNumber: string | number | null | undefined): number | null {
+  const match = String(refNumber ?? '').match(/(\d+)$/);
+  if (!match) return null;
+  const val = parseInt(match[1], 10);
+  return Number.isNaN(val) ? null : val;
+}
+
 export class DocumentRefNumberService {
   /**
    * Resolves fiscal year from a date string/number and the invoice start-number setting.
@@ -70,14 +82,9 @@ export class DocumentRefNumberService {
         const docFy = resolveJalaliFiscalYear(doc.date);
         if (docFy !== fiscalYear) continue;
       }
-      if (doc.refNumber) {
-        const numStr = String(doc.refNumber).replace(/\D/g, '');
-        if (numStr) {
-          const val = parseInt(numStr, 10);
-          if (!isNaN(val) && val <= MAX_REF_COUNTER_VALUE && val > maxNum) {
-            maxNum = val;
-          }
-        }
+      const val = extractRefSerial(doc.refNumber);
+      if (val !== null && val <= MAX_REF_COUNTER_VALUE && val > maxNum) {
+        maxNum = val;
       }
     }
     return maxNum;

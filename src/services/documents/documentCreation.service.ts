@@ -12,7 +12,7 @@ import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
-import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE } from './documentRefNumber.service.js';
+import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } from './documentRefNumber.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
@@ -228,11 +228,10 @@ export class DocumentCreationService {
           }
         }
 
-        // Sync document_ref_counters with custom refNumber if it has numeric digits
-        const digits = String(finalRefNumber).replace(/\D/g, '');
-        if (digits) {
-          const val = parseInt(digits, 10);
-          if (!isNaN(val) && val > 0 && val <= MAX_REF_COUNTER_VALUE) {
+        // Sync document_ref_counters with the numeric suffix of a custom refNumber (P3-10)
+        const val = extractRefSerial(finalRefNumber);
+        if (val !== null) {
+          if (val > 0 && val <= MAX_REF_COUNTER_VALUE) {
             // V3.0.6 (BUG-07): کلید شمارنده دستی نیز باید «سال جلالی» باشد؛
             // قبلاً سال میلادی (new Date().getFullYear) استفاده می‌شد و شمارنده
             // دستی روی ردیفی متفاوت از شماره‌گذاری خودکار sync می‌شد.

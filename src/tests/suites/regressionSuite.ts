@@ -3287,6 +3287,57 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.7b: v7.0.60 (audit P3-10): شماره دستی دارای پیشوند و سال فقط با پسوند عددی‌اش شمارنده را جلو می‌برد
+  if (shouldRun('reg_ref_counter_numeric_suffix_p3_10', 'p310', 'ref_counters', 'refnumber')) {
+    const tStart = Date.now();
+    const createdDocIds: number[] = [];
+    const testDocType = 'reg_test_p3_10';
+    const testName = 'v7.0.60: شماره دستی «INV-1403-0005» شمارنده را به ۵ می‌برد، نه 14030005 (P3-10)';
+    try {
+      // ۱) همگام‌سازی شمارنده با شماره دستی در createDocument
+      const manualId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-01', refNumber: 'INV-1403-0005', items: [], user: 'test-agent' });
+      createdDocIds.push(manualId);
+      const autoId = await DocumentService.createDocument({ docType: testDocType, status: 'draft', date: '2026-08-02', items: [], user: 'test-agent' });
+      createdDocIds.push(autoId);
+      const [autoDoc] = await orm.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, autoId));
+      if (autoDoc?.refNumber !== '6') {
+        throw new Error(`شماره خودکار پس از «INV-1403-0005» باید «6» باشد: ${autoDoc?.refNumber}`);
+      }
+      // ۲) مقداردهی اولیه شمارنده از روی اسناد موجود (شروع سرد) نیز فقط پسوند عددی را می‌خواند
+      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+      const peek = await DocumentService.peekNextRef(testDocType, '2026-08-03');
+      if (peek !== '7') {
+        throw new Error(`پیش‌نمایش شماره پس از شروع سرد باید «7» باشد: ${peek}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_ref_counter_numeric_suffix_p3_10',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'شماره دستی دارای سال (INV-1403-0005) شمارنده را به ۵ رساند؛ شماره خودکار بعدی «6» و پس از شروع سرد «7» بود.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_ref_counter_numeric_suffix_p3_10',
+        scenarioId: 'period_closing_and_conceptual_mappings',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('documents', 'id', createdDocIds);
+      }
+      await orm.delete(documentRefCounters).where(eq(documentRefCounters.docType, testDocType));
+    }
+  }
+
   // Test 27.8: v7.0.35 (audit P2-2): اولین حرکت همزمان یک کالا در یک انبار نباید با 23505 شکست بخورد
   if (shouldRun('reg_first_movement_race_p2_2', 'p22', 'race', 'item_warehouse_stocks', 'concurrency')) {
     const tStart = Date.now();
