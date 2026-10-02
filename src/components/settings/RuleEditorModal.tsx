@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Globe, Bell, Smartphone, GitBranch, ShieldCheck, HelpCircle, Play, CheckCircle2, XCircle, Code } from 'lucide-react';
 import { fetchJson } from '../../api';
+import { eventFieldOptions } from '../../lib/eventPayloadFields';
+import { EventFieldChips } from './EventFieldChips';
 
 export interface RuleCondition {
   field: string;
@@ -96,6 +98,17 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
   }, [initialRule, isOpen]);
 
   if (!isOpen) return null;
+
+  // v7.0.90 (TD-085 بند ۳): فیلدهای رویداد انتخاب‌شده برای شرط‌ها و متغیرهای متن پیام
+  const fieldOptions = eventFieldOptions(formData.eventType);
+  const canInsertIntoMessage = formData.actionType === 'in_app_notification' || formData.actionType === 'sms_simulation';
+  const insertIntoMessageTemplate = (path: string) => {
+    setFormData(prev => {
+      const current = String(prev.actionConfigJson?.messageTemplate || '');
+      const separator = current === '' || current.endsWith(' ') ? '' : ' ';
+      return { ...prev, actionConfigJson: { ...prev.actionConfigJson, messageTemplate: `${current}${separator}{{${path}}}` } };
+    });
+  };
 
   const handleAddCondition = () => {
     setFormData(prev => ({
@@ -304,6 +317,10 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               </button>
             </div>
 
+            <datalist id="rule-event-fields">
+              {fieldOptions.map((f) => <option key={f.path} value={f.path}>{f.label}</option>)}
+            </datalist>
+
             {formData.conditionsJson.length === 0 ? (
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center text-xs text-slate-500">
                 هیچ شرطی تعریف نشده است؛ اقدام برای تمامی رخدادهای رویداد <span className="font-mono text-indigo-600 font-bold">{formData.eventType}</span> اجرا خواهد شد.
@@ -317,7 +334,9 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
                     <div className="flex-1">
                       <input
                         type="text"
-                        placeholder="فیلد (مثال: payload.totalAmount)"
+                        list="rule-event-fields"
+                        aria-label="فیلد شرط"
+                        placeholder="انتخاب فیلد رویداد یا تایپ مسیر"
                         value={cond.field}
                         onChange={(e) => handleConditionChange(idx, 'field', e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-white"
@@ -676,14 +695,11 @@ export function RuleEditorModal({ isOpen, onClose, onSave, initialRule }: RuleEd
               <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl text-[11px] text-indigo-700 dark:text-indigo-300 flex items-start gap-2">
                 <HelpCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
-                  <span className="font-bold">راهنمای استفاده از متغیرهای رویداد در متن‌ها:</span>
-                  <div className="mt-1 flex flex-wrap gap-1.5 font-mono text-[10px]">
-                    <span className="px-1.5 py-0.5 bg-white dark:bg-slate-900 rounded border border-indigo-200 dark:border-indigo-800">{`{{payload.refNumber}}`}</span>
-                    <span className="px-1.5 py-0.5 bg-white dark:bg-slate-900 rounded border border-indigo-200 dark:border-indigo-800">{`{{payload.itemName}}`}</span>
-                    <span className="px-1.5 py-0.5 bg-white dark:bg-slate-900 rounded border border-indigo-200 dark:border-indigo-800">{`{{payload.totalAmount}}`}</span>
-                    <span className="px-1.5 py-0.5 bg-white dark:bg-slate-900 rounded border border-indigo-200 dark:border-indigo-800">{`{{metadata.userName}}`}</span>
-                    <span className="px-1.5 py-0.5 bg-white dark:bg-slate-900 rounded border border-indigo-200 dark:border-indigo-800">{`{{aggregateId}}`}</span>
-                  </div>
+                  <span className="font-bold">متغیرهای این رویداد{canInsertIntoMessage ? " (برای افزودن به متن پیام کلیک کنید)" : ""}:</span>
+                  <EventFieldChips
+                    fields={fieldOptions}
+                    onInsert={canInsertIntoMessage ? insertIntoMessageTemplate : undefined}
+                  />
                 </div>
               </div>
 
