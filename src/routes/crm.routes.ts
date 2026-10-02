@@ -15,6 +15,7 @@ import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
+import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -995,7 +996,7 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     if (description) {
       const allSysUsers = await orm.select({ id: users.id, username: users.username, fullName: users.fullName })
         .from(users)
-        .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
+        .where(notSyntheticTestUsername(users.username));
       for (const u of allSysUsers) {
         if (u.username && description.includes(`@${u.username}`)) targetUserIds.add(u.id);
         if (u.fullName && description.includes(`@${u.fullName}`)) targetUserIds.add(u.id);

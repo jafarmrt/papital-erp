@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { dailyWorkLogs, notifications, users, roles } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, UnauthorizedError, ForbiddenError } from '../errors/customErrors.js';
+import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -297,7 +298,7 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
     avatarUrl: users.avatarUrl
   })
   .from(users)
-  .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
+  .where(notSyntheticTestUsername(users.username));
 
   let filtered = allLogs;
 

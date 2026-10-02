@@ -20,6 +20,7 @@ import {
   lockoutMessage,
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
+import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.get('/check-setup', asyncHandler(async (req, res) => {
   try {
     const result = await orm.select({ count: sql<number>`count(*)` })
       .from(users)
-      .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
+      .where(notSyntheticTestUsername(users.username));
     count = Number(result[0]?.count || 0);
   } catch (dbErr) {
     // V3.0.7 (TD-065): مسیر عمومی هرگز seed اجرا نمی‌کند — قبلاً خطای DB از یک
@@ -141,7 +142,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
     // 3. Race-safe check for existing admin users
     const [{ count }] = await orm.select({ count: sql<number>`count(*)` })
       .from(users)
-      .where(sql`${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`);
+      .where(notSyntheticTestUsername(users.username));
     
     if (Number(count) > 0) {
       throw new BadRequestError('سیستم قبلاً راه اندازی شده است');

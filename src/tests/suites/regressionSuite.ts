@@ -6726,5 +6726,54 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.78: نام کاربری «tester…» کاربر واقعی است (الگوی test_% با escape؛ `_` در LIKE هر نویسه‌ای را تطبیق می‌دهد)
+  if (shouldRun('reg_synthetic_username_like_escape', 'synthetic', 'tester', 'like')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.78: کاربر tester و e2eadmin در فهرست کاربران دیده می‌شوند و فقط test_ / e2e_ / testuser_ کاربر ساختگی تست است';
+    const { users } = await import('../../db/schema.js');
+    const suffix = Date.now().toString(36);
+    const realNames = [`tester${suffix}`, `e2eadmin${suffix}`];
+    const syntheticNames = [`test_${suffix}`, `e2e_${suffix}`];
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      await orm.insert(users).values([...realNames, ...syntheticNames].map(username => ({
+        username, password: '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva', fullName: `کاربر آزمون ${username}`, role: 'viewer',
+      })));
+      const res = await request(app).get('/api/users/list-simple').set('Cookie', session.cookie);
+      const listed = new Set((Array.isArray(res.body) ? res.body : []).map((u: { username: string }) => u.username));
+      const violations: string[] = [];
+      if (res.status !== 200) violations.push(`HTTP ${res.status}`);
+      for (const n of realNames) if (!listed.has(n)) violations.push(`«${n}» در فهرست نیست`);
+      for (const n of syntheticNames) if (listed.has(n)) violations.push(`«${n}» (ساختگی) در فهرست است`);
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_synthetic_username_like_escape',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'tester و e2eadmin فهرست شدند؛ test_ و e2e_ کنار گذاشته شدند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_synthetic_username_like_escape',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      await orm.delete(users).where(inArray(users.username, [...realNames, ...syntheticNames]));
+    }
+  }
+
   return results;
 }

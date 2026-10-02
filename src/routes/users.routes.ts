@@ -13,6 +13,7 @@ import { NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -514,7 +515,7 @@ router.get('/users/list-simple', asyncHandler(async (req, res) => {
       avatarUrl: users.avatarUrl
     })
     .from(users)
-    .where(sql`${users.isDeleted} = 0 AND ${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`)
+    .where(sql`${users.isDeleted} = 0 AND ${notSyntheticTestUsername(users.username)}`)
     .orderBy(desc(users.id));
     
     const mapped = allUsers.map(u => ({
@@ -540,7 +541,7 @@ router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
       avatarUrl: users.avatarUrl
     })
     .from(users)
-    .where(sql`${users.isDeleted} = 0 AND ${users.username} NOT ILIKE 'testuser_%' AND ${users.username} NOT ILIKE 'test_%' AND ${users.username} NOT ILIKE 'e2e_%'`)
+    .where(sql`${users.isDeleted} = 0 AND ${notSyntheticTestUsername(users.username)}`)
     .orderBy(desc(users.id));
     
     const mapped = allUsers.map(u => ({
