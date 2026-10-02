@@ -246,6 +246,7 @@
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
 | TD-225 | Ref Serial From All Digits (P3-10) | همگام‌سازی شمارنده با شماره دستی (`createDocument`) و مقداردهی اولیه شمارنده از اسناد موجود (`getMaxExistingRefNumber`) همه غیرارقام شماره عطف را حذف می‌کردند؛ شماره دستی «INV-1403-0005» شمارنده را به 14030005 می‌برد و شماره خودکار بعدی 14030006 می‌شد | src/services/documents/documentRefNumber.service.ts، documentCreation.service.ts | resolved (v7.0.60) — تابع واحد `extractRefSerial` فقط پسوند عددی (`/(\d+)$/`) را می‌خواند؛ تست رگرسیون reg_ref_counter_numeric_suffix_p3_10 |
+| TD-226 | Public Endpoint Detection by Substring (P3-9) | `fetchJson` مسیر را با `includes('/me')`، `includes('/setup')`، `includes('/login')` و … عمومی تشخیص می‌داد؛ `/menu-visibility` و هر مسیری که رشته پرس‌وجویش این عبارت‌ها را داشت عمومی حساب می‌شد: پاسخ 401 آن کاربر را خارج نمی‌کرد و درخواست تغییرش توکن CSRF و کلید Idempotency نمی‌گرفت | src/api.ts:114-122 | resolved (v7.0.61) — `isPublicApiEndpoint`: تطبیق دقیق مسیر (بدون پرس‌وجو و پیشوند /api) با `Set` مسیرهای ورود، راه‌اندازی و نشست؛ تست واحد unit_public_endpoint_exact_match_p3_9 |
 
 ## 📝 یادداشت مهاجرت
 

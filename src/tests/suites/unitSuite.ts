@@ -1276,6 +1276,71 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // v7.0.61 (audit P3-9): تشخیص مسیر عمومی در fetchJson با تطبیق دقیق مسیر، نه includes
+  const tPublicStart = Date.now();
+  const publicTestName = 'v7.0.61: فقط مسیرهای دقیق ورود و نشست در fetchJson عمومی‌اند؛ /menu-visibility نه (P3-9)';
+  const g = globalThis as any;
+  const originalFetch = g.fetch;
+  const originalWindow = g.window;
+  try {
+    const api = await import('../../api.js');
+    const requests: { url: string; headers: Record<string, string> }[] = [];
+    let nextStatus = 200;
+    g.fetch = async (url: string, init?: RequestInit) => {
+      requests.push({ url, headers: (init?.headers as Record<string, string>) || {} });
+      if (url.endsWith('/auth/csrf')) {
+        return new Response(JSON.stringify({ csrfToken: 'unit-csrf' }), { status: 200 });
+      }
+      return new Response(JSON.stringify(nextStatus === 200 ? { ok: true } : { error: 'unauthorized' }), { status: nextStatus });
+    };
+    const fakeWindow = new EventTarget();
+    g.window = fakeWindow;
+    let unauthorizedEvents = 0;
+    fakeWindow.addEventListener('auth:unauthorized', () => { unauthorizedEvents++; });
+
+    const unauthorizedAfter = async (endpoint: string): Promise<boolean> => {
+      nextStatus = 401;
+      const before = unauthorizedEvents;
+      await api.fetchJson(endpoint, undefined, 0).catch(() => undefined);
+      return unauthorizedEvents > before;
+    };
+    const violations: string[] = [];
+    if (!(await unauthorizedAfter('/menu-visibility'))) violations.push('401 از /menu-visibility باید کاربر را خارج کند');
+    if (!(await unauthorizedAfter('/global-search?q=/me'))) violations.push('401 از جستجویی که «/me» در عبارتش است باید کاربر را خارج کند');
+    if (await unauthorizedAfter('/auth/me')) violations.push('401 از /auth/me نباید رویداد خروج بفرستد');
+
+    nextStatus = 200;
+    requests.length = 0;
+    await api.fetchJson('/customers?source=/setup', { method: 'POST', body: '{}' }, 0);
+    const mutation = requests.find(r => r.url.startsWith('/api/customers'));
+    if (!mutation?.headers['Idempotency-Key'] || mutation.headers['X-CSRF-Token'] !== 'unit-csrf') {
+      violations.push(`درخواست تغییر با «/setup» در رشته پرس‌وجو باید توکن CSRF و کلید Idempotency بگیرد: ${JSON.stringify(mutation?.headers)}`);
+    }
+    if (violations.length > 0) throw new Error(violations.join(' | '));
+    results.push(makeTestCase({
+      id: 'unit_public_endpoint_exact_match_p3_9',
+      name: publicTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tPublicStart,
+      details: '401 از /menu-visibility و جستجوی دارای «/me» رویداد خروج فرستاد، /auth/me نفرستاد؛ درخواست تغییر با «/setup» در پرس‌وجو توکن CSRF و کلید Idempotency گرفت.'
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_public_endpoint_exact_match_p3_9',
+      name: publicTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tPublicStart,
+      error: err.message
+    }));
+  } finally {
+    g.fetch = originalFetch;
+    if (originalWindow === undefined) delete g.window; else g.window = originalWindow;
+  }
+
   return results;
 }
 

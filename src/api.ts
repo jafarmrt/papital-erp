@@ -108,18 +108,33 @@ export function getAuthToken(): string | null {
   return inMemoryAuthToken;
 }
 
+/**
+ * مسیرهای ورود، راه‌اندازی و بررسی نشست: بدون پیش‌گرفتن توکن CSRF و کلید Idempotency،
+ * و پاسخ 401 آن‌ها کاربر را خارج نمی‌کند.
+ * v7.0.61 (audit P3-9): تطبیق دقیق مسیر؛ پیش‌تر `includes('/me')` مسیرهایی مثل `/menu-visibility`
+ * و هر مسیری که رشته جستجویش «/login» یا «/setup» داشت را هم عمومی حساب می‌کرد.
+ */
+const PUBLIC_API_PATHS = new Set([
+  '/login', '/auth/login',
+  '/check-setup', '/setup',
+  '/public-settings',
+  '/csrf', '/auth/csrf',
+  '/me', '/auth/me',
+]);
+
+export function isPublicApiEndpoint(endpoint: string): boolean {
+  let path = endpoint.split(/[?#]/)[0];
+  if (!path.startsWith('/')) path = `/${path}`;
+  if (path === '/api' || path.startsWith('/api/')) path = path.substring(4);
+  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+  return PUBLIC_API_PATHS.has(path);
+}
+
 export async function fetchJson<T = any>(endpoint: string, options?: RequestInit, retries = 1): Promise<T> {
   const method = (options?.method || 'GET').toUpperCase();
   const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const isPublicEndpoint = 
-    cleanEndpoint.includes('/login') || 
-    cleanEndpoint.includes('/check-setup') || 
-    cleanEndpoint.includes('/public-settings') || 
-    cleanEndpoint.includes('/setup') ||
-    cleanEndpoint.includes('/csrf') ||
-    cleanEndpoint.includes('/auth/me') ||
-    cleanEndpoint.includes('/me');
+  const isPublicEndpoint = isPublicApiEndpoint(cleanEndpoint);
 
   // Proactively acquire CSRF token if missing for mutation requests on authenticated routes
   let csrfToken = getCsrfToken();
