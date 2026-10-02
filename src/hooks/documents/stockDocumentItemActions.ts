@@ -1,0 +1,196 @@
+import { toast } from 'react-hot-toast';
+import { Item } from '../../types';
+import type { DocItemRow } from '../../components/documents/DocItemsTable';
+import { reservationMatchesListItem, type GlobalReservation } from '../../lib/documents/stockReservations';
+import type { StockDocumentForm } from './useStockDocumentForm';
+
+/**
+ * TD-080 (بخش ۳): کنترل‌کننده‌های اقلام فرم رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage.
+ * تابع ساده (بدون hook) است و در هر رندر با وضعیت تازه فرم ساخته می‌شود، مانند توابع داخلی صفحه اصلی.
+ */
+export function createStockDocumentItemActions(form: StockDocumentForm, itemsList: Item[]) {
+  const {
+    actionType, docItems, setDocItems, selectedItem, setSelectedItem, selectedItemObj, setSelectedItemObj,
+    quantity, setQuantity, unitPrice, setUnitPrice, selectedProjectId, selectedProjectReservedItems,
+    getItemReservationSummary,
+  } = form;
+
+  const handleAddAllProjectReservedItems = () => {
+    if (selectedProjectReservedItems.length === 0) {
+      toast.error('هیچ کالای رزرو شده‌ای برای این پروژه یافت نشد.');
+      return;
+    }
+
+    const itemsToAdd: DocItemRow[] = [];
+    const missingItems: string[] = [];
+
+    for (const rItem of selectedProjectReservedItems) {
+      const matchedItem = itemsList.find(i => reservationMatchesListItem(rItem, i));
+
+      if (matchedItem) {
+        itemsToAdd.push({
+          item: matchedItem,
+          quantity: rItem.reservedQty,
+          unitPrice: Number(matchedItem.purchase_price || matchedItem.sell_price || 0)
+        });
+      } else {
+        missingItems.push(rItem.itemName || rItem.itemCode);
+      }
+    }
+
+    if (itemsToAdd.length > 0) {
+      setDocItems(prev => {
+        const newMap = new Map<number, DocItemRow>();
+        for (const it of prev) {
+          newMap.set(it.item.id, { ...it });
+        }
+        for (const it of itemsToAdd) {
+          newMap.set(it.item.id, it);
+        }
+        return Array.from(newMap.values());
+      });
+      toast.success(`تعداد ${itemsToAdd.length} قلم کالای رزرو شده به حواله خروج افزوده شد.`);
+    }
+
+    if (missingItems.length > 0) {
+      toast(`کالاهای زیر در دیتابیس انبار به عنوان کالای فیزیکی فعال یافت نشدند: ${missingItems.join('، ')}`, { icon: '⚠️' });
+    }
+  };
+
+  const handleAddSingleProjectReservedItem = (rItem: GlobalReservation) => {
+    const matchedItem = itemsList.find(i => reservationMatchesListItem(rItem, i));
+
+    if (!matchedItem) {
+      toast.error(`کالای «${rItem.itemName || rItem.itemCode}» در انبار یافت نشد.`);
+      return;
+    }
+
+    setDocItems(prev => {
+      const existingIdx = prev.findIndex(p => p.item.id === matchedItem.id);
+      if (existingIdx >= 0) {
+        return prev.map((p, idx) => idx === existingIdx ? { ...p, quantity: rItem.reservedQty } : p);
+      }
+      return [...prev, {
+        item: matchedItem,
+        quantity: rItem.reservedQty,
+        unitPrice: Number(matchedItem.purchase_price || matchedItem.sell_price || 0)
+      }];
+    });
+
+    toast.success(`کالای «${matchedItem.name}» (${rItem.reservedQty} ${rItem.unit}) به اقلام حواله اضافه شد.`);
+  };
+
+  const handleItemSelect = (val: string, rawItem?: Item) => {
+    setSelectedItem(val);
+    setSelectedItemObj(rawItem || null);
+    if (rawItem) {
+      if (actionType === 'in') {
+        const itemPurchasePrice = rawItem.purchase_price ? Number(rawItem.purchase_price) : 0;
+        setUnitPrice(itemPurchasePrice > 0 ? itemPurchasePrice : '');
+      }
+    } else {
+      setUnitPrice('');
+    }
+  };
+
+  const handleAddItem = () => {
+    if (!selectedItem || !selectedItemObj) {
+      toast.error('لطفاً ابتدا کالا را انتخاب کنید.');
+      return;
+    }
+    if (!quantity || Number(quantity) <= 0) {
+      toast.error('لطفاً تعداد کالا را وارد کنید (باید بیشتر از صفر باشد).');
+      return;
+    }
+    const it = selectedItemObj;
+    const reqQty = Number(quantity);
+    const itemPrice = Number(unitPrice || 0);
+
+    if (actionType === 'out') {
+      const { reservedForOtherProjects, maxAllowedForExit, matchingReservations } = getItemReservationSummary(it);
+
+      const existingQtyInDoc = docItems.find(p => p.item.id === it.id)?.quantity || 0;
+      const totalRequestedInDoc = existingQtyInDoc + reqQty;
+
+      if (totalRequestedInDoc > maxAllowedForExit) {
+        if (reservedForOtherProjects > 0) {
+          const otherProjTitles = matchingReservations
+            .filter(r => String(r.projectId) !== String(selectedProjectId))
+            .map(r => `پروژه «${r.projectCode || r.projectTitle}» (${r.reservedQty} ${r.unit})`)
+            .join('، ');
+
+          toast.error(
+            `خطا: امکان خروج بیش از ${maxAllowedForExit} ${it.unit} وجود ندارد!\nتعداد ${reservedForOtherProjects} ${it.unit} برای سایر پروژه‌ها (${otherProjTitles}) رزرو شده است و قابل خروج نمی‌باشد.`
+          );
+        } else {
+          toast.error(`موجودی کافی نیست! موجودی قابل خروج: ${maxAllowedForExit} ${it.unit}`);
+        }
+        return;
+      }
+    }
+
+    setDocItems(prev => {
+      const existingIndex = prev.findIndex(p => p.item.id === it.id);
+      if (existingIndex >= 0) {
+        return prev.map((p, idx) => idx === existingIndex ? {
+          ...p,
+          quantity: p.quantity + reqQty,
+          unitPrice: itemPrice > 0 ? itemPrice : p.unitPrice
+        } : p);
+      }
+      return [...prev, { item: it, quantity: reqQty, unitPrice: itemPrice }];
+    });
+
+    setSelectedItem('');
+    setSelectedItemObj(null);
+    setQuantity('');
+    setUnitPrice('');
+  };
+
+  const handleUpdateItemQty = (index: number, newQty: number) => {
+    if (newQty <= 0) return;
+    const dItem = docItems[index];
+
+    if (actionType === 'out') {
+      const { reservedForOtherProjects, maxAllowedForExit, matchingReservations } = getItemReservationSummary(dItem.item);
+
+      if (newQty > maxAllowedForExit) {
+        if (reservedForOtherProjects > 0) {
+          const otherProjTitles = matchingReservations
+            .filter(r => String(r.projectId) !== String(selectedProjectId))
+            .map(r => `پروژه «${r.projectCode || r.projectTitle}» (${r.reservedQty} ${r.unit})`)
+            .join('، ');
+
+          toast.error(
+            `خطا: حداکثر سقف مجاز خروج این کالا ${maxAllowedForExit} ${dItem.item.unit} است. ${reservedForOtherProjects} ${dItem.item.unit} برای ${otherProjTitles} رزرو است.`
+          );
+        } else {
+          toast.error(`حداکثر موجودی قابل خروج ${maxAllowedForExit} ${dItem.item.unit} می‌باشد.`);
+        }
+        return;
+      }
+    }
+
+    setDocItems(prev => prev.map((item, idx) => idx === index ? { ...item, quantity: newQty } : item));
+  };
+
+  const handleUpdateItemPrice = (index: number, newPrice: number) => {
+    setDocItems(prev => prev.map((item, idx) => idx === index ? { ...item, unitPrice: Math.max(0, newPrice) } : item));
+  };
+
+  const handleRemove = (id: number) => {
+    setDocItems(prev => prev.filter(p => p.item.id !== id));
+  };
+
+  return {
+    handleAddAllProjectReservedItems,
+    handleAddSingleProjectReservedItem,
+    handleItemSelect,
+    handleAddItem,
+    handleUpdateItemQty,
+    handleUpdateItemPrice,
+    handleRemove,
+  };
+}
+
+export type StockDocumentItemActions = ReturnType<typeof createStockDocumentItemActions>;
