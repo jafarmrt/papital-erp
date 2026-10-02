@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { SYSTEM_UPDATES } from '../src/data/changelogs/index.js';
 import { v7Updates } from '../src/data/changelogs/7.js';
+import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
@@ -74,6 +75,12 @@ function main(): void {
   const duplicates = [...counts.entries()].filter(([, c]) => c > 1).map(([v]) => v);
   if (duplicates.length > 0) {
     fail(`نسخه(های) تکراری در چنج‌لاگ 7.ts: ${duplicates.join(', ')}`);
+  }
+
+  // 4) v7.0.54: قاعده چنج‌لاگ کوتاه سری فعال (فقط تغییرات مهم و باگ‌های مهم و بحرانی)
+  const compactViolations = findCompactRuleViolations(v7Updates);
+  if (compactViolations.length > 0) {
+    fail(`چنج‌لاگ 7.ts از قاعده مدخل کوتاه (src/data/changelogs/compactRule.ts) پیروی نمی‌کند:\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
   }
 
   console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);

@@ -61,7 +61,7 @@
 
 ## 7. AI Agent Auto-Changelog Updates & Release Tracking
 - **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to the **active** changelog file (currently `src/data/changelogs/7.ts`, series `v7.x.y` — see §13 and §23) with Jalali date, version bump, title, summary, changes, and fixes.
-- **Completeness:** All functional, structural, and architectural changes must be recorded.
+- **Short Entries, Important Points Only (v7.0.54, product-owner decision):** Every version still gets exactly one entry, but it records only important changes and important / critical bugs — no file lists, test names, debt bookkeeping or "version bumped" lines (those belong in the commit and `TECH_DEBT.md`). Limits in `src/data/changelogs/compactRule.ts` (title ≤ 90, summary ≤ 300 chars, ≤ 4 changes, ≤ 4 fixes, each ≤ 150 chars) are enforced by `npm run check:version`.
 
 ## 8. Server Startup & Background Seed Execution
 - **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately.
@@ -96,7 +96,7 @@
 - **Warehouse Stock Reconciliation (TD-200, v7.0.33):** `WarehouseStockReconciliationService` compares `item_warehouse_stocks` with the Kardex ledger (active rows, excluding reversals of soft-deleted rows). Repairs are manual only, dry-run by default, correct quantities only (never WAC), never auto-adjust negative ledger balances or items with unresolvable Kardex locations, and log every change/refusal to `inventory_reconciliation_anomalies`. Data-fixing migrations must never clamp or overwrite silently: add (`existing + EXCLUDED`) and record anomalies.
 
 ## 13. Scalable Changelog Architecture
-- **Version Partitioning:** Changelogs are split by major version in `src/data/changelogs/` (`0.ts` … `6.ts` are archives; `7.ts` is active).
+- **Version Partitioning:** `src/data/changelogs/0.ts` (`v1.0.0`) and `archive_1_6.ts` (condensed `v1.x`–`v6.x`, v7.0.11) are archives; `7.ts` is active.
 - **Active File:** For version 7.x releases, append to `src/data/changelogs/7.ts` and bump the version in all synced locations listed in §23.
 
 ## 14. Workflow Engine, Visual Canvas & SLA Analytics
@@ -173,7 +173,7 @@
 - **Single-Instance Deployment (v7.0.44, product-owner decision):** The system runs as ONE server process (one workshop, at most 20 concurrent users). In-memory caches, rate limiters and process-level locks assume a single process; do not add multi-replica infrastructure (Redis, object storage, cross-instance cache invalidation). The Kubernetes manifest uses `replicas: 1` with `strategy: Recreate` and no autoscaler.
 
 ## 23. V7 Governance — Active Series, Strict Typing, Zod Coverage, N+1 Optimization & Stock Normalization
-- **Active Series (v7.x.y):** The active changelog file is `src/data/changelogs/7.ts` (`v7.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), `4.ts` (`v4.x.y`), `5.ts` (`v5.x.y`), and `6.ts` (`v6.x.y` - finalized and archived at `v6.0.28`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/7.ts` and bump `package.json` `"version"`.
+- **Active Series (v7.x.y):** The active changelog file is `src/data/changelogs/7.ts` (`v7.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`) and `archive_1_6.ts` (condensed `v1.x.y`–`v6.x.y`, finalized at `v6.0.28`). Every change MUST append one unique, short `AIUpdateLog` entry (§7) to `src/data/changelogs/7.ts` and bump `package.json` `"version"`.
 - **Core Mission of Version 7:**
   1. **Strict TypeScript & Type Safety (فعال‌سازی Strict Mode):** Incremental adoption of `strict: true`, `strictNullChecks: true`, and elimination of untyped `: any` escape hatches across financial and inventory paths.
   2. **100% Zod Validation Coverage (اعتبارسنجی کامل روت‌ها):** Complete Zod middleware protection on all remaining unvalidated endpoints (Procurement, Dashboard, Transactions) preventing NaN/malformed inputs.

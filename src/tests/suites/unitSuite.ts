@@ -1150,6 +1150,36 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // v7.0.54 (تصمیم مالک محصول): مدخل‌های چنج‌لاگ فعال 7.ts کوتاه و فقط شامل نکات مهم هستند
+  const tChangelogStart = Date.now();
+  try {
+    const { v7Updates } = await import('../../data/changelogs/7.js');
+    const { findCompactRuleViolations } = await import('../../data/changelogs/compactRule.js');
+    const violations = findCompactRuleViolations(v7Updates);
+    if (violations.length > 0) {
+      throw new Error(`${violations.length} مورد نقض قاعده چنج‌لاگ کوتاه، از جمله: ${violations.slice(0, 3).join(' | ')}`);
+    }
+    results.push(makeTestCase({
+      id: 'unit_changelog_compact_rule',
+      name: 'v7.0.54: مدخل‌های چنج‌لاگ فعال 7.ts کوتاه و فقط شامل تغییرات و باگ‌های مهم هستند',
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tChangelogStart,
+      details: `${v7Updates.length} مدخل در محدوده قاعده compactRule.ts`
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_changelog_compact_rule',
+      name: 'v7.0.54: مدخل‌های چنج‌لاگ فعال 7.ts کوتاه و فقط شامل تغییرات و باگ‌های مهم هستند',
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tChangelogStart,
+      error: err.message
+    }));
+  }
+
   return results;
 }
 

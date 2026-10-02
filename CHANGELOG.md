@@ -9,13 +9,8 @@ going forward.
 | Channel | File | Version series |
 |---|---|---|
 | Client-bundled update center | `src/data/changelogs/0.ts` | baseline `v1.0.0` entry |
-| Client-bundled update center | `src/data/changelogs/1.ts` | `1.x.y` release series |
-| Client-bundled update center | `src/data/changelogs/2.ts` | `2.x.y` release series |
-| Client-bundled update center (archive) | `src/data/changelogs/3.ts` | completed `3.x.y` release series (`v3.0.0` - `v3.3.22`) |
-| Client-bundled update center (archive) | `src/data/changelogs/4.ts` | completed `4.x.y` release series (`v4.0.0` - `v4.0.42`) |
-| Client-bundled update center (archive) | `src/data/changelogs/5.ts` | completed `5.x.y` release series (`v5.0.0` - `v5.0.20`) |
-| Client-bundled update center (archive) | `src/data/changelogs/6.ts` | completed `6.x.y` release series (`v6.0.0` - `v6.0.28`) |
-| Client-bundled update center (active) | `src/data/changelogs/7.ts` | current `7.x.y` release series (`v7.0.0` onward) |
+| Client-bundled update center (archive) | `src/data/changelogs/archive_1_6.ts` | condensed `1.x.y` – `6.x.y` series (`v1.x` - `v6.0.28`), replaced `1.ts` … `6.ts` in v7.0.11 |
+| Client-bundled update center (active) | `src/data/changelogs/7.ts` | current `7.x.y` release series (`v7.0.0` onward); short entries, important points only (v7.0.54) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
