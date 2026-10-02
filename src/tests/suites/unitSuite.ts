@@ -1230,6 +1230,52 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // v7.0.58 (TD-173 / audit P2-13): کتابخانه xlsx نسخه رسمی اصلاح‌شده SheetJS (≥ 0.20.2) از فایل vendor مخزن است
+  const tXlsxStart = Date.now();
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const XLSX = await import('xlsx');
+    // در 0.20 خروجی ESM پیش‌فرض version ندارد؛ فضای نام ماژول دارد
+    const lib: any = (XLSX as any).version ? XLSX : ((XLSX as any).default ?? XLSX);
+    const [major, minor, patch] = String(lib.version || '0.0.0').split('.').map(Number);
+    if (major === 0 && (minor < 20 || (minor === 20 && patch < 2))) {
+      throw new Error(`نسخه xlsx (${lib.version}) آسیب‌پذیر است (GHSA-4r6h-8v6p-xvw6، GHSA-5pgg-2g8v-p4x9)؛ حداقل 0.20.2 لازم است`);
+    }
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+    const spec = String(pkg.dependencies?.xlsx || '');
+    if (!spec.startsWith('file:vendor/') || !fs.existsSync(path.join(process.cwd(), spec.slice('file:'.length)))) {
+      throw new Error(`وابستگی xlsx باید از فایل vendor مخزن نصب شود (اکنون: ${spec || 'ندارد'})`);
+    }
+    const rows = [{ کد: 'N-101', نام: 'گردنبند نقره', موجودی: 12.5 }, { کد: 'B-C-7', نام: 'مهره کریستالی', موجودی: 0 }];
+    const workbook = lib.utils.book_new();
+    lib.utils.book_append_sheet(workbook, lib.utils.json_to_sheet(rows), 'کالاها');
+    const buffer = lib.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const readBack = lib.utils.sheet_to_json(lib.read(buffer, { type: 'buffer' }).Sheets['کالاها']);
+    if (JSON.stringify(readBack) !== JSON.stringify(rows)) {
+      throw new Error(`ساخت و خواندن دوباره فایل اکسل نتیجه متفاوت داد: ${JSON.stringify(readBack)}`);
+    }
+    results.push(makeTestCase({
+      id: 'unit_xlsx_patched_build_td_173',
+      name: 'v7.0.58: کتابخانه xlsx نسخه اصلاح‌شده (≥ 0.20.2) از vendor و ساخت/خواندن اکسل فارسی (TD-173)',
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tXlsxStart,
+      details: `xlsx ${lib.version} از ${spec}`
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_xlsx_patched_build_td_173',
+      name: 'v7.0.58: کتابخانه xlsx نسخه اصلاح‌شده (≥ 0.20.2) از vendor و ساخت/خواندن اکسل فارسی (TD-173)',
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tXlsxStart,
+      error: err.message
+    }));
+  }
+
   return results;
 }
 

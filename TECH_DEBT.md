@@ -22,7 +22,6 @@
 | TD-108 | FE Helpers (Badges) | ۱۲ کپی `getStatusBadge`/`getPriorityBadge` با الگو یکسان ولی واژگان/رنگ متفاوت — تجمیع در PillBadge | components/pages | scheduled:فاز ۳ نسخه ۷ |
 | TD-109 | Runtime Flags Cleanup | پاکسازی کامل سرویس/کلیدهای موقت test_endpoints پس از حذف روت‌های تست | src/lib/runtimeFlags.ts | scheduled:فاز ۲ نسخه ۷ |
 | TD-112 | Workflow Keep-List | روت‌های بدون مصرف‌کننده فرانت‌اند در انتظار رابط کاربری فاز ۳ | workflow.routes.ts | scheduled:فاز ۳ نسخه ۷ |
-| TD-173 | Security / xlsx CVEs | `xlsx@0.18.5` دارای دو آسیب‌پذیری High بدون اصلاحیه در رجیستری npm (GHSA-4r6h-8v6p-xvw6 Prototype Pollution، GHSA-5pgg-2g8v-p4x9 ReDoS)؛ در ۱۰+ کامپوننت فرانت برای پارس فایل اکسل ورودی کاربر استفاده می‌شود. موقتاً در فهرست استثنای `scripts/audit-gate.ts` ثبت شده است | package.json، src/components/**/*Excel*، scripts/audit-gate.ts | open — مهاجرت به exceljs یا نسخه رسمی SheetJS (CDN) و حذف استثنا از گیت |
 | TD-177 | Docker Image Size | کتابخانه‌های صرفاً فرانت‌اند (react، lucide-react، xlsx، فونت‌ها، react-multi-date-picker و ...) در `dependencies` هستند و با `npm ci --omit=dev` وارد ایمیج رانتایم می‌شوند در حالی که سرور فقط ۲۴ ماژول require می‌کند | package.json، Dockerfile | open — انتقال وابستگی‌های فقط-کلاینت به devDependencies پس از بررسی |
 | TD-179 | Business Clock / Nowruz Approximation | شاخه میلادی `resolveJalaliFiscalYear` (businessClock.ts:132-141) نوروز را همیشه ۲۱ مارس فرض می‌کند؛ در سال‌هایی که نوروز ۲۰ مارس است، اسناد آن روز به سال مالی قبل نسبت داده می‌شوند (هم در پارتیشن شمارنده عطف و هم در `checkFiscalPeriodOpen`). تابع SQL `erp_ref_fiscal_year` در مهاجرت 0015 عمداً همین رفتار را آینه کرده تا دامنه یکتایی با شمارنده یکسان بماند | src/lib/businessClock.ts:116، drizzle/0015 | open — جایگزینی با تبدیل دقیق جلالی در هر دو سمت و بازمحاسبه ref_fiscal_year فقط برای ردیف‌های مرزی |
 | TD-187 | Targeted Account Lockout (residual) | با قفل تدریجی (TD-186) قفل حساب حداکثر ۳۰ دقیقه است، اما مهاجم بدون احراز هویت همچنان می‌تواند با یک تلاش ناموفق پس از پایان هر قفل، حساب هدف (مثلاً admin) را در قفل نگه دارد؛ قفل در سطح نام کاربری است نه (نام کاربری + IP). وضعیت قفل نام‌های کاربری ناموجود درون‌حافظه‌ای و مخصوص هر Pod است | src/services/auth/loginSecurity.service.ts | open — قفل در سطح (نام کاربری + IP) یا CAPTCHA پس از آستانه (ذخیره مشترک چند Pod با تصمیم v7.0.44 لازم نیست: استقرار تک‌نمونه‌ای) |
@@ -40,8 +39,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۹ ردیف
-- **آرشیو شده (resolved):** ۱۹۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۱۸ ردیف
+- **آرشیو شده (resolved):** ۱۹۳ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -50,4 +49,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v7.0.57 — حل TD-222 (آرشیو).*
+*آخرین بازبینی: v7.0.58 — P2-13 حل TD-173 (آرشیو).*

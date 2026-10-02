@@ -14,6 +14,8 @@
 FROM node:22-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# v7.0.58 (TD-173): SheetJS (xlsx) از فایل داخل مخزن نصب می‌شود (نسخه رسمی فقط روی cdn.sheetjs.com منتشر می‌شود)
+COPY vendor ./vendor
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---------- Stage 2: build ----------
@@ -22,6 +24,7 @@ WORKDIR /app
 
 # All dependencies (dev deps required for vite/esbuild build), reproducible from the lockfile.
 COPY package.json package-lock.json ./
+COPY vendor ./vendor
 RUN npm ci --no-audit --no-fund
 
 COPY . .

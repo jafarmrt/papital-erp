@@ -9,11 +9,8 @@ import fs from 'fs';
  *
  * هر استثنا باید یک ردیف باز در TECH_DEBT.md داشته باشد و با رفع آن حذف شود.
  */
-const ALLOWED_ADVISORIES: Record<string, string> = {
-  // xlsx@0.18.5 — بدون نسخه اصلاحی در رجیستری npm؛ مهاجرت در TD-173 پیگیری می‌شود
-  'GHSA-4r6h-8v6p-xvw6': 'TD-173 (xlsx Prototype Pollution)',
-  'GHSA-5pgg-2g8v-p4x9': 'TD-173 (xlsx ReDoS)',
-};
+// v7.0.58 (TD-173): استثناهای xlsx@0.18.5 حذف شدند — نسخه رسمی 0.20.3 از vendor/ نصب می‌شود
+const ALLOWED_ADVISORIES: Record<string, string> = {};
 
 const BLOCKING_SEVERITIES = new Set(['high', 'critical']);
 

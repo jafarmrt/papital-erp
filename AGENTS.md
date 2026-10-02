@@ -198,4 +198,5 @@
 - **Commit & Push:** In local development or environments with configured Git credentials/SSH keys, commit with descriptive messages and push to `origin/master`.
 - **Cloud & Sandbox Environments:** In environments without Git credentials, avoid executing failing push commands that interrupt workflow.
 - **Exclusions:** Never commit `.env`, local database directories (`/pgdata`, `/logs`), or source archives.
+- **Vendored SheetJS (v7.0.58, audit P2-13 / TD-173, product-owner decision):** `xlsx` is installed from `vendor/xlsx-0.20.3.tgz` (the official SheetJS build, published only on cdn.sheetjs.com — the npm `xlsx@0.18.5` is vulnerable). This tarball is the one allowed third-party archive in the repository. Upgrade only by replacing it with a newer official tarball and updating the `package.json` reference and lockfile; never switch back to the npm package.
 - **Conflict Handling:** Always use `git pull --rebase` if remote has progressed; never force-push.
