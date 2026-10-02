@@ -16,7 +16,7 @@ import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } fro
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
-import { resolveDocumentExchangeRate } from './documentExchangeRate.js';
+import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money, type Money } from '../../lib/money.js';
@@ -480,7 +480,8 @@ export class DocumentCreationService {
               documentId: docId,
               inOut: inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out'),
               quantity: qty,
-              price,
+              // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
+              price: stockUnitPriceInIrr(price, currency || 'IRR', docExchangeRate),
               date: date || normalizedDocDate,
               documentType: docType,
               documentRef: String(finalRefNumber || ''),

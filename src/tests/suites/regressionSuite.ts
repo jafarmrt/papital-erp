@@ -6247,6 +6247,80 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+
+  // Test: v7.0.69 (TD-227، تصمیم مالک محصول): قیمت ورود سند ارزی پیش از محاسبه WAC با نرخ تسعیر سند به ریال تبدیل می‌شود
+  if (shouldRun('reg_foreign_receipt_wac_irr_td_227', 'td227', 'wac', 'currency', 'exchange')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.69: رسید ارزی (ثبت قطعی، نهایی‌سازی و حذف) بهای میانگین ریالی کالا را با قیمت × نرخ تسعیر سند به‌روز می‌کند (TD-227)';
+    const createdDocIds: number[] = [];
+    try {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { fin } = await import('../../lib/financialDecimal.js');
+      const violations: string[] = [];
+      const [w1] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ stocks: {}, currentStock: 0, weightedAverageCost: 0 });
+      const today = await businessTodayIsoDate();
+      const wacNow = async () => {
+        const [row] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
+        return fin(row?.wac).toString();
+      };
+
+      // الف) رسید قطعی ۲ عدد × ۱۵۰ دلار با نرخ ۶۰۰٬۰۰۰ ← WAC = ۹۰٬۰۰۰٬۰۰۰ ریال
+      const docA = await DocumentService.createDocument({
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون TD-227',
+        currency: 'USD', exchangeRate: 600000, location: w1.code,
+        items: [{ itemId: item.id, quantity: 2, unit_price: 150, location: w1.code }]
+      });
+      createdDocIds.push(docA);
+      if (await wacNow() !== '90000000') violations.push(`WAC پس از رسید قطعی ارزی ${await wacNow()} شد (انتظار ۹۰٬۰۰۰٬۰۰۰)`);
+      const [kardexA] = await orm.select({ unitPrice: transactions.unitPrice, totalPrice: transactions.totalPrice }).from(transactions)
+        .where(and(eq(transactions.itemId, item.id), eq(transactions.documentId, docA)));
+      if (fin(kardexA?.unitPrice).toString() !== '90000000' || fin(kardexA?.totalPrice).toString() !== '180000000') {
+        violations.push(`کاردکس رسید ارزی باید ریالی باشد: ${fin(kardexA?.unitPrice).toString()} / ${fin(kardexA?.totalPrice).toString()}`);
+      }
+
+      // ب) پیش‌نویس ۲ عدد × ۱۰۰ دلار، نهایی‌سازی با نرخ ۵۰۰٬۰۰۰ ← WAC = (۱۸۰M + ۱۰۰M) ÷ ۴ = ۷۰٬۰۰۰٬۰۰۰
+      const docB = await DocumentService.createDocument({
+        docType: 'receipt', status: 'draft', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون TD-227',
+        currency: 'USD', exchangeRate: 400000, location: w1.code,
+        items: [{ itemId: item.id, quantity: 2, unit_price: 100, location: w1.code }]
+      });
+      createdDocIds.push(docB);
+      await DocumentService.finalizeDocument(docB, 'test-agent', undefined, { strict: false, exchangeRate: 500000 });
+      if (await wacNow() !== '70000000') violations.push(`WAC پس از نهایی‌سازی رسید ارزی ${await wacNow()} شد (انتظار ۷۰٬۰۰۰٬۰۰۰)`);
+
+      // ج) حذف رسید دوم ← WAC به ۹۰٬۰۰۰٬۰۰۰ برمی‌گردد
+      await DocumentService.deleteDocument(docB, 'test-agent');
+      if (await wacNow() !== '90000000') violations.push(`WAC پس از حذف رسید ارزی ${await wacNow()} شد (انتظار ۹۰٬۰۰۰٬۰۰۰)`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_foreign_receipt_wac_irr_td_227',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'رسید ۱۵۰ دلاری با نرخ ۶۰۰٬۰۰۰ WAC و کاردکس ۹۰٬۰۰۰٬۰۰۰ ریال ثبت کرد؛ نهایی‌سازی با نرخ ۵۰۰٬۰۰۰ WAC را ۷۰٬۰۰۰٬۰۰۰ و حذف آن دوباره ۹۰٬۰۰۰٬۰۰۰ کرد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_foreign_receipt_wac_irr_td_227',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (createdDocIds.length > 0) await cleanTestTableData('document_items', 'document_id', createdDocIds);
+    }
+  }
+
   return results;
 }
 

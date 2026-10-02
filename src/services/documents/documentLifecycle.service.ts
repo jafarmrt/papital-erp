@@ -3,7 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
-import { resolveDocumentExchangeRate } from './documentExchangeRate.js';
+import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
@@ -153,11 +153,19 @@ export class DocumentLifecycleService {
             }
           }
 
+          // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود (پیش از گردش انبار، چون قیمت ورود با آن به ریال می‌رود)؛ نرخ ارسالی روی خود سند ذخیره می‌شود
+          const finalExchangeRate = resolveDocumentExchangeRate({
+            currency: doc.currency,
+            input: { exchangeRate: options?.exchangeRate },
+            existing: doc.exchangeRate,
+          });
+
           // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
           for (const item of docLines) {
             const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
             const qty = Number(item.quantity);
-            const price = item.unitPrice ?? 0;
+            // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
+            const price = stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, finalExchangeRate);
 
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: item.itemId,
@@ -181,12 +189,6 @@ export class DocumentLifecycleService {
             input: { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount },
             lines: docLines,
             existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
-          });
-          // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود؛ نرخ ارسالی روی خود سند ذخیره می‌شود
-          const finalExchangeRate = resolveDocumentExchangeRate({
-            currency: doc.currency,
-            input: { exchangeRate: options?.exchangeRate },
-            existing: doc.exchangeRate,
           });
           await tx.update(documents).set({ 
             status: 'final',
@@ -353,7 +355,8 @@ export class DocumentLifecycleService {
               itemId: item.itemId,
               quantity: item.quantity,
               originalDirection: docDirection,
-              unitPrice: item.unitPrice ?? 0,
+              // v7.0.69 (TD-227): سند قدیمی ارزی بدون نرخ با همان قیمت ثبت‌شده برگردانده می‌شود
+              unitPrice: fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0),
               location: targetLoc
             });
           }

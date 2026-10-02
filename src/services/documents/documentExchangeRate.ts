@@ -1,5 +1,5 @@
 import { ValidationError } from '../../errors/customErrors.js';
-import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money, type Money } from '../../lib/money.js';
 
 /**
@@ -46,4 +46,18 @@ export function resolveDocumentExchangeRate(params: {
     throw new ValidationError(`برای سند با ارز ${currency} نرخ تسعیر (ریال به ازای هر واحد ${currency}) الزامی است.`);
   }
   return rate;
+}
+
+/**
+ * v7.0.69 (TD-227، تصمیم مالک محصول): قیمت واحد اقلام سند برای گردش انبار و بهای میانگین موزون (WAC) به ریال.
+ * سند ریالی بدون تغییر؛ سند ارزی قیمت × نرخ تسعیر سند. سند ارزی بدون نرخ پذیرفته نمی‌شود (WAC ریالی با عدد ارزی خراب می‌شود).
+ */
+export function stockUnitPriceInIrr(unitPrice: DecimalValue, currency: unknown, exchangeRate: DecimalValue): FinancialDecimal {
+  const cur = normalizeCurrency(currency);
+  if (cur === 'IRR') return fin(unitPrice);
+  const rate = fin(exchangeRate);
+  if (!rate.isPositive()) {
+    throw new ValidationError(`برای گردش انبار سند با ارز ${cur} نرخ تسعیر الزامی است.`);
+  }
+  return fin(unitPrice).multiply(rate).round(4);
 }
