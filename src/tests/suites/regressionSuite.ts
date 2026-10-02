@@ -6572,7 +6572,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (!/^1[345]\d{2}-\d{2}-\d{2}$/.test(jalaliDash)) violations.push(`businessTodayJalaliDash: «${jalaliDash}» (انتظار YYYY-MM-DD شمسی)`);
       if (jalaliToIsoDate(jalaliDash) !== todayIso) violations.push(`تبدیل «${jalaliDash}» به میلادی: «${jalaliToIsoDate(jalaliDash)}» (انتظار ${todayIso})`);
 
-      const allAccs = await AccountingService.getAllAccounts();
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const allAccs = await ChartOfAccountsService.getAllAccounts();
       const leaf = allAccs.find(a => a.level === 'subsidiary');
       if (!leaf) throw new Error('حساب معین برای حساب بانکی آزمون یافت نشد');
       const [pers] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل آزمون تاریخ پرداخت' }).returning({ id: personnel.id });
