@@ -1,6 +1,7 @@
 import { orm } from '../../db/drizzle.js';
-import { sql, asc } from 'drizzle-orm';
-import { refFiscalYearCorrections } from '../../db/schema.js';
+import { sql, asc, and, eq, or, like } from 'drizzle-orm';
+import { documents, refFiscalYearCorrections } from '../../db/schema.js';
+import { containsLikePattern } from '../../lib/sqlLike.js';
 import type {
   FinancialHealthReport,
   HealthCheckTestResult,
@@ -795,6 +796,47 @@ export class FinancialHealthService {
         details: 'شماره عطف سند تغییر نکرده است.',
       })),
       metrics: { corrected: fyCorrections.length - fyConflicts.length, conflicts: fyConflicts.length },
+    });
+
+    // =========================================================================
+    // آزمون ۹: v7.0.80 (TD-199) پیش‌فاکتورهای پیش از v7.0.32 که مالیات را فقط در متن یادداشت دارند
+    // =========================================================================
+    // تا v7.0.31 فرم فاکتور مالیات را به‌صورت «[ارزش افزوده: …]» به یادداشت می‌افزود؛ با تصمیم مالک محصول این داده منتقل
+    // نشد. چنین پیش‌فاکتوری اگر بدون ویرایش نهایی شود، فاکتور و سند حسابداری بدون مالیات صادر می‌شوند.
+    const legacyVatProformas = await orm
+      .select({ id: documents.id, refNumber: documents.refNumber, date: documents.date, buyerName: documents.buyerName })
+      .from(documents)
+      .where(and(
+        eq(documents.isDeleted, 0),
+        or(eq(documents.status, 'proforma'), eq(documents.type, 'proforma')),
+        sql`${documents.status} <> 'final'`,
+        sql`COALESCE(${documents.vatAmount}, 0) = 0`,
+        like(documents.notes, containsLikePattern('[ارزش افزوده:')),
+      ))
+      .orderBy(asc(documents.id));
+    tests.push({
+      id: 'legacy_proforma_vat_in_notes',
+      category: 'documents',
+      title: 'پیش‌فاکتورهای قدیمی با مالیات فقط در یادداشت',
+      description: 'پیش‌فاکتورهای ثبت‌شده پیش از v7.0.32 مالیات را فقط در متن یادداشت دارند و بدون ویرایش، بدون مالیات نهایی می‌شوند',
+      status: legacyVatProformas.length > 0 ? 'warning' : 'healthy',
+      scoreImpact: 0,
+      count: legacyVatProformas.length,
+      message: legacyVatProformas.length === 0
+        ? 'هیچ پیش‌فاکتور بازی با مالیات ثبت‌شده فقط در یادداشت یافت نشد.'
+        : `${legacyVatProformas.length} پیش‌فاکتور باز مالیات را فقط در یادداشت دارد؛ پیش از نهایی‌سازی آن را در فرم ویرایش باز و مالیات را دوباره فعال کنید.`,
+      quickFixAction: legacyVatProformas.length > 0 ? 'open_documents' : undefined,
+      items: legacyVatProformas.map((d) => ({
+        id: d.id,
+        code: `پیش‌فاکتور ${d.refNumber}`,
+        title: `خریدار: ${d.buyerName || '—'}`,
+        subtitle: `تاریخ: ${String(d.date || '').substring(0, 10)}`,
+        date: String(d.date || '').substring(0, 10),
+        linkType: 'document' as const,
+        linkId: d.id,
+        details: 'مالیات این پیش‌فاکتور در ستون مالیات ثبت نشده است (TD-199).',
+      })),
+      metrics: { legacyVatProformas: legacyVatProformas.length },
     });
 
     // =========================================================================

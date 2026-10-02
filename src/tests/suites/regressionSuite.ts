@@ -38,6 +38,7 @@ import {
 import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../lib/lockOrder.js';
 import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
+import type { CreateDocumentInput } from '../../services/documents/types.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -6772,6 +6773,70 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }));
     } finally {
       await orm.delete(users).where(inArray(users.username, [...realNames, ...syntheticNames]));
+    }
+  }
+
+  // Test: v7.0.80 (TD-199): گزارش پیش‌فاکتورهای قدیمی که مالیات را فقط در یادداشت دارند (بازرس سلامت مالی)
+  if (shouldRun('reg_legacy_proforma_vat_in_notes_td_199', 'td199', 'vat', 'proforma', 'health')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.80: بازرس سلامت مالی پیش‌فاکتور بازی را که مالیات را فقط در یادداشت «[ارزش افزوده: …]» دارد گزارش می‌کند (TD-199)';
+    const createdDocIds: number[] = [];
+    try {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const [defWh] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 20000 });
+      const today = await businessTodayIsoDate();
+      const legacyNote = 'سفارش مشتری [ارزش افزوده: ۱۸٬۰۰۰ ریال (9٪)]';
+      const create = async (extra: Partial<CreateDocumentInput>) => {
+        const id = await DocumentService.createDocument({
+          docType: 'proforma', status: 'proforma', date: today, user: 'test-agent', buyerName: 'خریدار آزمون TD-199',
+          location: defWh.code, items: [{ itemId: item.id, quantity: 2, unit_price: 100000, location: defWh.code }], ...extra
+        });
+        createdDocIds.push(id);
+        return id;
+      };
+      const legacyId = await create({ notes: legacyNote });
+      const structuredId = await create({ notes: legacyNote, vatPercent: 9 });
+      const plainId = await create({ notes: 'پیش‌فاکتور بدون مالیات' });
+
+      const health = await FinancialHealthService.runHealthCheck();
+      const check = health.tests.find((t) => t.id === 'legacy_proforma_vat_in_notes');
+      const listed = new Set((check?.items || []).map((i) => i.id));
+      const violations: string[] = [];
+      if (!check) violations.push('آزمون legacy_proforma_vat_in_notes در گزارش سلامت نیست');
+      if (check && check.status !== 'warning') violations.push(`وضعیت باید warning باشد: ${check.status}`);
+      if (!listed.has(legacyId)) violations.push('پیش‌فاکتور با مالیات فقط در یادداشت گزارش نشد');
+      if (listed.has(structuredId)) violations.push('پیش‌فاکتور دارای مالیات ساختاریافته نباید گزارش شود');
+      if (listed.has(plainId)) violations.push('پیش‌فاکتور بدون برچسب مالیات نباید گزارش شود');
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_legacy_proforma_vat_in_notes_td_199',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'فقط پیش‌فاکتوری که مالیات را در یادداشت دارد و ستون مالیاتش صفر است گزارش شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_legacy_proforma_vat_in_notes_td_199',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await orm.update(documents).set({ isDeleted: 1 }).where(inArray(documents.id, createdDocIds));
+        await cleanTestTableData('document_items', 'document_id', createdDocIds);
+      }
     }
   }
 
