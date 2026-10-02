@@ -218,6 +218,13 @@
       "when": 1790964000000,
       "tag": "0030_repair_legacy_mdy_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790967600000,
+      "tag": "0031_journal_voucher_number_unique",
+      "breakpoints": true
     }
   ]
 }

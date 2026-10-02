@@ -2,6 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { sql, asc, and, eq, or, like } from 'drizzle-orm';
 import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import type {
   FinancialHealthReport,
   HealthCheckTestResult,
@@ -873,6 +874,40 @@ export class FinancialHealthService {
         details: 'مقدار قبلی در جدول legacy_date_repairs نگه داشته شده است.',
       })),
       metrics: { corrected: dateRepairs.length - refusedDateRepairs.length, refused: refusedDateRepairs.length },
+    });
+
+    // =========================================================================
+    // آزمون ۱۱: v7.0.91 (TD-195) یکتایی شماره سند حسابداری (مهاجرت 0031)
+    // =========================================================================
+    const [duplicateNumbers, uniqueIndexPresent] = await Promise.all([findDuplicateVoucherNumbers(), hasVoucherNumberUniqueIndex()]);
+    const duplicateNumberCount = new Set(duplicateNumbers.map((r) => r.voucherNumber)).size;
+    const numberPenalty = Math.min(20, duplicateNumberCount * 5);
+    overallScore -= numberPenalty;
+    tests.push({
+      id: 'voucher_number_uniqueness',
+      category: 'vouchers',
+      title: 'یکتایی شماره سند حسابداری',
+      description: 'هر سند حسابداری باید شماره‌ای داشته باشد که سند دیگری ندارد؛ پایگاه‌داده با ایندکس یکتا از شماره تکراری جلوگیری می‌کند',
+      status: duplicateNumberCount > 0 ? 'error' : (uniqueIndexPresent ? 'healthy' : 'warning'),
+      scoreImpact: -numberPenalty,
+      count: duplicateNumberCount,
+      message: duplicateNumberCount > 0
+        ? `${duplicateNumberCount} شماره سند بین بیش از یک سند حسابداری مشترک است و قید یکتایی شماره سند در پایگاه‌داده اعمال نشده است؛ شماره‌ها خودکار تغییر داده نمی‌شوند و اصلاح آن‌ها با تصمیم حسابدار است.`
+        : (uniqueIndexPresent
+          ? 'شماره تکراری وجود ندارد و پایگاه‌داده از ثبت شماره تکراری جلوگیری می‌کند.'
+          : 'شماره تکراری وجود ندارد اما قید یکتایی شماره سند در پایگاه‌داده اعمال نشده است.'),
+      quickFixAction: duplicateNumberCount > 0 ? 'open_vouchers' : undefined,
+      items: duplicateNumbers.map((r) => ({
+        id: r.id,
+        code: `سند حسابداری #${r.voucherNumber}`,
+        title: r.description,
+        subtitle: `نوع: ${r.voucherType || '—'} | وضعیت: ${r.isDeleted === 1 ? 'حذف‌شده' : (r.status || '—')} | تاریخ: ${String(r.date || '').substring(0, 10)}`,
+        date: String(r.date || '').substring(0, 10),
+        linkType: 'voucher' as const,
+        linkId: r.id,
+        details: 'شماره این سند با سند دیگری یکی است (TD-195).',
+      })),
+      metrics: { duplicateNumbers: duplicateNumberCount, duplicateVoucherRows: duplicateNumbers.length, uniqueIndexPresent: uniqueIndexPresent ? 1 : 0 },
     });
 
     // =========================================================================

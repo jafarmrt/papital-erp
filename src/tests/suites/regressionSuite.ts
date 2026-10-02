@@ -4365,7 +4365,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const revAccount = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
       const assetAccount = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
       if (!revAccount || !assetAccount) throw new Error('سرفصل‌های لازم آزمون یافت نشد');
-      const baseYear = 1440 + Math.floor(Math.random() * 25) * 2;
+      // سال‌های ۱۴۸۰ تا ۱۵۰۰: جدا از بازه آزمون بستن سال TD-141 (۱۴۲۰ تا ۱۴۷۸)؛ با هم‌پوشانی، گاهی یکی از دو آزمون
+      // سالی را می‌بست که دیگری لازم داشت و این آزمون تصادفی شکست می‌خورد. ۱۵۰۰ آخرین سالی است که normalizeDateToIso
+      // به میلادی برمی‌گرداند
+      const baseYear = 1480 + Math.floor(Math.random() * 7) * 3;
       const voucher = (year: number, amount: number, extra: Record<string, unknown> = {}) => ({
         date: normalizeDateToIso(`${year}-06-15`) as string,
         voucherType: 'general' as const,
@@ -7523,5 +7526,91 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+
+  // Test: v7.0.91 (TD-195 / audit P1-8): پایگاه‌داده شماره سند حسابداری تکراری را نمی‌پذیرد و بازرس سلامت مالی
+  // شماره‌های تکراری (در داده‌ای که ایندکس یکتا روی آن ساخته نشده) را گزارش می‌کند
+  if (shouldRun('reg_voucher_number_unique_td_195', 'td195', 'voucher', 'number', 'unique')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.91: یکتایی شماره سند حسابداری در پایگاه‌داده و گزارش شماره‌های تکراری (TD-195)';
+    const { journalVouchers } = await import('../../db/schema.js');
+    const { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex, VOUCHER_NUMBER_UNIQUE_INDEX } = await import('../../services/accounting/voucherNumberIntegrity.js');
+    const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+    const fs = await import('fs');
+    const path = await import('path');
+    const createdIds: number[] = [];
+    try {
+      const violations: string[] = [];
+      const nextNumber = async (executor: { execute: typeof orm.execute } = orm) =>
+        Number((await executor.execute(sql`SELECT nextval('journal_voucher_number_seq') AS n`)).rows?.[0]?.n);
+      const row = (voucherNumber: number) => ({ voucherNumber, date: '2026-01-10', description: 'ERP-TEST-MARKER TD-195 شماره تکراری' });
+
+      if (!(await hasVoucherNumberUniqueIndex())) violations.push('ایندکس یکتای شماره سند ساخته نشده است');
+      const n = await nextNumber();
+      const [first] = await orm.insert(journalVouchers).values(row(n)).returning({ id: journalVouchers.id });
+      createdIds.push(first.id);
+      let duplicateRejected = false;
+      try {
+        const [dup] = await orm.insert(journalVouchers).values(row(n)).returning({ id: journalVouchers.id });
+        createdIds.push(dup.id);
+      } catch {
+        duplicateRejected = true;
+      }
+      if (!duplicateRejected) violations.push(`شماره سند تکراری ${n} پذیرفته شد`);
+
+      const report = await FinancialHealthService.runHealthCheck();
+      const check = report.tests.find((t) => t.id === 'voucher_number_uniqueness');
+      if (!check) violations.push('بازرس سلامت مالی آزمون یکتایی شماره سند ندارد');
+      else if (!duplicateRejected && check.count === 0) violations.push('شماره تکراری در گزارش سلامت نیامد');
+
+      // داده قدیمی بدون ایندکس یکتا (تراکنش برگشت‌خورده): شماره‌های تکراری با هر دو سند گزارش می‌شوند
+      let reported: number[] = [];
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql.raw(`DROP INDEX IF EXISTS ${VOUCHER_NUMBER_UNIQUE_INDEX}`));
+          const m = await nextNumber(tx);
+          await tx.insert(journalVouchers).values([row(m), row(m)]);
+          reported = (await findDuplicateVoucherNumbers(tx)).filter((r) => r.voucherNumber === m).map((r) => r.id);
+          // مهاجرت 0031 روی چنین داده‌ای خطا نمی‌دهد، ایندکس نمی‌سازد و sequence را از بزرگ‌ترین شماره جلو می‌برد
+          const ahead = m + 1000;
+          await tx.insert(journalVouchers).values(row(ahead));
+          const migrationSql = fs.readFileSync(path.join(process.cwd(), 'drizzle', '0031_journal_voucher_number_unique.sql'), 'utf8');
+          await tx.execute(sql.raw(migrationSql));
+          if (await hasVoucherNumberUniqueIndex(tx)) violations.push('مهاجرت روی داده دارای شماره تکراری ایندکس یکتا ساخت');
+          const afterMigration = await nextNumber(tx);
+          if (afterMigration <= ahead) violations.push(`sequence پس از مهاجرت عقب ماند: ${afterMigration} <= ${ahead}`);
+          throw new Error('rollback');
+        });
+      } catch (err) {
+        if (!(err instanceof Error && err.message === 'rollback')) throw err;
+      }
+      if (reported.length !== 2) violations.push(`گزارش شماره تکراری: ${reported.length} سند (باید ۲)`);
+      if (!(await hasVoucherNumberUniqueIndex())) violations.push('ایندکس یکتا پس از برگشت تراکنش آزمون از بین رفت');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_voucher_number_unique_td_195',
+        scenarioId: 'v6_fiscal_year_closing_isolation',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'ایندکس یکتا وجود داشت، شماره تکراری رد شد، بازرس سلامت آزمون یکتایی را داشت و شماره‌های تکراری داده بدون ایندکس گزارش شدند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_voucher_number_unique_td_195',
+        scenarioId: 'v6_fiscal_year_closing_isolation',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (createdIds.length > 0) await orm.delete(journalVouchers).where(inArray(journalVouchers.id, createdIds));
+    }
+  }
   return results;
 }

@@ -56,6 +56,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
     .on(table.sourceDocumentId)
     .where(sql`${table.isDeleted} = 0 AND ${table.sourceDocumentId} IS NOT NULL`),
   idx_jv_reference: index('idx_jv_reference').on(table.referenceModule, table.referenceId),
+  // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
+  // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),
   idx_jv_date: index('idx_jv_date').on(table.date),
   idx_jv_status: index('idx_jv_status').on(table.status),

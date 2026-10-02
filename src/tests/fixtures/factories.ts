@@ -2,7 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { money } from '../../lib/money.js';
 import type { DecimalValue } from '../../lib/financialDecimal.js';
 import bcrypt from 'bcryptjs';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, sql } from 'drizzle-orm';
 import {
   users,
   roles,
@@ -221,7 +221,8 @@ export async function createTestVoucher(
   const totalCredit = itemsList.reduce((sum, i) => sum + (i.credit || 0), 0);
 
   const voucherData = {
-    voucherNumber: voucherOverrides.voucherNumber || Math.floor(Math.random() * 900000) + 100000,
+    // v7.0.91 (TD-195): شماره از همان sequence برنامه؛ عدد تصادفی با ایندکس یکتای شماره سند گاهی تکراری می‌شد
+    voucherNumber: voucherOverrides.voucherNumber || Number((await db.execute(sql`SELECT nextval('journal_voucher_number_seq') AS n`)).rows?.[0]?.n),
     date: voucherOverrides.date || new Date().toISOString().split('T')[0],
     voucherType: voucherOverrides.voucherType || 'general',
     status: voucherOverrides.status || 'approved',
