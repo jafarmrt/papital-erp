@@ -86,6 +86,8 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const [currency, setCurrency] = useState('IRR');
   const [exchangeRate, setExchangeRate] = useState(0);
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
+  // v7.0.81 (TD-230): شناسه فاکتور فروش اصلی؛ کالای برگشتی با بهای خروج همان فاکتور وارد انبار می‌شود
+  const [returnInvoiceId, setReturnInvoiceId] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
 
   const [selectedItem, setSelectedItem] = useState('');
@@ -148,6 +150,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
     try {
       const doc = await fetchJson(`/documents/by-ref/${returnInvoiceRef}?type=invoice`);
       if (doc && doc.items) {
+        setReturnInvoiceId(typeof doc.id === 'number' ? doc.id : null);
         setBuyerName(doc.buyer_name || '');
         const newDocItems = doc.items.map((i: any) => ({
           item: { id: i.item_id, name: i.name, code: i.code, unit: i.unit },
@@ -558,6 +561,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
           currency: docCurrency,
           exchangeRate: docCurrency !== 'IRR' ? exchangeRate : null,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
+          returnOfDocumentId: docType === 'return' && returnInvoiceId !== null ? returnInvoiceId : undefined,
           attachments,
           items: docItems.map(d => ({ 
             itemId: d.item.id, 
@@ -632,6 +636,8 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
 
       setDocItems([]);
       fetchNextRef();
+      setReturnInvoiceRef('');
+      setReturnInvoiceId(null);
       setBuyerName('');
       setSelectedSupplierObj(null);
       setNotes('');
@@ -817,7 +823,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                   <input 
                     type="text" 
                     value={returnInvoiceRef} 
-                    onChange={e => setReturnInvoiceRef(e.target.value)} 
+                    onChange={e => { setReturnInvoiceRef(e.target.value); setReturnInvoiceId(null); }} 
                     placeholder="مثال: 1005" 
                     className="w-full border border-slate-200 bg-slate-50/50 rounded-xl text-sm px-3 py-2 text-left font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" 
                     dir="ltr" 
@@ -830,6 +836,11 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                     جستجو
                   </button>
                 </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {returnInvoiceId !== null
+                    ? 'کالاها با بهای تمام‌شده خروج همین فاکتور وارد انبار می‌شوند.'
+                    : 'بدون فاکتور مرجع، کالا با میانگین موزون فعلی وارد انبار می‌شود.'}
+                </p>
               </div>
             )}
 

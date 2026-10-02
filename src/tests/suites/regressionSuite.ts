@@ -6840,5 +6840,102 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.81 (TD-230): برگشت از فروش با بهای خروج فاکتور اصلی وارد انبار می‌شود، نه با قیمت فروش
+  if (shouldRun('reg_sales_return_original_cost_td_230', 'td230', 'return', 'wac', 'kardex')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.81: برگشت از فروش با بهای خروج فاکتور اصلی (بدون فاکتور مرجع با WAC جاری) وارد انبار می‌شود و سند حسابداری همان بها را برمی‌گرداند (TD-230)';
+    const createdDocIds: number[] = [];
+    const violations: string[] = [];
+    const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+    try {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { journalVoucherItems: jvItems } = await import('../../db/schema.js');
+      const [defWh] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 20000 });
+      const other = await createTestItem({ currentStock: 50, stocks: { [defWh.code]: 50 }, weightedAverageCost: 30000 });
+      const today = await businessTodayIsoDate();
+      const create = async (input: Partial<CreateDocumentInput>) => {
+        const id = await DocumentService.createDocument({
+          docType: 'return', status: 'final', date: today, user: 'test-agent', buyerName: 'خریدار آزمون TD-230',
+          location: defWh.code, items: [{ itemId: item.id, quantity: 2, unit_price: 100000, location: defWh.code }], ...input
+        });
+        createdDocIds.push(id);
+        return id;
+      };
+      const inCost = async (docId: number) => {
+        const rows = await orm.select({ unitPrice: transactions.unitPrice, type: transactions.type }).from(transactions)
+          .where(and(eq(transactions.documentId, docId), eq(transactions.isDeleted, 0)));
+        return rows.length === 1 && rows[0].type === 'in' ? Number(rows[0].unitPrice) : NaN;
+      };
+      const voucherCogsReversal = async (docId: number) => {
+        const [v] = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+          .where(and(eq(journalVouchers.sourceDocumentId, docId), eq(journalVouchers.isDeleted, 0)));
+        if (!v) return NaN;
+        const rows = await orm.select().from(jvItems).where(eq(jvItems.voucherId, v.id));
+        return rows.filter(r => r.detailedName === 'بهای تمام‌شده کالای فروش‌رفته').reduce((a, r) => a + Number(r.credit || 0), 0);
+      };
+      const rejects = async (input: Partial<CreateDocumentInput>) => {
+        try { await create(input); return false; } catch { return true; }
+      };
+
+      // فاکتور فروش ۳ عدد با بهای خروج ۲۰٬۰۰۰ و سپس رسید خرید که WAC را به ۲۵٬۰۰۰ می‌برد
+      const invoiceId = await create({ docType: 'invoice', inOut: 'out', items: [{ itemId: item.id, quantity: 3, unit_price: 100000, location: defWh.code }] });
+      await create({ docType: 'receipt', inOut: 'in', items: [{ itemId: item.id, quantity: 47, unit_price: 30000, location: defWh.code }] });
+      const [wacRow] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
+      check(Number(wacRow.wac) === 25000, `WAC پس از رسید باید ۲۵٬۰۰۰ باشد: ${Number(wacRow.wac)}`);
+
+      // ۱) با فاکتور مرجع: بهای ورود = بهای خروج فاکتور (۲۰٬۰۰۰)، نه قیمت فروش و نه WAC جاری
+      const linked = await create({ returnOfDocumentId: invoiceId });
+      check(await inCost(linked) === 20000, `بهای ورود برگشت با فاکتور مرجع باید ۲۰٬۰۰۰ باشد: ${await inCost(linked)}`);
+      check(await voucherCogsReversal(linked) === 40000, `برگشت بهای تمام‌شده در سند حسابداری باید ۴۰٬۰۰۰ باشد: ${await voucherCogsReversal(linked)}`);
+      const formatted = await DocumentService.getDocumentById(linked);
+      check(formatted?.returnOfDocumentId === invoiceId, `پیوند فاکتور مرجع در پاسخ سند نیست: ${formatted?.returnOfDocumentId}`);
+
+      // ۲) بدون فاکتور مرجع: WAC جاری کالا
+      const [wacNow] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
+      const unlinked = await create({});
+      check(await inCost(unlinked) === Number(wacNow.wac), `بهای ورود برگشت بدون فاکتور مرجع باید WAC جاری (${Number(wacNow.wac)}) باشد: ${await inCost(unlinked)}`);
+      check(await voucherCogsReversal(unlinked) === 2 * Number(wacNow.wac), `سند حسابداری برگشت بدون مرجع باید با همان بهای ورود باشد: ${await voucherCogsReversal(unlinked)}`);
+
+      // ۳) پیش‌نویس با فاکتور مرجع و نهایی‌سازی بعدی
+      const draft = await create({ status: 'draft', returnOfDocumentId: invoiceId });
+      await DocumentService.finalizeDocument(draft, 'test-agent');
+      check(await inCost(draft) === 20000, `نهایی‌سازی برگشت پیش‌نویس باید با بهای خروج فاکتور (۲۰٬۰۰۰) باشد: ${await inCost(draft)}`);
+
+      // ۴) ردها: کالای خارج‌نشده در فاکتور، سند مرجعی که فاکتور فروش نیست، فاکتور مرجع برای سند غیر برگشتی
+      check(await rejects({ returnOfDocumentId: invoiceId, items: [{ itemId: other.id, quantity: 1, unit_price: 1000, location: defWh.code }] }), 'کالایی که در فاکتور مرجع نیست باید رد شود');
+      check(await rejects({ returnOfDocumentId: createdDocIds[1] }), 'رسید خرید به‌عنوان فاکتور مرجع باید رد شود');
+      check(await rejects({ docType: 'receipt', inOut: 'in', returnOfDocumentId: invoiceId }), 'فاکتور مرجع روی سند غیر برگشتی باید رد شود');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_sales_return_original_cost_td_230',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'برگشت با فاکتور مرجع با بهای خروج فاکتور و بدون آن با WAC جاری وارد شد؛ سند حسابداری همان بها را برگرداند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_sales_return_original_cost_td_230',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', createdDocIds);
+      }
+    }
+  }
+
   return results;
 }

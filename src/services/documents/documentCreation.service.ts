@@ -17,10 +17,11 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
+import { assertReturnableInvoice, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money, type Money } from '../../lib/money.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -213,6 +214,12 @@ export class DocumentCreationService {
       }
     }
 
+    // v7.0.81 (TD-230): پیوند برگشت از فروش به فاکتور فروش اصلی
+    const returnOfDocumentId = parseReturnOfDocumentId(body.returnOfDocumentId ?? body.return_of_document_id);
+    if (returnOfDocumentId !== null && docType !== 'return') {
+      throw new ValidationError('فاکتور مرجع فقط برای سند برگشت از فروش قابل ثبت است.');
+    }
+
     const finalBuyerName = buyerName || buyer_name || '';
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
@@ -325,6 +332,7 @@ export class DocumentCreationService {
         vatAmount: docVat.vatAmount,
         attachments: [],
         projectId: finalProjectId ?? undefined,
+        returnOfDocumentId,
         isDeleted: 0
       }).returning({ id: documents.id });
       const docId = insertedDoc.id;
@@ -483,6 +491,15 @@ export class DocumentCreationService {
           }
         }
 
+        // v7.0.81 (TD-230، تصمیم مالک محصول): کالای برگشت از فروش با بهای خروج فاکتور اصلی (یا WAC جاری بدون فاکتور
+        // مرجع) وارد انبار می‌شود، نه با قیمت فروش
+        let returnUnitCosts: Map<number, FinancialDecimal> | null = null;
+        if (docType === 'return' && docStatus === 'final') {
+          returnUnitCosts = await resolveSalesReturnUnitCosts(tx, returnOfDocumentId, docLines.map(l => Number(l.itemId)));
+        } else if (returnOfDocumentId !== null) {
+          await assertReturnableInvoice(tx, returnOfDocumentId);
+        }
+
         const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
@@ -495,10 +512,10 @@ export class DocumentCreationService {
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: Number(itemId),
               documentId: docId,
-              inOut: inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out'),
+              inOut: docType === 'return' ? 'in' : (inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out')),
               quantity: qty,
               // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
-              price: stockUnitPriceInIrr(price, currency || 'IRR', docExchangeRate),
+              price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(price, currency || 'IRR', docExchangeRate),
               date: date || normalizedDocDate,
               documentType: docType,
               documentRef: String(finalRefNumber || ''),

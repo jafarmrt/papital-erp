@@ -64,6 +64,9 @@ export interface CreateDocumentInput {
   projectId?: number | string | null;
   project_id?: number | string | null;
   excludeDocumentId?: number | string | null;
+  /** v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش */
+  returnOfDocumentId?: number | string | null;
+  return_of_document_id?: number | string | null;
 }
 
 export interface UpdateDocumentInput {
@@ -133,6 +136,8 @@ export interface FormattedDocument {
   buyer_address: string | null;
   currency: string | null;
   exchangeRate?: number | null;
+  /** v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش */
+  returnOfDocumentId?: number | null;
   version?: number | null;
   isDeleted?: number | null;
   projectId?: number | null;

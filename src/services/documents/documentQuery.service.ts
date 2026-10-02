@@ -293,6 +293,7 @@ export class DocumentQueryService {
       vatAmount: amounts.vatAmount,
       vat_amount: amounts.vatAmount,
       exchangeRate: doc.exchangeRate?.toNumber() ?? null,
+      returnOfDocumentId: doc.returnOfDocumentId ?? null,
       payableAmount: amounts.payableAmount,
       payable_amount: amounts.payableAmount,
       paidAmount: amounts.paidAmount,

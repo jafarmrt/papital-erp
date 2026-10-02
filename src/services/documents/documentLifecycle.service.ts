@@ -4,6 +4,7 @@ import { documents, documentItems, items, transactions, journalVouchers } from '
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
+import { resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
@@ -161,11 +162,15 @@ export class DocumentLifecycleService {
           });
 
           // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
+          // v7.0.81 (TD-230): برگشت از فروش با بهای خروج فاکتور اصلی (یا WAC جاری بدون فاکتور مرجع)، نه قیمت فروش
+          const returnUnitCosts = targetType === 'return'
+            ? await resolveSalesReturnUnitCosts(tx, doc.returnOfDocumentId ?? null, docLines.map(l => l.itemId))
+            : null;
           for (const item of docLines) {
             const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
             const qty = Number(item.quantity);
             // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
-            const price = stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, finalExchangeRate);
+            const price = returnUnitCosts?.get(item.itemId) ?? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, finalExchangeRate);
 
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: item.itemId,

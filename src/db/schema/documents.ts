@@ -1,4 +1,4 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
@@ -18,6 +18,8 @@ export const documents = pgTable('documents', {
   crmLeadId: integer('crm_lead_id').references(baseRelations.crmLeadsId),
   // V3.1.46 (TD-070) / TD-169: لینک رسمی سند انبار/فاکتور به پروژه تولید — ارجاع از طریق baseRelations
   projectId: integer('project_id').references(baseRelations.productionProjectsId),
+  // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش؛ بهای ورود کالای برگشتی از گردش خروج همان فاکتور خوانده می‌شود
+  returnOfDocumentId: integer('return_of_document_id').references((): AnyPgColumn => documents.id),
   user: text('user'),
   notes: text('notes'),
   buyerName: text('buyer_name').default(''),
@@ -42,6 +44,7 @@ export const documents = pgTable('documents', {
   idx_date: index('docs_date').on(table.date),
   idx_buyer_name: index('idx_docs_buyer_name').on(table.buyerName),
   idx_docs_project: index('idx_docs_project').on(table.projectId),
+  idx_docs_return_of_document: index('idx_docs_return_of_document').on(table.returnOfDocumentId),
 }));
 registerColumnRef('documents.id', () => documents.id);
 

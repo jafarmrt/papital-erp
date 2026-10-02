@@ -100,6 +100,8 @@ export const documentCreateSchema = z.object({
     location: z.string().max(100).nullable().optional(),
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
+    // v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش
+    returnOfDocumentId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
     exchangeRate: exchangeRateInput,

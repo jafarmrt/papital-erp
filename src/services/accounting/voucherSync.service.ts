@@ -19,6 +19,7 @@ import { AccountMappingService } from './accountMapping.service.js';
 import { logger } from '../../middleware/logger.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
 
@@ -893,13 +894,16 @@ export class VoucherSyncService {
       let totalReturnAmount = fin(0);
       let fgReturnCost = fin(0);
       let rmReturnCost = fin(0);
+      // v7.0.81 (TD-230): بهای تمام‌شده برگشتی همان بهایی است که کالا با آن وارد انبار شد (ردیف‌های کاردکس همین سند)،
+      // تا ارزش کاردکس و برگشت بهای تمام‌شده یکی باشند؛ پیش‌تر WAC لحظه صدور سند (پس از ورود) خوانده می‌شد
+      const kardexReturnCosts = await salesReturnKardexUnitCosts(executor, doc.id);
 
       for (const line of itemsList) {
         const q = Number(line.quantity) || 0;
         totalReturnAmount = totalReturnAmount.add(fin(q).multiply(line.unitPrice).subtract(line.discount));
 
-        // TD-145: محاسبه بهای تمام‌شده کالای برگشتی بر پایه نرخ WAC
-        const wac = fin(line.weightedAverageCost);
+        // TD-145: بهای تمام‌شده کالای برگشتی (بدون ردیف کاردکس: WAC)
+        const wac = kardexReturnCosts.get(line.itemId) ?? fin(line.weightedAverageCost);
         const lineCost = fin(q).multiply(wac);
         if (line.itemType === 'product') {
           fgReturnCost = fgReturnCost.add(lineCost);
