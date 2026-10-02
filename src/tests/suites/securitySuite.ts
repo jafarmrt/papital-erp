@@ -621,6 +621,8 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
   const t13Start = Date.now();
   try {
     const { checkAccountLockout, recordFailedAttempt, resetFailedAttempts } = await import('../../routes/auth.routes.js');
+    const { resetPhantomLockouts, ACCOUNT_LOCKOUT_THRESHOLD } = await import('../../services/auth/loginSecurity.service.js');
+    const ip = '203.0.113.10';
     const { orm } = await import('../../db/drizzle.js');
     const { users } = await import('../../db/schema.js');
     const { eq } = await import('drizzle-orm');
@@ -641,7 +643,7 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
 
     try {
       // 1. Initial status should be unlocked
-      const initStatus = await checkAccountLockout(testUsername);
+      const initStatus = await checkAccountLockout(testUsername, ip);
       if (initStatus.isLocked) {
         throw new Error('کاربر جدید نباید قفل باشد');
       }
@@ -649,7 +651,7 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       // 2. Simulate 4 failed attempts -> still unlocked
       let lastFail: any = null;
       for (let i = 1; i <= 4; i++) {
-        lastFail = await recordFailedAttempt(testUsername);
+        lastFail = await recordFailedAttempt(testUsername, ip);
         if (lastFail.locked) {
           throw new Error(`تلاش شماره ${i} نباید حساب را قفل کند`);
         }
@@ -659,13 +661,13 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       }
 
       // 3. 5th attempt -> account locked (v7.0.28 / TD-186: progressive lock — 1 minute first)
-      const fifthFail = await recordFailedAttempt(testUsername);
+      const fifthFail = await recordFailedAttempt(testUsername, ip);
       if (!fifthFail.locked || fifthFail.remainingMinutes !== 1) {
         throw new Error(`تلاش پنجم باید حساب کاربری را ۱ دقیقه قفل کند (مقدار: ${fifthFail.remainingMinutes})`);
       }
 
       // 3.1 Each further failure doubles the lock (2, 4, ... capped at 30 minutes)
-      const sixthFail = await recordFailedAttempt(testUsername);
+      const sixthFail = await recordFailedAttempt(testUsername, ip);
       if (!sixthFail.locked || sixthFail.remainingMinutes !== 2) {
         throw new Error(`تلاش ششم باید قفل را به ۲ دقیقه افزایش دهد (مقدار: ${sixthFail.remainingMinutes})`);
       }
@@ -675,25 +677,49 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       }
 
       // 4. Verify lockout check reports locked
-      const lockedCheck = await checkAccountLockout(testUsername);
+      const lockedCheck = await checkAccountLockout(testUsername, ip);
       if (!lockedCheck.isLocked) {
         throw new Error('بررسی وضعیت قفل باید مقدار isLocked: true برگرداند');
       }
 
+      // 4.1 v7.0.70 (TD-187): قفل فقط برای همان (نام کاربری + IP) است؛ صاحب حساب از نشانی دیگر وارد می‌شود
+      const otherIpCheck = await checkAccountLockout(testUsername, '203.0.113.11');
+      if (otherIpCheck.isLocked) {
+        throw new Error('قفل ۶ تلاش ناموفق از یک نشانی نباید ورود همان کاربر از نشانی دیگر را ببندد (TD-187)');
+      }
+
+      // 4.2 قفل کل حساب فقط پس از ACCOUNT_LOCKOUT_THRESHOLD (۵۰) تلاش ناموفق از همه نشانی‌ها
+      await resetFailedAttempts(createdUser.id);
+      resetPhantomLockouts();
+      for (let i = 1; i < ACCOUNT_LOCKOUT_THRESHOLD; i++) {
+        const spread = await recordFailedAttempt(testUsername, `198.18.${Math.floor(i / 200)}.${i % 200}`);
+        if (spread.locked) throw new Error(`تلاش ${i} از نشانی‌های پراکنده نباید حساب را قفل کند`);
+      }
+      const freshIp = '203.0.113.12';
+      if ((await checkAccountLockout(testUsername, freshIp)).isLocked) {
+        throw new Error(`پیش از ${ACCOUNT_LOCKOUT_THRESHOLD} تلاش، حساب از نشانی تازه نباید قفل باشد`);
+      }
+      const accountFail = await recordFailedAttempt(testUsername, '198.18.9.9');
+      const accountCheck = await checkAccountLockout(testUsername, freshIp);
+      if (!accountFail.locked || accountFail.remainingMinutes !== 1 || !accountCheck.isLocked) {
+        throw new Error(`تلاش ${ACCOUNT_LOCKOUT_THRESHOLD}ام باید کل حساب را ۱ دقیقه از هر نشانی قفل کند: ${JSON.stringify({ accountFail, accountCheck })}`);
+      }
+
       // 5. Reset failed attempts
       await resetFailedAttempts(createdUser.id);
-      const postResetCheck = await checkAccountLockout(testUsername);
+      const postResetCheck = await checkAccountLockout(testUsername, freshIp);
       if (postResetCheck.isLocked) {
         throw new Error('پس از ریست، حساب باید از حالت قفل خارج شود');
       }
     } finally {
       // Cleanup test user
       await orm.delete(users).where(eq(users.id, createdUser.id));
+      resetPhantomLockouts();
     }
 
     results.push(makeTestCase({
       id: 'sec_rate_limiting_account_lockout',
-      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting (SEC-009 / TD-186)',
+      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting و قفل (نام کاربری + IP) با قفل کل حساب پس از ۵۰ تلاش (SEC-009 / TD-186 / TD-187)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: true,
@@ -703,7 +729,7 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
   } catch (err: any) {
     results.push(makeTestCase({
       id: 'sec_rate_limiting_account_lockout',
-      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting (SEC-009 / TD-186)',
+      name: 'مکانیزم قفل تدریجی حساب کاربری پس از ۵ تلاش ناموفق و Rate Limiting و قفل (نام کاربری + IP) با قفل کل حساب پس از ۵۰ تلاش (SEC-009 / TD-186 / TD-187)',
       layer: 'security',
       executionType: 'simulation_logic',
       passed: false,

@@ -302,7 +302,10 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         role: 'operator',
         avatarUrl: ''
       });
-      const attempts = 8;
+      // v7.0.70 (TD-187، تصمیم مالک محصول): هر نشانی جدا فقط (نام کاربری + IP) خودش را قفل می‌کند؛ چرخش نشانی
+      // پس از ACCOUNT_LOCKOUT_THRESHOLD تلاش به قفل کل حساب می‌خورد
+      const { ACCOUNT_LOCKOUT_THRESHOLD, resetPhantomLockouts } = await import('../../services/auth/loginSecurity.service.js');
+      const attempts = ACCOUNT_LOCKOUT_THRESHOLD + 2;
       const responses: any[] = [];
       try {
         for (let i = 0; i < attempts; i++) {
@@ -313,6 +316,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         }
       } finally {
         await orm.delete(users).where(eq(users.username, rlProbeUser));
+        resetPhantomLockouts();
         try {
           const { resetLoginRateLimiter } = await import('../../app.js');
           resetLoginRateLimiter();
@@ -578,9 +582,10 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
         // 2. After the threshold both get the same 429 progressive lock (1 minute)
         let realLocked: any = null;
         let ghostLocked: any = null;
+        // v7.0.70 (TD-187): قفل تدریجی برای (نام کاربری + IP) است؛ تلاش‌ها از همان نشانی
         for (let i = 0; i < 4; i++) {
-          realLocked = await attempt(realUser, `198.51.100.${110 + i}`);
-          ghostLocked = await attempt(ghostUser, `198.51.100.${120 + i}`);
+          realLocked = await attempt(realUser, '198.51.100.101');
+          ghostLocked = await attempt(ghostUser, '198.51.100.102');
         }
         if (realLocked?.status !== 429 || ghostLocked?.status !== 429 || realLocked.body?.remainingMinutes !== 1 || ghostLocked.body?.remainingMinutes !== 1
           || realLocked.body?.error !== ghostLocked.body?.error) {

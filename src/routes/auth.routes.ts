@@ -232,8 +232,9 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   // v7.0.28 (TD-186 / audit P1-5): پاسخ‌های یکسان برای کاربر موجود/ناموجود، قفل تدریجی و bcrypt غیرهمگام.
   // دلیل واقعی شکست فقط در لاگ ممیزی سمت سرور ثبت می‌شود.
 
-  // 1. Progressive lockout (applies equally to unknown usernames)
-  const lockout = await checkAccountLockout(tUsername);
+  // 1. Progressive lockout per (username + IP), account-wide after 50 failures (v7.0.70 / TD-187);
+  //    applies equally to unknown usernames
+  const lockout = await checkAccountLockout(tUsername, clientIp);
   if (lockout.isLocked) {
     const minutes = lockout.remainingMinutes || 1;
     logger.warn(`[Login Rejected] Account ${tUsername} is locked for ${minutes} more minute(s)`);
@@ -256,7 +257,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   const isMatch = await verifyPasswordConstantWork(password, activeUser?.password);
 
   if (activeUser && isMatch) {
-    await resetFailedAttempts(activeUser.id);
+    await resetFailedAttempts(activeUser.id, { username: tUsername, ip: clientIp });
 
     const csrfToken = generateCsrfToken();
     const token = generateToken({ id: activeUser.id, username: activeUser.username, role: activeUser.role, csrfToken, tokenVersion: activeUser.tokenVersion || 0 });
@@ -296,7 +297,7 @@ router.post(['/login', '/auth/login'], validate(loginSchema), asyncHandler(async
   // 3. Failure: deleted accounts do not count towards a lock; existing and unknown usernames do
   const failStatus = user && user.isDeleted === 1
     ? { locked: false, remainingAttempts: 0, remainingMinutes: undefined }
-    : await recordFailedAttempt(tUsername);
+    : await recordFailedAttempt(tUsername, clientIp);
   const internalReason = !user ? 'user_not_found' : user.isDeleted === 1 ? 'user_deleted' : (failStatus.locked ? 'account_locked_now' : 'wrong_password');
 
   await logActivity({

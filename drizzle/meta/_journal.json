@@ -183,6 +183,13 @@
       "when": 1790697600000,
       "tag": "0025_documents_exchange_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790784000000,
+      "tag": "0026_users_last_failed_login",
+      "breakpoints": true
     }
   ]
 }

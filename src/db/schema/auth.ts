@@ -10,6 +10,8 @@ export const users = pgTable('users', {
   mustResetPassword: integer('must_reset_password').default(0),
   failedLoginCount: integer('failed_login_count').default(0),
   lockedUntil: text('locked_until'),
+  // v7.0.70 (TD-187): زمان آخرین ورود ناموفق برای شروع دوباره شمارش قفل کل حساب پس از ۲۴ ساعت
+  lastFailedLoginAt: text('last_failed_login_at'),
   // V9-2.2: ابطال نشست با نسخه توکن و حذف نرم کاربران
   tokenVersion: integer('token_version').default(0),
   isDeleted: integer('is_deleted').default(0),
