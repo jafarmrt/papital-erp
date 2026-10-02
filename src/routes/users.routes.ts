@@ -11,6 +11,7 @@ import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -325,12 +326,12 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
 });
 
 // Permissions catalog route
-router.get('/permissions', async (req, res) => {
+router.get('/permissions', authorizePermission(...READ_PERMISSIONS.permissionCatalog), async (req, res) => {
   res.json(PERMISSION_CATALOG);
 });
 
 // ROLES MANAGEMENT ROUTES
-router.get('/roles', async (req, res) => {
+router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), async (req, res) => {
   try {
     const allRoles = await orm.select().from(roles).orderBy(roles.id);
     res.json(allRoles);
@@ -528,7 +529,7 @@ router.get('/users/list-simple', async (req, res) => {
   }
 });
 
-router.get('/users', async (req, res) => {
+router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), async (req, res) => {
   try {
     const allUsers = await orm.select({
       id: users.id,

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { sql, eq, and, desc, ilike, or, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, documentItems, journalVouchers } from '../db/schema.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -16,6 +16,7 @@ import { ItemCatalogService } from '../services/items/itemCatalog.service.js';
 import { resolveWarehouseCode } from '../services/inventory/warehouseResolver.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 
@@ -68,7 +69,7 @@ export const itemUpdateSchema = z.object({
 });
 
 // GET /items/reorder-alerts
-router.get('/items/reorder-alerts', async (req, res) => {
+router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.items), async (req, res) => {
   try {
     const type = req.query.type as string;
     const search = req.query.search as string;
@@ -133,7 +134,7 @@ router.get('/items/reorder-alerts', async (req, res) => {
 });
 
 // GET /items
-router.get('/items', async (req, res) => {
+router.get('/items', authorizePermission(...READ_PERMISSIONS.items), async (req, res) => {
   try {
     const type = req.query.type as string;
     // V9-1.3: صفحه‌بندی NaN-safe با سقف (limit=0 به معنای «بدون سقف» برای خروجی باقی می‌ماند)
@@ -460,7 +461,7 @@ router.delete('/items/:id', authorize('admin', 'products.delete'), validate(para
 // V10-2.1: endpoint واحد اتمیک کد بعدی کالا
 // GET = peek (بدون مصرف شمارنده — برای پیشنهاد خودکار فرم)
 // POST = consume (تخصیص اتمیک شماره سری — قفل سطر شمارنده + UPSERT، مقاوم به race)
-router.get('/items/next-code', asyncHandler(async (req, res) => {
+router.get('/items/next-code', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (req, res) => {
   const { type, year, prefix, transfer } = req.query as Record<string, string>;
   const result = await ItemCatalogService.peekNextItemCode({ type, year, prefix, transfer });
   res.json(result);

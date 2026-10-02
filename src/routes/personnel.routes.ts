@@ -3,13 +3,14 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { personnel, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { normalizePhoneNumber, normalizeNationalId } from '../utils.js';
 import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -321,7 +322,7 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
 });
 
 // GET /api/personnel - List personnel
-router.get('/personnel', async (req, res) => {
+router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), async (req, res) => {
   try {
     const search = (req.query.search as string) || '';
     const status = (req.query.status as string) || '';
@@ -404,7 +405,7 @@ router.get('/personnel', async (req, res) => {
 });
 
 // GET /api/personnel/:id - Single personnel detail
-router.get('/personnel/:id', validate(paramsIdSchema), async (req, res) => {
+router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [record] = await orm

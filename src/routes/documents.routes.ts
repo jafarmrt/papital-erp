@@ -17,6 +17,7 @@ import { getTodayJalaliDate } from '../utils.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -208,7 +209,7 @@ export const reconcileStockSchema = z.object({
 
 // V9-1.2: نگاه غیرمخرب (Peek) — شماره بعدی را بدون افزایش شمارنده برمی‌گرداند تا
 // بارگذاری فرم‌ها و فرم‌های رهاشده هرگز شماره سند نسوزانند.
-router.get('/documents/next-ref', validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documents), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
   const nextRef = await DocumentService.peekNextRef(String(req.query.type));
   res.json({ nextRef });
 }));
@@ -365,7 +366,7 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
   res.json({ success: true, docId: newDocId });
 }));
 
-router.get('/documents', validate(documentsQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
   const status = req.query.status as string;
   const search = req.query.search as string;
@@ -392,7 +393,7 @@ router.get('/documents', validate(documentsQuerySchema), asyncHandler(async (req
   res.json(result);
 }));
 
-router.get('/documents/by-ref/:ref', validate(paramsRefSchema), asyncHandler(async (req, res) => {
+router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsRefSchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
   const ref = req.params.ref;
   const docsResult = await DocumentService.getDocuments(type);
@@ -405,7 +406,7 @@ router.get('/documents/by-ref/:ref', validate(paramsRefSchema), asyncHandler(asy
   res.json(doc);
 }));
 
-router.get('/documents/audit-items', validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.documents), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
   const location = (req.query.location as string) || 'main';
   const allItems = await orm
     .select()
@@ -434,7 +435,7 @@ router.get('/documents/audit-items', validate(auditItemsQuerySchema), asyncHandl
   res.json(formatted);
 }));
 
-router.get('/documents/:id', validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
+router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
   const rawId = req.params.id;
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);
   if (!doc) throw new NotFoundError(`سند با شناسه یا عطف ${rawId} یافت نشد`);

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { fetchJson } from '../api';
+import { useAuth } from '../contexts/AuthContext';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions';
 import {
   Personnel,
   PieceworkTask,
@@ -31,6 +33,14 @@ export interface TaskFormData {
 
 export function usePiecework() {
   const [activeTab, setActiveTab] = useState<'logs' | 'tasks' | 'rates' | 'payrolls' | 'project-costs'>('logs');
+
+  // v7.0.59 (TD-223، تصمیم مالک محصول): مبالغ فیش‌ها فقط برای دارندگان مجوز فیش (همان گارد API)
+  const { user, userPermissions } = useAuth();
+  const canViewPayrolls = Boolean(
+    userPermissions?.isAdmin || user?.role === 'admin' ||
+    (Array.isArray(userPermissions?.permissions) &&
+      READ_PERMISSIONS.payrolls.some(p => userPermissions.permissions.includes(p)))
+  );
 
   // Core Data Lists
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
@@ -109,7 +119,7 @@ export function usePiecework() {
         fetchJson('/personnel', { signal }),
         fetchJson(`/piecework/tasks?status=${status}`, { signal }),
         fetchJson('/piecework/logs', { signal }),
-        fetchJson('/piecework/payrolls', { signal }),
+        canViewPayrolls ? fetchJson('/piecework/payrolls', { signal }) : Promise.resolve([]),
         fetchJson('/projects', { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load projects for piecework:', err);
@@ -714,6 +724,7 @@ export function usePiecework() {
   }, [logsList]);
 
   return {
+    canViewPayrolls,
     activeTab,
     setActiveTab,
     personnelList,

@@ -3,13 +3,14 @@ import { orm } from '../db/drizzle.js';
 import { transfers, items } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { parsePagination } from '../lib/pagination.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { TransferService } from '../services/transfer.service.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ function extractTransferCode(code: string): string | null {
 }
 
 // GET /api/transfers - Get all transfer codes and their linked products with pagination & search
-router.get('/transfers', authenticateToken, async (req: Request, res: Response) => {
+router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), async (req: Request, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
     const isAll = req.query.all === 'true' || limit === 0;
@@ -146,7 +147,7 @@ router.get('/transfers', authenticateToken, async (req: Request, res: Response) 
 });
 
 // GET /api/transfers/:code - Get single transfer code details and products
-router.get('/transfers/:code', authenticateToken, validate(deleteTransferSchema), async (req: Request, res: Response) => {
+router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(deleteTransferSchema), async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
     const [saved] = await orm.select().from(transfers).where(eq(transfers.code, code)).limit(1);

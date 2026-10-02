@@ -120,7 +120,8 @@ export function PieceworkPayrollPage() {
     filteredTasks,
     totalLoggedAmount,
     pendingLoggedAmount,
-    taskCategories
+    taskCategories,
+    canViewPayrolls
   } = usePiecework();
 
   return (
@@ -155,6 +156,7 @@ export function PieceworkPayrollPage() {
         logsCount={logsList.length}
         tasksCount={tasksList.length}
         payrollsCount={payrollsList.length}
+        showPayrolls={canViewPayrolls}
       />
 
       {/* TAB 1: WORK LOGS */}
@@ -217,7 +219,7 @@ export function PieceworkPayrollPage() {
       )}
 
       {/* TAB 4: PAYROLLS & SETTLEMENTS */}
-      {activeTab === 'payrolls' && (
+      {activeTab === 'payrolls' && canViewPayrolls && (
         <PieceworkPayrollsTab
           payrollsList={payrollsList}
           onOpenPayrollModal={handleOpenPayrollModal}

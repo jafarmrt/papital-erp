@@ -4,11 +4,12 @@ import { orm } from '../db/drizzle.js';
 import { items, itemPrices } from '../db/schema.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { ItemsService } from '../services/items.service.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../utils.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ export const batchPriceUpdateSchema = z.object({
 });
 
 // GET /items/prices/all
-router.get('/items/prices/all', async (req, res) => {
+router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPrices), async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(eq(itemPrices.isDeleted, 0));
     const activeStrategies = await ItemsService.getPricingStrategies();
@@ -55,7 +56,7 @@ router.get('/items/prices/all', async (req, res) => {
 });
 
 // GET /items/:id/prices
-router.get('/items/:id/prices', validate(paramsIdSchema), async (req, res) => {
+router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(and(eq(itemPrices.itemId, Number(req.params.id)), eq(itemPrices.isDeleted, 0)));
     const activeStrategies = await ItemsService.getPricingStrategies();
@@ -67,7 +68,7 @@ router.get('/items/:id/prices', validate(paramsIdSchema), async (req, res) => {
 });
 
 // GET /items/:id/prices/history
-router.get('/items/:id/prices/history', validate(paramsIdSchema), async (req, res) => {
+router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(eq(itemPrices.itemId, Number(req.params.id))).orderBy(desc(itemPrices.id));
     res.json(prices);

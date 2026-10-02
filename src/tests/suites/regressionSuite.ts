@@ -4794,6 +4794,127 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.26: v7.0.59 (TD-223، تصمیم مالک محصول): مسیرهای خواندن فقط برای دارنده مجوز همان بخش (یا فرم‌هایی که
+  // از آن فهرست انتخاب می‌گیرند)؛ مبالغ فیش‌ها فقط با مجوز فیش؛ فهرست کامل کاربران و نقش‌ها فقط برای مدیریت؛
+  // پیوست فاکتور و سند انبار از مجوز خواندن سند پیروی می‌کند
+  if (shouldRun('reg_read_scope_routes_td_223', 'td223', 'authorize', 'routes')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.59: محدوده مجوز مسیرهای خواندن طرف‌حساب، سند، کالا، قیمت، پرسنل، کارمزد، فیش، کاربران و پیوست سند (TD-223)';
+    const createdRoleIds: number[] = [];
+    const fsMod = await import('fs');
+    const pathMod = await import('path');
+    const osMod = await import('os');
+    const previousAttachmentsDir = process.env.ATTACHMENTS_DIR;
+    const tempRoot = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), 'erp-td223-'));
+    process.env.ATTACHMENTS_DIR = tempRoot;
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, loginTestUser } = await import('../fixtures/httpTestHelper.js');
+      const { createTestRole, createTestUser, createTestDocument } = await import('../fixtures/factories.js');
+      const { roles } = await import('../../db/schema.js');
+      const app = await getTestApp();
+      const sessionFor = async (permissions: string[]): Promise<string> => {
+        const role = await createTestRole({ permissions });
+        createdRoleIds.push(role.id);
+        return loginTestUser(app, (await createTestUser({ role: role.code })).username);
+      };
+      const logger = await sessionFor(['daily_logs.view', 'daily_logs.create']);
+      const production = await sessionFor(['products.view', 'warehouse.view', 'projects.view', 'piecework.view', 'piecework.log']);
+      const treasurer = await sessionFor(['accounting.view', 'accounting.treasury', 'accounting.cheques', 'documents.view', 'customers.view']);
+      const payroll = await sessionFor(['piecework.payroll']);
+      const userAdmin = await sessionFor(['users.manage']);
+
+      const status = async (cookie: string, url: string) => (await request(app).get(url).set('Cookie', cookie)).status;
+      const expectations: Array<[string, string, string, number]> = [
+        // کاربر ثبت گزارش: هیچ‌کدام
+        ['logger', logger, '/api/customers', 403],
+        ['logger', logger, '/api/customers/export-excel', 403],
+        ['logger', logger, '/api/documents', 403],
+        ['logger', logger, '/api/items', 403],
+        ['logger', logger, '/api/items/prices/all', 403],
+        ['logger', logger, '/api/personnel', 403],
+        ['logger', logger, '/api/piecework/tasks', 403],
+        ['logger', logger, '/api/piecework/logs', 403],
+        ['logger', logger, '/api/piecework/payrolls', 403],
+        ['logger', logger, '/api/transfers', 403],
+        ['logger', logger, '/api/pending-materials', 403],
+        ['logger', logger, '/api/inventory/reserved-items', 403],
+        ['logger', logger, '/api/users', 403],
+        ['logger', logger, '/api/roles', 403],
+        ['logger', logger, '/api/permissions', 403],
+        // آنچه برای همه باز می‌ماند
+        ['logger', logger, '/api/users/list-simple', 200],
+        ['logger', logger, '/api/piecework/payrolls/mine', 200],
+        // مدیر تولید: کارمزد و پرسنل و کالا بله، مبالغ فیش‌ها نه
+        ['production', production, '/api/piecework/tasks', 200],
+        ['production', production, '/api/personnel', 200],
+        ['production', production, '/api/items', 200],
+        ['production', production, '/api/piecework/payrolls', 403],
+        ['production', production, '/api/users', 403],
+        // خزانه‌دار: فیش‌ها (پرداخت) و فهرست کالا برای صفحه ورود و خروج انبار بله، قیمت‌ها نه
+        ['treasurer', treasurer, '/api/piecework/payrolls', 200],
+        ['treasurer', treasurer, '/api/items', 200],
+        ['treasurer', treasurer, '/api/items/prices/all', 403],
+        ['treasurer', treasurer, '/api/customers/export-excel', 200],
+        // دارنده مجوز فیش و مدیر کاربران
+        ['payroll', payroll, '/api/piecework/payrolls', 200],
+        ['userAdmin', userAdmin, '/api/users', 200],
+        ['userAdmin', userAdmin, '/api/roles', 200],
+        ['userAdmin', userAdmin, '/api/permissions', 200],
+      ];
+      const wrong: string[] = [];
+      for (const [who, cookie, url, want] of expectations) {
+        const got = await status(cookie, url);
+        if (got !== want) wrong.push(`${who} ${url}: ${got} (انتظار ${want})`);
+      }
+
+      // پیوست سند انبار: از مجوز خواندن سند پیروی می‌کند
+      const { AttachmentStorageService } = await import('../../services/attachments/attachmentStorage.service.js');
+      const { document: doc } = await createTestDocument({ refNumber: `DOC_TD223_${Date.now()}` }, []);
+      const [stored] = await AttachmentStorageService.attachToNewRecord(orm as any, 'document', doc.id,
+        [{ id: 'a', name: 'note.txt', url: 'data:text/plain;base64,c2FsYW0=' }], 'td223');
+      const attLogger = await status(logger, stored.url);
+      const attTreasurer = await status(treasurer, stored.url);
+      if (attLogger !== 403) wrong.push(`پیوست سند برای کاربر ثبت گزارش: ${attLogger} (انتظار 403)`);
+      if (attTreasurer !== 200) wrong.push(`پیوست سند برای دارنده documents.view: ${attTreasurer} (انتظار 200)`);
+      await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+      createdRoleIds.length = 0;
+
+      if (wrong.length > 0) {
+        throw new Error(`محدوده مجوز نادرست (${wrong.length}): ${wrong.join('، ')}`);
+      }
+      results.push(makeTestCase({
+        id: 'reg_read_scope_routes_td_223',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: `${expectations.length + 2} بررسی وضعیت دسترسی`
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_read_scope_routes_td_223',
+        scenarioId: 'route_authorization_scope',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdRoleIds.length > 0) {
+        const { roles } = await import('../../db/schema.js');
+        await orm.delete(roles).where(inArray(roles.id, createdRoleIds));
+      }
+      if (previousAttachmentsDir === undefined) delete process.env.ATTACHMENTS_DIR;
+      else process.env.ATTACHMENTS_DIR = previousAttachmentsDir;
+      fsMod.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

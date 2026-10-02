@@ -9,6 +9,8 @@ interface PieceworkTabsNavProps {
   logsCount: number;
   tasksCount: number;
   payrollsCount: number;
+  /** v7.0.59 (TD-223): زبانه فیش‌ها فقط برای دارندگان مجوز فیش */
+  showPayrolls?: boolean;
 }
 
 export function PieceworkTabsNav({
@@ -16,9 +18,10 @@ export function PieceworkTabsNav({
   setActiveTab,
   logsCount,
   tasksCount,
-  payrollsCount
+  payrollsCount,
+  showPayrolls = true
 }: PieceworkTabsNavProps) {
-  const tabs = [
+  const allTabs = [
     {
       id: 'logs' as PieceworkTabType,
       label: 'کارکرد روزانه پرسنل',
@@ -48,6 +51,7 @@ export function PieceworkTabsNav({
       icon: FolderKanban
     }
   ];
+  const tabs = showPayrolls ? allTabs : allTabs.filter(t => t.id !== 'payrolls');
 
   return (
     <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto">

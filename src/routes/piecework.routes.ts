@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePersonnelData, sanitizePayrollRecord } from '../lib/piiMasker.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 
@@ -155,7 +156,7 @@ const registerPayrollPaymentSchema = z.object({
 // ==========================================
 
 // GET /api/piecework/tasks - List tasks (active, archived, or all)
-router.get('/piecework/tasks', async (req, res) => {
+router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
   try {
     const { category, search, status = 'active' } = req.query;
     
@@ -195,7 +196,7 @@ router.get('/piecework/tasks', async (req, res) => {
 });
 
 // GET /api/piecework/tasks-history - Get global rate change history
-router.get('/piecework/tasks-history', async (req, res) => {
+router.get('/piecework/tasks-history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
     const history = await orm.select()
@@ -210,7 +211,7 @@ router.get('/piecework/tasks-history', async (req, res) => {
 });
 
 // GET /api/piecework/tasks/:id/history - Get rate change history for specific task
-router.get('/piecework/tasks/:id/history', validate(paramsIdSchema), async (req, res) => {
+router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const history = await orm.select()
@@ -408,7 +409,7 @@ router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin
 // ==========================================
 
 // GET /api/piecework/categories
-router.get('/piecework/categories', async (req, res) => {
+router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
   try {
     let dbCats: Array<typeof taskCategories.$inferSelect> = [];
     try {
@@ -528,7 +529,7 @@ router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin'
 // ==========================================
 
 // GET /api/piecework/personnel-rates/:personnelId
-router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], validate(paramsPersonnelIdSchema), async (req, res) => {
+router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsPersonnelIdSchema), async (req, res) => {
   try {
     const personnelId = Number(req.params.personnelId);
     const rates = await orm.select()
@@ -560,7 +561,7 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('perso
 // ==========================================
 
 // GET /api/piecework/logs - List work logs
-router.get('/piecework/logs', async (req, res) => {
+router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
   try {
     const { personnelId, projectId, startDate, endDate, status } = req.query;
 
@@ -699,7 +700,7 @@ router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), val
 // ==========================================
 
 // GET /api/piecework/payrolls - List payrolls
-router.get('/piecework/payrolls', async (req, res) => {
+router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrolls), async (req, res) => {
   try {
     const { personnelId, status } = req.query;
 
@@ -883,7 +884,7 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
 });
 
 // GET /api/piecework/payrolls/:id - Get single payroll with detailed items
-router.get('/piecework/payrolls/:id', validate(paramsIdSchema), async (req, res) => {
+router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), async (req, res) => {
   try {
     const id = Number(req.params.id);
 

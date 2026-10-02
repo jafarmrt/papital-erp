@@ -9,6 +9,7 @@ import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { PendingMaterialsService } from '../services/pendingMaterials.service.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 
@@ -79,7 +80,7 @@ const updatePendingMaterialSchema = z.object({
 });
 
 // GET /api/pending-materials - List pending raw materials
-router.get('/pending-materials', authenticateToken, async (req: Request, res: Response) => {
+router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), async (req: Request, res: Response) => {
   try {
     const { status } = req.query;
     const conditions = [eq(pendingMaterials.isDeleted, 0)];

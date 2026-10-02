@@ -3,7 +3,7 @@ import { sql, ilike, or, and, eq } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize } from '../middleware/authorize.js';
+import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -11,6 +11,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -96,7 +97,7 @@ const updateCustomerValidation = z.object({
   })
 });
 
-router.get('/customers', asyncHandler(async (req, res) => {
+router.get('/customers', authorizePermission(...READ_PERMISSIONS.customers), asyncHandler(async (req, res) => {
   // V9-1.3: صفحه‌بندی NaN-safe با سقف
   const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
   const search = req.query.search as string;
@@ -157,7 +158,7 @@ router.get('/customers', asyncHandler(async (req, res) => {
 }));
 
 // GET /api/customers/export-excel - Structured Excel export rows
-router.get('/customers/export-excel', asyncHandler(async (req, res) => {
+router.get('/customers/export-excel', authorizePermission(...READ_PERMISSIONS.customersExport), asyncHandler(async (req, res) => {
   const partyTypeFilter = (req.query.partyType || req.query.type) as string;
   const conditionsList = [eq(customers.isDeleted, 0)];
 

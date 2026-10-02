@@ -11,6 +11,7 @@ import { BadRequestError, ConflictError } from '../errors/customErrors.js';
 import { KardexBackfillService } from '../services/inventory/kardexBackfill.service.js';
 import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -120,7 +121,7 @@ export const releaseAllocationSchema = z.object({
 });
 
 // GET /api/inventory/reserved-items - Comprehensive report of reserved items
-router.get('/reserved-items', asyncHandler(async (req, res) => {
+router.get('/reserved-items', authorizePermission(...READ_PERMISSIONS.reservedItems), asyncHandler(async (req, res) => {
   const report = await ItemsService.getReservedStockDetails();
   res.json(report);
 }));

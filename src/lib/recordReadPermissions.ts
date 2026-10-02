@@ -1,18 +1,55 @@
 /**
- * v7.0.56 (audit P2-9): مجوزهای خواندن هر نوع رکورد دارای پیوست — یک منبع برای گارد مسیرهای خواندن همان رکورد
- * و برای دریافت فایل پیوست آن (GET /api/attachments/:id)؛ هر کس رکورد را می‌بیند پیوست آن را هم می‌بیند.
- * `null` یعنی مسیر خواندن آن رکورد هنوز فقط احراز هویت دارد (TD-223: نگاشت مسیر به مجوز در انتظار تصمیم مالک محصول).
+ * مجوزهای خواندن هر بخش — یک منبع برای گارد مسیرهای خواندن و برای دریافت فایل پیوست رکوردها
+ * (GET /api/attachments/:id؛ هر کس رکورد را می‌بیند پیوست آن را هم می‌بیند). هر فهرست «یکی کافی است» است:
+ * مجوز مشاهده همان بخش به‌علاوه مجوز فرم‌هایی که از آن فهرست انتخاب می‌گیرند.
+ * v7.0.56 (audit P2-9): سندهای حسابداری، خزانه، چک و پروژه.
+ * v7.0.59 (TD-223، تصمیم مالک محصول، فقط مجوزهای موجود): بقیه مسیرهای خواندن.
  */
-export const RECORD_READ_PERMISSIONS = {
-  journal_voucher: ['accounting.vouchers', 'accounting.reports', 'accounting.view'],
-  treasury_transaction: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
-  cheque: ['accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'],
-  production_project: [
+export const READ_PERMISSIONS = {
+  journalVouchers: ['accounting.vouchers', 'accounting.reports', 'accounting.view'],
+  treasuryTransactions: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
+  cheques: ['accounting.cheques', 'accounting.treasury', 'accounting.reports', 'accounting.view'],
+  projects: [
     'projects.view', 'projects.create', 'projects.edit', 'documents.view', 'documents.create',
     'warehouse.in', 'warehouse.out', 'warehouse.view'
   ],
-  document: null,
-  piecework_payroll: null,
+  // documents.view و warehouse.in: صفحه «ورود و خروج انبار» فهرست تأمین‌کنندگان را می‌خواند
+  customers: ['customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'crm.view', 'projects.view', 'procurement.view'],
+  customersExport: ['customers.view'],
+  documents: [
+    'documents.view', 'documents.create', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
+    'audit.view', 'crm.view', 'workflow.view'
+  ],
+  // صفحه‌های «ورود و خروج انبار» (documents.view، warehouse.in)، قیمت‌گذاری (products.edit_price) و انبارگردانی (audit.view)
+  items: [
+    'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'warehouse.view', 'warehouse.in',
+    'audit.view', 'projects.view', 'crm.view', 'procurement.view'
+  ],
+  itemPrices: ['products.view', 'products.edit_price', 'projects.view'],
+  personnel: [
+    'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',
+    'documents.view', 'documents.create', 'warehouse.in'
+  ],
+  /** کارکرد، تعرفه‌ها، عناوین و دسته‌های کارمزدی */
+  pieceworkReference: ['piecework.view', 'piecework.log', 'piecework.manage_tasks', 'projects.view', 'settings.manage'],
+  /** فیش‌های حقوق و کارمزد با مبالغ (فیش خود کاربر از /piecework/payrolls/mine) */
+  payrolls: ['piecework.payroll', 'personnel.manage', 'accounting.treasury'],
+  transfers: ['products.view'],
+  pendingMaterials: ['pending_materials.view', 'products.view'],
+  reservedItems: ['products.view', 'reports.view', 'warehouse.view', 'warehouse.in', 'documents.view', 'documents.create'],
+  /** فهرست کامل کاربران و نقش‌ها (فهرست ساده نام‌ها /users/list-simple برای همه باز است) */
+  userDirectory: ['users.manage', 'roles.manage', 'personnel.manage', 'workflow.manage', 'settings.manage'],
+  permissionCatalog: ['roles.manage', 'users.manage'],
+} as const satisfies Record<string, readonly string[]>;
+
+/** مجوز خواندن رکوردهای دارای پیوست (نوع رکورد در file_attachments) */
+export const RECORD_READ_PERMISSIONS = {
+  journal_voucher: READ_PERMISSIONS.journalVouchers,
+  treasury_transaction: READ_PERMISSIONS.treasuryTransactions,
+  cheque: READ_PERMISSIONS.cheques,
+  production_project: READ_PERMISSIONS.projects,
+  document: READ_PERMISSIONS.documents,
+  piecework_payroll: READ_PERMISSIONS.payrolls,
 } as const satisfies Record<string, readonly string[] | null>;
 
 export type AttachmentEntityType = keyof typeof RECORD_READ_PERMISSIONS;
