@@ -10,7 +10,7 @@
 3. **Row Locking:** For data updated within the same transaction, use `.for('update')` (NOT `.forUpdate()`).
 4. **Explicit Text Casting for WHERE Queries:** For code columns (e.g. `project_code`), cast with `sql\`${table.projectCode} = ${String(code)}::text\``.
 5. **Drizzle CamelCase Mapping & Standard Serialization (TD-170):** Express API endpoints for production projects and stages use standardized `camelCase` keys matching the Drizzle schema and typed contracts via `formatProject` and `formatStage` (with backward compatibility aliases for safe consumption).
-6. **Atomic Sequence Numbering:** Sequential numbers (vouchers, treasury transactions, document references) MUST use PostgreSQL Sequences (`SELECT nextval('...')`) or atomic counter tables (`document_counters` UPSERT), NEVER `COUNT(*)` or `MAX() + 1`.
+6. **Atomic Sequence Numbering:** Sequential numbers (vouchers, treasury transactions, document references) MUST use PostgreSQL Sequences (`SELECT nextval('...')`) or atomic counter tables (`document_ref_counters` / `item_code_counters`, row lock or UPSERT), NEVER `COUNT(*)` or `MAX() + 1`.
 7. **Module Resolution (`/src/db/drizzle.js`):** Subdirectory services MUST import Drizzle instance explicitly from `../../db/drizzle.js` (or `.ts`) to ensure clean production bundling.
 
 ## 2. API Response Handling & Array Safety Guard
@@ -64,6 +64,7 @@
 ## 7. AI Agent Auto-Changelog Updates & Release Tracking
 - **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to the **active** changelog file (currently `src/data/changelogs/7.ts`, series `v7.x.y` — see §13 and §23) with Jalali date, version bump, title, summary, changes, and fixes.
 - **Short Entries, Important Points Only (v7.0.54, product-owner decision):** Every version still gets exactly one entry, but it records only important changes and important / critical bugs — no file lists, test names, debt bookkeeping or "version bumped" lines (those belong in the commit and `TECH_DEBT.md`). Limits in `src/data/changelogs/compactRule.ts` (title ≤ 90, summary ≤ 300 chars, ≤ 4 changes, ≤ 4 fixes, each ≤ 150 chars) are enforced by `npm run check:version`.
+- **Every Claim Has a Test (v7.0.64, audit P3-13):** Every fix or behaviour change recorded in the changelog is backed by at least one automated test that fails on the previous version and passes on the new one. The test id is named in the commit message and in the `TECH_DEBT.md` / `TECH_DEBT_ARCHIVE.md` row (never in `7.ts`, per the rule above). A claim without such a test (e.g. a refactor or a documentation change) is worded as such and never as a fix.
 
 ## 8. Server Startup & Background Seed Execution
 - **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately.
@@ -123,20 +124,13 @@
 - **Standardized `fetchJson`:** Use `fetchJson` from `/src/api.ts` with `credentials: 'include'`.
 - **Guarded Background Polling:** Intervals (`setInterval`) must check active sub-tab state and clean up on unmount.
 
-## 17. System Testing, E2E Audit & Token-Safe Execution
+## 17. System Testing, E2E Audit & Test Runs
 - **Modular Test Suites:** Suites isolated under `src/tests/suites/` (`unit`, `database`, `workflow`, `concurrency`, `integration`, `security`, `api`, `regression`, `criticalPath`, `businessLogicAudit`, etc.).
-- **Interactive Chat Token Safety Guard (CRITICAL):**
-  - **No Blind Full-Suite Runs in Chat:** Running the entire test runner (`npm test` or `npm run test:full`) runs 15+ heavy test suites, generates tens of thousands of characters in console logs, takes >60s, and causes Gemini 2M TPM input token quota exhaustion (`resource_exhausted` / `model overloaded`).
-  - **Fast Verification First:** Always verify syntax, types, and builds via fast, lightweight tools (`lint_applet` / `npm run lint` and `compile_applet`).
-  - **Targeted Suite Execution:** If runtime database verification is necessary during a prompt, run ONLY the specific relevant suite:
-    ```bash
-    npx tsx scripts/run-tests.ts --suite database
-    # or
-    npx tsx scripts/run-tests.ts --suite regression
-    ```
-  - **Full Suite Reservation:** Reserve `npm run test:full` for offline CLI execution, CI/CD, or when explicitly requested by the user.
-  - **No Polling Loops:** Never poll `manage_task` repeatedly on long background jobs; wait for the system notification.
-  - **Context Reset Recommendation:** When a conversation exceeds 20-25 turns, advise the user to start a fresh chat to reset input token accumulation.
+- **Test Runs (v7.0.64, product-owner decision):**
+  - **While working:** verify with `npm run lint` and run ONLY the tests relevant to the change (`npx tsx scripts/run-tests.ts --suite <name> --filter <id-or-keyword>`), plus the same test on the previous code to prove it fails there.
+  - **Before every push:** run the full suite with the CI settings (`npm test` with the environment of the `test` job in `.github/workflows/ci.yml` against PostgreSQL 16) and `npm run build`; push only when both pass.
+  - **Otherwise:** a full run happens only when the user explicitly asks for it.
+  - **No Polling Loops:** never poll long background jobs repeatedly; wait for the completion notification.
 
 ## 18. Financial Reporting & Trial Balance
 - **4-Level Trial Balance (`FinancialReportsTab.tsx`):** Displays group, general, subsidiary, and detailed accounts.
@@ -145,7 +139,7 @@
 - **Drill-Down:** All balance rows support instant navigation to detailed ledger cards (`ledger`).
 
 ## 19. Concurrency, OCC & Database Stability Rules
-- **PostgreSQL Atomic Sequences (DB-001, DB-003, DB-011):** Sequence IDs generated via `nextval('...')` or `document_counters` UPSERT.
+- **PostgreSQL Atomic Sequences (DB-001, DB-003, DB-011):** Sequence IDs generated via `nextval('...')` or the `document_ref_counters` / `item_code_counters` counter tables.
 - **Idempotency OCC Locks (DB-010):** `IdempotencyService` uses `.onConflictDoNothing()` and OCC (`status` and `locked_until` in UPDATE WHERE clause).
 - **Stock Soft Delete & Reversal (DB-009):** `is_deleted = 1` + reversal transaction + balance recalculation.
 - **Negative Stock Guard (DB-006, TD-180):** Inventory deductions below zero are rejected (policy fixed to `forbidden`, enforced in `ItemWarehouseStockService.applyMovement` and by the DB CHECK constraint).

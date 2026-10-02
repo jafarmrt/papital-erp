@@ -1341,6 +1341,62 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (originalWindow === undefined) delete g.window; else g.window = originalWindow;
   }
 
+  // v7.0.64 (audit P3-12): سازگاری اسناد حاکمیتی با کد و رجیستری بدهی
+  const tGovStart = Date.now();
+  const govTestName = 'v7.0.64: جدول‌های نام‌برده در AGENTS.md و ARCHITECTURE_RULES.md وجود دارند و برچسب‌ها و آمار TECH_DEBT.md درست است (P3-12)';
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const root = process.cwd();
+    const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
+    const violations: string[] = [];
+
+    // ۱) هر جدولی که اسناد حاکمیتی با این پسوندها نام می‌برند باید در اسکیما تعریف شده باشد
+    const schemaDir = path.join(root, 'src/db/schema');
+    const tableNames = new Set<string>();
+    for (const f of fs.readdirSync(schemaDir).filter(n => n.endsWith('.ts'))) {
+      for (const m of fs.readFileSync(path.join(schemaDir, f), 'utf8').matchAll(/pgTable\(\s*'([a-z0-9_]+)'/g)) tableNames.add(m[1]);
+    }
+    for (const doc of ['AGENTS.md', 'ARCHITECTURE_RULES.md']) {
+      for (const m of read(doc).matchAll(/`([a-z][a-z0-9_]*_(?:counters|stocks|periods|attachments|corrections|anomalies|vouchers|transactions|logs))`/g)) {
+        if (!tableNames.has(m[1])) violations.push(`${doc}: جدول «${m[1]}» در اسکیما وجود ندارد`);
+      }
+    }
+
+    // ۲) ردیف‌های فعال TECH_DEBT.md فقط وضعیت جاری دارند و آمار با تعداد ردیف‌ها یکی است
+    const debt = read('TECH_DEBT.md');
+    const toLatin = (v: string) => v.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    const rows = debt.split('\n').filter(l => /^\| TD-\d+ \|/.test(l));
+    for (const row of rows) {
+      const cells = row.split(' | ');
+      const status = cells[cells.length - 1].replace(/\|\s*$/, '').trim();
+      if (!/^(open|in_progress|scheduled:فاز ۳ ممیزی)/.test(status)) violations.push(`${cells[0].replace('| ', '')}: وضعیت نامعتبر «${status.slice(0, 40)}»`);
+    }
+    const activeStat = debt.match(/\*\*فعال:\*\*\s*([۰-۹0-9]+)\s*ردیف/);
+    if (!activeStat || Number(toLatin(activeStat[1])) !== rows.length) violations.push(`آمار ردیف‌های فعال (${activeStat?.[1]}) با تعداد ردیف‌ها (${rows.length}) یکی نیست`);
+
+    if (violations.length > 0) throw new Error(violations.join(' | '));
+    results.push(makeTestCase({
+      id: 'unit_governance_docs_consistency_p3_12',
+      name: govTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tGovStart,
+      details: `${tableNames.size} جدول اسکیما؛ ${rows.length} ردیف فعال رجیستری بدهی با وضعیت جاری`
+    }));
+  } catch (err: any) {
+    results.push(makeTestCase({
+      id: 'unit_governance_docs_consistency_p3_12',
+      name: govTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tGovStart,
+      error: err.message
+    }));
+  }
+
   return results;
 }
 
