@@ -77,6 +77,22 @@ export const fiscalPeriods = pgTable('fiscal_periods', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
 });
 
+/**
+ * v7.0.82 (TD-231): پشتیبان و گزارش اصلاح تاریخ‌های قدیمی «07-10-1405 AP» (مهاجرت 0030)؛ مقدار قبلی و جدید هر ردیف
+ * پیش از تغییر ثبت می‌شود و بازرس سلامت مالی آن را نشان می‌دهد. status: 'corrected' | 'refused' (سند سال مالی بسته)
+ */
+export const legacyDateRepairs = pgTable('legacy_date_repairs', {
+  id: serial('id').primaryKey(),
+  tableName: text('table_name').notNull(),
+  rowId: integer('row_id').notNull(),
+  columnName: text('column_name').notNull(),
+  oldValue: text('old_value').notNull(),
+  newValue: text('new_value').notNull(),
+  status: text('status').notNull(),
+  reason: text('reason'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+});
+
 export const journalVoucherItems = pgTable('journal_voucher_items', {
   id: serial('id').primaryKey(),
   voucherId: integer('voucher_id').notNull().references(() => journalVouchers.id),

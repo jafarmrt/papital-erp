@@ -1,6 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import { sql, asc, and, eq, or, like } from 'drizzle-orm';
-import { documents, refFiscalYearCorrections } from '../../db/schema.js';
+import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type {
   FinancialHealthReport,
@@ -837,6 +837,42 @@ export class FinancialHealthService {
         details: 'مالیات این پیش‌فاکتور در ستون مالیات ثبت نشده است (TD-199).',
       })),
       metrics: { legacyVatProformas: legacyVatProformas.length },
+    });
+
+    // =========================================================================
+    // آزمون ۱۰: v7.0.82 (TD-231) اصلاح تاریخ‌های قدیمی «07-10-1405 AP» (مهاجرت 0030)
+    // =========================================================================
+    const dateRepairs = await orm.select().from(legacyDateRepairs).orderBy(asc(legacyDateRepairs.id));
+    const refusedDateRepairs = dateRepairs.filter((r) => r.status === 'refused');
+    const dateRepairTableLabel: Record<string, string> = {
+      journal_vouchers: 'سند حسابداری',
+      treasury_transactions: 'تراکنش خزانه',
+      piecework_payrolls: 'فیش حقوقی',
+    };
+    tests.push({
+      id: 'legacy_mdy_date_repairs',
+      category: 'vouchers',
+      title: 'اصلاح تاریخ‌های قدیمی با قالب ماه-روز-سال',
+      description: 'تا v7.0.73 برخی اسناد افتتاحیه، اسناد و تراکنش‌های پرداخت حقوق تاریخ «07-10-1405» گرفته بودند؛ این تاریخ‌ها به قالب درست برگردانده شدند و مقدار قبلی نگه داشته شد',
+      status: refusedDateRepairs.length > 0 ? 'warning' : 'healthy',
+      scoreImpact: 0,
+      count: refusedDateRepairs.length,
+      message: dateRepairs.length === 0
+        ? 'هیچ تاریخی با قالب قدیمی ماه-روز-سال یافت نشد.'
+        : `${dateRepairs.length - refusedDateRepairs.length} تاریخ اصلاح شد${refusedDateRepairs.length > 0 ? `؛ ${refusedDateRepairs.length} سند حسابداری در سال مالی بسته اصلاح نشد و باید بررسی شود` : ''}.`,
+      quickFixAction: refusedDateRepairs.length > 0 ? 'open_vouchers' : undefined,
+      items: dateRepairs.map((r) => ({
+        id: r.id,
+        code: `${dateRepairTableLabel[r.tableName] ?? r.tableName} #${r.rowId}`,
+        title: r.status === 'refused'
+          ? `اصلاح نشد: ${r.reason || ''} (تاریخ فعلی ${r.oldValue})`
+          : `تاریخ «${r.oldValue}» به «${r.newValue}» اصلاح شد`,
+        subtitle: `ستون: ${r.columnName}`,
+        date: r.newValue,
+        ...(r.tableName === 'journal_vouchers' ? { linkType: 'voucher' as const, linkId: r.rowId } : {}),
+        details: 'مقدار قبلی در جدول legacy_date_repairs نگه داشته شده است.',
+      })),
+      metrics: { corrected: dateRepairs.length - refusedDateRepairs.length, refused: refusedDateRepairs.length },
     });
 
     // =========================================================================

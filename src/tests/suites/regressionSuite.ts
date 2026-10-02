@@ -1064,7 +1064,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
 
     // 2. Setup synthetic dynamic test fiscal year (isolated per run)
-    const testYear = 1500 + Math.floor(Math.random() * 8000);
+    // v7.0.82: سال واقعی (۱۴۲۰ تا ۱۴۷۷) — قید قالب تاریخ journal_vouchers.date (مهاجرت 0030) فقط سال شمسی ۱۳xx تا ۱۵xx
+    // و میلادی ۱۹xx تا ۲۱xx را می‌پذیرد؛ سال‌های تصادفی ۱۶۰۰ تا ۹۴۹۹ تاریخ ساختگی نامعتبر می‌ساختند
+    const testYear = 1420 + Math.floor(Math.random() * 58);
     const testClosingDate = `${testYear}-12-29`;
     const testOpeningDate = `${testYear + 1}-01-01`;
 
@@ -6651,8 +6653,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
         WHERE c.table_schema = current_schema() AND t.table_type = 'BASE TABLE' AND c.data_type = 'text'
           AND left(c.table_name, 1) <> '_' -- جدول‌های پشتیبان مهاجرت‌ها (مانند _repair_0011_timestamps_backup)
-          -- TD-231: تا تصمیم درباره تاریخ‌های قدیمی «07-10-1405 AP» این سه ستون قید ندارند
-          AND (c.table_name, c.column_name) NOT IN (('journal_vouchers', 'date'), ('treasury_transactions', 'date'), ('piecework_payrolls', 'payment_date'))
           AND (c.column_name ~ '(^|_)date(_|$)' OR c.column_name IN ('reconciled_at', 'completed_at', 'last_failed_login_at'))
           AND NOT EXISTS (
             SELECT 1 FROM pg_constraint pc
@@ -6666,7 +6666,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [{ n: covered }] = (await orm.execute(sql`
         SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
-      if (covered !== 24) violations.push(`تعداد قیدهای قالب تاریخ معتبرشده: ${covered} (انتظار ۲۴)`);
+      // v7.0.82 (TD-231): ۲۴ قید مهاجرت 0028 و ۳ قید مهاجرت 0030
+      if (covered !== 27) violations.push(`تعداد قیدهای قالب تاریخ معتبرشده: ${covered} (انتظار ۲۷)`);
       if (missingRows.length > 0) violations.push(`بدون قید قالب معتبر: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
 
       const ROLLBACK = new Error('ROLLBACK_P3_15');
@@ -6934,6 +6935,108 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdDocIds.length > 0) {
         await cleanTestTableData('document_items', 'document_id', createdDocIds);
       }
+    }
+  }
+
+  // Test: v7.0.82 (TD-231): اصلاح تاریخ‌های قدیمی «07-10-1405 AP» با پشتیبان و گزارش (مهاجرت 0030)
+  if (shouldRun('reg_legacy_mdy_date_repair_td_231', 'td231', 'date', 'repair')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.82: تاریخ‌های «07-10-1405» سند حسابداری، تراکنش خزانه و فیش حقوقی با ثبت مقدار قبلی اصلاح می‌شوند؛ سند سال مالی بسته اصلاح نمی‌شود (TD-231)';
+    const ROLLBACK = new Error('ROLLBACK_TD_231');
+    const violations: string[] = [];
+    try {
+      const { treasuryTransactions, pieceworkPayrolls, personnel, fiscalPeriods, legacyDateRepairs } = await import('../../db/schema.js');
+      // ۱) تبدیل شمسی به میلادی SQL با تبدیلگر برنامه یکی است (نوروز ۲۰ و ۲۱ مارس، سال کبیسه، مرز نیمه دوم سال)
+      for (const j of ['1405-07-10', '1403-01-01', '1403-12-30', '1404-01-01', '1404-12-29', '1405-06-31', '1405-07-01', '1407-01-01']) {
+        const [jy, jm, jd] = j.split('-').map(Number);
+        const rows = (await orm.execute(sql`SELECT to_char(erp_jalali_to_gregorian(${jy}::int, ${jm}::int, ${jd}::int), 'YYYY-MM-DD') AS g`) as unknown as { rows: Array<{ g: string }> }).rows;
+        if (rows[0]?.g !== jalaliToIsoDate(j)) violations.push(`تبدیل ${j}: SQL ${rows[0]?.g}، برنامه ${jalaliToIsoDate(j)}`);
+      }
+      // ۲) قیدهای قالب تاریخ این سه ستون معتبرشده‌اند
+      const [{ n: constraints }] = (await orm.execute(sql`
+        SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+        WHERE rel.relnamespace = current_schema()::regnamespace AND pc.convalidated
+          AND pc.conname IN ('chk_journal_vouchers_date_datefmt', 'chk_treasury_transactions_date_datefmt', 'chk_piecework_payrolls_payment_date_datefmt')`) as unknown as { rows: Array<{ n: number }> }).rows;
+      if (constraints !== 3) violations.push(`قیدهای قالب تاریخ سه ستون: ${constraints} (انتظار ۳)`);
+
+      // ۳) داده قدیمی در تراکنشی که در پایان برگردانده می‌شود: قیدها برداشته، ردیف‌ها خراب و تابع اصلاح اجرا می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`ALTER TABLE journal_vouchers DROP CONSTRAINT chk_journal_vouchers_date_datefmt`);
+          await tx.execute(sql`ALTER TABLE treasury_transactions DROP CONSTRAINT chk_treasury_transactions_date_datefmt`);
+          await tx.execute(sql`ALTER TABLE piecework_payrolls DROP CONSTRAINT chk_piecework_payrolls_payment_date_datefmt`);
+          const base = 990000000 + Math.floor(Math.random() * 1000000);
+          const [vOpen] = await tx.insert(journalVouchers).values({ voucherNumber: base, date: '07-10-1405', description: 'ERP-TEST-MARKER TD-231 باز' }).returning({ id: journalVouchers.id });
+          const [vClosed] = await tx.insert(journalVouchers).values({ voucherNumber: base + 1, date: '12-20-1390', description: 'ERP-TEST-MARKER TD-231 بسته' }).returning({ id: journalVouchers.id });
+          await tx.insert(fiscalPeriods).values({ fiscalYear: 1390, status: 'closed' }).onConflictDoUpdate({ target: fiscalPeriods.fiscalYear, set: { status: 'closed' } });
+          const [tr] = await tx.insert(treasuryTransactions).values({
+            transactionNumber: `TD231-${base}`, type: 'payment', date: '07-10-1405 AP', method: 'cash', amount: money(1000), partyName: 'ERP-TEST-MARKER',
+          }).returning({ id: treasuryTransactions.id });
+          const [pers] = await tx.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل TD-231' }).returning({ id: personnel.id });
+          const [pay] = await tx.insert(pieceworkPayrolls).values({
+            payrollNumber: `TD231-${base}`, personnelId: pers.id, startDate: '1405-07-01', endDate: '1405-07-10', title: 'آزمون TD-231',
+            netPayable: money(1000), paymentDate: '07-10-1405 AP',
+          }).returning({ id: pieceworkPayrolls.id });
+
+          await tx.execute(sql`SELECT erp_repair_legacy_mdy_dates()`);
+
+          const [jvOpen] = await tx.select({ date: journalVouchers.date }).from(journalVouchers).where(eq(journalVouchers.id, vOpen.id));
+          const [jvClosed] = await tx.select({ date: journalVouchers.date }).from(journalVouchers).where(eq(journalVouchers.id, vClosed.id));
+          const [trRow] = await tx.select({ date: treasuryTransactions.date }).from(treasuryTransactions).where(eq(treasuryTransactions.id, tr.id));
+          const [payRow] = await tx.select({ paymentDate: pieceworkPayrolls.paymentDate }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, pay.id));
+          if (jvOpen.date !== '1405-07-10') violations.push(`تاریخ سند حسابداری: ${jvOpen.date} (انتظار 1405-07-10)`);
+          if (jvClosed.date !== '12-20-1390') violations.push(`سند سال مالی بسته نباید تغییر کند: ${jvClosed.date}`);
+          if (trRow.date !== '2026-10-02') violations.push(`تاریخ تراکنش خزانه: ${trRow.date} (انتظار 2026-10-02)`);
+          if (payRow.paymentDate !== '1405-07-10') violations.push(`تاریخ پرداخت فیش: ${payRow.paymentDate} (انتظار 1405-07-10)`);
+
+          const log = await tx.select().from(legacyDateRepairs);
+          const entry = (table: string, id: number) => log.find(r => r.tableName === table && r.rowId === id);
+          const eOpen = entry('journal_vouchers', vOpen.id);
+          const eClosed = entry('journal_vouchers', vClosed.id);
+          const eTr = entry('treasury_transactions', tr.id);
+          const ePay = entry('piecework_payrolls', pay.id);
+          if (eOpen?.status !== 'corrected' || eOpen.oldValue !== '07-10-1405') violations.push(`گزارش سند حسابداری: ${JSON.stringify(eOpen)}`);
+          if (eClosed?.status !== 'refused') violations.push(`گزارش سند سال بسته باید refused باشد: ${JSON.stringify(eClosed)}`);
+          if (eTr?.oldValue !== '07-10-1405 AP' || eTr.newValue !== '2026-10-02') violations.push(`گزارش تراکنش خزانه: ${JSON.stringify(eTr)}`);
+          if (ePay?.oldValue !== '07-10-1405 AP') violations.push(`گزارش فیش حقوقی: ${JSON.stringify(ePay)}`);
+
+          // اجرای دوباره چیزی را دوباره ثبت یا تغییر نمی‌دهد
+          await tx.execute(sql`SELECT erp_repair_legacy_mdy_dates()`);
+          const again = await tx.select().from(legacyDateRepairs);
+          if (again.length !== log.length) violations.push(`اجرای دوباره ${again.length - log.length} ردیف گزارش تازه ساخت`);
+
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const health = await FinancialHealthService.runHealthCheck();
+      if (!health.tests.some(t => t.id === 'legacy_mdy_date_repairs')) violations.push('آزمون legacy_mdy_date_repairs در گزارش سلامت مالی نیست');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_legacy_mdy_date_repair_td_231',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سه ستون اصلاح و در legacy_date_repairs ثبت شدند، سند سال بسته رد شد و تبدیل تاریخ SQL با برنامه یکی بود.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_legacy_mdy_date_repair_td_231',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
     }
   }
 
