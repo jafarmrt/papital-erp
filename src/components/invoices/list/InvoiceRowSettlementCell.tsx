@@ -1,14 +1,17 @@
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { formatPersianPrice } from '../../../utils';
+import { amountDecimalsOf } from '../../../lib/invoices/invoiceListDocuments';
 
 interface InvoiceRowSettlementCellProps {
   isCommercial: boolean;
   settlementStatus: string;
   remainingAmt: number;
+  currency?: string;
 }
 
 /** TD-080 (بخش ۳): ستون «وضعیت تسویه» یک ردیف لیست اسناد */
-export function InvoiceRowSettlementCell({ isCommercial, settlementStatus, remainingAmt }: InvoiceRowSettlementCellProps) {
+export function InvoiceRowSettlementCell({ isCommercial, settlementStatus, remainingAmt, currency }: InvoiceRowSettlementCellProps) {
+  const decimals = amountDecimalsOf(currency);
   return (
     <td className="p-3 whitespace-nowrap">
       {isCommercial ? (
@@ -25,7 +28,7 @@ export function InvoiceRowSettlementCell({ isCommercial, settlementStatus, remai
                 <span>تسویه ناقص</span>
               </span>
               <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                مانده: <span className="text-amber-700 font-bold">{formatPersianPrice(remainingAmt)}</span>
+                مانده: <span className="text-amber-700 font-bold">{formatPersianPrice(remainingAmt, undefined, decimals)}</span>
               </div>
             </div>
           ) : (
@@ -35,7 +38,7 @@ export function InvoiceRowSettlementCell({ isCommercial, settlementStatus, remai
                 <span>تسویه نشده</span>
               </span>
               <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                مانده: {formatPersianPrice(remainingAmt)}
+                مانده: {formatPersianPrice(remainingAmt, undefined, decimals)}
               </div>
             </div>
           )}

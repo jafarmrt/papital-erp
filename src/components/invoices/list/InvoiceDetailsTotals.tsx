@@ -1,6 +1,6 @@
 import { DollarSign } from 'lucide-react';
 import { formatPersianPrice, formatCurrencyLabel } from '../../../utils';
-import { addLineGross, addLineDiscount, documentPayableOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { addLineGross, addLineDiscount, amountDecimalsOf, documentPayableOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
 /**
  * TD-080 (بخش ۳): نوار جمع کل، جمع ناخالص و مجموع تخفیف در مودال جزئیات.
@@ -9,6 +9,7 @@ import { addLineGross, addLineDiscount, documentPayableOf, type InvoiceListDocum
  */
 export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
   const vatAmount = Number(selectedDocDetails.vatAmount || 0);
+  const decimals = amountDecimalsOf(selectedDocDetails.currency);
   return (
     <div className="bg-slate-900 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -18,7 +19,7 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
         <div>
           <span className="text-[11px] text-slate-400 block font-medium">جمع کل ارزش نهایی سند:</span>
           <strong className="text-base font-black text-white font-mono">
-            {formatPersianPrice(documentPayableOf(selectedDocDetails))} {formatCurrencyLabel(selectedDocDetails.currency)}
+            {formatPersianPrice(documentPayableOf(selectedDocDetails), undefined, decimals)} {formatCurrencyLabel(selectedDocDetails.currency)}
           </strong>
         </div>
       </div>
@@ -27,20 +28,20 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
         <div className="text-right">
           <span className="text-[10px] text-slate-400 block">جمع ناخالص:</span>
           <span className="font-mono text-slate-200 font-bold">
-            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineGross, 0))}
+            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineGross, 0), undefined, decimals)}
           </span>
         </div>
         <div className="text-right">
           <span className="text-[10px] text-slate-400 block">مجموع تخفیف:</span>
           <span className="font-mono text-rose-400 font-bold">
-            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineDiscount, 0))}
+            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineDiscount, 0), undefined, decimals)}
           </span>
         </div>
         {vatAmount > 0 && (
           <div className="text-right">
             <span className="text-[10px] text-slate-400 block">مالیات بر ارزش افزوده:</span>
             <span className="font-mono text-amber-300 font-bold">
-              {formatPersianPrice(vatAmount)}
+              {formatPersianPrice(vatAmount, undefined, decimals)}
             </span>
           </div>
         )}

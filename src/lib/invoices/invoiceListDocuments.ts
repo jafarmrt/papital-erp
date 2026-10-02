@@ -88,6 +88,14 @@ export function documentStatusLabelOf(status: string | undefined, finalLabel = '
   return finalLabel;
 }
 
+/**
+ * v7.0.96 (TD-235 بند ۲): رقم اعشار مبالغ یک سند؛ سند ارزی تا ۲ رقم (مثل ۲۰۰٫۵ دلار)، ریالی بدون اعشار.
+ * پیش‌تر مبلغ و مانده ردیف بدون ارز قالب‌بندی و اعشار سند ارزی گرد می‌شد.
+ */
+export function amountDecimalsOf(currency: string | undefined): number {
+  return currency && currency !== 'IRR' ? 2 : 0;
+}
+
 export interface InvoiceListSummary {
   salesTotals: Record<string, number>;
   salesCount: number;

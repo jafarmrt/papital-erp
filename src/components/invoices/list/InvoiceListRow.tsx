@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, AlertCircle, CreditCard, Package, RefreshCw, FileText } from 'lucide-react';
 import { formatPersianNumber, formatPersianCode, formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
 import {
-  INVOICE_TYPE_BADGES, partyLabelOf, resolveInvoiceRowFigures,
+  amountDecimalsOf, INVOICE_TYPE_BADGES, partyLabelOf, resolveInvoiceRowFigures,
   type InvoiceListDocument, type InvoiceTypeBadgeKind,
 } from '../../../lib/invoices/invoiceListDocuments';
 import type { InvoiceListActions } from '../../../hooks/invoices/useInvoiceListActions';
@@ -104,7 +104,7 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
             <strong className={`font-mono text-xs font-black block ${
               isReceipt ? 'text-emerald-800' : isInvoice ? 'text-blue-800' : 'text-slate-800'
             }`}>
-              {formatPersianPrice(totalDocAmount)}
+              {formatPersianPrice(totalDocAmount, undefined, amountDecimalsOf(doc.currency))}
             </strong>
             <span className="text-[10px] text-slate-500 font-normal">{currencyLabel}</span>
           </div>
@@ -114,7 +114,7 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
       </td>
 
       {/* Settlement Status */}
-      <InvoiceRowSettlementCell isCommercial={isCommercial} settlementStatus={settlementStatus} remainingAmt={remainingAmt} />
+      <InvoiceRowSettlementCell isCommercial={isCommercial} settlementStatus={settlementStatus} remainingAmt={remainingAmt} currency={doc.currency} />
 
       {/* Notes (Editable Inline) */}
       <InvoiceRowNotesCell doc={doc} actions={actions} />
