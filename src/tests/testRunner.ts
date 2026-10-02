@@ -1,5 +1,5 @@
 import { TestSuiteReport, TestCaseResult, LayerSummary, CriticalScenarioSummary, TestLayer, CriticalScenarioId } from './types.js';
-import { ensureTestDatabaseReady, cleanupAllTestFixtures } from './fixtures/dbTestHelper.js';
+import { assertTestDatabaseReady, cleanupAllTestFixtures } from './fixtures/dbTestHelper.js';
 import { runUnitTests } from './suites/unitSuite.js';
 import { runDatabaseTests } from './suites/databaseSuite.js';
 import { runWorkflowTests } from './suites/workflowSuite.js';
@@ -187,7 +187,8 @@ export class Phase21TestRunner {
     if (!isPureUnitRun) {
       // Ensure database schema migrations are applied and previous test artifacts are purged
       try {
-        await ensureTestDatabaseReady();
+        // v7.0.50 (TD-217): خروجی false دیگر نادیده گرفته نمی‌شود
+        await assertTestDatabaseReady();
         if (isTestCleanupAllowed()) {
           await cleanupAllTestFixtures();
         }

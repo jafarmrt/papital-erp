@@ -1,6 +1,6 @@
 import { pool } from '../../db/drizzle.js';
 import { logger } from '../../middleware/logger.js';
-import { runMigrations, setMigrationsJournalSchema } from '../../db/migrator.js';
+import { runMigrations, setMigrationsJournalSchema, type MigrationResult } from '../../db/migrator.js';
 
 /**
  * TST-007 — Test Isolation via Dedicated PostgreSQL Schema
@@ -24,7 +24,13 @@ interface PoolWithEvents {
   removeListener: (event: string, cb: (...args: any[]) => void) => unknown;
 }
 
-export async function setupTestSchema(): Promise<TestSchemaContext> {
+export interface SetupTestSchemaOptions {
+  /** فقط برای آزمون: جایگزین runMigrations (مثلاً مهاجرتِ شکست‌خورده) */
+  migrate?: () => Promise<MigrationResult>;
+}
+
+export async function setupTestSchema(options: SetupTestSchemaOptions = {}): Promise<TestSchemaContext> {
+  const migrate = options.migrate ?? runMigrations;
   const schema = `test_${Date.now()}`;
   // v7.0.42 (TD-192): افزونه pg_trgm (مهاجرت 0000) در public، همانند پروداکشن؛ در غیر این صورت داخل اولین
   // اسکیمای موقت نصب می‌شد و اسکیمای ایزوله بعدی روی همان پایگاه‌داده به gin_trgm_ops دسترسی نداشت
@@ -71,12 +77,20 @@ export async function setupTestSchema(): Promise<TestSchemaContext> {
   };
 
   // Run the migration pipeline INSIDE the sandbox schema
+  // v7.0.50 (TD-217): runMigrations خطا را برنمی‌اندازد و { success: false } برمی‌گرداند؛ پیش‌تر این نتیجه نادیده
+  // گرفته می‌شد، «migrated successfully» ثبت می‌شد و تست‌ها روی اسکیمای ناقص (یا public) با خطاهای گمراه‌کننده
+  // «relation does not exist» شکست می‌خوردند. اکنون اسکیما حذف و اجرای تست با علت واقعی متوقف می‌شود.
+  let result: MigrationResult;
   try {
-    await runMigrations();
-    logger.info(`[TestDb] Isolated test schema "${schema}" migrated successfully.`);
+    result = await migrate();
   } catch (err: any) {
-    logger.warn(`[TestDb] Migration inside schema ${schema} failed (${err.message}) — falling back to public mirror.`);
+    result = { success: false, appliedCount: 0, errors: [err?.message || String(err)] };
   }
+  if (!result.success) {
+    await teardown();
+    throw new Error(`[TestDb] Migrations failed inside isolated schema ${schema}: ${result.errors.join('; ') || 'unknown error'}`);
+  }
+  logger.info(`[TestDb] Isolated test schema "${schema}" migrated successfully.`);
 
   return { schema, teardown };
 }

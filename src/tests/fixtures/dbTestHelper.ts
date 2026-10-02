@@ -1,5 +1,5 @@
 import { orm } from '../../db/drizzle.js';
-import { runMigrations } from '../../db/migrator.js';
+import { runMigrations, type MigrationResult } from '../../db/migrator.js';
 import { 
   roles, 
   warehouses, 
@@ -24,22 +24,39 @@ let isMigrationsDone = false;
 
 /**
  * Ensures the PostgreSQL database is reachable and schema migrations are applied.
+ * v7.0.50 (TD-217): نتیجه runMigrations (که خطا را برنمی‌اندازد و { success: false } برمی‌گرداند) بررسی می‌شود؛
+ * پیش‌تر مهاجرت شکست‌خورده «آماده» گزارش و همان وضعیت تا پایان اجرا کش می‌شد.
+ * `migrate` فقط برای آزمون است؛ نتیجه آن کش نمی‌شود.
  */
-export async function ensureTestDatabaseReady(): Promise<boolean> {
+export async function ensureTestDatabaseReady(migrate: () => Promise<MigrationResult> = runMigrations): Promise<boolean> {
   try {
     // 1. Connectivity check
     await orm.execute(sql`SELECT 1`);
     
     // 2. Schema migration verification
-    if (!isMigrationsDone) {
-      await runMigrations();
-      isMigrationsDone = true;
+    const isDefaultMigrate = migrate === runMigrations;
+    if (!isMigrationsDone || !isDefaultMigrate) {
+      const result = await migrate();
+      if (!result.success) {
+        throw new Error(`migrations failed: ${result.errors.join('; ') || 'unknown error'}`);
+      }
+      if (isDefaultMigrate) isMigrationsDone = true;
     }
     
     return true;
   } catch (err: any) {
     logger.error(`[TestDbHelper] Database connectivity or migration failed: ${err.message}`);
     return false;
+  }
+}
+
+/**
+ * v7.0.50 (TD-217): همان ensureTestDatabaseReady ولی با خطا (برای اجراکننده تست‌ها که باید fail-fast باشد؛
+ * پیش‌تر خروجی بولی نادیده گرفته می‌شد و اجرای تست روی پایگاه‌داده ناآماده ادامه می‌یافت).
+ */
+export async function assertTestDatabaseReady(migrate: () => Promise<MigrationResult> = runMigrations): Promise<void> {
+  if (!(await ensureTestDatabaseReady(migrate))) {
+    throw new Error('database connectivity or schema migrations failed (see [TestDbHelper] log)');
   }
 }
 

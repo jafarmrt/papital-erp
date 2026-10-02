@@ -1,5 +1,5 @@
 import { orm } from './drizzle.js';
-import { runMigrations } from './migrator.js';
+import { runMigrations, type MigrationResult } from './migrator.js';
 import { categories, appSettings, roles, pieceworkTasks } from './schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
@@ -33,11 +33,18 @@ export async function runSeedWithLock(): Promise<{ success: boolean; message: st
  * Standard System Seed Data
  * Seeds initial master catalog, 22 standard categories, roles, presets, piecework tasks, and chart of accounts.
  */
-export async function runSeed(): Promise<{ success: boolean; message: string }> {
+export async function runSeed(
+  options: { migrate?: () => Promise<MigrationResult> } = {}
+): Promise<{ success: boolean; message: string }> {
   logger.info('[Seeder] Starting system master data seed process...');
 
   // 1. Ensure database schema is migrated and up-to-date
-  await runMigrations();
+  // v7.0.50 (TD-217): runMigrations خطا را برنمی‌اندازد؛ seed روی اسکیمای مهاجرت‌نشده اجرا نمی‌شود
+  // (بازنشانی سیستم و initial-setup پیش‌تر پس از مهاجرت شکست‌خورده ادامه می‌دادند). options.migrate فقط برای آزمون است.
+  const migration = await (options.migrate ?? runMigrations)();
+  if (!migration.success) {
+    throw new Error(`[Seeder] Schema migrations failed; seed aborted: ${migration.errors.join('; ') || 'unknown error'}`);
+  }
 
   // 2. Check & sync 22 standard categories
   const defaultCategories = [

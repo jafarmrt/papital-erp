@@ -3740,6 +3740,109 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.16b: v7.0.50 (TD-217): شکست مهاجرت در آماده‌سازی اسکیمای ایزوله، آمادگی پایگاه‌داده تست و seed پنهان نمی‌ماند
+  // (runMigrations خطا را برنمی‌اندازد و { success: false } برمی‌گرداند؛ این نتیجه پیش‌تر نادیده گرفته می‌شد)
+  if (shouldRun('reg_migration_failure_not_masked_td_217', 'td217', 'isolation', 'migration')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.50: شکست مهاجرت در اسکیمای ایزوله، آمادگی پایگاه‌داده تست و seed، اجرا را متوقف می‌کند (TD-217)';
+    try {
+      const { setupTestSchema } = await import('../setup/testDb.js');
+      const dbHelper: any = await import('../fixtures/dbTestHelper.js');
+      const seedModule: any = await import('../../db/seed.js');
+      const { getMigrationsJournalSchema } = await import('../../db/migrator.js');
+      const { pool } = await import('../../db/drizzle.js');
+      const marker = 'TD217 injected migration failure';
+      const failingMigrate = async () => ({ success: false, appliedCount: 0, errors: [marker] });
+      const listTestSchemas = async (): Promise<string> =>
+        (await pool.query(`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'test\\_%' ORDER BY nspname`)).rows
+          .map((r: any) => r.nspname).join(',');
+      const acquireListeners = (): number => (pool as any).listenerCount?.('acquire') ?? -1;
+
+      // الف) اسکیمای ایزوله با مهاجرت شکست‌خورده: خطا با علت واقعی، حذف اسکیما، بازگشت دفتر مهاجرت و شنونده‌ها
+      const outerJournal = getMigrationsJournalSchema();
+      const schemasBefore = await listTestSchemas();
+      const listenersBefore = acquireListeners();
+      let innerCtx: { teardown: () => Promise<void> } | null = null;
+      let setupError = '';
+      try {
+        innerCtx = await (setupTestSchema as any)({ migrate: failingMigrate });
+      } catch (e: any) {
+        setupError = e.message;
+      }
+      if (innerCtx) {
+        await innerCtx.teardown();
+        throw new Error('setupTestSchema با مهاجرت شکست‌خورده موفق برگشت؛ تست‌ها روی اسکیمای ناقص اجرا می‌شدند');
+      }
+      if (!setupError.includes(marker)) {
+        throw new Error(`خطای setupTestSchema علت شکست مهاجرت را ندارد: ${setupError}`);
+      }
+      const schemasAfter = await listTestSchemas();
+      if (schemasAfter !== schemasBefore) {
+        throw new Error(`اسکیمای ایزوله شکست‌خورده حذف نشد (پیش: ${schemasBefore} / پس: ${schemasAfter})`);
+      }
+      if (getMigrationsJournalSchema() !== outerJournal) {
+        throw new Error(`دفتر مهاجرت پس از شکست به «${outerJournal}» برنگشت (${getMigrationsJournalSchema()})`);
+      }
+      if (acquireListeners() !== listenersBefore) {
+        throw new Error(`شنونده acquire اسکیمای شکست‌خورده روی pool ماند (${listenersBefore} → ${acquireListeners()})`);
+      }
+
+      // ب) آمادگی پایگاه‌داده تست: مهاجرت شکست‌خورده «آماده» نیست و اجراکننده تست خطا می‌گیرد
+      const ready = await dbHelper.ensureTestDatabaseReady(failingMigrate);
+      if (ready !== false) {
+        throw new Error('ensureTestDatabaseReady مهاجرت شکست‌خورده را «آماده» گزارش کرد');
+      }
+      if (typeof dbHelper.assertTestDatabaseReady !== 'function') {
+        throw new Error('assertTestDatabaseReady (نسخه خطادهنده برای اجراکننده تست‌ها) وجود ندارد');
+      }
+      let assertError = '';
+      try {
+        await dbHelper.assertTestDatabaseReady(failingMigrate);
+      } catch (e: any) {
+        assertError = e.message;
+      }
+      if (!assertError) {
+        throw new Error('assertTestDatabaseReady با مهاجرت شکست‌خورده خطا نداد');
+      }
+      if ((await dbHelper.ensureTestDatabaseReady()) !== true) {
+        throw new Error('شکست تزریق‌شده وضعیت کش آمادگی پیش‌فرض را خراب کرد');
+      }
+
+      // ج) seed روی اسکیمای مهاجرت‌نشده اجرا نمی‌شود
+      let seedError = '';
+      try {
+        await seedModule.runSeed({ migrate: failingMigrate });
+      } catch (e: any) {
+        seedError = e.message;
+      }
+      if (!seedError.includes(marker)) {
+        throw new Error(`runSeed پس از مهاجرت شکست‌خورده ادامه داد (${seedError || 'بدون خطا'})`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_migration_failure_not_masked_td_217',
+        scenarioId: 'test_runner_real_database_guard',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'اسکیمای ایزوله با مهاجرت شکست‌خورده با علت واقعی متوقف و حذف شد؛ آمادگی پایگاه‌داده تست false و نسخه خطادهنده آن خطا داد؛ seed پیش از هر نوشتن متوقف شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_migration_failure_not_masked_td_217',
+        scenarioId: 'test_runner_real_database_guard',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 27.17: v7.0.45 (audit P2-1): جدول item_warehouse_stocks تنها منبع موجودی؛ جدول، کش JSONB، موجودی کل و کاردکس
   // پس از هر مسیر نوشتن یکسان می‌مانند (تعریف کالا، انتقال بین انبارها، فروش، انبارگردانی، بازسازی کاردکس، افتتاحیه)
   if (shouldRun('reg_single_stock_source_p2_1', 'p21', 'stock', 'invariant')) {
