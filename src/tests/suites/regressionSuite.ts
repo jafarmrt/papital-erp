@@ -6321,6 +6321,83 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+
+  // Test: v7.0.71 (audit P2-6 / TD-210 بخش ۳): جمع گزارش‌های حسابداری در SQL و Decimal — ۰٫۱ + ۰٫۱ + ۰٫۱ = ۰٫۳
+  if (shouldRun('reg_money_decimal_reports_p2_6', 'p26', 'td210', 'money', 'decimal', 'report', 'trial')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.71: تراز آزمایشی، کارت حساب و دفتر روزنامه جمع مبالغ اعشاری را بدون خطای double گزارش می‌کنند (P2-6)';
+    const createdVoucherIds: number[] = [];
+    try {
+      const { ChartOfAccountsService } = await import('../../services/accounting/chartOfAccounts.service.js');
+      const { AccountingReportService } = await import('../../services/accounting/accountingReport.service.js');
+      const violations: string[] = [];
+      const allAccs = await ChartOfAccountsService.getAllAccounts();
+      const leaf = allAccs.filter(a => a.level === 'subsidiary');
+      const dName = `ERP-TEST-MARKER تفصیلی P2-6-3 ${Date.now()}`;
+      const today = await businessTodayIsoDate();
+      const priorDate = '2020-01-15';
+
+      // سه سند تأییدشده ۰٫۱ (یکی پیش از بازه) روی یک تفصیلی
+      for (const date of [priorDate, today, today]) {
+        const v = await VoucherService.createJournalVoucher({
+          date, voucherType: 'general', status: 'approved',
+          description: 'ERP-TEST-MARKER سند آزمون جمع گزارش P2-6',
+          items: [
+            { accountId: leaf[0].id, debit: '0.1', credit: 0, detailedType: 'other', detailedName: dName },
+            { accountId: leaf[1].id, debit: 0, credit: '0.1', detailedType: 'other', detailedName: dName },
+          ],
+        });
+        createdVoucherIds.push(v.id);
+      }
+
+      // الف) تراز آزمایشی سطح تفصیلی: جمع کل بدهکار ۰٫۳ و گردش دوره ۰٫۲
+      const detailed = await AccountingReportService.getTrialBalance({ level: 'detailed', startDate: '2021-01-01' });
+      const row = detailed.find(r => r.accountId === leaf[0].id && r.name.startsWith(dName));
+      if (!row || row.totalDebit !== 0.3 || row.debitTurnover !== 0.2 || row.initialDebit !== 0.1 || row.debitBalance !== 0.3) {
+        violations.push(`تراز تفصیلی: ${JSON.stringify(row && { totalDebit: row.totalDebit, debitTurnover: row.debitTurnover, initialDebit: row.initialDebit, debitBalance: row.debitBalance })}`);
+      }
+
+      // ب) کارت حساب: مانده ابتدای دوره ۰٫۱ و مانده پایانی ۰٫۳
+      const card = await AccountingReportService.getDetailedAccountCard({ accountId: leaf[0].id, detailedName: dName, startDate: '2021-01-01' });
+      if (card.openingBalance !== 0.1 || card.totalDebit !== 0.2 || card.finalBalance !== 0.3) {
+        violations.push(`کارت حساب: ${JSON.stringify({ opening: card.openingBalance, totalDebit: card.totalDebit, final: card.finalBalance })}`);
+      }
+
+      // ج) دفتر روزنامه از ابتدا: مانده جاری پس از سه ردیف بدهکار ۰٫۱ برای همین تفصیلی
+      const book = await AccountingReportService.getJournalBook({ startDate: priorDate, endDate: priorDate });
+      const bookRows = book.items.filter(i => i.detailedName === dName && i.debit > 0);
+      if (bookRows.length !== 1 || bookRows[0].debit !== 0.1) {
+        violations.push(`دفتر روزنامه: ${JSON.stringify(bookRows.map(r => r.debit))}`);
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_money_decimal_reports_p2_6',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سه ردیف ۰٫۱ در تراز تفصیلی جمع ۰٫۳ (ابتدای دوره ۰٫۱ و گردش ۰٫۲) و در کارت حساب مانده پایانی ۰٫۳ داد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_money_decimal_reports_p2_6',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
+      await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
+    }
+  }
+
   return results;
 }
 

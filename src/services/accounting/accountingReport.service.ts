@@ -4,7 +4,7 @@ import { eq, asc, and, or, sql, like, gte, lte, lt, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, FinancialMath, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import type { 
   TrialBalanceRow, 
@@ -37,71 +37,77 @@ export class AccountingReportService {
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ];
 
-    // Fetch all journal items using executor (sees uncommitted changes in transactional closing)
-    const allItems = await executor.select({
-      voucherId: journalVouchers.id,
+    // v7.0.71 (P2-6 / TD-210 بخش ۳): جمع گردش‌ها در PostgreSQL با numeric دقیق، نه جمع double در JS.
+    // گروه‌بندی بر اساس حساب، تفصیلی، ارز و متن تاریخ است؛ تاریخ‌های قدیمی (شمسی یا قالب‌های دیگر) همچنان با
+    // normalizeDateToIso در JS دسته‌بندی می‌شوند، پس فقط جمع‌های هر روز به Decimal منتقل می‌شوند.
+    const itemCurrencyExpr = sql<string>`UPPER(COALESCE(NULLIF(${journalVoucherItems.currency}, ''), NULLIF(${journalVouchers.currency}, ''), 'IRR'))`;
+    const rateExpr = sql`COALESCE(NULLIF(${journalVoucherItems.exchangeRate}, 0), 1)`;
+    const groupedItems = await executor.select({
       voucherDate: journalVouchers.date,
-      voucherNumber: journalVouchers.voucherNumber,
-      voucherCurrency: journalVouchers.currency,
-      itemCurrency: journalVoucherItems.currency,
-      exchangeRate: journalVoucherItems.exchangeRate,
+      itemCurrency: itemCurrencyExpr,
       accountId: journalVoucherItems.accountId,
       detailedType: journalVoucherItems.detailedType,
       detailedId: journalVoucherItems.detailedId,
       detailedName: journalVoucherItems.detailedName,
-      debit: journalVoucherItems.debit,
-      credit: journalVoucherItems.credit,
-      description: journalVoucherItems.description,
+      debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
+      credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
+      debitIrr: sql<string>`COALESCE(SUM(ROUND(${journalVoucherItems.debit} * ${rateExpr}, 0)), 0)::text`,
+      creditIrr: sql<string>`COALESCE(SUM(ROUND(${journalVoucherItems.credit} * ${rateExpr}, 0)), 0)::text`,
     })
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .where(and(...baseConditions));
+    .where(and(...baseConditions))
+    .groupBy(
+      journalVouchers.date, itemCurrencyExpr, journalVoucherItems.accountId,
+      journalVoucherItems.detailedType, journalVoucherItems.detailedId, journalVoucherItems.detailedName
+    );
 
-    // Maps for turnovers
+    interface TurnoverAccumulator {
+      initialDebit: FinancialDecimal;
+      initialCredit: FinancialDecimal;
+      periodDebit: FinancialDecimal;
+      periodCredit: FinancialDecimal;
+    }
+    const emptyTurnover = (): TurnoverAccumulator => ({ initialDebit: fin(0), initialCredit: fin(0), periodDebit: fin(0), periodCredit: fin(0) });
+    const addTurnover = (acc: TurnoverAccumulator, isBeforeStart: boolean, d: FinancialDecimal, c: FinancialDecimal) => {
+      if (isBeforeStart) {
+        acc.initialDebit = acc.initialDebit.add(d);
+        acc.initialCredit = acc.initialCredit.add(c);
+      } else {
+        acc.periodDebit = acc.periodDebit.add(d);
+        acc.periodCredit = acc.periodCredit.add(c);
+      }
+    };
+
     // AccountId => turnover
-    const initialDebitMap = new Map<number, number>();
-    const initialCreditMap = new Map<number, number>();
-    const periodDebitMap = new Map<number, number>();
-    const periodCreditMap = new Map<number, number>();
+    const accountTurnover = new Map<number, TurnoverAccumulator>();
 
-    // Detailed entities map: key = `${accountId}_${detailedName || 'عام'}`
-    interface DetailedAccumulator {
+    // Detailed entities map: key = `${accountId}__${detailedName || 'عام'}`
+    interface DetailedAccumulator extends TurnoverAccumulator {
       accountId: number;
       detailedType?: string;
       detailedId?: number | null;
       detailedName: string;
-      initialDebit: number;
-      initialCredit: number;
-      periodDebit: number;
-      periodCredit: number;
     }
     const detailedMap = new Map<string, DetailedAccumulator>();
 
     // V6.0.3 (TD-142): نرمال‌سازی تاریخ‌های فیلتر به استاندارد ISO جهت پرهیز از عدم تطابق تقویم شمسی/میلادی
     const normStartDate = normalizeDateToIso(params.startDate);
     const normEndDate = normalizeDateToIso(params.endDate);
+    const isBaseView = !params.currency || params.currency === 'all';
 
-    for (const it of allItems) {
-      const rawDebit = Number(it.debit || 0);
-      const rawCredit = Number(it.credit || 0);
-      const itemCur = (it.itemCurrency || it.voucherCurrency || 'IRR').toUpperCase();
-      const rate = Number(it.exchangeRate) || 1;
+    for (const it of groupedItems) {
+      const itemCur = it.itemCurrency;
 
       // Currency filtering if specified
-      if (params.currency && params.currency !== 'all') {
-        if (itemCur !== params.currency.toUpperCase()) {
-          continue;
-        }
+      if (!isBaseView && itemCur !== params.currency!.toUpperCase()) {
+        continue;
       }
 
       // V6.0.21: If viewing all currencies (consolidated view), convert foreign currencies to base IRR using exchange rate
-      const isBaseView = !params.currency || params.currency === 'all';
-      const d = (isBaseView && itemCur !== 'IRR')
-        ? fin(rawDebit).multiply(rate).round(0).toNumber()
-        : rawDebit;
-      const c = (isBaseView && itemCur !== 'IRR')
-        ? fin(rawCredit).multiply(rate).round(0).toNumber()
-        : rawCredit;
+      const convert = isBaseView && itemCur !== 'IRR';
+      const d = fin(convert ? it.debitIrr : it.debit);
+      const c = fin(convert ? it.creditIrr : it.credit);
 
       const accId = it.accountId;
       const vDate = normalizeDateToIso(it.voucherDate) || String(it.voucherDate || '').slice(0, 10);
@@ -113,13 +119,12 @@ export class AccountingReportService {
         continue; // Skip transactions beyond end date
       }
 
-      if (isBeforeStart) {
-        initialDebitMap.set(accId, (initialDebitMap.get(accId) || 0) + d);
-        initialCreditMap.set(accId, (initialCreditMap.get(accId) || 0) + c);
-      } else {
-        periodDebitMap.set(accId, (periodDebitMap.get(accId) || 0) + d);
-        periodCreditMap.set(accId, (periodCreditMap.get(accId) || 0) + c);
+      let accTurnover = accountTurnover.get(accId);
+      if (!accTurnover) {
+        accTurnover = emptyTurnover();
+        accountTurnover.set(accId, accTurnover);
       }
+      addTurnover(accTurnover, isBeforeStart, d, c);
 
       // Detailed Tracking
       const dName = (it.detailedName && it.detailedName.trim()) ? it.detailedName.trim() : 'سایر / عمومی';
@@ -131,98 +136,65 @@ export class AccountingReportService {
           detailedType: it.detailedType || 'other',
           detailedId: it.detailedId,
           detailedName: dName,
-          initialDebit: 0,
-          initialCredit: 0,
-          periodDebit: 0,
-          periodCredit: 0,
+          ...emptyTurnover(),
         };
         detailedMap.set(dKey, det);
       }
-
-      if (isBeforeStart) {
-        det.initialDebit += d;
-        det.initialCredit += c;
-      } else {
-        det.periodDebit += d;
-        det.periodCredit += c;
-      }
+      addTurnover(det, isBeforeStart, d, c);
     }
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     const accMap = new Map(allAccs.map(a => [a.id, a]));
 
     // Aggregate from subsidiary up to general and group accounts
-    const aggInitialDebit = new Map<number, number>();
-    const aggInitialCredit = new Map<number, number>();
-    const aggPeriodDebit = new Map<number, number>();
-    const aggPeriodCredit = new Map<number, number>();
-
-    for (const [accId, debit] of initialDebitMap.entries()) {
+    const aggTurnover = new Map<number, TurnoverAccumulator>();
+    for (const [accId, turnover] of accountTurnover.entries()) {
       let cur = accMap.get(accId);
       while (cur) {
-        aggInitialDebit.set(cur.id, (aggInitialDebit.get(cur.id) || 0) + debit);
-        cur = cur.parentId ? accMap.get(cur.parentId) : undefined;
-      }
-    }
-    for (const [accId, credit] of initialCreditMap.entries()) {
-      let cur = accMap.get(accId);
-      while (cur) {
-        aggInitialCredit.set(cur.id, (aggInitialCredit.get(cur.id) || 0) + credit);
-        cur = cur.parentId ? accMap.get(cur.parentId) : undefined;
-      }
-    }
-    for (const [accId, debit] of periodDebitMap.entries()) {
-      let cur = accMap.get(accId);
-      while (cur) {
-        aggPeriodDebit.set(cur.id, (aggPeriodDebit.get(cur.id) || 0) + debit);
-        cur = cur.parentId ? accMap.get(cur.parentId) : undefined;
-      }
-    }
-    for (const [accId, credit] of periodCreditMap.entries()) {
-      let cur = accMap.get(accId);
-      while (cur) {
-        aggPeriodCredit.set(cur.id, (aggPeriodCredit.get(cur.id) || 0) + credit);
+        let agg = aggTurnover.get(cur.id);
+        if (!agg) {
+          agg = emptyTurnover();
+          aggTurnover.set(cur.id, agg);
+        }
+        addTurnover(agg, true, turnover.initialDebit, turnover.initialCredit);
+        addTurnover(agg, false, turnover.periodDebit, turnover.periodCredit);
         cur = cur.parentId ? accMap.get(cur.parentId) : undefined;
       }
     }
 
-    // Build standard account rows
-    const buildRow = (acc: Account): TrialBalanceRow => {
-      const initD = aggInitialDebit.get(acc.id) || 0;
-      const initC = aggInitialCredit.get(acc.id) || 0;
-      const perD = aggPeriodDebit.get(acc.id) || 0;
-      const perC = aggPeriodCredit.get(acc.id) || 0;
-
-      const totD = initD + perD;
-      const totC = initC + perC;
-      const diff = totD - totC;
-      const debitBalance = diff > 0 ? diff : 0;
-      const creditBalance = diff < 0 ? Math.abs(diff) : 0;
-
-      const initDiff = initD - initC;
-      const initialDebitBalance = initDiff > 0 ? initDiff : 0;
-      const initialCreditBalance = initDiff < 0 ? Math.abs(initDiff) : 0;
-
+    // ستون‌های مانده از جمع‌های Decimal؛ خروجی (TrialBalanceRow) عدد است
+    const balanceColumns = (t: TurnoverAccumulator) => {
+      const totD = t.initialDebit.add(t.periodDebit);
+      const totC = t.initialCredit.add(t.periodCredit);
+      const diff = totD.subtract(totC);
+      const initDiff = t.initialDebit.subtract(t.initialCredit);
+      const debitBalance = diff.isPositive() ? diff.toNumber() : 0;
+      const creditBalance = diff.isNegative() ? diff.abs().toNumber() : 0;
       return {
-        accountId: acc.id,
-        code: acc.code,
-        name: acc.name,
-        level: acc.level,
-        parentId: acc.parentId,
-        accountType: acc.accountType,
-        nature: acc.nature,
-        initialDebit: initialDebitBalance,
-        initialCredit: initialCreditBalance,
-        debitTurnover: perD,
-        creditTurnover: perC,
-        totalDebit: totD,
-        totalCredit: totC,
+        initialDebit: initDiff.isPositive() ? initDiff.toNumber() : 0,
+        initialCredit: initDiff.isNegative() ? initDiff.abs().toNumber() : 0,
+        debitTurnover: t.periodDebit.toNumber(),
+        creditTurnover: t.periodCredit.toNumber(),
+        totalDebit: totD.toNumber(),
+        totalCredit: totC.toNumber(),
         debitBalance,
         creditBalance,
         preClosingDebit: debitBalance,
         preClosingCredit: creditBalance,
       };
     };
+
+    // Build standard account rows
+    const buildRow = (acc: Account): TrialBalanceRow => ({
+      accountId: acc.id,
+      code: acc.code,
+      name: acc.name,
+      level: acc.level,
+      parentId: acc.parentId,
+      accountType: acc.accountType,
+      nature: acc.nature,
+      ...balanceColumns(aggTurnover.get(acc.id) ?? emptyTurnover()),
+    });
 
     // If level is single level
     if (targetLevel === 'group' || targetLevel === 'general' || targetLevel === 'subsidiary') {
@@ -234,14 +206,6 @@ export class AccountingReportService {
       const detailedRows: TrialBalanceRow[] = [];
       for (const det of detailedMap.values()) {
         const parentAcc = accMap.get(det.accountId);
-        const totD = det.initialDebit + det.periodDebit;
-        const totC = det.initialCredit + det.periodCredit;
-        const diff = totD - totC;
-        const debitBalance = diff > 0 ? diff : 0;
-        const creditBalance = diff < 0 ? Math.abs(diff) : 0;
-
-        const initDiff = det.initialDebit - det.initialCredit;
-
         detailedRows.push({
           accountId: det.accountId,
           code: `${parentAcc?.code || '0000'}-${det.detailedId || 'D'}`,
@@ -250,16 +214,7 @@ export class AccountingReportService {
           parentId: det.accountId,
           accountType: parentAcc?.accountType || 'asset',
           nature: parentAcc?.nature || 'debit',
-          initialDebit: initDiff > 0 ? initDiff : 0,
-          initialCredit: initDiff < 0 ? Math.abs(initDiff) : 0,
-          debitTurnover: det.periodDebit,
-          creditTurnover: det.periodCredit,
-          totalDebit: totD,
-          totalCredit: totC,
-          debitBalance,
-          creditBalance,
-          preClosingDebit: debitBalance,
-          preClosingCredit: creditBalance,
+          ...balanceColumns(det),
         });
       }
       return detailedRows.sort((a, b) => a.code.localeCompare(b.code));
@@ -283,13 +238,6 @@ export class AccountingReportService {
           // Find detailed entries under this subsidiary account
           const dets = Array.from(detailedMap.values()).filter(d => d.accountId === sub.id);
           for (const det of dets) {
-            const totD = det.initialDebit + det.periodDebit;
-            const totC = det.initialCredit + det.periodCredit;
-            const diff = totD - totC;
-            const debitBalance = diff > 0 ? diff : 0;
-            const creditBalance = diff < 0 ? Math.abs(diff) : 0;
-            const initDiff = det.initialDebit - det.initialCredit;
-
             resultRows.push({
               accountId: det.accountId,
               code: `${sub.code}-${det.detailedId || 'D'}`,
@@ -298,16 +246,7 @@ export class AccountingReportService {
               parentId: sub.id,
               accountType: sub.accountType,
               nature: sub.nature,
-              initialDebit: initDiff > 0 ? initDiff : 0,
-              initialCredit: initDiff < 0 ? Math.abs(initDiff) : 0,
-              debitTurnover: det.periodDebit,
-              creditTurnover: det.periodCredit,
-              totalDebit: totD,
-              totalCredit: totC,
-              debitBalance,
-              creditBalance,
-              preClosingDebit: debitBalance,
-              preClosingCredit: creditBalance,
+              ...balanceColumns(det),
             });
           }
         }
@@ -393,18 +332,19 @@ export class AccountingReportService {
     .where(and(...conditions))
     .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
 
-    let runningBalance = 0;
-    let totalDebit = 0;
-    let totalCredit = 0;
+    // v7.0.71 (P2-6 بخش ۳): جمع‌ها و مانده جاری با Decimal
+    let runningDec = fin(0);
+    let totalDebitDec = fin(0);
+    let totalCreditDec = fin(0);
     const uniqueVoucherIds = new Set<number>();
 
     const items = rawRows.map((r, idx) => {
       uniqueVoucherIds.add(r.voucherId);
-      const d = Number(r.debit) || 0;
-      const c = Number(r.credit) || 0;
-      totalDebit += d;
-      totalCredit += c;
-      runningBalance += (d - c);
+      const d = fin(r.debit);
+      const c = fin(r.credit);
+      totalDebitDec = totalDebitDec.add(d);
+      totalCreditDec = totalCreditDec.add(c);
+      runningDec = runningDec.add(d).subtract(c);
 
       return {
         rowNumber: idx + 1,
@@ -420,19 +360,50 @@ export class AccountingReportService {
         detailedType: r.detailedType || undefined,
         currency: r.itemCurrency || r.voucherCurrency || 'IRR',
         description: r.itemDescription || r.voucherDescription || '',
-        debit: d,
-        credit: c,
-        runningBalance,
+        debit: d.toNumber(),
+        credit: c.toNumber(),
+        runningBalance: runningDec.toNumber(),
       };
     });
 
     return {
       items,
-      totalDebit,
-      totalCredit,
+      totalDebit: totalDebitDec.toNumber(),
+      totalCredit: totalCreditDec.toNumber(),
       vouchersCount: uniqueVoucherIds.size,
-      isBalanced: Math.abs(totalDebit - totalCredit) < 0.01,
+      isBalanced: totalDebitDec.subtract(totalCreditDec).abs().lessThan(0.01),
     };
+  }
+
+  /**
+   * v7.0.71 (P2-6 / TD-210 بخش ۳): گردش بدهکار و بستانکار هر ارز با SUM دقیق PostgreSQL (اسناد تأییدشده/دائم،
+   * ردیف‌های حذف‌نشده)؛ خروجی عدد.
+   */
+  private static async currencyTurnovers(extraConditions: Array<SQL | undefined>): Promise<CurrencyFinancialSummary[]> {
+    const currencyExpr = sql<string>`COALESCE(NULLIF(${journalVoucherItems.currency}, ''), NULLIF(${journalVouchers.currency}, ''), 'IRR')`;
+    const rows = await orm.select({
+      currency: currencyExpr,
+      totalDebit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
+      totalCredit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
+      vouchersCount: sql<number>`COUNT(DISTINCT ${journalVouchers.id})::int`,
+    })
+    .from(journalVoucherItems)
+    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+    .where(and(
+      eq(journalVouchers.isDeleted, 0),
+      eq(journalVoucherItems.isDeleted, 0),
+      or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent')),
+      ...extraConditions
+    ))
+    .groupBy(currencyExpr);
+
+    return rows.map(r => ({
+      currency: r.currency,
+      totalDebit: fin(r.totalDebit).toNumber(),
+      totalCredit: fin(r.totalCredit).toNumber(),
+      netBalance: fin(r.totalDebit).subtract(r.totalCredit).toNumber(),
+      vouchersCount: Number(r.vouchersCount),
+    }));
   }
 
   /**
@@ -455,7 +426,7 @@ export class AccountingReportService {
 
     // Estimate Cash & Bank from Code 10 / 11
     const cashItems = bs.currentAssets.filter(a => a.code.startsWith('10') || a.code.startsWith('11'));
-    const cashAndBankBalance = cashItems.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+    const cashAndBankBalance = FinancialMath.sum(cashItems.map(a => a.amount)).toNumber();
 
     // Inventory estimate from code 14
     const inventoryItem = bs.currentAssets.find(a => a.code.startsWith('14'));
@@ -492,42 +463,8 @@ export class AccountingReportService {
     const inventoryTurnover = is.totalCostOfSales > 0 ? Number((is.totalCostOfSales / safeInventory).toFixed(2)) : 0;
     const inventoryTurnoverDays = inventoryTurnover > 0 ? Math.round(365 / inventoryTurnover) : 0;
 
-    // Currency Breakdowns across all active vouchers
-    const currencyVoucherItems = await orm.select({
-      itemCurrency: journalVoucherItems.currency,
-      voucherCurrency: journalVouchers.currency,
-      debit: journalVoucherItems.debit,
-      credit: journalVoucherItems.credit,
-      voucherId: journalVouchers.id,
-    })
-    .from(journalVoucherItems)
-    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .where(and(
-      eq(journalVouchers.isDeleted, 0),
-      eq(journalVoucherItems.isDeleted, 0),
-      or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
-    ));
-
-    const curMap = new Map<string, { totalDebit: number; totalCredit: number; vouchers: Set<number> }>();
-    for (const row of currencyVoucherItems) {
-      const cur = row.itemCurrency || row.voucherCurrency || 'IRR';
-      let entry = curMap.get(cur);
-      if (!entry) {
-        entry = { totalDebit: 0, totalCredit: 0, vouchers: new Set() };
-        curMap.set(cur, entry);
-      }
-      entry.totalDebit += Number(row.debit || 0);
-      entry.totalCredit += Number(row.credit || 0);
-      entry.vouchers.add(row.voucherId);
-    }
-
-    const currencyBreakdowns: CurrencyFinancialSummary[] = Array.from(curMap.entries()).map(([cur, data]) => ({
-      currency: cur,
-      totalDebit: data.totalDebit,
-      totalCredit: data.totalCredit,
-      netBalance: data.totalDebit - data.totalCredit,
-      vouchersCount: data.vouchers.size,
-    }));
+    // Currency Breakdowns across all active vouchers (v7.0.71: جمع در SQL)
+    const currencyBreakdowns = await AccountingReportService.currencyTurnovers([]);
 
     // Calculate Overall Health Score (0-100)
     let score = 50;
@@ -678,7 +615,8 @@ export class AccountingReportService {
     .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
 
     // V2.0.0: مانده ابتدای دوره — تجمیع اسناد قبل از startDate (با همان فیلترهای حساب/تفصیلی)
-    let openingBalance = 0;
+    // v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
+    let openingDec = fin(0);
     if (params.startDate) {
       // بازسازی شرط‌ها بدون شرط startDate: همان فیلترها ولی date < startDate
       const priorConds: (SQL | undefined)[] = [
@@ -696,24 +634,18 @@ export class AccountingReportService {
       ));
       if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
 
-      const priorRows = await orm.select({
-        debit: journalVoucherItems.debit,
-        credit: journalVoucherItems.credit,
-      })
+      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${journalVoucherItems.debit} - ${journalVoucherItems.credit}), 0)::text` })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
       .where(and(...priorConds.filter((c): c is SQL => c !== undefined)));
-
-      for (const r of priorRows) {
-        openingBalance += (Number(r.debit) || 0) - (Number(r.credit) || 0);
-      }
+      openingDec = fin(prior?.balance).round(4);
     }
-    openingBalance = Math.round(openingBalance * 10000) / 10000;
+    const openingBalance = openingDec.toNumber();
 
-    let runningBalance = openingBalance;
-    let totalDebit = 0;
-    let totalCredit = 0;
+    let runningDec = openingDec;
+    let totalDebitDec = fin(0);
+    let totalCreditDec = fin(0);
 
     interface LedgerOutputRow {
       voucherId: number;
@@ -733,11 +665,11 @@ export class AccountingReportService {
     }
 
     const items: LedgerOutputRow[] = rawRows.map(r => {
-      const d = Number(r.debit) || 0;
-      const c = Number(r.credit) || 0;
-      totalDebit += d;
-      totalCredit += c;
-      runningBalance += (d - c);
+      const d = fin(r.debit);
+      const c = fin(r.credit);
+      totalDebitDec = totalDebitDec.add(d);
+      totalCreditDec = totalCreditDec.add(c);
+      runningDec = runningDec.add(d).subtract(c);
 
       return {
         voucherId: r.voucherId,
@@ -750,9 +682,9 @@ export class AccountingReportService {
         detailedType: r.detailedType || undefined,
         detailedId: r.detailedId,
         currency: r.itemCurrency || r.voucherCurrency || 'IRR',
-        debit: d,
-        credit: c,
-        runningBalance,
+        debit: d.toNumber(),
+        credit: c.toNumber(),
+        runningBalance: runningDec.toNumber(),
       };
     });
 
@@ -776,9 +708,9 @@ export class AccountingReportService {
     return {
       items,
       openingBalance,
-      totalDebit,
-      totalCredit,
-      finalBalance: runningBalance,
+      totalDebit: totalDebitDec.toNumber(),
+      totalCredit: totalCreditDec.toNumber(),
+      finalBalance: runningDec.toNumber(),
     };
   }
 
@@ -990,27 +922,21 @@ export class AccountingReportService {
       );
     }
 
-    // 1. Calculate opening balance (prior to startDate)
-    let openingBalance = 0;
+    // 1. Calculate opening balance (prior to startDate) — v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
+    let openingDec = fin(0);
     if (params.startDate) {
       const priorConditions = [
         ...baseConditions,
         lt(journalVouchers.date, params.startDate)
       ].filter((c): c is SQL => c !== undefined);
 
-      const priorRows = await orm.select({
-        debit: journalVoucherItems.debit,
-        credit: journalVoucherItems.credit,
-      })
+      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${journalVoucherItems.debit} - ${journalVoucherItems.credit}), 0)::text` })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .where(and(...priorConditions));
-
-      for (const r of priorRows) {
-        openingBalance += (Number(r.debit) || 0) - (Number(r.credit) || 0);
-      }
+      openingDec = fin(prior?.balance).round(4);
     }
-    openingBalance = Math.round(openingBalance * 10000) / 10000;
+    const openingBalance = openingDec.toNumber();
 
     const openingBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب' =
       openingBalance > 0 ? 'بدهکار' : openingBalance < 0 ? 'بستانکار' : 'بی‌حساب';
@@ -1045,9 +971,9 @@ export class AccountingReportService {
     .where(and(...periodConditions))
     .orderBy(asc(journalVouchers.date), asc(journalVouchers.voucherNumber), asc(journalVoucherItems.rowOrder));
 
-    let runningBalance = openingBalance;
-    let totalDebit = 0;
-    let totalCredit = 0;
+    let runningDec = openingDec;
+    let totalDebitDec = fin(0);
+    let totalCreditDec = fin(0);
 
     const items: DetailedPartyLedgerItem[] = [];
 
@@ -1071,12 +997,12 @@ export class AccountingReportService {
     }
 
     rawRows.forEach((r, idx) => {
-      const d = Number(r.debit) || 0;
-      const c = Number(r.credit) || 0;
-      totalDebit += d;
-      totalCredit += c;
-      runningBalance += (d - c);
-      runningBalance = Math.round(runningBalance * 10000) / 10000;
+      const d = fin(r.debit);
+      const c = fin(r.credit);
+      totalDebitDec = totalDebitDec.add(d);
+      totalCreditDec = totalCreditDec.add(c);
+      runningDec = runningDec.add(d).subtract(c);
+      const runningBalance = runningDec.toNumber();
 
       const balanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب' =
         runningBalance > 0 ? 'بدهکار' : runningBalance < 0 ? 'بستانکار' : 'بی‌حساب';
@@ -1093,14 +1019,14 @@ export class AccountingReportService {
         detailedName: r.detailedName || undefined,
         detailedType: r.detailedType || undefined,
         currency: r.itemCurrency || r.voucherCurrency || 'IRR',
-        debit: d,
-        credit: c,
+        debit: d.toNumber(),
+        credit: c.toNumber(),
         runningBalance,
         balanceType,
       });
     });
 
-    const finalBalance = Math.round(runningBalance * 10000) / 10000;
+    const finalBalance = runningDec.round(4).toNumber();
     const finalBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب' =
       finalBalance > 0 ? 'بدهکار' : finalBalance < 0 ? 'بستانکار' : 'بی‌حساب';
 
@@ -1116,8 +1042,8 @@ export class AccountingReportService {
       party: partyInfo,
       openingBalance,
       openingBalanceType,
-      totalDebit: Math.round(totalDebit * 10000) / 10000,
-      totalCredit: Math.round(totalCredit * 10000) / 10000,
+      totalDebit: totalDebitDec.round(4).toNumber(),
+      totalCredit: totalCreditDec.round(4).toNumber(),
       finalBalance,
       finalBalanceType,
       netStatusText,
@@ -1145,46 +1071,46 @@ export class AccountingReportService {
     const costOfSales: { code: string; name: string; amount: number }[] = [];
     const operatingExpenses: { code: string; name: string; amount: number }[] = [];
 
-    let totalRevenue = 0;
-    let totalCostOfSales = 0;
-    let totalOperatingExpenses = 0;
+    // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal
+    let totalRevenue = fin(0);
+    let totalCostOfSales = fin(0);
+    let totalOperatingExpenses = fin(0);
 
     for (const r of trial) {
       if (r.accountType === 'revenue') {
-        const netAmt = r.creditTurnover - r.debitTurnover;
-        if (netAmt !== 0) {
-          revenues.push({ code: r.code, name: r.name, amount: netAmt });
-          totalRevenue += netAmt;
+        const netAmt = fin(r.creditTurnover).subtract(r.debitTurnover);
+        if (!netAmt.isZero()) {
+          revenues.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+          totalRevenue = totalRevenue.add(netAmt);
         }
       } else if (r.accountType === 'cost_of_sales') {
-        const netAmt = r.debitTurnover - r.creditTurnover;
-        if (netAmt !== 0) {
-          costOfSales.push({ code: r.code, name: r.name, amount: netAmt });
-          totalCostOfSales += netAmt;
+        const netAmt = fin(r.debitTurnover).subtract(r.creditTurnover);
+        if (!netAmt.isZero()) {
+          costOfSales.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+          totalCostOfSales = totalCostOfSales.add(netAmt);
         }
       } else if (r.accountType === 'expense') {
-        const netAmt = r.debitTurnover - r.creditTurnover;
-        if (netAmt !== 0) {
-          operatingExpenses.push({ code: r.code, name: r.name, amount: netAmt });
-          totalOperatingExpenses += netAmt;
+        const netAmt = fin(r.debitTurnover).subtract(r.creditTurnover);
+        if (!netAmt.isZero()) {
+          operatingExpenses.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+          totalOperatingExpenses = totalOperatingExpenses.add(netAmt);
         }
       }
     }
 
-    const grossProfit = totalRevenue - totalCostOfSales;
-    const operatingProfit = grossProfit - totalOperatingExpenses;
-    const netProfit = operatingProfit;
+    const grossProfit = totalRevenue.subtract(totalCostOfSales);
+    const operatingProfit = grossProfit.subtract(totalOperatingExpenses);
 
     return {
       revenues,
-      totalRevenue,
+      totalRevenue: totalRevenue.toNumber(),
       costOfSales,
-      totalCostOfSales,
-      grossProfit,
+      totalCostOfSales: totalCostOfSales.toNumber(),
+      grossProfit: grossProfit.toNumber(),
       operatingExpenses,
-      totalOperatingExpenses,
-      operatingProfit,
-      netProfit,
+      totalOperatingExpenses: totalOperatingExpenses.toNumber(),
+      operatingProfit: operatingProfit.toNumber(),
+      netProfit: operatingProfit.toNumber(),
     };
   }
 
@@ -1211,55 +1137,56 @@ export class AccountingReportService {
     const currentLiabilities: { code: string; name: string; amount: number }[] = [];
     const equity: { code: string; name: string; amount: number }[] = [];
 
-    let totalCurrentAssets = 0;
-    let totalNonCurrentAssets = 0;
-    let totalCurrentLiabilities = 0;
-    let totalEquity = 0;
+    // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal
+    let totalCurrentAssets = fin(0);
+    let totalNonCurrentAssets = fin(0);
+    let totalCurrentLiabilities = fin(0);
+    let totalEquity = fin(0);
 
-    let periodRevenues = 0;
-    let periodExpenses = 0;
+    let periodRevenues = fin(0);
+    let periodExpenses = fin(0);
 
     for (const r of trial) {
       if (r.accountType === 'asset') {
-        const netAmt = r.debitBalance - r.creditBalance;
+        const netAmt = fin(r.debitBalance).subtract(r.creditBalance);
         if (r.code.startsWith('1')) {
-          currentAssets.push({ code: r.code, name: r.name, amount: netAmt });
-          totalCurrentAssets += netAmt;
+          currentAssets.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+          totalCurrentAssets = totalCurrentAssets.add(netAmt);
         } else {
-          nonCurrentAssets.push({ code: r.code, name: r.name, amount: netAmt });
-          totalNonCurrentAssets += netAmt;
+          nonCurrentAssets.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+          totalNonCurrentAssets = totalNonCurrentAssets.add(netAmt);
         }
       } else if (r.accountType === 'liability') {
-        const netAmt = r.creditBalance - r.debitBalance;
-        currentLiabilities.push({ code: r.code, name: r.name, amount: netAmt });
-        totalCurrentLiabilities += netAmt;
+        const netAmt = fin(r.creditBalance).subtract(r.debitBalance);
+        currentLiabilities.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+        totalCurrentLiabilities = totalCurrentLiabilities.add(netAmt);
       } else if (r.accountType === 'equity') {
-        const netAmt = r.creditBalance - r.debitBalance;
-        equity.push({ code: r.code, name: r.name, amount: netAmt });
-        totalEquity += netAmt;
+        const netAmt = fin(r.creditBalance).subtract(r.debitBalance);
+        equity.push({ code: r.code, name: r.name, amount: netAmt.toNumber() });
+        totalEquity = totalEquity.add(netAmt);
       } else if (r.accountType === 'revenue') {
-        periodRevenues += (r.creditTurnover - r.debitTurnover);
+        periodRevenues = periodRevenues.add(fin(r.creditTurnover).subtract(r.debitTurnover));
       } else if (r.accountType === 'expense' || r.accountType === 'cost_of_sales') {
-        periodExpenses += (r.debitTurnover - r.creditTurnover);
+        periodExpenses = periodExpenses.add(fin(r.debitTurnover).subtract(r.creditTurnover));
       }
     }
 
-    const netProfitPeriod = periodRevenues - periodExpenses;
-    const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
-    const totalLiabilitiesAndEquity = totalCurrentLiabilities + totalEquity + netProfitPeriod;
+    const netProfitPeriod = periodRevenues.subtract(periodExpenses);
+    const totalAssets = totalCurrentAssets.add(totalNonCurrentAssets);
+    const totalLiabilitiesAndEquity = totalCurrentLiabilities.add(totalEquity).add(netProfitPeriod);
 
     return {
       currentAssets,
-      totalCurrentAssets,
+      totalCurrentAssets: totalCurrentAssets.toNumber(),
       nonCurrentAssets,
-      totalNonCurrentAssets,
-      totalAssets,
+      totalNonCurrentAssets: totalNonCurrentAssets.toNumber(),
+      totalAssets: totalAssets.toNumber(),
       currentLiabilities,
-      totalCurrentLiabilities,
+      totalCurrentLiabilities: totalCurrentLiabilities.toNumber(),
       equity,
-      totalEquity,
-      netProfitPeriod,
-      totalLiabilitiesAndEquity,
+      totalEquity: totalEquity.toNumber(),
+      netProfitPeriod: netProfitPeriod.toNumber(),
+      totalLiabilitiesAndEquity: totalLiabilitiesAndEquity.toNumber(),
     };
   }
 
@@ -1271,54 +1198,21 @@ export class AccountingReportService {
     totalCurrenciesCount: number;
     activeCurrencies: string[];
   }> {
-    const conditions = [
-      eq(journalVouchers.isDeleted, 0),
-      or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
-    ];
-
+    const dateConditions: SQL[] = [];
     if (params?.startDate) {
-      conditions.push(gte(journalVouchers.date, params.startDate));
+      dateConditions.push(gte(journalVouchers.date, params.startDate));
     }
     if (params?.endDate) {
-      conditions.push(lte(journalVouchers.date, params.endDate));
+      dateConditions.push(lte(journalVouchers.date, params.endDate));
     }
 
-    const currencyItems = await orm.select({
-      itemCurrency: journalVoucherItems.currency,
-      voucherCurrency: journalVouchers.currency,
-      debit: journalVoucherItems.debit,
-      credit: journalVoucherItems.credit,
-      voucherId: journalVouchers.id,
-    })
-    .from(journalVoucherItems)
-    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
-    .where(and(...conditions));
-
-    const curMap = new Map<string, { totalDebit: number; totalCredit: number; vouchers: Set<number> }>();
-    for (const row of currencyItems) {
-      const cur = row.itemCurrency || row.voucherCurrency || 'IRR';
-      let entry = curMap.get(cur);
-      if (!entry) {
-        entry = { totalDebit: 0, totalCredit: 0, vouchers: new Set() };
-        curMap.set(cur, entry);
-      }
-      entry.totalDebit += Number(row.debit || 0);
-      entry.totalCredit += Number(row.credit || 0);
-      entry.vouchers.add(row.voucherId);
-    }
-
-    const currencies: CurrencyFinancialSummary[] = Array.from(curMap.entries()).map(([cur, data]) => ({
-      currency: cur,
-      totalDebit: data.totalDebit,
-      totalCredit: data.totalCredit,
-      netBalance: data.totalDebit - data.totalCredit,
-      vouchersCount: data.vouchers.size,
-    }));
+    // v7.0.71: ردیف‌های حذف‌شده سند (journal_voucher_items.is_deleted) هم دیگر شمرده نمی‌شوند
+    const currencies = await AccountingReportService.currencyTurnovers(dateConditions);
 
     return {
       currencies,
       totalCurrenciesCount: currencies.length,
-      activeCurrencies: Array.from(curMap.keys()),
+      activeCurrencies: currencies.map(c => c.currency),
     };
   }
 
@@ -1326,66 +1220,55 @@ export class AccountingReportService {
    * Financial Overview Stats for Accounting Dashboard
    */
   static async getFinancialOverviewStats(): Promise<FinancialSummaryStats> {
+    // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal و جمع چک‌ها در SQL
     const banks = await TreasuryService.getBankAccounts();
-    const totalCashAndBank = banks.reduce((sum, b) => sum + (Number(b.currentBalance) || 0), 0);
+    const totalCashAndBank = FinancialMath.sum(banks.map(b => b.currentBalance));
 
     const trial = await this.getTrialBalance({ level: 'general' });
 
-    let totalReceivables = 0;
-    let totalPayables = 0;
-    let totalRevenues = 0;
-    let totalCostOfSales = 0;
-    let totalExpenses = 0;
+    let totalReceivables = fin(0);
+    let totalPayables = fin(0);
+    let totalRevenues = fin(0);
+    let totalCostOfSales = fin(0);
+    let totalExpenses = fin(0);
 
     for (const r of trial) {
       if (r.code === '12' || r.code === '11') {
-        totalReceivables += r.debitBalance;
+        totalReceivables = totalReceivables.add(r.debitBalance);
       } else if (r.code === '30' || r.code === '31' || r.code === '32') {
-        totalPayables += r.creditBalance;
+        totalPayables = totalPayables.add(r.creditBalance);
       } else if (r.accountType === 'revenue') {
-        totalRevenues += (r.creditTurnover - r.debitTurnover);
+        totalRevenues = totalRevenues.add(fin(r.creditTurnover).subtract(r.debitTurnover));
       } else if (r.accountType === 'cost_of_sales') {
-        totalCostOfSales += (r.debitTurnover - r.creditTurnover);
+        totalCostOfSales = totalCostOfSales.add(fin(r.debitTurnover).subtract(r.creditTurnover));
       } else if (r.accountType === 'expense') {
-        totalExpenses += (r.debitTurnover - r.creditTurnover);
+        totalExpenses = totalExpenses.add(fin(r.debitTurnover).subtract(r.creditTurnover));
       }
     }
 
     // Cheques stats
-    const allCheques = await orm.select().from(cheques).where(eq(cheques.isDeleted, 0));
-    let totalChequesInCollection = 0;
-    let totalChequesReceived = 0;
-    let totalChequesPaid = 0;
-
-    for (const c of allCheques) {
-      const amt = Number(c.amount) || 0;
-      if (c.type === 'received') {
-        totalChequesReceived += amt;
-        if (c.status === 'in_collection' || c.status === 'in_treasury' || c.status === 'received') {
-          totalChequesInCollection += amt;
-        }
-      } else {
-        if (c.status !== 'passed' && c.status !== 'returned') {
-          totalChequesPaid += amt;
-        }
-      }
-    }
+    const isReceived = sql`${cheques.type} = 'received'`;
+    const [chequeSums] = await orm.select({
+      received: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${isReceived}), 0)::text`,
+      inCollection: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${isReceived} AND ${cheques.status} IN ('in_collection', 'in_treasury', 'received')), 0)::text`,
+      paid: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${cheques.type} IS DISTINCT FROM 'received' AND ${cheques.status} IS DISTINCT FROM 'passed' AND ${cheques.status} IS DISTINCT FROM 'returned'), 0)::text`,
+    }).from(cheques).where(eq(cheques.isDeleted, 0));
 
     const [vCount] = await orm.select({ count: sql<number>`count(*)` })
       .from(journalVouchers)
       .where(eq(journalVouchers.isDeleted, 0));
 
     return {
-      totalCashAndBank,
-      totalReceivables,
-      totalPayables,
-      totalChequesInCollection,
-      totalChequesReceived,
-      totalChequesPaid,
-      totalRevenues,
-      totalCostOfSales,
-      totalExpenses,
-      netProfit: totalRevenues - totalCostOfSales - totalExpenses,
+      totalCashAndBank: totalCashAndBank.toNumber(),
+      totalReceivables: totalReceivables.toNumber(),
+      totalPayables: totalPayables.toNumber(),
+      totalChequesInCollection: fin(chequeSums?.inCollection).toNumber(),
+      totalChequesReceived: fin(chequeSums?.received).toNumber(),
+      totalChequesPaid: fin(chequeSums?.paid).toNumber(),
+      totalRevenues: totalRevenues.toNumber(),
+      totalCostOfSales: totalCostOfSales.toNumber(),
+      totalExpenses: totalExpenses.toNumber(),
+      netProfit: totalRevenues.subtract(totalCostOfSales).subtract(totalExpenses).toNumber(),
       totalVouchersCount: Number(vCount?.count) || 0,
     };
   }
@@ -1431,18 +1314,18 @@ export class AccountingReportService {
     const start = params.startDate || '';
     const end = params.endDate || '9999-12-31';
 
+    // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal
     const rows = banks.map(b => {
-      let opening = Number(b.initialBalance) || 0;
-      let receipts = 0;
-      let payments = 0;
+      let opening = fin(b.initialBalance);
+      let receipts = fin(0);
+      let payments = fin(0);
       for (const t of txs) {
         if (Number(t.bankAccountId) !== b.id || t.status === 'voided') continue;
         const inPeriod = (!start || String(t.date).slice(0, 10) >= start) && (String(t.date).slice(0, 10) <= end);
-        const amt = Number(t.amount) || 0;
         if (inPeriod) {
-          if (t.type === 'receipt') receipts += amt; else payments += amt;
+          if (t.type === 'receipt') receipts = receipts.add(t.amount); else payments = payments.add(t.amount);
         } else if (!start || String(t.date).slice(0, 10) < start) {
-          opening += t.type === 'receipt' ? amt : -amt;
+          opening = t.type === 'receipt' ? opening.add(t.amount) : opening.subtract(t.amount);
         }
       }
       return {
@@ -1450,41 +1333,41 @@ export class AccountingReportService {
         title: b.title,
         type: b.type,
         currency: b.currency || 'IRR',
-        opening: Math.round(opening * 10000) / 10000,
-        receipts: Math.round(receipts * 10000) / 10000,
-        payments: Math.round(payments * 10000) / 10000,
-        closing: Math.round((opening + receipts - payments) * 10000) / 10000,
+        opening: opening.round(4).toNumber(),
+        receipts: receipts.round(4).toNumber(),
+        payments: payments.round(4).toNumber(),
+        closing: opening.add(receipts).subtract(payments).round(4).toNumber(),
       };
     });
 
     // روند ماهانه بر مبنای همه حساب‌ها در بازه
-    const monthMap = new Map<string, { receipts: number; payments: number }>();
+    const monthMap = new Map<string, { receipts: FinancialDecimal; payments: FinancialDecimal }>();
     for (const t of txs) {
       if (t.status === 'voided') continue;
       const d = String(t.date).slice(0, 10);
       if (start && d < start) continue;
       if (d > end) continue;
       const monthKey = d.slice(0, 7);
-      const agg = monthMap.get(monthKey) || { receipts: 0, payments: 0 };
-      if (t.type === 'receipt') agg.receipts += Number(t.amount) || 0;
-      else agg.payments += Number(t.amount) || 0;
+      const agg = monthMap.get(monthKey) || { receipts: fin(0), payments: fin(0) };
+      if (t.type === 'receipt') agg.receipts = agg.receipts.add(t.amount);
+      else agg.payments = agg.payments.add(t.amount);
       monthMap.set(monthKey, agg);
     }
     const months = Array.from(monthMap.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, v]) => ({
         month,
-        receipts: Math.round(v.receipts * 10000) / 10000,
-        payments: Math.round(v.payments * 10000) / 10000,
-        net: Math.round((v.receipts - v.payments) * 10000) / 10000,
+        receipts: v.receipts.round(4).toNumber(),
+        payments: v.payments.round(4).toNumber(),
+        net: v.receipts.subtract(v.payments).round(4).toNumber(),
       }));
 
-    const totals = rows.reduce((acc, r) => ({
-      opening: acc.opening + r.opening,
-      receipts: acc.receipts + r.receipts,
-      payments: acc.payments + r.payments,
-      closing: acc.closing + r.closing,
-    }), { opening: 0, receipts: 0, payments: 0, closing: 0 });
+    const totals = {
+      opening: FinancialMath.sum(rows.map(r => r.opening)).toNumber(),
+      receipts: FinancialMath.sum(rows.map(r => r.receipts)).toNumber(),
+      payments: FinancialMath.sum(rows.map(r => r.payments)).toNumber(),
+      closing: FinancialMath.sum(rows.map(r => r.closing)).toNumber(),
+    };
 
     return { period: { startDate: start, endDate: end }, rows, months, totals };
   }
@@ -1507,14 +1390,15 @@ export class AccountingReportService {
       .select({
         code: accounts.code,
         title: accounts.name,
-        debit: sql<number>`COALESCE(SUM(${journalVoucherItems.debit}), 0)`,
-        credit: sql<number>`COALESCE(SUM(${journalVoucherItems.credit}), 0)`,
+        debit: sql<string>`COALESCE(SUM(${journalVoucherItems.debit}), 0)::text`,
+        credit: sql<string>`COALESCE(SUM(${journalVoucherItems.credit}), 0)::text`,
       })
       .from(journalVoucherItems)
       .innerJoin(accounts, eq(journalVoucherItems.accountId, accounts.id))
       .innerJoin(journalVouchers, eq(journalVoucherItems.voucherId, journalVouchers.id))
       .where(and(
         eq(journalVouchers.isDeleted, 0),
+        eq(journalVoucherItems.isDeleted, 0),
         sql`${journalVouchers.status} IN ('approved', 'permanent')`,
         sql`${accounts.code} IN ('1101', '1102', '1103', '3101')`
       ))
@@ -1534,7 +1418,7 @@ export class AccountingReportService {
       bounced: { code: '1103', type: 'received' },
     };
     // چک پرداختی صادره/در جریان → 3101 (تا زمان پاس شدن)
-    const expected: Record<string, number> = { '1101': 0, '1102': 0, '1103': 0, '3101': 0 };
+    const expected: Record<string, FinancialDecimal> = { '1101': fin(0), '1102': fin(0), '1103': fin(0), '3101': fin(0) };
     const counts: Record<string, number> = { '1101': 0, '1102': 0, '1103': 0, '3101': 0 };
     for (const c of allCheques) {
       let codeKey: string | null = null;
@@ -1544,7 +1428,7 @@ export class AccountingReportService {
         codeKey = '3101';
       }
       if (codeKey) {
-        expected[codeKey] += Number(c.amount) || 0;
+        expected[codeKey] = expected[codeKey].add(c.amount);
         counts[codeKey] += 1;
       }
     }
@@ -1559,14 +1443,14 @@ export class AccountingReportService {
     const codes = ['1101', '1102', '1103', '3101'];
     return codes.map(code => {
       const lr = ledgerRows.find(l => l.code === code);
-      const ledgerBalance = Math.round(((Number(lr?.debit) || 0) - (Number(lr?.credit) || 0)) * 10000) / 10000;
-      const expectedBalance = Math.round((expected[code] || 0) * 10000) / 10000;
+      const ledgerBalance = fin(lr?.debit).subtract(lr?.credit ?? 0).round(4);
+      const expectedBalance = expected[code].round(4);
       return {
         code,
         title: lr?.title || titles[code],
-        ledgerBalance,
-        expectedBalance,
-        discrepancy: Math.round((ledgerBalance - expectedBalance) * 10000) / 10000,
+        ledgerBalance: ledgerBalance.toNumber(),
+        expectedBalance: expectedBalance.toNumber(),
+        discrepancy: ledgerBalance.subtract(expectedBalance).toNumber(),
         counts: { ledger: 0, cheques: counts[code] || 0 },
       };
     });

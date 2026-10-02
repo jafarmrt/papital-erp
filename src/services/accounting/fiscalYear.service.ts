@@ -8,7 +8,7 @@ import { AccountingReportService } from './accountingReport.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { ConflictError } from '../../errors/customErrors.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import type { 
   FiscalYearClosingPreview, 
   FiscalYearClosingResult, 
@@ -43,12 +43,13 @@ export class FiscalYearService {
     const temporaryAccounts: FiscalClosingAccountRow[] = [];
     const permanentAccounts: FiscalClosingAccountRow[] = [];
 
-    let totalRevenues = 0;
-    let totalCostOfSales = 0;
-    let totalExpenses = 0;
+    // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal؛ سود خالص پیش‌نمایش مستقیم در سند بستن حساب‌ها استفاده می‌شود
+    let totalRevenuesDec = fin(0);
+    let totalCostOfSalesDec = fin(0);
+    let totalExpensesDec = fin(0);
 
-    let totalTemporaryDebit = 0;
-    let totalTemporaryCredit = 0;
+    let totalTemporaryDebitDec = fin(0);
+    let totalTemporaryCreditDec = fin(0);
 
     for (const r of trial) {
       const isTemporary = r.accountType === 'revenue' || r.accountType === 'cost_of_sales' || r.accountType === 'expense';
@@ -57,7 +58,7 @@ export class FiscalYearService {
         if (r.accountType === 'revenue') {
           const netCredit = Number(r.creditTurnover || 0) - Number(r.debitTurnover || 0);
           if (netCredit !== 0) {
-            totalRevenues += netCredit;
+            totalRevenuesDec = totalRevenuesDec.add(netCredit);
             const action = netCredit > 0 ? 'debit' : 'credit';
             const amount = Math.abs(netCredit);
             temporaryAccounts.push({
@@ -69,13 +70,13 @@ export class FiscalYearService {
               action,
               amount
             });
-            if (action === 'debit') totalTemporaryDebit += amount;
-            else totalTemporaryCredit += amount;
+            if (action === 'debit') totalTemporaryDebitDec = totalTemporaryDebitDec.add(amount);
+            else totalTemporaryCreditDec = totalTemporaryCreditDec.add(amount);
           }
         } else if (r.accountType === 'cost_of_sales') {
           const netDebit = Number(r.debitTurnover || 0) - Number(r.creditTurnover || 0);
           if (netDebit !== 0) {
-            totalCostOfSales += netDebit;
+            totalCostOfSalesDec = totalCostOfSalesDec.add(netDebit);
             const action = netDebit > 0 ? 'credit' : 'debit';
             const amount = Math.abs(netDebit);
             temporaryAccounts.push({
@@ -87,13 +88,13 @@ export class FiscalYearService {
               action,
               amount
             });
-            if (action === 'credit') totalTemporaryCredit += amount;
-            else totalTemporaryDebit += amount;
+            if (action === 'credit') totalTemporaryCreditDec = totalTemporaryCreditDec.add(amount);
+            else totalTemporaryDebitDec = totalTemporaryDebitDec.add(amount);
           }
         } else if (r.accountType === 'expense') {
           const netDebit = Number(r.debitTurnover || 0) - Number(r.creditTurnover || 0);
           if (netDebit !== 0) {
-            totalExpenses += netDebit;
+            totalExpensesDec = totalExpensesDec.add(netDebit);
             const action = netDebit > 0 ? 'credit' : 'debit';
             const amount = Math.abs(netDebit);
             temporaryAccounts.push({
@@ -105,8 +106,8 @@ export class FiscalYearService {
               action,
               amount
             });
-            if (action === 'credit') totalTemporaryCredit += amount;
-            else totalTemporaryDebit += amount;
+            if (action === 'credit') totalTemporaryCreditDec = totalTemporaryCreditDec.add(amount);
+            else totalTemporaryDebitDec = totalTemporaryDebitDec.add(amount);
           }
         }
       } else {
@@ -140,7 +141,12 @@ export class FiscalYearService {
       }
     }
 
-    const netProfit = totalRevenues - totalCostOfSales - totalExpenses;
+    const totalRevenues = totalRevenuesDec.toNumber();
+    const totalCostOfSales = totalCostOfSalesDec.toNumber();
+    const totalExpenses = totalExpensesDec.toNumber();
+    const totalTemporaryDebit = totalTemporaryDebitDec.toNumber();
+    const totalTemporaryCredit = totalTemporaryCreditDec.toNumber();
+    const netProfit = totalRevenuesDec.subtract(totalCostOfSalesDec).subtract(totalExpensesDec).toNumber();
     const isProfit = netProfit >= 0;
 
     const summaryVouchersPreview = [
@@ -150,7 +156,7 @@ export class FiscalYearService {
         date: closingDate,
         description: `بستن حساب‌های موقت (درآمد و هزینه) به حساب خلاصه سود و زیان سال مالی ${currentYear}`,
         itemsCount: temporaryAccounts.length + 1,
-        totalAmount: Math.max(totalTemporaryDebit, totalTemporaryCredit) + Math.abs(netProfit)
+        totalAmount: fin(Math.max(totalTemporaryDebit, totalTemporaryCredit)).add(Math.abs(netProfit)).toNumber()
       },
       {
         title: '۲. سند انتقال سود/زیان سال جاری به سود انباشته',
@@ -166,7 +172,7 @@ export class FiscalYearService {
         date: closingDate,
         description: `سند اختتامیه و بستن حساب‌های ترازنامه‌ای (دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام) در پایان سال مالی ${currentYear}`,
         itemsCount: permanentAccounts.length,
-        totalAmount: permanentAccounts.reduce((s, a) => s + a.amount, 0) / 2
+        totalAmount: FinancialMath.sum(permanentAccounts.map(a => a.amount)).divide(2).toNumber()
       },
       {
         title: '۴. سند افتتاحیه سال مالی جدید',
@@ -174,7 +180,7 @@ export class FiscalYearService {
         date: openingDateNewYear,
         description: `سند افتتاحیه سال مالی ${Number(currentYear) + 1} (انتقال مانده‌های ابتدای دوره از سال مالی قبل)`,
         itemsCount: permanentAccounts.length,
-        totalAmount: permanentAccounts.reduce((s, a) => s + a.amount, 0) / 2
+        totalAmount: FinancialMath.sum(permanentAccounts.map(a => a.amount)).divide(2).toNumber()
       }
     ];
 
