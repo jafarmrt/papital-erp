@@ -1,11 +1,11 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { items, documents, documentItems, pieceworkLogs, pieceworkPayrolls, personnel, pieceworkTasks, users } from '../../db/schema.js';
+import { items, documents, documentItems, pieceworkLogs, pieceworkPayrolls, personnel, pieceworkTasks } from '../../db/schema.js';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
 import { IdempotencyService } from '../../services/idempotency.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../lib/lockOrder.js';
-import { syncFixtureItemStocks } from '../fixtures/factories.js';
+import { syncFixtureItemStocks, createTestUser } from '../fixtures/factories.js';
 
 export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -533,9 +533,10 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   // 6b. V4.0.13: Triple-Key Idempotency Isolation (TD-095: user + scope + key)
   const t6bStart = Date.now();
   try {
-    const existingUsers = await orm.select({ id: users.id }).from(users).limit(2);
-    const u1Id = existingUsers[0]?.id || 1;
-    const u2Id = existingUsers[1]?.id || (existingUsers[0]?.id ? null : 2);
+    // v7.0.47 (TD-213): کاربران خود آزمون؛ پیش‌تر دو کاربر اول جدول برداشته و در نبود کاربر شناسه ۱ فرض می‌شد و
+    // اجرای مستقل این سوئیت روی اسکیمای تازه با نقض کلید خارجی idempotency_keys.created_by_id شکست می‌خورد
+    const u1Id = (await createTestUser({ role: 'operator' })).id;
+    const u2Id = (await createTestUser({ role: 'operator' })).id;
 
     const sharedKey = `iso_key_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
@@ -555,7 +556,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     const acqU2Docs = await IdempotencyService.acquireOrGet({
       key: sharedKey,
       scope: 'documents',
-      userId: u2Id ?? undefined,
+      userId: u2Id,
       requestPath: '/api/documents',
       requestMethod: 'POST'
     });
