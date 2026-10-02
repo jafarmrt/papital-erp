@@ -15,6 +15,7 @@ import {
   Users
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice } from '../../utils';
+import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
 
 interface WorkflowStepperWidgetProps {
   entityType: string;
@@ -52,6 +53,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   const currentState = wfData?.currentState;
   const allStates = wfData?.allStates || [];
   const availableTransitions = wfData?.availableTransitions || [];
+  const blockedTransitions = wfData?.blockedTransitions || [];
   const history = wfData?.history || [];
 
   const handleStartWorkflow = () => {
@@ -270,7 +272,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
           )}
 
           {/* Available Actions Bar */}
-          {instance.status === 'IN_PROGRESS' && availableTransitions.length > 0 && (
+          {instance.status === 'IN_PROGRESS' && (availableTransitions.length > 0 || blockedTransitions.length > 0) && (
             <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-3 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
@@ -309,6 +311,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                   );
                 })}
               </div>
+              <WorkflowBlockedActions blocked={blockedTransitions} />
             </div>
           )}
 
@@ -326,6 +329,8 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                   انصراف
                 </button>
               </div>
+
+              <WorkflowActionConditionList transition={selectedTransition} />
 
               {/* Document Summary Context */}
               {entityType === 'document' && wfData?.entityContext && (

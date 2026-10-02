@@ -20,6 +20,8 @@ import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
+import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
+import type { RuleExpression } from '../ruleEngine.service.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
 
@@ -49,6 +51,12 @@ export interface WorkflowTransitionSnapshot {
   kValue?: number | null;
   autoActionKey?: string | null;
   isDeleted?: number;
+}
+
+/** v7.0.89 (TD-085): متن فارسی شرط‌های یک اقدام */
+export interface WorkflowTransitionConditionText {
+  conditions: string[];
+  conditionsMatch: 'AND' | 'OR';
 }
 
 export interface WorkflowSnapshotDsl {
@@ -495,7 +503,7 @@ export class WorkflowTransitionExecutor {
       if (transition.ruleConditionsJson) {
         const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
         if (!ruleEval.passed) {
-          const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => `${b.rule.field} ${b.rule.operator} ${b.rule.value} (مقدار واقعی: ${b.actualValue ?? 'خالی'})`);
+          const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => describeUnmetWorkflowRule(b.rule, b.actualValue));
           throw new ValidationError(`شرایط سیستمی لازم برای اجرای این مرحله احراز نشد: ${failedRules.join('، ')}`);
         }
       }
@@ -710,7 +718,7 @@ export class WorkflowTransitionExecutor {
       const authoritativeContext = await getEntityContext(instance.entityType, instance.entityId);
       const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
       if (!ruleEval.passed) {
-        const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => `${b.rule.field} ${b.rule.operator} ${b.rule.value}`);
+        const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => describeUnmetWorkflowRule(b.rule, b.actualValue));
         return { allowed: false, reason: `شرایط لازم برای این انتقال احراز نشده است (${failedRules.join('، ')})` };
       }
     }
@@ -755,16 +763,39 @@ export class WorkflowTransitionExecutor {
     // Server-side authoritative entity context resolution
     const entityContext = await getEntityContext(entityType, entityId, txExecutor);
 
-    const availableTransitions = await WorkflowTransitionExecutor.getAvailableTransitions(
+    // v7.0.89 (TD-085 بند ۱): اقدام‌هایی که نقش کاربر اجازه می‌دهد؛ آن‌هایی که شرط‌شان برقرار نیست با دلیل فارسی
+    // جدا برمی‌گردند (پیش از این بی‌صدا پنهان می‌شدند) و هر اقدام متن شرط‌هایش را دارد
+    const roleAllowedTransitions = await WorkflowTransitionExecutor.getAvailableTransitions(
       inst.id, 
       inst.currentStateId, 
       userRole, 
       userId, 
       snapshotTransitionsOf(inst.snapshotDsl), 
-      entityContext, 
+      undefined, 
       txExecutor,
       userPermissions
     );
+    const availableTransitions: Array<WorkflowTransitionSnapshot & WorkflowTransitionConditionText> = [];
+    const blockedTransitions: Array<Pick<WorkflowTransitionSnapshot, 'id' | 'title' | 'actionKey'> & WorkflowTransitionConditionText & { unmetConditions: string[] }> = [];
+    for (const t of roleAllowedTransitions) {
+      const rules = t.ruleConditionsJson as RuleExpression;
+      const breakdown = WorkflowRuleEngine.evaluateRuleBreakdown(rules, entityContext);
+      const conditionText: WorkflowTransitionConditionText = {
+        conditions: breakdown.breakdown.map((b) => describeWorkflowRule(b.rule)),
+        conditionsMatch: breakdown.matchType,
+      };
+      if (WorkflowRuleEngine.evaluateConditions(rules, entityContext)) {
+        availableTransitions.push({ ...t, ...conditionText });
+      } else {
+        blockedTransitions.push({
+          id: t.id,
+          title: t.title,
+          actionKey: t.actionKey,
+          ...conditionText,
+          unmetConditions: breakdown.breakdown.filter((b) => !b.passed).map((b) => describeUnmetWorkflowRule(b.rule, b.actualValue)),
+        });
+      }
+    }
 
     // v7.0.88 (TD-085): ساختاری که ویجت مراحل ورکفلو (WorkflowInstanceData) می‌خواند؛ پیش از این نمونه تخت برمی‌گشت
     // و ویجت هیچ‌وقت فرایند در جریان را نمی‌دید. مراحل از تصویر نسخه خود فرایند خوانده می‌شوند.
@@ -791,6 +822,7 @@ export class WorkflowTransitionExecutor {
       currentState: currentState ?? null,
       allStates,
       availableTransitions,
+      blockedTransitions,
       history,
       approvalProgress: (inst.approvalProgressJson as Record<string, unknown> | null) || {},
       entityContext

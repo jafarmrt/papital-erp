@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkflowStepperWidget } from '../../components/workflow/WorkflowStepperWidget';
 
@@ -21,7 +21,8 @@ const instanceResponse = {
     { id: 11, stateKey: 'finance', title: 'تایید مالی', stateType: 'normal', color: 'amber', stepOrder: 2 },
     { id: 12, stateKey: 'done', title: 'تایید شده', stateType: 'terminal', color: 'emerald', stepOrder: 3 },
   ],
-  availableTransitions: [{ id: 21, fromStateId: 11, toStateId: 12, actionKey: 'approve', title: 'تایید مالی نهایی', approvalRuleType: 'AND_ALL' }],
+  availableTransitions: [{ id: 21, fromStateId: 11, toStateId: 12, actionKey: 'approve', title: 'تایید مالی نهایی', approvalRuleType: 'AND_ALL', conditions: ['ارز برابر IRR باشد'], conditionsMatch: 'AND' }],
+  blockedTransitions: [{ id: 22, title: 'تایید کلان', actionKey: 'approve_big', conditions: ['مبلغ کل بیشتر از ۱۰۰ باشد'], conditionsMatch: 'AND', unmetConditions: ['مبلغ کل بیشتر از ۱۰۰ باشد (مقدار فعلی: ۵۰)'] }],
   history: [],
   approvalProgress: { 21: { approvalRuleType: 'AND_ALL', requiredCount: 3, signatures: [{ userId: 1, userName: 'مدیر مالی', signedAt: '2026-10-02T10:00:00Z' }], status: 'PENDING' } },
   entityContext: {},
@@ -51,6 +52,16 @@ describe('WorkflowStepperWidget (TD-085)', () => {
     renderWidget();
     expect(await screen.findByText(/امضاهای ثبت‌شده \(1 از 3\)/)).toBeTruthy();
     expect(screen.getByText('1/3 امضا')).toBeTruthy();
+  });
+
+  it('shows why an action is blocked and the conditions of the chosen action (TD-085 part 1)', async () => {
+    fetchJson.mockResolvedValue(instanceResponse);
+    renderWidget();
+    expect(await screen.findByText('مبلغ کل بیشتر از ۱۰۰ باشد (مقدار فعلی: ۵۰)')).toBeTruthy();
+    expect(screen.getByText(/«تایید کلان» فعلاً ممکن نیست/)).toBeTruthy();
+    fireEvent.click(screen.getByText('تایید مالی نهایی'));
+    expect(screen.getByText('شرط‌های این اقدام برقرار است:')).toBeTruthy();
+    expect(screen.getByText('ارز برابر IRR باشد')).toBeTruthy();
   });
 
   it('offers to start the workflow when the document has none', async () => {

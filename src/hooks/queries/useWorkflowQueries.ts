@@ -26,6 +26,19 @@ export interface WorkflowTransition {
   approvalRuleType?: string;
   kValue?: number;
   autoActionKey?: string;
+  /** v7.0.89 (TD-085): متن فارسی شرط‌های اقدام */
+  conditions?: string[];
+  conditionsMatch?: 'AND' | 'OR';
+}
+
+/** v7.0.89 (TD-085): اقدامی که نقش کاربر اجازه می‌دهد ولی شرط‌هایش برقرار نیست */
+export interface WorkflowBlockedTransition {
+  id: number;
+  title: string;
+  actionKey: string;
+  conditions: string[];
+  conditionsMatch: 'AND' | 'OR';
+  unmetConditions: string[];
 }
 
 export interface WorkflowInstance {
@@ -70,6 +83,7 @@ export interface WorkflowInstanceData {
   currentState?: WorkflowState;
   allStates?: WorkflowState[];
   availableTransitions?: WorkflowTransition[];
+  blockedTransitions?: WorkflowBlockedTransition[];
   history?: WorkflowHistoryLog[];
   approvalProgress?: Record<string, any>;
   entityContext?: Record<string, any>;

@@ -7431,5 +7431,97 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.89 (TD-085 بند ۱): اقدامی که شرطش برقرار نیست با دلیل فارسی برمی‌گردد (نه پنهان) و خطای اجرا فارسی است
+  if (shouldRun('reg_workflow_condition_preview_td_085', 'td085', 'workflow', 'condition')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.89: پیش‌نمایش فارسی شرط‌های اقدام ورکفلو؛ اقدام مسدود با دلیل برمی‌گردد و خطای اجرا فارسی است (TD-085)';
+    const {
+      workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks,
+    } = await import('../../db/schema.js');
+    const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+    const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const entityType = `reg_td085c_${suffix}`;
+    let defId: number | undefined;
+    try {
+      const violations: string[] = [];
+      const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+        code: `REG_TD085C_${suffix}`, title: 'ورکفلو آزمون شرط', entityType,
+        states: [
+          { stateKey: 'draft', title: 'پیش‌نویس', stateType: 'initial', stepOrder: 1 },
+          { stateKey: 'done', title: 'تایید', stateType: 'terminal', stepOrder: 2 },
+          { stateKey: 'big', title: 'تایید کلان', stateType: 'terminal', stepOrder: 2 },
+        ],
+        transitions: [
+          { fromStateKey: 'draft', toStateKey: 'done', actionKey: 'approve', title: 'تایید عادی',
+            ruleConditionsJson: [{ field: 'entityId', operator: 'eq', value: '1' }] },
+          { fromStateKey: 'draft', toStateKey: 'big', actionKey: 'approve_big', title: 'تایید کلان',
+            ruleConditionsJson: [{ field: 'entityId', operator: 'gt', value: 100 }] },
+        ],
+      });
+      defId = saved?.definition?.id;
+      if (!defId) throw new Error('تعریف ذخیره نشد');
+      const instance = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '1' });
+      const st = await WorkflowTransitionExecutor.getInstanceByEntity(entityType, '1', undefined, 'admin', ['*']);
+      const available = st?.availableTransitions || [];
+      const blocked = st?.blockedTransitions || [];
+      if (available.length !== 1 || available[0].title !== 'تایید عادی') violations.push(`اقدام مجاز: ${available.map((t) => t.title).join('،') || '-'}`);
+      if (available[0]?.conditions?.[0] !== 'entityId برابر ۱ باشد') violations.push(`متن شرط اقدام مجاز: ${available[0]?.conditions?.join('،') ?? '-'}`);
+      if (blocked.length !== 1 || blocked[0].title !== 'تایید کلان') {
+        violations.push(`اقدام مسدود: ${blocked.length}`);
+      } else if (blocked[0].unmetConditions[0] !== 'entityId بیشتر از ۱۰۰ باشد (مقدار فعلی: ۱)') {
+        violations.push(`دلیل مسدود بودن: ${blocked[0].unmetConditions.join('،')}`);
+      }
+      const blockedId = blocked[0]?.id;
+      if (blockedId) {
+        let message = '';
+        try {
+          await WorkflowTransitionExecutor.executeTransition({ instanceId: instance.id, transitionId: blockedId, userRole: 'admin', userPermissions: ['*'] });
+        } catch (err) {
+          message = err instanceof Error ? err.message : String(err);
+        }
+        if (!message.includes('entityId بیشتر از ۱۰۰ باشد') || /\bgt\b/.test(message)) violations.push(`خطای اجرای اقدام مسدود: ${message || 'خطا نداد'}`);
+      }
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_workflow_condition_preview_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'اقدام مجاز متن شرطش را داشت، اقدام مسدود با دلیل فارسی برگشت و اجرای آن با پیام فارسی رد شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_workflow_condition_preview_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (defId) {
+        const instanceIds = (await orm.select({ id: workflowInstances.id }).from(workflowInstances)
+          .where(eq(workflowInstances.workflowDefinitionId, defId))).map((r) => r.id);
+        if (instanceIds.length > 0) {
+          await orm.delete(workflowTasks).where(inArray(workflowTasks.instanceId, instanceIds));
+          await orm.delete(workflowPendingApprovals).where(inArray(workflowPendingApprovals.instanceId, instanceIds));
+          await orm.delete(workflowHistoryLogs).where(inArray(workflowHistoryLogs.instanceId, instanceIds));
+          await orm.delete(workflowInstances).where(inArray(workflowInstances.id, instanceIds));
+        }
+        await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
+        await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+        await orm.delete(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, defId));
+        await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
+      }
+    }
+  }
+
   return results;
 }
