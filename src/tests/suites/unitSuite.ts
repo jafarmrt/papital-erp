@@ -1243,7 +1243,8 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       throw new Error(`نسخه xlsx (${lib.version}) آسیب‌پذیر است (GHSA-4r6h-8v6p-xvw6، GHSA-5pgg-2g8v-p4x9)؛ حداقل 0.20.2 لازم است`);
     }
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
-    const spec = String(pkg.dependencies?.xlsx || '');
+    // v7.0.84 (TD-177): xlsx فقط در باندل فرانت است و در devDependencies قرار دارد
+    const spec = String(pkg.devDependencies?.xlsx || pkg.dependencies?.xlsx || '');
     if (!spec.startsWith('file:vendor/') || !fs.existsSync(path.join(process.cwd(), spec.slice('file:'.length)))) {
       throw new Error(`وابستگی xlsx باید از فایل vendor مخزن نصب شود (اکنون: ${spec || 'ندارد'})`);
     }
