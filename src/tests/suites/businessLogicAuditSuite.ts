@@ -169,11 +169,11 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
         startDate: '1404/01/01',
         endDate: '1404/01/30',
         title: 'V10 regression fixture',
-        totalPieceworkAmount: 0,
-        totalFixedAmount: 0,
-        totalBonuses: 0,
-        totalDeductions: 0,
-        netPayable: 500000,
+        totalPieceworkAmount: money(0),
+        totalFixedAmount: money(0),
+        totalBonuses: money(0),
+        totalDeductions: money(0),
+        netPayable: money(500000),
         status: 'paid',
         isDeleted: 0
       }).returning({ id: pieceworkPayrolls.id });
@@ -416,7 +416,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       const [newTask] = await orm.insert(pieceworkTasks).values({
         code: `TSK-T7-${Date.now()}`,
         title: 'وظیفه تستی تاریخ',
-        defaultRate: 10000,
+        defaultRate: money(10000),
         unit: 'عدد',
         isDeleted: 0
       }).returning({ id: pieceworkTasks.id });
@@ -432,8 +432,8 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       date: jDate2,
       dateIso: isoExpected2,
       quantity: 10,
-      unitRate: 10000,
-      totalAmount: 100000,
+      unitRate: money(10000),
+      totalAmount: money(100000),
       isDeleted: 0
     }).returning({ id: pieceworkLogs.id });
     createdPieceworkLogId = insertedPiecework.id;
@@ -648,7 +648,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       category: 'گردنبند',
       unit: 'عدد',
       currentStock: 5,
-      weightedAverageCost: 100000,
+      weightedAverageCost: money(100000),
       isDeleted: 0,
     }).returning({ id: items.id });
     await seedFixtureItemStocks(insertedItem.id, { [orchWh]: 5 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها

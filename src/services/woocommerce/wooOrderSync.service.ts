@@ -6,6 +6,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { OutboxService } from '../events/outboxService.js';
 import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
 
 /**
@@ -330,7 +331,7 @@ export class WooOrderSyncService {
           status: 'processed',
           erpDocumentId: newDocId,
           buyerName: invoiceBuyerName,
-          totalAmount: orderTotalNum,
+          totalAmount: money(orderTotalNum),
           payload: wcOrder,
           errorMessage: '',
           updatedAt: systemNowUtcIso(),
@@ -399,7 +400,7 @@ export class WooOrderSyncService {
     await tx.update(woocommerceOrderLogs).set({
       status: 'failed',
       buyerName,
-      totalAmount,
+      totalAmount: money(totalAmount),
       payload: wcOrder,
       errorMessage: message,
       updatedAt: systemNowUtcIso(),

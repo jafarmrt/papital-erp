@@ -1,4 +1,6 @@
 import { orm } from '../../db/drizzle.js';
+import { money } from '../../lib/money.js';
+import type { DecimalValue } from '../../lib/financialDecimal.js';
 import bcrypt from 'bcryptjs';
 import { eq, asc } from 'drizzle-orm';
 import {
@@ -95,18 +97,18 @@ export async function createTestCustomer(overrides: Partial<typeof customers.$in
  * `stocks`، موجودی پیش‌فرض (currentStock یا ۱۰۰) در انبار پیش‌فرض ثبت می‌شود.
  */
 export async function createTestItem(
-  overrides: Partial<typeof items.$inferInsert> & { stocks?: Record<string, number> } = {},
+  overrides: Partial<Omit<typeof items.$inferInsert, 'weightedAverageCost'>> & { stocks?: Record<string, number>; weightedAverageCost?: DecimalValue } = {},
   db: any = orm
 ) {
   const suffix = uniqueSuffix();
-  const { stocks: stocksOverride, ...columnOverrides } = overrides;
+  const { stocks: stocksOverride, weightedAverageCost: wacOverride, ...columnOverrides } = overrides;
   const itemData = {
     type: columnOverrides.type || 'product',
     name: columnOverrides.name || withTestMarker(`کالای آزمایشی ${suffix}`),
     code: columnOverrides.code || `ITEM_${suffix}`,
     unit: columnOverrides.unit || 'عدد',
     category: columnOverrides.category || 'دستبند',
-    weightedAverageCost: columnOverrides.weightedAverageCost ?? 50000,
+    weightedAverageCost: money(wacOverride ?? 50000),
     reorderPoint: columnOverrides.reorderPoint ?? 10,
     version: columnOverrides.version ?? 1,
     isDeleted: 0,

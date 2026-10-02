@@ -11,6 +11,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { ItemsService } from '../services/items.service.js';
 import { normalizeStrategyTitle, getStrategyCanonicalKey } from '../utils.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { money } from '../lib/money.js';
 
 const router = Router();
 
@@ -110,7 +111,7 @@ router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_pr
     const [inserted] = await orm.insert(itemPrices).values({
       itemId,
       title: cleanTitle,
-      price: Number(price),
+      price: money(price),
       currency: String(currency || 'IRR'),
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -202,12 +203,12 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
             });
           }
         } else {
-          const numPrice = Number(price);
+          const priceVal = money(price);
           const strCurrency = String(currency || 'IRR');
           const primaryActive = matchingActive[0];
 
           if (primaryActive) {
-            if (primaryActive.price !== numPrice || primaryActive.currency !== strCurrency) {
+            if (!primaryActive.price.equals(priceVal) || primaryActive.currency !== strCurrency) {
               for (const m of matchingActive) {
                 await tx.update(itemPrices)
                   .set({ isDeleted: 1, updatedAt: nowIso })
@@ -216,7 +217,7 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
               await tx.insert(itemPrices).values({
                 itemId: numItemId,
                 title: cleanTitle,
-                price: numPrice,
+                price: priceVal,
                 currency: strCurrency,
                 createdAt: nowIso,
                 updatedAt: nowIso,
@@ -228,7 +229,7 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
                 itemName: itemObj.name,
                 title: cleanTitle,
                 beforePrice: primaryActive.price,
-                afterPrice: numPrice,
+                afterPrice: priceVal.toNumber(),
                 currency: strCurrency,
                 action: 'UPDATED'
               });
@@ -237,7 +238,7 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
             await tx.insert(itemPrices).values({
               itemId: numItemId,
               title: cleanTitle,
-              price: numPrice,
+              price: priceVal,
               currency: strCurrency,
               createdAt: nowIso,
               updatedAt: nowIso,
@@ -249,7 +250,7 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
               itemName: itemObj.name,
               title: cleanTitle,
               beforePrice: null,
-              afterPrice: numPrice,
+              afterPrice: priceVal.toNumber(),
               currency: strCurrency,
               action: 'CREATED'
             });

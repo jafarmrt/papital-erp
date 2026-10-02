@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { items, documents, documentItems, pieceworkLogs, pieceworkPayrolls, personnel, pieceworkTasks } from '../../db/schema.js';
@@ -81,7 +82,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       type: 'product',
       unit: 'عدد',
       currentStock: 10,
-      weightedAverageCost: 1000,
+      weightedAverageCost: money(1000),
       isDeleted: 0
     }).returning({ id: items.id });
     await seedFixtureItemStocks(raceItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -631,7 +632,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       type: 'product',
       unit: 'عدد',
       currentStock: 100,
-      weightedAverageCost: 1000,
+      weightedAverageCost: money(1000),
       isDeleted: 0
     }).returning({ id: items.id });
     await seedFixtureItemStocks(rlkItem.id, { main: 100 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -649,7 +650,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       documentId: rlkDoc.id,
       itemId: rlkItem.id,
       quantity: 3,
-      unitPrice: 1000,
+      unitPrice: money(1000),
       location: 'main',
       isDeleted: 0
     });
@@ -879,7 +880,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       const [newTask] = await orm.insert(pieceworkTasks).values({
         code: `TASK_${Date.now()}`,
         title: 'ERP-TEST-MARKER تسک آزمایشی همزمانی',
-        defaultRate: 50000,
+        defaultRate: money(50000),
         unit: 'عدد',
         isDeleted: 0
       }).returning({ id: pieceworkTasks.id });
@@ -890,7 +891,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       fullName: `پرسنل تست همزمانی فیش ${Date.now()}`,
       jobTitle: 'کارشناس طلاساز',
       phone: `0912${Math.floor(1000000 + Math.random() * 8999999)}`,
-      monthlySalary: 0,
+      monthlySalary: money(0),
       isDeleted: 0
     }).returning({ id: personnel.id });
     tempWorkerId = testWorker.id;
@@ -900,8 +901,8 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       taskId: task.id,
       date: '1405/01/15',
       quantity: 10,
-      unitRate: 50000,
-      totalAmount: 500000,
+      unitRate: money(50000),
+      totalAmount: money(500000),
       status: 'pending',
       isDeleted: 0,
       notes: 'تست همزمانی فیش حقوقی'
@@ -943,11 +944,11 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
             startDate: '1405/01/01',
             endDate: '1405/01/30',
             title: 'ERP-TEST-MARKER فیش آزمایشی همزمانی',
-            totalPieceworkAmount: 500000,
-            totalFixedAmount: 0,
-            totalBonuses: 0,
-            totalDeductions: 0,
-            netPayable: 500000,
+            totalPieceworkAmount: money(500000),
+            totalFixedAmount: money(0),
+            totalBonuses: money(0),
+            totalDeductions: money(0),
+            netPayable: money(500000),
             status: 'approved',
             isDeleted: 0
           }).returning({ id: pieceworkPayrolls.id });

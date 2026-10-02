@@ -1,4 +1,6 @@
 import { ValidationError } from '../../errors/customErrors.js';
+import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
+import { money, type Money } from '../../lib/money.js';
 
 /**
  * v7.0.63 (TD-198): نرخ تسعیر ساختاریافته اسناد ارزی.
@@ -19,14 +21,14 @@ export interface ExchangeRateInput {
 }
 
 /** ورودی نرخ تسعیر را می‌خواند؛ اگر ارسال نشده باشد undefined برمی‌گرداند. */
-export function parseExchangeRateInput(input: ExchangeRateInput | undefined): number | undefined {
+export function parseExchangeRateInput(input: ExchangeRateInput | undefined): Money | undefined {
   const raw = input?.exchangeRate !== undefined ? input.exchangeRate : input?.exchange_rate;
   if (raw === undefined || raw === null || raw === '') return undefined;
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) {
     throw new ValidationError(`نرخ تسعیر باید عددی بزرگ‌تر از صفر باشد (مقدار دریافتی: ${String(raw)}).`);
   }
-  return value;
+  return money(raw as DecimalValue);
 }
 
 /**
@@ -35,11 +37,11 @@ export function parseExchangeRateInput(input: ExchangeRateInput | undefined): nu
 export function resolveDocumentExchangeRate(params: {
   currency: unknown;
   input?: ExchangeRateInput;
-  existing?: number | string | null;
-}): number | null {
+  existing?: DecimalValue;
+}): Money | null {
   const currency = normalizeCurrency(params.currency);
   if (currency === 'IRR') return null;
-  const rate = parseExchangeRateInput(params.input) ?? (Number(params.existing) > 0 ? Number(params.existing) : undefined);
+  const rate = parseExchangeRateInput(params.input) ?? (fin(params.existing).isPositive() ? money(params.existing) : undefined);
   if (rate === undefined) {
     throw new ValidationError(`برای سند با ارز ${currency} نرخ تسعیر (ریال به ازای هر واحد ${currency}) الزامی است.`);
   }

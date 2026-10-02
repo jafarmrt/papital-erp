@@ -316,7 +316,7 @@ export class PayrollPaymentService {
 
       // ۱۰. بروزرسانی فیش حقوقی
       await tx.update(pieceworkPayrolls).set({
-        paidAmount: newTotalPaid.toNumber(),
+        paidAmount: money(newTotalPaid),
         status: nextStatus,
         paymentDate: payDate,
         paymentMethod: input.method || 'bank_transfer',
@@ -332,7 +332,7 @@ export class PayrollPaymentService {
 
       const updatedPayroll = {
         ...payroll,
-        paidAmount: newTotalPaid.toNumber(),
+        paidAmount: money(newTotalPaid),
         status: nextStatus,
         paymentDate: payDate,
         paymentMethod: input.method || 'bank_transfer',

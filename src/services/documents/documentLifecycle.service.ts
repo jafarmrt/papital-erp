@@ -19,6 +19,7 @@ import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
+import { money } from '../../lib/money.js';
 
 export class DocumentLifecycleService {
   /**
@@ -156,7 +157,7 @@ export class DocumentLifecycleService {
           for (const item of docLines) {
             const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
             const qty = Number(item.quantity);
-            const price = Number(item.unitPrice || 0);
+            const price = item.unitPrice ?? 0;
 
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: item.itemId,
@@ -179,7 +180,7 @@ export class DocumentLifecycleService {
             docType: targetType,
             input: { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount },
             lines: docLines,
-            existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: Number(doc.vatAmount) || 0 },
+            existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
           });
           // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود؛ نرخ ارسالی روی خود سند ذخیره می‌شود
           const finalExchangeRate = resolveDocumentExchangeRate({
@@ -310,8 +311,8 @@ export class DocumentLifecycleService {
             documentId: doc.id,
             type: orig.type === 'in' ? 'out' : 'in',
             quantity: origQty,
-            unitPrice: Number(orig.unitPrice) || 0,
-            totalPrice: Number(orig.totalPrice) || 0,
+            unitPrice: money(orig.unitPrice),
+            totalPrice: money(orig.totalPrice),
             date: nowIso,
             documentType: orig.documentType || doc.type,
             documentRef: `REV-${orig.documentRef || doc.refNumber || id}`,
@@ -339,7 +340,7 @@ export class DocumentLifecycleService {
                 itemId: orig.itemId,
                 quantity: origQty,
                 originalDirection: orig.type as 'in' | 'out',
-                unitPrice: Number(orig.unitPrice || 0),
+                unitPrice: orig.unitPrice ?? 0,
                 location: targetLoc
               });
             }
@@ -352,7 +353,7 @@ export class DocumentLifecycleService {
               itemId: item.itemId,
               quantity: item.quantity,
               originalDirection: docDirection,
-              unitPrice: Number(item.unitPrice || 0),
+              unitPrice: item.unitPrice ?? 0,
               location: targetLoc
             });
           }

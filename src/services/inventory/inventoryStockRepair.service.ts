@@ -7,6 +7,7 @@ import { InsufficientStockError } from '../../errors/customErrors.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { money } from '../../lib/money.js';
 
 export class InventoryStockRepairService {
   /**
@@ -93,8 +94,8 @@ export class InventoryStockRepairService {
         .set({ version: nextVersion(item.version) })
         .where(eq(items.id, params.itemId));
 
-      const itemUnitPrice = Number(item.weightedAverageCost) || 0;
-      const itemTotalPrice = fin(itemUnitPrice).multiply(qty).toNumber();
+      const itemUnitPrice = money(item.weightedAverageCost);
+      const itemTotalPrice = money(itemUnitPrice.multiply(qty));
 
       // 1. Transaction log out from source
       const [outTx] = await txEngine.insert(transactions).values({

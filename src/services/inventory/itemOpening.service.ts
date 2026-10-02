@@ -6,6 +6,8 @@ import { VoucherService } from '../accounting/voucher.service.js';
 import { logger } from '../../middleware/logger.js';
 import { businessTodayJalaliDash } from '../../lib/businessClock.js';
 import type { JournalVoucher } from '../../types.js';
+import { money } from '../../lib/money.js';
+import { fin } from '../../lib/financialDecimal.js';
 
 /**
  * V2.0.0: سند افتتاحیه موجودی اولیه کالا — اتمیک و idempotent
@@ -29,9 +31,9 @@ export class ItemOpeningService {
     if (existing) return VoucherService.getJournalVoucherById(existing.id, params.tx);
 
     const stock = Number(item.currentStock) || 0;
-    const wac = Number(item.weightedAverageCost) || 0;
-    const amount = Math.round(stock * wac * 10000) / 10000;
-    if (amount <= 0) return null; // موجودی اولیه یا WAC ندارد — سند ندارد
+    const wac = money(item.weightedAverageCost);
+    const amount = fin(stock).multiply(wac).round(4);
+    if (!amount.isPositive()) return null; // موجودی اولیه یا WAC ندارد — سند ندارد
 
     const inventoryAcc = item.type === 'raw_material'
       ? await AccountMappingService.getInventoryRawMaterialsAccount(params.tx)
@@ -46,7 +48,7 @@ export class ItemOpeningService {
       await executor.update(transactions)
         .set({
           unitPrice: wac,
-          totalPrice: sql`${transactions.quantity} * ${wac}`
+          totalPrice: sql`${transactions.quantity} * ${wac.toDbString()}::numeric`
         })
         .where(and(
           eq(transactions.itemId, itemId),
@@ -54,7 +56,7 @@ export class ItemOpeningService {
           or(
             eq(transactions.documentRef, 'ثبت اولیه کالا'),
             eq(transactions.documentRef, 'درون‌ریزی اکسل'),
-            eq(transactions.unitPrice, 0)
+            eq(transactions.unitPrice, money(0))
           ),
           eq(transactions.isDeleted, 0)
         ));

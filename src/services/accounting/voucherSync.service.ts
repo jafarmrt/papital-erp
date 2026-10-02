@@ -17,7 +17,7 @@ import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { logger } from '../../middleware/logger.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
@@ -51,16 +51,17 @@ export class VoucherSyncService {
    */
   static async resolveVoucherExchangeRate(
     executor: DbExecutor,
-    doc: { currency?: string | null; exchangeRate?: number | string | null; refNumber?: string | null },
-    explicitRate?: number
-  ): Promise<number> {
+    doc: { currency?: string | null; exchangeRate?: DecimalValue; refNumber?: string | null },
+    explicitRate?: DecimalValue
+  ): Promise<FinancialDecimal> {
     const currency = (doc.currency || 'IRR').toUpperCase();
-    if (currency === 'IRR') return 1;
-    if (explicitRate !== undefined && Number(explicitRate) > 0) return Number(explicitRate);
-    if (Number(doc.exchangeRate) > 0) return Number(doc.exchangeRate);
+    if (currency === 'IRR') return fin(1);
+    // v7.0.68 (P2-6): نرخ بدون عبور از double
+    if (explicitRate !== undefined && fin(explicitRate).isPositive()) return fin(explicitRate);
+    if (fin(doc.exchangeRate).isPositive()) return fin(doc.exchangeRate);
     const [settingRow] = await executor.select().from(appSettings)
       .where(eq(appSettings.key, `exchange_rate_${currency.toLowerCase()}`));
-    if (settingRow && Number(settingRow.value) > 0) return Number(settingRow.value);
+    if (settingRow && fin(settingRow.value as DecimalValue).isPositive()) return fin(settingRow.value as DecimalValue);
     throw new ValidationError(`نرخ تسعیر سند ارزی ${doc.refNumber ?? ''} (${currency}) ثبت نشده است؛ سند حسابداری با نرخ ۱ صادر نمی‌شود.`);
   }
 
@@ -112,28 +113,26 @@ export class VoucherSyncService {
     let grossAmount = fin(0);
     let totalDiscount = fin(0);
 
+    // v7.0.68 (P2-6): مبالغ اقلام بدون عبور از double
     for (const it of itemsList) {
-      const q = Number(it.quantity) || 0;
-      const p = Number(it.unitPrice) || 0;
-      const d = Number(it.discount) || 0;
-      grossAmount = grossAmount.add(fin(q).multiply(p));
-      totalDiscount = totalDiscount.add(d);
+      grossAmount = grossAmount.add(fin(it.quantity).multiply(it.unitPrice));
+      totalDiscount = totalDiscount.add(it.discount);
     }
 
-    const grossAmountNum = grossAmount.round(4).toNumber();
-    const totalDiscountNum = totalDiscount.round(4).toNumber();
+    const grossAmountNum = grossAmount.round(4);
+    const totalDiscountNum = totalDiscount.round(4);
 
-    if (grossAmountNum <= 0) return null;
+    if (!grossAmountNum.isPositive()) return null;
 
-    const netAmountRaw = fin(grossAmountNum).subtract(totalDiscountNum);
-    const netAmount = netAmountRaw.isNegative() ? 0 : netAmountRaw.round(4).toNumber();
+    const netAmountRaw = grossAmountNum.subtract(totalDiscountNum);
+    const netAmount = netAmountRaw.isNegative() ? fin(0) : netAmountRaw.round(4);
 
     // v7.0.32 (TD-197 / audit P1-7): مبلغ مالیات فقط از ستون ساختاریافته خود فاکتور خوانده می‌شود. پیش‌تر از
     // متن آزاد یادداشت با Regex استخراج می‌شد و یادداشتی مانند «مالیات ۲ قلم آخر محاسبه نشود» مالیات ۲ ریالی
     // در دفاتر ثبت می‌کرد که در خود فاکتور وجود نداشت.
-    const vatAmount = fin(Number(doc.vatAmount) || 0).round(4).toNumber();
+    const vatAmount = fin(doc.vatAmount).round(4);
 
-    const finalPayable = fin(netAmount).add(vatAmount).round(4).toNumber();
+    const finalPayable = netAmount.add(vatAmount).round(4);
 
     // Conceptual Account Resolution (Subphase 9.2 + V5.0.17 TD-120)
     const customerAcc = await AccountMappingService.getTradeReceivablesAccount(tx);
@@ -157,7 +156,7 @@ export class VoucherSyncService {
     }
 
     // TD-120 & AUD-04: اعتبارسنجی تراز بودن سند در نبود سرفصل تخفیف یا ارزش افزوده
-    if (totalDiscountNum > 0 && !discountAcc) {
+    if (totalDiscountNum.isPositive() && !discountAcc) {
       if (isStrict) {
         throw new ValidationError('سرفصل حسابداری تخفیفات اعطایی (۵۱۰۲) در تنظیمات حسابداری تعریف نشده است.');
       }
@@ -165,7 +164,7 @@ export class VoucherSyncService {
       return null;
     }
 
-    if (vatAmount > 0 && !vatAcc) {
+    if (vatAmount.isPositive() && !vatAcc) {
       if (isStrict) {
         throw new ValidationError('سرفصل حسابداری مالیات بر ارزش افزوده (۳۲۰۳) در تنظیمات حسابداری تعریف نشده است.');
       }
@@ -192,10 +191,10 @@ export class VoucherSyncService {
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other';
       detailedId?: number;
       detailedName?: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency?: string;
-      exchangeRate?: number;
+      exchangeRate?: DecimalValue;
       description?: string;
     }[] = [];
 
@@ -213,7 +212,7 @@ export class VoucherSyncService {
     });
 
     // ۲) بدهکار: تخفیفات اعطایی
-    if (totalDiscountNum > 0 && discountAcc) {
+    if (totalDiscountNum.isPositive() && discountAcc) {
       voucherItems.push({
         accountId: discountAcc.id,
         detailedType: 'other',
@@ -239,7 +238,7 @@ export class VoucherSyncService {
     });
 
     // ۴) بستانکار: مالیات بر ارزش افزوده
-    if (vatAmount > 0 && vatAcc) {
+    if (vatAmount.isPositive() && vatAcc) {
       voucherItems.push({
         accountId: vatAcc.id,
         detailedType: 'other',
@@ -262,10 +261,10 @@ export class VoucherSyncService {
         eq(transactions.type, 'out'),
         eq(transactions.isDeleted, 0)
       ));
-    const txCostMap = new Map<number, number>();
+    const txCostMap = new Map<number, FinancialDecimal>();
     for (const t of docTxs) {
-      if (t.unitPrice && Number(t.unitPrice) > 0) {
-        txCostMap.set(t.itemId, Number(t.unitPrice));
+      if (fin(t.unitPrice).isPositive()) {
+        txCostMap.set(t.itemId, fin(t.unitPrice));
       }
     }
 
@@ -274,9 +273,9 @@ export class VoucherSyncService {
     for (const line of itemsList) {
       const q = Number(line.quantity) || 0;
       const historicalCost = txCostMap.get(line.itemId);
-      const wac = (historicalCost !== undefined && historicalCost > 0)
+      const wac = historicalCost !== undefined
         ? historicalCost
-        : (Number(line.weightedAverageCost) || 0); // fallback to current WAC if no tx recorded
+        : fin(line.weightedAverageCost); // fallback to current WAC if no tx recorded
       const lineCost = fin(q).multiply(wac);
       if (line.itemType === 'product') {
         fgCost = fgCost.add(lineCost);
@@ -288,8 +287,8 @@ export class VoucherSyncService {
     // Apply currency conversion (TD-143): Convert IRR WAC to invoice foreign currency
     let fgCostConv = fgCost;
     let rmCostConv = rmCost;
-    if (docCurrency !== 'IRR' && exchangeRate > 0) {
-      if (exchangeRate >= 1) {
+    if (docCurrency !== 'IRR' && exchangeRate.isPositive()) {
+      if (exchangeRate.greaterThanOrEqual(1)) {
         fgCostConv = fgCost.divide(exchangeRate);
         rmCostConv = rmCost.divide(exchangeRate);
       } else {
@@ -298,12 +297,12 @@ export class VoucherSyncService {
       }
     }
 
-    const fgCostNum = fgCostConv.round(4).toNumber();
-    const rmCostNum = rmCostConv.round(4).toNumber();
-    const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4).toNumber();
+    const fgCostNum = fgCostConv.round(4);
+    const rmCostNum = rmCostConv.round(4);
+    const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4);
 
-    if (totalCogsNum > 0) {
-      if (!cogsAcc || (fgCostNum > 0 && !fgAcc) || (rmCostNum > 0 && !rmAcc)) {
+    if (totalCogsNum.isPositive()) {
+      if (!cogsAcc || (fgCostNum.isPositive() && !fgAcc) || (rmCostNum.isPositive() && !rmAcc)) {
         if (isStrict) {
           throw new ValidationError('سرفصل بهای تمام‌شده کالای فروش‌رفته (۶۰۰۱) یا حساب‌های موجودی کالا در تنظیمات حسابداری تعریف نشده است.');
         }
@@ -321,7 +320,7 @@ export class VoucherSyncService {
         });
 
         // ۵-ب) بستانکار: کاهش موجودی کالای تولیدشده (۱۴۰۳)
-        if (fgCostNum > 0 && fgAcc) {
+        if (fgCostNum.isPositive() && fgAcc) {
           voucherItems.push({
             accountId: fgAcc.id,
             detailedType: 'other',
@@ -335,7 +334,7 @@ export class VoucherSyncService {
         }
 
         // ۵-ج) بستانکار: کاهش موجودی مواد اولیه (۱۴۰۱)
-        if (rmCostNum > 0 && rmAcc) {
+        if (rmCostNum.isPositive() && rmAcc) {
           voucherItems.push({
             accountId: rmAcc.id,
             detailedType: 'other',
@@ -367,7 +366,7 @@ export class VoucherSyncService {
       resultVoucher = await VoucherService.updateJournalVoucher(existingVoucher.id, {
         date: docDate,
         voucherType: 'sales',
-        description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum > 0 ? ' (همراه با تخفیف)' : ''}${vatAmount > 0 ? ' (شامل ارزش‌افزوده)' : ''}`,
+        description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum.isPositive() ? ' (همراه با تخفیف)' : ''}${vatAmount.isPositive() ? ' (شامل ارزش‌افزوده)' : ''}`,
         items: voucherItems,
       }, tx);
     } else {
@@ -375,7 +374,7 @@ export class VoucherSyncService {
         date: docDate,
         voucherType: 'sales',
         status: 'draft',
-        description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum > 0 ? ' (همراه با تخفیف)' : ''}${vatAmount > 0 ? ' (شامل ارزش‌افزوده)' : ''}`,
+        description: `ثبت فاکتور فروش شماره ${doc.refNumber} به نام ${doc.buyerName || 'مشتری'}${totalDiscountNum.isPositive() ? ' (همراه با تخفیف)' : ''}${vatAmount.isPositive() ? ' (شامل ارزش‌افزوده)' : ''}`,
         referenceModule: 'invoice',
         referenceId: docId,
         referenceNumber: doc.refNumber,
@@ -444,13 +443,11 @@ export class VoucherSyncService {
     let finishedGoodsAmount = fin(0);
 
     for (const it of itemsList) {
-      const q = Number(it.quantity) || 0;
       // P1-03 (M-06): در رسیدهای خرید قیمت واقعی فاکتور ثبت می‌شود؛ فال‌بک به WAC فقط مختص رسیدهای تولید است
-      const p = doc.type === 'production_receipt'
-        ? (Number(it.unitPrice) > 0 ? Number(it.unitPrice) : (Number(it.weightedAverageCost) || 0))
-        : Number(it.unitPrice || 0);
-      const d = Number(it.discount) || 0;
-      const lineNetRaw = fin(q).multiply(p).subtract(d);
+      const p = doc.type === 'production_receipt' && !fin(it.unitPrice).isPositive()
+        ? fin(it.weightedAverageCost)
+        : fin(it.unitPrice);
+      const lineNetRaw = fin(it.quantity).multiply(p).subtract(it.discount);
       const lineNet = lineNetRaw.isNegative() ? fin(0) : lineNetRaw;
 
       if (it.itemType === 'product') {
@@ -467,11 +464,11 @@ export class VoucherSyncService {
       }
     }
 
-    const rawMaterialsAmountNum = rawMaterialsAmount.round(4).toNumber();
-    const finishedGoodsAmountNum = finishedGoodsAmount.round(4).toNumber();
+    const rawMaterialsAmountNum = rawMaterialsAmount.round(4);
+    const finishedGoodsAmountNum = finishedGoodsAmount.round(4);
 
-    const totalGross = fin(rawMaterialsAmountNum).add(finishedGoodsAmountNum).round(4).toNumber();
-    if (totalGross <= 0) return null;
+    const totalGross = fin(rawMaterialsAmountNum).add(finishedGoodsAmountNum).round(4);
+    if (!totalGross.isPositive()) return null;
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     const rawMaterialAcc = allAccs.find(a => a.code === '1401') || allAccs.find(a => a.code === '14');
@@ -516,15 +513,15 @@ export class VoucherSyncService {
       detailedType?: 'none' | 'customer' | 'supplier' | 'personnel' | 'project' | 'bank_account' | 'other';
       detailedId?: number;
       detailedName?: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency?: string;
-      exchangeRate?: number;
+      exchangeRate?: DecimalValue;
       description?: string;
     }[] = [];
 
     // Debit 1: Raw Materials
-    if (rawMaterialsAmountNum > 0 && rawMaterialAcc) {
+    if (rawMaterialsAmountNum.isPositive() && rawMaterialAcc) {
       voucherItems.push({
         accountId: rawMaterialAcc.id,
         detailedType: 'other',
@@ -538,7 +535,7 @@ export class VoucherSyncService {
     }
 
     // Debit 2: Finished Goods
-    if (finishedGoodsAmountNum > 0 && finishedGoodsAcc) {
+    if (finishedGoodsAmountNum.isPositive() && finishedGoodsAcc) {
       voucherItems.push({
         accountId: finishedGoodsAcc.id,
         detailedType: 'other',
@@ -729,10 +726,10 @@ export class VoucherSyncService {
       detailedType?: 'none' | 'customer' | 'supplier' | 'personnel' | 'project' | 'bank_account' | 'other';
       detailedId?: number;
       detailedName?: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency?: string;
-      exchangeRate?: number;
+      exchangeRate?: DecimalValue;
       description?: string;
     }[] = [];
 
@@ -744,7 +741,7 @@ export class VoucherSyncService {
       for (const line of itemsList) {
         const q = Number(line.quantity) || 0;
         // P1-06 (M-07 & F11): حواله مصرف بر مبنای بهای تمام‌شده میانگین موزون (WAC) ارزیابی می‌شود، نه قیمت فروش
-        const lineCostRate = Number(line.weightedAverageCost) > 0 ? Number(line.weightedAverageCost) : (Number(line.unitPrice) || 0);
+        const lineCostRate = fin(line.weightedAverageCost).isPositive() ? fin(line.weightedAverageCost) : fin(line.unitPrice);
         const cost = fin(q).multiply(lineCostRate);
         if (line.itemType === 'product') {
           productCost = productCost.add(cost);
@@ -753,10 +750,10 @@ export class VoucherSyncService {
         }
       }
 
-      const rawMatCostNum = rawMatCost.round(4).toNumber();
-      const productCostNum = productCost.round(4).toNumber();
-      const totalCost = fin(rawMatCostNum).add(productCostNum).round(4).toNumber();
-      if (totalCost <= 0) return null;
+      const rawMatCostNum = rawMatCost.round(4);
+      const productCostNum = productCost.round(4);
+      const totalCost = fin(rawMatCostNum).add(productCostNum).round(4);
+      if (!totalCost.isPositive()) return null;
       if (!wipAcc) {
         if (isStrict) {
           throw new ValidationError('سرفصل حسابداری کالای در جریان ساخت (۱۴۰۲) در تنظیمات حسابداری یافت نشد.');
@@ -778,7 +775,7 @@ export class VoucherSyncService {
         description: `بهای مواد و کالای خارج‌شده بابت حواله ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
       });
 
-      if (rawMatCostNum > 0) {
+      if (rawMatCostNum.isPositive()) {
         if (!rawMaterialAcc) {
           if (isStrict) {
             throw new ValidationError('سرفصل حسابداری موجودی مواد اولیه و ملزومات (۱۴۰۱) در تنظیمات حسابداری یافت نشد.');
@@ -796,7 +793,7 @@ export class VoucherSyncService {
         }
       }
 
-      if (productCostNum > 0) {
+      if (productCostNum.isPositive()) {
         if (!finishedGoodsAcc) {
           if (isStrict) {
             throw new ValidationError('سرفصل حسابداری موجودی کالای ساخته‌شده (۱۴۰۳) در تنظیمات حسابداری یافت نشد.');
@@ -822,7 +819,7 @@ export class VoucherSyncService {
       for (const line of itemsList) {
         const q = Number(line.quantity) || 0;
         // P1-06 (M-07 & F11): ثبت هزینه ضایعات بر مبنای بهای تمام‌شده میانگین موزون (WAC)، نه قیمت فروش
-        const lineCostRate = Number(line.weightedAverageCost) > 0 ? Number(line.weightedAverageCost) : (Number(line.unitPrice) || 0);
+        const lineCostRate = fin(line.weightedAverageCost).isPositive() ? fin(line.weightedAverageCost) : fin(line.unitPrice);
         const cost = fin(q).multiply(lineCostRate);
         if (line.itemType === 'product') {
           productWaste = productWaste.add(cost);
@@ -831,10 +828,10 @@ export class VoucherSyncService {
         }
       }
 
-      const rawMatWasteNum = rawMatWaste.round(4).toNumber();
-      const productWasteNum = productWaste.round(4).toNumber();
-      const totalWasteAmount = fin(rawMatWasteNum).add(productWasteNum).round(4).toNumber();
-      if (totalWasteAmount <= 0) return null;
+      const rawMatWasteNum = rawMatWaste.round(4);
+      const productWasteNum = productWaste.round(4);
+      const totalWasteAmount = fin(rawMatWasteNum).add(productWasteNum).round(4);
+      if (!totalWasteAmount.isPositive()) return null;
       if (!wasteExpenseAcc) {
         if (isStrict) {
           throw new ValidationError('سرفصل حسابداری هزینه ضایعات و افت کیفی (۶۰۰۳) در تنظیمات حسابداری یافت نشد.');
@@ -855,7 +852,7 @@ export class VoucherSyncService {
         description: `هزینه ضایعات و افت کیفی بابت سند شماره ${doc.refNumber}`
       });
 
-      if (rawMatWasteNum > 0) {
+      if (rawMatWasteNum.isPositive()) {
         if (!rawMaterialAcc) {
           if (isStrict) {
             throw new ValidationError('سرفصل حسابداری موجودی مواد اولیه و ملزومات (۱۴۰۱) جهت ثبت ضایعات یافت نشد.');
@@ -873,7 +870,7 @@ export class VoucherSyncService {
         }
       }
 
-      if (productWasteNum > 0) {
+      if (productWasteNum.isPositive()) {
         if (!finishedGoodsAcc) {
           if (isStrict) {
             throw new ValidationError('سرفصل حسابداری موجودی کالای ساخته‌شده (۱۴۰۳) جهت ثبت ضایعات یافت نشد.');
@@ -899,12 +896,10 @@ export class VoucherSyncService {
 
       for (const line of itemsList) {
         const q = Number(line.quantity) || 0;
-        const p = Number(line.unitPrice) || 0;
-        const d = Number(line.discount) || 0;
-        totalReturnAmount = totalReturnAmount.add(fin(q).multiply(p).subtract(d));
+        totalReturnAmount = totalReturnAmount.add(fin(q).multiply(line.unitPrice).subtract(line.discount));
 
         // TD-145: محاسبه بهای تمام‌شده کالای برگشتی بر پایه نرخ WAC
-        const wac = Number(line.weightedAverageCost) || 0;
+        const wac = fin(line.weightedAverageCost);
         const lineCost = fin(q).multiply(wac);
         if (line.itemType === 'product') {
           fgReturnCost = fgReturnCost.add(lineCost);
@@ -919,8 +914,8 @@ export class VoucherSyncService {
       const docCurrency = (doc.currency || 'IRR').toUpperCase();
       const docExchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
 
-      if (docCurrency !== 'IRR' && docExchangeRate > 0) {
-        if (docExchangeRate >= 1) {
+      if (docCurrency !== 'IRR' && docExchangeRate.isPositive()) {
+        if (docExchangeRate.greaterThanOrEqual(1)) {
           fgCostConv = fgReturnCost.divide(docExchangeRate);
           rmCostConv = rmReturnCost.divide(docExchangeRate);
         } else {
@@ -929,10 +924,10 @@ export class VoucherSyncService {
         }
       }
 
-      const totalReturnAmountNum = totalReturnAmount.round(4).toNumber();
-      const fgCostNum = fgCostConv.round(4).toNumber();
-      const rmCostNum = rmCostConv.round(4).toNumber();
-      const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4).toNumber();
+      const totalReturnAmountNum = totalReturnAmount.round(4);
+      const fgCostNum = fgCostConv.round(4);
+      const rmCostNum = rmCostConv.round(4);
+      const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4);
 
       if (!salesReturnAcc || !customerAcc) {
         if (isStrict) {
@@ -951,7 +946,7 @@ export class VoucherSyncService {
       voucherType = 'sales';
       voucherDescription = `سند برگشت از فروش / مرجوعی شماره ${doc.refNumber} - مشتری: ${doc.buyerName || 'مشتری'}`;
 
-      if (totalReturnAmountNum > 0) {
+      if (totalReturnAmountNum.isPositive()) {
         // ۱) بدهکار: برگشت از فروش و تخفیفات (۵۱۰۱)
         voucherItems.push({
           accountId: salesReturnAcc.id,
@@ -960,7 +955,7 @@ export class VoucherSyncService {
           debit: totalReturnAmountNum,
           credit: 0,
           currency: doc.currency || 'IRR',
-          exchangeRate: docExchangeRate > 0 ? docExchangeRate : undefined,
+          exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
           description: `برگشت از فروش بابت سند مرجوعی شماره ${doc.refNumber}`
         });
 
@@ -973,20 +968,20 @@ export class VoucherSyncService {
           debit: 0,
           credit: totalReturnAmountNum,
           currency: doc.currency || 'IRR',
-          exchangeRate: docExchangeRate > 0 ? docExchangeRate : undefined,
+          exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
           description: `بستانکاری مشتری بابت مرجوعی کالا در سند شماره ${doc.refNumber}`
         });
       }
 
       // TD-145: ۳) زوج آرتیکل اصلاح موجودی کالا (بدهکار) و تعدیل بهای تمام‌شده کالای فروش‌رفته (بستانکار)
-      if (totalCogsNum > 0) {
+      if (totalCogsNum.isPositive()) {
         if (!cogsAcc) {
           if (isStrict) {
             throw new ValidationError('سرفصل بهای تمام‌شده کالای فروش‌رفته (۶۰۰۱) برای صدور سند مرجوعی فروش در تنظیمات حسابداری یافت نشد.');
           }
         } else {
           // ۳-الف) بدهکار: افزایش موجودی کالای تولیدشده (۱۴۰۳)
-          if (fgCostNum > 0 && finishedGoodsAcc) {
+          if (fgCostNum.isPositive() && finishedGoodsAcc) {
             voucherItems.push({
               accountId: finishedGoodsAcc.id,
               detailedType: 'other',
@@ -994,13 +989,13 @@ export class VoucherSyncService {
               debit: fgCostNum,
               credit: 0,
               currency: doc.currency || 'IRR',
-              exchangeRate: docExchangeRate > 0 ? docExchangeRate : undefined,
+              exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
               description: `افزایش موجودی کالای ساخته‌شده بابت برگشت از فروش سند شماره ${doc.refNumber}`
             });
           }
 
           // ۳-ب) بدهکار: افزایش موجودی مواد اولیه (۱۴۰۱)
-          if (rmCostNum > 0 && rawMaterialAcc) {
+          if (rmCostNum.isPositive() && rawMaterialAcc) {
             voucherItems.push({
               accountId: rawMaterialAcc.id,
               detailedType: 'other',
@@ -1008,7 +1003,7 @@ export class VoucherSyncService {
               debit: rmCostNum,
               credit: 0,
               currency: doc.currency || 'IRR',
-              exchangeRate: docExchangeRate > 0 ? docExchangeRate : undefined,
+              exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
               description: `افزایش موجودی مواد اولیه بابت برگشت از فروش سند شماره ${doc.refNumber}`
             });
           }
@@ -1021,7 +1016,7 @@ export class VoucherSyncService {
             debit: 0,
             credit: totalCogsNum,
             currency: doc.currency || 'IRR',
-            exchangeRate: docExchangeRate > 0 ? docExchangeRate : undefined,
+            exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
             description: `تعدیل بهای تمام‌شده کالای فروش‌رفته بابت مرجوعی فروش شماره ${doc.refNumber}`
           });
         }

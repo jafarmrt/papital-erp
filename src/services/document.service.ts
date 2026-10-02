@@ -1,4 +1,5 @@
 import type { DbExecutor } from '../db/drizzle.js';
+import type { DecimalValue } from '../lib/financialDecimal.js';
 import { 
   DocumentRefNumberService, 
   DocumentStockEngine, 
@@ -121,7 +122,7 @@ export class DocumentService {
       documentId?: number | null;
       inOut: 'in' | 'out';
       quantity: number;
-      price: number;
+      price: DecimalValue;
       date: string;
       documentType: string;
       documentRef: string;

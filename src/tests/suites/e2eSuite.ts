@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { ensureTestDatabaseReady, cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { createTestUser, createTestItem, createTestWorkflow } from '../fixtures/factories.js';
@@ -502,10 +503,10 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
       startDate: '1403/02/01',
       endDate: '1403/02/31',
       title: 'تسویه دستمزد کارهای کارمزدی اردیبهشت',
-      totalPieceworkAmount: 8000000,
-      totalBonuses: 1000000,
-      totalDeductions: 500000,
-      netPayable: 8500000,
+      totalPieceworkAmount: money(8000000),
+      totalBonuses: money(1000000),
+      totalDeductions: money(500000),
+      netPayable: money(8500000),
       status: 'approved'
     }).returning();
 

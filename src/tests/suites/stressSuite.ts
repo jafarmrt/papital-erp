@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import {
@@ -133,7 +134,7 @@ export async function runStressTests(): Promise<TestCaseResult[]> {
         category: 'گردنبند',
         unit: 'عدد',
         currentStock: 1000,
-        weightedAverageCost: 1000, // v7.0.46 (P2-4): خروج کالای بدون بهای تمام‌شده رد می‌شود
+        weightedAverageCost: money(1000), // v7.0.46 (P2-4): خروج کالای بدون بهای تمام‌شده رد می‌شود
         isDeleted: 0
       }).returning();
       await seedFixtureItemStocks(testItem.id, { main: 1000 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها

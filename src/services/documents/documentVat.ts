@@ -1,4 +1,5 @@
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { money, type Money } from '../../lib/money.js';
 import { ValidationError } from '../../errors/customErrors.js';
 
 /**
@@ -13,7 +14,8 @@ export const VAT_DOC_TYPES: ReadonlySet<string> = new Set(['invoice', 'proforma'
 
 export interface DocumentVat {
   vatPercent: number;
-  vatAmount: number;
+  /** v7.0.68 (P2-6): Decimal، بدون عبور از double */
+  vatAmount: Money;
 }
 
 export interface VatLine {
@@ -45,30 +47,31 @@ function parseOptionalNumber(raw: unknown, label: string): number | undefined {
 }
 
 /** ورودی مالیات را می‌خواند و اعتبارسنجی می‌کند؛ اگر هیچ‌کدام ارسال نشده باشد هر دو undefined برمی‌گردند. */
-export function parseVatInput(input: VatInput): { vatPercent?: number; vatAmount?: number } {
+export function parseVatInput(input: VatInput): { vatPercent?: number; vatAmount?: FinancialDecimal } {
   const vatPercent = parseOptionalNumber(pick(input.vatPercent, input.vat_percent), 'درصد مالیات بر ارزش افزوده');
-  const vatAmount = parseOptionalNumber(pick(input.vatAmount, input.vat_amount), 'مبلغ مالیات بر ارزش افزوده');
+  const rawVatAmount = pick(input.vatAmount, input.vat_amount);
+  const vatAmount = parseOptionalNumber(rawVatAmount, 'مبلغ مالیات بر ارزش افزوده') !== undefined ? fin(rawVatAmount as DecimalValue) : undefined;
   if (vatPercent !== undefined && (vatPercent < 0 || vatPercent > 100)) {
     throw new ValidationError(`درصد مالیات بر ارزش افزوده باید بین ۰ تا ۱۰۰ باشد (مقدار دریافتی: ${vatPercent}).`);
   }
-  if (vatAmount !== undefined && vatAmount < 0) {
-    throw new ValidationError(`مبلغ مالیات بر ارزش افزوده نمی‌تواند منفی باشد (مقدار دریافتی: ${vatAmount}).`);
+  if (vatAmount !== undefined && vatAmount.isNegative()) {
+    throw new ValidationError(`مبلغ مالیات بر ارزش افزوده نمی‌تواند منفی باشد (مقدار دریافتی: ${vatAmount.toString()}).`);
   }
   return { vatPercent, vatAmount };
 }
 
 /** جمع خالص اقلام (پایه مالیات) با همان قاعده سند حسابداری فروش؛ منفی به صفر گرد می‌شود. */
-export function computeNetAmount(lines: VatLine[]): number {
+export function computeNetAmount(lines: VatLine[]): FinancialDecimal {
   let gross = fin(0);
   let discount = fin(0);
   for (const line of lines) {
-    const qty = Number(line.quantity) || 0;
-    const price = Number(line.unitPrice ?? line.unit_price ?? line.price ?? 0) || 0;
-    gross = gross.add(fin(qty).multiply(price));
-    discount = discount.add(Number(line.discount) || 0);
+    const qty = fin(line.quantity as DecimalValue);
+    const price = fin((line.unitPrice ?? line.unit_price ?? line.price ?? 0) as DecimalValue);
+    gross = gross.add(qty.multiply(price));
+    discount = discount.add(line.discount as DecimalValue);
   }
   const net = gross.round(4).subtract(discount.round(4));
-  return net.isNegative() ? 0 : net.round(4).toNumber();
+  return net.isNegative() ? fin(0) : net.round(4);
 }
 
 /**
@@ -82,19 +85,19 @@ export function resolveDocumentVat(params: {
   docType: string;
   input: VatInput;
   lines: VatLine[];
-  existing?: DocumentVat;
+  existing?: { vatPercent: number; vatAmount: DecimalValue };
   linesChanged?: boolean;
 }): DocumentVat {
   if (!VAT_DOC_TYPES.has(params.docType)) {
-    return { vatPercent: 0, vatAmount: 0 };
+    return { vatPercent: 0, vatAmount: money(0) };
   }
   const { vatPercent, vatAmount } = parseVatInput(params.input);
   if (vatAmount !== undefined) {
-    return { vatPercent: vatPercent ?? 0, vatAmount: fin(vatAmount).round(4).toNumber() };
+    return { vatPercent: vatPercent ?? 0, vatAmount: money(vatAmount.round(4)) };
   }
   const percentFromPercentage = (pct: number): DocumentVat => ({
     vatPercent: pct,
-    vatAmount: pct > 0 ? fin(computeNetAmount(params.lines)).multiply(pct).divide(100).round(0).toNumber() : 0,
+    vatAmount: money(pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100).round(0) : 0),
   });
   if (vatPercent !== undefined) {
     return percentFromPercentage(vatPercent);
@@ -103,5 +106,5 @@ export function resolveDocumentVat(params: {
   if (params.linesChanged && existing.vatPercent > 0) {
     return percentFromPercentage(existing.vatPercent);
   }
-  return { vatPercent: Number(existing.vatPercent) || 0, vatAmount: Number(existing.vatAmount) || 0 };
+  return { vatPercent: Number(existing.vatPercent) || 0, vatAmount: money(existing.vatAmount) };
 }

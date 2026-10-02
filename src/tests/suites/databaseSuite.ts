@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { users, items, appSettings, transactions, documents, documentItems, warehouses } from '../../db/schema.js';
@@ -316,8 +317,8 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         itemId: testItem.id,
         type: 'in',
         quantity: 10,
-        unitPrice: 1000,
-        totalPrice: 10000,
+        unitPrice: money(1000),
+        totalPrice: money(10000),
         location: 'main',
         date: d1.toISOString(),
       },
@@ -325,8 +326,8 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         itemId: testItem.id,
         type: 'in',
         quantity: 10,
-        unitPrice: 2000,
-        totalPrice: 20000,
+        unitPrice: money(2000),
+        totalPrice: money(20000),
         location: 'main',
         date: d2.toISOString(),
       },
@@ -334,8 +335,8 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         itemId: testItem.id,
         type: 'out',
         quantity: 5,
-        unitPrice: 1500,
-        totalPrice: 7500,
+        unitPrice: money(1500),
+        totalPrice: money(7500),
         location: 'main',
         date: d3.toISOString(),
       }
@@ -370,8 +371,8 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
         itemId: testItem.id,
         type: 'out',
         quantity: 15,
-        unitPrice: 1500,
-        totalPrice: 22500,
+        unitPrice: money(1500),
+        totalPrice: money(22500),
         location: 'main',
         date: d4.toISOString(),
       }

@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { items, transactions } from '../../db/schema.js';
 import { normalizeDateToDbTimestamp } from '../../utils.js';
-import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { money } from '../../lib/money.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { domainEventBus } from '../events/domainEventBus.js';
@@ -16,7 +17,8 @@ export interface ApplyStockMovementParams {
   documentId?: number | null;
   inOut: 'in' | 'out';
   quantity: number;
-  price: number;
+  /** v7.0.68 (P2-6): Money/Decimal بدون عبور از double پذیرفته می‌شود */
+  price: DecimalValue;
   date: string;
   documentType: string;
   documentRef: string;
@@ -29,7 +31,7 @@ export interface ApplyStockReversalParams {
   itemId: number;
   quantity: number;
   originalDirection: 'in' | 'out';
-  unitPrice: number;
+  unitPrice: DecimalValue;
   location: string;
 }
 
@@ -62,6 +64,7 @@ export class DocumentStockEngine {
         `قیمت واحد در گردش انبار نمی‌تواند منفی یا نامعتبر باشد (مقدار دریافتی: ${String(price)}).`
       );
     }
+    const priceDec = fin(price);
 
     // Atomically fetch and lock the item row before performing any inventory calculation
     const [itemData] = await tx
@@ -87,18 +90,18 @@ export class DocumentStockEngine {
 
     const normalizedTxDate = normalizeDateToDbTimestamp(date);
 
-    const currentItemWac = Number(itemData.weightedAverageCost) || 0;
+    const currentItemWac = fin(itemData.weightedAverageCost);
     // P1-02 (H-01, F2 & INV-01): ثبت بهای تمام‌شده تاریخی خروج در تراکنش انبار جهت حفظ انضباط دفاتر دوبل
     // v7.0.46 (audit P2-4، تصمیم مالک محصول): پیش‌تر برای کالای بدون بهای تمام‌شده (WAC صفر) قیمت سند (قیمت فروش)
     // به‌عنوان بهای تمام‌شده خروج ثبت می‌شد و سود ناخالص صفر نشان داده می‌شد. اکنون خروج چنین کالایی رد می‌شود،
     // جز کسری انبارگردانی و کاهش موجودی از ورود اکسل (documentType = 'audit') که با بهای صفر ثبت می‌شوند تا
     // اصلاح شمارش قفل نشود.
-    let txUnitPrice = price;
+    let txUnitPrice: FinancialDecimal = priceDec;
     if (inOut === 'out') {
-      if (currentItemWac > 0) {
+      if (currentItemWac.isPositive()) {
         txUnitPrice = currentItemWac;
       } else if (documentType === STOCK_COUNT_DOCUMENT_TYPE) {
-        txUnitPrice = 0;
+        txUnitPrice = fin(0);
       } else {
         throw new ValidationError(
           `کالای «${itemData.name}» (${itemData.code}) هنوز بهای تمام‌شده ندارد و خروج آن ثبت نمی‌شود. ` +
@@ -106,20 +109,20 @@ export class DocumentStockEngine {
         );
       }
     }
-    const txTotalPrice = fin(txUnitPrice).multiply(qty).round(4).toNumber();
+    const txTotalPrice = txUnitPrice.multiply(qty).round(4);
 
     const [insertedTx] = await tx.insert(transactions).values({
       itemId,
       documentId: documentId ?? undefined,
       type: inOut,
       quantity: qty,
-      unitPrice: txUnitPrice,
-      totalPrice: txTotalPrice,
+      unitPrice: money(txUnitPrice),
+      totalPrice: money(txTotalPrice),
       date: normalizedTxDate,
       documentType,
       documentRef: String(documentRef),
       createdBy: user,
-      notes: notes || (inOut === 'out' && price !== txUnitPrice && price > 0 ? `قیمت فروش: ${price}` : ''),
+      notes: notes || (inOut === 'out' && !priceDec.equals(txUnitPrice) && priceDec.isPositive() ? `قیمت فروش: ${priceDec.toString()}` : ''),
       location: finalTargetLoc,
       isDeleted: 0,
     }).returning({ id: transactions.id });
@@ -136,16 +139,16 @@ export class DocumentStockEngine {
     const after = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
     const newTotalStock = after.total;
 
-    let newWAC = Number(itemData.weightedAverageCost || 0);
+    let newWAC = currentItemWac;
     if (inOut === 'in') {
-      newWAC = FinancialMath.calculateWAC(oldTotalStock, newWAC, qty, price).toNumber();
+      newWAC = FinancialMath.calculateWAC(oldTotalStock, newWAC, qty, priceDec);
     }
 
     await tx
       .update(items)
       .set({
         // v7.0.48 (TD-214): current_stock را تریگر پایگاه‌داده از item_warehouse_stocks می‌نویسد
-        weightedAverageCost: newWAC,
+        weightedAverageCost: money(newWAC),
         version: nextVersion(itemData.version)
       })
       .where(eq(items.id, itemId));
@@ -162,7 +165,7 @@ export class DocumentStockEngine {
         itemName: itemData.name,
         movementType: inOut,
         quantity: qty,
-        unitPrice: price,
+        unitPrice: priceDec.toNumber(),
         warehouseLocation: finalTargetLoc,
         previousStock: oldTotalStock,
         newStock: newTotalStock,
@@ -210,19 +213,14 @@ export class DocumentStockEngine {
     const after = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
     const newTotalStock = after.total;
 
-    let newWAC = Number(itemData.weightedAverageCost || 0);
-    if (originalDirection === 'in') {
-      if (newTotalStock <= 0) {
-        newWAC = Number(itemData.weightedAverageCost || 0);
-      } else {
-        const oldTotalVal = fin(oldTotalStock).multiply(newWAC);
-        const revertVal = fin(qty).multiply(unitPrice);
-        const remainingVal = oldTotalVal.subtract(revertVal);
-        if (remainingVal.isNegative() || newTotalStock <= 0) {
-          newWAC = Number(itemData.weightedAverageCost || 0);
-        } else {
-          newWAC = remainingVal.divide(newTotalStock).round(4).toNumber();
-        }
+    const oldWAC = fin(itemData.weightedAverageCost);
+    let newWAC = oldWAC;
+    if (originalDirection === 'in' && newTotalStock > 0) {
+      const oldTotalVal = fin(oldTotalStock).multiply(oldWAC);
+      const revertVal = fin(qty).multiply(unitPrice);
+      const remainingVal = oldTotalVal.subtract(revertVal);
+      if (!remainingVal.isNegative()) {
+        newWAC = remainingVal.divide(newTotalStock).round(4);
       }
     }
 
@@ -230,7 +228,7 @@ export class DocumentStockEngine {
       .update(items)
       .set({
         // v7.0.48 (TD-214): current_stock را تریگر پایگاه‌داده از item_warehouse_stocks می‌نویسد
-        weightedAverageCost: newWAC,
+        weightedAverageCost: money(newWAC),
         version: nextVersion(itemData.version)
       })
       .where(eq(items.id, itemId));

@@ -244,7 +244,7 @@ export class VoucherService {
       debit: DecimalValue;
       credit: DecimalValue;
       currency?: string;
-      exchangeRate?: number;
+      exchangeRate?: DecimalValue;
       description?: string;
     }[];
   }, externalTx?: DbExecutor): Promise<JournalVoucher> {
@@ -343,7 +343,7 @@ export class VoucherService {
       debit: DecimalValue;
       credit: DecimalValue;
       currency?: string;
-      exchangeRate?: number;
+      exchangeRate?: DecimalValue;
       description?: string;
     }[];
   }, externalTx?: DbExecutor): Promise<JournalVoucher> {
@@ -591,7 +591,7 @@ export class VoucherService {
         debit: DecimalValue;
         credit: DecimalValue;
         currency?: string;
-        exchangeRate?: number;
+        exchangeRate?: DecimalValue;
         description?: string;
       }[];
       newDescription?: string;
@@ -767,7 +767,7 @@ export class VoucherService {
       debit: DecimalValue;
       credit: DecimalValue;
       currency?: string;
-      exchangeRate?: number;
+      exchangeRate?: DecimalValue;
       description?: string;
     }[];
     newDescription?: string;

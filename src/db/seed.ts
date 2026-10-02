@@ -4,6 +4,7 @@ import { categories, appSettings, roles, pieceworkTasks } from './schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_PRESETS } from '../constants/presets.js';
 import { INITIAL_PIECEWORK_TASKS } from '../data/pieceworkTasksData.js';
+import { money } from '../lib/money.js';
 import { AccountingService } from '../services/accounting.service.js';
 import { WorkflowDefinitionService } from '../services/workflow/workflowDefinitionService.js';
 import { logger } from '../middleware/logger.js';
@@ -380,7 +381,7 @@ export async function runSeed(
       const chunkSize = 20;
       for (let i = 0; i < missingTasks.length; i += chunkSize) {
         const chunk = missingTasks.slice(i, i + chunkSize);
-        await orm.insert(pieceworkTasks).values(chunk);
+        await orm.insert(pieceworkTasks).values(chunk.map(t => ({ ...t, defaultRate: money(t.defaultRate) })));
       }
       logger.info(`[Seeder] Seeded ${missingTasks.length} missing piecework tasks.`);
     }

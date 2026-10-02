@@ -1,6 +1,7 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
+import { moneyNumeric } from './moneyColumn';
 
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
@@ -35,7 +36,7 @@ export const crmLeads = pgTable('crm_leads', {
   company: text('company').default(''),
   source: text('source').default('تماس تلفنی'), // 'تماس تلفنی', 'وبسایت', 'معرف', 'نمایشگاه', 'شبکه‌های اجتماعی', 'سایر'
   stage: text('stage').default('lead'), // 'lead', 'qualified', 'proposal', 'won', 'lost'
-  estimatedValue: numeric('estimated_value', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  estimatedValue: moneyNumeric('estimated_value').default(sql`0`),
   currency: text('currency').default('IRR'),
   probability: integer('probability').default(50),
   assignedTo: text('assigned_to').default(''),

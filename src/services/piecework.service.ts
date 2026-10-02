@@ -4,6 +4,8 @@ import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, piec
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
 import { VoucherService } from './accounting/voucher.service.js';
+import { money, moneyOr } from '../lib/money.js';
+import { fin, type DecimalValue, type FinancialDecimal } from '../lib/financialDecimal.js';
 
 export interface CreatePieceworkTaskInput {
   code?: string;
@@ -49,8 +51,8 @@ export class PieceworkService {
       taskId: number;
       taskCode?: string;
       taskTitle?: string;
-      oldRate?: number;
-      newRate: number;
+      oldRate?: DecimalValue;
+      newRate: DecimalValue;
       changeType: 'create' | 'rate_change' | 'excel_import' | 'title_change' | 'archived' | 'restored';
       reason?: string;
       userId?: number;
@@ -64,8 +66,8 @@ export class PieceworkService {
         taskId: data.taskId,
         taskCode: data.taskCode || '',
         taskTitle: data.taskTitle || '',
-        oldRate: Number(data.oldRate || 0),
-        newRate: Number(data.newRate || 0),
+        oldRate: money(data.oldRate || 0),
+        newRate: money(data.newRate || 0),
         changeType: data.changeType,
         reason: data.reason || '',
         changedByUserId: data.userId || null,
@@ -95,7 +97,7 @@ export class PieceworkService {
       code: taskCode,
       title: input.title.trim(),
       category: input.category ? String(input.category).trim() : 'سایر',
-      defaultRate: Number(input.defaultRate) || 0,
+      defaultRate: moneyOr(input.defaultRate, 0),
       unit: input.unit ? String(input.unit).trim() : 'عدد',
       description: input.description ? String(input.description).trim() : '',
       isActive: 1,
@@ -107,7 +109,7 @@ export class PieceworkService {
       taskCode: newTask.code,
       taskTitle: newTask.title,
       oldRate: 0,
-      newRate: Number(newTask.defaultRate) || 0,
+      newRate: newTask.defaultRate ?? 0,
       changeType: 'create',
       reason: 'تعریف اولیه عنوان کاری',
       userId: input.userId,
@@ -130,8 +132,8 @@ export class PieceworkService {
       throw new NotFoundError('عنوان کاری یافت نشد');
     }
 
-    const oldRate = Number(existing.defaultRate) || 0;
-    const newRate = input.defaultRate !== undefined ? Number(input.defaultRate) : oldRate;
+    const oldRate = moneyOr(existing.defaultRate, 0);
+    const newRate = input.defaultRate !== undefined ? money(input.defaultRate) : oldRate;
     const newTitle = input.title !== undefined ? String(input.title).trim() : existing.title;
 
     const [current] = await executor.update(pieceworkTasks).set({
@@ -143,7 +145,7 @@ export class PieceworkService {
       isActive: input.isActive !== undefined ? (input.isActive ? 1 : 0) : existing.isActive
     }).where(eq(pieceworkTasks.id, id)).returning();
 
-    if (oldRate !== newRate) {
+    if (!oldRate.equals(newRate)) {
       await PieceworkService.recordTaskRateHistory({
         taskId: id,
         taskCode: existing.code,
@@ -215,8 +217,9 @@ export class PieceworkService {
       const { personnelId, taskId, projectId, date, quantity, unitRate, notes, createdById, createdByUsername } = item;
       if (!personnelId || !taskId || !date || quantity === undefined) continue;
 
-      let finalRate = Number(unitRate);
-      if (isNaN(finalRate) || finalRate < 0) {
+      const parsedRate = Number(unitRate);
+      let finalRate: DecimalValue = unitRate;
+      if (isNaN(parsedRate) || parsedRate < 0) {
         const [custom] = await executor.select()
           .from(pieceworkPersonnelRates)
           .where(and(
@@ -236,7 +239,7 @@ export class PieceworkService {
       }
 
       const qty = parseQuantityOrTime(quantity);
-      const totalAmt = qty * finalRate;
+      const totalAmt = fin(qty).multiply(finalRate);
       const normDate = normalizePersianDate(String(date));
       const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
 
@@ -247,8 +250,8 @@ export class PieceworkService {
         date: normDate,
         dateIso: isoDate,
         quantity: qty,
-        unitRate: finalRate,
-        totalAmount: totalAmt,
+        unitRate: money(finalRate),
+        totalAmount: money(totalAmt),
         notes: notes ? String(notes).trim() : '',
         status: 'pending',
         createdById: createdById || null,
@@ -331,7 +334,7 @@ export class PieceworkService {
         await executor.update(pieceworkTasks).set({
           title,
           category,
-          defaultRate,
+          defaultRate: money(defaultRate),
           unit,
           description: description || existing.description,
           isActive: 1,
@@ -357,7 +360,7 @@ export class PieceworkService {
           code,
           title,
           category,
-          defaultRate,
+          defaultRate: money(defaultRate),
           unit,
           description,
           isActive: 1,
@@ -586,7 +589,7 @@ export class PieceworkService {
   ): Promise<void> {
     const pId = Number(data.personnelId);
     const tId = Number(data.taskId);
-    const rate = Number(data.customRate);
+    const rate = money(data.customRate);
 
     const [existing] = await executor.select()
       .from(pieceworkPersonnelRates)
@@ -637,15 +640,15 @@ export class PieceworkService {
     const normDate = normalizePersianDate(newDate);
     const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : existing.dateIso);
     const newQty = data.quantity !== undefined ? parseQuantityOrTime(data.quantity) : existing.quantity;
-    const newRate = data.unitRate !== undefined ? Number(data.unitRate) : existing.unitRate;
-    const newTotal = newQty * newRate;
+    const newRate: FinancialDecimal = data.unitRate !== undefined ? fin(data.unitRate) : existing.unitRate;
+    const newTotal = fin(newQty).multiply(newRate);
 
     const [updated] = await executor.update(pieceworkLogs).set({
       date: normDate,
       dateIso: isoDate,
       quantity: newQty,
-      unitRate: newRate,
-      totalAmount: newTotal,
+      unitRate: money(newRate),
+      totalAmount: money(newTotal),
       projectId: data.projectId !== undefined ? (data.projectId ? Number(data.projectId) : null) : existing.projectId,
       notes: data.notes !== undefined ? String(data.notes).trim() : existing.notes
     }).where(eq(pieceworkLogs.id, id)).returning();

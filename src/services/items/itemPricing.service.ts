@@ -2,13 +2,14 @@ import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { appSettings } from '../../db/schema.js';
 import { getStrategyCanonicalKey, formatStrategyDisplayTitle } from '../../utils.js';
+import type { DecimalValue } from '../../lib/financialDecimal.js';
 
 export interface PriceItemRecord {
   id?: number | string;
   itemId?: number | string;
   item_id?: number | string;
   title?: string;
-  price?: number | string;
+  price?: DecimalValue;
   currency?: string | null;
   isDeleted?: number | null;
   is_deleted?: number | null;

@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, treasuryTransactions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import type { Money } from '../../lib/money.js';
+import type { DecimalValue, FinancialDecimal } from '../../lib/financialDecimal.js';
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
@@ -81,8 +82,8 @@ export class DocumentQueryService {
       document_id: number;
       item_id: number;
       quantity: number;
-      unit_price: number | null;
-      discount: number | null;
+      unit_price: Money | null;
+      discount: Money | null;
       location: string | null;
       name: string | null;
       code: string | null;
@@ -130,37 +131,16 @@ export class DocumentQueryService {
     const formattedDocs: FormattedDocument[] = docs.map(d => {
       const dItems = allItems.filter(i => i.document_id === d.id);
       const itemsCount = dItems.length;
-      // V9-1.3: جمع‌های مالی با FinancialDecimal — حذف خطای شناور float
-      const totalQuantity = dItems.reduce((acc, i) => fin(acc).add(Number(i.quantity || 0)).toNumber(), 0);
-      const totalAmount = dItems.reduce(
-        (acc, i) => fin(acc).add(fin(Number(i.quantity || 0)).multiply(Number(i.unit_price || 0)).subtract(Number(i.discount || 0))).toNumber(),
-        0
-      );
-      const totalDiscount = dItems.reduce((acc, i) => fin(acc).add(Number(i.discount || 0)).toNumber(), 0);
-      const grossAmount = dItems.reduce(
-        (acc, i) => fin(acc).add(fin(Number(i.quantity || 0)).multiply(Number(i.unit_price || 0))).toNumber(),
-        0
-      );
-
       // V3.0.0 Phase 1: وضعیت تسویه فاکتور و تجمیع تراکنش‌های خزانه
       const docSettlements = treasurySettlements.filter(t => t.documentId === d.id);
       const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(d.type);
-      const paidAmount = settledAmount(docSettlements, isPurchase);
-
       // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته (همان بدهکار مشتری در سند حسابداری)
-      const vatAmount = Number(d.vatAmount) || 0;
-      const payableAmount = fin(totalAmount).add(vatAmount).toNumber();
-      const safePaidAmount = Math.max(0, paidAmount);
-      const remainingAmount = Math.max(0, fin(payableAmount).subtract(safePaidAmount).toNumber());
-      let settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
-
-      if (payableAmount > 0 && safePaidAmount >= payableAmount - 0.01) {
-        settlementStatus = 'fully_paid';
-      } else if (safePaidAmount > 0) {
-        settlementStatus = 'partially_paid';
-      } else {
-        settlementStatus = 'unpaid';
-      }
+      // v7.0.68 (P2-6): همه جمع‌ها با Decimal؛ خروجی عدد
+      const amounts = documentAmounts(
+        dItems.map(i => ({ quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })),
+        d.vatAmount,
+        settledAmount(docSettlements, isPurchase)
+      );
 
       return {
         ...d,
@@ -172,20 +152,21 @@ export class DocumentQueryService {
         projectId: d.projectId ?? null,
         project_id: d.projectId ?? null,
         itemsCount,
-        totalQuantity,
-        totalAmount,
-        totalDiscount,
-        grossAmount,
+        totalQuantity: amounts.totalQuantity,
+        totalAmount: amounts.totalAmount,
+        totalDiscount: amounts.totalDiscount,
+        grossAmount: amounts.grossAmount,
         vatPercent: Number(d.vatPercent) || 0,
-        vatAmount,
-        payableAmount,
-        paidAmount: safePaidAmount,
-        remainingAmount,
-        settlementStatus,
+        vatAmount: amounts.vatAmount,
+        exchangeRate: d.exchangeRate?.toNumber() ?? null,
+        payableAmount: amounts.payableAmount,
+        paidAmount: amounts.paidAmount,
+        remainingAmount: amounts.remainingAmount,
+        settlementStatus: amounts.settlementStatus,
         items: dItems.map(i => ({
           ...i,
-          unit_price: Number(i.unit_price || 0),
-          discount: Number(i.discount || 0),
+          unit_price: fin(i.unit_price).toNumber(),
+          discount: fin(i.discount).toNumber(),
           location: i.location || ''
         }))
       };
@@ -232,13 +213,6 @@ export class DocumentQueryService {
 
     const rows = (itemsResult.rows || []) as Array<Record<string, unknown>>;
 
-    const totalCalculated = rows.reduce((sum: number, row: Record<string, unknown>) => {
-      const qty = Number(row.quantity || 0);
-      const price = Number(row.unit_price || 0);
-      const discount = Number(row.discount || 0);
-      return fin(sum).add(fin(qty).multiply(price).subtract(discount)).toNumber();
-    }, 0);
-
     const formattedItems: FormattedDocumentItem[] = rows.map((row: Record<string, unknown>) => {
       const matchingTx = txs.find(t => t.itemId === Number(row.item_id));
       const variance = matchingTx 
@@ -264,9 +238,6 @@ export class DocumentQueryService {
       };
     });
 
-    const totalQuantity = formattedItems.reduce((acc, i) => acc + Number(i.quantity || 0), 0);
-    const totalDiscount = formattedItems.reduce((acc, i) => acc + Number(i.discount || 0), 0);
-    const grossAmount = formattedItems.reduce((acc, i) => acc + (Number(i.quantity || 0) * Number(i.unit_price || 0)), 0);
 
     // V3.0.0 Phase 1: بازیابی تراکنش‌های تسویه متصل به این سند
     const settlements = await orm.select({
@@ -289,22 +260,13 @@ export class DocumentQueryService {
     ));
 
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
-    const paidAmount = settledAmount(settlements, isPurchase);
-
     // v7.0.32 (TD-197): مبلغ قابل وصول = جمع خالص اقلام + مالیات ساختاریافته
-    const vatAmount = Number(doc.vatAmount) || 0;
-    const payableAmount = fin(totalCalculated).add(vatAmount).toNumber();
-    const safePaidAmount = Math.max(0, paidAmount);
-    const remainingAmount = Math.max(0, fin(payableAmount).subtract(safePaidAmount).toNumber());
-    let settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
-
-    if (payableAmount > 0 && safePaidAmount >= payableAmount - 0.01) {
-      settlementStatus = 'fully_paid';
-    } else if (safePaidAmount > 0) {
-      settlementStatus = 'partially_paid';
-    } else {
-      settlementStatus = 'unpaid';
-    }
+    // v7.0.68 (P2-6): جمع‌ها با Decimal از مقدار رشته‌ای پایگاه‌داده؛ خروجی عدد
+    const amounts = documentAmounts(
+      rows.map(row => ({ quantity: row.quantity as DecimalValue, unitPrice: row.unit_price as DecimalValue, discount: row.discount as DecimalValue })),
+      doc.vatAmount,
+      settledAmount(settlements, isPurchase)
+    );
 
     return {
       ...doc,
@@ -321,20 +283,21 @@ export class DocumentQueryService {
       projectId: doc.projectId ?? null,
       project_id: doc.projectId ?? null,
       itemsCount: formattedItems.length,
-      totalQuantity,
-      totalDiscount,
-      grossAmount,
-      total_amount: totalCalculated,
-      totalAmount: totalCalculated,
+      totalQuantity: amounts.totalQuantity,
+      totalDiscount: amounts.totalDiscount,
+      grossAmount: amounts.grossAmount,
+      total_amount: amounts.totalAmount,
+      totalAmount: amounts.totalAmount,
       vatPercent: Number(doc.vatPercent) || 0,
       vat_percent: Number(doc.vatPercent) || 0,
-      vatAmount,
-      vat_amount: vatAmount,
-      payableAmount,
-      payable_amount: payableAmount,
-      paidAmount: safePaidAmount,
-      remainingAmount,
-      settlementStatus,
+      vatAmount: amounts.vatAmount,
+      vat_amount: amounts.vatAmount,
+      exchangeRate: doc.exchangeRate?.toNumber() ?? null,
+      payableAmount: amounts.payableAmount,
+      payable_amount: amounts.payableAmount,
+      paidAmount: amounts.paidAmount,
+      remainingAmount: amounts.remainingAmount,
+      settlementStatus: amounts.settlementStatus,
       // قرارداد API: مبلغ عدد (P2-6)
       settlements: settlements.map(t => ({ ...t, amount: t.amount.toNumber() })),
       items: formattedItems
@@ -383,9 +346,44 @@ export class DocumentQueryService {
 }
 
 /** v7.0.67 (P2-6): جمع خالص تسویه‌های خزانه یک سند با Decimal؛ خرید با پرداخت و فروش با دریافت تسویه می‌شود. */
-function settledAmount(rows: Array<{ amount: Money; type: string }>, isPurchase: boolean): number {
+function settledAmount(rows: Array<{ amount: Money; type: string }>, isPurchase: boolean): FinancialDecimal {
   const settling = isPurchase ? 'payment' : 'receipt';
-  return rows
-    .reduce((sum, t) => (t.type === settling ? sum.add(t.amount) : sum.subtract(t.amount)), fin(0))
-    .toNumber();
+  return rows.reduce((sum, t) => (t.type === settling ? sum.add(t.amount) : sum.subtract(t.amount)), fin(0));
+}
+
+/**
+ * v7.0.68 (P2-6): جمع‌های سند (ناخالص، تخفیف، خالص، قابل پرداخت، پرداخت‌شده، مانده) با Decimal؛ خروجی عدد برای API.
+ * پرداخت منفی صفر و مانده منفی صفر حساب می‌شود؛ تسویه کامل با آستانه ۰٫۰۱.
+ */
+function documentAmounts(
+  lines: Array<{ quantity: DecimalValue; unitPrice: DecimalValue; discount: DecimalValue }>,
+  vatAmount: DecimalValue,
+  paid: FinancialDecimal
+) {
+  let quantity = fin(0);
+  let gross = fin(0);
+  let discount = fin(0);
+  for (const line of lines) {
+    quantity = quantity.add(line.quantity);
+    gross = gross.add(fin(line.quantity).multiply(line.unitPrice));
+    discount = discount.add(line.discount);
+  }
+  const total = gross.subtract(discount);
+  const payable = total.add(vatAmount);
+  const safePaid = paid.isNegative() ? fin(0) : paid;
+  const remaining = payable.subtract(safePaid);
+  const settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' =
+    payable.isPositive() && safePaid.greaterThanOrEqual(payable.subtract(0.01)) ? 'fully_paid'
+      : safePaid.isPositive() ? 'partially_paid' : 'unpaid';
+  return {
+    totalQuantity: quantity.toNumber(),
+    grossAmount: gross.toNumber(),
+    totalDiscount: discount.toNumber(),
+    totalAmount: total.toNumber(),
+    vatAmount: fin(vatAmount).toNumber(),
+    payableAmount: payable.toNumber(),
+    paidAmount: safePaid.toNumber(),
+    remainingAmount: remaining.isNegative() ? 0 : remaining.toNumber(),
+    settlementStatus,
+  };
 }

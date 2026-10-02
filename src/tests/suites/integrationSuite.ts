@@ -1,3 +1,4 @@
+import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { ensureTestDatabaseReady, cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { createTestWorkflow, createTestWorkflowInstance, createTestUser, createTestItem } from '../fixtures/factories.js';
@@ -1022,10 +1023,10 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       startDate: '1403/01/01',
       endDate: '1403/01/30',
       title: 'تسویه دستمزد کارمزدی فروردین',
-      totalPieceworkAmount: 5000000,
-      totalBonuses: 500000,
-      totalDeductions: 200000,
-      netPayable: 5300000,
+      totalPieceworkAmount: money(5000000),
+      totalBonuses: money(500000),
+      totalDeductions: money(200000),
+      netPayable: money(5300000),
       status: 'approved'
     }).returning();
 

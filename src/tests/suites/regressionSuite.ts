@@ -1171,7 +1171,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       category: 'گردنبند',
       unit: 'عدد',
       currentStock: 10,
-      weightedAverageCost: 60000000, // 60,000,000 IRR WAC
+      weightedAverageCost: money(60000000), // 60,000,000 IRR WAC
       isDeleted: 0
     }).returning();
 
@@ -1191,8 +1191,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       documentId: testDoc.id,
       itemId: testItem.id,
       quantity: 1,
-      unitPrice: 150,
-      discount: 0,
+      unitPrice: money(150),
+      discount: money(0),
       location: 'main',
       isDeleted: 0
     }).returning();
@@ -1270,7 +1270,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       code: syntheticCode,
       name: 'کالای تست تخلیه کاردکس و حفظ WAC',
       currentStock: 0,
-      weightedAverageCost: 500000,
+      weightedAverageCost: money(500000),
       type: 'product',
       unit: 'عدد',
       isDeleted: 0
@@ -1281,7 +1281,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       itemId: testItem.id,
       type: 'in',
       quantity: 10,
-      unitPrice: 750000,
+      unitPrice: money(750000),
       date: todayIso,
       location: 'main',
       notes: 'ورود تستی برای ارزیابی WAC',
@@ -1293,7 +1293,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       itemId: testItem.id,
       type: 'out',
       quantity: 10,
-      unitPrice: 750000,
+      unitPrice: money(750000),
       date: todayIso,
       location: 'main',
       notes: 'خروج تستی برای صفر شدن موجودی',
@@ -1381,7 +1381,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       unit: 'عدد',
       category: 'گردنبند',
       currentStock: 20,
-      weightedAverageCost: 500000,
+      weightedAverageCost: money(500000),
       version: 1,
       isDeleted: 0
     }).returning();
@@ -1540,7 +1540,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       unit: 'عدد',
       category: 'گردنبند',
       currentStock: 10,
-      weightedAverageCost: 200000,
+      weightedAverageCost: money(200000),
       isDeleted: 0
     }).returning();
     await seedFixtureItemStocks(testItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -1673,7 +1673,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       type: 'raw_material',
       unit: 'عدد',
       currentStock: 10,
-      weightedAverageCost: 100000,
+      weightedAverageCost: money(100000),
     }).returning();
     await seedFixtureItemStocks(testItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
 
@@ -1692,8 +1692,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       documentId: testDoc.id,
       itemId: testItem.id,
       quantity: 3,
-      unitPrice: 100000,
-      discount: 0,
+      unitPrice: money(100000),
+      discount: money(0),
       location: 'main',
       isDeleted: 0
     }).returning();
@@ -1703,8 +1703,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       documentId: testDoc.id,
       itemId: testItem.id,
       quantity: 5,
-      unitPrice: 100000,
-      discount: 0,
+      unitPrice: money(100000),
+      discount: money(0),
       location: 'main',
       isDeleted: 1
     }).returning();
@@ -1815,7 +1815,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       type: 'product',
       unit: 'عدد',
       currentStock: 10,
-      weightedAverageCost: 400000,
+      weightedAverageCost: money(400000),
       isDeleted: 0,
     }).returning();
     await seedFixtureItemStocks(testItem.id, { main: 10 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -1844,8 +1844,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       documentId: testReturnDoc.id,
       itemId: testItem.id,
       quantity: 2,
-      unitPrice: 600000,
-      discount: 0,
+      unitPrice: money(600000),
+      discount: money(0),
       location: 'main',
       isDeleted: 0,
     }).returning();
@@ -3448,7 +3448,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       };
       const [item] = await orm.insert(items).values({
         name: 'کالای تست نرخ تسعیر TD-198', code: `ITEM-TD198-${Date.now()}`, type: 'product', category: 'گردنبند',
-        unit: 'عدد', weightedAverageCost: 60000000, isDeleted: 0
+        unit: 'عدد', weightedAverageCost: money(60000000), isDeleted: 0
       }).returning();
       createdItemId = item.id;
       const line = [{ itemId: item.id, quantity: 1, unit_price: 150, discount: 0 }];
@@ -3470,10 +3470,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       // ۳) سند حسابداری: نرخ از ستون سند، نه از یادداشت «نرخ تسعیر: 1»
       const [usdDoc] = await orm.insert(documents).values({
         type: 'invoice', refNumber: `TD198-D-${Date.now()}`, date: '2026-08-02 00:00:00', buyerName: 'خریدار تست TD-198',
-        currency: 'USD', exchangeRate: 600000, notes: 'نرخ تسعیر: 1', status: 'final', isDeleted: 0
+        currency: 'USD', exchangeRate: money(600000), notes: 'نرخ تسعیر: 1', status: 'final', isDeleted: 0
       }).returning();
       createdDocIds.push(usdDoc.id);
-      await orm.insert(documentItems).values({ documentId: usdDoc.id, itemId: item.id, quantity: 1, unitPrice: 150, discount: 0, location: 'main', isDeleted: 0 });
+      await orm.insert(documentItems).values({ documentId: usdDoc.id, itemId: item.id, quantity: 1, unitPrice: money(150), discount: money(0), location: 'main', isDeleted: 0 });
       const voucher = await VoucherSyncService.syncSalesInvoiceVoucher(usdDoc.id, { strict: true });
       if (voucher) createdVoucherIds.push(voucher.id);
       const full = voucher ? await VoucherService.getJournalVoucherById(voucher.id) : null;
@@ -3488,7 +3488,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         currency: 'AED', notes: 'نرخ تسعیر: 150000', status: 'final', isDeleted: 0
       }).returning();
       createdDocIds.push(legacyDoc.id);
-      await orm.insert(documentItems).values({ documentId: legacyDoc.id, itemId: item.id, quantity: 1, unitPrice: 10, discount: 0, location: 'main', isDeleted: 0 });
+      await orm.insert(documentItems).values({ documentId: legacyDoc.id, itemId: item.id, quantity: 1, unitPrice: money(10), discount: money(0), location: 'main', isDeleted: 0 });
       await expectValidation('سند حسابداری سند درهمی بدون نرخ', () => VoucherSyncService.syncSalesInvoiceVoucher(legacyDoc.id, { strict: true }));
 
       if (violations.length > 0) throw new Error(violations.join(' | '));
@@ -4236,7 +4236,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const today = await businessTodayIsoDate();
       const noCost = await createTestItem({ stocks: { [w1.code]: 5 }, currentStock: 5, weightedAverageCost: 0 });
       // قیمت فهرست فروش: پیش‌تر مبنای بهای کسری انبارگردانی کالای بدون بهای تمام‌شده قرار می‌گرفت
-      await orm.insert(itemPrices).values({ itemId: noCost.id, title: 'قیمت فروش آزمون P2-4', price: 70000 });
+      await orm.insert(itemPrices).values({ itemId: noCost.id, title: 'قیمت فروش آزمون P2-4', price: money(70000) });
 
       const rejectedFor: string[] = [];
       for (const [docType, label] of [['invoice', 'فروش'], ['remittance', 'حواله خروج']] as const) {
@@ -5180,7 +5180,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         type: 'product',
         unit: 'عدد',
         currentStock: 25,
-        weightedAverageCost: 100000,
+        weightedAverageCost: money(100000),
         isDeleted: 0
       }).returning({ id: items.id });
       await seedFixtureItemStocks(itemA.id, { main: 25 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -5192,7 +5192,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         type: 'product',
         unit: 'عدد',
         currentStock: 30,
-        weightedAverageCost: 200000,
+        weightedAverageCost: money(200000),
         isDeleted: 0
       }).returning({ id: items.id });
       await seedFixtureItemStocks(itemB.id, { main: 30 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -5218,7 +5218,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           documentId: draftDoc.id,
           itemId: higherId,
           quantity: 2,
-          unitPrice: 150000,
+          unitPrice: money(150000),
           location: 'main',
           isDeleted: 0
         },
@@ -5226,7 +5226,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           documentId: draftDoc.id,
           itemId: lowerId,
           quantity: 3,
-          unitPrice: 250000,
+          unitPrice: money(250000),
           location: 'main',
           isDeleted: 0
         }
@@ -5308,7 +5308,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         category: 'انگشتر',
         type: 'product',
         currentStock: 100,
-        weightedAverageCost: 50000,
+        weightedAverageCost: money(50000),
         isDeleted: 0
       }).returning();
       await seedFixtureItemStocks(testItem.id, { main: 100 }); // v7.0.48 (TD-214): موجودی آزمون در جدول موجودی انبارها
@@ -5331,8 +5331,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         documentId: draftDoc.id,
         itemId: testItem.id,
         quantity: 5,
-        unitPrice: 60000,
-        discount: 0,
+        unitPrice: money(60000),
+        discount: money(0),
         location: 'main'
       });
 
@@ -5710,7 +5710,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       });
       createdTaskIds.push(task.id);
 
-      if (!task.id || task.defaultRate !== 25000) {
+      if (!task.id || Number(task.defaultRate) !== 25000) {
         throw new Error('تعریف عنوان کاری از طریق PieceworkService.createTask ناموفق بود.');
       }
 
@@ -5720,7 +5720,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         title: `عنوان پرکیسی بازنگری‌شده ${now}`
       });
 
-      if (!updatedTask || updatedTask.defaultRate !== 30000) {
+      if (!updatedTask || Number(updatedTask.defaultRate) !== 30000) {
         throw new Error('ویرایش نرخ و عنوان کاری از طریق PieceworkService.updateTask ناموفق بود.');
       }
 
@@ -6161,6 +6161,89 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdBankId !== null) await cleanTestTableData('bank_accounts', 'id', [createdBankId]);
       await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
       await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
+    }
+  }
+
+
+  // Test: v7.0.68 (audit P2-6 / TD-210 بخش ۲): قیمت سند، بهای میانگین (WAC)، گردش کاردکس و نرخ کارمزدی ۱۸ رقمی دقیق ذخیره می‌شوند
+  if (shouldRun('reg_money_decimal_documents_p2_6', 'p26', 'td210', 'money', 'decimal', 'wac')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.68: قیمت اقلام سند، WAC، گردش کاردکس و نرخ کارمزدی با مبلغ ۱۸ رقمی دقیق ذخیره و جمع می‌شوند (P2-6)';
+    const createdDocIds: number[] = [];
+    let createdTaskId: number | null = null;
+    try {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { pieceworkTasks } = await import('../../db/schema.js');
+      const { fin } = await import('../../lib/financialDecimal.js');
+      const violations: string[] = [];
+      const [w1] = await orm.select({ code: warehouses.code }).from(warehouses)
+        .where(eq(warehouses.isActive, 1)).orderBy(warehouses.id).limit(1);
+      const item = await createTestItem({ stocks: {}, currentStock: 0, weightedAverageCost: 0 });
+      const today = await businessTodayIsoDate();
+
+      // الف) دو رسید با قیمت ۱۷ رقمی: WAC = (۳ × ...۴۵۶۷ + ۱ × ...۴۵۷۱) ÷ ۴ = ...۴۵۶۸ دقیق
+      const receipt = (qty: number, unitPrice: string) => DocumentService.createDocument({
+        docType: 'receipt', status: 'final', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون P2-6',
+        location: w1.code, items: [{ itemId: item.id, quantity: qty, unit_price: unitPrice, location: w1.code }]
+      });
+      createdDocIds.push(await receipt(3, '1234567890123.4567'));
+      createdDocIds.push(await receipt(1, '1234567890123.4571'));
+
+      const [line] = await orm.select({ unitPrice: documentItems.unitPrice }).from(documentItems).where(eq(documentItems.documentId, createdDocIds[0]));
+      if (fin(line?.unitPrice).toString() !== '1234567890123.4567') violations.push(`قیمت قلم سند ${fin(line?.unitPrice).toString()} ذخیره شد`);
+      const [kardex] = await orm.select({ totalPrice: transactions.totalPrice }).from(transactions)
+        .where(and(eq(transactions.itemId, item.id), eq(transactions.documentId, createdDocIds[0])));
+      if (fin(kardex?.totalPrice).toString() !== '3703703670370.3701') violations.push(`مبلغ گردش کاردکس ${fin(kardex?.totalPrice).toString()} ذخیره شد`);
+      const [after] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
+      if (fin(after?.wac).toString() !== '1234567890123.4568') violations.push(`WAC پس از دو رسید ${fin(after?.wac).toString()} شد`);
+
+      // ب) جمع سند با Decimal: ۰٫۱ + ۰٫۲ = ۰٫۳ (نه 0.30000000000000004) و خروجی API عدد
+      const smallId = await DocumentService.createDocument({
+        docType: 'receipt', status: 'draft', inOut: 'in', date: today, user: 'test-agent', buyerName: 'تأمین‌کننده آزمون P2-6',
+        location: w1.code, items: [
+          { itemId: item.id, quantity: 1, unit_price: 0.1, location: w1.code },
+          { itemId: item.id, quantity: 1, unit_price: 0.2, location: w1.code },
+        ]
+      });
+      createdDocIds.push(smallId);
+      const doc = await DocumentService.getDocumentById(smallId) as { totalAmount?: unknown } | null;
+      if (doc?.totalAmount !== 0.3) violations.push(`جمع سند ${JSON.stringify(doc?.totalAmount)} شد`);
+
+      // ج) نرخ پایه کارمزدی ۱۸ رقمی
+      const task = await PieceworkService.createTask({ title: `ERP-TEST-MARKER نرخ P2-6 ${Date.now()}`, defaultRate: '12345678901234.5678', unit: 'عدد' });
+      createdTaskId = task.id;
+      const [storedTask] = await orm.select({ rate: pieceworkTasks.defaultRate }).from(pieceworkTasks).where(eq(pieceworkTasks.id, task.id));
+      if (fin(storedTask?.rate).toString() !== '12345678901234.5678') violations.push(`نرخ کارمزدی ${fin(storedTask?.rate).toString()} ذخیره شد`);
+      if (typeof JSON.parse(JSON.stringify(task)).defaultRate !== 'number') violations.push('نرخ کارمزدی در JSON عدد نیست');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_money_decimal_documents_p2_6',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'قیمت قلم و گردش کاردکس ۱۷ رقمی دقیق ذخیره شد؛ WAC دو رسید ...۴۵۶۸ شد؛ جمع ۰٫۱ + ۰٫۲ برابر ۰٫۳ و نرخ کارمزدی دقیق ذخیره شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_money_decimal_documents_p2_6',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (createdDocIds.length > 0) await cleanTestTableData('document_items', 'document_id', createdDocIds);
+      if (createdTaskId !== null) {
+        await cleanTestTableData('piecework_task_rate_history', 'task_id', [createdTaskId]);
+        await cleanTestTableData('piecework_tasks', 'id', [createdTaskId]);
+      }
     }
   }
 

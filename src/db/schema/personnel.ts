@@ -1,7 +1,9 @@
 import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
 import { registerColumnRef, baseRelations } from './baseRelations';
+import { moneyNumeric } from './moneyColumn';
 
 export const personnel = pgTable('personnel', {
   id: serial('id').primaryKey(),
@@ -18,7 +20,7 @@ export const personnel = pgTable('personnel', {
   employmentStatus: text('employment_status').default('فعال'), // 'فعال', 'قطع همکاری', 'مرخصی', 'تعلیق'
   // V10-4.4: مدل حقوق — 'none' | 'piecework' (پیش‌فرض) | 'monthly_fixed' | 'mixed'
   salaryType: text('salary_type').default('none'),
-  monthlySalary: numeric('monthly_salary', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  monthlySalary: moneyNumeric('monthly_salary').default(sql`0`),
   jobTitle: text('job_title').default(''),
   education: text('education').default(''),
   endDate: text('end_date').default(''),
@@ -58,7 +60,7 @@ export const pieceworkTasks = pgTable('piecework_tasks', {
   code: text('code').notNull(),
   title: text('title').notNull(),
   category: text('category').default('سایر'),
-  defaultRate: numeric('default_rate', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  defaultRate: moneyNumeric('default_rate').default(sql`0`),
   unit: text('unit').default('عدد'),
   description: text('description').default(''),
   isActive: integer('is_active').default(1),
@@ -75,8 +77,8 @@ export const pieceworkTaskRateHistory = pgTable('piecework_task_rate_history', {
   taskId: integer('task_id').notNull().references(() => pieceworkTasks.id),
   taskCode: text('task_code').default(''),
   taskTitle: text('task_title').default(''),
-  oldRate: numeric('old_rate', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  newRate: numeric('new_rate', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  oldRate: moneyNumeric('old_rate').default(sql`0`),
+  newRate: moneyNumeric('new_rate').notNull(),
   changeType: text('change_type').default('rate_change'), // 'create', 'rate_change', 'excel_import', 'title_change', 'archived', 'restored'
   reason: text('reason').default(''),
   changedByUserId: integer('changed_by_user_id').references(() => users.id),
@@ -92,7 +94,7 @@ export const pieceworkPersonnelRates = pgTable('piecework_personnel_rates', {
   id: serial('id').primaryKey(),
   personnelId: integer('personnel_id').notNull().references(() => personnel.id),
   taskId: integer('task_id').notNull().references(() => pieceworkTasks.id),
-  customRate: numeric('custom_rate', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  customRate: moneyNumeric('custom_rate').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -107,16 +109,16 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   startDate: text('start_date').notNull(),
   endDate: text('end_date').notNull(),
   title: text('title').notNull(),
-  totalPieceworkAmount: numeric('total_piecework_amount', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
-  totalBonuses: numeric('total_bonuses', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  totalDeductions: numeric('total_deductions', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  netPayable: numeric('net_payable', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  totalPieceworkAmount: moneyNumeric('total_piecework_amount').notNull().default(sql`0`),
+  totalBonuses: moneyNumeric('total_bonuses').default(sql`0`),
+  totalDeductions: moneyNumeric('total_deductions').default(sql`0`),
+  netPayable: moneyNumeric('net_payable').notNull(),
   // V10-4.4: سهم حقوق ثابت در این فیش (برای salaryType = monthly_fixed / mixed)
-  totalFixedAmount: numeric('total_fixed_amount', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  totalFixedAmount: moneyNumeric('total_fixed_amount').default(sql`0`),
   // V1.9.0: کسر از مساعده/وام پرسنل — در سند تسویه از حساب مساعده (1301) بستانکار می‌شود
-  advanceDeduction: numeric('advance_deduction', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  advanceDeduction: moneyNumeric('advance_deduction').default(sql`0`),
   // V4.0.33: مبلغ پرداخت‌شده تاکنون جهت پشتیبانی از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
-  paidAmount: numeric('paid_amount', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  paidAmount: moneyNumeric('paid_amount').default(sql`0`),
   status: text('status').default('draft'),
   paymentDate: text('payment_date').default(''),
   paymentMethod: text('payment_method').default(''),
@@ -142,8 +144,8 @@ export const pieceworkLogs = pgTable('piecework_logs', {
   date: text('date').notNull(),
   dateIso: text('date_iso').default(''),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
-  unitRate: numeric('unit_rate', { precision: 18, scale: 4, mode: 'number' }).notNull(),
-  totalAmount: numeric('total_amount', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  unitRate: moneyNumeric('unit_rate').notNull(),
+  totalAmount: moneyNumeric('total_amount').notNull(),
   notes: text('notes').default(''),
   payrollId: integer('payroll_id').references(() => pieceworkPayrolls.id),
   status: text('status').default('pending'),

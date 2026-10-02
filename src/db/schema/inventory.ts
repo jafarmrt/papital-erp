@@ -1,6 +1,7 @@
 import { pgTable, text, serial, numeric, integer, timestamp, index, varchar, primaryKey, check, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { registerColumnRef, baseRelations } from './baseRelations';
+import { moneyNumeric } from './moneyColumn';
 
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
@@ -71,7 +72,7 @@ export const items = pgTable('items', {
   image: text('image').default(''),
   thumbnail: text('thumbnail').default(''),
   reorderPoint: numeric('reorder_point', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  weightedAverageCost: numeric('weighted_average_cost', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  weightedAverageCost: moneyNumeric('weighted_average_cost').default(sql`0`),
   color: text('color'),
   weight: numeric('weight', { precision: 18, scale: 4, mode: 'number' }),
   material: text('material'),
@@ -93,8 +94,8 @@ export const transactions = pgTable('transactions', {
   documentId: integer('document_id').references(baseRelations.documentsId),
   type: text('type').notNull(), // 'in' or 'out'
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
-  unitPrice: numeric('unit_price', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  totalPrice: numeric('total_price', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  unitPrice: moneyNumeric('unit_price').default(sql`0`),
+  totalPrice: moneyNumeric('total_price').default(sql`0`),
   date: timestamp('date', { withTimezone: false, mode: 'string' }).notNull(),
   documentType: text('document_type'),
   documentRef: text('document_ref'),
@@ -126,7 +127,7 @@ export const itemPrices = pgTable('item_prices', {
   id: serial('id').primaryKey(),
   itemId: integer('item_id').notNull().references(() => items.id),
   title: text('title').notNull(),
-  price: numeric('price', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  price: moneyNumeric('price').notNull(),
   currency: text('currency').default('IRR'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
@@ -147,7 +148,7 @@ export const pendingMaterials = pgTable('pending_materials', {
   requestedBy: text('requested_by').default(''),
   status: text('status').default('pending'), // 'pending', 'approved', 'rejected'
   reorderPoint: numeric('reorder_point', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  weightedAverageCost: numeric('weighted_average_cost', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  weightedAverageCost: moneyNumeric('weighted_average_cost').default(sql`0`),
   color: text('color').default(''),
   weight: numeric('weight', { precision: 18, scale: 4, mode: 'number' }).default(0),
   material: text('material').default(''),

@@ -10,6 +10,7 @@ import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecuto
 import { DocumentService } from './document.service.js';
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
+import { money } from '../lib/money.js';
 
 type DbClient = DbExecutor;
 
@@ -68,6 +69,11 @@ export interface ConvertToOrdersInput {
   notes?: string;
 }
 
+
+/** v7.0.68 (P2-6): مبلغ برآوردی در پاسخ سرویس عدد است (ستون Decimal). */
+function toRequisitionDto(row: typeof purchaseRequisitions.$inferSelect): PurchaseRequisition {
+  return { ...row, totalEstimatedAmount: row.totalEstimatedAmount?.toNumber() ?? 0 } as unknown as PurchaseRequisition;
+}
 export class ProcurementService {
   /**
    * Atomic sequential code generation for Purchase Requisitions (e.g. PR-1405-0001)
@@ -200,7 +206,7 @@ export class ProcurementService {
         requestedById: user.id || null,
         requestedByName: user.username || 'سیستم',
         notes: input.notes || '',
-        totalEstimatedAmount: totalEst,
+        totalEstimatedAmount: money(totalEst),
         items: sanitizedItems,
         isDeleted: 0
       }).returning();
@@ -241,7 +247,7 @@ export class ProcurementService {
         }
       });
 
-      return inserted as unknown as PurchaseRequisition;
+      return toRequisitionDto(inserted);
     });
 
     return createdReq;
@@ -296,7 +302,7 @@ export class ProcurementService {
       .offset(offset);
 
     return {
-      data: rows as unknown as PurchaseRequisition[],
+      data: rows.map(toRequisitionDto),
       total: countRes?.count || 0
     };
   }
@@ -314,7 +320,7 @@ export class ProcurementService {
       throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
     }
 
-    return req as unknown as PurchaseRequisition;
+    return toRequisitionDto(req);
   }
 
   /**
@@ -363,7 +369,7 @@ export class ProcurementService {
       requiredDate: updates.requiredDate || existing.requiredDate,
       notes: updates.notes !== undefined ? updates.notes : existing.notes,
       items: newItems,
-      totalEstimatedAmount: newTotalEst,
+      totalEstimatedAmount: money(newTotalEst),
       assignedToId: updates.assignedToId !== undefined ? updates.assignedToId : existing.assignedToId,
       assignedToName: updates.assignedToName !== undefined ? updates.assignedToName : existing.assignedToName,
       updatedAt: new Date().toISOString()
@@ -383,7 +389,7 @@ export class ProcurementService {
       }
     });
 
-    return updated as unknown as PurchaseRequisition;
+    return toRequisitionDto(updated);
   }
 
   /**
@@ -677,7 +683,7 @@ export class ProcurementService {
 
     return {
       success: true,
-      requisition: updatedReq as unknown as PurchaseRequisition,
+      requisition: toRequisitionDto(updatedReq),
       message: `وضعیت درخواست با موفقیت به «${statusTitleMap[mappedStatus] || mappedStatus}» تغییر یافت.`
     };
   }
@@ -838,7 +844,7 @@ export class ProcurementService {
 
     return {
       createdDocuments,
-      requisition: finalUpdatedReq as unknown as PurchaseRequisition
+      requisition: toRequisitionDto(finalUpdatedReq)
     };
   }
 

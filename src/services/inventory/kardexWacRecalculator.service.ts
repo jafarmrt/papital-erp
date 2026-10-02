@@ -12,6 +12,7 @@ import { logger } from '../../middleware/logger.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
+import { money } from '../../lib/money.js';
 
 export interface KardexRebuildOptions {
   userId?: number;
@@ -78,7 +79,7 @@ export class KardexWacRecalculatorService {
       }
 
       let runningBal = fin(0);
-      let runningWac = fin(item.weightedAverageCost || 0);
+      let runningWac = fin(item.weightedAverageCost);
       const qtyByWarehouseId = new Map<number, number>();
       const unresolvedByLocation = new Map<string, number>();
 
@@ -140,7 +141,7 @@ export class KardexWacRecalculatorService {
       // V6 (TD-136): در صورت صفر یا منفی شدن موجودی نهایی، بهای تمام‌شده تاریخی (WAC) نباید صفر شود
       // آخرین بهای میانگین موزون معتبر کالا حفظ می‌گردد تا در ارزش‌گذاری و معاملات بعدی معتبر بماند.
       if (runningWac.lessThanOrEqual(0)) {
-        runningWac = fin(item.weightedAverageCost || 0);
+        runningWac = fin(item.weightedAverageCost);
       }
 
       const oldStock = fin(item.currentStock).toNumber();
@@ -158,7 +159,7 @@ export class KardexWacRecalculatorService {
       await txEngine
         .update(items)
         .set({
-          weightedAverageCost: newWac,
+          weightedAverageCost: money(runningWac),
           lastKardexRebuildAt: nowIso,
           version: nextVersion(item.version),
         })

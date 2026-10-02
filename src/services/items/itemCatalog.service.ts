@@ -14,6 +14,7 @@ import { ItemOpeningService } from '../inventory/itemOpening.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
+import { money } from '../../lib/money.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
@@ -511,8 +512,8 @@ export class ItemCatalogService {
           const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
           const existingStocks = existingSnapshot.byCode;
           const itemWac = !isNaN(weightedAverageCost) && weightedAverageCost > 0
-            ? weightedAverageCost
-            : Number(matchedItem?.weightedAverageCost || 0);
+            ? money(weightedAverageCost)
+            : money(matchedItem?.weightedAverageCost);
 
           await tx.update(items).set({
             name: name || matchedItem.name,
@@ -598,7 +599,7 @@ export class ItemCatalogService {
           updatedCount++;
         } else {
           const finalCode = code || `ITEM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-          const itemWac = isNaN(weightedAverageCost) ? 0 : weightedAverageCost;
+          const itemWac = money(isNaN(weightedAverageCost) ? 0 : weightedAverageCost);
           const [newItem] = await tx.insert(items).values({
             name: name || 'کالای بدون نام',
             code: finalCode,
@@ -728,7 +729,7 @@ export class ItemCatalogService {
           await tx.insert(itemPrices).values({
             itemId: targetItemId,
             title: cleanTitle,
-            price: pObj.price,
+            price: money(pObj.price),
             currency: pObj.currency,
             createdAt: nowIso,
             updatedAt: nowIso,
@@ -856,7 +857,7 @@ export class ItemCatalogService {
         image: imageUrl,
         thumbnail: thumbnailUrl,
         reorderPoint: Number(reorder_point || 0),
-        weightedAverageCost: Number(weighted_average_cost || 0),
+        weightedAverageCost: money(weighted_average_cost || 0),
         color: color || null,
         weight: weight ? Number(weight) : null,
         material: material || null,
@@ -1012,8 +1013,8 @@ export class ItemCatalogService {
       }
 
       const effectiveWac = weighted_average_cost !== undefined && weighted_average_cost !== ''
-        ? Number(weighted_average_cost) || 0
-        : (body.initial_cost !== undefined && body.initial_cost !== '' ? Number(body.initial_cost) || 0 : Number(prevItem.weightedAverageCost || 0));
+        ? money(weighted_average_cost)
+        : (body.initial_cost !== undefined && body.initial_cost !== '' ? money(body.initial_cost) : money(prevItem.weightedAverageCost));
 
       const updateData: Partial<typeof items.$inferInsert> = {
         name, code, unit, category: category || '',

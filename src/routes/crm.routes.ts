@@ -14,6 +14,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
+import { money } from '../lib/money.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -602,7 +603,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     contacts: Array.isArray(contacts) ? contacts : [],
     source: source || 'تماس تلفنی',
     stage: stage || 'lead',
-    estimatedValue: Number(estimatedValue || 0),
+    estimatedValue: money(estimatedValue || 0),
     currency: currency || 'IRR',
     probability: probability !== undefined ? Number(probability) : 50,
     assignedTo: assignee.name || authorName,
@@ -724,7 +725,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     contacts: contacts !== undefined ? (Array.isArray(contacts) ? contacts : []) : existing.contacts,
     source: source !== undefined ? source : existing.source,
     stage: stage !== undefined ? stage : existing.stage,
-    estimatedValue: estimatedValue !== undefined ? Number(estimatedValue) : existing.estimatedValue,
+    estimatedValue: estimatedValue !== undefined ? money(estimatedValue) : existing.estimatedValue,
     currency: currency !== undefined ? currency : existing.currency,
     probability: probability !== undefined ? Number(probability) : existing.probability,
     assignedTo: targetAssignee ? (targetAssignee.name || authorName) : existing.assignedTo,

@@ -1,11 +1,12 @@
 import { orm } from '../../db/drizzle.js';
 import { items, transactions } from '../../db/schema.js';
 import { and, eq, sql } from 'drizzle-orm';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { logger } from '../../middleware/logger.js';
 import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
+import { money } from '../../lib/money.js';
 
 export const KARDEX_BACKFILL_REF = 'موجودی اولیه (تطبیق سیستم)';
 
@@ -49,7 +50,8 @@ export class KardexBackfillService {
     await orm.transaction(async (tx) => {
       for (const row of candidateRows) {
         const itemId = Number(row.id);
-        const wac = Number(row.weighted_average_cost || 0);
+        const wacRaw = (row.weighted_average_cost ?? 0) as DecimalValue;
+        const wac = Number(wacRaw);
 
         const [lockedItem] = await tx
           .select({ id: items.id, weightedAverageCost: items.weightedAverageCost })
@@ -72,7 +74,7 @@ export class KardexBackfillService {
           logger.warn(`[Kardex Backfill] Item ${itemId} has stock but zero WAC — synthetic ledger rows will carry unitPrice=0`);
         }
 
-        const effectiveWac = wac > 0 ? fin(wac).round(4).toNumber() : 0;
+        const effectiveWac = wac > 0 ? fin(wacRaw).round(4) : fin(0);
 
         // v7.0.48 (TD-214): موجودی هر انبار از جدول نرمال (ستون JSONB حذف شد)؛ چون current_stock مجموع همین جدول است،
         // کالای دارای موجودی همیشه ردیف جدول دارد و محل کاردکس همان کد استاندارد انبار ردیف است.
@@ -84,8 +86,8 @@ export class KardexBackfillService {
               itemId,
               type: 'in',
               quantity: qty,
-              unitPrice: effectiveWac,
-              totalPrice: fin(effectiveWac).multiply(qty).round(4).toNumber(),
+              unitPrice: money(effectiveWac),
+              totalPrice: money(effectiveWac.multiply(qty).round(4)),
               date: todayStr,
               documentType: 'audit',
               documentRef: KARDEX_BACKFILL_REF,
@@ -105,18 +107,18 @@ export class KardexBackfillService {
         .innerJoin(items, eq(transactions.itemId, items.id))
         .where(and(
           eq(transactions.documentRef, KARDEX_BACKFILL_REF),
-          eq(transactions.unitPrice, 0),
+          eq(transactions.unitPrice, money(0)),
           eq(transactions.isDeleted, 0)
         ));
 
       for (const row of poisoned) {
-        const wac = Number(row.wac || 0);
-        if (wac > 0) {
+        const wac = fin(row.wac);
+        if (wac.isPositive()) {
           await tx
             .update(transactions)
             .set({
-              unitPrice: fin(wac).round(4).toNumber(),
-              totalPrice: fin(wac).multiply(Number(row.quantity) || 0).round(4).toNumber()
+              unitPrice: money(wac.round(4)),
+              totalPrice: money(wac.multiply(Number(row.quantity) || 0).round(4))
             })
             .where(eq(transactions.id, row.id));
           repairedRows++;

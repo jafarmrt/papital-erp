@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pendingMaterials, items } from '../db/schema.js';
 import { NotFoundError, ConflictError } from '../errors/customErrors.js';
+import { moneyOr } from '../lib/money.js';
 
 export interface CreatePendingMaterialInput {
   name: string;
@@ -89,7 +90,7 @@ export class PendingMaterialsService {
         requestedBy,
         status: 'pending',
         reorderPoint: Number(input.reorderPoint) || 0,
-        weightedAverageCost: Number(input.weightedAverageCost) || 0,
+        weightedAverageCost: moneyOr(input.weightedAverageCost, 0),
         color: input.color || '',
         weight: Number(input.weight) || 0,
         material: input.material || '',
@@ -146,7 +147,7 @@ export class PendingMaterialsService {
         category: finalCategory,
         currentStock: 0,
         reorderPoint: Number(overrides?.reorderPoint ?? existing.reorderPoint) || 0,
-        weightedAverageCost: Number(overrides?.weightedAverageCost ?? existing.weightedAverageCost) || 0,
+        weightedAverageCost: moneyOr(overrides?.weightedAverageCost ?? existing.weightedAverageCost, 0),
         color: overrides?.color ?? existing.color ?? '',
         weight: Number(overrides?.weight ?? existing.weight) || 0,
         material: overrides?.material ?? existing.material ?? '',
@@ -232,7 +233,7 @@ export class PendingMaterialsService {
         unit: data.unit !== undefined ? data.unit.trim() : existing.unit,
         category: data.category !== undefined ? data.category.trim() : existing.category,
         reorderPoint: data.reorderPoint !== undefined ? Number(data.reorderPoint) || 0 : existing.reorderPoint,
-        weightedAverageCost: data.weightedAverageCost !== undefined ? Number(data.weightedAverageCost) || 0 : existing.weightedAverageCost,
+        weightedAverageCost: data.weightedAverageCost !== undefined ? moneyOr(data.weightedAverageCost, 0) : existing.weightedAverageCost,
         color: data.color !== undefined ? data.color : existing.color,
         weight: data.weight !== undefined ? Number(data.weight) || 0 : existing.weight,
         material: data.material !== undefined ? data.material : existing.material,

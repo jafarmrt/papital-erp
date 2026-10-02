@@ -12,6 +12,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { normalizePhoneNumber, normalizeNationalId } from '../utils.js';
 import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { money, moneyOr } from '../lib/money.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -527,7 +528,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         phone: normalizePhoneNumber(phone),
         employmentStatus,
         salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-        monthlySalary: monthlySalary !== undefined ? Number(monthlySalary) || 0 : 0,
+        monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
         jobTitle: jobTitle.trim(),
         education: education.trim(),
         endDate,
@@ -646,7 +647,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         employmentStatus,
         // V10-4.4: مدل حقوق ثابت/ترکیبی
         salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-        monthlySalary: monthlySalary !== undefined ? Number(monthlySalary) || 0 : 0,
+        monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
         jobTitle: jobTitle ? jobTitle.trim() : '',
         education: education ? education.trim() : '',
         endDate: endDate || '',

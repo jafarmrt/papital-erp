@@ -1,4 +1,6 @@
-import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, jsonb, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { moneyNumeric } from './moneyColumn';
 import { users } from './auth';
 import { workflowInstances } from './workflow';
 import { baseRelations } from './baseRelations';
@@ -19,7 +21,7 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   assignedToName: text('assigned_to_name').default(''),
   workflowInstanceId: integer('workflow_instance_id').references((): AnyPgColumn => workflowInstances.id),
   notes: text('notes').default(''),
-  totalEstimatedAmount: numeric('total_estimated_amount', { precision: 18, scale: 2, mode: 'number' }).default(0),
+  totalEstimatedAmount: moneyNumeric('total_estimated_amount', { precision: 18, scale: 2 }).default(sql`0`),
   items: jsonb('items').notNull().default([]),
   isDeleted: integer('is_deleted').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),

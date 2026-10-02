@@ -1,7 +1,9 @@
 import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index, varchar, primaryKey } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
 import { registerColumnRef, baseRelations } from './baseRelations';
+import { moneyNumeric } from './moneyColumn';
 
 export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
@@ -27,9 +29,9 @@ export const documents = pgTable('documents', {
   // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده ساختاریافته؛ تنها منبع مبلغ مالیات سند حسابداری فروش.
   // vat_amount مبلغ نهایی مالیات (به ارز سند) است؛ vat_percent فقط برای نمایش/ویرایش فرم نگه داشته می‌شود.
   vatPercent: numeric('vat_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
-  vatAmount: numeric('vat_amount', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
+  vatAmount: moneyNumeric('vat_amount').notNull().default(sql`0`),
   // v7.0.63 (TD-198): نرخ تسعیر (ریال به ازای یک واحد ارز سند)؛ برای سند غیرریالی الزامی، برای ریالی تهی.
-  exchangeRate: numeric('exchange_rate', { precision: 18, scale: 4, mode: 'number' }),
+  exchangeRate: moneyNumeric('exchange_rate'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),
@@ -69,8 +71,8 @@ export const documentItems = pgTable('document_items', {
   documentId: integer('document_id').notNull().references(() => documents.id),
   itemId: integer('item_id').notNull().references(baseRelations.itemsId),
   quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
-  unitPrice: numeric('unit_price', { precision: 18, scale: 4, mode: 'number' }).default(0),
-  discount: numeric('discount', { precision: 18, scale: 4, mode: 'number' }).default(0),
+  unitPrice: moneyNumeric('unit_price').default(sql`0`),
+  discount: moneyNumeric('discount').default(sql`0`),
   location: text('location').default('main'),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
@@ -103,7 +105,7 @@ export const woocommerceOrderLogs = pgTable('woocommerce_order_logs', {
   erpDocumentId: integer('erp_document_id').references(() => documents.id),
   status: text('status').notNull(), // 'processed', 'failed', 'already_exists'
   buyerName: text('buyer_name').default(''),
-  totalAmount: numeric('total_amount', { precision: 15, scale: 2, mode: 'number' }).default(0),
+  totalAmount: moneyNumeric('total_amount', { precision: 15, scale: 2 }).default(sql`0`),
   payload: jsonb('payload'),
   errorMessage: text('error_message').default(''),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),

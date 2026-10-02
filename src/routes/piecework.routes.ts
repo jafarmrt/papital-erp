@@ -12,6 +12,7 @@ import { VoucherSyncService } from '../services/accounting/voucherSync.service.j
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
 import { ConflictError } from '../errors/customErrors.js';
 import { fin } from '../lib/financialDecimal.js';
+import { money } from '../lib/money.js';
 import { PieceworkService } from '../services/piecework.service.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -1072,12 +1073,12 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
         return { status: 400, error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
       }
 
-      const pieceworkTotal = pieceworkTotalFin.round(4).toNumber();
-      const fixedPortion = fixedPortionFin.round(4).toNumber();
-      const totBonuses = totBonusesFin.round(4).toNumber();
-      const totDeductions = totDeductionsFin.round(4).toNumber();
-      const advanceDeduction = advanceDeductionFin.round(4).toNumber();
-      const net = netFin.toNumber();
+      const pieceworkTotal = money(pieceworkTotalFin.round(4));
+      const fixedPortion = money(fixedPortionFin.round(4));
+      const totBonuses = money(totBonusesFin.round(4));
+      const totDeductions = money(totDeductionsFin.round(4));
+      const advanceDeduction = money(advanceDeductionFin.round(4));
+      const net = money(netFin);
 
       // 4. Atomic Sequence Numbering from piecework_payroll_number_seq
       const seqResult = await tx.execute(sql`SELECT nextval('piecework_payroll_number_seq') AS num`);

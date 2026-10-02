@@ -19,6 +19,8 @@ import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import { resolveDocumentExchangeRate } from './documentExchangeRate.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
+import { money, type Money } from '../../lib/money.js';
+import { fin } from '../../lib/financialDecimal.js';
 
 export class DocumentCreationService {
   /**
@@ -89,7 +91,7 @@ export class DocumentCreationService {
         docType: existingDoc.type,
         input: body,
         lines: vatLines,
-        existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: Number(existingDoc.vatAmount) || 0 },
+        existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
         linesChanged,
       });
 
@@ -159,8 +161,8 @@ export class DocumentCreationService {
             documentId: id,
             itemId: Number(itemId),
             quantity: qty,
-            unitPrice: price,
-            discount: disc,
+            unitPrice: money(price),
+            discount: money(disc),
             location: targetLoc
           });
         }
@@ -338,7 +340,7 @@ export class DocumentCreationService {
         const missingPriceItemIds = lockedAuditItems
           .filter(it => Number(it.weightedAverageCost || 0) <= 0)
           .map(it => it.id);
-        const auditPriceMap = new Map<number, number>();
+        const auditPriceMap = new Map<number, Money>();
         if (missingPriceItemIds.length > 0) {
           const priceRows = await tx
             .select({ itemId: itemPrices.itemId, price: itemPrices.price })
@@ -346,7 +348,7 @@ export class DocumentCreationService {
             .where(and(inArray(itemPrices.itemId, missingPriceItemIds), eq(itemPrices.isDeleted, 0)));
           for (const pr of priceRows) {
             if (!auditPriceMap.has(pr.itemId)) {
-              auditPriceMap.set(pr.itemId, Number(pr.price || 0));
+              auditPriceMap.set(pr.itemId, pr.price);
             }
           }
         }
@@ -368,8 +370,8 @@ export class DocumentCreationService {
             documentId: docId,
             itemId: Number(itemId),
             quantity: physicalQty,
-            unitPrice: 0,
-            discount: 0,
+            unitPrice: money(0),
+            discount: money(0),
             location: targetLoc
           });
 
@@ -378,9 +380,9 @@ export class DocumentCreationService {
             const absVariance = Math.abs(variance);
             const txNotes = variance > 0 ? 'اضافی انبارگردانی دوره‌ای' : 'کسری انبارگردانی دوره‌ای';
 
-            let auditMovementPrice = Number(targetItem?.weightedAverageCost || 0);
-            if (auditMovementPrice <= 0) {
-              auditMovementPrice = auditPriceMap.get(Number(itemId)) || 0;
+            let auditMovementPrice = fin(targetItem?.weightedAverageCost);
+            if (!auditMovementPrice.isPositive()) {
+              auditMovementPrice = fin(auditPriceMap.get(Number(itemId)));
             }
 
             await DocumentStockEngine.applyStockMovement(tx, {
@@ -491,8 +493,8 @@ export class DocumentCreationService {
             documentId: docId,
             itemId: Number(itemId),
             quantity: qty,
-            unitPrice: price,
-            discount: disc,
+            unitPrice: money(price),
+            discount: money(disc),
             location: targetLoc
           });
         }

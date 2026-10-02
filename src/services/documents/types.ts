@@ -18,10 +18,11 @@ export interface GetDocumentsFilter {
 export interface DocumentLineItemInput {
   itemId: number | string;
   quantity: number | string;
-  unit_price?: number;
-  unitPrice?: number;
-  price?: number;
-  discount?: number;
+  // v7.0.68 (P2-6): مبلغ می‌تواند رشته باشد (ورودی API) تا رقم‌های اعشار بدون عبور از double ذخیره شوند
+  unit_price?: number | string;
+  unitPrice?: number | string;
+  price?: number | string;
+  discount?: number | string;
   location?: string;
   targetLoc?: string;
   physical_stock?: number;
