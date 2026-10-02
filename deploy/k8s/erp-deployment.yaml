@@ -16,13 +16,12 @@ metadata:
   labels:
     app: erp
 spec:
-  # V3.0.8 (TD-058): rollout کنترل‌شده و قابل برگشت
+  # v7.0.44 (تصمیم مالک محصول): سامانه تک‌نمونه‌ای است (یک کارگاه، حداکثر ۲۰ کاربر همزمان).
+  # کش‌های درون‌حافظه‌ای، محدودکننده‌های نرخ و قفل‌های فرایندی برای یک پردازه طراحی شده‌اند؛
+  # Recreate تضمین می‌کند حتی هنگام به‌روزرسانی هم دو پردازه همزمان اجرا نشوند (چند replica پشتیبانی نمی‌شود).
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  replicas: 2
+    type: Recreate
+  replicas: 1
   selector:
     matchLabels:
       app: erp
@@ -31,9 +30,7 @@ spec:
       labels:
         app: erp
     spec:
-      # V3.0.8 (TD-058): stateful path ها به volume منتقل شدند؛
-      # uploads باید ReadWriteMany باشد تا هر ۲ (یا N) replica به همان داده دسترسی داشته باشند
-      # (Stateless شدن واقعی — داده تصاویر از بین رفتن pod زنده می‌ماند).
+      # V3.0.8 (TD-058): stateful path ها به volume منتقل شدند (داده تصاویر با از بین رفتن pod زنده می‌ماند).
       volumes:
       - name: uploads
         persistentVolumeClaim:
@@ -42,7 +39,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v7.0.43
+        image: registry.example.com/erp:v7.0.44
         ports:
         - containerPort: 3000
         volumeMounts:
@@ -54,7 +51,7 @@ spec:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "7.0.43"
+          value: "7.0.44"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -123,28 +120,8 @@ spec:
   - port: 80
     targetPort: 3000
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: erp
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: erp
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-
----
-# V3.0.8 (TD-058): PersistentVolumeClaim ???? ???????? ????? (????/?????? ????).
-# accessMode ???? ????? StorageClass ???? ????? ????? ???? RWX ???? multi-replica ?????? ???.
+# V3.0.8 (TD-058): PersistentVolumeClaim برای فایل‌های بارگذاری‌شده (تصاویر و پیوست‌ها).
+# v7.0.44: با یک نمونه، ReadWriteOnce کافی است.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -153,8 +130,8 @@ metadata:
     app: erp
 spec:
   accessModes:
-  - ReadWriteMany
+  - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
-  # storageClassName: <??? StorageClass ???? ??? ?? ???????? RWX (??? nfs/nfs-subdir)>
+  # storageClassName: <StorageClass مورد نظر>

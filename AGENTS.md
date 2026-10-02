@@ -165,7 +165,8 @@
 ## 22. Database Migrations, Production Seed Gating & Pool Timeouts
 - **Atomic Migrations (DB-013):** `src/db/migrator.ts` runs the official Drizzle migrator over `drizzle/*.sql` (journal: `drizzle/meta/_journal.json`) in an atomic transaction; applied migrations are tracked in `drizzle.__drizzle_migrations`. Every new migration MUST be registered in the journal.
 - **Production Seed Gating (DB-014):** Seeding disabled in production unless `ALLOW_SEED_IN_PRODUCTION=true`, protected by advisory lock (`pg_try_advisory_lock(89345)`).
-- **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 30000` ms. Bulk tasks use `withLongQueryTimeout(fn)`.
+- **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 60000` ms (defaults of `DB_STATEMENT_TIMEOUT` / `DB_IDLE_IN_TX_TIMEOUT`), sent in the pool's connection startup `options` (v7.0.39). Bulk tasks use `withLongQueryTimeout(fn)`.
+- **Single-Instance Deployment (v7.0.44, product-owner decision):** The system runs as ONE server process (one workshop, at most 20 concurrent users). In-memory caches, rate limiters and process-level locks assume a single process; do not add multi-replica infrastructure (Redis, object storage, cross-instance cache invalidation). The Kubernetes manifest uses `replicas: 1` with `strategy: Recreate` and no autoscaler.
 
 ## 23. V7 Governance — Active Series, Strict Typing, Zod Coverage, N+1 Optimization & Stock Normalization
 - **Active Series (v7.x.y):** The active changelog file is `src/data/changelogs/7.ts` (`v7.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`), `1.ts` (`v1.x.y`), `2.ts` (`v2.x.y`), `3.ts` (`v3.x.y`), `4.ts` (`v4.x.y`), `5.ts` (`v5.x.y`), and `6.ts` (`v6.x.y` - finalized and archived at `v6.0.28`). Every change MUST append one unique `AIUpdateLog` entry to `src/data/changelogs/7.ts` and bump `package.json` `"version"`.

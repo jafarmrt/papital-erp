@@ -161,6 +161,26 @@
 
 ---
 
+## 🗺️ نسخه ۷ — اقلام حل‌شده نقشه راه V7 (فازهای ۱ تا ۴، منتقل‌شده از جدول فعال در v7.0.44) — آرشیو
+
+| ID | حوزه | شرح | منبع (فایل) | وضعیت |
+|----|------|-----|--------------|-------|
+| TD-110 | financialMath Shim | مهاجرت ۵ ایمپورت باقی‌مانده از utils/financialMath به lib/financialDecimal و حذف فایل واسط | src/utils/financialMath.ts | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
+| TD-129 | Lockfile Flux | محافظت از وجود package-lock.json در گیت CI و فعال‌سازی کش | فرایند/CI | resolved:v7.0.19 — گیت در v7.0.3 اضافه شد ولی خود package-lock.json هرگز commit نشده بود و CI همیشه در گام اول شکست می‌خورد؛ در v7.0.19 فایل قفل (lockfileVersion 3، Node 22) ثبت شد (جزئیات: TD-172) |
+| TD-132 | Dead Dependencies / CVEs | پکیج‌های بی‌استفاده firebase، firebase-admin و @google/genai و کاهش حجم ایمیج | package.json | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
+| TD-134 | Test DB Isolation Off by Default | پیش‌فرض کردن ERP_TEST_SCHEMA_ISOLATION=1 در رانر تست‌ها و حذف sleepها | scripts/run-tests.ts:121 | resolved:v7.0.3 (فاز ۲ نسخه ۷) |
+| TD-160 | TypeScript Strict Mode Disabled | خاموش بودن فلگ‌های strict, strictNullChecks, noImplicitAny در tsconfig.json | tsconfig.json | resolved:v7.0.4 (فاز ۳ نسخه ۷) |
+| TD-161 | Zod Coverage Gap | فقدان اعتبارسنجی Zod روی ۱۱ روت تدارکات (Procurement) و روت‌های داشبورد | src/routes/procurement.routes.ts | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
+| TD-162 | Ad-Hoc DDL in Migrator | ۵ بلوک DDL خام خارج از ترنزکشن رسمی دریزل که خطاها را قورت می‌دهند | src/db/migrator.ts:77-108 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
+| TD-163 | Startup Race Condition | پذیرش ترافیک قبل از اتمام مایگریشن‌ها و سید در هنگام بوت سرور | server.ts:47-108 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
+| TD-164 | N+1 Queries in Hot Loops | کوری‌های تکی انبار و قیمت در حلقه سطرهای سند انبارگردانی تحت قفل سطری | src/services/document.service.ts:615 | resolved:v7.0.2 (فاز ۲ نسخه ۷) |
+| TD-165 | JSONB Stocks Normalization | ذخیره‌سازی موجودی تفکیکی انبار در ستون JSONB فاقد قید دیتابیسی | src/db/schema/inventory.ts:33 | resolved:v7.0.8 (فاز ۴.۱ نسخه ۷) |
+| TD-166 | Missing FK Index | فقدان نمایه B-Tree روی documents(project_id) | src/db/schema/documents.ts:85 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
+| TD-167 | fetchJson Typing & Protocol Fallback | تایپ ضعیف T=any و قورت دادن خطای بدنه نامعتبر در .catch(() => ({})) | src/api.ts:77,190 | resolved:v7.0.5 (فاز ۳ نسخه ۷) |
+| TD-168 | Native parseFloat in Forms | استفاده مستقیم از parseFloat در ۲۴ فیلد فرم‌های مالی و کارمزدی | VoucherItemsTable.tsx, PieceworkLogModal.tsx | resolved:v7.0.6 (فاز ۳ نسخه ۷) |
+| TD-169 | Schema Import Cycle | چرخه ۵ ماژولی در اسکیماهای Drizzle (Tarjan SCC) | src/db/schema/ | resolved:v7.0.12 (فاز ۴.۲ نسخه ۷) |
+| TD-170 | Dual Serialization Debt | بازگرداندن همزمان کلیدهای camelCase و snake_case در روت پروژه‌ها | src/routes/projects.routes.ts:202 | resolved:v7.0.15 (فاز ۴.۳ نسخه ۷) |
+
 ## 🧯 نسخه ۷ — فاز ۰ اصلاحات اضطراری ممیزی مستقل (docs/audit/TECHNICAL_AUDIT_REPORT.md) — آرشیو
 
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
@@ -204,6 +224,8 @@
 | TD-206 | JWT Algorithm & CSRF Comparison Hardening (P2-11) | `jwt.verify` در `authenticateToken`، `csrfProtection`، خروج (`auth.routes.ts`) و `metricsAuth` بدون `algorithms` فراخوانی می‌شد و jsonwebtoken با کلید متنی HS384/HS512 را هم می‌پذیرفت؛ توکن CSRF با `!==` مقایسه می‌شد در حالی که `safeCompareTokens` در پروژه موجود بود | src/middleware/auth.ts:171,271,289، src/middleware/metricsAuth.ts:48، src/routes/auth.routes.ts:342 | resolved (v7.0.41) — `JWT_ALGORITHM = 'HS256'` در صدور و `JWT_VERIFY_OPTIONS` در هر چهار راستی‌آزمایی؛ CSRF با `safeCompareTokens`؛ پن‌تست‌های pen_jwt_algorithm_pinned و pen_csrf_constant_time_compare |
 | TD-192 | Test Isolation Shares Migration Journal | `setupTestSchema` (src/tests/setup/testDb.ts) مهاجرت‌ها را داخل اسکیمای موقت اجرا می‌کند اما جدول ردیابی `drizzle.__drizzle_migrations` بین همه اجراها مشترک است؛ اجرای دوم تست‌ها روی همان پایگاه‌داده هیچ مهاجرتی را اعمال نمی‌کند و همه سوئیت‌ها روی اسکیمای خالی شکست می‌خورند. CI چون هر بار پایگاه‌داده تازه می‌سازد تحت تأثیر نیست | src/tests/setup/testDb.ts:66، src/db/migrator.ts | resolved (v7.0.42) — دفتر مهاجرت قابل‌تنظیم (`setMigrationsJournalSchema`) و داخل خود اسکیمای موقت در `setupTestSchema` (حذف همراه آن)؛ pg_trgm پیش از آن در public نصب می‌شود (پیش‌تر در اولین اسکیمای موقت نصب می‌شد)؛ تست reg_test_schema_own_migration_journal_td_192 و اجرای کامل دوم روی همان پایگاه‌داده |
 | TD-207 | Unknown /api Route Served the SPA (P3-11) | در پروداکشن `server.ts` پس از `createApp` یک catch-all `app.get('*')` برای index.html دارد و `createApp` هیچ پاسخ پایانی برای `/api` نداشت؛ درخواست کاربر واردشده به مسیر ناموجود API، صفحه برنامه را با کد 200 دریافت می‌کرد | src/app.ts:389، server.ts:107-116 | resolved (v7.0.43) — `app.use('/api', ...)` با پاسخ 404 JSON پیش از `errorHandler` و پیش از catch-all برنامه؛ پن‌تست pen_unknown_api_route_json_404 |
+| TD-208 | Per-Router Authentication (P2-7) | هر روتر زیر `/api` خودش `router.use(authenticateToken)` دارد و درخواست تا رسیدن به روتر مقصد از حدود ۲۰ روتر عبور می‌کند (اجرای مکرر jwt.verify و جستجوی کش) | src/app.ts، src/routes/*.ts | resolved (v7.0.44) — بدون تغییر کد با تصمیم مالک محصول: با حداکثر ۲۰ کاربر همزمان سود کارایی ناچیز است و تغییر، قاعده AGENTS.md §5 (ثبت روت‌ها پس از `router.use(authenticateToken)`) را برهم می‌زند |
+| TD-209 | In-Memory Caches Across Replicas (P2-8) | کش احراز هویت ۳۰ ثانیه‌ای، کش نقش/مجوز و تنظیمات ۶۰ ثانیه‌ای، محدودکننده‌های نرخ و اجرای مهاجرت‌ها در هر Pod برای استقرار چندنمونه‌ای (replicas: 2، HPA تا ۱۰) ایمن نبودند | src/middleware/auth.ts، src/lib/memoryCache.ts، deploy/k8s/erp-deployment.yaml | resolved (v7.0.44) — با تصمیم مالک محصول استقرار تک‌نمونه‌ای است (یک کارگاه، حداکثر ۲۰ کاربر): مانیفست کوبرنتیز `replicas: 1` با `strategy: Recreate` و بدون HPA، PVC با ReadWriteOnce؛ قاعده «Single-Instance Deployment» در AGENTS.md §22؛ Redis و ابطال کش بین نمونه‌ها لازم نیست |
 
 ## 📝 یادداشت مهاجرت
 

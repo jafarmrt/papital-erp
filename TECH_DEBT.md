@@ -21,45 +21,32 @@
 | TD-106 | Frontend / Type Safety (FE-007) | ۹۱۸ مورد `: any` و ۲۷۹ مورد `as any` در سورس‌کد | سراسر src | scheduled:فاز ۳ نسخه ۷ |
 | TD-108 | FE Helpers (Badges) | ۱۲ کپی `getStatusBadge`/`getPriorityBadge` با الگو یکسان ولی واژگان/رنگ متفاوت — تجمیع در PillBadge | components/pages | scheduled:فاز ۳ نسخه ۷ |
 | TD-109 | Runtime Flags Cleanup | پاکسازی کامل سرویس/کلیدهای موقت test_endpoints پس از حذف روت‌های تست | src/lib/runtimeFlags.ts | scheduled:فاز ۲ نسخه ۷ |
-| TD-110 | financialMath Shim | مهاجرت ۵ ایمپورت باقی‌مانده از utils/financialMath به lib/financialDecimal و حذف فایل واسط | src/utils/financialMath.ts | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
 | TD-112 | Workflow Keep-List | روت‌های بدون مصرف‌کننده فرانت‌اند در انتظار رابط کاربری فاز ۳ | workflow.routes.ts | scheduled:فاز ۳ نسخه ۷ |
-| TD-129 | Lockfile Flux | محافظت از وجود package-lock.json در گیت CI و فعال‌سازی کش | فرایند/CI | resolved:v7.0.19 — گیت در v7.0.3 اضافه شد ولی خود package-lock.json هرگز commit نشده بود و CI همیشه در گام اول شکست می‌خورد؛ در v7.0.19 فایل قفل (lockfileVersion 3، Node 22) ثبت شد (جزئیات: TD-172) |
 | TD-173 | Security / xlsx CVEs | `xlsx@0.18.5` دارای دو آسیب‌پذیری High بدون اصلاحیه در رجیستری npm (GHSA-4r6h-8v6p-xvw6 Prototype Pollution، GHSA-5pgg-2g8v-p4x9 ReDoS)؛ در ۱۰+ کامپوننت فرانت برای پارس فایل اکسل ورودی کاربر استفاده می‌شود. موقتاً در فهرست استثنای `scripts/audit-gate.ts` ثبت شده است | package.json، src/components/**/*Excel*، scripts/audit-gate.ts | open — مهاجرت به exceljs یا نسخه رسمی SheetJS (CDN) و حذف استثنا از گیت |
 | TD-177 | Docker Image Size | کتابخانه‌های صرفاً فرانت‌اند (react، lucide-react، xlsx، فونت‌ها، react-multi-date-picker و ...) در `dependencies` هستند و با `npm ci --omit=dev` وارد ایمیج رانتایم می‌شوند در حالی که سرور فقط ۲۴ ماژول require می‌کند | package.json، Dockerfile | open — انتقال وابستگی‌های فقط-کلاینت به devDependencies پس از بررسی |
 | TD-179 | Business Clock / Nowruz Approximation | شاخه میلادی `resolveJalaliFiscalYear` (businessClock.ts:132-141) نوروز را همیشه ۲۱ مارس فرض می‌کند؛ در سال‌هایی که نوروز ۲۰ مارس است، اسناد آن روز به سال مالی قبل نسبت داده می‌شوند (هم در پارتیشن شمارنده عطف و هم در `checkFiscalPeriodOpen`). تابع SQL `erp_ref_fiscal_year` در مهاجرت 0015 عمداً همین رفتار را آینه کرده تا دامنه یکتایی با شمارنده یکسان بماند | src/lib/businessClock.ts:116، drizzle/0015 | open — جایگزینی با تبدیل دقیق جلالی در هر دو سمت و بازمحاسبه ref_fiscal_year فقط برای ردیف‌های مرزی |
-| TD-187 | Targeted Account Lockout (residual) | با قفل تدریجی (TD-186) قفل حساب حداکثر ۳۰ دقیقه است، اما مهاجم بدون احراز هویت همچنان می‌تواند با یک تلاش ناموفق پس از پایان هر قفل، حساب هدف (مثلاً admin) را در قفل نگه دارد؛ قفل در سطح نام کاربری است نه (نام کاربری + IP). وضعیت قفل نام‌های کاربری ناموجود درون‌حافظه‌ای و مخصوص هر Pod است | src/services/auth/loginSecurity.service.ts | open — قفل در سطح (نام کاربری + IP) یا CAPTCHA پس از آستانه، و ذخیره مشترک (Redis) در استقرار چند Pod |
+| TD-187 | Targeted Account Lockout (residual) | با قفل تدریجی (TD-186) قفل حساب حداکثر ۳۰ دقیقه است، اما مهاجم بدون احراز هویت همچنان می‌تواند با یک تلاش ناموفق پس از پایان هر قفل، حساب هدف (مثلاً admin) را در قفل نگه دارد؛ قفل در سطح نام کاربری است نه (نام کاربری + IP). وضعیت قفل نام‌های کاربری ناموجود درون‌حافظه‌ای و مخصوص هر Pod است | src/services/auth/loginSecurity.service.ts | open — قفل در سطح (نام کاربری + IP) یا CAPTCHA پس از آستانه (ذخیره مشترک چند Pod با تصمیم v7.0.44 لازم نیست: استقرار تک‌نمونه‌ای) |
 | TD-189 | Plaintext Third-Party Credential | ستون `personnel.nobitex_password` رمز حساب صرافی پرسنل را به‌صورت متن ساده در پایگاه‌داده نگه می‌دارد (از v7.0.29 در خروجی داده‌ها حذف می‌شود، اما در دیتابیس و احتمالاً پاسخ‌های API پرسنل باقی است) | src/db/schema/personnel.ts:34 | open — حذف نگهداری رمز شخص ثالث یا رمزنگاری در سطح برنامه با کلید جدا، و حذف از پاسخ‌های API |
 | TD-191 | WooCommerce Order Totals (shipping / fees / tax) | فاکتور سفارش ووکامرس فقط از `line_items` ساخته می‌شود؛ هزینه ارسال (`shipping_lines`)، کارمزدها (`fee_lines`) و مالیات سفارش (`total_tax`) در فاکتور و سند حسابداری ثبت نمی‌شوند، پس جمع فاکتور می‌تواند از مبلغ پرداختی مشتری کمتر باشد | src/services/woocommerce/wooOrderSync.service.ts | open — نیازمند تصمیم مالک محصول درباره سرفصل درآمد حمل و نگاشت مالیات ووکامرس به فیلدهای ساختاریافته ارزش افزوده |
 | TD-195 | Voucher Number Uniqueness Not Enforced in DB | گزارش ممیزی (P1-8) ایندکس یکتای `journal_vouchers(voucher_number)` را هم پیشنهاد کرده بود؛ اضافه نشد چون داده‌های قدیمی ممکن است شماره تکراری داشته باشند و شکست ساخت ایندکس، راه‌اندازی پروداکشن را متوقف می‌کند. شماره‌های جدید از sequence می‌آیند و تکراری نمی‌شوند | src/db/schema/accounting.ts، drizzle/ | open — گزارش شماره‌های تکراری در بازرس سلامت مالی، اصلاح با تصمیم حسابدار و سپس مهاجرت ایندکس یکتا |
 | TD-198 | Exchange Rate Parsed From Notes | `syncSalesInvoiceVoucher` (voucherSync.service.ts) نرخ تسعیر فاکتورهای ارزی را در نبود گزینه صریح با الگوی متنی «نرخ تسعیر» / exchange_rate از متن یادداشت سند استخراج می‌کند — همان کلاس مشکل P1-7؛ یادداشت آزاد می‌تواند نرخ تسعیر سند حسابداری را تغییر دهد | src/services/accounting/voucherSync.service.ts | open — ستون ساختاریافته نرخ تسعیر روی سند |
 | TD-199 | Pre-v7.0.32 Proformas Keep VAT Only in Notes | با تصمیم مالک محصول داده قدیمی منتقل نشد؛ پیش‌فاکتورهایی که پیش از v7.0.32 با مالیات ثبت شده‌اند مالیات را فقط در متن یادداشت دارند و اگر بدون ویرایش نهایی شوند، فاکتور و سند حسابداری بدون مالیات صادر می‌شوند | documents (vat_percent / vat_amount) | open — پیش از نهایی‌سازی، پیش‌فاکتور قدیمی را در فرم ویرایش باز و مالیات را دوباره فعال کنید؛ یا گزارش پیش‌فاکتورهای باز دارای برچسب مالیات در یادداشت |
+| TD-210 | Money Columns as JS double (P2-6) | ستون‌های مالی `numeric(18,4)` با `mode: 'number'` به double جاوااسکریپت تبدیل می‌شوند (۱۵ تا ۱۷ رقم معنادار) و تجمیع‌های گزارشی در JS انجام می‌شود | src/db/schema/*.ts، گزارش‌های حسابداری | scheduled:فاز ۳ نسخه ۷ — با تصمیم مالک محصول (v7.0.44) به فاز ۳ موکول شد؛ با ابعاد یک کارگاه مبالغ از محدوده دقت double فراتر نمی‌روند |
+| TD-211 | Attachments as Base64 in JSONB (P2-9) | پیوست‌های اسناد، اسناد حسابداری، چک‌ها، پرسنل و پروژه‌ها به‌صورت Base64 در ستون‌های `attachments` ذخیره و در هر `select()` بدون انتخاب ستون خوانده می‌شوند | src/db/schema/*.ts (attachments) | scheduled:فاز ۲ نسخه ۷ — جهت مصوب (v7.0.44): ذخیره روی دیسک سرور در پوشه‌ای جدا از public/uploads و دریافت فقط از مسیر نیازمند ورود و مجوز، بدون سرویس جدید؛ تکلیف پیوست‌های موجود نیازمند تصمیم مالک محصول |
 | TD-130 | Hard Delete in updateDocument | بررسی ردیف‌های document_items در ویرایش سند جهت هم‌ترازی با soft-delete | document.service.ts:235 | scheduled:فاز ۱ نسخه ۷ |
-| TD-132 | Dead Dependencies / CVEs | پکیج‌های بی‌استفاده firebase، firebase-admin و @google/genai و کاهش حجم ایمیج | package.json | resolved:v7.0.10 (فاز ۲ نسخه ۷) |
-| TD-134 | Test DB Isolation Off by Default | پیش‌فرض کردن ERP_TEST_SCHEMA_ISOLATION=1 در رانر تست‌ها و حذف sleepها | scripts/run-tests.ts:121 | resolved:v7.0.3 (فاز ۲ نسخه ۷) |
-| TD-160 | TypeScript Strict Mode Disabled | خاموش بودن فلگ‌های strict, strictNullChecks, noImplicitAny در tsconfig.json | tsconfig.json | resolved:v7.0.4 (فاز ۳ نسخه ۷) |
-| TD-161 | Zod Coverage Gap | فقدان اعتبارسنجی Zod روی ۱۱ روت تدارکات (Procurement) و روت‌های داشبورد | src/routes/procurement.routes.ts | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
-| TD-162 | Ad-Hoc DDL in Migrator | ۵ بلوک DDL خام خارج از ترنزکشن رسمی دریزل که خطاها را قورت می‌دهند | src/db/migrator.ts:77-108 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
-| TD-163 | Startup Race Condition | پذیرش ترافیک قبل از اتمام مایگریشن‌ها و سید در هنگام بوت سرور | server.ts:47-108 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
-| TD-164 | N+1 Queries in Hot Loops | کوری‌های تکی انبار و قیمت در حلقه سطرهای سند انبارگردانی تحت قفل سطری | src/services/document.service.ts:615 | resolved:v7.0.2 (فاز ۲ نسخه ۷) |
-| TD-165 | JSONB Stocks Normalization | ذخیره‌سازی موجودی تفکیکی انبار در ستون JSONB فاقد قید دیتابیسی | src/db/schema/inventory.ts:33 | resolved:v7.0.8 (فاز ۴.۱ نسخه ۷) |
-| TD-166 | Missing FK Index | فقدان نمایه B-Tree روی documents(project_id) | src/db/schema/documents.ts:85 | resolved:v7.0.1 (فاز ۱ نسخه ۷) |
-| TD-167 | fetchJson Typing & Protocol Fallback | تایپ ضعیف T=any و قورت دادن خطای بدنه نامعتبر در .catch(() => ({})) | src/api.ts:77,190 | resolved:v7.0.5 (فاز ۳ نسخه ۷) |
-| TD-168 | Native parseFloat in Forms | استفاده مستقیم از parseFloat در ۲۴ فیلد فرم‌های مالی و کارمزدی | VoucherItemsTable.tsx, PieceworkLogModal.tsx | resolved:v7.0.6 (فاز ۳ نسخه ۷) |
-| TD-169 | Schema Import Cycle | چرخه ۵ ماژولی در اسکیماهای Drizzle (Tarjan SCC) | src/db/schema/ | resolved:v7.0.12 (فاز ۴.۲ نسخه ۷) |
-| TD-170 | Dual Serialization Debt | بازگرداندن همزمان کلیدهای camelCase و snake_case در روت پروژه‌ها | src/routes/projects.routes.ts:202 | resolved:v7.0.15 (فاز ۴.۳ نسخه ۷) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۱۶ ردیف
-- **آرشیو شده (resolved):** ۱۶۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۱۸ ردیف
+- **آرشیو شده (resolved):** ۱۸۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
 ---
 
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
-> ⚠️ ناسازگاری شناخته‌شده: چند ردیف `resolved` (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) هنوز در جدول فعال بالا مانده‌اند و آمار «۱۶ ردیف فعال» با جدول منطبق نیست؛ جابه‌جایی آن‌ها خارج از دامنه فاز ۰ است.
+> ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v7.0.43 — پایان زیرفاز ۲.۲ ممیزی: حل TD-176، TD-182، TD-192، TD-194 و TD-204 تا TD-207 (آرشیو).*
+*آخرین بازبینی: v7.0.44 — زیرفاز ۲.۳ ممیزی، بخش الف: تصمیم استقرار تک‌نمونه‌ای (TD-208، TD-209)، زمان‌بندی TD-210 و TD-211، انتقال ردیف‌های حل‌شده به آرشیو.*
