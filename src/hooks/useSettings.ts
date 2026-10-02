@@ -53,7 +53,6 @@ export function useSettings() {
   const [displayTimezone, setDisplayTimezone] = useState('Asia/Tehran');
 
   // V1.1.1: فلگ‌های runtime سیستمی (تب پیکربندی سیستمی)
-  const [enableTestEndpoints, setEnableTestEndpoints] = useState('false');
 
   // Modal and form states for categories
   const [showCatModal, setShowCatModal] = useState(false);
@@ -145,12 +144,6 @@ export function useSettings() {
     const tzSetting = data.find((s) => s.key === 'display_timezone');
     if (tzSetting?.value) {
       setDisplayTimezone(tzSetting.value);
-    }
-
-    // V1.1.1: فلگ‌های runtime سیستمی
-    const testEndpointsSetting = data.find((s) => s.key === 'runtime_enable_test_endpoints');
-    if (testEndpointsSetting?.value) {
-      setEnableTestEndpoints(testEndpointsSetting.value);
     }
 
     const presetsSetting = data.find((s) => s.key === 'project_workflow_presets');
@@ -296,7 +289,6 @@ export function useSettings() {
         { key: 'company_logo', value: companyLogo },
         { key: 'currency', value: currency },
         { key: 'display_timezone', value: displayTimezone },
-        { key: 'runtime_enable_test_endpoints', value: enableTestEndpoints },
         { key: 'project_workflow_presets', value: JSON.stringify(workflowPresets) },
         { key: 'inventory_control_preset_sections', value: JSON.stringify(inventoryControlSections) },
         { key: 'wc_store_url', value: wcStoreUrl },
@@ -394,7 +386,6 @@ export function useSettings() {
     companyLogo, setCompanyLogo,
     currency, setCurrency,
     displayTimezone, setDisplayTimezone,
-    enableTestEndpoints, setEnableTestEndpoints,
     wcStoreUrl, setWcStoreUrl,
     wcConsumerKey, setWcConsumerKey,
     wcConsumerSecret, setWcConsumerSecret,

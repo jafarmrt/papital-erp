@@ -38,7 +38,6 @@ const BUSINESS_SETTING_KEYS = new Set([
 
 /** کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی — فقط مدیر سیستم (admin) */
 const ADMIN_ONLY_SETTING_KEYS = new Set([
-  'runtime_enable_test_endpoints',
   // تغییر آدرس فروشگاه باعث ارسال کلیدهای ووکامرس به سایت دیگر می‌شود؛ بنابراین هم‌ردیف کلیدهای محرمانه است
   'wc_store_url',
   'wc_consumer_key',
@@ -49,10 +48,11 @@ const ADMIN_ONLY_SETTING_KEYS = new Set([
 /** پیکربندی دسترسی نقش‌ها — admin یا دارنده مجوز roles.manage (هم‌راستا با مدیریت نقش‌ها) */
 const ROLE_CONFIG_SETTING_KEYS = new Set(['menu_visibility']);
 
-/** مقدار مؤثر کلیدهایی که در دیتابیس ثبت نشده‌اند (برای تشخیص «بدون تغییر») */
-const IMPLICIT_DEFAULTS: Record<string, string> = {
-  runtime_enable_test_endpoints: 'false',
-};
+/**
+ * v7.0.85 (TD-109): کلیدهای بازنشسته — فلگ `runtime_enable_test_endpoints` پس از حذف روت‌های تست هیچ اثری نداشت و
+ * حذف شد. فرم تنظیمات نسخه قبلی (تب بازمانده در مرورگر) هنوز آن را می‌فرستد؛ بی‌صدا نادیده گرفته می‌شود تا ذخیره شکست نخورد.
+ */
+const RETIRED_SETTING_KEYS = new Set(['runtime_enable_test_endpoints']);
 
 export interface SettingsActor {
   id?: number;
@@ -70,9 +70,6 @@ function normalizeSettingValue(key: string, raw: string): string {
   if (key === 'display_timezone') {
     return String(raw).trim();
   }
-  if (key === 'runtime_enable_test_endpoints') {
-    return String(raw).trim().toLowerCase();
-  }
   return raw;
 }
 
@@ -82,9 +79,6 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
     if (!(ALLOWED_TIMEZONES as readonly string[]).includes(value)) {
       throw new ValidationError(`منطقه زمانی '${value}' پشتیبانی نمی‌شود.`);
     }
-  }
-  if (key === 'runtime_enable_test_endpoints' && value !== 'true' && value !== 'false') {
-    throw new ValidationError('مقدار مجاز برای این فلگ فقط true یا false است.');
   }
 }
 
@@ -120,6 +114,7 @@ export class SystemSettingsService {
     items: Array<{ key: string; value: string }>,
     actor: SettingsActor
   ): Promise<SaveSettingsResult> {
+    items = items.filter(i => !RETIRED_SETTING_KEYS.has(i.key));
     const unknownKeys = items.map(i => i.key).filter(k => !this.isKnownSettingKey(k));
     if (unknownKeys.length > 0) {
       throw new ValidationError(`کلید(های) تنظیمات ناشناخته: ${unknownKeys.join('، ')}`);
@@ -139,8 +134,7 @@ export class SystemSettingsService {
         }
         const value = normalizeSettingValue(item.key, item.value);
         const before = current.get(item.key);
-        const effectiveBefore = before ?? IMPLICIT_DEFAULTS[item.key];
-        if (effectiveBefore !== undefined && effectiveBefore === value) {
+        if (before !== undefined && before === value) {
           continue;
         }
 
@@ -157,8 +151,6 @@ export class SystemSettingsService {
       invalidateSettingsCache();
       const { invalidateTimezoneCache } = await import('../../lib/businessClock.js');
       invalidateTimezoneCache();
-      const { invalidateRuntimeFlagsCache } = await import('../../lib/runtimeFlags.js');
-      invalidateRuntimeFlagsCache();
 
       await logActivity({
         userId: actor.id,

@@ -7127,5 +7127,66 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.85 (TD-109): فلگ بی‌اثر test_endpoints حذف شد؛ فرم قدیمی که کلید آن را می‌فرستد ذخیره‌اش شکست نمی‌خورد
+  if (shouldRun('reg_retired_test_endpoints_flag_td_109', 'td109', 'settings', 'flag')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.85: کلید بازنشسته runtime_enable_test_endpoints ذخیره نمی‌شود و ذخیره فرم را نمی‌شکند؛ /system/env دیگر آن را گزارش نمی‌کند (TD-109)';
+    const { appSettings } = await import('../../db/schema.js');
+    const RETIRED = 'runtime_enable_test_endpoints';
+    const [original] = await orm.select().from(appSettings).where(eq(appSettings.key, RETIRED));
+    const [originalName] = await orm.select().from(appSettings).where(eq(appSettings.key, 'company_name'));
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      await orm.delete(appSettings).where(eq(appSettings.key, RETIRED));
+      const violations: string[] = [];
+      const save = await request(app).post('/api/settings').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken)
+        .send({ settings: [{ key: RETIRED, value: 'true' }, { key: 'company_name', value: `شرکت آزمون TD-109 ${Date.now()}` }] });
+      if (save.status !== 200) violations.push(`ذخیره فرم با کلید بازنشسته: HTTP ${save.status} ${JSON.stringify(save.body).slice(0, 160)}`);
+      if (Array.isArray(save.body?.changedKeys) && save.body.changedKeys.includes(RETIRED)) violations.push('کلید بازنشسته در کلیدهای تغییرکرده است');
+      const [stored] = await orm.select().from(appSettings).where(eq(appSettings.key, RETIRED));
+      if (stored) violations.push(`کلید بازنشسته ذخیره شد: ${stored.value}`);
+      const env = await request(app).get('/api/system/env').set('Cookie', session.cookie);
+      if (env.status !== 200) violations.push(`/system/env: HTTP ${env.status}`);
+      if (env.body && ('effectiveTestEndpoints' in env.body || 'ENABLE_TEST_ENDPOINTS' in (env.body.flags || {}))) {
+        violations.push('/system/env هنوز فلگ test_endpoints را گزارش می‌کند');
+      }
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_retired_test_endpoints_flag_td_109',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'کلید بازنشسته نادیده گرفته شد، بقیه فرم ذخیره شد و گزارش محیط آن را ندارد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_retired_test_endpoints_flag_td_109',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      for (const [key, row] of [[RETIRED, original], ['company_name', originalName]] as const) {
+        if (row) {
+          await orm.insert(appSettings).values({ key, value: row.value }).onConflictDoUpdate({ target: appSettings.key, set: { value: row.value } });
+        } else {
+          await orm.delete(appSettings).where(eq(appSettings.key, key));
+        }
+      }
+      const { invalidateSettingsCache } = await import('../../lib/memoryCache.js');
+      invalidateSettingsCache();
+    }
+  }
+
   return results;
 }

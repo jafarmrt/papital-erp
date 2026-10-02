@@ -350,8 +350,6 @@ export async function runSeed(
     { key: 'display_timezone', value: 'Asia/Tehran' },
     { key: 'pricing_strategies', value: 'فروشگاه,مصرف‌کننده,عمده' },
     { key: 'project_workflow_presets', value: JSON.stringify(DEFAULT_WORKFLOW_PRESETS) },
-    // V1.1.1: فلگ‌های runtime — پیش‌فرض امن (endpoint های تست خاموش)
-    { key: 'runtime_enable_test_endpoints', value: 'false' }
   ];
 
   try {

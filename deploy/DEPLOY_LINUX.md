@@ -119,4 +119,3 @@ systemctl restart papital-erp     # ری‌استارت
 - [ ] پورت 3000 روی فایروال عمومی بسته باشد: `ufw deny 3000/tcp` (فقط Nginx به آن وصل است)
 - [ ] بکاپ خودکار روزانه (cron: `0 3 * * * bash /opt/papital-erp/scripts/backup.sh`) + انتقال بکاپ به محل دوم
 - [ ] `sudo certbot renew --dry-run` یک بار بعد از نصب
-- [ ] endpointهای تست سیستم به‌صورت پیش‌فرض در production قفل‌اند (`runtime_enable_test_endpoints`) — روشن نکنید

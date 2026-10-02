@@ -470,7 +470,7 @@ export async function runPenetrationTests(): Promise<TestCaseResult[]> {
           throw new Error(`کلید محرمانه برای مدیر باید ماسک شود (مقدار: ${maskedRow?.value})`);
         }
 
-        // 2. Manager re-submits the whole form (masked secret + unchanged system flag) and changes the company name
+        // 2. Manager re-submits the whole form (masked secret + the retired test-endpoints flag of an old form, v7.0.85) and changes the company name
         const saveRes = await request(app).post('/api/settings').set('Cookie', mgr.cookie).set('X-CSRF-Token', mgr.csrfToken)
           .send({ settings: [
             { key: 'company_name', value: 'شرکت آزمون بعد' },

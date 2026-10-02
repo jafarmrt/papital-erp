@@ -85,7 +85,6 @@ export function initMockStore() {
     { key: 'display_timezone', value: 'Asia/Tehran' },
     { key: 'pricing_strategies', value: 'فروشگاه,مصرف‌کننده,عمده' },
     { key: 'project_workflow_presets', value: JSON.stringify(DEFAULT_WORKFLOW_PRESETS) },
-    { key: 'runtime_enable_test_endpoints', value: 'false' }
   ];
   tables.set('app_settings', initialSettings);
 

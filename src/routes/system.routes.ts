@@ -25,7 +25,6 @@ import { validate } from '../middleware/validate.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ForbiddenError } from '../errors/customErrors.js';
 import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity } from '../lib/auditLogger.js';
-import { isTestEndpointsEnabled, getTestEndpointsSource } from '../lib/runtimeFlags.js';
 import { runSeed } from '../db/seed.js';
 import { validateDbSchema } from '../db/migrator.js';
 import { appSettingsCache } from '../lib/memoryCache.js';
@@ -76,17 +75,13 @@ router.get('/system/env', authorize('admin'), asyncHandler(async (req, res) => {
     description: 'استعلام وضعیت متغیرهای محیطی و اتصال به پایگاه‌داده',
     ipAddress: extractClientIp(req)
   });
-  const effectiveTestEndpoints = await isTestEndpointsEnabled();
   res.json({
     version: BUILD_INFO.version,
     buildInfo: BUILD_INFO,
     db: process.env.DATABASE_URL ? 'set' : 'not set',
     nodeEnv: process.env.NODE_ENV || 'development',
     nodeVersion: process.version,
-    effectiveTestEndpoints,
-    testEndpointsSource: getTestEndpointsSource(),
     flags: {
-      ENABLE_TEST_ENDPOINTS: process.env.ENABLE_TEST_ENDPOINTS ? 'set' : 'not set',
       ERP_ALLOW_TEST_CLEANUP: process.env.ERP_ALLOW_TEST_CLEANUP ? 'set' : 'not set',
       ALLOW_SEED_IN_PRODUCTION: process.env.ALLOW_SEED_IN_PRODUCTION ? 'set' : 'not set',
       DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'not set',
