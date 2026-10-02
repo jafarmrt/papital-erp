@@ -92,15 +92,19 @@ export async function businessTodayIsoDate(): Promise<string> {
   }).format(new Date());
 }
 
-/** تاریخ امروز در منطقه توافقی به فرمت جلالی خط‌تیره: `1405-06-06` (ارقام انگلیسی) */
+/**
+ * تاریخ امروز در منطقه توافقی به فرمت جلالی خط‌تیره: `1405-06-06` (ارقام انگلیسی)
+ * v7.0.74: قالب en-US ترتیب «ماه/روز/سال AP» دارد و خروجی قبلی `07-10-1405 AP` بود که هیچ تبدیلگری آن را
+ * نمی‌شناخت؛ اکنون اجزا جداگانه خوانده و به ترتیب سال-ماه-روز چیده می‌شوند.
+ */
 export async function businessTodayJalaliDash(): Promise<string> {
   const tz = await getDisplayTimezone();
-  return new Intl.DateTimeFormat('en-US-u-ca-persian', {
+  const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', {
     timeZone: tz,
     year: 'numeric', month: '2-digit', day: '2-digit',
-  })
-    .format(new Date())
-    .replace(/\//g, '-');
+  }).formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month').padStart(2, '0')}-${part('day').padStart(2, '0')}`;
 }
 
 /**

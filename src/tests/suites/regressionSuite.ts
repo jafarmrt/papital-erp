@@ -6557,5 +6557,83 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.74: تاریخ شمسی امروز (businessTodayJalaliDash) به قالب ۱۴۰۵-۰۷-۱۰ است؛ سند و تراکنش خزانه پرداخت حقوق تاریخ ISO امروز را دارند
+  if (shouldRun('reg_jalali_dash_today_payroll_dates', 'jalalidash', 'payroll', 'date')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.74: تاریخ شمسی امروز سرور به قالب سال-ماه-روز است و پرداخت حقوق سند و تراکنش خزانه را با تاریخ ISO امروز ثبت می‌کند';
+    const created = { personnelId: null as number | null, bankId: null as number | null, payrollId: null as number | null, treasuryId: null as number | null, voucherId: null as number | null };
+    try {
+      const { businessTodayJalaliDash } = await import('../../lib/businessClock.js');
+      const { personnel, bankAccounts, pieceworkPayrolls, treasuryTransactions } = await import('../../db/schema.js');
+      const { PayrollPaymentService } = await import('../../services/accounting/payrollPayment.service.js');
+      const violations: string[] = [];
+      const todayIso = await businessTodayIsoDate();
+      const jalaliDash = await businessTodayJalaliDash();
+      if (!/^1[345]\d{2}-\d{2}-\d{2}$/.test(jalaliDash)) violations.push(`businessTodayJalaliDash: «${jalaliDash}» (انتظار YYYY-MM-DD شمسی)`);
+      if (jalaliToIsoDate(jalaliDash) !== todayIso) violations.push(`تبدیل «${jalaliDash}» به میلادی: «${jalaliToIsoDate(jalaliDash)}» (انتظار ${todayIso})`);
+
+      const allAccs = await AccountingService.getAllAccounts();
+      const leaf = allAccs.find(a => a.level === 'subsidiary');
+      if (!leaf) throw new Error('حساب معین برای حساب بانکی آزمون یافت نشد');
+      const [pers] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل آزمون تاریخ پرداخت' }).returning({ id: personnel.id });
+      created.personnelId = pers.id;
+      const [bank] = await orm.insert(bankAccounts).values({
+        code: `BA-JD-${Date.now()}`, title: 'حساب آزمون تاریخ پرداخت', type: 'bank', accountId: leaf.id, currentBalance: money(1000000), isDeleted: 0
+      }).returning({ id: bankAccounts.id });
+      created.bankId = bank.id;
+      const [payroll] = await orm.insert(pieceworkPayrolls).values({
+        payrollNumber: `PAY-JD-${Date.now()}`, personnelId: pers.id, startDate: '1405/06/01', endDate: '1405/06/31', title: 'فیش آزمون تاریخ پرداخت',
+        totalPieceworkAmount: money(500000), totalFixedAmount: money(0), totalBonuses: money(0), totalDeductions: money(0),
+        netPayable: money(500000), status: 'approved', isDeleted: 0
+      }).returning({ id: pieceworkPayrolls.id });
+      created.payrollId = payroll.id;
+
+      const result = await PayrollPaymentService.registerPayrollPayment({ payrollId: payroll.id, bankAccountId: bank.id, method: 'bank_transfer', username: 'test-agent' });
+      created.treasuryId = result.transactionId;
+      created.voucherId = result.voucherId;
+      const [tr] = await orm.select({ date: treasuryTransactions.date }).from(treasuryTransactions).where(eq(treasuryTransactions.id, result.transactionId));
+      if (tr?.date !== todayIso) violations.push(`تاریخ تراکنش خزانه: «${tr?.date}» (انتظار ${todayIso})`);
+      if (result.voucherId !== null) {
+        const [v] = await orm.select({ date: journalVouchers.date }).from(journalVouchers).where(eq(journalVouchers.id, result.voucherId));
+        if (v?.date !== todayIso) violations.push(`تاریخ سند حسابداری: «${v?.date}» (انتظار ${todayIso})`);
+      } else {
+        violations.push('سند حسابداری پرداخت صادر نشد');
+      }
+      if (result.payroll.paymentDate !== jalaliDash) violations.push(`تاریخ پرداخت فیش: «${result.payroll.paymentDate}» (انتظار ${jalaliDash})`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_jalali_dash_today_payroll_dates',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: `امروز شمسی ${jalaliDash}؛ سند و تراکنش خزانه پرداخت حقوق با تاریخ ${todayIso} ثبت شدند.`
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_jalali_dash_today_payroll_dates',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (created.treasuryId !== null) await cleanTestTableData('treasury_transactions', 'id', [created.treasuryId]);
+      if (created.voucherId !== null) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', [created.voucherId]);
+        await cleanTestTableData('journal_vouchers', 'id', [created.voucherId]);
+      }
+      if (created.payrollId !== null) await cleanTestTableData('piecework_payrolls', 'id', [created.payrollId]);
+      if (created.bankId !== null) await cleanTestTableData('bank_accounts', 'id', [created.bankId]);
+      if (created.personnelId !== null) await cleanTestTableData('personnel', 'id', [created.personnelId]);
+    }
+  }
+
   return results;
 }

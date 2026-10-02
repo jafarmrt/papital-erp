@@ -19,6 +19,7 @@ import { OutboxService } from '../events/outboxService.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { businessTodayJalaliDash } from '../../lib/businessClock.js';
+import { jalaliToIsoDate } from '../../utils.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
 // V4.0.33: سرویس جامع و واحد ثبت پرداخت حقوق — پشتیبانی کامل از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
@@ -275,7 +276,8 @@ export class PayrollPaymentService {
       const [tr] = await tx.insert(treasuryTransactions).values({
         transactionNumber: txNum,
         type: 'payment',
-        date: payDate.trim(),
+        // v7.0.74: تاریخ تراکنش خزانه ISO است (TD-105)؛ تاریخ پرداخت فیش شمسی می‌ماند
+        date: jalaliToIsoDate(payDate) || payDate.trim(),
         method: input.method || 'bank_transfer',
         amount: money(payAmount),
         currency: 'IRR',
