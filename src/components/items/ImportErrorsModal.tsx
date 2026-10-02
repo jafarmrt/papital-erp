@@ -2,6 +2,7 @@ import React from 'react';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { Category } from '../../types';
+import { errorMessageOf } from '../../utils';
 
 interface ImportErrorItem {
   rowIndex: number;
@@ -117,9 +118,9 @@ export function ImportErrorsModal({
                         setImportErrors(newErrs);
                         onSuccessRefresh();
                       } catch (e) {
-                        toast.error(e.message || 'مجدداً خطا رخ داد.');
+                        toast.error(errorMessageOf(e) || 'مجدداً خطا رخ داد.');
                         const newErrs = [...importErrors];
-                        newErrs[idx].error = e.message || 'خطای ناشناخته';
+                        newErrs[idx].error = errorMessageOf(e) || 'خطای ناشناخته';
                         setImportErrors(newErrs);
                       }
                     }}

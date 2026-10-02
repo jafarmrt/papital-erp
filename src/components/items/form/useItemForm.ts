@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Item } from '../../../types';
 import { fetchJson } from '../../../api';
-import { getTodayJalaliDate, parseCleanNumber } from '../../../utils';
+import { getTodayJalaliDate, parseCleanNumber, errorMessageOf } from '../../../utils';
 import { ItemFormData, ItemFormModalProps } from './types';
 import {
   parseItemStocks,
@@ -263,7 +263,7 @@ export function useItemForm({
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'خطا در ثبت کالا');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت کالا');
     } finally {
       setIsSaving(false);
     }

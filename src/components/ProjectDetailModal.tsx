@@ -3,7 +3,7 @@ import { X, Check, Calendar, User, Package, Users, Layers, CheckCircle2, Edit3, 
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
-import { toPersianDigits, formatPersianNumber } from '../utils';
+import { toPersianDigits, formatPersianNumber, errorMessageOf } from '../utils';
 import { FinancialAttachmentUploader } from './accounting/FinancialAttachmentUploader';
 
 // Tab Components
@@ -202,7 +202,7 @@ export default function ProjectDetailModal({
         toast.error(res?.error || 'خطا در ویرایش مرحله');
       }
     } catch (err) {
-      toast.error(err.message || 'خطا در ذخیره مرحله');
+      toast.error(errorMessageOf(err) || 'خطا در ذخیره مرحله');
     } finally {
       setSavingStage(false);
     }

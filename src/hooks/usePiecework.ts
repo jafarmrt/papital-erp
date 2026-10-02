@@ -11,7 +11,7 @@ import {
   PieceworkPersonnelRate
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
-import { parseQuantityOrTime, formatPersianPrice } from '../utils';
+import { parseQuantityOrTime, formatPersianPrice, errorMessageOf } from '../utils';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -313,7 +313,7 @@ export function usePiecework() {
       setIsLogModalOpen(false);
       loadData();
     } catch (err) {
-      hotToast.error(err.message || 'خطا در ثبت کارکرد');
+      hotToast.error(errorMessageOf(err) || 'خطا در ثبت کارکرد');
     } finally {
       setIsSavingLog(false);
     }
@@ -326,7 +326,7 @@ export function usePiecework() {
         hotToast.success('ردیف کارکرد حذف شد');
         loadData();
       } catch (err) {
-        hotToast.error(err.message || 'خطا در حذف کارکرد');
+        hotToast.error(errorMessageOf(err) || 'خطا در حذف کارکرد');
       }
     }
   };
@@ -380,7 +380,7 @@ export function usePiecework() {
       setIsTaskModalOpen(false);
       loadData();
     } catch (err) {
-      hotToast.error(err.message || 'خطا در ذخیره عنوان کاری');
+      hotToast.error(errorMessageOf(err) || 'خطا در ذخیره عنوان کاری');
     } finally {
       setIsSavingTask(false);
     }
@@ -465,7 +465,7 @@ export function usePiecework() {
       }
       setCustomRatesMap(map);
     } catch (err) {
-      hotToast.error(err.message || 'خطا در دریافت نرخ‌های اختصاصی');
+      hotToast.error(errorMessageOf(err) || 'خطا در دریافت نرخ‌های اختصاصی');
     }
   };
 
@@ -493,7 +493,7 @@ export function usePiecework() {
       setCustomRatesMap(prev => ({ ...prev, [taskId]: customRate }));
       hotToast.success('نرخ اختصاصی ثبت شد');
     } catch (err) {
-      hotToast.error(err.message || 'خطا در ذخیره نرخ اختصاصی');
+      hotToast.error(errorMessageOf(err) || 'خطا در ذخیره نرخ اختصاصی');
     }
   };
 
@@ -606,7 +606,7 @@ export function usePiecework() {
       loadData();
       setActiveTab('payrolls');
     } catch (err) {
-      hotToast.error(err.message || 'خطا در صدور فیش حقوقی');
+      hotToast.error(errorMessageOf(err) || 'خطا در صدور فیش حقوقی');
     } finally {
       setIsSavingPayroll(false);
     }
@@ -617,7 +617,7 @@ export function usePiecework() {
       const res = await fetchJson(`/piecework/payrolls/${id}`);
       setViewingPayroll(res);
     } catch (err) {
-      hotToast.error(err.message || 'خطا در دریافت جزئیات فیش');
+      hotToast.error(errorMessageOf(err) || 'خطا در دریافت جزئیات فیش');
     }
   };
 
@@ -634,7 +634,7 @@ export function usePiecework() {
       }
       loadData();
     } catch (err) {
-      hotToast.error(err.message || 'خطا در به‌روزرسانی وضعیت فیش');
+      hotToast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی وضعیت فیش');
     }
   };
 
@@ -648,7 +648,7 @@ export function usePiecework() {
         }
         loadData();
       } catch (err) {
-        hotToast.error(err.message || 'خطا در ابطال فیش حقوقی');
+        hotToast.error(errorMessageOf(err) || 'خطا در ابطال فیش حقوقی');
       }
     }
   };

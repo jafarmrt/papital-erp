@@ -17,6 +17,7 @@ import {
   roundToOneDecimal,
   buildReservedItemsToFreeze
 } from '../components/project/projectInventoryUtils';
+import { errorMessageOf } from '../utils';
 
 export function useProjectInventory(
   project: ProductionProject,
@@ -469,7 +470,7 @@ export function useProjectInventory(
       });
     } catch (err) {
       console.error('Error creating custom raw material:', err);
-      toast.error(err.message || 'خطا در ثبت ماده اولیه جدید');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت ماده اولیه جدید');
     }
   };
 
@@ -686,7 +687,7 @@ export function useProjectInventory(
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error finalizing inventory reservation:', err);
-      toast.error(err.message || 'خطا در فریز و رزرو انبار');
+      toast.error(errorMessageOf(err) || 'خطا در فریز و رزرو انبار');
     } finally {
       setSaving(false);
     }
@@ -720,7 +721,7 @@ export function useProjectInventory(
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error unfreezing reservation:', err);
-      toast.error(err.message || 'خطا در لغو فریز انبار');
+      toast.error(errorMessageOf(err) || 'خطا در لغو فریز انبار');
     } finally {
       setSaving(false);
     }
@@ -763,7 +764,7 @@ export function useProjectInventory(
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('Error saving project inventory control:', err);
-      toast.error(err.message || 'خطا در ذخیره‌سازی کنترل موجودی پروژه');
+      toast.error(errorMessageOf(err) || 'خطا در ذخیره‌سازی کنترل موجودی پروژه');
     } finally {
       setSaving(false);
     }

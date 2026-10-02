@@ -8,6 +8,15 @@ import { AIUpdateLog } from './types';
  */
 export const v7Updates: AIUpdateLog[] = [
   {
+    version: 'v7.0.79',
+    date: '۱۰ مهر ۱۴۰۵',
+    title: 'P3-3: حالت strict در TypeScript روشن شد',
+    summary: 'کامپایلر اکنون با strict: true کار می‌کند. تنها خطاهای باقی‌مانده خواندن err.message از متغیر catch با نوع unknown بود که با تابع errorMessageOf و همان پیام پیش‌فرض قبلی جایگزین شد؛ رفتار برنامه تغییر نکرد.',
+    changes: [
+      'کاهش any (۱۵۹۷ مورد) همچنان تدریجی و با ratchet است (TD-106)'
+    ]
+  },
+  {
     version: 'v7.0.78',
     date: '۱۰ مهر ۱۴۰۵',
     title: 'رفع پنهان شدن کاربرانی که نامشان با test یا e2e شروع می‌شود',

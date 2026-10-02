@@ -5,7 +5,7 @@ import { Boxes, Plus, Search, RefreshCw, CheckCircle2, Clock, RotateCcw, User, W
 import * as xlsx from 'xlsx';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
-import { formatPersianDate, formatPersianNumber, parseCleanNumber } from '../../utils';
+import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf } from '../../utils';
 
 interface ProjectBomAllocationsTabProps {
   user?: any;
@@ -129,7 +129,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       setShowAllocateModal(false);
       loadAllocations();
     } catch (err) {
-      setErrorMsg(err.message || 'خطا در ثبت تخصیص به پروژه');
+      setErrorMsg(errorMessageOf(err) || 'خطا در ثبت تخصیص به پروژه');
     } finally {
       setSubmitting(false);
     }

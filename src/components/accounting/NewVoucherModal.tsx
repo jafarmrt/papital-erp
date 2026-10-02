@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, CheckCircle2, AlertCircle, FileText, Save, X, Scale, Zap, Copy, Keyboard, Sparkles } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, extractDateString, errorMessageOf } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { Account, Customer, Personnel, JournalVoucher, FinancialAttachment } from '../../types';
 // V9 Phase 5.2: تایپ و جدول ردیف‌ها به کامپوننت VoucherItemsTable منتقل شد
@@ -404,7 +404,7 @@ export function NewVoucherModal({
       toast.success(editingVoucher ? 'سند حسابداری به‌روزرسانی شد' : 'سند حسابداری با موفقیت ثبت شد');
       onClose();
     } catch (err) {
-      toast.error(err.message || 'خطا در ثبت سند حسابداری');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت سند حسابداری');
     } finally {
       setIsSaving(false);
     }

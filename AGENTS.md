@@ -178,7 +178,7 @@
 ## 23. V7 Governance — Active Series, Strict Typing, Zod Coverage, N+1 Optimization & Stock Normalization
 - **Active Series (v7.x.y):** The active changelog file is `src/data/changelogs/7.ts` (`v7.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`) and `archive_1_6.ts` (condensed `v1.x.y`–`v6.x.y`, finalized at `v6.0.28`). Every change MUST append one unique, short `AIUpdateLog` entry (§7) to `src/data/changelogs/7.ts` and bump `package.json` `"version"`.
 - **Core Mission of Version 7:**
-  1. **Strict TypeScript & Type Safety (فعال‌سازی Strict Mode):** Incremental adoption of `strict: true`, `strictNullChecks: true`, and elimination of untyped `: any` escape hatches across financial and inventory paths.
+  1. **Strict TypeScript & Type Safety (فعال‌سازی Strict Mode):** `strict: true` is on (v7.0.79, audit P3-3 — catch variables are `unknown`: read them with `errorMessageOf(err)` / `getErrorMessage(err)` from `src/utils`, never `err.message`); untyped `: any` escape hatches are removed incrementally (ESLint ratchet).
   2. **100% Zod Validation Coverage (اعتبارسنجی کامل روت‌ها):** Complete Zod middleware protection on all remaining unvalidated endpoints (Procurement, Dashboard, Transactions) preventing NaN/malformed inputs.
   3. **N+1 Performance Elimination (حذف کوری‌های متوالی در لوپ‌ها):** Batch fetching of warehouse locations and item base prices in document finalization and audit loops.
   4. **Database Migrator Hardening (استحکام مایگریتور):** Formalization of all ad-hoc DDL into numbered Drizzle migrations and fail-fast startup behavior in production.

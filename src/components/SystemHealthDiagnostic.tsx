@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
-import { getDisplayTimezoneClient } from '../utils';
+import { getDisplayTimezoneClient, errorMessageOf } from '../utils';
 import { Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Send, FileText, GitPullRequest, Wrench, Play, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -86,7 +86,7 @@ export default function SystemHealthDiagnostic() {
       const data = await fetchJson('/system/health');
       setHealth(data);
     } catch (err) {
-      setError(err.message || 'خطا در دریافت وضعیت سلامت سیستم');
+      setError(errorMessageOf(err) || 'خطا در دریافت وضعیت سلامت سیستم');
       toast.error('امکان دریافت اطلاعات سلامت سرور وجود ندارد');
     } finally {
       setLoading(false);
@@ -100,7 +100,7 @@ export default function SystemHealthDiagnostic() {
       setReconciliationReport(report);
       toast.success('اسکن انطباق و موازنه سیستم با موفقیت تکمیل شد');
     } catch (err) {
-      toast.error(err.message || 'خطا در اجرای اسکن انطباق دیتابیس و ماژول‌ها');
+      toast.error(errorMessageOf(err) || 'خطا در اجرای اسکن انطباق دیتابیس و ماژول‌ها');
     } finally {
       setReconciling(false);
     }
@@ -118,7 +118,7 @@ export default function SystemHealthDiagnostic() {
       await runReconciliationCheck();
       await loadHealthData();
     } catch (err) {
-      toast.error(err.message || 'خطا در اجرای اصلاحیه خودکار');
+      toast.error(errorMessageOf(err) || 'خطا در اجرای اصلاحیه خودکار');
     } finally {
       setFixingAction('');
     }

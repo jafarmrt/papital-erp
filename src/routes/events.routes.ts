@@ -11,6 +11,7 @@ import { EventSourcingReplayService } from '../services/events/eventSourcingRepl
 import { logActivity } from '../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { z } from 'zod';
+import { errorMessageOf } from '../utils.js';
 
 const eventIdParamSchema = z.object({
   params: z.object({
@@ -745,11 +746,11 @@ router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(asyn
       data: newSub
     });
   } catch (error) {
-    const isClientError = error.message?.includes('SSRF') || error.message?.includes('Disallowed') || error.message?.includes('Invalid URL');
+    const isClientError = errorMessageOf(error)?.includes('SSRF') || errorMessageOf(error)?.includes('Disallowed') || errorMessageOf(error)?.includes('Invalid URL');
     res.status(isClientError ? 400 : 500).json({
       success: false,
-      message: isClientError ? error.message : 'خطا در ایجاد وب‌هوک',
-      error: error.message
+      message: isClientError ? errorMessageOf(error) : 'خطا در ایجاد وب‌هوک',
+      error: errorMessageOf(error)
     });
   }
 }));
@@ -765,11 +766,11 @@ router.put('/webhooks/:id', authorizePermission('events.manage'), validate(param
       data: updated
     });
   } catch (error) {
-    const isClientError = error.message?.includes('SSRF') || error.message?.includes('Disallowed') || error.message?.includes('Invalid URL');
+    const isClientError = errorMessageOf(error)?.includes('SSRF') || errorMessageOf(error)?.includes('Disallowed') || errorMessageOf(error)?.includes('Invalid URL');
     res.status(isClientError ? 400 : 500).json({
       success: false,
-      message: isClientError ? error.message : 'خطا در ویرایش وب‌هوک',
-      error: error.message
+      message: isClientError ? errorMessageOf(error) : 'خطا در ویرایش وب‌هوک',
+      error: errorMessageOf(error)
     });
   }
 }));

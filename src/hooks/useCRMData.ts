@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
-import { getTodayJalaliDate, getFutureJalaliDate } from '../utils';
+import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf } from '../utils';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
@@ -283,7 +283,7 @@ export function useCRMData(user: any) {
       setIsLeadModalOpen(false);
       loadAllData();
     } catch (err) {
-      toast.error(err.message || 'خطا در ذخیره فرصت فروش');
+      toast.error(errorMessageOf(err) || 'خطا در ذخیره فرصت فروش');
     } finally {
       setIsSavingLead(false);
     }
@@ -310,7 +310,7 @@ export function useCRMData(user: any) {
       }
       loadAllData();
     } catch (err) {
-      toast.error(err.message || 'خطا در تغییر مرحله فروش');
+      toast.error(errorMessageOf(err) || 'خطا در تغییر مرحله فروش');
     }
   };
 
@@ -388,7 +388,7 @@ export function useCRMData(user: any) {
         openLeadDrawer(selectedLeadDrawer);
       }
     } catch (err) {
-      toast.error(err.message || 'خطا در ثبت اقدام');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت اقدام');
     } finally {
       setIsSavingActivity(false);
     }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -195,7 +195,7 @@ export function ChequesTab({
       toast.success('چک با موفقیت در سیستم ثبت شد');
       setIsNewModalOpen(false);
     } catch (err) {
-      toast.error(err.message || 'خطا در ثبت چک');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت چک');
     } finally {
       setIsSaving(false);
     }
@@ -222,7 +222,7 @@ export function ChequesTab({
       toast.success('وضعیت چک به‌روزرسانی شد');
       setStatusModalCheque(null);
     } catch (err) {
-      toast.error(err.message || 'خطا در تغییر وضعیت چک');
+      toast.error(errorMessageOf(err) || 'خطا در تغییر وضعیت چک');
     } finally {
       setIsSaving(false);
     }
@@ -234,7 +234,7 @@ export function ChequesTab({
       await onDeleteCheque(cheque.id);
       toast.success('چک حذف شد');
     } catch (err) {
-      toast.error(err.message || 'خطا در حذف چک');
+      toast.error(errorMessageOf(err) || 'خطا در حذف چک');
     }
   };
 

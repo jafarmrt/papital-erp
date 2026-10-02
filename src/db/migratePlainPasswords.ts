@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { orm } from './drizzle.js';
 import { users } from './schema.js';
 import { logger } from '../middleware/logger.js';
+import { errorMessageOf } from '../utils.js';
 
 /**
  * Startup Migration for Plain-text Passwords (SEC-008).
@@ -45,7 +46,7 @@ export async function migratePlainPasswords(): Promise<{ migrated: number; skipp
     logger.info(`[Password Migration] Completed: ${migrated} users migrated, ${skipped} users already hashed.`);
     return { migrated, skipped };
   } catch (err) {
-    logger.error(`[Password Migration] Failed: ${err.message}`);
+    logger.error(`[Password Migration] Failed: ${errorMessageOf(err)}`);
     return { migrated: 0, skipped: 0 };
   }
 }

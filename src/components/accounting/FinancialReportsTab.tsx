@@ -33,6 +33,7 @@ import { FinancialRatiosView } from './reports/FinancialRatiosView';
 import { AccountingAuditChecklistView } from './reports/AccountingAuditChecklistView';
 import { AutomationStatusView } from './reports/AutomationStatusView';
 import { ProjectReportView } from './reports/ProjectReportView';
+import { errorMessageOf } from '../../utils';
 
 interface FinancialReportsTabProps {
   accounts: Account[];
@@ -136,7 +137,7 @@ export function FinancialReportsTab({
       const res = await fetchJson(`/accounting/reports/journal-book?${params.toString()}`);
       setJournalBookData(res?.report || res);
     } catch (err) {
-      toast.error(err.message || 'خطا در بارگذاری دفتر روزنامه');
+      toast.error(errorMessageOf(err) || 'خطا در بارگذاری دفتر روزنامه');
     } finally {
       setJournalLoading(false);
     }
@@ -151,7 +152,7 @@ export function FinancialReportsTab({
       const res = await fetchJson(`/accounting/reports/financial-ratios?${params.toString()}`);
       setRatiosData(res?.report || res);
     } catch (err) {
-      toast.error(err.message || 'خطا در محاسبه نسبت‌های مالی');
+      toast.error(errorMessageOf(err) || 'خطا در محاسبه نسبت‌های مالی');
     } finally {
       setRatiosLoading(false);
     }

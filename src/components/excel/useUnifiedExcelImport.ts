@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, errorMessageOf } from '../../utils';
 import { Category, Item } from '../../types';
 import { PreviewRow, ImportResult } from './types';
 import { validateExcelRows, ParsedExcelItem } from './excelImportValidation';
@@ -64,7 +64,7 @@ export function useUnifiedExcelImport({
     try {
       await exportCompleteExcel(typeFilter);
     } catch (err) {
-      toast.error('خطا در دریافت خروجی اکسل: ' + (err.message || 'خطای شبکه'));
+      toast.error('خطا در دریافت خروجی اکسل: ' + (errorMessageOf(err) || 'خطای شبکه'));
     } finally {
       setIsExporting(false);
     }
@@ -74,7 +74,7 @@ export function useUnifiedExcelImport({
     try {
       await downloadExcelTemplate();
     } catch (err) {
-      toast.error('خطا در دانلود الگوی اکسل: ' + err.message);
+      toast.error('خطا در دانلود الگوی اکسل: ' + errorMessageOf(err));
     }
   };
 
@@ -123,7 +123,7 @@ export function useUnifiedExcelImport({
           setStep('preview');
           toast.success(`${validated.length} ردیف آماده بررسی و ثبت است.`);
         } catch (err) {
-          toast.error('خطا در خواندن فایل اکسل: ' + err.message);
+          toast.error('خطا در خواندن فایل اکسل: ' + errorMessageOf(err));
         } finally {
           setIsLoadingMetadata(false);
         }
@@ -131,7 +131,7 @@ export function useUnifiedExcelImport({
 
       reader.readAsBinaryString(file);
     } catch (err) {
-      toast.error('خطا در دریافت اطلاعات پایه سیستم: ' + err.message);
+      toast.error('خطا در دریافت اطلاعات پایه سیستم: ' + errorMessageOf(err));
       setIsLoadingMetadata(false);
     }
   };
@@ -232,7 +232,7 @@ export function useUnifiedExcelImport({
         onSuccess();
       }
     } catch (err) {
-      toast.error('خطا در ورود اطلاعات: ' + (err.message || 'خطای غیرمنتظره'));
+      toast.error('خطا در ورود اطلاعات: ' + (errorMessageOf(err) || 'خطای غیرمنتظره'));
     } finally {
       setIsImporting(false);
     }

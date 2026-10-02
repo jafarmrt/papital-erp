@@ -132,6 +132,18 @@ export function getErrorMessage(err: unknown): string {
 }
 
 /**
+ * v7.0.79 (audit P3-3, `strict: true`): متن خطای یک catch با نوع unknown، یا رشته خالی اگر پیامی ندارد؛
+ * جایگزین `err.message` تا الگوی `errorMessageOf(err) || 'پیام پیش‌فرض'` همان رفتار قبلی را داشته باشد.
+ */
+export function errorMessageOf(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message: unknown }).message;
+    return typeof message === 'string' ? message : '';
+  }
+  return '';
+}
+
+/**
  * Safely extracts an array from API responses (paginated { data: [...] } or direct array [...])
  */
 export function safeExtractArray<T = unknown>(res: unknown): T[] {

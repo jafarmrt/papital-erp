@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User, ProductionProject } from '../types';
 import { toast } from 'react-hot-toast';
-import { getTodayJalaliDate, extractDateString } from '../utils';
+import { getTodayJalaliDate, extractDateString, errorMessageOf } from '../utils';
 import { confirmAction } from '../components/ConfirmDialogHost';
 
 export interface SimpleUserOption {
@@ -336,7 +336,7 @@ export function useDailyLogs(user: User) {
       resetForm();
       loadLogsAndStats();
     } catch (err) {
-      toast.error(err.message || 'خطا در ثبت گزارش کار');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت گزارش کار');
     } finally {
       setIsSaving(false);
     }
@@ -349,7 +349,7 @@ export function useDailyLogs(user: User) {
       toast.success('گزارش کار حذف شد');
       loadLogsAndStats();
     } catch (err) {
-      toast.error(err.message || 'خطا در حذف گزارش کار');
+      toast.error(errorMessageOf(err) || 'خطا در حذف گزارش کار');
     }
   };
 
@@ -370,7 +370,7 @@ export function useDailyLogs(user: User) {
       setReviewModalLog(null);
       loadLogsAndStats();
     } catch (err) {
-      toast.error(err.message || 'خطا در ثبت بازخورد مدیریتی');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت بازخورد مدیریتی');
     } finally {
       setIsSubmittingReview(false);
     }

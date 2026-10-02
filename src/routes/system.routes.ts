@@ -427,6 +427,7 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
 
 import fs from 'fs';
 import path from 'path';
+import { errorMessageOf } from '../utils.js';
 
 // V3.0.7 (TD-065): اطلاعات زیرساخت (مسیر uploads، حافظه، پروتکل) فقط برای ادمین
 router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) => {
@@ -439,7 +440,7 @@ router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) =
     dbStatus.latencyMs = Date.now() - dbStart;
   } catch (e) {
     dbStatus.status = 'error';
-    dbStatus.message = `خطا در اتصال به پایگاه‌داده: ${e.message}`;
+    dbStatus.message = `خطا در اتصال به پایگاه‌داده: ${errorMessageOf(e)}`;
   }
 
   // 2. Check Write Permissions on public/uploads
@@ -456,7 +457,7 @@ router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) =
   } catch (e) {
     storageStatus.status = 'error';
     storageStatus.writable = false;
-    storageStatus.message = `خطای دسترسی نوشتن به پوشه تصاویر: ${e.message}`;
+    storageStatus.message = `خطای دسترسی نوشتن به پوشه تصاویر: ${errorMessageOf(e)}`;
   }
 
   // 3. Subsystem Health Checks (Outbox, DLQ, Vouchers, Workflow)

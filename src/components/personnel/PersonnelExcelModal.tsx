@@ -3,7 +3,7 @@ import { X, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader
 import * as xlsx from 'xlsx';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
-import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, normalizeNationalId } from '../../utils';
+import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, normalizeNationalId, errorMessageOf } from '../../utils';
 import { Personnel } from '../../types';
 
 interface PersonnelExcelModalProps {
@@ -114,7 +114,7 @@ export function PersonnelExcelModal({
       toast.success('فایل اکسل پرسنل با موفقیت دانلود شد.');
     } catch (err) {
       console.error(err);
-      toast.error('خطا در دریافت خروجی اکسل: ' + (err.message || 'خطای شبکه'));
+      toast.error('خطا در دریافت خروجی اکسل: ' + (errorMessageOf(err) || 'خطای شبکه'));
     } finally {
       setIsExporting(false);
     }
@@ -298,7 +298,7 @@ export function PersonnelExcelModal({
         toast.success(`${formatPersianNumber(parsed.length)} ردیف از فایل اکسل با موفقیت بازخوانی شد.`);
       } catch (err) {
         console.error(err);
-        toast.error('خطا در پردازش فایل اکسل: ' + err.message);
+        toast.error('خطا در پردازش فایل اکسل: ' + errorMessageOf(err));
       }
     };
 
@@ -381,7 +381,7 @@ export function PersonnelExcelModal({
       onSuccess();
     } catch (err) {
       console.error(err);
-      toast.error('خطا در ثبت نهایی پرسنل: ' + (err.message || 'خطای شبکه'));
+      toast.error('خطا در ثبت نهایی پرسنل: ' + (errorMessageOf(err) || 'خطای شبکه'));
     } finally {
       setIsImporting(false);
     }

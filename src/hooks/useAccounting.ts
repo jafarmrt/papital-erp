@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import toast from 'react-hot-toast';
 import { useAccountingReports } from './useAccountingReports';
+import { errorMessageOf } from '../utils';
 
 export function useAccounting() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing' | 'explorer'>('dashboard');
@@ -231,7 +232,7 @@ export function useAccounting() {
       await loadAccounts();
       await loadStats();
     } catch (err) {
-      toast.error(err.message || 'خطا در بارگذاری کدینگ استاندارد');
+      toast.error(errorMessageOf(err) || 'خطا در بارگذاری کدینگ استاندارد');
     } finally {
       setLoading(false);
     }
@@ -496,7 +497,7 @@ export function useAccounting() {
       await loadStats();
     } catch (err) {
       console.error('Error syncing banks:', err);
-      toast.error(err?.message || 'خطا در همگام‌سازی مانده حساب‌های بانکی');
+      toast.error(errorMessageOf(err) || 'خطا در همگام‌سازی مانده حساب‌های بانکی');
     } finally {
       setIsSyncingBanks(false);
     }

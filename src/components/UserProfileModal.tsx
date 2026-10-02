@@ -7,6 +7,7 @@ import { User } from '../types';
 import { fetchJson } from '../api';
 import { compressTo300KB } from '../utils/imageCompression';
 import toast from 'react-hot-toast';
+import { errorMessageOf } from '../utils';
 
 interface UserProfileModalProps {
   user: User;
@@ -109,7 +110,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate }
         toast.error(res?.error || 'خطا در بروزرسانی پروفایل');
       }
     } catch (err) {
-      toast.error(err.message || 'خطا در برقراری ارتباط با سرور');
+      toast.error(errorMessageOf(err) || 'خطا در برقراری ارتباط با سرور');
     } finally {
       setSaving(false);
     }
@@ -161,7 +162,7 @@ export default function UserProfileModal({ user, isOpen, onClose, onUserUpdate }
         toast.error(res?.error || 'خطا در تغییر کلمه عبور');
       }
     } catch (err) {
-      toast.error(err.message || 'خطا در تغییر کلمه عبور');
+      toast.error(errorMessageOf(err) || 'خطا در تغییر کلمه عبور');
     } finally {
       setSaving(false);
     }

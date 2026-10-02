@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
-import { formatPersianNumber, parseCleanNumber } from '../utils';
+import { formatPersianNumber, parseCleanNumber, errorMessageOf } from '../utils';
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -125,7 +125,7 @@ export default function WarehouseTransferModal({
         onClose();
       }, 1000);
     } catch (err) {
-      setErrorMsg(err.message || 'خطا در ثبت حواله انتقال');
+      setErrorMsg(errorMessageOf(err) || 'خطا در ثبت حواله انتقال');
     } finally {
       setSubmitting(false);
     }

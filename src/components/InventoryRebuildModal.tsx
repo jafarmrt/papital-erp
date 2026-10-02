@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ShieldCheck, AlertTriangle, CheckCircle2, Wrench, RotateCcw } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
-import { formatPersianNumber } from '../utils';
+import { formatPersianNumber, errorMessageOf } from '../utils';
 
 interface InventoryRebuildModalProps {
   isOpen: boolean;
@@ -50,7 +50,7 @@ export default function InventoryRebuildModal({
       setResultData(res.data || res);
       onSuccess();
     } catch (err) {
-      setErrorMsg(err.message || 'خطا در اجرای بازسازی و تطبیق کاردکس');
+      setErrorMsg(errorMessageOf(err) || 'خطا در اجرای بازسازی و تطبیق کاردکس');
     } finally {
       setSubmitting(false);
     }

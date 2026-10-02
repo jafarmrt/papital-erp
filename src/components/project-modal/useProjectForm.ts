@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate } from '../../utils';
+import { getTodayJalaliDate, errorMessageOf } from '../../utils';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage, ProjectModalProps } from './types';
 import {
@@ -284,7 +284,7 @@ export function useProjectForm({
         toast.error(res?.error || 'خطا در ذخیره‌سازی پروژه');
       }
     } catch (err) {
-      toast.error(err.message || 'خطا در ارتباط با سرور');
+      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
     } finally {
       setSaving(false);
     }

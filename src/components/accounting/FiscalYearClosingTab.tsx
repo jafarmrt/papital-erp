@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
 import toast from 'react-hot-toast';
@@ -65,7 +65,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
       setPreviewData(data);
       toast.success(`پیش‌نمایش بستن سال مالی ${toPersianDigits(selectedYear)} با موفقیت محاسبه شد.`);
     } catch (error) {
-      toast.error(error.message || 'خطا در محاسبه پیش‌نمایش بستن سال مالی');
+      toast.error(errorMessageOf(error) || 'خطا در محاسبه پیش‌نمایش بستن سال مالی');
     } finally {
       setIsLoadingPreview(false);
     }
@@ -134,7 +134,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
       setIsConfirmModalOpen(false);
       toast.success(result.message || 'عملیات بستن سال مالی با موفقیت کامل انجام شد!');
     } catch (error) {
-      toast.error(error.message || 'خطا در بستن سال مالی');
+      toast.error(errorMessageOf(error) || 'خطا در بستن سال مالی');
     } finally {
       setIsExecuting(false);
     }

@@ -9,7 +9,7 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice } from '../../utils';
+import { extractDateString, formatPersianPrice, errorMessageOf } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import toast from 'react-hot-toast';
 
@@ -531,7 +531,7 @@ export default function ProjectScheduleTab({
         toast.error(res?.error || 'خطا در ذخیره‌سازی برنامه‌ریزی');
       }
     } catch (err) {
-      toast.error(err.message || 'خطا در ارتباط با سرور');
+      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
     } finally {
       setSaving(false);
     }

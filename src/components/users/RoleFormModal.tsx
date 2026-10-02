@@ -11,6 +11,7 @@ import {
   ChevronUp,
   Info,
 } from 'lucide-react';
+import { errorMessageOf } from '../../utils';
 
 export const ROLE_PRESETS = [
   {
@@ -185,7 +186,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       onSuccess();
       onClose();
     } catch (err) {
-      toast.error(err.message || 'خطا در ثبت نقش');
+      toast.error(errorMessageOf(err) || 'خطا در ثبت نقش');
     } finally {
       setIsSaving(false);
     }

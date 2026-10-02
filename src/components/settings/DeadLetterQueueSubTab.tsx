@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { AlertOctagon, RefreshCw, Search, Filter, RotateCcw, CheckCircle2, XCircle, Trash2, Edit3, AlertTriangle, Layers, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
-import { formatPersianDate } from '../../utils';
+import { formatPersianDate, errorMessageOf } from '../../utils';
 import { fetchJson } from '../../api';
 
 interface DeadLetterItem {
@@ -222,7 +222,7 @@ export function DeadLetterQueueSubTab() {
 
       setEditingItem(null);
     } catch (err) {
-      setJsonError('فرمت JSON وارد شده نامعتبر است: ' + err.message);
+      setJsonError('فرمت JSON وارد شده نامعتبر است: ' + errorMessageOf(err));
     } finally {
       setIsSavingPayload(false);
     }

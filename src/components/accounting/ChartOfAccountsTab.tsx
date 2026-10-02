@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { FolderTree, Plus, Search, ChevronRight, ChevronDown, Edit3, Trash2, RefreshCw } from 'lucide-react';
-import { formatPersianPrice } from '../../utils';
+import { formatPersianPrice, errorMessageOf } from '../../utils';
 import type { Account, AccountLevel, AccountType, AccountNature } from '../../types';
 import toast from 'react-hot-toast';
 
@@ -119,7 +119,7 @@ export function ChartOfAccountsTab({
       }
       setIsModalOpen(false);
     } catch (err) {
-      toast.error(err.message || 'خطا در ذخیره حساب');
+      toast.error(errorMessageOf(err) || 'خطا در ذخیره حساب');
     } finally {
       setIsSaving(false);
     }
@@ -136,7 +136,7 @@ export function ChartOfAccountsTab({
       await onDeleteAccount(acc.id);
       toast.success('حساب حذف شد');
     } catch (err) {
-      toast.error(err.message || 'خطا در حذف حساب');
+      toast.error(errorMessageOf(err) || 'خطا در حذف حساب');
     }
   };
 

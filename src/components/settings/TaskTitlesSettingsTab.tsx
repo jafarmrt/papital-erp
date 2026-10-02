@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { Layers, Plus, Edit3, Trash2, Search, FolderPlus, Tag, X } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, errorMessageOf } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { toast } from 'react-hot-toast';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
@@ -101,7 +101,7 @@ export function TaskTitlesSettingsTab() {
       setEditingTask(null);
       loadData();
     } catch (err) {
-      toast.error(err.message || 'خطا در ذخیره عنوان کاری');
+      toast.error(errorMessageOf(err) || 'خطا در ذخیره عنوان کاری');
     } finally {
       setIsSavingTask(false);
     }
@@ -115,7 +115,7 @@ export function TaskTitlesSettingsTab() {
       toast.success('عنوان کاری حذف شد');
       loadData();
     } catch (err) {
-      toast.error(err.message || 'خطا در حذف عنوان کاری');
+      toast.error(errorMessageOf(err) || 'خطا در حذف عنوان کاری');
     }
   };
 
@@ -149,7 +149,7 @@ export function TaskTitlesSettingsTab() {
       setCatDesc('');
       loadData();
     } catch (err) {
-      toast.error(err.message || 'خطا در ذخیره دسته‌بندی');
+      toast.error(errorMessageOf(err) || 'خطا در ذخیره دسته‌بندی');
     } finally {
       setIsSavingCat(false);
     }
@@ -163,7 +163,7 @@ export function TaskTitlesSettingsTab() {
       toast.success('دسته‌بندی حذف شد');
       loadData();
     } catch (err) {
-      toast.error(err.message || 'خطا در حذف دسته‌بندی');
+      toast.error(errorMessageOf(err) || 'خطا در حذف دسته‌بندی');
     }
   };
 

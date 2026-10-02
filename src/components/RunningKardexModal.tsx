@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../utils';
+import { formatPersianNumber, formatPersianPrice, formatPersianDate, errorMessageOf } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
 
 interface RunningKardexModalProps {
@@ -40,7 +40,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
       }
       setData(normalized);
     } catch (err) {
-      setError(err.message || 'خطا در بارگذاری کاردکس کالا');
+      setError(errorMessageOf(err) || 'خطا در بارگذاری کاردکس کالا');
     } finally {
       setLoading(false);
     }
