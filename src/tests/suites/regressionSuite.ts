@@ -4348,6 +4348,67 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.21b: v7.0.52 (TD-219): پس از حذف ستون items.stocks (v7.0.48) آمار BI انبار و غیرفعال‌سازی انبار
+  // موجودی را از item_warehouse_stocks می‌خوانند (هر دو از آن زمان با خطای 500 شکست می‌خوردند)
+  if (shouldRun('reg_dropped_stocks_column_leftovers_td_219', 'td219', 'td214', 'stocks')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.52: آمار BI انبار و غیرفعال‌سازی انبار پس از حذف ستون items.stocks از جدول موجودی انبارها می‌خوانند (TD-219)';
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { createTestItem, createTestWarehouse } = await import('../fixtures/factories.js');
+      const { invalidateDashboardBiCache }: any = await import('../../routes/dashboard.routes.js');
+      const app = await getTestApp();
+      const admin = await getAdminSession();
+      const stocked = await createTestWarehouse({ name: `انبار دارای موجودی TD-219 ${Date.now()}` });
+      const empty = await createTestWarehouse({ name: `انبار خالی TD-219 ${Date.now()}` });
+      await createTestItem({ stocks: { [stocked.code]: 5 } });
+
+      // الف) توزیع موجودی بین انبارها در آمار BI
+      if (typeof invalidateDashboardBiCache === 'function') invalidateDashboardBiCache();
+      const bi = await request(app).get('/api/dashboard-bi-stats').set('Cookie', admin.cookie);
+      if (bi.status !== 200 || Number(bi.body?.locations?.[stocked.code]) !== 5 || Number(bi.body?.locations?.[empty.code]) !== 0) {
+        throw new Error(`آمار BI باید موجودی انبار تازه را ۵ و انبار خالی را ۰ بدهد (وضعیت ${bi.status}، ${JSON.stringify(bi.body?.locations ?? bi.body).slice(0, 200)})`);
+      }
+
+      // ب) غیرفعال‌سازی: انبار دارای موجودی 409، انبار خالی موفق
+      const blocked = await request(app).delete(`/api/warehouses/${stocked.id}`)
+        .set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken);
+      const allowed = await request(app).delete(`/api/warehouses/${empty.id}`)
+        .set('Cookie', admin.cookie).set('x-csrf-token', admin.csrfToken);
+      const [stockedAfter] = await orm.select({ isActive: warehouses.isActive }).from(warehouses).where(eq(warehouses.id, stocked.id));
+      const [emptyAfter] = await orm.select({ isActive: warehouses.isActive }).from(warehouses).where(eq(warehouses.id, empty.id));
+      if (blocked.status !== 409 || stockedAfter?.isActive !== 1) {
+        throw new Error(`غیرفعال‌سازی انبار دارای موجودی باید با 409 رد شود (وضعیت ${blocked.status}، ${JSON.stringify(blocked.body).slice(0, 160)})`);
+      }
+      if (allowed.status !== 200 || emptyAfter?.isActive !== 0) {
+        throw new Error(`انبار بدون موجودی باید غیرفعال شود (وضعیت ${allowed.status}، ${JSON.stringify(allowed.body).slice(0, 160)})`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_dropped_stocks_column_leftovers_td_219',
+        scenarioId: 'inventory_rebuild',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'آمار BI موجودی انبار تازه را ۵ داد؛ غیرفعال‌سازی انبار دارای موجودی 409 و انبار خالی 200 شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_dropped_stocks_column_leftovers_td_219',
+        scenarioId: 'inventory_rebuild',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

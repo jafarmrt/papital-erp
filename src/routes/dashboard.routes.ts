@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { sql, eq, and, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { items, transactions, users, appSettings, warehouses } from '../db/schema.js';
+import { items, transactions, users, appSettings, warehouses, itemWarehouseStocks } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { logger } from '../middleware/logger.js';
 
@@ -13,6 +13,12 @@ const dashboardCache = {
   timestamp: 0,
   TTL: 30000 // 30 seconds
 };
+
+/** برای آزمون‌ها: کش ۳۰ ثانیه‌ای آمار BI را خالی می‌کند */
+export function invalidateDashboardBiCache(): void {
+  dashboardCache.data = null;
+  dashboardCache.timestamp = 0;
+}
 
 router.get('/stats', async (req, res) => {
   try {
@@ -120,19 +126,22 @@ router.get('/dashboard-bi-stats', async (req, res) => {
       distributionObj[w.code] = 0;
     }
 
-    const warehouseDistribution = await orm.execute(sql`
-      SELECT 
-        key as location, 
-        SUM(NULLIF(value, '')::numeric) as total_stock
-      FROM ${items}, jsonb_each_text(COALESCE(stocks, '{}'::jsonb))
-      WHERE is_deleted = 0
-      GROUP BY key
-      ORDER BY total_stock DESC
-    `);
-    for (const row of warehouseDistribution.rows) {
-      const loc = row.location as string;
+    // v7.0.52 (TD-219): توزیع موجودی بین انبارها از item_warehouse_stocks؛ ستون items.stocks در v7.0.48 حذف شد و
+    // این کوئری از آن زمان با خطای 500 شکست می‌خورد
+    const warehouseDistribution = await orm
+      .select({
+        location: warehouses.code,
+        totalStock: sql<string>`SUM(${itemWarehouseStocks.currentStock})`
+      })
+      .from(itemWarehouseStocks)
+      .innerJoin(warehouses, eq(warehouses.id, itemWarehouseStocks.warehouseId))
+      .innerJoin(items, eq(items.id, itemWarehouseStocks.itemId))
+      .where(eq(items.isDeleted, 0))
+      .groupBy(warehouses.code);
+    for (const row of warehouseDistribution) {
+      const loc = row.location;
       if (loc in distributionObj) {
-        distributionObj[loc] = Number(row.total_stock);
+        distributionObj[loc] = Number(row.totalStock);
       }
     }
 

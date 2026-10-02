@@ -1,6 +1,6 @@
-import { eq, sql, asc } from 'drizzle-orm';
+import { eq, sql, asc, and, ne } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { warehouses } from '../db/schema.js';
+import { warehouses, items, itemWarehouseStocks } from '../db/schema.js';
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/customErrors.js';
 
 export interface CreateWarehouseInput {
@@ -94,11 +94,19 @@ export class WarehouseService {
     }
 
     // TD-117: بررسی وجود موجودی کالا در انبار پیش از غیرفعال‌سازی
-    const resCheck = await executor.execute(sql`
-      SELECT COUNT(*)::int AS n FROM items
-      WHERE is_deleted = 0 AND COALESCE((stocks->>${wh.code}::text)::numeric, 0) <> 0`);
-    
-    if (Number((resCheck.rows[0] as { n?: number })?.n || 0) > 0) {
+    // v7.0.52 (TD-219): از item_warehouse_stocks (تنها منبع موجودی)؛ ستون items.stocks در v7.0.48 حذف شد و این
+    // بررسی از آن زمان با خطای 500 شکست می‌خورد و هیچ انباری غیرفعال نمی‌شد
+    const [stockCheck] = await executor
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(itemWarehouseStocks)
+      .innerJoin(items, eq(items.id, itemWarehouseStocks.itemId))
+      .where(and(
+        eq(itemWarehouseStocks.warehouseId, wh.id),
+        eq(items.isDeleted, 0),
+        ne(itemWarehouseStocks.currentStock, 0)
+      ));
+
+    if (Number(stockCheck?.n || 0) > 0) {
       throw new ConflictError(`انبار «${wh.name}» هنوز موجودی دارد؛ ابتدا موجودی را با سند انتقال خالی کنید.`);
     }
 

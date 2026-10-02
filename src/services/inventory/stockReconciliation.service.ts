@@ -115,7 +115,7 @@ export class StockReconciliationService {
   /**
    * Performs 3-way stock reconciliation across:
    * 1. Scalar `current_stock` column
-   * 2. JSONB `stocks` warehouse breakdown sum
+   * 2. Per-warehouse breakdown from `item_warehouse_stocks` (v7.0.48: the JSONB `stocks` column was dropped)
    * 3. Kardex ledger (`transactions` table sum)
    * With per-warehouse and per-location verification.
    */
