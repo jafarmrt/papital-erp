@@ -51,6 +51,10 @@ export function InvoiceListRow({ doc, actions }: { doc: InvoiceListDocument; act
           <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
             پیش‌فاکتور
           </span>
+        ) : doc.status === 'draft' ? (
+          <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+            پیش‌نویس
+          </span>
         ) : (
           <span className="bg-emerald-100 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
             <CheckCircle2 size={10} /> نهایی

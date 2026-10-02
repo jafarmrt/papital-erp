@@ -1,5 +1,5 @@
 import { formatCurrencyLabel } from '../../../utils';
-import { detailsTypeLabelOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { detailsTypeLabelOf, documentStatusLabelOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
 /** TD-080 (بخش ۳): کارت‌های طرف حساب، نوع/وضعیت و ارز در مودال جزئیات سند */
 export function InvoiceDetailsInfoCards({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
@@ -33,7 +33,7 @@ export function InvoiceDetailsInfoCards({ selectedDocDetails }: { selectedDocDet
         <div className="flex items-center gap-2 mt-1">
           <span className="font-bold text-slate-700">وضعیت:</span>
           <span className="font-bold text-emerald-700">
-            {selectedDocDetails.status === 'proforma' ? 'پیش‌فاکتور' : 'نهایی‌شده'}
+            {documentStatusLabelOf(selectedDocDetails.status, 'نهایی‌شده')}
           </span>
         </div>
       </div>

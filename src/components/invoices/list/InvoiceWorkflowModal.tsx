@@ -1,7 +1,7 @@
 import { X, GitBranch } from 'lucide-react';
 import { formatPersianCode } from '../../../utils';
 import { WorkflowStepperWidget } from '../../workflow/WorkflowStepperWidget';
-import { workflowTypeLabelOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { documentStatusLabelOf, workflowTypeLabelOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
 interface InvoiceWorkflowModalProps {
   workflowDoc: InvoiceListDocument;
@@ -44,7 +44,7 @@ export function InvoiceWorkflowModal({ workflowDoc, setWorkflowDoc, loadData }: 
             <div>
               <span className="text-slate-500 block text-[11px]">وضعیت فعلی:</span>
               <span className="font-bold text-emerald-700">
-                {workflowDoc.status === 'proforma' ? 'پیش‌فاکتور' : 'نهایی'}
+                {documentStatusLabelOf(workflowDoc.status)}
               </span>
             </div>
           </div>

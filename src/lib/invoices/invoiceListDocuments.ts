@@ -78,6 +78,16 @@ export function documentPayableOf(d: InvoiceListDocument): number {
   return documentAmountOf(d) + Number(d.vatAmount || 0);
 }
 
+/**
+ * v7.0.95 (TD-235 بند ۳): نام وضعیت سند؛ پیش‌تر هر وضعیتی جز پیش‌فاکتور (از جمله پیش‌نویس) «نهایی» نمایش داده می‌شد.
+ * finalLabel متن وضعیت نهایی همان محل نمایش است («نهایی» یا «نهایی‌شده»).
+ */
+export function documentStatusLabelOf(status: string | undefined, finalLabel = 'نهایی'): string {
+  if (status === 'proforma') return 'پیش‌فاکتور';
+  if (status === 'draft') return 'پیش‌نویس';
+  return finalLabel;
+}
+
 export interface InvoiceListSummary {
   salesTotals: Record<string, number>;
   salesCount: number;
@@ -112,10 +122,11 @@ export function computeInvoiceListSummary(docs: InvoiceListDocument[]): InvoiceL
     if (d.status === 'proforma' || d.type === 'proforma') {
       addTo(proformaTotals, cur, docAmount);
       proformaCount++;
-    } else if (d.type === 'invoice') {
+    } else if (d.type === 'invoice' && d.status !== 'draft') {
+      // v7.0.95 (TD-235 بند ۳): پیش‌نویس جزو «فاکتور فروش نهایی» شمرده نمی‌شود
       addTo(salesTotals, cur, docAmount);
       salesCount++;
-    } else if (d.type === 'receipt') {
+    } else if (d.type === 'receipt' && d.status !== 'draft') {
       addTo(purchaseTotals, cur, docAmount);
       purchaseCount++;
     } else {
