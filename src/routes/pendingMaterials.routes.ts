@@ -3,6 +3,7 @@ import { orm } from '../db/drizzle.js';
 import { pendingMaterials } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
@@ -80,7 +81,7 @@ const updatePendingMaterialSchema = z.object({
 });
 
 // GET /api/pending-materials - List pending raw materials
-router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), async (req: Request, res: Response) => {
+router.get('/pending-materials', authenticateToken, authorizePermission(...READ_PERMISSIONS.pendingMaterials), asyncHandler(async (req: Request, res: Response) => {
   try {
     const { status } = req.query;
     const conditions = [eq(pendingMaterials.isDeleted, 0)];
@@ -130,10 +131,10 @@ router.get('/pending-materials', authenticateToken, authorizePermission(...READ_
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
-});
+}));
 
 // POST /api/pending-materials - Submit a new pending material (from project inventory control)
-router.post('/pending-materials', authenticateToken, validate(createPendingMaterialSchema), async (req: Request, res: Response) => {
+router.post('/pending-materials', authenticateToken, validate(createPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const username = req.user?.username || req.user?.full_name || 'کاربر سیستم';
     const inserted = await PendingMaterialsService.submitPendingMaterial({
@@ -159,10 +160,10 @@ router.post('/pending-materials', authenticateToken, validate(createPendingMater
     logger.error({ message: 'Error creating pending material', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/pending-materials/:id/approve - Approve and register in official warehouse inventory
-router.put('/pending-materials/:id/approve', authenticateToken, authorizePermission('pending_materials.approve'), validate(approvePendingMaterialSchema), async (req: Request, res: Response) => {
+router.put('/pending-materials/:id/approve', authenticateToken, authorizePermission('pending_materials.approve'), validate(approvePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
     const { officialItem: newItem } = await PendingMaterialsService.approvePendingMaterial(pId, req.body);
@@ -185,10 +186,10 @@ router.put('/pending-materials/:id/approve', authenticateToken, authorizePermiss
     logger.error({ message: 'Error approving pending material', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/pending-materials/:id/reject - Reject pending material
-router.put('/pending-materials/:id/reject', authenticateToken, authorizePermission('pending_materials.approve'), validate(rejectPendingMaterialSchema), async (req: Request, res: Response) => {
+router.put('/pending-materials/:id/reject', authenticateToken, authorizePermission('pending_materials.approve'), validate(rejectPendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
     const { rejectionReason } = req.body || {};
@@ -211,10 +212,10 @@ router.put('/pending-materials/:id/reject', authenticateToken, authorizePermissi
     logger.error({ message: 'Error rejecting pending material', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/pending-materials/:id - Update pending material details
-router.put('/pending-materials/:id', authenticateToken, validate(updatePendingMaterialSchema), async (req: Request, res: Response) => {
+router.put('/pending-materials/:id', authenticateToken, validate(updatePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
     await PendingMaterialsService.updatePendingMaterial(pId, req.body);
@@ -223,10 +224,10 @@ router.put('/pending-materials/:id', authenticateToken, validate(updatePendingMa
     logger.error({ message: 'Error updating pending material', error: err });
     throw err;
   }
-});
+}));
 
 // DELETE /api/pending-materials/:id - Delete pending material
-router.delete('/pending-materials/:id', authenticateToken, authorize('admin', 'manager'), validate(paramsIdSchema), async (req: Request, res: Response) => {
+router.delete('/pending-materials/:id', authenticateToken, authorize('admin', 'manager'), validate(paramsIdSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
     await PendingMaterialsService.deletePendingMaterial(pId);
@@ -235,6 +236,6 @@ router.delete('/pending-materials/:id', authenticateToken, authorize('admin', 'm
     logger.error({ message: 'Error deleting pending material', error: err });
     throw err;
   }
-});
+}));
 
 export default router;

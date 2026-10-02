@@ -1449,6 +1449,94 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
+  // v7.0.66 (TD-229): هر هندلر و میدل‌ور async روت‌ها از asyncHandler عبور می‌کند (AGENTS.md §20، OBS-002)؛
+  // رد شدن Promise به next و پاسخ خطای یکسان می‌رسد و به وصله سراسری express-async-errors وابسته نیست.
+  const tAsyncStart = Date.now();
+  const asyncTestName = 'v7.0.66: هیچ هندلر یا میدل‌ور async خامی در روت‌ها ثبت نشده و رد Promise به next می‌رسد (TD-229)';
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const ts = (await import('typescript')).default;
+    const { asyncHandler } = await import('../../middleware/asyncHandler.js');
+    const { authorize, authorizePermission } = await import('../../middleware/authorize.js');
+    const { validate } = await import('../../middleware/validate.js');
+    const { idempotency } = await import('../../middleware/idempotency.js');
+    const { z } = await import('zod');
+    const violations: string[] = [];
+
+    const routeFiles = [
+      ...fs.readdirSync('src/routes').filter(f => f.endsWith('.ts')).map(f => path.join('src/routes', f)),
+      'src/app.ts',
+      'src/modules/_template/routes.ts',
+    ];
+    const ROUTE_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'use']);
+    const isAsyncFn = (n: import('typescript').Node) =>
+      (ts.isArrowFunction(n) || ts.isFunctionExpression(n)) && !!n.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword);
+    for (const file of routeFiles) {
+      const sf = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+      const asyncConsts = new Set<string>();
+      sf.forEachChild(stmt => {
+        if (!ts.isVariableStatement(stmt)) return;
+        for (const d of stmt.declarationList.declarations) {
+          if (ts.isIdentifier(d.name) && d.initializer && isAsyncFn(d.initializer)) asyncConsts.add(d.name.text);
+        }
+      });
+      const visit = (n: import('typescript').Node) => {
+        if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ROUTE_METHODS.has(n.expression.name.text)
+          && ts.isIdentifier(n.expression.expression) && ['router', 'app'].includes(n.expression.expression.text)) {
+          for (const arg of n.arguments) {
+            if (isAsyncFn(arg) || (ts.isIdentifier(arg) && asyncConsts.has(arg.text))) {
+              const { line } = sf.getLineAndCharacterOfPosition(arg.getStart(sf));
+              violations.push(`${file}:${line + 1}`);
+            }
+          }
+        }
+        ts.forEachChild(n, visit);
+      };
+      visit(sf);
+    }
+    if (violations.length > 0) violations.splice(0, violations.length, `هندلر async خام: ${violations.length} مورد (${violations.slice(0, 5).join(', ')})`);
+
+    const factories: Array<[string, unknown]> = [
+      ['authorize', authorize('admin')],
+      ['authorizePermission', authorizePermission('products.view')],
+      ['validate', validate(z.object({}))],
+      ['idempotency', idempotency()],
+    ];
+    for (const [name, mw] of factories) {
+      if ((mw as { constructor: { name: string } }).constructor.name === 'AsyncFunction') violations.push(`میدل‌ور ${name} تابع async خام برمی‌گرداند`);
+    }
+
+    const failure = new Error('probe failure');
+    const forwarded = await new Promise<unknown>((resolve) => {
+      const handler = asyncHandler(async () => { throw failure; });
+      const ret = handler({} as never, {} as never, (e?: unknown) => resolve(e));
+      if (ret !== undefined) violations.push('asyncHandler نباید Promise برگرداند');
+    });
+    if (forwarded !== failure) violations.push('رد Promise هندلر به next نرسید');
+
+    if (violations.length > 0) throw new Error(violations.join(' | '));
+    results.push(makeTestCase({
+      id: 'unit_route_async_handler_td_229',
+      name: asyncTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: true,
+      durationMs: Date.now() - tAsyncStart,
+      details: `${routeFiles.length} فایل روت بدون هندلر async خام؛ authorize/authorizePermission/validate/idempotency هندلر هم‌زمان برمی‌گردانند`
+    }));
+  } catch (err) {
+    results.push(makeTestCase({
+      id: 'unit_route_async_handler_td_229',
+      name: asyncTestName,
+      layer: 'unit',
+      executionType: 'real_code',
+      passed: false,
+      durationMs: Date.now() - tAsyncStart,
+      error: err instanceof Error ? err.message : String(err)
+    }));
+  }
+
   return results;
 }
 

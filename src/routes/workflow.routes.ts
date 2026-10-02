@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -36,7 +37,7 @@ router.use(authenticateToken);
  * GET /api/workflow/inbox
  * Get approval inbox for current user's role
  */
-router.get('/inbox', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/inbox', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const page = parseInt(req.query.page as string || '1');
     const limit = parseInt(req.query.limit as string || '50');
@@ -56,13 +57,13 @@ router.get('/inbox', authorizePermission('workflow.view', 'workflow.approve', 'w
     logger.error(`[Workflow Route /inbox] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/tasks/my-tasks
  * Get task inbox for current user (workflow_tasks model with delegation support)
  */
-router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const page = parseInt(req.query.page as string || '1');
     const limit = parseInt(req.query.limit as string || '50');
@@ -88,13 +89,13 @@ router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.app
     logger.error(`[Workflow Route /tasks/my-tasks] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/tasks/stats
  * Get summary stats for user's tasks
  */
-router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role || '';
@@ -114,13 +115,13 @@ router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approv
     logger.error(`[Workflow Route /tasks/stats] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/tasks/:taskId/execute
  * Execute a workflow task directly by task ID
  */
-router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(taskIdParamSchema), async (req: AuthenticatedRequest, res) => {
+router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(taskIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = Number(req.params.taskId);
     const { comment, snapshotData, action } = req.body;
@@ -150,13 +151,13 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
     logger.error(`[Workflow Route /tasks/:taskId/execute] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/instance/:entityType/:entityId
  * Get active workflow instance, current state, available actions, and history
  */
-router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(entityParamSchema), async (req: AuthenticatedRequest, res) => {
+router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(entityParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { entityType, entityId } = req.params;
     const userId = req.user?.id;
@@ -177,13 +178,13 @@ router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view
     logger.error(`[Workflow Route /instance] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/start
  * Start or attach a workflow instance to an entity
  */
-router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'workflow.view', 'documents.create', 'documents.edit'), async (req: AuthenticatedRequest, res) => {
+router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'workflow.view', 'documents.create', 'documents.edit'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { workflowCode, entityType, entityId } = req.body;
 
@@ -205,13 +206,13 @@ router.post('/start', authorizePermission('workflow.execute', 'workflow.manage',
     logger.error(`[Workflow Route /start] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/transition
  * Execute a workflow transition
  */
-router.post('/transition', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.post('/transition', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { instanceId, transitionId, comment, snapshotData } = req.body;
 
@@ -236,13 +237,13 @@ router.post('/transition', authorizePermission('workflow.approve', 'workflow.exe
     logger.error(`[Workflow Route /transition] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/definitions
  * Get list of all workflow definitions for Visual Canvas Designer
  */
-router.get('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const definitions = await WorkflowEngineService.getWorkflowDefinitions();
     res.json(definitions);
@@ -251,13 +252,13 @@ router.get('/definitions', authorizePermission('workflow.manage', 'workflow.admi
     logger.error(`[Workflow Route /definitions] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/definitions/:id
  * Get single workflow definition detail with states & transitions
  */
-router.get('/definitions/:id', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), async (req: AuthenticatedRequest, res) => {
+router.get('/definitions/:id', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const detail = await WorkflowEngineService.getWorkflowDefinitionDetail(id);
@@ -267,13 +268,13 @@ router.get('/definitions/:id', authorizePermission('workflow.manage', 'workflow.
     logger.error(`[Workflow Route /definitions/:id] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/definitions/:id/versions
  * Get version history for a workflow definition
  */
-router.get('/definitions/:id/versions', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), async (req: AuthenticatedRequest, res) => {
+router.get('/definitions/:id/versions', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const versions = await WorkflowEngineService.getDefinitionVersions(id);
@@ -283,13 +284,13 @@ router.get('/definitions/:id/versions', authorizePermission('workflow.manage', '
     logger.error(`[Workflow Route /definitions/:id/versions] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/definitions/:id/versions/:version
  * Get specific version detail for a workflow definition
  */
-router.get('/definitions/:id/versions/:version', authorizePermission('workflow.manage', 'workflow.admin'), validate(definitionVersionParamSchema), async (req: AuthenticatedRequest, res) => {
+router.get('/definitions/:id/versions/:version', authorizePermission('workflow.manage', 'workflow.admin'), validate(definitionVersionParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const versionNumber = Number(req.params.version);
@@ -300,13 +301,13 @@ router.get('/definitions/:id/versions/:version', authorizePermission('workflow.m
     logger.error(`[Workflow Route /definitions/:id/versions/:version] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/definitions/:id/rollback
  * Rollback workflow definition to a previous version
  */
-router.post('/definitions/:id/rollback', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), async (req: AuthenticatedRequest, res) => {
+router.post('/definitions/:id/rollback', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const { version } = req.body;
@@ -320,13 +321,13 @@ router.post('/definitions/:id/rollback', authorizePermission('workflow.manage', 
     logger.error(`[Workflow Route /definitions/:id/rollback] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/definitions/:id/publish
  * Publish a new immutable version snapshot for a workflow definition
  */
-router.post('/definitions/:id/publish', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), async (req: AuthenticatedRequest, res) => {
+router.post('/definitions/:id/publish', authorizePermission('workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const { title, description } = req.body;
@@ -337,13 +338,13 @@ router.post('/definitions/:id/publish', authorizePermission('workflow.manage', '
     logger.error(`[Workflow Route /definitions/:id/publish] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/definitions
  * Save or update workflow definition (Visual Designer)
  */
-router.post('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.post('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const payload = req.body;
     if (!payload.title || !payload.code || !payload.entityType) {
@@ -357,13 +358,13 @@ router.post('/definitions', authorizePermission('workflow.manage', 'workflow.adm
     logger.error(`[Workflow Route POST /definitions] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/positions
  * Quick update canvas node positions from drag
  */
-router.post('/positions', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.post('/positions', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { positions } = req.body;
     if (!positions || !Array.isArray(positions)) {
@@ -376,13 +377,13 @@ router.post('/positions', authorizePermission('workflow.manage', 'workflow.admin
     logger.error(`[Workflow Route POST /positions] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/definitions/seed-default
  * Force re-seed / sync standard default workflow definitions
  */
-router.post('/definitions/seed-default', authorizePermission('workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.post('/definitions/seed-default', authorizePermission('workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     // Delete existing standard definitions if forced
     await WorkflowEngineService.seedDefaultWorkflows();
@@ -393,13 +394,13 @@ router.post('/definitions/seed-default', authorizePermission('workflow.admin'), 
     logger.error(`[Workflow Route /seed-default] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/analytics/sla
  * SLA analytics and bottleneck reports
  */
-router.get('/analytics/sla', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/analytics/sla', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const report = await WorkflowEngineService.getSlaAnalytics();
     res.json(report);
@@ -408,13 +409,13 @@ router.get('/analytics/sla', authorizePermission('workflow.manage', 'workflow.ad
     logger.error(`[Workflow Route /analytics/sla] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/analytics/bottlenecks
  * Get identified bottleneck states
  */
-router.get('/analytics/bottlenecks', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/analytics/bottlenecks', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const bottlenecks = await WorkflowEngineService.getBottleneckAnalytics();
     res.json({ success: true, count: bottlenecks.length, data: bottlenecks });
@@ -423,13 +424,13 @@ router.get('/analytics/bottlenecks', authorizePermission('workflow.manage', 'wor
     logger.error(`[Workflow Route /analytics/bottlenecks] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/analytics/compliance
  * Get SLA compliance KPI rate
  */
-router.get('/analytics/compliance', authorizePermission('workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/analytics/compliance', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const compliance = await WorkflowEngineService.getSlaComplianceStats();
     res.json({ success: true, data: compliance });
@@ -438,13 +439,13 @@ router.get('/analytics/compliance', authorizePermission('workflow.manage', 'work
     logger.error(`[Workflow Route /analytics/compliance] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * GET /api/workflow/delegations
  * Get workflow delegations for current user or all (if admin)
  */
-router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
     const userRole = req.user?.role || 'user';
@@ -455,13 +456,13 @@ router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage
     logger.error(`[Workflow Route GET /delegations] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/delegations
  * Create a new workflow delegation
  */
-router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), async (req: AuthenticatedRequest, res) => {
+router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
     const userName = req.user?.username || 'کاربر';
@@ -497,13 +498,13 @@ router.post('/delegations', authorizePermission('workflow.approve', 'workflow.ma
     logger.error(`[Workflow Route POST /delegations] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 /**
  * POST /api/workflow/delegations/:id/revoke
  * Revoke an active delegation
  */
-router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(paramsIdSchema), async (req: AuthenticatedRequest, res) => {
+router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(paramsIdSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const id = Number(req.params.id);
     const userId = req.user?.id || 0;
@@ -523,6 +524,6 @@ router.post('/delegations/:id/revoke', authorizePermission('workflow.approve', '
     logger.error(`[Workflow Route POST /delegations/:id/revoke] Error: ${errMsg}`);
     throw err;
   }
-});
+}));
 
 export default router;

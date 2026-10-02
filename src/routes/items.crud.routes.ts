@@ -69,7 +69,7 @@ export const itemUpdateSchema = z.object({
 });
 
 // GET /items/reorder-alerts
-router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.items), async (req, res) => {
+router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (req, res) => {
   try {
     const type = req.query.type as string;
     const search = req.query.search as string;
@@ -131,10 +131,10 @@ router.get('/items/reorder-alerts', authorizePermission(...READ_PERMISSIONS.item
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // GET /items
-router.get('/items', authorizePermission(...READ_PERMISSIONS.items), async (req, res) => {
+router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandler(async (req, res) => {
   try {
     const type = req.query.type as string;
     // V9-1.3: صفحه‌بندی NaN-safe با سقف (limit=0 به معنای «بدون سقف» برای خروجی باقی می‌ماند)
@@ -273,10 +273,10 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), async (req,
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // POST /items
-router.post('/items', authorize('admin', 'manager', 'products.create'), validate(itemCreateUpdateSchema), async (req, res) => {
+router.post('/items', authorize('admin', 'manager', 'products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
   try {
     const { insertedId, stockValues, computedStock, imageUrl, thumbnailUrl } = await ItemCatalogService.createItem(
       req.body,
@@ -344,10 +344,10 @@ router.post('/items', authorize('admin', 'manager', 'products.create'), validate
     }
     throw err;
   }
-});
+}));
 
 // PUT /items/:id
-router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validate(itemUpdateSchema), async (req, res) => {
+router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validate(itemUpdateSchema), asyncHandler(async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const { name, code, unit, category, reorder_point, color, weight, material, size } = req.body;
@@ -420,10 +420,10 @@ router.put('/items/:id', authorize('admin', 'manager', 'products.edit'), validat
     }
     throw err;
   }
-});
+}));
 
 // DELETE /items/:id
-router.delete('/items/:id', authorize('admin', 'products.delete'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/items/:id', authorize('admin', 'products.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const stockBeforeDelete = await ItemWarehouseStockService.getStockSnapshot(orm, itemId);
@@ -456,7 +456,7 @@ router.delete('/items/:id', authorize('admin', 'products.delete'), validate(para
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // V10-2.1: endpoint واحد اتمیک کد بعدی کالا
 // GET = peek (بدون مصرف شمارنده — برای پیشنهاد خودکار فرم)

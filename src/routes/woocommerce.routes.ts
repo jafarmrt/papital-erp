@@ -7,6 +7,7 @@ import https from 'https';
 import crypto from 'crypto';
 import fs from 'fs';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.service.js';
@@ -218,7 +219,7 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
   }
 };
 
-router.all('/webhook/order', handleWebhookPingOrPayload);
+router.all('/webhook/order', asyncHandler(handleWebhookPingOrPayload));
 
 
 // ==========================================
@@ -227,7 +228,7 @@ router.all('/webhook/order', handleWebhookPingOrPayload);
 router.use(authenticateToken);
 
 // Get WooCommerce Order Logs History
-router.get('/order-logs', authorize('admin', 'manager', 'woocommerce.view'), async (req, res) => {
+router.get('/order-logs', authorize('admin', 'manager', 'woocommerce.view'), asyncHandler(async (req, res) => {
   try {
     const logs = await orm.select()
       .from(woocommerceOrderLogs)
@@ -238,10 +239,10 @@ router.get('/order-logs', authorize('admin', 'manager', 'woocommerce.view'), asy
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // Get WooCommerce Synced Orders History
-router.get('/synced-orders', authorize('admin', 'manager', 'woocommerce.view'), async (req, res) => {
+router.get('/synced-orders', authorize('admin', 'manager', 'woocommerce.view'), asyncHandler(async (req, res) => {
   try {
     const docs = await orm.select()
       .from(documents)
@@ -257,10 +258,10 @@ router.get('/synced-orders', authorize('admin', 'manager', 'woocommerce.view'), 
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // Manual order sync trigger by Order ID
-router.post('/sync-order-by-id', authorize('admin', 'manager', 'woocommerce.manage'), validate(syncOrderSchema), async (req, res) => {
+router.post('/sync-order-by-id', authorize('admin', 'manager', 'woocommerce.manage'), validate(syncOrderSchema), asyncHandler(async (req, res) => {
   try {
     const { orderId } = req.body;
 
@@ -286,10 +287,10 @@ router.post('/sync-order-by-id', authorize('admin', 'manager', 'woocommerce.mana
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // Sync single item stock to WooCommerce
-router.post('/sync-item', authorize('admin', 'manager', 'woocommerce.manage'), validate(syncItemSchema), async (req, res) => {
+router.post('/sync-item', authorize('admin', 'manager', 'woocommerce.manage'), validate(syncItemSchema), asyncHandler(async (req, res) => {
   try {
     const { itemId } = req.body;
 
@@ -334,10 +335,10 @@ router.post('/sync-item', authorize('admin', 'manager', 'woocommerce.manage'), v
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // Bulk sync all active ERP items' stock to WooCommerce
-router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manage'), async (req, res) => {
+router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manage'), asyncHandler(async (req, res) => {
   try {
     const settingsRows = await orm.select().from(appSettings).where(
       sql`key IN ('wc_store_url', 'wc_consumer_key', 'wc_consumer_secret')`
@@ -396,10 +397,10 @@ router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manag
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // Test Connection
-router.post('/test-connection', authorize('admin', 'manager', 'woocommerce.manage'), validate(testConnectionSchema), async (req, res) => {
+router.post('/test-connection', authorize('admin', 'manager', 'woocommerce.manage'), validate(testConnectionSchema), asyncHandler(async (req, res) => {
   try {
     const { url, consumerKey, consumerSecret } = req.body;
 
@@ -417,6 +418,6 @@ router.post('/test-connection', authorize('admin', 'manager', 'woocommerce.manag
   } catch (error) {
     throw error;
   }
-});
+}));
 
 export default router;

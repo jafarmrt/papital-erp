@@ -16,6 +16,7 @@ import {
   documentRefCounters, itemCodeCounters, purchaseRequisitions
 } from '../db/schema.js';
 import { authenticateToken, AUTH_COOKIE_NAME, getAuthCookieOptions } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { logger } from '../middleware/logger.js';
@@ -53,7 +54,7 @@ router.use(authenticateToken);
 
 // TD-105 (v4.0.31): تاریخ امروز کسب‌وکار از ساعت توافقی سرور — مرجع پیش‌فرض
 // مودال‌های خزانه‌داری به‌جای new Date().toISOString() مرورگر کلاینت
-router.get('/system/business-date', async (req, res) => {
+router.get('/system/business-date', asyncHandler(async (req, res) => {
   const { businessTodayIsoDate, getDisplayTimezone } = await import('../lib/businessClock.js');
   res.json({
     success: true,
@@ -62,10 +63,10 @@ router.get('/system/business-date', async (req, res) => {
       timezone: await getDisplayTimezone()
     }
   });
-});
+}));
 
 // V1.1.1: وضعیت محیط و فلگ‌های سیستمی — فقط set/not-set؛ هرگز مقدار secret ها
-router.get('/system/env', authorize('admin'), async (req, res) => {
+router.get('/system/env', authorize('admin'), asyncHandler(async (req, res) => {
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'admin',
@@ -93,7 +94,7 @@ router.get('/system/env', authorize('admin'), async (req, res) => {
       ERP_SETUP_TOKEN: process.env.ERP_SETUP_TOKEN ? 'set' : 'not set'
     }
   });
-});
+}));
 
 // App Settings
 // V3.0.6 (SEC): مقادیر حساس (secret/token/password) فقط برای ادمین برگردانده می‌شود؛
@@ -101,7 +102,7 @@ router.get('/system/env', authorize('admin'), async (req, res) => {
 // wc_consumer_secret / wc_webhook_secret / erp_webhook_secret_token جلوگیری شود.
 // v7.0.26 (TD-184): الگوی کلیدهای حساس و مقدار ماسک در سرویس تنظیمات متمرکز شد (consumer_key نیز ماسک می‌شود)
 
-router.get('/settings', async (req, res) => {
+router.get('/settings', asyncHandler(async (req, res) => {
   try {
     const settings = await appSettingsCache.getOrSet('all_settings', async () => {
       return orm.select().from(appSettings);
@@ -120,10 +121,10 @@ router.get('/settings', async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // V10-5.3: نقشه دید منو per-role — خواندنی برای همه کاربران احراز هویت‌شده (سایدبار)
-router.get('/menu-visibility', async (req, res) => {
+router.get('/menu-visibility', asyncHandler(async (req, res) => {
   try {
     const result = await appSettingsCache.getOrSet('menu_visibility', async () => {
       const [row] = await orm.select().from(appSettings).where(eq(appSettings.key, 'menu_visibility'));
@@ -139,11 +140,11 @@ router.get('/menu-visibility', async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // v7.0.26 (TD-184 / audit P1-3): ذخیره فقط کلیدهای تغییرکرده با مجوز سطح کلید در SystemSettingsService
 // (RULE 01: روت فقط اعتبارسنجی و فراخوانی سرویس). مجوز settings.manage هم‌راستا با نمایش منوی تنظیمات است.
-router.post('/settings', authorize('admin', 'manager', 'settings.manage'), validate(settingsSchema), async (req, res) => {
+router.post('/settings', authorize('admin', 'manager', 'settings.manage'), validate(settingsSchema), asyncHandler(async (req, res) => {
   const result = await SystemSettingsService.saveSettings(req.body.settings, {
     id: req.user?.id,
     username: req.user?.username,
@@ -151,9 +152,9 @@ router.post('/settings', authorize('admin', 'manager', 'settings.manage'), valid
     role: req.user?.role,
   });
   res.json({ success: true, ...result });
-});
+}));
 
-router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => {
+router.get('/activity-logs', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
   try {
     // V9-1.3: صفحه‌بندی NaN-safe با سقف
     const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 30 });
@@ -240,9 +241,9 @@ router.get('/activity-logs', authorize('admin', 'manager'), async (req, res) => 
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.get('/activity-logs/filters', authorize('admin', 'manager'), async (req, res) => {
+router.get('/activity-logs/filters', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
   try {
     const rawUsers = await orm.selectDistinct({ username: activityLogs.username, fullName: activityLogs.userFullName }).from(activityLogs);
     const userMap = new Map<string, string>();
@@ -266,10 +267,10 @@ router.get('/activity-logs/filters', authorize('admin', 'manager'), async (req, 
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Purge old audit logs (Admin only with strict retention policy enforcement - Sub-phase 1.5 / D-2)
-router.post('/activity-logs/purge', authorize('admin'), async (req, res) => {
+router.post('/activity-logs/purge', authorize('admin'), asyncHandler(async (req, res) => {
   try {
     const { retentionDays, preserveCritical, allowForceRecent } = req.body || {};
     const report = await purgeOldAuditLogs({
@@ -289,20 +290,20 @@ router.post('/activity-logs/purge', authorize('admin'), async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Audit log integrity and retention status check
-router.get('/activity-logs/integrity', authorize('admin', 'manager'), async (req, res) => {
+router.get('/activity-logs/integrity', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
   try {
     const integrity = await checkAuditLogIntegrity();
     res.json(integrity);
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Admin clear data (Wipe & Reset all system operational data and users to trigger initial setup scenario)
-router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), async (req, res) => {
+router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), asyncHandler(async (req, res) => {
   // P0-01 (ARCH-01): محافظت قطعی در برابر حذف فیزیکی دیتابیس در محیط پروداکشن
   const isProd = process.env.NODE_ENV === 'production';
   const allowDangerousPurge = process.env.ALLOW_DANGEROUS_DATA_PURGE === 'true';
@@ -422,13 +423,13 @@ router.post('/admin/clear-data', authorize('admin'), validate(clearDataSchema), 
     logger.error({ message: 'Error clearing system data', error: err });
     throw err;
   }
-});
+}));
 
 import fs from 'fs';
 import path from 'path';
 
 // V3.0.7 (TD-065): اطلاعات زیرساخت (مسیر uploads، حافظه، پروتکل) فقط برای ادمین
-router.get('/system/health', authorize('admin'), async (req, res) => {
+router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) => {
   let dbStatus = { status: 'ok', latencyMs: 0, message: 'پایگاه‌داده PostgreSQL متصل و آماده است' };
   
   // 1. Check DB Connection & Latency
@@ -516,10 +517,10 @@ router.get('/system/health', authorize('admin'), async (req, res) => {
     },
     checkTimestamp: new Date().toISOString()
   });
-});
+}));
 
 // Automated System Integrity & Reconciliation Scan
-router.get('/system/reconciliation-check', authorize('admin'), async (req, res) => {
+router.get('/system/reconciliation-check', authorize('admin'), asyncHandler(async (req, res) => {
   try {
     const checks: Array<{ id: string; category: string; title: string; status: 'ok' | 'warning' | 'error'; details: string }> = [];
 
@@ -607,10 +608,10 @@ router.get('/system/reconciliation-check', authorize('admin'), async (req, res) 
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Execute Non-Destructive Auto-Fix Actions
-router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) => {
+router.post('/system/reconciliation-fix', authorize('admin'), asyncHandler(async (req, res) => {
   try {
     const { action } = req.body || {};
 
@@ -658,7 +659,7 @@ router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) =
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —
 // روت‌های /system/tests/run و /system/clean-test-data حذف شده‌اند و اجرای
@@ -669,7 +670,7 @@ router.post('/system/reconciliation-fix', authorize('admin'), async (req, res) =
 // می‌شود (کالا: products.view، طرف حساب: customers.view، سند و فاکتور: documents.view، پروژه: projects.view)؛
 // بخش بدون مجوز خالی است، نه خطا. پیش‌تر هر کاربر واردشده (مثلاً «کاربر ثبت گزارش») همه بخش‌ها را می‌گرفت.
 // نویسه‌های % و _ ورودی هم escape می‌شوند.
-router.get('/global-search', async (req, res) => {
+router.get('/global-search', asyncHandler(async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 1) {
@@ -839,12 +840,12 @@ router.get('/global-search', async (req, res) => {
     logger.error({ message: 'Global search error', error: err });
     throw err;
   }
-});
+}));
 
 // Export full database dump as JSON
 // v7.0.29 (TD-188 / audit P1-6): خروجی امن داده‌ها (بدون هش رمز، رمز صرافی پرسنل و کلیدهای محرمانه؛
 // شامل دفاتر حسابداری و کارمزدی) — نسخه پشتیبان قابل بازگردانی نیست؛ پشتیبان واقعی: scripts/backup.sh
-router.get('/export-backup', authorize('admin'), async (req, res) => {
+router.get('/export-backup', authorize('admin'), asyncHandler(async (req, res) => {
   const exportData = await DataExportService.buildExport();
   const tableCount = Object.keys((exportData.data as Record<string, unknown>) || {}).length;
 
@@ -861,7 +862,7 @@ router.get('/export-backup', authorize('admin'), async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', `attachment; filename="erp-data-export-${new Date().toISOString().split('T')[0]}.json"`);
   res.json(exportData);
-});
+}));
 
 export default router;
 

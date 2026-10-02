@@ -3,6 +3,7 @@ import { orm } from '../db/drizzle.js';
 import { transfers, items } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { parsePagination } from '../lib/pagination.js';
@@ -46,7 +47,7 @@ function extractTransferCode(code: string): string | null {
 }
 
 // GET /api/transfers - Get all transfer codes and their linked products with pagination & search
-router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), async (req: Request, res: Response) => {
+router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), asyncHandler(async (req: Request, res: Response) => {
   try {
     const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
     const isAll = req.query.all === 'true' || limit === 0;
@@ -144,10 +145,10 @@ router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSI
     logger.error({ message: 'Error fetching transfers', error });
     throw error;
   }
-});
+}));
 
 // GET /api/transfers/:code - Get single transfer code details and products
-router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(deleteTransferSchema), async (req: Request, res: Response) => {
+router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
     const [saved] = await orm.select().from(transfers).where(eq(transfers.code, code)).limit(1);
@@ -192,7 +193,7 @@ router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PE
     logger.error({ message: 'Error fetching transfer details', error });
     throw error;
   }
-});
+}));
 
 // POST /api/transfers - Create or Update transfer image/details
 // V9-2.2: مسیر مرده GET /transfers/test حذف شد — توسط /transfers/:code سایه‌گذاری شده بود و هرگز اجرا نمی‌شد
@@ -234,13 +235,13 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
   }
 };
 
-router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
-router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
-router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
-router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), handleSaveTransfer);
+router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
 
 // DELETE /api/transfers/:code - Delete transfer details/image
-router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'products.delete'), validate(deleteTransferSchema), async (req: Request, res: Response) => {
+router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'products.delete'), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
     await TransferService.deleteTransfer(code, req.user);
@@ -250,7 +251,7 @@ router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager
     logger.error({ message: 'Error deleting transfer', error });
     throw error;
   }
-});
+}));
 
 export default router;
 

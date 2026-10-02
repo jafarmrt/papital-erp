@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { domainEventBus } from '../services/events/domainEventBus.js';
 import { OutboxService } from '../services/events/outboxService.js';
@@ -20,7 +21,7 @@ const eventIdParamSchema = z.object({
 const router = Router();
 
 // Public Webhook Simulator Echo Endpoint (exempt from auth, but validates signature token)
-router.all('/webhook-echo', async (req, res) => {
+router.all('/webhook-echo', asyncHandler(async (req, res) => {
   try {
     const receivedToken = (req.headers['x-erp-signature-token'] || req.headers['X-ERP-Signature-Token']) as string | undefined;
     const expectedToken = await EventActionEngineService.getWebhookSecretToken();
@@ -66,7 +67,7 @@ router.all('/webhook-echo', async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Enforce authentication on all event routes
 router.use(authenticateToken);
@@ -75,7 +76,7 @@ router.use(authenticateToken);
 // 1. Domain Events Inspection & Simulation (EDA Telemetry)
 // =========================================================================
 
-router.get('/domain-events', authorizePermission('events.view'), async (req, res) => {
+router.get('/domain-events', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const filter = req.query.filter as string | undefined;
@@ -91,9 +92,9 @@ router.get('/domain-events', authorizePermission('events.view'), async (req, res
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/domain-events/simulate', authorizePermission('events.manage'), async (req, res) => {
+router.post('/domain-events/simulate', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { eventType, aggregateType, aggregateId, payload } = req.body;
     const user = req.user;
@@ -117,13 +118,13 @@ router.post('/domain-events/simulate', authorizePermission('events.manage'), asy
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // =========================================================================
 // 2. Transactional Outbox Pipeline & Management
 // =========================================================================
 
-router.get('/outbox/stats', authorizePermission('events.view'), async (req, res) => {
+router.get('/outbox/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const stats = await OutboxService.getOutboxStats();
     res.json({
@@ -133,9 +134,9 @@ router.get('/outbox/stats', authorizePermission('events.view'), async (req, res)
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get('/outbox', authorizePermission('events.view'), async (req, res) => {
+router.get('/outbox', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
@@ -157,9 +158,9 @@ router.get('/outbox', authorizePermission('events.view'), async (req, res) => {
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), async (req, res) => {
+router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const batchSize = req.body.batchSize ? parseInt(req.body.batchSize, 10) : 25;
     const result = await OutboxService.processPendingBatch(batchSize);
@@ -172,9 +173,9 @@ router.post(['/outbox/process-now', '/outbox/process'], authorizePermission('eve
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/outbox/retry-failed', authorizePermission('events.manage'), async (req, res) => {
+router.post('/outbox/retry-failed', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     await OutboxService.retryAllFailedEvents();
 
@@ -185,9 +186,9 @@ router.post('/outbox/retry-failed', authorizePermission('events.manage'), async 
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), async (req, res) => {
+router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), validate(eventIdParamSchema), asyncHandler(async (req, res) => {
   try {
     const { eventId } = req.params;
     await OutboxService.retryFailedEvent(eventId);
@@ -199,13 +200,13 @@ router.post('/outbox/:eventId/retry', authorizePermission('events.manage'), vali
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // =========================================================================
 // 3. Automated Event Actions & Rules Engine
 // =========================================================================
 
-router.get(['/action-rules/stats', '/rules/stats'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/action-rules/stats', '/rules/stats'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const stats = await EventActionEngineService.getStats();
     res.json({
@@ -215,9 +216,9 @@ router.get(['/action-rules/stats', '/rules/stats'], authorizePermission('events.
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get(['/action-rules', '/rules'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/action-rules', '/rules'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const isActive = req.query.isActive !== undefined ? req.query.isActive === 'true' || req.query.isActive === '1' : undefined;
     const eventType = req.query.eventType as string | undefined;
@@ -234,9 +235,9 @@ router.get(['/action-rules', '/rules'], authorizePermission('events.view'), asyn
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view'), validate(paramsIdSchema), async (req, res) => {
+router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const rule = await EventActionEngineService.getRuleById(id);
@@ -252,9 +253,9 @@ router.get(['/action-rules/:id', '/rules/:id'], authorizePermission('events.view
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), async (req, res) => {
+router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { name, description, eventType, conditions, conditionsJson, actionType, actionConfigJson, actions, isActive } = req.body;
 
@@ -297,9 +298,9 @@ router.post(['/action-rules', '/rules'], authorizePermission('events.manage'), a
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updatedRule = await EventActionEngineService.updateRule(id, req.body);
@@ -321,9 +322,9 @@ router.put(['/action-rules/:id', '/rules/:id'], authorizePermission('events.mana
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     await EventActionEngineService.deleteRule(id);
@@ -344,9 +345,9 @@ router.delete(['/action-rules/:id', '/rules/:id'], authorizePermission('events.m
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updatedRule = await EventActionEngineService.toggleRule(id);
@@ -359,9 +360,9 @@ router.post(['/action-rules/:id/toggle', '/rules/:id/toggle'], authorizePermissi
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { customEvent } = req.body;
@@ -375,9 +376,9 @@ router.post(['/action-rules/:id/test', '/rules/:id/test'], authorizePermission('
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/action-rules/test-draft', authorizePermission('events.manage'), async (req, res) => {
+router.post('/action-rules/test-draft', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { rule } = req.body;
     res.json({
@@ -390,9 +391,9 @@ router.post('/action-rules/test-draft', authorizePermission('events.manage'), as
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get(['/action-logs', '/action-rules/logs'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/action-logs', '/action-rules/logs'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const ruleId = req.query.ruleId ? parseInt(req.query.ruleId as string, 10) : undefined;
     const status = req.query.status as string | undefined;
@@ -416,13 +417,13 @@ router.get(['/action-logs', '/action-rules/logs'], authorizePermission('events.v
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // =========================================================================
 // 4. Dead Letter Queue (DLQ) Quarantine & Error Recovery
 // =========================================================================
 
-router.get('/dlq/stats', authorizePermission('events.view'), async (req, res) => {
+router.get('/dlq/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const stats = await DeadLetterQueueService.getStats();
     res.json({
@@ -432,9 +433,9 @@ router.get('/dlq/stats', authorizePermission('events.view'), async (req, res) =>
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get('/dlq', authorizePermission('events.view'), async (req, res) => {
+router.get('/dlq', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
@@ -460,9 +461,9 @@ router.get('/dlq', authorizePermission('events.view'), async (req, res) => {
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { payload, adjustedPayload } = req.body;
@@ -484,9 +485,9 @@ router.post('/dlq/:id/replay', authorizePermission('events.manage'), validate(pa
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/dlq/replay-batch', authorizePermission('events.manage'), async (req, res) => {
+router.post('/dlq/replay-batch', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -513,9 +514,9 @@ router.post('/dlq/replay-batch', authorizePermission('events.manage'), async (re
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { notes } = req.body;
@@ -531,9 +532,9 @@ router.post('/dlq/:id/dismiss', authorizePermission('events.manage'), validate(p
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { payload } = req.body;
@@ -549,9 +550,9 @@ router.put('/dlq/:id/payload', authorizePermission('events.manage'), validate(pa
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/dlq/purge', authorizePermission('events.manage'), async (req, res) => {
+router.post('/dlq/purge', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const result = await DeadLetterQueueService.purgeResolved();
 
@@ -563,13 +564,13 @@ router.post('/dlq/purge', authorizePermission('events.manage'), async (req, res)
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // =========================================================================
 // 5. Event Sourcing Timeline Replay & Simulation
 // =========================================================================
 
-router.get(['/event-sourcing/types', '/timeline/types'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/event-sourcing/types', '/timeline/types'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const types = await EventSourcingReplayService.getAggregateTypes();
     res.json({
@@ -579,9 +580,9 @@ router.get(['/event-sourcing/types', '/timeline/types'], authorizePermission('ev
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
     const search = (req.query.search as string) || '';
@@ -600,9 +601,9 @@ router.get(['/event-sourcing/aggregates', '/timeline/aggregates'], authorizePerm
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const type = ((req.query.type as string) || (req.query.aggregateType as string) || '').trim();
     const id = ((req.query.id as string) || (req.query.aggregateId as string) || '').trim();
@@ -621,9 +622,9 @@ router.get(['/event-sourcing/timeline', '/timeline'], authorizePermission('event
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], authorizePermission('events.manage'), async (req, res) => {
+router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { event, eventId, eventType, aggregateType, aggregateId, payload, dryRun } = req.body;
 
@@ -642,7 +643,7 @@ router.post(['/event-sourcing/simulate-replay', '/timeline/simulate-replay'], au
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // =========================================================================
 // 6. Webhook Subscriptions & Deliveries Pipeline
@@ -659,7 +660,7 @@ function maskSubscriptionSecret<T extends { secretKey?: string }>(sub: T, isAdmi
   return { ...sub, secretKey: s.length > 8 ? `${'*'.repeat(Math.max(s.length - 4, 4))}${s.slice(-4)}` : MASKED_SECRET };
 }
 
-router.get('/webhooks/stats', authorizePermission('events.view'), async (req, res) => {
+router.get('/webhooks/stats', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const stats = await WebhookSubscriptionService.getStats();
     res.json({
@@ -669,9 +670,9 @@ router.get('/webhooks/stats', authorizePermission('events.view'), async (req, re
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get('/webhooks', authorizePermission('events.view'), async (req, res) => {
+router.get('/webhooks', authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const subs = await WebhookSubscriptionService.getSubscriptions();
     const isAdmin = req.user?.role === 'admin';
@@ -683,9 +684,9 @@ router.get('/webhooks', authorizePermission('events.view'), async (req, res) => 
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsIdSchema), async (req, res) => {
+router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const sub = await WebhookSubscriptionService.getSubscriptionById(id);
@@ -701,9 +702,9 @@ router.get('/webhooks/:id', authorizePermission('events.view'), validate(paramsI
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/webhooks', authorizePermission('events.manage'), async (req, res) => {
+router.post('/webhooks', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { name, targetUrl, eventPatterns, secretKey, customHeaders, retryLimit, timeoutSeconds } = req.body;
 
@@ -751,9 +752,9 @@ router.post('/webhooks', authorizePermission('events.manage'), async (req, res) 
       error: error.message
     });
   }
-});
+}));
 
-router.put('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.put('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updated = await WebhookSubscriptionService.updateSubscription(id, req.body);
@@ -771,9 +772,9 @@ router.put('/webhooks/:id', authorizePermission('events.manage'), validate(param
       error: error.message
     });
   }
-});
+}));
 
-router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     await WebhookSubscriptionService.deleteSubscription(id);
@@ -785,9 +786,9 @@ router.delete('/webhooks/:id', authorizePermission('events.manage'), validate(pa
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), validate(paramsIdSchema), async (req, res) => {
+router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updated = await WebhookSubscriptionService.toggleSubscription(id);
@@ -800,9 +801,9 @@ router.post('/webhooks/:id/toggle', authorizePermission('events.manage'), valida
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.post('/webhooks/ping', authorizePermission('events.manage'), async (req, res) => {
+router.post('/webhooks/ping', authorizePermission('events.manage'), asyncHandler(async (req, res) => {
   try {
     const { targetUrl, secretKey, customHeaders } = req.body;
     if (!targetUrl) {
@@ -819,9 +820,9 @@ router.post('/webhooks/ping', authorizePermission('events.manage'), async (req, 
   } catch (error) {
     throw error;
   }
-});
+}));
 
-router.get(['/webhooks/deliveries/list', '/webhooks/deliveries'], authorizePermission('events.view'), async (req, res) => {
+router.get(['/webhooks/deliveries/list', '/webhooks/deliveries'], authorizePermission('events.view'), asyncHandler(async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
@@ -841,7 +842,7 @@ router.get(['/webhooks/deliveries/list', '/webhooks/deliveries'], authorizePermi
   } catch (error) {
     throw error;
   }
-});
+}));
 
 // Public Webhook Simulator Echo Endpoint
 // V9-2.2: مسیر تکراری حذف شد — نسخه معتبر (با اعتبارسنجی توکن) در ابتدای فایل ثبت شده است.

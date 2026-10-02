@@ -1044,9 +1044,14 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       json: () => mockRes
     };
 
-    await middleware(mockReq, mockRes, (err?: any) => {
-      nextCalled = true;
-      nextError = err;
+    // میدل‌ور از asyncHandler عبور می‌کند (v7.0.66)؛ تا فراخوانی next یا json صبر می‌شود
+    await new Promise<void>((resolve) => {
+      mockRes.json = () => { resolve(); return mockRes; };
+      middleware(mockReq, mockRes, (err?: any) => {
+        nextCalled = true;
+        nextError = err;
+        resolve();
+      });
     });
 
     if (!nextCalled || nextError) {

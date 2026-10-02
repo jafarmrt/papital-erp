@@ -4,6 +4,7 @@ import { eq, desc, and, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -202,7 +203,7 @@ export const PERMISSION_CATALOG = [
 ];
 
 // Get current user's active permissions array
-router.get('/users/my-permissions', async (req, res) => {
+router.get('/users/my-permissions', asyncHandler(async (req, res) => {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ error: 'غیر مجاز' });
@@ -226,10 +227,10 @@ router.get('/users/my-permissions', async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Profile endpoints (Any authenticated user can manage their profile)
-router.get('/users/profile', async (req, res) => {
+router.get('/users/profile', asyncHandler(async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'غیر مجاز' });
@@ -244,9 +245,9 @@ router.get('/users/profile', async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.put('/users/profile', validate(updateProfileSchema), async (req, res) => {
+router.put('/users/profile', validate(updateProfileSchema), asyncHandler(async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'غیر مجاز' });
@@ -323,24 +324,24 @@ router.put('/users/profile', validate(updateProfileSchema), async (req, res) => 
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Permissions catalog route
-router.get('/permissions', authorizePermission(...READ_PERMISSIONS.permissionCatalog), async (req, res) => {
+router.get('/permissions', authorizePermission(...READ_PERMISSIONS.permissionCatalog), asyncHandler(async (req, res) => {
   res.json(PERMISSION_CATALOG);
-});
+}));
 
 // ROLES MANAGEMENT ROUTES
-router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), async (req, res) => {
+router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
   try {
     const allRoles = await orm.select().from(roles).orderBy(roles.id);
     res.json(allRoles);
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), async (req, res) => {
+router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), asyncHandler(async (req, res) => {
   try {
     const { name, code, description, permissions } = req.body;
 
@@ -387,9 +388,9 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRoleSchema), async (req, res) => {
+router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRoleSchema), asyncHandler(async (req, res) => {
   try {
     const roleId = Number(req.params.id);
     const { name, description, permissions } = req.body;
@@ -435,9 +436,9 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.delete('/roles/:id', authorizePermission('roles.manage'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/roles/:id', authorizePermission('roles.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const roleId = Number(req.params.id);
     const [targetRole] = await orm.select().from(roles).where(eq(roles.id, roleId));
@@ -474,7 +475,7 @@ router.delete('/roles/:id', authorizePermission('roles.manage'), validate(params
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // USERS MANAGEMENT ROUTES
 const userCreateSchema = z.object({
@@ -503,7 +504,7 @@ const userParamsSchema = z.object({
   })
 });
 
-router.get('/users/list-simple', async (req, res) => {
+router.get('/users/list-simple', asyncHandler(async (req, res) => {
   try {
     const allUsers = await orm.select({
       id: users.id,
@@ -527,9 +528,9 @@ router.get('/users/list-simple', async (req, res) => {
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), async (req, res) => {
+router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asyncHandler(async (req, res) => {
   try {
     const allUsers = await orm.select({
       id: users.id,
@@ -555,9 +556,9 @@ router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
   } catch (err) {
     throw err;
   }
-});
+}));
 
-router.post('/users', authorizePermission('users.manage'), validate(userCreateSchema), async (req, res) => {
+router.post('/users', authorizePermission('users.manage'), validate(userCreateSchema), asyncHandler(async (req, res) => {
   try {
     const { username, password, full_name, role } = req.body;
     const tUsername = (username || '').trim();
@@ -657,9 +658,9 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     }
     throw err;
   }
-});
+}));
 
-router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdateSchema), async (req, res) => {
+router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdateSchema), asyncHandler(async (req, res) => {
   try {
     const { password, full_name, role } = req.body;
     const targetUserId = Number(req.params.id);
@@ -737,9 +738,9 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     }
     throw err;
   }
-});
+}));
 
-router.delete('/users/:id', authorizePermission('users.manage'), validate(userParamsSchema), async (req, res) => {
+router.delete('/users/:id', authorizePermission('users.manage'), validate(userParamsSchema), asyncHandler(async (req, res) => {
   try {
     const targetUserId = Number(req.params.id);
 
@@ -801,7 +802,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
   } catch (err) {
     throw err;
   }
-});
+}));
 
 export default router;
 

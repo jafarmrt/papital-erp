@@ -156,7 +156,7 @@ const registerPayrollPaymentSchema = z.object({
 // ==========================================
 
 // GET /api/piecework/tasks - List tasks (active, archived, or all)
-router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
+router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
     const { category, search, status = 'active' } = req.query;
     
@@ -193,10 +193,10 @@ router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.piecework
     logger.error({ message: 'Error fetching piecework tasks', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/piecework/tasks-history - Get global rate change history
-router.get('/piecework/tasks-history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
+router.get('/piecework/tasks-history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
     const history = await orm.select()
@@ -208,10 +208,10 @@ router.get('/piecework/tasks-history', authorizePermission(...READ_PERMISSIONS.p
     logger.error({ message: 'Error fetching global piecework task rate history', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/piecework/tasks/:id/history - Get rate change history for specific task
-router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsIdSchema), async (req, res) => {
+router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const history = await orm.select()
@@ -223,10 +223,10 @@ router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIO
     logger.error({ message: 'Error fetching piecework task rate history', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/tasks - Create new task
-router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate(createPieceworkTaskSchema), async (req, res) => {
+router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate(createPieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const { code, title, category, defaultRate, unit, description } = req.body;
 
@@ -255,10 +255,10 @@ router.post('/piecework/tasks', authorize('personnel.manage', 'admin'), validate
     logger.error({ message: 'Error creating piecework task', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/tasks/import-excel - Bulk import piecework tasks
-router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admin'), async (req, res) => {
+router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admin'), asyncHandler(async (req, res) => {
   try {
     const { rows, mode = 'upsert' } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -291,10 +291,10 @@ router.post('/piecework/tasks/import-excel', authorize('personnel.manage', 'admi
     logger.error({ message: 'Error importing piecework tasks from excel', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/tasks/clear-defaults or clear-all
-router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorize('personnel.manage', 'admin'), async (req, res) => {
+router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], authorize('personnel.manage', 'admin'), asyncHandler(async (req, res) => {
   try {
     const count = await PieceworkService.clearAllTasks({
       userId: req.user?.id,
@@ -318,10 +318,10 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], a
     logger.error({ message: 'Error clearing all piecework tasks', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/piecework/tasks/:id - Update task
-router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkTaskSchema), async (req, res) => {
+router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { title, category, defaultRate, unit, description, isActive } = req.body;
@@ -352,10 +352,10 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
     logger.error({ message: 'Error updating piecework task', error: err });
     throw err;
   }
-});
+}));
 
 // DELETE /api/piecework/tasks/:id
-router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.deleteTask(id, {
@@ -377,10 +377,10 @@ router.delete('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), va
     logger.error({ message: 'Error deleting piecework task', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/tasks/:id/restore - Restore an archived/deleted task
-router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
+router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = await PieceworkService.restoreTask(id, {
@@ -402,14 +402,14 @@ router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin
     logger.error({ message: 'Error restoring piecework task', error: err });
     throw err;
   }
-});
+}));
 
 // ==========================================
 // 1.5. Task Categories (دسته‌بندی‌های عناوین کاری)
 // ==========================================
 
 // GET /api/piecework/categories
-router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
+router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
     let dbCats: Array<typeof taskCategories.$inferSelect> = [];
     try {
@@ -455,10 +455,10 @@ router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.piec
     // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/categories
-router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'settings.manage'), validate(createTaskCategorySchema), async (req, res) => {
+router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'settings.manage'), validate(createTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const { name, description } = req.body;
     const inserted = await PieceworkService.createCategory({ name, description });
@@ -477,10 +477,10 @@ router.post('/piecework/categories', authorize('personnel.manage', 'admin', 'set
     logger.error({ message: 'Error creating task category', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/piecework/categories/:id
-router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), validate(updateTaskCategorySchema), async (req, res) => {
+router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), validate(updateTaskCategorySchema), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const { name, description } = req.body;
@@ -501,10 +501,10 @@ router.put('/piecework/categories/:id', authorize('personnel.manage', 'admin', '
     logger.error({ message: 'Error updating task category', error: err });
     throw err;
   }
-});
+}));
 
 // DELETE /api/piecework/categories/:id
-router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), async (req, res) => {
+router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin', 'settings.manage'), asyncHandler(async (req, res) => {
   try {
     const rawId = req.params.id;
     const result = await PieceworkService.deleteCategory(rawId);
@@ -522,14 +522,14 @@ router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin'
     logger.error({ message: 'Error deleting task category', error: err });
     throw err;
   }
-});
+}));
 
 // ==========================================
 // 2. Custom Personnel Rates (نرخ‌های اختصاصی)
 // ==========================================
 
 // GET /api/piecework/personnel-rates/:personnelId
-router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsPersonnelIdSchema), async (req, res) => {
+router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsPersonnelIdSchema), asyncHandler(async (req, res) => {
   try {
     const personnelId = Number(req.params.personnelId);
     const rates = await orm.select()
@@ -542,10 +542,10 @@ router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:person
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/personnel-rates - Set or update custom rate
-router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('personnel.manage', 'admin'), validate(setPersonnelRateSchema), async (req, res) => {
+router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('personnel.manage', 'admin'), validate(setPersonnelRateSchema), asyncHandler(async (req, res) => {
   try {
     const { personnelId, taskId, customRate } = req.body;
     await PieceworkService.setPersonnelRate({ personnelId, taskId, customRate });
@@ -554,14 +554,14 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('perso
     logger.error({ message: 'Error setting custom rate', error: err });
     throw err;
   }
-});
+}));
 
 // ==========================================
 // 3. Piecework Logs (کارکرد روزانه پرکیسی)
 // ==========================================
 
 // GET /api/piecework/logs - List work logs
-router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkReference), async (req, res) => {
+router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
     const { personnelId, projectId, startDate, endDate, status } = req.query;
 
@@ -630,10 +630,10 @@ router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkR
     logger.error({ message: 'Error fetching piecework logs', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/logs - Record work logs (Supports single or batch array)
-router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create', 'admin'), validate(createPieceworkLogsSchema), async (req, res) => {
+router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create', 'admin'), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
@@ -665,10 +665,10 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     logger.error({ message: 'Error logging piecework', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/piecework/logs/:id - Update work log
-router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkLogSchema), async (req, res) => {
+router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkLogSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
@@ -680,10 +680,10 @@ router.put('/piecework/logs/:id', authorize('personnel.manage', 'admin'), valida
     logger.error({ message: 'Error updating piecework log', error: err });
     throw err;
   }
-});
+}));
 
 // DELETE /api/piecework/logs/:id - Delete work log
-router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     await PieceworkService.deleteWorkLog(id);
@@ -693,14 +693,14 @@ router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), val
     logger.error({ message: 'Error deleting piecework log', error: err });
     throw err;
   }
-});
+}));
 
 // ==========================================
 // 4. Payrolls & Payslips (فیش‌های حقوقی و تسویه)
 // ==========================================
 
 // GET /api/piecework/payrolls - List payrolls
-router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrolls), async (req, res) => {
+router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrolls), asyncHandler(async (req, res) => {
   try {
     const { personnelId, status } = req.query;
 
@@ -796,11 +796,11 @@ router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrol
     // V9-2.1: هدایت خطا به errorHandler سراسری با traceId
     throw err;
   }
-});
+}));
 
 // GET /api/piecework/payrolls/mine - فیش‌های حقوقی کاربر جاری
 // برای پرسنلی که همزمان کاربر سیستم هستند: لینک personnel.userId → users.id
-router.get('/piecework/payrolls/mine', async (req, res) => {
+router.get('/piecework/payrolls/mine', asyncHandler(async (req, res) => {
   try {
     const uid = Number((req as any).user?.id);
     if (!uid || isNaN(uid)) return res.json([]);
@@ -881,10 +881,10 @@ router.get('/piecework/payrolls/mine', async (req, res) => {
     logger.error({ message: 'Error fetching my payrolls', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/piecework/payrolls/:id - Get single payroll with detailed items
-router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), async (req, res) => {
+router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -978,10 +978,10 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
     // V9-2.1: Ù‡Ø¯Ø§ÛŒØª Ø®Ø·Ø§ Ø¨Ù‡ errorHandler Ø³Ø±Ø§Ø³Ø±ÛŒ Ø¨Ø§ traceId
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/payrolls - Generate new payroll for personnel
-router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), async (req, res) => {
+router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(generatePieceworkPayrollSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
@@ -1160,10 +1160,10 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
     logger.error({ message: 'Error generating payroll', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/piecework/payrolls/:id/status - Update status or mark as paid
-router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admin'), validate(updatePieceworkPayrollStatusSchema), async (req, res) => {
+router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admin'), validate(updatePieceworkPayrollStatusSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, paymentDate, paymentMethod, paymentReference, notes } = req.body;
@@ -1242,10 +1242,10 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
     logger.error({ message: 'Error updating payroll status', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/payrolls/:id/register-payment — V10-4.4: مسیر یگانه پرداخت حقوق
-router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), async (req, res) => {
+router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(registerPayrollPaymentSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { bankAccountId, method, amount, paymentDate, paymentReference, notes } = req.body;
@@ -1287,10 +1287,10 @@ router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.man
     logger.error({ message: 'Error registering payroll payment', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/piecework/payrolls/:id/payments — V4.0.33: دریافت سابقه اقساط و پرداخت‌های خزانه‌ای متصل به یک فیش
-router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), async (req, res) => {
+router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -1323,10 +1323,10 @@ router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'pers
     logger.error({ message: 'Error fetching payroll payments', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/piecework/personnel/:id/advance-balance — V4.0.33: استعلام سیستمی مانده مساعده تسویه‌نشده پرسنل
-router.get('/piecework/personnel/:id/advance-balance', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), async (req, res) => {
+router.get('/piecework/personnel/:id/advance-balance', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(id);
@@ -1335,10 +1335,10 @@ router.get('/piecework/personnel/:id/advance-balance', authorize('personnel.view
     logger.error({ message: 'Error getting personnel advance balance', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/piecework/payrolls/:id/sync-voucher - Explicitly sync accounting journal voucher for payroll
-router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecework.payroll', 'personnel.manage'), idempotency({ scope: 'payroll' }), validate(paramsIdSchema), async (req, res) => {
+router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecework.payroll', 'personnel.manage'), idempotency({ scope: 'payroll' }), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -1376,7 +1376,7 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
     logger.error({ message: 'Error syncing payroll voucher', error: err });
     throw err;
   }
-});
+}));
 
 // DELETE /api/piecework/payrolls/:id - Cancel/delete payroll and un-link logs
 router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {

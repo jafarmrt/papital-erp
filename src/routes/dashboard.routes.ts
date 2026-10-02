@@ -3,6 +3,7 @@ import { sql, eq, and, gt, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, transactions, users, appSettings, warehouses, itemWarehouseStocks } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 
@@ -23,7 +24,7 @@ export function invalidateDashboardBiCache(): void {
 
 // v7.0.53 (audit P2-10، تصمیم مالک محصول): آمار داشبورد انبار فقط برای دارندگان reports.view؛
 // v7.0.55 (تصمیم مالک محصول): دارندگان warehouse.view (مثلاً انباردار) هم
-router.get('/stats', authorize('reports.view', 'warehouse.view'), async (req, res) => {
+router.get('/stats', authorize('reports.view', 'warehouse.view'), asyncHandler(async (req, res) => {
   try {
     const [{ count: totalProducts }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
     const [{ count: totalMaterials }] = await orm.select({ count: sql<number>`count(*)` }).from(items).where(and(eq(items.type, 'raw_material'), eq(items.isDeleted, 0)));
@@ -43,9 +44,9 @@ router.get('/stats', authorize('reports.view', 'warehouse.view'), async (req, re
     logger.error({ message: 'STATS ENDPOINT ERROR', error: err });
     throw err;
   }
-});
+}));
 
-router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), async (req, res) => {
+router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), asyncHandler(async (req, res) => {
   const now = Date.now();
   if (dashboardCache.data && (now - dashboardCache.timestamp < dashboardCache.TTL)) {
     return res.json(dashboardCache.data);
@@ -179,6 +180,6 @@ router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), a
     logger.error({ message: 'BI-STATS ENDPOINT ERROR', error: err });
     throw err;
   }
-});
+}));
 
 export default router;

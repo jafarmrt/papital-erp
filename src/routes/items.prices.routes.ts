@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { items, itemPrices } from '../db/schema.js';
@@ -36,7 +37,7 @@ export const batchPriceUpdateSchema = z.object({
 });
 
 // GET /items/prices/all
-router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPrices), async (req, res) => {
+router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPrices), asyncHandler(async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(eq(itemPrices.isDeleted, 0));
     const activeStrategies = await ItemsService.getPricingStrategies();
@@ -53,10 +54,10 @@ router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPric
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // GET /items/:id/prices
-router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), async (req, res) => {
+router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(and(eq(itemPrices.itemId, Number(req.params.id)), eq(itemPrices.isDeleted, 0)));
     const activeStrategies = await ItemsService.getPricingStrategies();
@@ -65,20 +66,20 @@ router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemPric
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // GET /items/:id/prices/history
-router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), async (req, res) => {
+router.get('/items/:id/prices/history', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(eq(itemPrices.itemId, Number(req.params.id))).orderBy(desc(itemPrices.id));
     res.json(prices);
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // POST /items/:id/prices
-router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_price'), validate(itemPriceSchema), async (req, res) => {
+router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_price'), validate(itemPriceSchema), asyncHandler(async (req, res) => {
   try {
     const { title, price, currency = 'IRR' } = req.body;
     const itemId = Number(req.params.id);
@@ -137,13 +138,13 @@ router.post('/items/:id/prices', authorize('admin', 'manager', 'products.edit_pr
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // DELETE /items/:id/prices/:priceId — حذف شد (v4.0.29): هیچ فراخوانی frontend ندارد؛
 // حذف قیمت‌ها از طریق batch-update انجام می‌شود.
 
 // POST /items/prices/batch-update
-router.post('/items/prices/batch-update', authorize('admin', 'manager', 'products.edit_price'), validate(batchPriceUpdateSchema), async (req, res) => {
+router.post('/items/prices/batch-update', authorize('admin', 'manager', 'products.edit_price'), validate(batchPriceUpdateSchema), asyncHandler(async (req, res) => {
   try {
     const { updates } = req.body;
     const nowIso = new Date().toISOString();
@@ -275,6 +276,6 @@ router.post('/items/prices/batch-update', authorize('admin', 'manager', 'product
     logger.error({ message: 'Error in batch price update', error: err });
     throw err;
   }
-});
+}));
 
 export default router;

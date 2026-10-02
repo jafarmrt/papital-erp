@@ -182,4 +182,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch((err: unknown) => {
+  logger.error('[Startup] startServer failed', err);
+  process.exit(1);
+});

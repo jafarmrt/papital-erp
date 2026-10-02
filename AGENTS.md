@@ -146,7 +146,7 @@
 
 ## 20. Observability, Error Handling & Lifecycle Rules
 - **AppError Hierarchy (OBS-003):** Typed subclasses (`ValidationError`, `NotFoundError`, `UnauthorizedError`, `ConflictError`, `DatabaseError`).
-- **AsyncHandler & Global Error Handler (OBS-002):** Routes wrapped in `asyncHandler` return uniform error schema with `traceId`.
+- **AsyncHandler & Global Error Handler (OBS-002):** Routes wrapped in `asyncHandler` return uniform error schema with `traceId`. Every async route handler and every async middleware factory (`authorize`, `authorizePermission`, `validate`, `idempotency`) MUST go through `asyncHandler` (v7.0.66, TD-229); `express-async-errors` is only a safety net, never the mechanism. Enforced by unit test `unit_route_async_handler_td_229`.
 - **Structured Logging (OBS-001, OBS-006):** Winston logger with daily rotation into `logs/application-%DATE%.log` and `logs/error-%DATE%.log`.
 - **Recursive Sanitization (OBS-009):** Sensitive fields scrubbed with `[REDACTED]`.
 - **Lifecycle Probes (OBS-007):** Kubernetes probes at `/health/live`, `/health/ready`, `/health/startup`.

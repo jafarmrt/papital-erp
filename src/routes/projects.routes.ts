@@ -3,6 +3,7 @@ import { eq, desc, and, asc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { productionProjects, projectStages, items, projectProductStageProgress } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -529,7 +530,7 @@ export async function getProjectProgressMatrixStatus(
 }
 
 // GET /api/projects - List all production projects with summary progress
-router.get('/projects', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), async (req, res) => {
+router.get('/projects', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), asyncHandler(async (req, res) => {
   try {
     const { status, priority, search } = req.query;
 
@@ -591,10 +592,10 @@ router.get('/projects', authorizePermission(...RECORD_READ_PERMISSIONS.productio
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // GET /api/projects/:id - Get single project details with stages
-router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), validate(paramsIdSchema), async (req, res) => {
+router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.production_project), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -629,10 +630,10 @@ router.get('/projects/:id', authorizePermission(...RECORD_READ_PERMISSIONS.produ
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // POST /api/projects - Create a new production project with stages
-router.post('/projects', authorizePermission('projects.create'), validate(createProjectSchema), async (req, res) => {
+router.post('/projects', authorizePermission('projects.create'), validate(createProjectSchema), asyncHandler(async (req, res) => {
   try {
     const { 
       title, customer_id, customer_name, item_id, item_code, item_name, 
@@ -681,10 +682,10 @@ router.post('/projects', authorizePermission('projects.create'), validate(create
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // PUT /api/projects/:id - Edit project details
-router.put('/projects/:id', authorizePermission('projects.edit'), validate(updateProjectSchema), async (req, res) => {
+router.put('/projects/:id', authorizePermission('projects.edit'), validate(updateProjectSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -744,10 +745,10 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // POST /api/projects/:id/add-to-inventory - Add produced project products to warehouse stock
-router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit'), validate(addProjectToInventorySchema), async (req, res) => {
+router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit'), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { itemsToAdd, markCompleted } = req.body;
@@ -778,10 +779,10 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // DELETE /api/projects/:id - Soft delete project and stages
-router.delete('/projects/:id', authorizePermission('projects.delete'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/projects/:id', authorizePermission('projects.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -803,10 +804,10 @@ router.delete('/projects/:id', authorizePermission('projects.delete'), validate(
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // POST /api/projects/:id/stages - Add a stage to project
-router.post('/projects/:id/stages', authorizePermission('projects.edit'), validate(createProjectStageSchema), async (req, res) => {
+router.post('/projects/:id/stages', authorizePermission('projects.edit'), validate(createProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const { title, status, start_date, end_date, assigned_personnel, required_resources, notes } = req.body;
@@ -825,10 +826,10 @@ router.post('/projects/:id/stages', authorizePermission('projects.edit'), valida
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // PUT /api/projects/:id/stages/:stageId - Update a stage
-router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit'), validate(updateProjectStageSchema), async (req, res) => {
+router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit'), validate(updateProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
@@ -864,10 +865,10 @@ router.put('/projects/:id/stages/:stageId', authorizePermission('projects.edit')
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // DELETE /api/projects/:id/stages/:stageId - Delete a stage
-router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edit'), validate(deleteProjectStageSchema), async (req, res) => {
+router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edit'), validate(deleteProjectStageSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     const stageId = parseInt(req.params.stageId, 10);
@@ -878,14 +879,14 @@ router.delete('/projects/:id/stages/:stageId', authorizePermission('projects.edi
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // همگام‌سازی خودکار درصد پیشرفت و وضعیت هر مرحله و کل پروژه بر اساس ماتریس SKUها
 export const syncProjectStagesAndStatusFromProductProgress = ProjectService.syncProjectStagesAndStatusFromProductProgress;
 
 
 // GET /api/projects/:id/product-progress — ماتریس کامل پیشرفت SKUها
-router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), validate(paramsIdSchema), async (req, res) => {
+router.get('/projects/:id/product-progress', authorizePermission('projects.view', 'projects.edit', 'projects.create', 'warehouse.view', 'documents.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -998,7 +999,7 @@ router.get('/projects/:id/product-progress', authorizePermission('projects.view'
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // PUT /api/projects/:id/product-progress — بولک آپسِرت وضعیت دودویی هر SKU در هر مرحله
 const updateProductProgressSchema = z.object({
@@ -1018,7 +1019,7 @@ const updateProductProgressSchema = z.object({
   })
 });
 
-router.put('/projects/:id/product-progress', authorizePermission('projects.edit'), validate(updateProductProgressSchema), async (req, res) => {
+router.put('/projects/:id/product-progress', authorizePermission('projects.edit'), validate(updateProductProgressSchema), asyncHandler(async (req, res) => {
   try {
     const projectId = parseInt(req.params.id, 10);
     if (isNaN(projectId)) return res.status(400).json({ error: 'شناسه پروژه نامعتبر است' });
@@ -1062,6 +1063,6 @@ router.put('/projects/:id/product-progress', authorizePermission('projects.edit'
   } catch (err) {
     throw err;
   }
-});
+}));
 
 export default router;

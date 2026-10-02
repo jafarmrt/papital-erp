@@ -176,7 +176,8 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   }
 
   const jwtSecret = getJwtSecret();
-  jwt.verify(token, jwtSecret, JWT_VERIFY_OPTIONS, async (err: any, decoded: any) => {
+  // v7.0.66 (TD-229): callback هم‌زمان؛ رد Promise بدنه به next می‌رود نه unhandledRejection
+  jwt.verify(token, jwtSecret, JWT_VERIFY_OPTIONS, (err: any, decoded: any) => { (async () => {
     if (err || !decoded) {
       return res.status(401).json({ error: 'توکن نامعتبر است یا منقضی شده' });
     }
@@ -242,7 +243,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
       updateRequestContext({ userId: req.user.id, username: req.user.username });
     }
     next();
-  });
+  })().catch(next); });
 };
 
 export const csrfProtection = (req: Request, res: Response, next: NextFunction) => {

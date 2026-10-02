@@ -4500,16 +4500,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const request = (await import('supertest')).default;
       const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
 
-      const runGuard = async (guard: any, role: string): Promise<number> => {
+      // میدل‌ور از asyncHandler عبور می‌کند (v7.0.66)؛ پایان آن با فراخوانی next یا json شناخته می‌شود
+      const runGuard = (guard: any, role: string): Promise<number> => new Promise<number>((resolve) => {
         let status = 0;
         const req: any = { user: { id: -1, username: 'p210_probe', role } };
         const res: any = {
           status(code: number) { status = code; return this; },
-          json() { return this; }
+          json() { resolve(status); return this; }
         };
-        await guard(req, res, () => { status = 200; });
-        return status;
-      };
+        guard(req, res, () => resolve(200));
+      });
 
       // الف) کاربری که کد نقشش دقیقاً نام مجوز است (نقشی که پیش‌تر ساخته شده) و خود مجوز را ندارد
       const dotted = 'customers.manage';

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
@@ -18,7 +19,7 @@ export const unifiedImportSchema = z.object({
 });
 
 // GET /items/unified-export
-router.get('/items/unified-export', authorize('admin', 'manager', 'products.view'), async (req, res) => {
+router.get('/items/unified-export', authorize('admin', 'manager', 'products.view'), asyncHandler(async (req, res) => {
   try {
     const typeFilter = req.query.type as string;
     const result = await ItemsService.processUnifiedExport(typeFilter);
@@ -36,10 +37,10 @@ router.get('/items/unified-export', authorize('admin', 'manager', 'products.view
     logger.error({ message: 'Error exporting items', error: err });
     throw err;
   }
-});
+}));
 
 // POST /items/unified-import
-router.post('/items/unified-import', authorize('admin', 'manager', 'products.create', 'products.edit'), validate(unifiedImportSchema), async (req, res) => {
+router.post('/items/unified-import', authorize('admin', 'manager', 'products.create', 'products.edit'), validate(unifiedImportSchema), asyncHandler(async (req, res) => {
   try {
     const { rows, typeFilter } = req.body;
     const result = await ItemsService.processUnifiedImport(rows, typeFilter, req);
@@ -57,6 +58,6 @@ router.post('/items/unified-import', authorize('admin', 'manager', 'products.cre
     logger.error({ message: 'Error in unified import', error: err });
     throw err;
   }
-});
+}));
 
 export default router;

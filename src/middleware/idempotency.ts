@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { IdempotencyService } from '../services/idempotency.service.js';
 import { logger } from './logger.js';
+import { asyncHandler } from './asyncHandler.js';
 
 export interface IdempotencyMiddlewareOptions {
   scope?: string;
@@ -21,7 +22,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
   const headerName = (options.headerName || 'idempotency-key').toLowerCase();
   const altHeaderName = 'x-idempotency-key';
 
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     // Only apply idempotency to mutating HTTP methods
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       return next();
@@ -97,14 +98,14 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
       };
 
       res.json = function (body: any): Response {
-        saveResponseOnce(body);
+        void saveResponseOnce(body); // خطاها داخل saveResponseOnce گرفته و لاگ می‌شوند
         res.setHeader('X-Idempotency-Key', cleanKey);
         res.setHeader('X-Idempotency-Scope', scope);
         return originalJson(body);
       };
 
       res.send = function (body: any): Response {
-        saveResponseOnce(body);
+        void saveResponseOnce(body); // خطاها داخل saveResponseOnce گرفته و لاگ می‌شوند
         res.setHeader('X-Idempotency-Key', cleanKey);
         res.setHeader('X-Idempotency-Scope', scope);
         return originalSend(body);
@@ -119,5 +120,5 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
       });
       next(err);
     }
-  };
+  });
 }

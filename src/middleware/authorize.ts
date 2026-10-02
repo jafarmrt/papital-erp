@@ -3,6 +3,7 @@ import { orm } from '../db/drizzle.js';
 import { roles } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { rolePermissionsCache } from '../lib/memoryCache.js';
+import { asyncHandler } from './asyncHandler.js';
 
 async function getCachedRoleData(roleCode: string) {
   return rolePermissionsCache.getOrSet(roleCode, async () => {
@@ -39,7 +40,7 @@ async function roleOrPermissionGranted(role: string, entries: string[]): Promise
 }
 
 export const authorize = (...allowedRolesOrPermissions: string[]) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) {
       return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
@@ -54,11 +55,11 @@ export const authorize = (...allowedRolesOrPermissions: string[]) => {
     }
 
     return res.status(403).json({ error: 'دسترسی غیرمجاز برای این عملیات' });
-  };
+  });
 };
 
 export const authorizePermission = (...permissionKeys: string[]) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) {
       return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
@@ -73,7 +74,7 @@ export const authorizePermission = (...permissionKeys: string[]) => {
     } catch (err) {
       return res.status(500).json({ error: 'خطا در بررسی مجوز دسترسی' });
     }
-  };
+  });
 };
 
 /**

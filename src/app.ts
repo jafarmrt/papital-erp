@@ -10,6 +10,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { logger, morganMiddleware, errorHandler } from './middleware/logger.js';
 import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics } from './middleware/metrics.js';
 import { metricsAuthMiddleware } from './middleware/metricsAuth.js';
+import { asyncHandler } from './middleware/asyncHandler.js';
 import promClient from 'prom-client';
 import { requestContextMiddleware } from './lib/requestContext.js';
 import { validateCorsOrigin } from './lib/corsValidator.js';
@@ -264,12 +265,12 @@ export async function createApp(): Promise<express.Express> {
   app.post(['/api/login', '/api/auth/login'], loginLimiter);
 
   // Prometheus Metrics Endpoint (V9-2.2 & V4 Subphase 2.3 / S-3: محافظت قطعی با METRICS_TOKEN یا احراز هویت ادمین)
-  app.get(['/metrics', '/api/metrics'], metricsAuthMiddleware, async (_req, res) => {
+  app.get(['/metrics', '/api/metrics'], metricsAuthMiddleware, asyncHandler(async (_req, res) => {
     updateDbPoolMetrics();
     await updateOutboxMetrics();
     res.set('Content-Type', promClient.register.contentType);
     res.send(await promClient.register.metrics());
-  });
+  }));
 
   // ======== API Routes ========
   // 1. Liveness probe (Always 200 if process is running)
@@ -278,7 +279,7 @@ export async function createApp(): Promise<express.Express> {
   });
 
   // 2. Readiness probe (200 if DB reachable and connection pool not saturated)
-  app.get(['/api/health/ready', '/health/ready'], async (_req, res) => {
+  app.get(['/api/health/ready', '/health/ready'], asyncHandler(async (_req, res) => {
     try {
       await orm.execute(sql`SELECT 1`);
 
@@ -309,7 +310,7 @@ export async function createApp(): Promise<express.Express> {
         timestamp: new Date().toISOString(),
       });
     }
-  });
+  }));
 
   // 3. Startup probe (200 if background migrations/seeds completed)
   app.get(['/api/health/startup', '/health/startup'], (_req, res) => {
@@ -321,7 +322,7 @@ export async function createApp(): Promise<express.Express> {
   });
 
   // 4. Diagnostic Health Probe
-  app.get(['/api/health', '/health'], async (_req, res) => {
+  app.get(['/api/health', '/health'], asyncHandler(async (_req, res) => {
     try {
       await orm.execute(sql`SELECT 1`);
       res.json({
@@ -339,7 +340,7 @@ export async function createApp(): Promise<express.Express> {
         timestamp: new Date().toISOString()
       });
     }
-  });
+  }));
 
   app.use('/api/woocommerce', woocommerceRoutes);
   app.use('/api', authRoutes);

@@ -3,6 +3,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { personnel, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
@@ -85,7 +86,7 @@ const updatePersonnelSchema = z.object({
 });
 
 // GET /api/personnel/export - Export all personnel for Excel
-router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage', 'payroll.view_sensitive'), async (req, res) => {
+router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage', 'payroll.view_sensitive'), asyncHandler(async (req, res) => {
   try {
     const list = await orm
       .select({
@@ -147,10 +148,10 @@ router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage'
     logger.error({ message: 'Error exporting personnel', error: err });
     throw err;
   }
-});
+}));
 
 // POST /api/personnel/bulk-import - Bulk import personnel from Excel
-router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.manage'), async (req, res) => {
+router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.manage'), asyncHandler(async (req, res) => {
   try {
     const { rows = [], updateIfExists = true } = req.body;
 
@@ -319,10 +320,10 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
     logger.error({ message: 'Error bulk importing personnel', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/personnel - List personnel
-router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), async (req, res) => {
+router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asyncHandler(async (req, res) => {
   try {
     const search = (req.query.search as string) || '';
     const status = (req.query.status as string) || '';
@@ -402,10 +403,10 @@ router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asy
     logger.error({ message: 'Error fetching personnel', error: err });
     throw err;
   }
-});
+}));
 
 // GET /api/personnel/:id - Single personnel detail
-router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel), validate(paramsIdSchema), async (req, res) => {
+router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const [record] = await orm
@@ -458,10 +459,10 @@ router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel),
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // POST /api/personnel - Create new personnel
-router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), validate(createPersonnelSchema), async (req, res) => {
+router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), validate(createPersonnelSchema), asyncHandler(async (req, res) => {
   try {
     const {
       firstName = '',
@@ -561,10 +562,10 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
     logger.error({ message: 'Error creating personnel', error: err });
     throw err;
   }
-});
+}));
 
 // PUT /api/personnel/:id - Update personnel
-router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(updatePersonnelSchema), async (req, res) => {
+router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(updatePersonnelSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -679,10 +680,10 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
     logger.error({ message: 'Error updating personnel', error: err });
     throw err;
   }
-});
+}));
 
 // DELETE /api/personnel/:id - Soft delete
-router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -716,7 +717,7 @@ router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'
   } catch (err) {
     throw err;
   }
-});
+}));
 
 // Asynchronous background remediation: Ensure existing records have leading zeros for phone and nationalId
 export default router;

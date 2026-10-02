@@ -8,6 +8,16 @@ import { AIUpdateLog } from './types';
  */
 export const v7Updates: AIUpdateLog[] = [
   {
+    version: 'v7.0.66',
+    date: '۱۰ مهر ۱۴۰۵',
+    title: 'TD-229: همه هندلرها و میدل‌ورهای async روت‌ها از asyncHandler عبور می‌کنند',
+    summary: 'حدود ۱۸۰ هندلر روت و میدل‌ورهای مجوز، اعتبارسنجی و ایدمپوتنسی async خام بودند و فقط وصله سراسری express-async-errors خطایشان را به پاسخ خطا می‌رساند. اکنون همه از asyncHandler عبور می‌کنند و رفتار خطا بدون وابستگی به آن وصله یکسان است.',
+    changes: [
+      'هشدارهای ESLint «Promise در جای void» از ۷۱۴ به ۱۳ رسید',
+      'خطای راه‌اندازی سرور و اجراکننده تست‌ها صریحاً گرفته و با کد خروج ۱ گزارش می‌شود'
+    ]
+  },
+  {
     version: 'v7.0.65',
     date: '۱۰ مهر ۱۴۰۵',
     title: 'P3-4: ESLint با گیت فایل پایه در CI',

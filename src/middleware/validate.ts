@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
+import { asyncHandler } from './asyncHandler.js';
 
 const fieldTranslations: Record<string, string> = {
   name: 'نام',
@@ -138,7 +139,7 @@ export const paramsWarehouseIdSchema = createParamsIdSchema('id', 'شناسه ا
 export const paramsPersonnelIdSchema = createParamsIdSchema('id', 'شناسه پرسنل');
 
 export const validate = (schema: ZodSchema) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = await schema.parseAsync({
         body: req.body,
@@ -179,5 +180,5 @@ export const validate = (schema: ZodSchema) => {
       }
       next(error);
     }
-  };
+  });
 };

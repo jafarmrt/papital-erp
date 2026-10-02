@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
@@ -30,14 +31,14 @@ const updateWarehouseValidation = z.object({
   })
 });
 
-router.get('/warehouses', async (req, res) => {
+router.get('/warehouses', asyncHandler(async (req, res) => {
   try {
     const data = await WarehouseService.listActive();
     res.json(data);
   } catch (err) { throw err; }
-});
+}));
 
-router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), async (req, res) => {
+router.post('/warehouses', authorize('admin'), validate(createWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name, code } = req.body;
     const created = await WarehouseService.createWarehouse({ name, code });
@@ -56,9 +57,9 @@ router.post('/warehouses', authorize('admin'), validate(createWarehouseValidatio
     logger.error({ message: 'POST /warehouses ERROR', error: err });
     throw err; 
   }
-});
+}));
 
-router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValidation), async (req, res) => {
+router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValidation), asyncHandler(async (req, res) => {
   try {
     const { name } = req.body;
     const id = Number(req.params.id);
@@ -75,9 +76,9 @@ router.put('/warehouses/:id', authorize('admin'), validate(updateWarehouseValida
 
     res.json({ success: true });
   } catch (err) { throw err; }
-});
+}));
 
-router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), async (req, res) => {
+router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const wh = await WarehouseService.deactivateWarehouse(id);
@@ -93,6 +94,6 @@ router.delete('/warehouses/:id', authorize('admin'), validate(paramsIdSchema), a
 
     res.json({ success: true });
   } catch (err) { throw err; }
-});
+}));
 
 export default router;

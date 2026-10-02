@@ -241,4 +241,7 @@ Available Suites:
   process.exit(process.exitCode ?? 0);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
