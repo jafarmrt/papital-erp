@@ -1,9 +1,14 @@
 import { DollarSign } from 'lucide-react';
 import { formatPersianPrice, formatCurrencyLabel } from '../../../utils';
-import { addLineNet, addLineGross, addLineDiscount, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
+import { addLineGross, addLineDiscount, documentPayableOf, type InvoiceListDocument } from '../../../lib/invoices/invoiceListDocuments';
 
-/** TD-080 (بخش ۳): نوار جمع کل، جمع ناخالص و مجموع تخفیف در مودال جزئیات */
+/**
+ * TD-080 (بخش ۳): نوار جمع کل، جمع ناخالص و مجموع تخفیف در مودال جزئیات.
+ * v7.0.94 (TD-235 بند ۱): جمع کل = خالص اقلام + مالیات (documentPayableOf)؛ پیش‌تر مالیات حذف می‌شد و اگر سند کامل
+ * بارگذاری نمی‌شد (ردیف بدون اقلام) صفر نشان می‌داد.
+ */
 export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
+  const vatAmount = Number(selectedDocDetails.vatAmount || 0);
   return (
     <div className="bg-slate-900 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -13,7 +18,7 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
         <div>
           <span className="text-[11px] text-slate-400 block font-medium">جمع کل ارزش نهایی سند:</span>
           <strong className="text-base font-black text-white font-mono">
-            {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineNet, 0))} {formatCurrencyLabel(selectedDocDetails.currency)}
+            {formatPersianPrice(documentPayableOf(selectedDocDetails))} {formatCurrencyLabel(selectedDocDetails.currency)}
           </strong>
         </div>
       </div>
@@ -31,6 +36,14 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
             {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineDiscount, 0))}
           </span>
         </div>
+        {vatAmount > 0 && (
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 block">مالیات بر ارزش افزوده:</span>
+            <span className="font-mono text-amber-300 font-bold">
+              {formatPersianPrice(vatAmount)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

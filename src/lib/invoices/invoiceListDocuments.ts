@@ -33,6 +33,8 @@ export interface InvoiceListDocument {
   itemsCount?: number;
   totalQuantity?: number | string;
   totalAmount?: number;
+  vatAmount?: number;
+  payableAmount?: number;
   paidAmount?: number;
   remainingAmount?: number;
   settlementStatus?: string;
@@ -65,6 +67,15 @@ export function documentAmountOf(d: InvoiceListDocument): number {
     ? d.totalAmount
     : (d.items?.reduce(addLineNet, 0) || 0)
   );
+}
+
+/**
+ * v7.0.94 (TD-235 بند ۱): مبلغ قابل پرداخت سند = خالص اقلام + مالیات ساختاریافته (AGENTS §۶)؛ payableAmount سرور،
+ * وگرنه مبلغ خالص به‌علاوه vatAmount. ستون «مبلغ سند» جدول و «جمع کل ارزش نهایی سند» پنجره جزئیات همین را نشان می‌دهند.
+ */
+export function documentPayableOf(d: InvoiceListDocument): number {
+  if (d.payableAmount !== undefined && d.payableAmount !== null) return Number(d.payableAmount);
+  return documentAmountOf(d) + Number(d.vatAmount || 0);
 }
 
 export interface InvoiceListSummary {
@@ -161,7 +172,7 @@ export function resolveInvoiceRowFigures(doc: InvoiceListDocument): InvoiceRowFi
     ? doc.totalQuantity
     : (doc.items?.reduce(addLineQuantity, 0) || 0);
 
-  const totalDocAmount = documentAmountOf(doc);
+  const totalDocAmount = documentPayableOf(doc);
 
   // Settlement calculations
   const isCommercial = (isInvoice || isReceipt) && totalDocAmount > 0;
@@ -215,7 +226,7 @@ export function detailsSettlementViewOf(settlementStatus: string | undefined): {
   return { label: 'تسویه نشده', iconClass: 'bg-rose-100 text-rose-700', badgeClass: 'bg-rose-100 text-rose-800' };
 }
 
-/** مانده تسویه در مودال جزئیات: remainingAmount سرور، وگرنه totalAmount − paidAmount (حداقل صفر) */
+/** مانده تسویه در مودال جزئیات: remainingAmount سرور، وگرنه مبلغ قابل پرداخت − paidAmount (حداقل صفر، v7.0.94) */
 export function detailsRemainingOf(doc: InvoiceListDocument): number {
-  return doc.remainingAmount !== undefined ? doc.remainingAmount : Math.max(0, (doc.totalAmount || 0) - (doc.paidAmount || 0));
+  return doc.remainingAmount !== undefined ? doc.remainingAmount : Math.max(0, documentPayableOf(doc) - (doc.paidAmount || 0));
 }
