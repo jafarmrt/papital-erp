@@ -36,11 +36,12 @@ export default function Dashboard() {
     Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
 
-  // v7.0.53 (audit P2-10): کارت «وضعیت انبار» فقط برای دارندگان reports.view (مجوز آمار داشبورد انبار)
-  const hasReportsPermission = Boolean(
+  // v7.0.53 / v7.0.55 (audit P2-10): کارت «وضعیت انبار» برای دارندگان reports.view یا warehouse.view (مجوز آمار داشبورد انبار)
+  const canViewWarehouseStatus = Boolean(
     userPermissions?.isAdmin ||
     user?.role === 'admin' ||
-    Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('reports.view')
+    Array.isArray(userPermissions?.permissions) &&
+      (userPermissions.permissions.includes('reports.view') || userPermissions.permissions.includes('warehouse.view'))
   );
 
   // Convert CRM activities and Daily Logs into Calendar Event items
@@ -156,7 +157,7 @@ export default function Dashboard() {
           </div>
 
           {/* Warehouse BI & Analytics Quick Link Card */}
-          {hasReportsPermission && (
+          {canViewWarehouseStatus && (
             <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-5 border border-slate-700/80 shadow-md flex items-center justify-between gap-4">
               <div className="flex items-center gap-3.5 min-w-0">
                 <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">

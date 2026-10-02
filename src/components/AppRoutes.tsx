@@ -92,7 +92,7 @@ export function AppRoutes({ user, userPermissions, permissionsLoaded }: AppRoute
           <Route path="/" element={<Dashboard />} />
         {/* V10-5.0: وضعیت انبار = داشبورد تحلیلی و هوش تجاری انبار */}
         <Route path="/inventory-status" element={
-          <ProtectedRoute requiredPerm="reports.view" userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
+          <ProtectedRoute requiredPerm={['reports.view', 'warehouse.view']} userPermissions={userPermissions} permissionsLoaded={permissionsLoaded} user={user}>
             <InventoryStatusPage />
           </ProtectedRoute>
         } />

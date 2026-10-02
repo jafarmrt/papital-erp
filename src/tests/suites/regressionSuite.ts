@@ -4413,7 +4413,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // نویسه‌های % و _ در جستجوی سراسری و کاردکس نویسه عام نیستند
   if (shouldRun('reg_read_endpoint_scope_p2_10', 'p210', 'authorize', 'search')) {
     const tStart = Date.now();
-    const testName = 'v7.0.53: جستجوی سراسری بخش‌به‌بخش با مجوز، کاردکس با warehouse.view/accounting.view و آمار داشبورد با reports.view (P2-10)';
+    const testName = 'v7.0.53/55: جستجوی سراسری بخش‌به‌بخش با مجوز، کاردکس با warehouse.view/accounting.view و آمار داشبورد انبار با reports.view/warehouse.view (P2-10)';
     const createdRoleIds: number[] = [];
     try {
       const request = (await import('supertest')).default;
@@ -4504,15 +4504,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`«%%%» در جستجوی کاردکس نویسه عام شد (وضعیت ${kardexPercent.status}، ${kardexRows.length} ردیف)`);
       }
 
-      // ج) آمار داشبورد انبار
+      // ج) آمار داشبورد انبار: reports.view یا (از v7.0.55، تصمیم مالک محصول) warehouse.view
       const dash: Record<string, number> = {};
-      for (const [name, cookie] of [['logger', logger], ['warehouse', warehouseViewer], ['reports', reportsViewer]] as const) {
+      for (const [name, cookie] of [['logger', logger], ['accounting', accountingViewer], ['warehouse', warehouseViewer], ['reports', reportsViewer]] as const) {
         dash[`${name}:stats`] = (await request(app).get('/api/stats').set('Cookie', cookie)).status;
         dash[`${name}:bi`] = (await request(app).get('/api/dashboard-bi-stats').set('Cookie', cookie)).status;
       }
-      if (dash['logger:stats'] !== 403 || dash['logger:bi'] !== 403 || dash['warehouse:stats'] !== 403 || dash['warehouse:bi'] !== 403
-        || dash['reports:stats'] !== 200 || dash['reports:bi'] !== 200) {
-        throw new Error(`آمار داشبورد انبار فقط برای reports.view: ${fmt(dash)}`);
+      const dashExpected: Record<string, number> = {
+        'logger:stats': 403, 'logger:bi': 403, 'accounting:stats': 403, 'accounting:bi': 403,
+        'warehouse:stats': 200, 'warehouse:bi': 200, 'reports:stats': 200, 'reports:bi': 200
+      };
+      if (Object.entries(dashExpected).some(([k, want]) => dash[k] !== want)) {
+        throw new Error(`آمار داشبورد انبار فقط برای reports.view یا warehouse.view: ${fmt(dash)}`);
       }
 
       results.push(makeTestCase({

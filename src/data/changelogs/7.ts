@@ -8,6 +8,15 @@ import { AIUpdateLog } from './types';
  */
 export const v7Updates: AIUpdateLog[] = [
   {
+    version: 'v7.0.55',
+    date: '۱۰ مهر ۱۴۰۵',
+    title: 'صفحه «وضعیت انبار» برای دارندگان مجوز مشاهده انبار',
+    summary: 'به تصمیم مالک محصول، صفحه «وضعیت انبار» و آمار آن علاوه بر reports.view با warehouse.view هم باز می‌شود؛ انباردار و ناظر انبارگردانی دوباره آن را می‌بینند.',
+    changes: [
+      'آمار داشبورد انبار، منو، مسیر صفحه و کارت داشبورد با reports.view یا warehouse.view'
+    ]
+  },
+  {
     version: 'v7.0.54',
     date: '۱۰ مهر ۱۴۰۵',
     title: 'چنج‌لاگ کوتاه: فشرده‌سازی 7.ts و قاعده ثبت فقط نکات مهم',
