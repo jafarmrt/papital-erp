@@ -3632,6 +3632,63 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.15: v7.0.40 (audit P2-11): پردازه سرور در همه محیط‌ها پس از خطای مدیریت‌نشده یا شکست نهایی مهاجرت متوقف می‌شود
+  if (shouldRun('reg_process_exits_on_unhandled_errors_p2_11', 'p211', 'uncaught', 'process')) {
+    const tStart = Date.now();
+    try {
+      const { spawnSync } = await import('child_process');
+      const runServer = (extraImport: string | null, port: number) => {
+        const args = ['--import', 'tsx', ...(extraImport ? ['--import', extraImport] : []), 'server.ts'];
+        const child = spawnSync(process.execPath, args, {
+          cwd: process.cwd(),
+          // محیط توسعه؛ پایگاه‌داده غیرقابل‌دسترس تا هیچ داده‌ای لمس نشود (پورت ۱ همیشه بسته است)
+          env: { ...process.env, NODE_ENV: 'development', PORT: String(port), DATABASE_URL: 'postgresql://probe:probe@127.0.0.1:1/probe' },
+          encoding: 'utf-8',
+          timeout: 90_000,
+          killSignal: 'SIGKILL'
+        });
+        return { status: child.status, output: `${child.stdout || ''}${child.stderr || ''}` };
+      };
+      const basePort = 39000 + Math.floor(Math.random() * 500);
+
+      // ۱) شکست نهایی مهاجرت در محیط توسعه: پیش‌تر سرور بدون اسکیما به کار ادامه می‌داد
+      const migration = runServer(null, basePort);
+      if (migration.status !== 1 || !migration.output.includes('FATAL: Database migrations failed after 5 attempts')) {
+        throw new Error(`پس از شکست نهایی مهاجرت پردازه باید با کد ۱ متوقف شود: ${JSON.stringify({ status: migration.status, tail: migration.output.slice(-500) })}`);
+      }
+
+      // ۲) خطای مدیریت‌نشده پس از راه‌اندازی در محیط توسعه: پیش‌تر فقط لاگ می‌شد
+      const uncaught = runServer('./src/tests/fixtures/uncaughtAfterStartupProbe.ts', basePort + 1);
+      if (uncaught.status !== 1 || !uncaught.output.includes('UNCAUGHT_PROBE_FIRING')
+        || !uncaught.output.includes('Initiating graceful shutdown (exit code 1)')
+        || uncaught.output.includes('FATAL: Database migrations failed after 5 attempts')) {
+        throw new Error(`پس از خطای مدیریت‌نشده پردازه باید خاموشی کنترل‌شده با کد ۱ انجام دهد: ${JSON.stringify({ status: uncaught.status, tail: uncaught.output.slice(-500) })}`);
+      }
+
+      results.push(makeTestCase({
+        id: 'reg_process_exits_on_unhandled_errors_p2_11',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.40: توقف پردازه در محیط توسعه پس از خطای مدیریت‌نشده و شکست نهایی مهاجرت (P2-11)',
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سرور واقعی در محیط توسعه پس از ۵ شکست مهاجرت و نیز پس از یک خطای مدیریت‌نشده، هر دو بار با کد ۱ متوقف شد.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_process_exits_on_unhandled_errors_p2_11',
+        scenarioId: 'startup_db_session_hygiene',
+        name: 'v7.0.40: توقف پردازه در محیط توسعه پس از خطای مدیریت‌نشده و شکست نهایی مهاجرت (P2-11)',
+        layer: 'regression',
+        executionType: 'real_code',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    }
+  }
+
   // Test 28: V6 Phase 5.1: رعایت دقیق سلسله‌مراتب قفل‌ها (ITEMS_STOCK:40 قبل از DOCUMENTS:60) و ممانعت از بن‌بست (TD-159)
   if (shouldRun('reg_lock_hierarchy_deadlock_prevention_td_159', 'td159', 'lock', 'deadlock', 'concurrency')) {
     const t28Start = Date.now();

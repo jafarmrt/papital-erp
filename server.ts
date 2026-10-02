@@ -15,6 +15,7 @@ import { EventActionEngineService } from './src/services/events/eventActionEngin
 import { WebhookSubscriptionService } from './src/services/events/webhookSubscriptionService.js';
 import { WorkflowEngineService } from './src/services/workflow/workflowEngineService.js';
 import { pool } from './src/db/drizzle.js';
+import { decideProcessErrorAction, processErrorMessage } from './src/lib/processErrorPolicy.js';
 
 async function startServer() {
   // TST-001: production startup assertion — abort if test code leaked into bundle
@@ -76,15 +77,14 @@ async function startServer() {
         }
       }
     }
-    if (!migrationSucceeded && process.env.NODE_ENV === 'production') {
-      logger.error('FATAL: Database migrations failed after 5 attempts in production. Aborting process.');
+    // v7.0.40 (audit P2-11): در همه محیط‌ها؛ سرور بدون اسکیما نباید به پاسخ‌دادن ادامه دهد
+    if (!migrationSucceeded) {
+      logger.error('FATAL: Database migrations failed after 5 attempts. Aborting process.');
       process.exit(1);
     }
   })().catch(err => {
     logger.error('Unhandled error in background migration/seed runner:', err);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
+    process.exit(1);
   });
 
   // Serve public static assets (fonts, icons, images) directly
@@ -120,21 +120,6 @@ async function startServer() {
     logger.info(`Server running on port ${PORT}`);
   });
 
-  const SAFE_PATTERNS = [
-    'terminating connection',
-    'Connection terminated',
-    'connection terminated',
-    'ECONNRESET',
-    'idle-in-transaction',
-    'socket closed',
-  ];
-
-  const FATAL_PATTERNS = [
-    'heap out of memory',
-    'assertion failed',
-    'FATAL',
-  ];
-
   let isShuttingDown = false;
   function gracefulShutdown(exitCode: number = 0): void {
     if (isShuttingDown) return;
@@ -166,39 +151,24 @@ async function startServer() {
     }, 10000).unref();
   }
 
-  process.on('uncaughtException', (err: any) => {
-    const msg = err?.message || String(err);
-
-    if (SAFE_PATTERNS.some(p => msg.includes(p))) {
-      logger.warn(`[UncaughtException Handled] PostgreSQL connection drop: ${msg}`);
+  // v7.0.40 (audit P2-11): پس از خطای پیش‌بینی‌نشده وضعیت پردازه نامعلوم است؛ در همه محیط‌ها خاموشی کنترل‌شده،
+  // به‌جز قطع اتصال‌های PostgreSQL که استخر خودش بازیابی می‌کند (src/lib/processErrorPolicy.ts)
+  process.on('uncaughtException', (err: unknown) => {
+    if (decideProcessErrorAction(err) === 'ignore') {
+      logger.warn(`[UncaughtException Handled] PostgreSQL connection drop: ${processErrorMessage(err)}`);
       return;
     }
-
-    if (FATAL_PATTERNS.some(p => msg.includes(p))) {
-      logger.error('[Fatal Uncaught Exception — killing process]', err);
-      gracefulShutdown(1);
-      return;
-    }
-
-    logger.error('[Uncaught Exception — non-fatal]', err);
-    if (process.env.NODE_ENV === 'production') {
-      gracefulShutdown(1);
-    }
+    logger.error('[Uncaught Exception — shutting down]', err);
+    gracefulShutdown(1);
   });
 
-  process.on('unhandledRejection', (reason: any) => {
-    const msg = reason?.message || String(reason);
-
-    if (SAFE_PATTERNS.some(p => msg.includes(p))) {
-      logger.warn(`[UnhandledRejection Handled] PostgreSQL connection drop: ${msg}`);
+  process.on('unhandledRejection', (reason: unknown) => {
+    if (decideProcessErrorAction(reason) === 'ignore') {
+      logger.warn(`[UnhandledRejection Handled] PostgreSQL connection drop: ${processErrorMessage(reason)}`);
       return;
     }
-
-    logger.error('[Unhandled Rejection]', reason);
-
-    if (process.env.NODE_ENV === 'production') {
-      gracefulShutdown(1);
-    }
+    logger.error('[Unhandled Rejection — shutting down]', reason);
+    gracefulShutdown(1);
   });
 
   process.on('SIGTERM', () => {

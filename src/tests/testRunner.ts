@@ -139,7 +139,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v6_treasury_cheque_isolation: 'Treasury & Cheques: Cheque Method Bank Balance Drain Prevention & Receivable/Payable Isolation (V6 Sub-phase 1.2 / TD-148)',
   v6_fiscal_year_closing_isolation: 'Accounting & Year Closing: Fiscal Year Closing Transaction Isolation & Trial Balance Calendar Normalization (V6 Sub-phase 1.3 / TD-141, TD-142)',
   test_runner_real_database_guard: 'Test Infrastructure: Runner Refuses the In-Memory Mock Database for Every Suite (P2-12)',
-  startup_db_session_hygiene: 'Startup & DB Sessions: Connection-Level Timeouts, No DB Access Before Migrations, Seed Lock Release (TD-176 / TD-194)'
+  startup_db_session_hygiene: 'Startup, Process & DB Sessions: Connection-Level Timeouts, No DB Access Before Migrations, Seed Lock Release, Exit on Unhandled Errors (TD-176 / TD-194 / P2-11)'
 };
 
 
