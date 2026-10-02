@@ -16,6 +16,7 @@ import { ItemStockReservationService } from '../items/itemStockReservation.servi
 import { LockHierarchyLevel, sortIdsForLocking, withOrderedLocks } from '../../lib/lockOrder.js';
 import { logger } from '../../middleware/logger.js';
 import { logActivity } from '../../lib/auditLogger.js';
+import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 
 export class DocumentLifecycleService {
@@ -131,9 +132,11 @@ export class DocumentLifecycleService {
               }
 
               const summary = reservationReport.itemSummaries.find(s => s.itemId === item.itemId);
+              // v7.0.45 (audit P2-1): موجودی انبارها از جدول نرمال (منبع حقیقت)، نه کش JSONB
+              const tableStock = await ItemWarehouseStockService.getStockSnapshot(tx, item.itemId);
               const sellableInfo = ItemStockReservationService.computeSellable(
                 summary,
-                (dbItem.stocks as Record<string, number>) || {},
+                tableStock.byCode,
                 {
                   location: targetLoc,
                   excludeDocumentId: id,

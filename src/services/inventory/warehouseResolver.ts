@@ -75,3 +75,32 @@ export async function resolveWarehouseCode(tx: DbClient, raw: unknown): Promise<
   return resolver(raw);
 }
 
+
+export interface LedgerWarehouseRef { id: number; code: string; name: string; isActive: number | null }
+
+/**
+ * v7.0.33 (TD-200) / v7.0.45 (P2-1): نگاشت محل ثبت‌شده در کاردکس (یا کلید JSONB قدیمی) به انبار — روی همه انبارها،
+ * از جمله غیرفعال، چون تاریخچه ممکن است به انباری اشاره کند که بعداً غیرفعال شده است.
+ * '' و 'default' = انبار پیش‌فرض (فعال با کمترین شناسه)؛ سپس کد و سپس نام (بدون حساسیت به حروف)؛ در غیر این صورت null.
+ * همین قاعده در تطبیق موجودی انبارها، بازسازی کاردکس و تابع SQL مهاجرت 0020 استفاده می‌شود.
+ */
+export function createLedgerLocationResolver(all: LedgerWarehouseRef[]): (raw: unknown) => LedgerWarehouseRef | null {
+  const sorted = [...all].sort((a, b) => a.id - b.id);
+  const defaultWh = sorted.find(w => w.isActive === 1) ?? sorted[0] ?? null;
+  const byCode = new Map<string, LedgerWarehouseRef>();
+  for (const w of sorted) {
+    const key = w.code.trim().toLowerCase();
+    if (!byCode.has(key)) byCode.set(key, w);
+  }
+  const byName = new Map<string, LedgerWarehouseRef>();
+  for (const w of sorted) {
+    const key = (w.name || '').trim().toLowerCase();
+    if (key && !byName.has(key)) byName.set(key, w);
+  }
+  return (raw: unknown): LedgerWarehouseRef | null => {
+    const key = String(raw ?? '').trim().toLowerCase();
+    // ردیف‌های قدیمی بدون انبار و ردیف‌های معکوس با برچسب 'default' به انبار پیش‌فرض تعلق دارند
+    if (!key || key === 'default') return defaultWh;
+    return byCode.get(key) ?? byName.get(key) ?? null;
+  };
+}

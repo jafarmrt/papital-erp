@@ -1,6 +1,6 @@
-import { sql, eq, and, or, inArray, asc } from 'drizzle-orm';
+import { sql, eq, and, or, inArray } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { items, warehouses, productionProjects, documents, documentItems } from '../../db/schema.js';
+import { items, productionProjects, documents, documentItems } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -102,41 +102,6 @@ interface InventoryControlData {
 }
 
 export class ItemStockReservationService {
-  /**
-   * Auto-sync function to fix any existing items where current_stock > 0 but warehouse stocks sum to 0
-   */
-  static async syncMissingWarehouseStocks(): Promise<void> {
-    try {
-      const activeWHs = await orm.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.isActive, 1)).orderBy(asc(warehouses.id)); // v7.0.36 (P2-3)
-      if (activeWHs.length === 0) {
-        return;
-      }
-      const defaultWhCode = activeWHs[0].code;
-
-      const itemsToFix = await orm.execute(sql`
-        SELECT id, current_stock, stocks
-        FROM ${items}
-        WHERE is_deleted = 0 AND current_stock > 0
-      `);
-
-      for (const row of itemsToFix.rows) {
-        const id = Number(row.id);
-        const currentStock = Number(row.current_stock || 0);
-        const stocksObj = (row.stocks as Record<string, number>) || {};
-
-        const totalWhStock = Object.values(stocksObj).reduce((sum, v) => sum + (Number(v) || 0), 0);
-        if (totalWhStock === 0 && currentStock > 0) {
-          stocksObj[defaultWhCode] = currentStock;
-          await orm.update(items)
-            .set({ stocks: stocksObj })
-            .where(eq(items.id, id));
-        }
-      }
-    } catch (err) {
-      logger.error({ message: 'Error syncing missing warehouse stocks', error: err });
-    }
-  }
-
   /**
    * Derive reserved items for a project's inventory control bounded by warehouse stock.
    */

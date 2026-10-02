@@ -13,6 +13,7 @@ import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE } from './documentRefNumber.service.js';
+import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
@@ -310,6 +311,8 @@ export class DocumentCreationService {
           .where(and(inArray(items.id, sortedAuditItemIds), eq(items.isDeleted, 0)))
           .for('update');
         const auditItemMap = new Map(lockedAuditItems.map(it => [it.id, it]));
+        // v7.0.45 (audit P2-1): موجودی ثبت‌شده هر انبار از جدول موجودی انبارها (منبع حقیقت)
+        const auditStockMap = await ItemWarehouseStockService.getStocksForItems(tx, sortedAuditItemIds);
 
         // TD-164: حذف کوئری‌های تکراری N+1 انبار و قیمت در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
@@ -337,10 +340,9 @@ export class DocumentCreationService {
           const targetItem = auditItemMap.get(Number(itemId));
 
           // P1-04 (H-05): محاسبه انحراف انبارگردانی در سمت سرور بر مبنای موجودی ثبت‌شده واقعی در پایگاه‌داده تحت قفل
-          const whStocks = (targetItem?.stocks as Record<string, number>) || {};
-          const dbStock = targetLoc && whStocks[targetLoc] !== undefined
-            ? Number(whStocks[targetLoc] || 0)
-            : Number(targetItem?.currentStock || 0);
+          // v7.0.45 (audit P2-1): موجودی همین انبار از جدول نرمال؛ انبار بدون ردیف یعنی صفر. پیش‌تر اگر JSONB کلیدی
+          // برای این انبار نداشت، موجودی کل کالا (همه انبارها) مبنای انحراف قرار می‌گرفت.
+          const dbStock = auditStockMap.get(Number(itemId))?.byCode[targetLoc] ?? 0;
 
           const physicalQty = Number(physical_stock || 0);
           const variance = physicalQty - dbStock;
@@ -405,6 +407,8 @@ export class DocumentCreationService {
             .where(and(inArray(items.id, distinctSortedIds), eq(items.isDeleted, 0)))
             .for('update');
           const dbItemMap = new Map(lockedDbItems.map(it => [it.id, it]));
+          // v7.0.45 (audit P2-1): موجودی انبارها از جدول نرمال (منبع حقیقت)، نه کش JSONB
+          const tableStockMap = await ItemWarehouseStockService.getStocksForItems(tx, distinctSortedIds);
 
           for (const item of docLines) {
             const itId = Number(item.itemId);
@@ -421,7 +425,7 @@ export class DocumentCreationService {
             const summary = reservationReport.itemSummaries.find(s => s.itemId === itId);
             const sellableInfo = ItemStockReservationService.computeSellable(
               summary,
-              (dbItem.stocks as Record<string, number>) || {},
+              tableStockMap.get(itId)?.byCode ?? {},
               {
                 location: targetLoc,
                 excludeDocumentId: excludeDocId,

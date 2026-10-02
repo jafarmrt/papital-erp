@@ -67,8 +67,6 @@ export class DocumentStockEngine {
         name: items.name,
         code: items.code,
         unit: items.unit,
-        stocks: items.stocks,
-        currentStock: items.currentStock,
         weightedAverageCost: items.weightedAverageCost,
         version: items.version
       })
@@ -80,7 +78,9 @@ export class DocumentStockEngine {
       throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سیستم یافت نشد.`);
     }
 
-    const currentStocks = (itemData.stocks as Record<string, number>) || {};
+    // v7.0.45 (audit P2-1): موجودی پیش از حرکت از جدول نرمال (منبع حقیقت)، نه از کش JSONB
+    const before = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+    const oldTotalStock = before.total;
 
     const normalizedTxDate = normalizeDateToDbTimestamp(date);
 
@@ -106,20 +106,19 @@ export class DocumentStockEngine {
     }).returning({ id: transactions.id });
 
     // V7 Phase 4.1 (TD-165): به‌روزرسانی جدول رابطه‌ای نرمال‌سازی‌شده item_warehouse_stocks تحت قفل سطری
-    const { newLocationStock } = await ItemWarehouseStockService.applyMovement(tx, {
+    await ItemWarehouseStockService.applyMovement(tx, {
       itemId,
       warehouse: whInfo,
       inOut,
       quantity: qty,
     });
-    currentStocks[finalTargetLoc] = newLocationStock;
 
-    // Single source of truth: total currentStock is strictly the sum of all location stocks
-    const newTotalStock = Object.values(currentStocks)
-      .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
-      .round(4)
-      .toNumber();
-    const oldTotalStock = Number(itemData.currentStock || 0);
+    // v7.0.45 (audit P2-1): کش JSONB و موجودی کل فقط از جدول نرمال ساخته می‌شوند. پیش‌تر موجودی کل از جمع کلیدهای
+    // JSONB حساب می‌شد و کلیدهای قدیمی (نام انبار به‌جای کد) یا انتقال‌هایی که فقط JSONB را تغییر داده بودند،
+    // موجودی را دوبار می‌شمردند یا مقدار کهنه جدول را دوباره در JSONB می‌نوشتند.
+    const after = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+    const currentStocks = after.byCode;
+    const newTotalStock = after.total;
 
     let newWAC = Number(itemData.weightedAverageCost || 0);
     if (inOut === 'in') {
@@ -173,29 +172,29 @@ export class DocumentStockEngine {
     const { itemId, quantity: qty, originalDirection, unitPrice, location: targetLoc } = params;
 
     const [itemData] = await tx
-      .select({ stocks: items.stocks, currentStock: items.currentStock, weightedAverageCost: items.weightedAverageCost, version: items.version })
+      .select({ weightedAverageCost: items.weightedAverageCost, version: items.version })
       .from(items)
       .where(eq(items.id, itemId))
       .for('update');
     if (!itemData) return;
-    const currentStocks = (itemData.stocks as Record<string, number>) || {};
     const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);
     const revMovement: 'in' | 'out' = originalDirection === 'in' ? 'out' : 'in';
 
+    // v7.0.45 (audit P2-1): موجودی کل قبل و بعد از جدول نرمال
+    const before = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+    const oldTotalStock = before.total;
+
     // V7 Phase 4.1 (TD-165): به‌روزرسانی جدول رابطه‌ای نرمال‌سازی‌شده item_warehouse_stocks تحت قفل سطری
-    const { newLocationStock } = await ItemWarehouseStockService.applyMovement(tx, {
+    await ItemWarehouseStockService.applyMovement(tx, {
       itemId,
       warehouse: whInfo,
       inOut: revMovement,
       quantity: qty,
     });
-    currentStocks[whInfo.code] = newLocationStock;
 
-    const oldTotalStock = Number(itemData.currentStock || 0);
-    const newTotalStock = Object.values(currentStocks)
-      .reduce((sum, val) => sum.add(Number(val) || 0), fin(0))
-      .round(4)
-      .toNumber();
+    const after = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+    const currentStocks = after.byCode;
+    const newTotalStock = after.total;
 
     let newWAC = Number(itemData.weightedAverageCost || 0);
     if (originalDirection === 'in') {

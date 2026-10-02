@@ -25,9 +25,9 @@
   ```
 
 ## 3. Inventory & Stock Management
-- **Dual Stock Storage:** Inventory is stored globally in `current_stock` and per-location in `jsonb` column `stocks`. Both MUST be kept in sync during every stock movement.
+- **Single Source of Truth for Stock (v7.0.45, audit P2-1, product-owner decision):** Per-warehouse stock lives ONLY in `item_warehouse_stocks` (one row per item × warehouse, CHECK non-negative). `items.stocks` (JSONB) and `items.current_stock` are a read cache rebuilt from that table (`ItemWarehouseStockService.getStockSnapshot` / `syncJsonbReadCache`, canonical warehouse codes via join); no code path may write quantities into them directly, and availability / count / transfer checks read the table, never the cache. A missing row means zero (the old first-movement fallback to JSONB is removed; migration 0020 created the missing rows). Removing the JSONB column is deferred.
 - **Weighted Average Cost (WAC):** Updated ONLY on stock 'in'. If current stock <= 0, new WAC equals the new unit price.
-- **Centralized Stock Movements:** All stock operations, warehouse locations, and WAC calculations MUST route through `DocumentService.applyStockMovement` in `src/services/document.service.ts`.
+- **Centralized Stock Movements:** All stock operations, warehouse locations, and WAC calculations MUST route through `DocumentService.applyStockMovement` in `src/services/document.service.ts` (item creation and opening stock included). Warehouse-to-warehouse transfers that must not change WAC move both rows through `ItemWarehouseStockService.applyMovement` and then rebuild the cache.
 - **Default Warehouse (TD-203, v7.0.36):** The default warehouse is the ACTIVE warehouse with the LOWEST id. Any query that picks a default/first warehouse MUST `orderBy(asc(warehouses.id))` (or use `getDefaultWarehouseCode` in `src/services/inventory/warehouseResolver.ts`); PostgreSQL row order without `ORDER BY` changes after updates.
 - **Document Statuses:** Supported document statuses in API and services: `'draft'`, `'proforma'` (پیش‌فاکتور), and `'final'`.
 - **Soft Delete & Reversal (DB-009):** Never HARD DELETE stock transactions. Set `is_deleted = 1`, issue an atomic reversal transaction with `reversal_of_id`, and recalibrate balances via `DocumentService.applyStockMovement`.
@@ -88,7 +88,7 @@
 
 ## 12. Kardex Event Sourcing & Inventory Reconciliation
 - **Event-Driven Verification:** Calculate true stock balances from sequential `stock_movements` log.
-- **Three-Way Sync:** Keep global `current_stock`, warehouse location JSONB `stocks`, and Kardex ledger fully aligned.
+- **Three-Way Invariant:** `item_warehouse_stocks` (truth) = JSONB / `current_stock` cache (derived) = Kardex ledger balance (active rows, excluding reversals of soft-deleted rows). Kardex locations and legacy JSON keys map to warehouses with one rule (`createLedgerLocationResolver`: '' / 'default' = default warehouse, then code, then name, all warehouses). The Kardex rebuild refuses (never silently drops) items with movements in an unresolvable location or a negative per-warehouse balance.
 - **Warehouse Stock Reconciliation (TD-200, v7.0.33):** `WarehouseStockReconciliationService` compares `item_warehouse_stocks` with the Kardex ledger (active rows, excluding reversals of soft-deleted rows). Repairs are manual only, dry-run by default, correct quantities only (never WAC), never auto-adjust negative ledger balances or items with unresolvable Kardex locations, and log every change/refusal to `inventory_reconciliation_anomalies`. Data-fixing migrations must never clamp or overwrite silently: add (`existing + EXCLUDED`) and record anomalies.
 
 ## 13. Scalable Changelog Architecture

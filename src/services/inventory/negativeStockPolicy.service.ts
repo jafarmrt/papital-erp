@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { logger } from '../../middleware/logger.js';
+import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 
 /**
  * v7.0.22 (TD-180 / audit P0-3): سیاست موجودی منفی به تصمیم مالک محصول فقط «ممنوع» است.
@@ -135,10 +136,11 @@ export class NegativeStockPolicyService {
       };
     }
 
-    const totalStock = fin(item.currentStock).toNumber();
+    // v7.0.45 (audit P2-1): موجودی از جدول موجودی انبارها (منبع حقیقت)، نه کش JSONB
+    const snapshot = await ItemWarehouseStockService.getStockSnapshot(db, item.id);
+    const totalStock = snapshot.total;
     const loc = params.location ? String(params.location).trim() : '';
-    const locStocks = (item.stocks as Record<string, number>) || {};
-    const locStock = loc ? fin(locStocks[loc]).toNumber() : totalStock;
+    const locStock = loc ? fin(snapshot.byCode[loc] ?? 0).toNumber() : totalStock;
 
     const projectedTotal = FinancialMath.subtract(totalStock, qty);
     const projectedLoc = loc ? FinancialMath.subtract(locStock, qty) : projectedTotal;

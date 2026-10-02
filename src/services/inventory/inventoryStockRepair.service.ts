@@ -1,7 +1,10 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
-import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { eq, and } from 'drizzle-orm';
+import { fin } from '../../lib/financialDecimal.js';
+import { nextVersion } from '../../lib/occHelper.js';
+import { InsufficientStockError } from '../../errors/customErrors.js';
+import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 
@@ -65,24 +68,31 @@ export class InventoryStockRepairService {
         throw new Error(`انبار مقصد معتبر نیست (${params.toLocation}).`);
       }
 
-      const stocksObj = (item.stocks as Record<string, number>) || {};
-      const currentFromQty = fin(stocksObj[params.fromLocation]).toNumber();
+      // v7.0.45 (audit P2-1): انتقال روی جدول موجودی انبارها (منبع حقیقت) و سپس بازسازی کش از آن. پیش‌تر فقط
+      // JSONB تغییر می‌کرد؛ جدول، موجودی کهنه انبار مبداء را نگه می‌داشت و گردش بعدی همان مقدار کهنه را دوباره در
+      // JSONB می‌نوشت (بازتولید: رسید ۱۰، انتقال ۴، فروش ۵ ← موجودی ۹ به‌جای ۵).
+      const fromWh = await ItemWarehouseStockService.resolveWarehouse(txEngine, params.fromLocation);
+      const toWh = await ItemWarehouseStockService.resolveWarehouse(txEngine, params.toLocation);
+      const before = await ItemWarehouseStockService.getStockSnapshot(txEngine, params.itemId);
+      const currentFromQty = before.byCode[fromWh.code] ?? 0;
 
       if (currentFromQty < qty) {
-        throw new Error(
+        throw new InsufficientStockError(
           `موجودی انبار مبداء (${params.fromLocation}) برای کالا کافی نیست. موجودی فعلی: ${currentFromQty}، درخواست: ${qty}`
         );
       }
 
-      const updatedStocks = { ...stocksObj };
-      updatedStocks[params.fromLocation] = FinancialMath.subtract(currentFromQty, qty);
-      updatedStocks[params.toLocation] = FinancialMath.add(fin(updatedStocks[params.toLocation]).toNumber(), qty);
+      await ItemWarehouseStockService.applyMovement(txEngine, { itemId: params.itemId, warehouse: fromWh, inOut: 'out', quantity: qty });
+      await ItemWarehouseStockService.applyMovement(txEngine, { itemId: params.itemId, warehouse: toWh, inOut: 'in', quantity: qty });
+      const after = await ItemWarehouseStockService.getStockSnapshot(txEngine, params.itemId);
+      const updatedStocks = after.byCode;
 
       await txEngine
         .update(items)
         .set({
           stocks: updatedStocks,
-          version: sql`${items.version} + 1`
+          currentStock: after.total,
+          version: nextVersion(item.version)
         })
         .where(eq(items.id, params.itemId));
 

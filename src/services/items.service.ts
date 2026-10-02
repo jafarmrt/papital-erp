@@ -18,10 +18,6 @@ export type {
 };
 
 export class ItemsService {
-  static async syncMissingWarehouseStocks(): Promise<void> {
-    return ItemStockReservationService.syncMissingWarehouseStocks();
-  }
-
   static async getReservedStockDetails(): Promise<ReservedItemsFullReport> {
     return ItemStockReservationService.getReservedStockDetails();
   }

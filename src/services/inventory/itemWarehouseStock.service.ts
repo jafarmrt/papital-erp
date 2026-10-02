@@ -1,8 +1,7 @@
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { itemWarehouseStocks, warehouses, items } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
-import { logger } from '../../middleware/logger.js';
 import type { DbExecutor } from '../../db/drizzle.js';
 
 export type DbClient = DbExecutor;
@@ -70,30 +69,9 @@ export class ItemWarehouseStockService {
     // اولین حرکت یک کالا در یک انبار هر دو INSERT می‌کردند و یکی با خطای 23505 شکست می‌خورد.
     const { row: existing, created } = await ItemWarehouseStockService.lockOrCreateRow(tx, itemId, warehouse);
 
-    let previousLocationStock = Number(existing.currentStock || 0);
-    if (created) {
-      // Lazy migration / initialize from items.stocks JSONB or items.currentStock under lock
-      const [it] = await tx
-        .select({ stocks: items.stocks, currentStock: items.currentStock })
-        .from(items)
-        .where(eq(items.id, itemId))
-        .for('update');
-
-      previousLocationStock = 0;
-      if (it) {
-        const stocksJson = (it.stocks as Record<string, number>) || {};
-        const valByCode = stocksJson[warehouse.code] ?? stocksJson[warehouse.code.toLowerCase()];
-        const valById = stocksJson[String(warehouse.id)];
-        const valByName = stocksJson[warehouse.name];
-        const rawStockVal = valByCode ?? valById ?? valByName;
-
-        if (rawStockVal !== undefined && Number.isFinite(Number(rawStockVal))) {
-          previousLocationStock = Number(rawStockVal);
-        } else if (Object.keys(stocksJson).length === 0 && Number(it.currentStock || 0) > 0 && (warehouse.code === 'main' || warehouse.id === 1)) {
-          previousLocationStock = Number(it.currentStock || 0);
-        }
-      }
-    }
+    // v7.0.45 (audit P2-1): این جدول تنها منبع موجودی هر انبار است؛ ردیف تازه با صفر شروع می‌شود و دیگر از کش
+    // JSONB مقدار اولیه نمی‌گیرد (ردیف‌های جاافتاده داده قدیمی را مهاجرت 0020 ساخته است).
+    const previousLocationStock = Number(existing.currentStock || 0);
     let newLocationStock: number;
 
     if (inOut === 'in') {
@@ -162,71 +140,111 @@ export class ItemWarehouseStockService {
   }
 
   /**
-   * Syncs the normalized rows of an item to the JSONB items.stocks column and items.currentStock.
-   * Maintains 100% backwards compatibility as a high-performance Read-Cache.
+   * v7.0.45 (audit P2-1): موجودی فعلی کالا در هر انبار، فقط از جدول نرمال (منبع حقیقت) با کد استاندارد انبار
+   * (از جدول انبارها، نه ستون کپی warehouse_code که در مهاجرت 0014 گاهی نام انبار گرفته است).
+   */
+  public static async getStockSnapshot(tx: DbClient, itemId: number): Promise<StockSnapshot> {
+    const map = await ItemWarehouseStockService.getStocksForItems(tx, [itemId]);
+    return map.get(itemId) ?? { byCode: {}, total: 0 };
+  }
+
+  /** نسخه دسته‌ای getStockSnapshot برای حلقه‌های سند (بدون N+1) */
+  public static async getStocksForItems(tx: DbClient, itemIds: number[]): Promise<Map<number, StockSnapshot>> {
+    const ids = Array.from(new Set(itemIds.filter(id => Number.isInteger(id) && id > 0)));
+    const result = new Map<number, StockSnapshot>();
+    if (ids.length === 0) return result;
+    const rows = await tx
+      .select({
+        itemId: itemWarehouseStocks.itemId,
+        code: warehouses.code,
+        currentStock: itemWarehouseStocks.currentStock,
+      })
+      .from(itemWarehouseStocks)
+      .innerJoin(warehouses, eq(warehouses.id, itemWarehouseStocks.warehouseId))
+      .where(inArray(itemWarehouseStocks.itemId, ids))
+      .orderBy(asc(itemWarehouseStocks.warehouseId));
+    const totals = new Map<number, ReturnType<typeof fin>>();
+    for (const id of ids) {
+      result.set(id, { byCode: {}, total: 0 });
+      totals.set(id, fin(0));
+    }
+    for (const r of rows) {
+      const snap = result.get(r.itemId)!;
+      const val = fin(Number(r.currentStock) || 0).round(4).toNumber();
+      snap.byCode[r.code] = fin(snap.byCode[r.code] ?? 0).add(val).round(4).toNumber();
+      totals.set(r.itemId, totals.get(r.itemId)!.add(val));
+    }
+    for (const [id, total] of totals) {
+      result.get(id)!.total = total.round(4).toNumber();
+    }
+    return result;
+  }
+
+  /**
+   * کش خواندنی JSONB (items.stocks) و موجودی کل (items.current_stock) را از جدول نرمال بازسازی و ذخیره می‌کند.
+   * v7.0.45 (audit P2-1): هیچ مسیری مستقیم در این دو ستون نمی‌نویسد؛ هر تغییر موجودی پس از اعمال روی جدول نرمال
+   * همین تابع را صدا می‌زند (یا مقدار getStockSnapshot را در همان UPDATE می‌نویسد).
    */
   public static async syncJsonbReadCache(
     tx: DbClient,
     itemId: number
   ): Promise<{ stocksJson: Record<string, number>; totalStock: number }> {
-    const rows = await tx
-      .select({
-        warehouseCode: itemWarehouseStocks.warehouseCode,
-        currentStock: itemWarehouseStocks.currentStock,
-      })
-      .from(itemWarehouseStocks)
-      .where(eq(itemWarehouseStocks.itemId, itemId));
-
-    const stocksJson: Record<string, number> = {};
-    let totalStock = fin(0);
-
-    for (const r of rows) {
-      const val = Number(r.currentStock || 0);
-      stocksJson[r.warehouseCode] = val;
-      totalStock = totalStock.add(val);
-    }
-
-    const finalTotalStock = totalStock.round(4).toNumber();
-
+    const snapshot = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
     await tx
       .update(items)
       .set({
-        stocks: stocksJson,
-        currentStock: finalTotalStock,
+        stocks: snapshot.byCode,
+        currentStock: snapshot.total,
       })
       .where(eq(items.id, itemId));
-
-    return { stocksJson, totalStock: finalTotalStock };
+    return { stocksJson: snapshot.byCode, totalStock: snapshot.total };
   }
 
   /**
-   * Bulk synchronizes warehouse breakdown into item_warehouse_stocks (e.g., during Kardex rebuild).
+   * موجودی همه انبارهای یک کالا را به مقادیر داده‌شده (کلید: شناسه انبار) تنظیم می‌کند؛ ردیف انبارهایی که در
+   * نقشه نیستند صفر می‌شوند (بازسازی کاردکس: دفتر کاردکس مرجع است). مقدار منفی پذیرفته نمی‌شود.
    */
-  public static async rebuildItemWarehouseStocks(
+  public static async setItemWarehouseStocks(
     tx: DbClient,
     itemId: number,
-    breakdown: Record<string, number>
+    qtyByWarehouseId: Map<number, number>
   ): Promise<void> {
-    const nowIso = new Date().toISOString();
-
-    for (const [rawWh, qty] of Object.entries(breakdown)) {
-      try {
-        const wh = await ItemWarehouseStockService.resolveWarehouse(tx, rawWh);
-        const stockNum = fin(Number(qty) || 0).round(4).toNumber();
-
-        const { row: existing, created } = await ItemWarehouseStockService.lockOrCreateRow(tx, itemId, wh);
-        await tx
-          .update(itemWarehouseStocks)
-          .set({
-            currentStock: stockNum,
-            warehouseCode: wh.code,
-            version: created ? existing.version : existing.version + 1,
-            updatedAt: nowIso,
-          })
-          .where(eq(itemWarehouseStocks.id, existing.id));
-      } catch (err: any) {
-        logger.warn(`[ItemWarehouseStockService] Could not resolve warehouse "${rawWh}" for item ${itemId}: ${err.message}`);
+    for (const [whId, qty] of qtyByWarehouseId) {
+      if (!Number.isFinite(qty) || qty < 0) {
+        throw new ValidationError(`موجودی کالای ${itemId} در انبار ${whId} نمی‌تواند منفی یا نامعتبر باشد (${qty}).`);
       }
     }
+    const allWarehouses = await tx
+      .select({ id: warehouses.id, code: warehouses.code, name: warehouses.name })
+      .from(warehouses);
+    const whById = new Map(allWarehouses.map(w => [w.id, w]));
+    const existingRows = await tx
+      .select({ warehouseId: itemWarehouseStocks.warehouseId })
+      .from(itemWarehouseStocks)
+      .where(eq(itemWarehouseStocks.itemId, itemId));
+    const targetIds = new Set<number>([...qtyByWarehouseId.keys(), ...existingRows.map(r => r.warehouseId)]);
+    const nowIso = new Date().toISOString();
+
+    for (const whId of [...targetIds].sort((a, b) => a - b)) {
+      const wh = whById.get(whId);
+      if (!wh) continue;
+      const stockNum = fin(qtyByWarehouseId.get(whId) ?? 0).round(4).toNumber();
+      const { row: existing, created } = await ItemWarehouseStockService.lockOrCreateRow(tx, itemId, wh);
+      await tx
+        .update(itemWarehouseStocks)
+        .set({
+          currentStock: stockNum,
+          warehouseCode: wh.code,
+          version: created ? existing.version : existing.version + 1,
+          updatedAt: nowIso,
+        })
+        .where(eq(itemWarehouseStocks.id, existing.id));
+    }
   }
+}
+
+export interface StockSnapshot {
+  /** موجودی هر انبار با کد استاندارد انبار */
+  byCode: Record<string, number>;
+  total: number;
 }

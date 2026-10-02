@@ -10,6 +10,8 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { logger } from '../../middleware/logger.js';
+import { createLedgerLocationResolver, type LedgerWarehouseRef } from './warehouseResolver.js';
+import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 
 /**
  * v7.0.33 (TD-200 / audit P1-9): گزارش و ترمیم موجودی تفکیکی انبارها از روی دفتر کاردکس.
@@ -98,7 +100,7 @@ export interface WarehouseStockRepairResult {
   changes: PlannedChange[];
 }
 
-interface WarehouseRef { id: number; code: string; name: string; isActive: number | null }
+type WarehouseRef = LedgerWarehouseRef;
 
 type ItemSnapshot = { id: number; code: string | null; name: string; currentStock: number | null; stocks: unknown };
 
@@ -108,23 +110,6 @@ interface ItemAnalysis {
   unresolved: UnresolvedLedgerLocation[];
   tableSum: number;
   cacheMismatch: boolean;
-}
-
-function createLocationResolver(all: WarehouseRef[]) {
-  const sorted = [...all].sort((a, b) => a.id - b.id);
-  const defaultWh = sorted.find(w => w.isActive === 1) ?? sorted[0] ?? null;
-  const byCode = new Map(sorted.map(w => [w.code.trim().toLowerCase(), w]));
-  const byName = new Map<string, WarehouseRef>();
-  for (const w of sorted) {
-    const key = (w.name || '').trim().toLowerCase();
-    if (key && !byName.has(key)) byName.set(key, w);
-  }
-  return (raw: unknown): WarehouseRef | null => {
-    const key = String(raw ?? '').trim().toLowerCase();
-    // ردیف‌های قدیمی بدون انبار و ردیف‌های معکوس با برچسب 'default' به انبار پیش‌فرض تعلق دارند
-    if (!key || key === 'default') return defaultWh;
-    return byCode.get(key) ?? byName.get(key) ?? null;
-  };
 }
 
 async function loadLedger(executor: DbExecutor, itemIds?: number[]): Promise<Array<{ itemId: number; location: string; qty: number }>> {
@@ -230,7 +215,7 @@ export class WarehouseStockReconciliationService {
     const allWarehouses: WarehouseRef[] = await executor
       .select({ id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive })
       .from(warehouses);
-    const resolve = createLocationResolver(allWarehouses);
+    const resolve = createLedgerLocationResolver(allWarehouses);
     const warehouseById = new Map(allWarehouses.map(w => [w.id, w]));
 
     const itemConds = [eq(items.isDeleted, 0)];
@@ -444,20 +429,11 @@ export class WarehouseStockReconciliationService {
     }
 
     // کش JSONB و موجودی کل از جدول نرمال (با کد استاندارد انبار) بازسازی می‌شوند؛ بهای میانگین موزون دست نمی‌خورد
-    const rows = await tx.select({ warehouseCode: itemWarehouseStocks.warehouseCode, currentStock: itemWarehouseStocks.currentStock })
-      .from(itemWarehouseStocks)
-      .where(eq(itemWarehouseStocks.itemId, a.item.id));
-    const stocksJson: Record<string, number> = {};
-    let total = fin(0);
-    for (const r of rows) {
-      const val = fin(Number(r.currentStock) || 0).round(4).toNumber();
-      stocksJson[r.warehouseCode] = fin(stocksJson[r.warehouseCode] ?? 0).add(val).round(4).toNumber();
-      total = total.add(val);
-    }
+    const snapshot = await ItemWarehouseStockService.getStockSnapshot(tx, a.item.id);
     const [itemRow] = await tx.select({ version: items.version }).from(items).where(eq(items.id, a.item.id));
     await tx.update(items).set({
-      stocks: stocksJson,
-      currentStock: total.round(4).toNumber(),
+      stocks: snapshot.byCode,
+      currentStock: snapshot.total,
       version: nextVersion(itemRow?.version ?? 1),
     }).where(eq(items.id, a.item.id));
     return changes;

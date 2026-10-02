@@ -5,6 +5,7 @@ import { eq, and, or, sql } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
 import { IdempotencyService } from '../../services/idempotency.service.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../lib/lockOrder.js';
+import { syncFixtureItemStocks } from '../fixtures/factories.js';
 
 export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -643,6 +644,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
       weightedAverageCost: 1000,
       isDeleted: 0
     }).returning({ id: items.id });
+    await syncFixtureItemStocks(rlkItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
 
     const [rlkDoc] = await orm.insert(documents).values({
       type: 'invoice',

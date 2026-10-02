@@ -11,6 +11,7 @@ import { DocumentService } from '../document.service.js';
 import { resolveWarehouseCode, getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
@@ -503,7 +504,9 @@ export class ItemCatalogService {
 
         if (matchedItem) {
           targetItemId = matchedItem.id;
-          const existingStocks = (matchedItem.stocks as Record<string, number>) || {};
+          // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها، نه کش JSONB
+          const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
+          const existingStocks = existingSnapshot.byCode;
           const itemWac = !isNaN(weightedAverageCost) && weightedAverageCost > 0
             ? weightedAverageCost
             : Number(matchedItem?.weightedAverageCost || 0);
@@ -557,8 +560,8 @@ export class ItemCatalogService {
               }
             }
           } else if (hasCustomStockInRow || currentStock !== undefined) {
-            const finalStock = (hasCustomStockInRow ? currentStock : matchedItem.currentStock) ?? 0;
-            const diff = finalStock - (matchedItem.currentStock || 0);
+            const finalStock = (hasCustomStockInRow ? currentStock : existingSnapshot.total) ?? 0;
+            const diff = finalStock - existingSnapshot.total;
             const defaultLoc = await resolveWarehouseCode(tx, '');
             if (diff > 0) {
               await DocumentService.applyStockMovement(tx, {
@@ -824,6 +827,10 @@ export class ItemCatalogService {
       for (const wh of whs) {
         const bodyKey = `stock_${wh.code}`;
         const val = body[bodyKey] !== undefined ? Number(body[bodyKey]) : 0;
+        // v7.0.45 (audit P2-1): موجودی اولیه از مسیر جدول موجودی انبارها ثبت می‌شود که مقدار منفی را نمی‌پذیرد
+        if (!Number.isFinite(val) || val < 0) {
+          throw new ValidationError(`موجودی اولیه انبار «${wh.code}» باید عددی صفر یا مثبت باشد.`);
+        }
         stockValues[wh.code] = val;
         computedStock += val;
       }
@@ -852,36 +859,37 @@ export class ItemCatalogService {
         weight: weight ? Number(weight) : null,
         material: material || null,
         size: size || null,
-        currentStock: computedStock,
-        stocks: stockValues,
+        currentStock: 0,
+        stocks: {},
         isDeleted: 0
       }).returning();
 
+      // v7.0.45 (audit P2-1): موجودی اولیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)؛
+      // پیش‌تر فقط JSONB و کاردکس نوشته می‌شد و جدول موجودی انبارها ردیفی نداشت.
       if (computedStock > 0) {
         const txDate = await businessTodayIsoDate();
         for (const whCode of Object.keys(stockValues)) {
           const qty = stockValues[whCode];
           if (qty > 0) {
-            await tx.insert(transactions).values({
+            await DocumentService.applyStockMovement(tx, {
               itemId: inserted.id,
-              type: 'in',
+              inOut: 'in',
               quantity: qty,
-              unitPrice: Number(weighted_average_cost) || 0,
-              totalPrice: (Number(weighted_average_cost) || 0) * qty,
+              price: Number(weighted_average_cost) || 0,
               date: txDate,
               documentType: 'audit',
               documentRef: 'ثبت اولیه کالا',
-              location: whCode,
-              notes: 'موجودی اولیه هنگام تعریف کالا',
-              createdBy: user?.username || 'admin',
-              isDeleted: 0
+              user: user?.username || 'admin',
+              targetLoc: whCode,
+              notes: 'موجودی اولیه هنگام تعریف کالا'
             });
           }
         }
       }
+      const [createdItem] = await tx.select().from(items).where(eq(items.id, inserted.id));
 
       return {
-        item: inserted,
+        item: createdItem,
         insertedId: inserted.id,
         stockValues,
         computedStock,
@@ -971,7 +979,9 @@ export class ItemCatalogService {
         ))
         .limit(1);
 
-      const canSetOpening = Number(prevItem.currentStock || 0) <= 0 && !txRow && !docRow && !voucherRow;
+      // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها (منبع حقیقت)
+      const stockBefore = await ItemWarehouseStockService.getStockSnapshot(tx, itemId);
+      const canSetOpening = stockBefore.total <= 0 && !txRow && !docRow && !voucherRow;
 
       const whs = await tx.select({ code: warehouses.code }).from(warehouses).orderBy(asc(warehouses.id));
       let computedStock = 0;
@@ -1016,36 +1026,31 @@ export class ItemCatalogService {
       if (imageUrl !== undefined) updateData.image = imageUrl;
       if (thumbnailUrl !== undefined) updateData.thumbnail = thumbnailUrl;
 
-      if (canSetOpening && computedStock > 0) {
-        updateData.currentStock = computedStock;
-        updateData.stocks = stockValues;
-      }
-
       let openingVoucherId: number | null = null;
 
-      const [updatedItem] = await tx.update(items).set(updateData).where(eq(items.id, itemId)).returning();
+      let [updatedItem] = await tx.update(items).set(updateData).where(eq(items.id, itemId)).returning();
 
       if (canSetOpening && computedStock > 0) {
+        // v7.0.45 (audit P2-1): موجودی افتتاحیه از موتور مرکزی گردش انبار (کاردکس + جدول موجودی انبارها + کش)
         const txDate = await businessTodayIsoDate();
         for (const whCode of Object.keys(stockValues)) {
           const qty = stockValues[whCode];
           if (qty > 0) {
-            await tx.insert(transactions).values({
-              itemId: itemId,
-              type: 'in',
+            await DocumentService.applyStockMovement(tx, {
+              itemId,
+              inOut: 'in',
               quantity: qty,
-              unitPrice: effectiveWac,
-              totalPrice: Math.round(qty * effectiveWac * 10000) / 10000,
+              price: effectiveWac,
               date: txDate,
               documentType: 'audit',
               documentRef: 'ثبت موجودی افتتاحیه',
-              location: whCode,
-              notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)',
-              createdBy: user?.username || 'admin',
-              isDeleted: 0
+              user: user?.username || 'admin',
+              targetLoc: whCode,
+              notes: 'موجودی اولیه هنگام ویرایش کالا (سند افتتاحیه)'
             });
           }
         }
+        [updatedItem] = await tx.select().from(items).where(eq(items.id, itemId));
 
         const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
           entityType: 'item',

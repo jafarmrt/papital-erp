@@ -141,6 +141,13 @@
       "when": 1790179200000,
       "tag": "0019_inventory_reconciliation_anomalies",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790265600000,
+      "tag": "0020_item_warehouse_stocks_single_source",
+      "breakpoints": true
     }
   ]
 }

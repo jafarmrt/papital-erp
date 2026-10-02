@@ -1,5 +1,6 @@
 import { orm } from '../../db/drizzle.js';
 import bcrypt from 'bcryptjs';
+import { sql, eq } from 'drizzle-orm';
 import {
   users,
   roles,
@@ -89,7 +90,11 @@ export async function createTestCustomer(overrides: Partial<typeof customers.$in
 /**
  * Item / Inventory Product Factory
  */
-export async function createTestItem(overrides: Partial<typeof items.$inferInsert> = {}, db: any = orm) {
+export async function createTestItem(
+  overrides: Partial<typeof items.$inferInsert> = {},
+  db: any = orm,
+  options: { legacyJsonOnly?: boolean } = {}
+) {
   const suffix = uniqueSuffix();
   const itemData = {
     type: overrides.type || 'product',
@@ -107,7 +112,20 @@ export async function createTestItem(overrides: Partial<typeof items.$inferInser
   };
 
   const [inserted] = await db.insert(items).values(itemData).returning();
-  return inserted;
+  // legacyJsonOnly: وضعیت داده پیش از مهاجرت 0020 (فقط JSONB، بدون ردیف جدول) برای آزمون ابزارهای تطبیق
+  if (options.legacyJsonOnly) return inserted;
+  return syncFixtureItemStocks(inserted.id, db);
+}
+
+/**
+ * v7.0.45 (audit P2-1): جدول item_warehouse_stocks تنها منبع موجودی است و موتور گردش دیگر مقدار اولیه را از JSONB
+ * نمی‌خواند. کالای آزمایشی که مستقیم با JSONB درج می‌شود همانند داده قدیمی پس از مهاجرت 0020 همگام می‌شود
+ * (ساخت ردیف‌های جدول از JSONB و بازسازی کش از جدول).
+ */
+export async function syncFixtureItemStocks(itemId: number, db: any = orm) {
+  await db.execute(sql`SELECT erp_backfill_item_warehouse_stocks(${itemId}::integer, 'test-fixture')`);
+  const [synced] = await db.select().from(items).where(eq(items.id, itemId));
+  return synced;
 }
 
 /**

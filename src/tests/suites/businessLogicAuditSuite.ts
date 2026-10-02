@@ -14,6 +14,7 @@ import { DataReconciliationService } from '../../services/reconciliation/dataRec
 import { getMenuGroups } from '../../components/layout/menuConfig.js';
 import { cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { jalaliToIsoDate } from '../../utils.js';
+import { syncFixtureItemStocks } from '../fixtures/factories.js';
 
 /**
  * Business Logic & System Invariants Audit Suite
@@ -649,6 +650,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       weightedAverageCost: 100000,
       isDeleted: 0,
     }).returning({ id: items.id });
+    await syncFixtureItemStocks(insertedItem.id); // v7.0.45 (P2-1): ردیف‌های جدول موجودی انبارها از JSONB
     orchItemId = insertedItem.id;
 
     // 9.1 Test Empty Document Finalization Guard (Must throw ValidationError & remain draft)
