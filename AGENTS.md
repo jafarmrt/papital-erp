@@ -129,6 +129,7 @@
 
 ## 17. System Testing, E2E Audit & Test Runs
 - **Vitest for New Unit & Frontend Tests (v7.0.76, audit P3-6, product-owner decision):** New pure-unit and React component tests are Vitest files in `src/tests/vitest/*.test.ts(x)` (jsdom + Testing Library), run with `npm run test:vitest` (CI lint job). Database and domain suites stay on the existing runner.
+- **Playwright Critical Path (v7.0.77, audit P3-7):** `e2e/critical-path.spec.ts` drives login → final sales invoice → its journal voucher against the production bundle (`dist/server.cjs`) on an empty database (`E2E_DATABASE_URL`, `npm run test:e2e`, CI job `e2e`; the web server is awaited on `/health/startup`, not `/health/ready`, because migrations and seed run in the background). UI changes on these pages must keep it green.
 - **Modular Test Suites:** Suites isolated under `src/tests/suites/` (`unit`, `database`, `workflow`, `concurrency`, `integration`, `security`, `api`, `regression`, `criticalPath`, `businessLogicAudit`, etc.).
 - **Test Runs (v7.0.64, product-owner decision):**
   - **While working:** verify with `npm run lint` and run ONLY the tests relevant to the change (`npx tsx scripts/run-tests.ts --suite <name> --filter <id-or-keyword>`), plus the same test on the previous code to prove it fails there.

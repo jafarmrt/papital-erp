@@ -17,3 +17,7 @@ logs/
 public/uploads/*
 !public/uploads/.gitkeep
 papital-erp-source-*.zip
+
+# Playwright (v7.0.77)
+test-results/
+playwright-report/

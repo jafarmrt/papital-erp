@@ -1,5 +1,5 @@
 # .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate)
-# Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) → client-server-build → docker-build-gate
+# Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
 #
 # Environment & Secrets:
 #   DATABASE_URL: Service container PostgreSQL 16
@@ -185,7 +185,7 @@ jobs:
 
   build:
     name: Client & Server Production Build
-    needs: [test, coverage-gate]
+    needs: [test, coverage-gate, e2e]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
     steps:
@@ -209,6 +209,59 @@ jobs:
         with:
           name: dist-${{ github.sha }}
           path: dist/
+          retention-days: 7
+
+  e2e:
+    name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: erp_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Application (production bundle served to the browser)
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Login → Sales Invoice → Journal Voucher
+        # سرور dist/server.cjs روی پایگاه‌داده خالی؛ مهاجرت و seed در شروع، مدیر از مسیر راه‌اندازی اولیه
+        env:
+          E2E_DATABASE_URL: postgresql://postgres:test@localhost:5432/erp_e2e
+        run: npm run test:e2e
+
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
 
   docker-gate:

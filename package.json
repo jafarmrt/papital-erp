@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "7.0.76",
+  "version": "7.0.77",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -19,6 +19,7 @@
     "test:ci": "tsx scripts/run-tests.ts --summary --report-file=dist/test-report.json",
     "test:full": "tsx scripts/run-tests.ts",
     "test:vitest": "vitest run",
+    "test:e2e": "playwright test",
     "db:baseline": "tsx scripts/build-baseline.ts",
     "attachments:migrate": "tsx scripts/migrate-attachments.ts",
     "db:cleanup-test": "tsx scripts/cleanup-test-data.ts",
@@ -63,6 +64,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@tailwindcss/vite": "^4.1.14",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
