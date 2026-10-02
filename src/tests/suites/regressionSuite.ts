@@ -6635,5 +6635,95 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.75 (audit P3-15): ستون‌های تاریخ متنی فقط قالب تاریخ معتبر می‌پذیرند (CHECK، بدون تغییر نوع ستون)
+  if (shouldRun('reg_date_format_check_constraints_p3_15', 'p315', 'date', 'check')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.75: همه ستون‌های تاریخ متنی قید قالب معتبرشده دارند؛ «abc» رد و تاریخ شمسی، میلادی و ارقام فارسی پذیرفته می‌شود (P3-15)';
+    let personnelId: number | null = null;
+    try {
+      const { normalizeError } = await import('../../errors/customErrors.js');
+      const violations: string[] = [];
+      const missing = await orm.execute(sql`
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+        WHERE c.table_schema = current_schema() AND t.table_type = 'BASE TABLE' AND c.data_type = 'text'
+          AND left(c.table_name, 1) <> '_' -- جدول‌های پشتیبان مهاجرت‌ها (مانند _repair_0011_timestamps_backup)
+          -- TD-231: تا تصمیم درباره تاریخ‌های قدیمی «07-10-1405 AP» این سه ستون قید ندارند
+          AND (c.table_name, c.column_name) NOT IN (('journal_vouchers', 'date'), ('treasury_transactions', 'date'), ('piecework_payrolls', 'payment_date'))
+          AND (c.column_name ~ '(^|_)date(_|$)' OR c.column_name IN ('reconciled_at', 'completed_at', 'last_failed_login_at'))
+          AND NOT EXISTS (
+            SELECT 1 FROM pg_constraint pc
+            JOIN pg_class rel ON rel.oid = pc.conrelid
+            WHERE rel.relname = c.table_name AND rel.relnamespace = current_schema()::regnamespace
+              AND pc.conname = 'chk_' || c.table_name || '_' || c.column_name || '_datefmt'
+              AND pc.contype = 'c' AND pc.convalidated
+          )
+        ORDER BY 1, 2`);
+      const missingRows = (missing as unknown as { rows: Array<{ table_name: string; column_name: string }> }).rows;
+      const [{ n: covered }] = (await orm.execute(sql`
+        SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+        WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname LIKE 'chk%datefmt' AND pc.convalidated`) as unknown as { rows: Array<{ n: number }> }).rows;
+      if (covered !== 24) violations.push(`تعداد قیدهای قالب تاریخ معتبرشده: ${covered} (انتظار ۲۴)`);
+      if (missingRows.length > 0) violations.push(`بدون قید قالب معتبر: ${missingRows.map(r => `${r.table_name}.${r.column_name}`).join(', ')}`);
+
+      const ROLLBACK = new Error('ROLLBACK_P3_15');
+      const { personnel } = await import('../../db/schema.js');
+      const [pers] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل آزمون قالب تاریخ P3-15' }).returning({ id: personnel.id });
+      personnelId = pers.id;
+      const tryBirthDate = async (birthDate: string): Promise<unknown> => {
+        try {
+          await orm.transaction(async (tx) => {
+            await tx.update(personnel).set({ birthDate }).where(eq(personnel.id, personnelId!));
+            throw ROLLBACK;
+          });
+          return null;
+        } catch (err) {
+          return err === ROLLBACK ? null : err;
+        }
+      };
+      for (const ok of ['2026-10-02', '1370/05/12', '1370-5-1', '۱۳۷۰/۰۵/۱۲', '2026-10-02 18:30:00', '']) {
+        const err = await tryBirthDate(ok);
+        if (err) violations.push(`«${ok}» رد شد: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      for (const bad of ['abc', '1370/13/01', '2026-10-32', '10/02/2026', '07-10-1405 AP']) {
+        const err = await tryBirthDate(bad);
+        if (!err) { violations.push(`«${bad}» پذیرفته شد`); continue; }
+        const normalized = normalizeError(err);
+        if (normalized.code !== 'INVALID_DATE_FORMAT' || normalized.statusCode !== 422) {
+          violations.push(`«${bad}»: پاسخ ${normalized.statusCode} ${normalized.code} (انتظار 422 INVALID_DATE_FORMAT)`);
+        }
+      }
+      // ستون‌های *_iso فقط YYYY-MM-DD
+      const isoKind = (await orm.execute(sql`SELECT erp_date_text_ok('2026-10-02', 'iso') AS a, erp_date_text_ok('1405/07/10', 'iso') AS b`) as unknown as { rows: Array<{ a: boolean; b: boolean }> }).rows[0];
+      if (!isoKind.a || isoKind.b) violations.push(`قالب iso: 2026-10-02=${isoKind.a}، 1405/07/10=${isoKind.b}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_date_format_check_constraints_p3_15',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'همه ستون‌های تاریخ متنی قید قالب معتبرشده دارند؛ تاریخ نامعتبر با 422 INVALID_DATE_FORMAT رد شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_date_format_check_constraints_p3_15',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (personnelId !== null) await cleanTestTableData('personnel', 'id', [personnelId]);
+    }
+  }
+
   return results;
 }

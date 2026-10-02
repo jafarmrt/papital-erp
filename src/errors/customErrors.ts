@@ -172,6 +172,15 @@ export function normalizeError(err: unknown): NormalizedError {
         stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
       };
     }
+    // v7.0.75 (P3-15): قید قالب ستون‌های تاریخ متنی (chk_<table>_<column>_datefmt، مهاجرت 0028)
+    if (code === '23514' && typeof pgErr.constraint === 'string' && pgErr.constraint.endsWith('_datefmt')) {
+      return {
+        message: 'قالب تاریخ نامعتبر است؛ تاریخ را به شکل ۱۴۰۵/۰۷/۱۰ یا 2026-10-02 وارد کنید.',
+        statusCode: 422,
+        code: 'INVALID_DATE_FORMAT',
+        stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+      };
+    }
     if (code === '23505') {
       return {
         message: 'مقدار وارد شده تکراری است',
