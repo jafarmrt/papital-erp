@@ -3428,6 +3428,103 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test 27.7d: v7.0.63 (TD-198): نرخ تسعیر ساختاریافته؛ برای سند ارزی الزامی و هرگز از یادداشت خوانده نمی‌شود
+  if (shouldRun('reg_structured_exchange_rate_td_198', 'td198', 'currency', 'exchange')) {
+    const tStart = Date.now();
+    const createdDocIds: number[] = [];
+    const createdVoucherIds: number[] = [];
+    let createdItemId: number | null = null;
+    const testName = 'v7.0.63: سند ارزی بدون نرخ تسعیر ثبت، ویرایش و صدور سند حسابداری نمی‌شود و نرخ از یادداشت خوانده نمی‌شود (TD-198)';
+    try {
+      const violations: string[] = [];
+      const expectValidation = async (label: string, fn: () => Promise<unknown>) => {
+        try {
+          await fn();
+          violations.push(`${label}: باید با خطای اعتبارسنجی رد شود`);
+        } catch (err: any) {
+          if (!String(err?.message || '').includes('نرخ تسعیر')) violations.push(`${label}: خطای نامرتبط ${err?.message}`);
+        }
+      };
+      const [item] = await orm.insert(items).values({
+        name: 'کالای تست نرخ تسعیر TD-198', code: `ITEM-TD198-${Date.now()}`, type: 'product', category: 'گردنبند',
+        unit: 'عدد', weightedAverageCost: 60000000, isDeleted: 0
+      }).returning();
+      createdItemId = item.id;
+      const line = [{ itemId: item.id, quantity: 1, unit_price: 150, discount: 0 }];
+
+      // ۱) ثبت پیش‌فاکتور ارزی بدون نرخ رد می‌شود؛ با نرخ ذخیره می‌شود
+      await expectValidation('ثبت پیش‌فاکتور دلاری بدون نرخ', () => DocumentService.createDocument({ docType: 'proforma', status: 'proforma', date: '2026-08-01', refNumber: `TD198-A-${Date.now()}`, currency: 'USD', items: line, user: 'test-agent' }));
+      const proformaId = await DocumentService.createDocument({ docType: 'proforma', status: 'proforma', date: '2026-08-01', refNumber: `TD198-B-${Date.now()}`, currency: 'USD', exchangeRate: 600000, items: line, user: 'test-agent' });
+      createdDocIds.push(proformaId);
+      const [stored] = await orm.select({ rate: documents.exchangeRate }).from(documents).where(eq(documents.id, proformaId));
+      if (Number(stored?.rate) !== 600000) violations.push(`نرخ تسعیر باید روی سند ذخیره شود: ${stored?.rate}`);
+
+      // ۲) ویرایش به ارز دیگر بدون نرخ جدید با نرخ قبلی ذخیره می‌شود؛ سند ریالی نرخ ندارد
+      const irrId = await DocumentService.createDocument({ docType: 'proforma', status: 'proforma', date: '2026-08-01', refNumber: `TD198-C-${Date.now()}`, items: line, user: 'test-agent' });
+      createdDocIds.push(irrId);
+      await expectValidation('تغییر ارز سند ریالی به یورو بدون نرخ', () => DocumentService.updateDocument(irrId, { currency: 'EUR' }));
+      const [irrDoc] = await orm.select({ rate: documents.exchangeRate, currency: documents.currency }).from(documents).where(eq(documents.id, irrId));
+      if (irrDoc?.rate !== null || irrDoc?.currency !== 'IRR') violations.push(`سند ریالی نباید نرخ یا ارز تغییرکرده داشته باشد: ${JSON.stringify(irrDoc)}`);
+
+      // ۳) سند حسابداری: نرخ از ستون سند، نه از یادداشت «نرخ تسعیر: 1»
+      const [usdDoc] = await orm.insert(documents).values({
+        type: 'invoice', refNumber: `TD198-D-${Date.now()}`, date: '2026-08-02 00:00:00', buyerName: 'خریدار تست TD-198',
+        currency: 'USD', exchangeRate: 600000, notes: 'نرخ تسعیر: 1', status: 'final', isDeleted: 0
+      }).returning();
+      createdDocIds.push(usdDoc.id);
+      await orm.insert(documentItems).values({ documentId: usdDoc.id, itemId: item.id, quantity: 1, unitPrice: 150, discount: 0, location: 'main', isDeleted: 0 });
+      const voucher = await VoucherSyncService.syncSalesInvoiceVoucher(usdDoc.id, { strict: true });
+      if (voucher) createdVoucherIds.push(voucher.id);
+      const full = voucher ? await VoucherService.getJournalVoucherById(voucher.id) : null;
+      const cogs = full?.items?.find(it => it.accountCode === '6001' || it.description?.includes('بهای تمام‌شده'));
+      if (!cogs || Number(cogs.exchangeRate) !== 600000 || Math.abs(Number(cogs.debit) - 100) > 0.01) {
+        violations.push(`سند حسابداری باید با نرخ ستون سند (600000) و بهای تمام‌شده ۱۰۰ دلار صادر شود: ${JSON.stringify({ rate: cogs?.exchangeRate, debit: cogs?.debit })}`);
+      }
+
+      // ۴) سند ارزی قدیمی بدون نرخ (فقط نرخ در یادداشت) با نرخ ۱ سند حسابداری نمی‌گیرد
+      const [legacyDoc] = await orm.insert(documents).values({
+        type: 'invoice', refNumber: `TD198-E-${Date.now()}`, date: '2026-08-02 00:00:00', buyerName: 'خریدار تست TD-198',
+        currency: 'AED', notes: 'نرخ تسعیر: 150000', status: 'final', isDeleted: 0
+      }).returning();
+      createdDocIds.push(legacyDoc.id);
+      await orm.insert(documentItems).values({ documentId: legacyDoc.id, itemId: item.id, quantity: 1, unitPrice: 10, discount: 0, location: 'main', isDeleted: 0 });
+      await expectValidation('سند حسابداری سند درهمی بدون نرخ', () => VoucherSyncService.syncSalesInvoiceVoucher(legacyDoc.id, { strict: true }));
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_structured_exchange_rate_td_198',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'پیش‌فاکتور دلاری بدون نرخ و تغییر ارز بدون نرخ رد شد؛ سند حسابداری با نرخ ستون سند (نه یادداشت) صادر شد و سند درهمی بدون نرخ سند حسابداری نگرفت.'
+      }));
+    } catch (err: any) {
+      results.push(makeTestCase({
+        id: 'reg_structured_exchange_rate_td_198',
+        scenarioId: 'multi_currency_financials_and_ratios',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err.message
+      }));
+    } finally {
+      if (createdVoucherIds.length > 0) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
+        await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
+      }
+      if (createdDocIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', createdDocIds);
+        await cleanTestTableData('documents', 'id', createdDocIds);
+      }
+      if (createdItemId !== null) await cleanTestTableData('items', 'id', [createdItemId]);
+    }
+  }
+
   // Test 27.8: v7.0.35 (audit P2-2): اولین حرکت همزمان یک کالا در یک انبار نباید با 23505 شکست بخورد
   if (shouldRun('reg_first_movement_race_p2_2', 'p22', 'race', 'item_warehouse_stocks', 'concurrency')) {
     const tStart = Date.now();

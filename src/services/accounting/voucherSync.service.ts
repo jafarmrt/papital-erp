@@ -45,6 +45,26 @@ export interface MissingDocumentVoucherSyncSummary {
 
 export class VoucherSyncService {
   /**
+   * v7.0.63 (TD-198): نرخ تسعیر سند حسابداری یک سند ارزی. ترتیب: نرخ صریح فراخواننده، ستون documents.exchange_rate،
+   * کلید تنظیمات exchange_rate_<ارز> (سازگاری اسناد قدیمی). دیگر هیچ نرخی از متن یادداشت خوانده نمی‌شود و در نبود
+   * نرخ، سند حسابداری با نرخ ۱ صادر نمی‌شود.
+   */
+  static async resolveVoucherExchangeRate(
+    executor: DbExecutor,
+    doc: { currency?: string | null; exchangeRate?: number | string | null; refNumber?: string | null },
+    explicitRate?: number
+  ): Promise<number> {
+    const currency = (doc.currency || 'IRR').toUpperCase();
+    if (currency === 'IRR') return 1;
+    if (explicitRate !== undefined && Number(explicitRate) > 0) return Number(explicitRate);
+    if (Number(doc.exchangeRate) > 0) return Number(doc.exchangeRate);
+    const [settingRow] = await executor.select().from(appSettings)
+      .where(eq(appSettings.key, `exchange_rate_${currency.toLowerCase()}`));
+    if (settingRow && Number(settingRow.value) > 0) return Number(settingRow.value);
+    throw new ValidationError(`نرخ تسعیر سند ارزی ${doc.refNumber ?? ''} (${currency}) ثبت نشده است؛ سند حسابداری با نرخ ۱ صادر نمی‌شود.`);
+  }
+
+  /**
    * Automatic Double-Entry Journal Voucher for Sales Invoices
    */
   static async syncSalesInvoiceVoucher(docId: number, options?: {
@@ -163,32 +183,9 @@ export class VoucherSyncService {
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
 
-    // V6.0.4 (TD-143): استخراج نرخ تسعیر ارز در فاکتورهای ارزی
+    // V6.0.4 (TD-143) / v7.0.63 (TD-198): نرخ تسعیر فاکتور ارزی از ستون ساختاریافته سند
     const docCurrency = (doc.currency || 'IRR').toUpperCase();
-    let exchangeRate = 1;
-    if (docCurrency !== 'IRR') {
-      if (options?.exchangeRate !== undefined && Number(options.exchangeRate) > 0) {
-        exchangeRate = Number(options.exchangeRate);
-      } else if (doc.notes) {
-        const match = doc.notes.match(/(?:نرخ\s*تسعیر|exchange_?rate)\s*[:=]?\s*([\d,.]+)/i);
-        if (match && match[1]) {
-          const parsed = Number(match[1].replace(/,/g, ''));
-          if (parsed > 0) exchangeRate = parsed;
-        }
-      }
-      if (exchangeRate === 1) {
-        try {
-          const [settingRow] = await executor.select().from(appSettings)
-            .where(eq(appSettings.key, `exchange_rate_${docCurrency.toLowerCase()}`));
-          if (settingRow && settingRow.value) {
-            const val = Number(settingRow.value);
-            if (val > 0) exchangeRate = val;
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
+    const exchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
 
     const voucherItems: {
       accountId: number;
@@ -511,20 +508,8 @@ export class VoucherSyncService {
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
     const isProduction = doc.type === 'production_receipt';
 
-    // V6.0.4 (TD-143): استخراج نرخ تسعیر ارز در فاکتورهای خرید ارزی
-    const docCurrency = (doc.currency || 'IRR').toUpperCase();
-    let exchangeRate = 1;
-    if (docCurrency !== 'IRR') {
-      if (options?.exchangeRate !== undefined && Number(options.exchangeRate) > 0) {
-        exchangeRate = Number(options.exchangeRate);
-      } else if (doc.notes) {
-        const match = doc.notes.match(/(?:نرخ\s*تسعیر|exchange_?rate)\s*[:=]?\s*([\d,.]+)/i);
-        if (match && match[1]) {
-          const parsed = Number(match[1].replace(/,/g, ''));
-          if (parsed > 0) exchangeRate = parsed;
-        }
-      }
-    }
+    // V6.0.4 (TD-143) / v7.0.63 (TD-198): نرخ تسعیر فاکتور خرید ارزی از ستون ساختاریافته سند
+    const exchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
 
     const voucherItems: {
       accountId: number;
@@ -932,31 +917,7 @@ export class VoucherSyncService {
       let fgCostConv = fgReturnCost;
       let rmCostConv = rmReturnCost;
       const docCurrency = (doc.currency || 'IRR').toUpperCase();
-      let docExchangeRate = 1;
-
-      if (docCurrency !== 'IRR') {
-        if (options?.exchangeRate !== undefined && Number(options.exchangeRate) > 0) {
-          docExchangeRate = Number(options.exchangeRate);
-        } else if (doc.notes) {
-          const match = doc.notes.match(/(?:نرخ\s*تسعیر|exchange_?rate)\s*[:=]?\s*([\d,.]+)/i);
-          if (match && match[1]) {
-            const parsed = Number(match[1].replace(/,/g, ''));
-            if (parsed > 0) docExchangeRate = parsed;
-          }
-        }
-        if (docExchangeRate === 1) {
-          try {
-            const [settingRow] = await executor.select().from(appSettings)
-              .where(eq(appSettings.key, `exchange_rate_${docCurrency.toLowerCase()}`));
-            if (settingRow && settingRow.value) {
-              const val = Number(settingRow.value);
-              if (val > 0) docExchangeRate = val;
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
+      const docExchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
 
       if (docCurrency !== 'IRR' && docExchangeRate > 0) {
         if (docExchangeRate >= 1) {

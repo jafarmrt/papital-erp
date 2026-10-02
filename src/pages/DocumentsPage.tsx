@@ -23,6 +23,7 @@ import GlobalReservationsPanel from '../components/documents/GlobalReservationsP
 import DocItemsTable from '../components/documents/DocItemsTable';
 import { FinancialAttachmentUploader } from '../components/accounting/FinancialAttachmentUploader';
 import { ItemFormModal } from '../components/items/ItemFormModal';
+import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
 import { useAuth } from '../contexts/AuthContext';
 import { QUERY_KEYS } from '../lib/queryKeys';
 
@@ -83,6 +84,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
   const [buyerName, setBuyerName] = useState('');
   const [selectedSupplierObj, setSelectedSupplierObj] = useState<Customer | null>(null);
   const [currency, setCurrency] = useState('IRR');
+  const [exchangeRate, setExchangeRate] = useState(0);
   const [returnInvoiceRef, setReturnInvoiceRef] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -521,6 +523,14 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
       }
     }
 
+    // v7.0.63 (TD-198): ارز فقط برای سند ورود انتخاب می‌شود؛ سند ارزی بدون نرخ تسعیر ثبت نمی‌شود
+    const docCurrency = actionType === 'in' ? currency : 'IRR';
+    const rateError = exchangeRateError(docCurrency, exchangeRate);
+    if (rateError) {
+      toast.error(rateError);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const formattedDate = extractDateString(date) || new Date().toISOString().split('T')[0];
@@ -545,7 +555,8 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
           buyer_name: buyerName,
           notes: finalNotes,
           inOut: actionType,
-          currency,
+          currency: docCurrency,
+          exchangeRate: docCurrency !== 'IRR' ? exchangeRate : null,
           projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
           attachments,
           items: docItems.map(d => ({ 
@@ -774,6 +785,7 @@ export default function DocumentsPage({ user: currentUser }: { user: User }) {
                   <option value="AED">درهم (AED)</option>
                   <option value="GBP">پوند (GBP)</option>
                 </select>
+                <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} />
               </div>
             )}
 

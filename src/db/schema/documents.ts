@@ -28,6 +28,8 @@ export const documents = pgTable('documents', {
   // vat_amount مبلغ نهایی مالیات (به ارز سند) است؛ vat_percent فقط برای نمایش/ویرایش فرم نگه داشته می‌شود.
   vatPercent: numeric('vat_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
   vatAmount: numeric('vat_amount', { precision: 18, scale: 4, mode: 'number' }).notNull().default(0),
+  // v7.0.63 (TD-198): نرخ تسعیر (ریال به ازای یک واحد ارز سند)؛ برای سند غیرریالی الزامی، برای ریالی تهی.
+  exchangeRate: numeric('exchange_rate', { precision: 18, scale: 4, mode: 'number' }),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   version: integer('version').notNull().default(1),
   isDeleted: integer('is_deleted').default(0),

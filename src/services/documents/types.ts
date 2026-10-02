@@ -56,6 +56,9 @@ export interface CreateDocumentInput {
   vatPercent?: number;
   vat_amount?: number;
   vatAmount?: number;
+  /** v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی */
+  exchangeRate?: number | string | null;
+  exchange_rate?: number | string | null;
   attachments?: any[];
   projectId?: number | string | null;
   project_id?: number | string | null;
@@ -85,6 +88,9 @@ export interface UpdateDocumentInput {
   vat_percent?: number | string | null;
   vatAmount?: number | string | null;
   vat_amount?: number | string | null;
+  /** v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی */
+  exchangeRate?: number | string | null;
+  exchange_rate?: number | string | null;
   expectedVersion?: number;
   version?: number;
 }
@@ -125,6 +131,7 @@ export interface FormattedDocument {
   buyerAddress: string | null;
   buyer_address: string | null;
   currency: string | null;
+  exchangeRate?: number | null;
   version?: number | null;
   isDeleted?: number | null;
   projectId?: number | null;

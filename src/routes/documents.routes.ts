@@ -69,6 +69,12 @@ const vatAmountInput = z.union([
   z.string().regex(/^\d+(\.\d+)?$/, 'مبلغ مالیات بر ارزش افزوده نامعتبر است'),
   z.null()
 ]).optional();
+// v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی (ریال به ازای یک واحد ارز)
+const exchangeRateInput = z.union([
+  z.number().positive('نرخ تسعیر باید بزرگ‌تر از صفر باشد'),
+  z.string().regex(/^\d+(\.\d+)?$/, 'نرخ تسعیر نامعتبر است'),
+  z.null()
+]).optional();
 
 export const documentCreateSchema = z.object({
   body: z.object({
@@ -96,6 +102,7 @@ export const documentCreateSchema = z.object({
     projectId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
+    exchangeRate: exchangeRateInput,
     attachments: z.array(z.any()).optional()
   }).superRefine((body, ctx) => {
     // اسناد انبارگردانی از physical_stock استفاده می‌کنند و مقدار صفر در آن‌ها مجاز است
@@ -108,6 +115,7 @@ export const finalizeDocumentSchema = z.object({
     user: z.string().max(100).optional(),
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
+    exchangeRate: exchangeRateInput,
   }).optional(),
   params: z.object({
     id: numericIdString
@@ -144,6 +152,7 @@ export const documentUpdateSchema = z.object({
     notes: z.string().max(2000).nullable().optional(),
     vatPercent: vatPercentInput,
     vatAmount: vatAmountInput,
+    exchangeRate: exchangeRateInput,
     location: z.string().max(100).nullable().optional(),
     // V10-4.3: پذیرش لینک رسمی CRM در ویرایش سند
     crmLeadId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional(),
@@ -444,7 +453,7 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documents),
 
 router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_keeper', 'accountant', 'documents.edit', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  const { user, vatAmount, vatPercent } = req.body || {};
+  const { user, vatAmount, vatPercent, exchangeRate } = req.body || {};
   const beforeDoc = await DocumentService.getDocumentById(docId);
   if (!beforeDoc) {
     throw new NotFoundError('سند مورد نظر یافت نشد.');
@@ -456,6 +465,7 @@ router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_k
   await DocumentService.finalizeDocument(docId, user, undefined, {
     vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
     vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
+    exchangeRate: exchangeRate !== undefined && exchangeRate !== null ? Number(exchangeRate) : undefined,
   });
 
   // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود

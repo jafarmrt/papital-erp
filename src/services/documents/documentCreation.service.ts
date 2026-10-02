@@ -16,6 +16,7 @@ import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } fro
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput } from './documentVat.js';
+import { resolveDocumentExchangeRate } from './documentExchangeRate.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 
@@ -92,6 +93,13 @@ export class DocumentCreationService {
         linesChanged,
       });
 
+      // v7.0.63 (TD-198): نرخ تسعیر ساختاریافته؛ برای ارز غیرریالی الزامی (ورودی یا نرخ ذخیره‌شده)
+      const docExchangeRate = resolveDocumentExchangeRate({
+        currency: currency || existingDoc.currency,
+        input: body,
+        existing: existingDoc.exchangeRate,
+      });
+
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       const storedAttachments = body.attachments !== undefined
         ? await AttachmentStorageService.normalizeForRecord(tx, 'document', id, body.attachments, user || existingDoc.user || '')
@@ -109,6 +117,7 @@ export class DocumentCreationService {
         buyerAddress: buyer_address !== undefined ? buyer_address : existingDoc.buyerAddress,
         status: status || existingDoc.status,
         currency: currency || existingDoc.currency,
+        exchangeRate: docExchangeRate,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
         attachments: storedAttachments,
@@ -280,6 +289,7 @@ export class DocumentCreationService {
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
       const finalNotes = notes || '';
       const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [] });
+      const docExchangeRate = resolveDocumentExchangeRate({ currency: currency || 'IRR', input: body });
 
       const [insertedDoc] = await tx.insert(documents).values({
         type: docType,
@@ -294,6 +304,7 @@ export class DocumentCreationService {
         buyerAddress: finalBuyerAddress,
         status: docStatus,
         currency: currency || 'IRR',
+        exchangeRate: docExchangeRate,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
         attachments: [],

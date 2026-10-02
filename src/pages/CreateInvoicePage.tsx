@@ -14,6 +14,7 @@ import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWid
 import { useServerDraft } from '../hooks/useServerDraft';
 import { getSellableStock } from '../lib/stockAvailability';
 import { Sparkles } from 'lucide-react';
+import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
 
 // Print styles are added globally or inline
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
@@ -38,6 +39,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const [notes, setNotes] = useState('');
   const [crmLeadId, setCrmLeadId] = useState<number | null>(null);
   const [currency, setCurrency] = useState('IRR');
+  const [exchangeRate, setExchangeRate] = useState(0);
 
   // VAT & Tax states
   const [applyVat, setApplyVat] = useState(false);
@@ -63,6 +65,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     status,
     location,
     currency,
+    exchangeRate,
     buyerName,
     buyerCity,
     buyerPhone,
@@ -87,6 +90,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (loaded.status) setStatus(loaded.status);
       if (loaded.location) setLocation(loaded.location);
       if (loaded.currency) setCurrency(loaded.currency);
+      if (Number(loaded.exchangeRate) > 0) setExchangeRate(Number(loaded.exchangeRate));
       if (loaded.buyerName) setBuyerName(loaded.buyerName);
       if (loaded.buyerCity) setBuyerCity(loaded.buyerCity);
       if (loaded.buyerPhone) setBuyerPhone(loaded.buyerPhone);
@@ -136,6 +140,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       setBuyerAddress(doc.buyer_address || '');
       setNotes(doc.notes || '');
       setCurrency(doc.currency || 'IRR');
+      setExchangeRate(Number(doc.exchangeRate ?? doc.exchange_rate ?? 0) || 0);
       // v7.0.32 (TD-197): بازیابی مالیات ساختاریافته پیش‌فاکتور در حالت ویرایش
       const loadedVatPercent = Number(doc.vatPercent ?? doc.vat_percent ?? 0) || 0;
       setApplyVat(loadedVatPercent > 0);
@@ -347,6 +352,12 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
 
+    const rateError = exchangeRateError(currency, exchangeRate);
+    if (rateError) {
+      toast.error(rateError);
+      return;
+    }
+
     if (status === 'final' && warehouses.length === 0) {
       toast.error('هیچ انباری در سیستم تعریف نشده است. لطفاً ابتدا از بخش تنظیمات > مدیریت انبارها، حداقل یک انبار تعریف نمایید.');
       return;
@@ -387,6 +398,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         notes,
         location,
         currency,
+        exchangeRate: currency !== 'IRR' ? exchangeRate : null,
         crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
         vatPercent: applyVat ? vatRate : 0,
         vatAmount: vatAmount,
@@ -536,6 +548,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <option value="AED">درهم (AED)</option>
                 <option value="GBP">پوند (GBP)</option>
               </select>
+              <ExchangeRateField currency={currency} value={exchangeRate} onChange={setExchangeRate} />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">محل خروج قلم کالا (انبار مبدا)</label>

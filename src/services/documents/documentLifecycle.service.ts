@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
+import { resolveDocumentExchangeRate } from './documentExchangeRate.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
@@ -180,11 +181,18 @@ export class DocumentLifecycleService {
             lines: docLines,
             existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: Number(doc.vatAmount) || 0 },
           });
+          // v7.0.63 (TD-198): سند ارزی بدون نرخ تسعیر نهایی نمی‌شود؛ نرخ ارسالی روی خود سند ذخیره می‌شود
+          const finalExchangeRate = resolveDocumentExchangeRate({
+            currency: doc.currency,
+            input: { exchangeRate: options?.exchangeRate },
+            existing: doc.exchangeRate,
+          });
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,
             vatPercent: finalVat.vatPercent,
             vatAmount: finalVat.vatAmount,
+            exchangeRate: finalExchangeRate,
             version: nextVersion(doc.version)
           }).where(eq(documents.id, id));
 
