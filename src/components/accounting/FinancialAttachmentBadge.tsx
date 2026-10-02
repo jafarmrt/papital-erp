@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Paperclip, Image as ImageIcon } from 'lucide-react';
 import { FinancialAttachment } from '../../types';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
+import { AttachmentImage } from '../attachments/AttachmentImage';
 
 interface Props {
   attachments?: FinancialAttachment[] | null;
@@ -83,7 +84,7 @@ export const FinancialAttachmentBadge: React.FC<Props> = ({ attachments, compact
                 >
                   <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center shrink-0 border border-slate-200">
                     {att.url?.startsWith('data:image/') || att.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(att.name || '') ? (
-                      <img src={att.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <AttachmentImage src={att.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
                       <ImageIcon size={18} className="text-blue-600" />
                     )}

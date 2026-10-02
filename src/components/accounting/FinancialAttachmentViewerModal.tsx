@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Download, FileText, Calendar, ShieldCheck, ChevronRight, ChevronLeft, FileSpreadsheet } from 'lucide-react';
 import { FinancialAttachment } from '../../types';
 import { formatPersianDate, formatPersianNumber } from '../../utils';
+import { AttachmentImage } from '../attachments/AttachmentImage';
+import { downloadAttachment } from '../../lib/attachments/attachmentDisplay';
 
 interface Props {
   attachment?: FinancialAttachment | null;
@@ -49,12 +51,10 @@ export const FinancialAttachmentViewerModal: React.FC<Props> = ({
 
   const handleDownload = () => {
     if (!currentAttachment.url) return;
-    const link = document.createElement('a');
-    link.href = currentAttachment.url;
-    link.download = currentAttachment.name || 'financial-document';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // v7.0.100 (TD-224 بند ۲): در حالت توکن در حافظه فایل با هدر Bearer دانلود می‌شود
+    downloadAttachment(currentAttachment.url, currentAttachment.name || 'financial-document').catch((err: unknown) => {
+      console.error('Attachment download failed:', err);
+    });
   };
 
   const handlePrev = (e: React.MouseEvent) => {
@@ -148,7 +148,7 @@ export const FinancialAttachmentViewerModal: React.FC<Props> = ({
 
           {isImage ? (
             <div className="max-w-full max-h-[68vh] flex items-center justify-center">
-              <img
+              <AttachmentImage
                 src={currentAttachment.url}
                 alt={currentAttachment.title || currentAttachment.name || 'پیوست'}
                 className="max-w-full max-h-[68vh] object-contain rounded-lg shadow-2xl border border-white/10"
@@ -205,7 +205,7 @@ export const FinancialAttachmentViewerModal: React.FC<Props> = ({
                   title={att.title || att.name || `پیوست ${idx + 1}`}
                 >
                   {isAttImage ? (
-                    <img
+                    <AttachmentImage
                       src={att.url}
                       alt=""
                       className="w-full h-full object-cover"

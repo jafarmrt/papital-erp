@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { FinancialAttachment } from '../../types';
 import { compressTo300KB } from '../../utils/imageCompression';
 import { formatFileSize, formatPersianNumber } from '../../utils';
+import { AttachmentImage } from '../attachments/AttachmentImage';
 
 export interface ModernPersianDropzoneProps {
   attachments: FinancialAttachment[];
@@ -352,7 +353,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
                 >
                   {isImage ? (
                     <>
-                      <img
+                      <AttachmentImage
                         src={att.url}
                         alt={att.title || att.name}
                         className="w-full h-full object-cover"

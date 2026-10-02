@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import { VoucherAttachmentThumbnails } from './VoucherAttachmentThumbnails';
 
 interface JournalVouchersTabProps {
   vouchers: JournalVoucher[];
@@ -813,34 +814,13 @@ export function JournalVouchersTab({
                                       مشاهده و بزرگ‌نمایی همه
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                                    {voucher.attachments.map((att) => (
-                                      <div
-                                        key={att.id}
-                                        onClick={() => setViewingAttachments({
-                                          title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
-                                          attachments: voucher.attachments || []
-                                        })}
-                                        className="group relative rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden cursor-pointer hover:border-indigo-500 transition bg-slate-50 dark:bg-slate-800 aspect-4/3 flex flex-col"
-                                      >
-                                        {att.fileType?.startsWith('image/') ? (
-                                          <img
-                                            src={att.dataUrl}
-                                            alt={att.fileName}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition"
-                                          />
-                                        ) : (
-                                          <div className="w-full h-full flex flex-col items-center justify-center p-2 text-slate-500">
-                                            <FileText className="w-6 h-6 text-rose-500 mb-1" />
-                                            <span className="text-[9px] truncate max-w-full">{att.fileName}</span>
-                                          </div>
-                                        )}
-                                        <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-xs text-white p-1 text-[9px] truncate">
-                                          {att.title || att.fileName}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <VoucherAttachmentThumbnails
+                                    attachments={voucher.attachments}
+                                    onOpen={() => setViewingAttachments({
+                                      title: `اسناد و مدارک ضمیمه سند شماره #${voucher.voucherNumber}`,
+                                      attachments: voucher.attachments || []
+                                    })}
+                                  />
                                 </div>
                               )}
                             </div>
