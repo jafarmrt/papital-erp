@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { User } from '../../types';
 import { PersonnelFormData } from '../../hooks/usePersonnel';
-import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba } from '../../utils';
+import { extractDateString, getIranianBankFromCard, getIranianBankFromSheba, isoToJalaliDate } from '../../utils';
 import { NationalIdInput, IranianPhoneInput, BankCardInput, ShebaInput } from '../common';
 
 interface PersonnelFormModalProps {
@@ -150,7 +150,7 @@ export function PersonnelFormModal({
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ تولد</label>
                 <DatePicker
-                  value={formData.birthDate || ''}
+                  value={isoToJalaliDate(formData.birthDate) || formData.birthDate || ''}
                   onChange={(dateObj: any) => {
                     setFormData((prev) => ({ ...prev, birthDate: extractDateString(dateObj) }));
                   }}
@@ -317,7 +317,7 @@ export function PersonnelFormModal({
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پایان کار با پاپیتال</label>
                 <DatePicker
-                  value={formData.endDate || ''}
+                  value={isoToJalaliDate(formData.endDate) || formData.endDate || ''}
                   onChange={(dateObj: any) => {
                     setFormData((prev) => ({ ...prev, endDate: extractDateString(dateObj) }));
                   }}

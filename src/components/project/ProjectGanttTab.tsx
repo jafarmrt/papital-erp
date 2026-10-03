@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Calendar, Clock, CheckCircle2, PlayCircle, Tag, BarChart3 } from 'lucide-react';
 import { ProductionProject, ProjectStage, ProjectProductItem } from '../../types';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, toStorageDate, formatPersianDate } from '../../utils';
 import { PillBadge, type PillBadgeVariants } from '../common/PillBadge';
 
 // v7.0.86 (TD-108): نشان وضعیت مرحله در گانت (بر پایه وضعیت و درصد پیشرفت)
@@ -36,14 +36,10 @@ interface ProjectGanttTabProps {
 
 // Convert Jalali or ISO date string (YYYY/MM/DD or YYYY-MM-DD) to comparable timestamp
 function parseDateToTimestamp(dateStr?: string): number | null {
-  if (!dateStr || typeof dateStr !== 'string') return null;
-  const clean = dateStr.trim().replace(/-/g, '/');
-  const parts = clean.split('/').map(p => parseInt(p, 10));
-  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
-    return null;
-  }
-  // Approximate day index for relative positioning (support both Jalali 14xx and Gregorian 20xx)
-  return parts[0] * 365 + parts[1] * 30 + parts[2];
+  // v7.0.135 (TD-232): تاریخ پروژه و مرحله میلادی ISO و برنامه محصولات شمسی است؛ هر دو به شماره روز دقیق تبدیل می‌شوند
+  // (پیش‌تر سال×۳۶۵+ماه×۳۰ بود و تاریخ شمسی و میلادی در یک نمودار با هم جور نمی‌شدند)
+  const iso = toStorageDate(dateStr);
+  return iso ? Date.parse(`${iso}T00:00:00Z`) / 86400000 : null;
 }
 
 // Calculate days difference
@@ -141,7 +137,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
       }
 
       // Check if stage is delayed or close to target date with 0% progress
-      if (prog < 100 && stg.end_date && project.end_date && stg.end_date >= project.end_date) {
+      if (prog < 100 && stg.end_date && project.end_date && (toStorageDate(stg.end_date) || '') >= (toStorageDate(project.end_date) || '')) {
         critical++;
       }
     });
@@ -181,11 +177,11 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
           <div className="flex items-center gap-2.5 font-mono text-xs">
             <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
               <span className="text-slate-400 text-[10px] block font-sans">تاریخ شروع پروژه:</span>
-              <span className="font-bold text-slate-800">{project.start_date || 'تعیین‌نشده'}</span>
+              <span className="font-bold text-slate-800">{project.start_date ? formatPersianDate(project.start_date) : 'تعیین‌نشده'}</span>
             </div>
             <div className="bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
               <span className="text-amber-800 text-[10px] block font-sans font-bold">موعد تحویل تعهدشده:</span>
-              <span className="font-bold text-amber-900">{project.end_date || 'تعیین‌نشده'}</span>
+              <span className="font-bold text-amber-900">{project.end_date ? formatPersianDate(project.end_date) : 'تعیین‌نشده'}</span>
             </div>
           </div>
         </div>
@@ -404,7 +400,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                       </span>
                       <span className="font-bold text-slate-800">{stg.title}</span>
                       <span className="text-[10px] text-slate-400 font-mono">
-                        ({stg.start_date || 'شروع نامشخص'} تا {stg.end_date || 'پایان نامشخص'})
+                        ({stg.start_date ? formatPersianDate(stg.start_date) : 'شروع نامشخص'} تا {stg.end_date ? formatPersianDate(stg.end_date) : 'پایان نامشخص'})
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -473,7 +469,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                       <span className="font-bold text-slate-800 text-xs">{stg.title}</span>
                       {stg.start_date && stg.end_date && (
                         <span className="text-[10px] text-slate-500 font-mono bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-                          {stg.start_date} الی {stg.end_date}
+                          {formatPersianDate(stg.start_date)} الی {formatPersianDate(stg.end_date)}
                         </span>
                       )}
                     </div>
@@ -526,7 +522,7 @@ export default function ProjectGanttTab({ project, onUpdate }: ProjectGanttTabPr
                             <span className="text-slate-400 font-sans">(بدون مونتاژ)</span>
                           ) : hasSpecificDates ? (
                             <span className="text-slate-500 text-[9px]">
-                              [{pSched.startDate || '...'} تا {pSched.endDate || '...'}]
+                              [{pSched.startDate ? formatPersianDate(pSched.startDate) : '...'} تا {pSched.endDate ? formatPersianDate(pSched.endDate) : '...'}]
                             </span>
                           ) : null}
                         </div>

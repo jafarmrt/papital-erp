@@ -2,7 +2,8 @@ import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
 import { resolveJalaliFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
-import { getTodayJalaliDate, errorMessageOf } from '../utils.js';
+import { errorMessageOf } from '../utils.js';
+import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { ValidationError, NotFoundError } from '../errors/customErrors.js';
@@ -215,7 +216,8 @@ export class ProcurementService {
         projectName,
         status: 'pending',
         priority: input.priority || 'normal',
-        requiredDate: input.requiredDate || getTodayJalaliDate(),
+        // v7.0.135 (TD-232): تاریخ نیاز میلادی ISO (پیش‌فرض امروز کسب‌وکار)
+        requiredDate: requireStorageDate(input.requiredDate, 'تاریخ نیاز') || await businessTodayIsoDate(),
         requestedById: user.id || null,
         requestedByName: user.username || 'سیستم',
         notes: input.notes || '',
@@ -379,7 +381,7 @@ export class ProcurementService {
     const [updated] = await orm.update(purchaseRequisitions).set({
       title: updates.title !== undefined ? updates.title.trim() : existing.title,
       priority: updates.priority || existing.priority,
-      requiredDate: updates.requiredDate || existing.requiredDate,
+      requiredDate: (updates.requiredDate ? requireStorageDate(updates.requiredDate, 'تاریخ نیاز') : '') || existing.requiredDate,
       notes: updates.notes !== undefined ? updates.notes : existing.notes,
       items: newItems,
       totalEstimatedAmount: money(newTotalEst),

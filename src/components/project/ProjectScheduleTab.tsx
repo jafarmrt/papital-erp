@@ -9,7 +9,7 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice, errorMessageOf } from '../../utils';
+import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import toast from 'react-hot-toast';
 
@@ -675,7 +675,7 @@ export default function ProjectScheduleTab({
                             <Calendar className="w-3.5 h-3.5 text-blue-600" />
                             <span>از:</span>
                             <DatePicker
-                              value={sched.startDate || ''}
+                              value={isoToJalaliDate(sched.startDate) || sched.startDate || ''}
                               onChange={(val: any) => {
                                 const formatted = extractDateString(val);
                                 updateProductSchedule(stg.id, p.id, prev => ({ ...prev, startDate: formatted }));
@@ -692,7 +692,7 @@ export default function ProjectScheduleTab({
                           <div className="flex items-center gap-1 text-[11px] text-slate-600">
                             <span>تا:</span>
                             <DatePicker
-                              value={sched.endDate || ''}
+                              value={isoToJalaliDate(sched.endDate) || sched.endDate || ''}
                               onChange={(val: any) => {
                                 const formatted = extractDateString(val);
                                 updateProductSchedule(stg.id, p.id, prev => ({ ...prev, endDate: formatted }));

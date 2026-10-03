@@ -3,7 +3,7 @@ import { X, ShoppingBag, Plus, Trash2, CheckCircle2, Building2, FileText, AlertC
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, PurchaseRequisitionItemRow, Item } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber, parseCleanNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, parseCleanNumber, formatPersianDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
@@ -422,7 +422,7 @@ export function SplitOrderModal({
                     پروژه: {requisition.projectName}
                   </span>
                 )}
-                <span>تاریخ نیاز: <b className="font-mono">{requisition.requiredDate || '---'}</b></span>
+                <span>تاریخ نیاز: <b className="font-mono">{requisition.requiredDate ? formatPersianDate(requisition.requiredDate) : '---'}</b></span>
               </div>
             </div>
 

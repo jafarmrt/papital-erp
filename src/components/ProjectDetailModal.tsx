@@ -3,7 +3,7 @@ import { X, Check, Calendar, User, Package, Users, Layers, CheckCircle2, Edit3, 
 import { ProductionProject, ProjectStage, Item } from '../types';
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
-import { toPersianDigits, formatPersianNumber, errorMessageOf } from '../utils';
+import { toPersianDigits, formatPersianNumber, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../utils';
 import { FinancialAttachmentUploader } from './accounting/FinancialAttachmentUploader';
 
 // Tab Components
@@ -156,8 +156,8 @@ export default function ProjectDetailModal({
     setStageTitle(stg.title);
     setStageStatus(stg.status);
     setStageProgress(stg.progress_percent || 0);
-    setStageStartDate(stg.start_date || '');
-    setStageEndDate(stg.end_date || '');
+    setStageStartDate(isoToJalaliDate(stg.start_date) || stg.start_date || '');
+    setStageEndDate(isoToJalaliDate(stg.end_date) || stg.end_date || '');
     setPersonnelInput(Array.isArray(stg.assigned_personnel) ? stg.assigned_personnel.join(', ') : '');
     setResourcesInput(Array.isArray(stg.required_resources) ? stg.required_resources.join(', ') : '');
     setStageNotes(stg.notes || '');
@@ -294,7 +294,7 @@ export default function ProjectDetailModal({
                 {project?.end_date && (
                   <span className="flex items-center gap-1 text-slate-300">
                     <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                    <span>موعد تحویل: <strong className="text-white font-mono">{toPersianDigits(project.end_date)}</strong></span>
+                    <span>موعد تحویل: <strong className="text-white font-mono">{formatPersianDate(project.end_date)}</strong></span>
                   </span>
                 )}
                 {project?.quantity && (
@@ -503,7 +503,7 @@ export default function ProjectDetailModal({
                     <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
                       <span className="text-[10px] text-slate-500 font-semibold block">تاریخ شروع و تحویل:</span>
                       <p className="font-bold font-mono text-slate-800">
-                        {project.start_date || '؟'} تا {project.end_date || '؟'}
+                        {project.start_date ? formatPersianDate(project.start_date) : '؟'} تا {project.end_date ? formatPersianDate(project.end_date) : '؟'}
                       </p>
                     </div>
 
@@ -613,10 +613,10 @@ export default function ProjectDetailModal({
                                         <span>پرسنل: {stg.assigned_personnel.join('، ')}</span>
                                       )}
                                       {stg.start_date && (
-                                        <span>• شروع: {toPersianDigits(stg.start_date)}</span>
+                                        <span>• شروع: {formatPersianDate(stg.start_date)}</span>
                                       )}
                                       {stg.end_date && (
-                                        <span>• پایان: {toPersianDigits(stg.end_date)}</span>
+                                        <span>• پایان: {formatPersianDate(stg.end_date)}</span>
                                       )}
                                     </div>
                                   </div>

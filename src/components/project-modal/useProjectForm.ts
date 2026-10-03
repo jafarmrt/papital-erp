@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Customer, Item, FinancialAttachment } from '../../types';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate, errorMessageOf } from '../../utils';
+import { getTodayJalaliDate, errorMessageOf, isoToJalaliDate } from '../../utils';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../../constants/presets';
 import { ProductRow, ProjectStage, ProjectModalProps } from './types';
 import {
@@ -98,8 +98,8 @@ export function useProjectForm({
         setProjectCode(projectToEdit.project_code || '');
         setTitle(projectToEdit.title || '');
         setSelectedCustomerId(projectToEdit.customer_id || null);
-        setStartDate(projectToEdit.start_date || '');
-        setEndDate(projectToEdit.end_date || '');
+        setStartDate(isoToJalaliDate(projectToEdit.start_date) || projectToEdit.start_date || '');
+        setEndDate(isoToJalaliDate(projectToEdit.end_date) || projectToEdit.end_date || '');
         setPriority(projectToEdit.priority || 'medium');
         setDescription(projectToEdit.description || '');
         setStages(projectToEdit.stages?.map(s => ({

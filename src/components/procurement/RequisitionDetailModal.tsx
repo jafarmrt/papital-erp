@@ -3,7 +3,7 @@ import { X, FileText, CheckCircle2, AlertTriangle, ShoppingCart, UserCheck, Chec
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { ConfirmWarehouseDeliveryModal } from './ConfirmWarehouseDeliveryModal';
 import { PillBadge } from '../common/PillBadge';
 import { REQUISITION_PRIORITY_DETAIL_BADGES, REQUISITION_PRIORITY_DETAIL_FALLBACK, REQUISITION_STATUS_BADGES, REQUISITION_STATUS_FALLBACK } from './requisitionBadges';
@@ -248,7 +248,7 @@ export function RequisitionDetailModal({
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-500 block mb-1">تاریخ نیاز:</span>
-              <span className="font-mono font-bold text-slate-900">{requisition.requiredDate || '---'}</span>
+              <span className="font-mono font-bold text-slate-900">{requisition.requiredDate ? formatPersianDate(requisition.requiredDate) : '---'}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-500 block mb-1">برآورد کل هزینه:</span>

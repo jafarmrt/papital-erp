@@ -3,7 +3,7 @@ import { ShoppingBag, ShoppingCart, Search, Plus, Layers, RefreshCw, Eye, Trash2
 import { toast } from 'react-hot-toast';
 import { PurchaseRequisition, Item, User, ProcurementOrder } from '../../types';
 import { fetchJson } from '../../api';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { RequisitionDetailModal } from './RequisitionDetailModal';
 import { SplitOrderModal } from './SplitOrderModal';
 import { CreateRequisitionModal } from './CreateRequisitionModal';
@@ -606,7 +606,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
                           </td>
 
                           <td className="p-3 text-center font-mono font-bold text-slate-700">
-                            {req.requiredDate || '---'}
+                            {req.requiredDate ? formatPersianDate(req.requiredDate) : '---'}
                           </td>
 
                           <td className="p-3 text-center font-mono font-black text-amber-800">

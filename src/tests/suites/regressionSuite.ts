@@ -6699,11 +6699,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           return err === ROLLBACK ? null : err;
         }
       };
-      for (const ok of ['2026-10-02', '1370/05/12', '1370-5-1', '۱۳۷۰/۰۵/۱۲', '2026-10-02 18:30:00', '']) {
+      // v7.0.135 (TD-232): تاریخ تولد پس از یکسان‌سازی فقط ISO می‌پذیرد؛ قالب «any» (شمسی، میلادی، ارقام فارسی) با تابع SQL سنجیده می‌شود
+      for (const ok of ['2026-10-02', '']) {
         const err = await tryBirthDate(ok);
         if (err) violations.push(`«${ok}» رد شد: ${err instanceof Error ? err.message : String(err)}`);
       }
-      for (const bad of ['abc', '1370/13/01', '2026-10-32', '10/02/2026', '07-10-1405 AP']) {
+      for (const v of ['2026-10-02', '1370/05/12', '1370-5-1', '۱۳۷۰/۰۵/۱۲', '2026-10-02 18:30:00']) {
+        const ok = (await orm.execute(sql`SELECT erp_date_text_ok(${v}::text, 'any') AS ok`) as unknown as { rows: Array<{ ok: boolean }> }).rows[0].ok;
+        if (!ok) violations.push(`قالب any «${v}» را رد کرد`);
+      }
+      for (const bad of ['abc', '1370/13/01', '2026-10-32', '10/02/2026', '07-10-1405 AP', '1370/05/12']) {
         const err = await tryBirthDate(bad);
         if (!err) { violations.push(`«${bad}» پذیرفته شد`); continue; }
         const normalized = normalizeError(err);
@@ -7060,7 +7065,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.131: تبدیل تاریخ SQL با مبدل برنامه یکی است؛ یکسان‌سازی ستون مقدار قبلی را ثبت و تاریخ نامعتبر را رد می‌کند؛ گزارش تقویم ستون‌ها را می‌شمارد (TD-232)';
     const ROLLBACK = new Error('ROLLBACK_TD_232');
     const violations: string[] = [];
-    let reportPersonnelId: number | null = null;
+    let reportVoucherId: number | null = null;
     try {
       const { personnel, legacyDateRepairs } = await import('../../db/schema.js');
       const { toStorageDate } = await import('../../utils/calendarDate.js');
@@ -7127,15 +7132,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         if (err !== ROLLBACK) throw err;
       }
 
-      // ۴) گزارش فقط‌خواندنی: ستون‌ها و شمار ردیف شمسی
-      const [pers] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER TD-232 گزارش', birthDate: '1370/05/12' }).returning({ id: personnel.id });
-      reportPersonnelId = pers.id;
+      // ۴) گزارش فقط‌خواندنی: ستون‌ها و شمار ردیف شمسی (تاریخ سند حسابداری شمسی می‌ماند و قالب any دارد)
+      const [jv] = await orm.insert(journalVouchers).values({ voucherNumber: 980000000 + Math.floor(Math.random() * 1000000), date: '1405/07/10', description: 'ERP-TEST-MARKER TD-232 گزارش' }).returning({ id: journalVouchers.id });
+      reportVoucherId = jv.id;
       const report = await DateCalendarReportService.buildReport();
       const col = (t: string, c: string) => report.columns.find(x => x.table === t && x.column === c);
       for (const [t, c] of [['crm_activities', 'activity_date'], ['cheques', 'due_date'], ['journal_vouchers', 'date'], ['personnel', 'birth_date']]) {
         if (!col(t, c)) violations.push(`ستون ${t}.${c} در گزارش نیست`);
       }
-      if ((col('personnel', 'birth_date')?.jalali ?? 0) < 1) violations.push('گزارش تاریخ تولد شمسی را نشمرد');
+      if ((col('journal_vouchers', 'date')?.jalali ?? 0) < 1) violations.push('گزارش تاریخ شمسی سند حسابداری را نشمرد');
       if (report.columns.some(x => x.table === 'legacy_date_repairs')) violations.push('جدول legacy_date_repairs نباید در گزارش باشد');
 
       if (violations.length > 0) throw new Error(violations.join(' | '));
@@ -7161,7 +7166,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         error: err instanceof Error ? err.message : String(err)
       }));
     } finally {
-      if (reportPersonnelId !== null) await cleanTestTableData('personnel', 'id', [reportPersonnelId]);
+      if (reportVoucherId !== null) await cleanTestTableData('journal_vouchers', 'id', [reportVoucherId]);
     }
   }
 
@@ -7545,6 +7550,120 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('piecework_task_rate_history', 'task_id', [taskId]);
         await cleanTestTableData('piecework_tasks', 'id', [taskId]);
       }
+    }
+  }
+
+  // Test: v7.0.135 (TD-232): تاریخ پروژه، مرحله، درخواست خرید و پرسنل میلادی ISO ذخیره می‌شوند
+  if (shouldRun('reg_project_personnel_dates_iso_td_232', 'td232', 'project', 'personnel', 'calendar')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.135: تاریخ پروژه و مراحل، تاریخ نیاز درخواست خرید و تاریخ تولد و پایان همکاری پرسنل میلادی ISO ذخیره می‌شوند؛ تاریخ قدیمی با ثبت مقدار قبلی تبدیل می‌شود (TD-232)';
+    const ROLLBACK = new Error('ROLLBACK_TD_232_PROJECT');
+    const violations: string[] = [];
+    let projectId: number | null = null;
+    let requisitionId: number | null = null;
+    let personnelId: number | null = null;
+    try {
+      const { productionProjects, projectStages, purchaseRequisitions, personnel, legacyDateRepairs } = await import('../../db/schema.js');
+      const { toStorageDate } = await import('../../utils/calendarDate.js');
+      const { normalizeError } = await import('../../errors/customErrors.js');
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+
+      const columns = [['production_projects', 'start_date'], ['production_projects', 'end_date'], ['project_stages', 'start_date'], ['project_stages', 'end_date'], ['purchase_requisitions', 'required_date'], ['personnel', 'birth_date'], ['personnel', 'end_date']];
+      const [{ n: isoConstraints }] = (await orm.execute(sql`
+        SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+        WHERE rel.relnamespace = current_schema()::regnamespace AND pc.convalidated AND pg_get_constraintdef(pc.oid) LIKE '%''iso''%'
+          AND pc.conname = ANY(${sql.param(columns.map(([t, c]) => `chk_${t}_${c}_datefmt`))}::text[])`) as unknown as { rows: Array<{ n: number }> }).rows;
+      if (isoConstraints !== columns.length) violations.push(`قید iso معتبر: ${isoConstraints} (انتظار ${columns.length})`);
+
+      // ۱) تبدیل داده قدیمی (گام‌های مهاجرت 0042) در تراکنشی که برگردانده می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          for (const [t, c] of columns) await tx.execute(sql`ALTER TABLE ${sql.identifier(t)} DROP CONSTRAINT IF EXISTS ${sql.identifier(`chk_${t}_${c}_datefmt`)}`);
+          const tag = Date.now();
+          const [pr] = await tx.insert(productionProjects).values({ projectCode: `TD232-${tag}`, title: 'ERP-TEST-MARKER پروژه', startDate: '1405/07/01', endDate: '۱۴۰۵/۰۸/۱۵' }).returning({ id: productionProjects.id });
+          const [st] = await tx.insert(projectStages).values({ projectId: pr.id, title: 'ERP-TEST-MARKER مرحله', startDate: '1405-7-2', endDate: '2026-10-30' }).returning({ id: projectStages.id });
+          const [rq] = await tx.insert(purchaseRequisitions).values({ code: `TD232-${tag}`, title: 'ERP-TEST-MARKER', requiredDate: '1405/07/20' }).returning({ id: purchaseRequisitions.id });
+          const [pe] = await tx.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل', birthDate: '1370/05/12', endDate: 'نامعلوم' }).returning({ id: personnel.id });
+          for (const [t, c] of columns) await tx.execute(sql`SELECT erp_unify_text_date_column(${t}, ${c})`);
+          const [p1] = await tx.select().from(productionProjects).where(eq(productionProjects.id, pr.id));
+          const [s1] = await tx.select().from(projectStages).where(eq(projectStages.id, st.id));
+          const [r1] = await tx.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, rq.id));
+          const [e1] = await tx.select().from(personnel).where(eq(personnel.id, pe.id));
+          if (p1.startDate !== toStorageDate('1405/07/01') || p1.endDate !== toStorageDate('1405/08/15')) violations.push(`پروژه: ${p1.startDate}، ${p1.endDate}`);
+          if (s1.startDate !== toStorageDate('1405/07/02') || s1.endDate !== '2026-10-30') violations.push(`مرحله: ${s1.startDate}، ${s1.endDate}`);
+          if (r1.requiredDate !== toStorageDate('1405/07/20')) violations.push(`درخواست خرید: ${r1.requiredDate}`);
+          if (e1.birthDate !== '1991-08-03' || e1.endDate !== 'نامعلوم') violations.push(`پرسنل: ${e1.birthDate}، ${e1.endDate}`);
+          const refused = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.repairKind, 'calendar'), eq(legacyDateRepairs.tableName, 'personnel'), eq(legacyDateRepairs.rowId, pe.id), eq(legacyDateRepairs.columnName, 'end_date')));
+          if (refused[0]?.status !== 'refused') violations.push('مقدار غیرتاریخی پایان همکاری باید refused ثبت شود');
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      // ۲) ثبت پروژه و مرحله با تاریخ شمسی ← ISO؛ تاریخ نامعتبر 422
+      const { project, stages } = await ProjectService.createProject({
+        title: 'ERP-TEST-MARKER پروژه TD-232', startDate: '۱۴۰۵/۰۷/۰۱', endDate: '1405/08/15',
+        initialStages: [{ title: 'برش', start_date: '1405/07/02', end_date: '1405/07/10' }],
+      });
+      projectId = project.id;
+      if (project.startDate !== toStorageDate('1405/07/01') || project.endDate !== toStorageDate('1405/08/15')) violations.push(`پروژه جدید: ${project.startDate}، ${project.endDate}`);
+      if (stages[0]?.startDate !== toStorageDate('1405/07/02') || stages[0]?.endDate !== toStorageDate('1405/07/10')) violations.push(`مرحله جدید: ${stages[0]?.startDate}، ${stages[0]?.endDate}`);
+      try {
+        await ProjectService.updateProject(project.id, { endDate: '1405/12/30' });
+        violations.push('۳۰ اسفند ۱۴۰۵ (سال عادی) پذیرفته شد');
+      } catch (err) {
+        if (normalizeError(err).statusCode !== 422) violations.push(`تاریخ نامعتبر پروژه: ${normalizeError(err).statusCode}`);
+      }
+
+      // ۳) درخواست خرید بدون تاریخ نیاز ← امروز ISO
+      const req = await ProcurementService.createRequisition({ title: 'ERP-TEST-MARKER درخواست TD-232', items: [{ itemName: 'آزمون', quantity: 1, unit: 'عدد' } as never] }, { username: 'ERP-TEST-MARKER' });
+      requisitionId = req.id;
+      const [reqRow] = await orm.select({ d: purchaseRequisitions.requiredDate }).from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
+      if (reqRow.d !== await businessTodayIsoDate()) violations.push(`تاریخ نیاز پیش‌فرض: ${reqRow.d}`);
+
+      // ۴) پرسنل از API: تاریخ تولد شمسی ← ISO
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const created = await request(app).post('/api/personnel').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken)
+        .send({ firstName: 'ERP-TEST-MARKER', lastName: 'TD-232', birthDate: '۱۳۷۰/۰۵/۱۲' });
+      personnelId = created.body?.id ?? created.body?.data?.id ?? null;
+      if (created.status >= 300 || !personnelId) violations.push(`ثبت پرسنل: ${created.status} ${JSON.stringify(created.body).slice(0, 200)}`);
+      else {
+        const [pRow] = await orm.select({ b: personnel.birthDate }).from(personnel).where(eq(personnel.id, personnelId));
+        if (pRow.b !== '1991-08-03') violations.push(`تاریخ تولد ذخیره‌شده: ${pRow.b}`);
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_project_personnel_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'تاریخ‌های پروژه، مرحله، درخواست خرید و پرسنل ISO ذخیره شدند، تاریخ نامعتبر 422 گرفت و داده قدیمی با گزارش تبدیل شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_project_personnel_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (projectId !== null) {
+        await cleanTestTableData('project_stages', 'project_id', [projectId]);
+        await cleanTestTableData('production_projects', 'id', [projectId]);
+      }
+      if (requisitionId !== null) await cleanTestTableData('purchase_requisitions', 'id', [requisitionId]);
+      if (personnelId !== null) await cleanTestTableData('personnel', 'id', [personnelId]);
     }
   }
 

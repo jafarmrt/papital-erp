@@ -9,7 +9,8 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
-import { normalizePhoneNumber, normalizeNationalId } from '../utils.js';
+import { normalizePhoneNumber, normalizeNationalId, isoToJalaliDate } from '../utils.js';
+import { requireStorageDate } from '../lib/storageDate.js';
 import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { money, moneyOr } from '../lib/money.js';
@@ -131,7 +132,7 @@ router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage'
       'کد ملی': p.nationalId ? normalizeNationalId(p.nationalId) : '',
       'وضعیت همکاری': p.employmentStatus || 'فعال',
       'جنسیت': p.gender || 'مرد',
-      'تاریخ تولد': p.birthDate || '',
+      'تاریخ تولد': isoToJalaliDate(p.birthDate) || p.birthDate || '',
       'تحصیلات': p.education || '',
       'شماره شبا': p.shebaNumber || '',
       'شماره کارت': p.cardNumber || '',
@@ -205,7 +206,8 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
         const employmentStatus = ['فعال', 'قطع همکاری', 'مرخصی', 'تعلیق'].includes(item.employmentStatus)
           ? item.employmentStatus
           : 'فعال';
-        const birthDate = String(item.birthDate || '').trim();
+        // v7.0.135 (TD-232): تاریخ تولد میلادی ISO ذخیره می‌شود؛ تاریخ نامعتبر خطای همان ردیف است
+        const birthDate = requireStorageDate(String(item.birthDate || '').trim(), 'تاریخ تولد');
         const nationality = String(item.nationality || 'ایرانی').trim();
         const education = String(item.education || '').trim();
         const cardNumber = String(item.cardNumber || '').trim();
@@ -522,7 +524,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         personnelCode: personnelCode.trim(),
         userId: userId ? Number(userId) : null,
         gender,
-        birthDate,
+        birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
         nationality,
         nationalId: normalizeNationalId(nationalId),
         phone: normalizePhoneNumber(phone),
@@ -531,7 +533,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
         jobTitle: jobTitle.trim(),
         education: education.trim(),
-        endDate,
+        endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
         terminationReason,
         specializedSkills,
         otherSkills,
@@ -640,7 +642,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         personnelCode: personnelCode ? personnelCode.trim() : '',
         userId: userId ? Number(userId) : null,
         gender,
-        birthDate,
+        birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
         nationality,
         nationalId: nationalId ? normalizeNationalId(nationalId) : '',
         phone: phone ? normalizePhoneNumber(phone) : '',
@@ -650,7 +652,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
         jobTitle: jobTitle ? jobTitle.trim() : '',
         education: education ? education.trim() : '',
-        endDate: endDate || '',
+        endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
         terminationReason: terminationReason || '',
         specializedSkills: specializedSkills || '',
         otherSkills: otherSkills || '',

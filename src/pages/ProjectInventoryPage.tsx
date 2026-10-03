@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { ProductionProject, Item, User } from '../types';
 import { fetchJson } from '../api';
-import { formatPersianNumber } from '../utils';
+import { formatPersianNumber, formatPersianDate } from '../utils';
 import toast from 'react-hot-toast';
 import ProjectInventoryTab from '../components/project/ProjectInventoryTab';
 
@@ -208,7 +208,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
               </div>
               <p className="text-xs text-slate-300">
                 مشتری: <span className="text-amber-300 font-bold">{project.customer_name || 'ثبت‌نشده'}</span> | 
-                تاریخ تحویل: <span className="font-mono text-slate-200">{project.end_date || 'تعیین نشده'}</span> | 
+                تاریخ تحویل: <span className="font-mono text-slate-200">{project.end_date ? formatPersianDate(project.end_date) : 'تعیین نشده'}</span> | 
                 تیراژ کل سفارش: <span className="font-mono font-bold text-emerald-400">{formatPersianNumber(project.quantity || 1)} {project.unit || 'عدد'}</span>
               </p>
             </div>

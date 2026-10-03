@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
 import { businessNowIsoDateTime } from '../lib/businessClock.js';
+import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 
 export interface CreateProjectInput {
@@ -125,8 +126,9 @@ export class ProjectService {
       itemName: input.itemName || '',
       quantity: input.quantity ? Number(input.quantity) : 1,
       unit: input.unit || 'عدد',
-      startDate: input.startDate || '',
-      endDate: input.endDate || '',
+      // v7.0.135 (TD-232): تاریخ شروع و پایان پروژه و مراحل میلادی ISO؛ ورودی شمسی تبدیل و نامعتبر 422
+      startDate: requireStorageDate(input.startDate, 'تاریخ شروع پروژه'),
+      endDate: requireStorageDate(input.endDate, 'تاریخ پایان پروژه'),
       status: 'planned',
       priority: input.priority || 'medium',
       description: input.description || '',
@@ -148,8 +150,8 @@ export class ProjectService {
         stageOrder: index + 1,
         title: typeof stg.title === 'string' && stg.title.trim() ? stg.title.trim() : `مرحله ${index + 1}`,
         status: typeof stg.status === 'string' ? stg.status : 'pending',
-        startDate: typeof stg.startDate === 'string' ? stg.startDate : (typeof stg.start_date === 'string' ? stg.start_date : (input.startDate || '')),
-        endDate: typeof stg.endDate === 'string' ? stg.endDate : (typeof stg.end_date === 'string' ? stg.end_date : (input.endDate || '')),
+        startDate: requireStorageDate(typeof stg.startDate === 'string' ? stg.startDate : (typeof stg.start_date === 'string' ? stg.start_date : (input.startDate || '')), 'تاریخ شروع مرحله'),
+        endDate: requireStorageDate(typeof stg.endDate === 'string' ? stg.endDate : (typeof stg.end_date === 'string' ? stg.end_date : (input.endDate || '')), 'تاریخ پایان مرحله'),
         assignedPersonnel: Array.isArray(stg.assignedPersonnel) ? stg.assignedPersonnel : (Array.isArray(stg.assigned_personnel) ? stg.assigned_personnel : []),
         requiredResources: Array.isArray(stg.requiredResources) ? stg.requiredResources : (Array.isArray(stg.required_resources) ? stg.required_resources : []),
         progressPercent: typeof stg.progressPercent === 'number' ? stg.progressPercent : (typeof stg.progress_percent === 'number' ? stg.progress_percent : 0),
@@ -218,8 +220,8 @@ export class ProjectService {
     if (input.itemName !== undefined) updateData.itemName = input.itemName;
     if (input.quantity !== undefined) updateData.quantity = Number(input.quantity);
     if (input.unit !== undefined) updateData.unit = input.unit;
-    if (input.startDate !== undefined) updateData.startDate = input.startDate;
-    if (input.endDate !== undefined) updateData.endDate = input.endDate;
+    if (input.startDate !== undefined) updateData.startDate = optionalStorageDate(input.startDate, 'تاریخ شروع پروژه');
+    if (input.endDate !== undefined) updateData.endDate = optionalStorageDate(input.endDate, 'تاریخ پایان پروژه');
     if (input.status !== undefined) updateData.status = input.status;
     if (input.priority !== undefined) updateData.priority = input.priority;
     if (input.description !== undefined) updateData.description = input.description;
@@ -347,8 +349,8 @@ export class ProjectService {
       stageOrder: nextOrder,
       title: data.title.trim(),
       status: data.status || 'pending',
-      startDate: data.startDate || '',
-      endDate: data.endDate || '',
+      startDate: requireStorageDate(data.startDate, 'تاریخ شروع مرحله'),
+      endDate: requireStorageDate(data.endDate, 'تاریخ پایان مرحله'),
       assignedPersonnel: Array.isArray(data.assignedPersonnel) ? data.assignedPersonnel : [],
       requiredResources: Array.isArray(data.requiredResources) ? data.requiredResources : [],
       progressPercent: data.status === 'completed' ? 100 : 0,
@@ -513,8 +515,8 @@ export class ProjectService {
         updateData.completedAt = new Date().toISOString();
       }
     }
-    if (data.startDate !== undefined) updateData.startDate = data.startDate;
-    if (data.endDate !== undefined) updateData.endDate = data.endDate;
+    if (data.startDate !== undefined) updateData.startDate = optionalStorageDate(data.startDate, 'تاریخ شروع مرحله');
+    if (data.endDate !== undefined) updateData.endDate = optionalStorageDate(data.endDate, 'تاریخ پایان مرحله');
     if (data.assignedPersonnel !== undefined) {
       updateData.assignedPersonnel = Array.isArray(data.assignedPersonnel) ? data.assignedPersonnel : [];
     }

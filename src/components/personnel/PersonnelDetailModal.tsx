@@ -1,6 +1,6 @@
 import { Briefcase, Award, Wallet, X, Edit2, Phone, Calendar } from 'lucide-react';
 import { Personnel } from '../../types';
-import { formatPersianCode, formatPersianNumber, formatPersianPhone, formatPersianNationalId } from '../../utils';
+import { formatPersianCode, formatPersianPhone, formatPersianNationalId, formatPersianDate } from '../../utils';
 
 interface PersonnelDetailModalProps {
   isOpen: boolean;
@@ -88,7 +88,7 @@ export function PersonnelDetailModal({
               <span className="text-[10px] text-slate-400 block">تاریخ تولد</span>
               <span className="font-bold font-mono text-slate-800 mt-0.5 flex items-center gap-1">
                 <Calendar size={12} className="text-amber-500" />
-                {personnel.birthDate ? formatPersianNumber(personnel.birthDate) : '---'}
+                {personnel.birthDate ? formatPersianDate(personnel.birthDate) : '---'}
               </span>
             </div>
 
@@ -118,7 +118,7 @@ export function PersonnelDetailModal({
               <div>
                 <span className="text-[10px] text-slate-500 block">تاریخ پایان همکاری:</span>
                 <span className="font-bold font-mono text-slate-800">
-                  {personnel.endDate ? formatPersianNumber(personnel.endDate) : '---'}
+                  {personnel.endDate ? formatPersianDate(personnel.endDate) : '---'}
                 </span>
               </div>
             </div>
