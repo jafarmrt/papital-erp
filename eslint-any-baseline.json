@@ -183,7 +183,6 @@
   "src/modules/_template/service.ts": 4,
   "src/pages/ActivityLogsPage.tsx": 12,
   "src/pages/ApprovalInboxPage.tsx": 2,
-  "src/pages/CreateInvoicePage.tsx": 21,
   "src/pages/CRMPage.tsx": 7,
   "src/pages/CustomersPage.tsx": 6,
   "src/pages/DailyLogsPage.tsx": 1,

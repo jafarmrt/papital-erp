@@ -58,8 +58,9 @@ export function useCategoriesQuery(type?: string) {
 export function useWarehousesQuery() {
   return useQuery<WarehouseItem[]>({
     queryKey: QUERY_KEYS.warehouses.list(),
-    queryFn: async () => {
-      const res = await fetchJson('/warehouses');
+    // سیگنال React Query: با بسته شدن صفحه، درخواست در حال اجرا لغو می‌شود
+    queryFn: async ({ signal }) => {
+      const res = await fetchJson('/warehouses', { signal });
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
     },
     staleTime: 5 * 60 * 1000,

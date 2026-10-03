@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { fetchJson } from '../api';
+import { isCancelledError } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { Item, User, Customer } from '../types';
-import { Plus, Trash2, Printer, Edit3, X, GitBranch } from 'lucide-react';
+import { Item, User } from '../types';
+import { Plus, Trash2, Printer, X } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { cn, formatPersianPrice, formatPersianNumber, formatPersianCode, formatPersianDate, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
-import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
+import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
 import { useServerDraft } from '../hooks/useServerDraft';
+import { useInvoiceReferenceData, useItemPricesQuery } from '../hooks/invoices/useInvoiceReferenceData';
+import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
+import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
+import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
+import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
 import { ExchangeRateField, exchangeRateError } from '../components/documents/ExchangeRateField';
 
@@ -21,22 +26,24 @@ import { ExchangeRateField, exchangeRateError } from '../components/documents/Ex
 export default function CreateInvoicePage({ user: currentUser }: { user: User }) {
   const isSalesUser = currentUser.role === 'sales_manager' || (currentUser.role !== 'admin' && currentUser.role !== 'manager' && currentUser.role !== 'warehouse_keeper' && currentUser.role !== 'accountant');
 
-  const [itemPrices, setItemPrices] = useState<any[]>([]);
   const [docType, setDocType] = useState('invoice');
   const [status, setStatus] = useState(isSalesUser ? 'proforma' : 'final'); // 'proforma' or 'final'
-  const [location, setLocation] = useState<string>('');
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  
-  const [refNumber, setRefNumber] = useState('');
-  const [date, setDate] = useState<any>(() => getTodayJalaliDate());
-  
+
+  // خواندنی‌های صفحه با React Query (انبارها، مشتریان، پیش‌فاکتورهای باز، شماره بعدی سند)
+  const { warehouses, customersList, proformas, nextRef, loadDocument, refreshProformas, refetchNextRef } = useInvoiceReferenceData(docType);
+
+  // انبار پیش‌فرض = اولین انبار برگشتی (مثل قبل) تا وقتی کاربر، پیش‌نویس یا سند ویرایشی انبار دیگری انتخاب نکرده باشد
+  const [locationOverride, setLocation] = useState<string | null>(null);
+  const location = locationOverride ?? warehouses[0]?.code ?? '';
+
+  // شماره سند = شماره بعدی سرور تا وقتی کاربر یا پیش‌فاکتور ویرایشی شماره دیگری نگذاشته باشد (null = شماره سرور)
+  const [refOverride, setRefNumber] = useState<string | null>(null);
+  const refNumber = refOverride ?? nextRef;
+  const [date, setDate] = useState<string>(() => getTodayJalaliDate());
+
   // Buyer fields
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerCity, setBuyerCity] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
-  const [buyerAddress, setBuyerAddress] = useState('');
-  const [customersList, setCustomersList] = useState<Customer[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const buyer = useInvoiceBuyer(customersList);
+  const { buyerName, setBuyerName, buyerCity, setBuyerCity, buyerPhone, setBuyerPhone, buyerAddress, setBuyerAddress, selectedCustomerId, setSelectedCustomerId, handleCustomerSelect } = buyer;
   const [notes, setNotes] = useState('');
   const [crmLeadId, setCrmLeadId] = useState<number | null>(null);
   const [currency, setCurrency] = useState('IRR');
@@ -51,14 +58,14 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   const [quantity, setQuantity] = useState<number | ''>('');
   const [unitPrice, setUnitPrice] = useState<number | ''>('');
   const [discount, setDiscount] = useState<number | ''>(0);
-  const [isSaving, setIsSaving] = useState(false);
-  
-  const [docItems, setDocItems] = useState<{item: Item, quantity: number, unitPrice: number, discount: number}[]>([]);
+  const itemPricesQuery = useItemPricesQuery(selectedItem);
+  const itemPrices = selectedItem ? (itemPricesQuery.data ?? []) : [];
+
+  const [docItems, setDocItems] = useState<InvoiceDocItem[]>([]);
   const [editingDocId, setEditingDocId] = useState<number | null>(null);
-  const [workflowModalDoc, setWorkflowModalDoc] = useState<any | null>(null);
 
   // Print view state
-  const [printedDoc, setPrintedDoc] = useState<any>(null);
+  const [printedDoc, setPrintedDoc] = useState<InvoiceDocumentDetails | null>(null);
 
   // Server draft data builder
   const currentInvoiceData = {
@@ -105,199 +112,89 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     }
   });
 
-  const fetchNextRef = async (signal?: AbortSignal) => {
-    try {
-      const { nextRef } = await fetchJson(`/documents/next-ref?type=${docType}`, { signal });
-      setRefNumber(nextRef);
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return;
-      console.error(e);
-    }
-  };
+  const saveMutation = useInvoiceSave({ loadDocument, discardDraft });
+  const isSaving = saveMutation.isPending;
 
-  const [proformas, setProformas] = useState<any[]>([]);
-  const loadProformas = (signal?: AbortSignal) => {
-    fetchJson('/documents?status=proforma&limit=1000', { signal }).then(res => {
-      const rawData = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      setProformas(rawData);
-    }).catch(err => {
-      if (err?.name === 'AbortError') return;
-      console.error(err);
-    });
-  };
-
-  const handleEditProforma = async (p: any) => {
+  const handleEditProforma = async (p: InvoiceListDocument) => {
     try {
-      const doc = await fetchJson(`/documents/${p.id}`);
+      const doc = await loadDocument(p.id);
       if (!doc) return;
+      const form = invoiceFormFromDocument(doc, p.ref_number);
       setEditingDocId(p.id);
-      setDocType(doc.type || 'invoice');
-      setStatus(doc.status || 'proforma');
-      setRefNumber(doc.ref_number || p.ref_number || '');
-      if (doc.date) setDate(formatPersianDate(doc.date, { englishDigits: true }));
-      setBuyerName(doc.buyer_name || '');
-      setBuyerCity(doc.buyer_city || '');
-      setBuyerPhone(doc.buyer_phone || '');
-      setBuyerAddress(doc.buyer_address || '');
-      setNotes(doc.notes || '');
-      setCurrency(doc.currency || 'IRR');
-      setExchangeRate(Number(doc.exchangeRate ?? doc.exchange_rate ?? 0) || 0);
-      // v7.0.32 (TD-197): بازیابی مالیات ساختاریافته پیش‌فاکتور در حالت ویرایش
-      const loadedVatPercent = Number(doc.vatPercent ?? doc.vat_percent ?? 0) || 0;
-      setApplyVat(loadedVatPercent > 0);
-      if (loadedVatPercent > 0) setVatRate(loadedVatPercent);
-      if (doc.location) setLocation(doc.location);
-
-      if (Array.isArray(doc.items)) {
-        const mappedItems = doc.items.map((it: any) => ({
-          item: {
-            id: it.itemId || it.item_id,
-            code: it.itemCode || it.item_code || '',
-            name: it.itemName || it.item_name || 'کالا',
-            unit: it.itemUnit || it.unit || 'عدد',
-            current_stock: it.current_stock || 0
-          },
-          quantity: Number(it.quantity || 0),
-          unitPrice: Number(it.unitPrice || it.unit_price || 0),
-          discount: Number(it.discount || 0)
-        }));
-        setDocItems(mappedItems);
-      }
+      setDocType(form.docType);
+      setStatus(form.status);
+      setRefNumber(form.refNumber);
+      if (form.date) setDate(form.date);
+      buyer.setBuyer(form);
+      setNotes(form.notes);
+      setCurrency(form.currency);
+      setExchangeRate(form.exchangeRate);
+      setApplyVat(form.vatPercent > 0);
+      if (form.vatPercent > 0) setVatRate(form.vatPercent);
+      if (form.location) setLocation(form.location);
+      if (form.docItems) setDocItems(form.docItems);
       toast.success(`پیش‌فاکتور شماره ${p.ref_number} جهت ویرایش بارگذاری شد.`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
+      if (isCancelledError(err)) return;
       toast.error('خطا در دریافت اطلاعات پیش‌فاکتور جهت ویرایش');
     }
   };
 
-  const handleCancelEdit = () => {
+  const handlePrintProforma = async (p: InvoiceListDocument) => {
+    try {
+      setPrintedDoc(await loadDocument(p.id));
+    } catch (err) {
+      if (!isCancelledError(err)) console.error(err);
+    }
+  };
+
+  // پاک کردن فرم پس از ثبت یا انصراف از ویرایش؛ شماره سند به شماره بعدی سرور برمی‌گردد
+  const resetForm = () => {
     setEditingDocId(null);
     setDocItems([]);
-    setSelectedCustomerId('');
     setBuyerName('');
     setBuyerCity('');
     setBuyerPhone('');
     setBuyerAddress('');
     setNotes('');
     setApplyVat(false);
-    fetchNextRef();
-    toast('ویرایش پیش‌فاکتور لغو شد.');
+    setRefNumber(null);
   };
 
-  const loadCustomers = (signal?: AbortSignal) => {
-    fetchJson('/customers?limit=1000', { signal }).then(res => {
-      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      setCustomersList(list);
-    }).catch(err => {
-      if (err?.name === 'AbortError') return;
-      console.error(err);
-    });
+  const handleCancelEdit = () => {
+    resetForm();
+    setSelectedCustomerId('');
+    refetchNextRef();
+    toast('ویرایش پیش‌فاکتور لغو شد.');
   };
 
   const locationState = useLocation();
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchJson('/warehouses', { signal: controller.signal }).then(whs => {
-      const safeWhs = Array.isArray(whs) ? whs : [];
-      setWarehouses(safeWhs);
-      if (safeWhs.length > 0) {
-        setLocation(safeWhs[0].code);
-      }
-    }).catch(err => {
-      if (err?.name === 'AbortError') return;
-      console.error(err);
-    });
-    fetchNextRef(controller.signal);
-    loadProformas(controller.signal);
-    loadCustomers(controller.signal);
-
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    if (buyerName && customersList.length > 0) {
-      const match = customersList.find(c => c.name.trim().toLowerCase() === buyerName.trim().toLowerCase() || String(c.id) === String(selectedCustomerId));
-      if (match) {
-        if (!selectedCustomerId) {
-          setSelectedCustomerId(match.id.toString());
-        }
-        if (!buyerCity) {
-          const locParts = [match.province, match.city].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean);
-          const uniqueLoc = locParts.filter((v, i, a) => a.indexOf(v) === i).join(' - ');
-          setBuyerCity(uniqueLoc || match.city || match.province || '');
-        }
-        if (!buyerPhone) {
-          const phoneVal = match.phone || (match.contacts && match.contacts[0]?.phone) || '';
-          setBuyerPhone(phoneVal);
-        }
-        if (!buyerAddress) {
-          setBuyerAddress(match.address || '');
-        }
-      }
-    } else if (!buyerName && selectedCustomerId) {
-      setSelectedCustomerId('');
-    }
-  }, [buyerName, customersList, selectedCustomerId, buyerCity, buyerPhone, buyerAddress]);
-
-  useEffect(() => {
     if (locationState.state) {
-      const s = locationState.state as any;
-      if (s.buyerName) setBuyerName(s.buyerName);
-      if (s.buyerPhone) setBuyerPhone(s.buyerPhone);
-      if (s.buyerAddress) setBuyerAddress(s.buyerAddress);
-      const loc = [s.buyerProvince || s.province, s.buyerCity || s.city].filter(Boolean).map((x: any) => String(x).trim()).filter(Boolean);
-      const uniqueLoc = loc.filter((v, i, a) => a.indexOf(v) === i).join(' - ');
+      const s = locationState.state as Record<string, string | number | undefined>;
+      const str = (v: string | number | undefined) => (v === undefined ? '' : String(v));
+      if (s.buyerName) setBuyerName(str(s.buyerName));
+      if (s.buyerPhone) setBuyerPhone(str(s.buyerPhone));
+      if (s.buyerAddress) setBuyerAddress(str(s.buyerAddress));
+      const uniqueLoc = customerLocationLabel({ province: str(s.buyerProvince || s.province), city: str(s.buyerCity || s.city) });
       if (uniqueLoc) setBuyerCity(uniqueLoc);
-      else if (s.buyerCity) setBuyerCity(s.buyerCity);
-      if (s.notes) setNotes(s.notes);
-      if (s.crmLeadId) setCrmLeadId(s.crmLeadId);
-      if (s.type) { setDocType(s.type); setStatus('proforma'); }
-      if (s.status) setStatus(s.status);
-      if (s.currency) setCurrency(s.currency);
+      else if (s.buyerCity) setBuyerCity(str(s.buyerCity));
+      if (s.notes) setNotes(str(s.notes));
+      if (s.crmLeadId) setCrmLeadId(Number(s.crmLeadId));
+      if (s.type) { setDocType(str(s.type)); setStatus('proforma'); }
+      if (s.status) setStatus(str(s.status));
+      if (s.currency) setCurrency(str(s.currency));
       toast.success('اطلاعات خریدار و پرونده فروش CRM با موفقیت منتقل شد.');
     }
-  }, [locationState.state]);
+  }, [locationState.state, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
 
-  const handleCustomerSelect = (val: string, rawC?: any) => {
-    setSelectedCustomerId(val);
-    if (!val) {
-      setBuyerName(''); setBuyerCity(''); setBuyerPhone(''); setBuyerAddress('');
-      return;
-    }
-    const customer = rawC || customersList.find(c => String(c.id) === String(val));
-    if (customer) {
-      setBuyerName(customer.name || '');
-      
-      const locParts = [customer.province, customer.city].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean);
-      const uniqueLoc = locParts.filter((v, i, a) => a.indexOf(v) === i).join(' - ');
-      setBuyerCity(uniqueLoc || customer.city || customer.province || '');
-
-      let phoneVal = customer.phone || '';
-      if (!phoneVal && Array.isArray(customer.contacts) && customer.contacts.length > 0) {
-        const primary = customer.contacts.find((c: any) => c.isPrimary) || customer.contacts[0];
-        phoneVal = primary?.phone || '';
-      }
-      setBuyerPhone(phoneVal);
-      setBuyerAddress(customer.address || '');
-    }
-  };
-
-  const handleItemSelect = (val: string, rawItem?: any) => {
+  const handleItemSelect = (val: string, rawItem?: Item) => {
     setSelectedItem(val);
     setSelectedItemObj(rawItem || null);
     setDiscount(0);
     setUnitPrice(0);
-    setItemPrices([]);
-    if (val) {
-      fetchJson(`/items/${val}/prices`)
-        .then(res => setItemPrices(Array.isArray(res) ? res : []))
-        .catch(err => {
-          console.error(`Failed to load prices for item ${val}:`, err);
-          toast.error('خطا در دریافت قیمت‌های کالا');
-          setItemPrices([]);
-        });
-    }
   };
 
   const handleAddItem = () => {
@@ -342,7 +239,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setDocItems(prev => prev.filter(p => p.item.id !== id));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!buyerName || !buyerName.trim()) {
       toast.error('لطفاً خریدار / طرف حساب فاکتور را حتماً از لیست طرفین حساب انتخاب کنید.');
@@ -380,89 +277,38 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       }
     }
 
-    setIsSaving(true);
-    try {
-      const formattedDate = extractDateString(date) || new Date().toISOString().split('T')[0];
+    const formattedDate = extractDateString(date) || new Date().toISOString().split('T')[0];
 
-      const payload = {
-        docType,
-        status,
-        refNumber,
-        date: formattedDate,
-        user: currentUser.full_name,
-        inOut: 'out',
-        buyer_name: buyerName,
-        buyer_city: buyerCity,
-        buyer_phone: buyerPhone,
-        buyer_address: buyerAddress,
-        // v7.0.32 (TD-197): مالیات در فیلدهای ساختاریافته vatPercent/vatAmount ذخیره می‌شود، نه در متن یادداشت
-        notes,
-        location,
-        currency,
-        exchangeRate: currency !== 'IRR' ? exchangeRate : null,
-        crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
-        vatPercent: applyVat ? vatRate : 0,
-        vatAmount: vatAmount,
-        items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))
-      };
+    const payload = {
+      docType,
+      status,
+      refNumber,
+      date: formattedDate,
+      user: currentUser.full_name,
+      inOut: 'out' as const,
+      buyer_name: buyerName,
+      buyer_city: buyerCity,
+      buyer_phone: buyerPhone,
+      buyer_address: buyerAddress,
+      // v7.0.32 (TD-197): مالیات در فیلدهای ساختاریافته vatPercent/vatAmount ذخیره می‌شود، نه در متن یادداشت
+      notes,
+      location,
+      currency,
+      exchangeRate: currency !== 'IRR' ? exchangeRate : null,
+      crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
+      vatPercent: applyVat ? vatRate : 0,
+      vatAmount: vatAmount,
+      items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))
+    };
 
-      let res;
-      if (editingDocId) {
-        res = await fetchJson(`/documents/${editingDocId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload)
-        });
-        toast.success('پیش‌فاکتور با موفقیت به‌روزرسانی شد!');
-      } else {
-        res = await fetchJson('/documents', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-        toast.success(status === 'final' ? 'فاکتور و سند حسابداری دوبل آن با موفقیت ثبت شدند!' : 'پیش‌فاکتور با موفقیت ثبت شد و وارد چرخه تاییدات گردید!');
-        
-        // Auto-start Document Approval Workflow for newly created proforma
-        if (status === 'proforma' && res?.docId) {
-          try {
-            await fetchJson('/workflow/start', {
-              method: 'POST',
-              body: JSON.stringify({
-                workflowCode: 'DOC_APPROVAL_WORKFLOW',
-                entityType: 'document',
-                entityId: res.docId
-              })
-            });
-          } catch (wfErr) {
-            console.warn('Could not auto-start workflow for proforma:', wfErr);
-          }
-        }
-      }
-      
-      const targetDocId = editingDocId || res?.docId;
-      if (targetDocId) {
-        const docDetails = await fetchJson(`/documents/${targetDocId}`);
-        setPrintedDoc(docDetails);
-      }
-      
-      // Reset form
-      if (!editingDocId) {
-        await discardDraft();
-      }
-      setEditingDocId(null);
-      setDocItems([]);
-      setBuyerName('');
-      setBuyerCity('');
-      setBuyerPhone('');
-      setBuyerAddress('');
-      setNotes('');
-      setApplyVat(false);
-      fetchNextRef();
-      loadProformas();
-    } catch (err: any) {
-      const errMsg = err?.message || err?.error || 'خطا در ثبت سند';
-      toast.error(errMsg, { duration: 5000 });
-    } finally {
-      setIsSaving(false);
-    }
+    // ثبت/ویرایش، شروع گردش‌کار پیش‌فاکتور تازه، بارگذاری سند برای چاپ و ابطال کش صفحات دیگر در useInvoiceSave
+    saveMutation.mutate({ editingDocId, payload }, {
+      onSuccess: (result) => {
+        if (result.printedDoc) setPrintedDoc(result.printedDoc);
+        // Reset form
+        resetForm();
+      },
+    });
   };
 
   // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
@@ -570,7 +416,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
               <label className="block text-xs font-medium mb-1 text-slate-500">تاریخ</label>
               <DatePicker 
                 value={date} 
-                onChange={(dateObj: any) => setDate(extractDateString(dateObj))} 
+                onChange={(dateObj) => setDate(extractDateString(dateObj))} 
                 calendar={persian} 
                 locale={persian_fa} 
                 calendarPosition="bottom-right"
@@ -593,8 +439,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <SearchableSelect 
                   className="w-full"
                   fetchUrl="/customers?limit=1000"
-                  mapResultToOption={(c: any) => {
-                    const loc = [c.province, c.city].filter(Boolean).map((s: any) => String(s).trim()).filter((v: string, i: number, a: string[]) => Boolean(v) && a.indexOf(v) === i).join(' - ');
+                  mapResultToOption={(c: BuyerSource & { id: number }) => {
+                    const loc = customerLocationLabel(c);
                     return {
                       value: c.id.toString(),
                       label: `👤 ${c.name} ${c.phone ? `(${c.phone})` : ''} ${loc ? `- ${loc}` : ''}`,
@@ -659,7 +505,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                   key={`item-select-${location}-${status}`}
                   className="w-full shadow-sm rounded"
                   fetchUrl="/items"
-                  mapResultToOption={(it: any) => {
+                  mapResultToOption={(it: Item) => {
                     const { loc, total, reserved, sellable } = getSellableStock(it, location);
                     const whName = warehouses.find(w => w.code === location)?.name || location || 'انبار انتخابی';
 
@@ -829,100 +675,13 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
         </form>
       </div>
 
-      {proformas.length > 0 && (
-        <div className="bg-white border rounded-xl shadow-sm flex flex-col p-6 mt-8">
-          <h3 className="font-bold flex items-center gap-2 mb-4">⏳ پیش فاکتورهای باز ({proformas.length})</h3>
-          <div className="border rounded-xl flex overflow-hidden">
-            <table className="w-full text-sm text-right">
-              <thead className="bg-slate-50 text-slate-500 border-b">
-                <tr>
-                  <th className="p-3 font-medium">شماره سند</th>
-                  <th className="p-3 font-medium">تاریخ</th>
-                  <th className="p-3 font-medium">نام خریدار</th>
-                  <th className="p-3 font-medium text-center">عملیات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y text-sm">
-                {proformas.map((p, pIdx) => (
-                  <tr key={`proforma-${p.id || pIdx}-${pIdx}`} className={cn("hover:bg-slate-50", editingDocId === p.id && "bg-amber-50/60 font-bold")}>
-                    <td className="p-3 font-mono font-bold">{p.ref_number}</td>
-                    <td className="p-3 font-mono">{formatPersianDate(p.date)}</td>
-                    <td className="p-3">{p.buyer_name || '-'}</td>
-                    <td className="p-3 text-center">
-                      <div className="flex justify-center items-center gap-2">
-                        <button 
-                          type="button" 
-                          onClick={() => setWorkflowModalDoc(p)} 
-                          className="text-purple-700 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer border border-purple-200 shadow-xs"
-                          title="مشاهده وضعیت تاییدات و پیگیری در کارتابل گردش‌کار"
-                        >
-                          <GitBranch size={13} /> گردش‌کار و تاییدات
-                        </button>
-                        <button type="button" onClick={async () => {
-                          const doc = await fetchJson(`/documents/${p.id}`);
-                          setPrintedDoc(doc);
-                        }} className="text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-blue-200">نمایش / چاپ</button>
-                        <button type="button" onClick={() => handleEditProforma(p)} className="text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-amber-200">
-                          <Edit3 size={13} /> ویرایش
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Workflow Stepper Action Modal */}
-      {workflowModalDoc && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 my-auto">
-            <div className="bg-slate-900 text-white p-4 shrink-0 flex items-center justify-between border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <GitBranch className="w-5 h-5 text-purple-400 shrink-0" />
-                <h3 className="font-bold text-xs sm:text-sm">
-                  چرخه تاییدات و گردش‌کار پیش‌فاکتور {formatPersianCode(workflowModalDoc.ref_number)}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setWorkflowModalDoc(null)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs">
-              <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 text-purple-900 leading-relaxed">
-                <p className="font-medium">
-                  از طریق گام‌های زیر می‌توانید پیش‌فاکتور را بررسی کرده و با دکمه <strong className="text-purple-950 font-black">«ارسال به انبار»</strong>، وضعیت گردش‌کار را جهت تایید موجودی و آماده‌سازی به کارتابل انباردار ارسال نمایید.
-                </p>
-              </div>
-
-              <WorkflowStepperWidget
-                entityType="document"
-                entityId={workflowModalDoc.id}
-                workflowCode="DOC_APPROVAL_WORKFLOW"
-                title="اقدامات و ترنزیشن‌های گردش‌کار"
-                onStateChange={() => {
-                  loadProformas();
-                }}
-              />
-            </div>
-            <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setWorkflowModalDoc(null)}
-                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                بستن پنجره
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OpenProformasPanel
+        proformas={proformas}
+        editingDocId={editingDocId}
+        onPrint={handlePrintProforma}
+        onEdit={handleEditProforma}
+        onWorkflowStateChange={refreshProformas}
+      />
     </div>
   );
 }

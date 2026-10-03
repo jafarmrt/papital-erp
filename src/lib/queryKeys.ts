@@ -121,6 +121,15 @@ export const QUERY_KEYS = {
     all: ['documents'] as const,
     list: (filters?: Record<string, unknown> | object) => ['documents', 'list', filters ?? {}] as const,
     detail: (id: number) => ['documents', 'detail', id] as const,
+    // صفحه صدور فاکتور: شماره بعدی سند و پیش‌فاکتورهای باز (زیر documents تا ابطال دامنه اسناد آن‌ها را هم تازه کند)
+    nextRef: (type: string) => ['documents', 'next-ref', type] as const,
+    openProformas: () => ['documents', 'open-proformas'] as const,
+  },
+
+  // رزرو موجودی (پیش‌فاکتورها و پروژه‌ها) — فرم رسید/حواله انبار
+  inventory: {
+    all: ['inventory'] as const,
+    reservedItems: () => ['inventory', 'reserved-items'] as const,
   },
 
   // V9 Phase 5.1 — Activity / Audit Logs
