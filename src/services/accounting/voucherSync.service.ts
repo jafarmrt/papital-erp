@@ -23,6 +23,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
+import { isoToJalaliDate } from '../../utils/calendarDate.js';
 
 /** انواع اسنادی که VoucherSync برایشان سند حسابداری خودکار صادر می‌کند */
 export const AUTO_VOUCHER_DOC_TYPES = ['invoice', 'receipt', 'production_receipt', 'purchase', 'remittance', 'waste', 'return'] as const;
@@ -1297,7 +1298,7 @@ export class VoucherSyncService {
         debit: 0,
         credit: payableCredit,
         currency: 'IRR',
-        description: `خالص حقوق و دستمزد پرداختنی به ${pers?.fullName || ''} بابت دوره ${pay.startDate} تا ${pay.endDate}`
+        description: `خالص حقوق و دستمزد پرداختنی به ${pers?.fullName || ''} بابت دوره ${isoToJalaliDate(pay.startDate) || pay.startDate} تا ${isoToJalaliDate(pay.endDate) || pay.endDate}`
       });
     }
 

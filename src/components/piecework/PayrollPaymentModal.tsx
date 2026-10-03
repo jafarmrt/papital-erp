@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Landmark, BanknoteArrowUp, History, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate, extractDateString, formatPersianPrice, formatPersianNumber } from '../../utils';
+import { getTodayJalaliDate, extractDateString, formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -211,7 +211,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
                             {p.trackingNumber ? ` — کد: ${p.trackingNumber}` : ''}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {p.date} • سند #{p.transactionNumber || p.id}
+                            {formatPersianDate(p.date)} • سند #{p.transactionNumber || p.id}
                           </div>
                         </div>
                         <div className="font-mono font-black text-emerald-700">

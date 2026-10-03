@@ -2,7 +2,9 @@ import { eq, and, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError } from '../errors/customErrors.js';
-import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
+import { parseQuantityOrTime } from '../utils.js';
+import { requireStorageDate } from '../lib/storageDate.js';
+import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import {
   allocatePieceworkTaskCode,
@@ -77,7 +79,8 @@ export class PieceworkService {
     executor: DbExecutor = orm
   ) {
     try {
-      const today = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      // v7.0.134 (TD-232): تاریخ اعمال نرخ میلادی ISO (پیش‌تر «۱۴۰۵/۰۷/۱۱» با ارقام فارسی و ساعت سرور)
+      const today = await businessTodayIsoDate();
       // savepoint: خطای این درج تراکنش فراخواننده (مثلاً ورود اکسل یکجا، TD-246) را از کار نمی‌اندازد
       await executor.transaction(async (sp) => sp.insert(pieceworkTaskRateHistory).values({
         taskId: data.taskId,
@@ -274,14 +277,14 @@ export class PieceworkService {
 
       const qty = parseQuantityOrTime(quantity);
       const totalAmt = fin(qty).multiply(finalRate);
-      const normDate = normalizePersianDate(String(date));
-      const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
+      // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO در هر دو ستون؛ تاریخ نامعتبر 422 (پیش‌تر امروز UTC جایگزین می‌شد)
+      const isoDate = requireStorageDate(date, 'تاریخ کارکرد');
 
       const [inserted] = await executor.insert(pieceworkLogs).values({
         personnelId: Number(personnelId),
         taskId: Number(taskId),
         projectId: projectId ? Number(projectId) : null,
-        date: normDate,
+        date: isoDate,
         dateIso: isoDate,
         quantity: qty,
         unitRate: money(finalRate),
@@ -707,15 +710,13 @@ export class PieceworkService {
       throw new BadRequestError('کارکردی که در فیش تسویه‌شده درج شده قابل تغییر نیست');
     }
 
-    const newDate = data.date !== undefined ? String(data.date).trim() : existing.date;
-    const normDate = normalizePersianDate(newDate);
-    const isoDate = jalaliToIsoDate(normDate) || (normDate.includes('-') ? normDate.slice(0, 10) : existing.dateIso);
+    const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
     const newQty = data.quantity !== undefined ? parseQuantityOrTime(data.quantity) : existing.quantity;
     const newRate: FinancialDecimal = data.unitRate !== undefined ? fin(data.unitRate) : existing.unitRate;
     const newTotal = fin(newQty).multiply(newRate);
 
     const [updated] = await executor.update(pieceworkLogs).set({
-      date: normDate,
+      date: isoDate,
       dateIso: isoDate,
       quantity: newQty,
       unitRate: money(newRate),

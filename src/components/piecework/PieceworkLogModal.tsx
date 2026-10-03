@@ -6,7 +6,7 @@ import { Calculator, X, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { PieceworkLog, PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { BatchLogRow } from '../../hooks/usePiecework';
-import { formatPersianPrice, formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatQuantityOrTime, parseQuantityOrTime, extractDateString, formatCurrencyLabel, isoToJalaliDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 
@@ -93,7 +93,7 @@ export function PieceworkLogModal({
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ</label>
                   <DatePicker
-                    value={editingLog.date}
+                    value={isoToJalaliDate(editingLog.date) || editingLog.date}
                     onChange={(dateObj: any) => {
                       setEditingLog(prev => prev ? { ...prev, date: extractDateString(dateObj) } : null);
                     }}

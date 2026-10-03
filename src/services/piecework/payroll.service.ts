@@ -2,7 +2,8 @@ import { eq, and, or, sql, inArray, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError } from '../../errors/customErrors.js';
-import { normalizePersianDate } from '../../utils.js';
+import { isoToJalaliDate, toStorageDate } from '../../utils.js';
+import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
@@ -49,8 +50,12 @@ export class PieceworkPayrollService {
     const currentUsername = input.username;
 
     const pId = Number(personnelId);
-    const sDate = normalizePersianDate(String(startDate));
-    const eDate = normalizePersianDate(String(endDate));
+    // v7.0.134 (TD-232): بازه فیش میلادی ISO ذخیره و مقایسه می‌شود؛ ورودی شمسی تبدیل و نامعتبر 422
+    const sDate = requireStorageDate(startDate, 'تاریخ شروع دوره فیش');
+    const eDate = requireStorageDate(endDate, 'تاریخ پایان دوره فیش');
+    if (!sDate || !eDate || sDate > eDate) {
+      throw new BadRequestError('بازه فیش معتبر نیست: تاریخ شروع و پایان الزامی است و شروع نباید بعد از پایان باشد');
+    }
 
     // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
     return orm.transaction(async (tx) => {
@@ -70,8 +75,8 @@ export class PieceworkPayrollService {
         .for('update');
 
       const eligibleLogs = allPersonnelLogs.filter(log => {
-        const d = normalizePersianDate(log.date);
-        return d >= sDate && d <= eDate;
+        const d = toStorageDate(log.date);
+        return !!d && d >= sDate && d <= eDate;
       });
 
       // 2. Fixed salary deduction & dedup within transaction
@@ -81,7 +86,8 @@ export class PieceworkPayrollService {
 
       let fixedDedupNote = '';
       if (fixedIncluded && fixedPortionFin.greaterThan(0)) {
-        const targetMonthKey = sDate.slice(0, 7); // '1405/06'
+        // ماه شمسی دوره (مثلاً '1405/06')؛ هر فیش قبلی با ماه شمسی تاریخ شروعش مقایسه می‌شود
+        const targetMonthKey = isoToJalaliDate(sDate).slice(0, 7);
         const priorFixedPayrolls = await tx.select({
           id: pieceworkPayrolls.id,
           payrollNumber: pieceworkPayrolls.payrollNumber,
@@ -95,7 +101,7 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-        const sameMonthFixed = priorFixedPayrolls.filter(pr => String(pr.startDate || '').slice(0, 7) === targetMonthKey);
+        const sameMonthFixed = priorFixedPayrolls.filter(pr => isoToJalaliDate(pr.startDate).slice(0, 7) === targetMonthKey);
         const alreadyGranted = sameMonthFixed.reduce((sum, pr) => sum.add(pr.totalFixedAmount || 0), fin(0));
         if (alreadyGranted.greaterThan(0)) {
           fixedPortionFin = fixedPortionFin.subtract(alreadyGranted);
@@ -145,7 +151,7 @@ export class PieceworkPayrollService {
       const seq = Number(seqResult.rows?.[0]?.num);
       const payrollNumber = `PAY-${seq}`;
 
-      const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${sDate} تا ${eDate})`;
+      const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${isoToJalaliDate(sDate)} تا ${isoToJalaliDate(eDate)})`;
       const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
 
       // 5. Insert payroll record
@@ -219,7 +225,7 @@ export class PieceworkPayrollService {
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
       if (status) updates.status = String(status);
-      if (paymentDate !== undefined) updates.paymentDate = String(paymentDate).trim();
+      if (paymentDate !== undefined) updates.paymentDate = requireStorageDate(paymentDate, 'تاریخ پرداخت فیش');
       if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
       if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
       if (notes !== undefined) updates.notes = String(notes).trim();

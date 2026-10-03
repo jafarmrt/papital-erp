@@ -11,7 +11,7 @@ import {
   PieceworkPersonnelRate
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
-import { parseQuantityOrTime, formatPersianPrice, errorMessageOf } from '../utils';
+import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate } from '../utils';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -516,8 +516,9 @@ export function usePiecework() {
     return safeLogs.filter(l =>
       l.personnelId === Number(payrollPersonnelId) &&
       l.status === 'pending' &&
-      l.date >= payrollStartDate &&
-      l.date <= payrollEndDate
+      // v7.0.134 (TD-232): تاریخ کارکرد ISO است و بازه فیش شمسی انتخاب می‌شود
+      l.date >= (toStorageDate(payrollStartDate) || '') &&
+      l.date <= (toStorageDate(payrollEndDate) || '')
     );
   }, [logsList, payrollPersonnelId, payrollStartDate, payrollEndDate]);
 
@@ -661,8 +662,8 @@ export function usePiecework() {
       const matchProject = selectedProjectFilter === 'all' ||
         (selectedProjectFilter === 'none' ? !log.projectId : log.projectId === Number(selectedProjectFilter));
       const matchStatus = statusFilter === 'all' || log.status === statusFilter;
-      const matchStart = !startDateFilter || log.date >= startDateFilter;
-      const matchEnd = !endDateFilter || log.date <= endDateFilter;
+      const matchStart = !startDateFilter || log.date >= (toStorageDate(startDateFilter) || '');
+      const matchEnd = !endDateFilter || log.date <= (toStorageDate(endDateFilter) || '');
       const q = logSearchQuery.trim().toLowerCase();
       const matchSearch = !q ||
         (log.personnelName && log.personnelName.toLowerCase().includes(q)) ||

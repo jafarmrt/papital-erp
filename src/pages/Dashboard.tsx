@@ -9,7 +9,7 @@ import { InteractiveJalaliCalendar, CalendarEventItem } from '../components/dash
 import { CRMTasksWidget } from '../components/dashboard/CRMTasksWidget';
 import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentionsWidget';
 import { Warehouse, ArrowLeft, Sparkles } from 'lucide-react';
-import { toEnglishDigits, isoToJalaliDate } from '../utils';
+import { isoToJalaliDate } from '../utils';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -91,7 +91,7 @@ export default function Dashboard() {
           items.push({
             id: `log-${log.id}`,
             title: `گزارش کار: ${log.userFullName || log.username || 'همکار'}`,
-            date: toEnglishDigits(d).replace(/-/g, '/'),
+            date: isoToJalaliDate(d),
             type: 'daily_log',
             assignedTo: log.userFullName || log.username || '',
             raw: log

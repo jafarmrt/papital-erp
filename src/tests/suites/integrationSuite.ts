@@ -1019,8 +1019,8 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     const [payroll] = await orm.insert(pieceworkPayrolls).values({
       payrollNumber: `PAY-${Date.now()}`,
       personnelId: person.id,
-      startDate: '1403/01/01',
-      endDate: '1403/01/30',
+      startDate: '2024-03-20',
+      endDate: '2024-04-18',
       title: 'تسویه دستمزد کارمزدی فروردین',
       totalPieceworkAmount: money(5000000),
       totalBonuses: money(500000),

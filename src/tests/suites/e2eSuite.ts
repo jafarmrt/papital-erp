@@ -500,8 +500,8 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
     const [payroll] = await orm.insert(pieceworkPayrolls).values({
       payrollNumber: `PAY-E2E-${Date.now()}`,
       personnelId: worker.id,
-      startDate: '1403/02/01',
-      endDate: '1403/02/31',
+      startDate: '2024-04-20',
+      endDate: '2024-05-20',
       title: 'تسویه دستمزد کارهای کارمزدی اردیبهشت',
       totalPieceworkAmount: money(8000000),
       totalBonuses: money(1000000),

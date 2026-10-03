@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import { fetchJson } from '../api';
 import { DailyWorkLog, User, ProductionProject } from '../types';
 import { toast } from 'react-hot-toast';
-import { getTodayJalaliDate, extractDateString, errorMessageOf } from '../utils';
+import { getTodayJalaliDate, extractDateString, errorMessageOf, isoToJalaliDate } from '../utils';
 import { confirmAction } from '../components/ConfirmDialogHost';
 
 export interface SimpleUserOption {
@@ -256,7 +256,7 @@ export function useDailyLogs(user: User) {
 
   const handleOpenEditModal = (log: DailyWorkLog) => {
     setEditingLog(log);
-    setFormDate(log.date || getTodayJalaliDate());
+    setFormDate(isoToJalaliDate(log.date) || getTodayJalaliDate());
     setFormStartTime(log.start_time || log.startTime || '08:30');
     setFormEndTime(log.end_time || log.endTime || '17:00');
     setFormWorkMode(log.work_mode || log.workMode || 'onsite');

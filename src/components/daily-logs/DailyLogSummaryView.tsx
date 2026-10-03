@@ -5,7 +5,7 @@ import {
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianNumber, extractDateString } from '../../utils';
+import { formatPersianNumber, extractDateString, formatPersianDate } from '../../utils';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 
 interface DailyLogSummaryViewProps {
@@ -375,7 +375,7 @@ export function DailyLogSummaryView({
                         )}
                       </div>
                       <span className="text-[11px] text-slate-500 font-bold">
-                        📅 {formatPersianNumber(log.date)} ({formatPersianNumber(log.start_time)} تا {formatPersianNumber(log.end_time)} - {formatPersianNumber(log.work_hours)} ساعت)
+                        📅 {formatPersianDate(log.date)} ({formatPersianNumber(log.start_time)} تا {formatPersianNumber(log.end_time)} - {formatPersianNumber(log.work_hours)} ساعت)
                       </span>
                     </div>
 

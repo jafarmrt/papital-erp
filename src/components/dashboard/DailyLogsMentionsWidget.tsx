@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AtSign, Clock, User, ArrowLeft, Plus, Tag, Briefcase, MessageSquare, Search, X } from 'lucide-react';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, formatPersianDate } from '../../utils';
 import { DailyWorkLog, User as UserModel } from '../../types';
 
 interface DailyLogsMentionsWidgetProps {
@@ -191,7 +191,7 @@ export function DailyLogsMentionsWidget({
                   </div>
 
                   <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                    📅 {toPersianDigits(logDate)}
+                    📅 {formatPersianDate(logDate)}
                   </span>
                 </div>
 

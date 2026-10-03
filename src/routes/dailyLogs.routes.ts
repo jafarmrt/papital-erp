@@ -5,12 +5,13 @@ import { dailyWorkLogs, notifications, users, roles } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
-import { jalaliToIsoDate } from '../utils.js';
+import { isoToJalaliDate, toEnglishDigits } from '../utils.js';
+import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { NotFoundError, UnauthorizedError, ForbiddenError } from '../errors/customErrors.js';
+import { NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
@@ -87,8 +88,8 @@ function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<
   const mentionsArr = Array.isArray(l.mentions) ? l.mentions : [];
   const allowedArr = Array.isArray(l.allowedUsers) ? l.allowedUsers : [];
   const tagsArr = Array.isArray(l.tags) ? l.tags : [];
-  const rawDate = String(l.date || '');
-  const computedDateIso = String(l.dateIso || jalaliToIsoDate(rawDate) || rawDate.slice(0, 10));
+  // v7.0.134 (TD-232): ستون اصلی میلادی ISO است و date_iso همان مقدار را دارد
+  const computedDateIso = String(l.date || '');
 
   return {
     ...l,
@@ -204,14 +205,8 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
   let result = filtered;
 
   if (date) {
-    const targetDate = String(date).trim();
-    const targetDateIso = jalaliToIsoDate(targetDate) || targetDate;
-    result = result.filter(l => 
-      l.date === targetDate || 
-      l.dateIso === targetDate || 
-      l.dateIso === targetDateIso ||
-      l.date === targetDateIso
-    );
+    const targetDateIso = requireStorageDate(date, 'تاریخ');
+    result = result.filter(l => l.date === targetDateIso);
   }
 
   if (user_id) {
@@ -308,25 +303,18 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
   }
 
   if (report_type === 'daily' && date) {
-    const targetDate = String(date).trim();
-    const targetDateIso = jalaliToIsoDate(targetDate) || targetDate;
-    filtered = filtered.filter(l => 
-      l.date === targetDate || 
-      l.dateIso === targetDate || 
-      l.dateIso === targetDateIso || 
-      (l.createdAt && l.createdAt.startsWith(targetDate)) ||
-      (l.createdAt && l.createdAt.startsWith(targetDateIso))
-    );
+    const targetDateIso = requireStorageDate(date, 'تاریخ گزارش');
+    filtered = filtered.filter(l => l.date === targetDateIso);
   } else if (report_type === 'monthly' && year_month) {
-    const prefix = String(year_month).trim();
-    const prefixIso = jalaliToIsoDate(prefix.includes('-') || prefix.includes('/') ? `${prefix}/01` : '')?.slice(0, 7) || '';
-    filtered = filtered.filter(l => 
-      l.date.startsWith(prefix) || 
-      (l.dateIso && l.dateIso.startsWith(prefix)) ||
-      (prefixIso && l.dateIso && l.dateIso.startsWith(prefixIso)) ||
-      (l.createdAt && l.createdAt.startsWith(prefix)) ||
-      (prefixIso && l.createdAt && l.createdAt.startsWith(prefixIso))
-    );
+    // v7.0.134 (TD-232): ماه گزارش شمسی است (۱۴۰۵/۰۷) و با ماه شمسی تاریخ کارکرد مقایسه می‌شود؛ ماه میلادی (2026-10) هم پذیرفته است.
+    // پیش‌تر ماه شمسی به ماه میلادیِ روز اول آن تبدیل می‌شد و کارکردهای نیمه دوم ماه جا می‌افتاد.
+    const ym = toEnglishDigits(String(year_month)).trim().match(/^(\d{4})[-/](\d{1,2})$/);
+    if (!ym) throw new ValidationError(`ماه گزارش «${String(year_month)}» معتبر نیست؛ مانند ۱۴۰۵/۰۷ وارد کنید`);
+    const y = Number(ym[1]);
+    const m = ym[2].padStart(2, '0');
+    filtered = y < 1900
+      ? filtered.filter(l => isoToJalaliDate(l.date).slice(0, 7) === `${y}/${m}`)
+      : filtered.filter(l => l.date.slice(0, 7) === `${y}-${m}`);
   }
 
   // Grouping by user
@@ -465,8 +453,8 @@ router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(cr
   const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : [];
   const tagsList = Array.isArray(tags) ? tags : [];
 
-  const rawDate = date || await businessTodayIsoDate();
-  const computedDateIso = jalaliToIsoDate(rawDate) || rawDate.slice(0, 10);
+  // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO در هر دو ستون؛ ورودی شمسی تبدیل و نامعتبر 422
+  const computedDateIso = requireStorageDate(date, 'تاریخ کارکرد') || await businessTodayIsoDate();
 
   const [newLog] = await orm
     .insert(dailyWorkLogs)
@@ -474,7 +462,7 @@ router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(cr
       userId,
       username: username || 'user',
       userFullName: userFullName || 'کاربر سیستم',
-      date: rawDate,
+      date: computedDateIso,
       dateIso: computedDateIso,
       startTime,
       endTime,
@@ -564,13 +552,12 @@ router.put('/daily-logs/:id', authorizePermission('daily_logs.create'), validate
   const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : existing.allowedUsers;
   const tagsList = Array.isArray(tags) ? tags : existing.tags;
 
-  const updatedDate = date || existing.date;
-  const updatedDateIso = date ? (jalaliToIsoDate(date) || date.slice(0, 10)) : (existing.dateIso || jalaliToIsoDate(existing.date) || existing.date.slice(0, 10));
+  const updatedDateIso = (date ? requireStorageDate(date, 'تاریخ کارکرد') : '') || existing.date;
 
   await orm
     .update(dailyWorkLogs)
     .set({
-      date: updatedDate,
+      date: updatedDateIso,
       dateIso: updatedDateIso,
       startTime,
       endTime,

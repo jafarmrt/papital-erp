@@ -18,8 +18,9 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
-import { businessTodayJalaliDash } from '../../lib/businessClock.js';
-import { jalaliToIsoDate } from '../../utils.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { isoToJalaliDate } from '../../utils.js';
+import { requireStorageDate } from '../../lib/storageDate.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
 // V4.0.33: سرویس جامع و واحد ثبت پرداخت حقوق — پشتیبانی کامل از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
@@ -172,7 +173,7 @@ export class PayrollPaymentService {
 
       if (payroll.status === 'paid') {
         throw new ConflictError(
-          `فیش ${payroll.payrollNumber} قبلاً به‌طور کامل در تاریخ «${payroll.paymentDate || '—'}» تسویه شده است. ثبت پرداخت مجدد مجاز نیست.`
+          `فیش ${payroll.payrollNumber} قبلاً به‌طور کامل در تاریخ «${isoToJalaliDate(payroll.paymentDate) || payroll.paymentDate || '—'}» تسویه شده است. ثبت پرداخت مجدد مجاز نیست.`
         );
       }
 
@@ -231,14 +232,15 @@ export class PayrollPaymentService {
       const newTotalPaid = alreadyPaid.add(payAmount).round(4);
       const isFullyPaid = newTotalPaid.greaterThanOrEqual(netPayable);
       const nextStatus = isFullyPaid ? 'paid' : 'partially_paid';
-      const payDate = (input.paymentDate && input.paymentDate.trim()) || await businessTodayJalaliDash();
+      // v7.0.134 (TD-232): تاریخ پرداخت فیش و تراکنش خزانه میلادی ISO (سند حسابداری هم تاریخ را ISO می‌کند)
+      const payIso = requireStorageDate(input.paymentDate, 'تاریخ پرداخت') || await businessTodayIsoDate();
 
       const descText = isFullyPaid
         ? `تسویه نهایی ${input.method === 'cash' ? 'نقدی' : input.method === 'pos' ? 'کارتخوان' : 'بانکی'} حقوق ${pers?.fullName || ''} فیش ${payroll.payrollNumber}`
         : `پرداخت مرحله‌ای (قسطی) حقوق ${pers?.fullName || ''} بابت فیش ${payroll.payrollNumber} (مانده پس از پرداخت: ${netPayable.subtract(newTotalPaid).toNumber().toLocaleString('fa-IR')} ریال)`;
 
       const voucher = await VoucherService.createJournalVoucher({
-        date: payDate,
+        date: payIso,
         voucherType: 'treasury',
         status: 'draft',
         description: descText,
@@ -277,7 +279,7 @@ export class PayrollPaymentService {
         transactionNumber: txNum,
         type: 'payment',
         // v7.0.74: تاریخ تراکنش خزانه ISO است (TD-105)؛ تاریخ پرداخت فیش شمسی می‌ماند
-        date: jalaliToIsoDate(payDate) || payDate.trim(),
+        date: payIso,
         method: input.method || 'bank_transfer',
         amount: money(payAmount),
         currency: 'IRR',
@@ -320,7 +322,7 @@ export class PayrollPaymentService {
       await tx.update(pieceworkPayrolls).set({
         paidAmount: money(newTotalPaid),
         status: nextStatus,
-        paymentDate: payDate,
+        paymentDate: payIso,
         paymentMethod: input.method || 'bank_transfer',
         paymentReference: input.paymentReference?.trim() || payroll.paymentReference
       }).where(eq(pieceworkPayrolls.id, payroll.id));
@@ -336,7 +338,7 @@ export class PayrollPaymentService {
         ...payroll,
         paidAmount: money(newTotalPaid),
         status: nextStatus,
-        paymentDate: payDate,
+        paymentDate: payIso,
         paymentMethod: input.method || 'bank_transfer',
         paymentReference: input.paymentReference?.trim() || payroll.paymentReference
       };

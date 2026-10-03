@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { DailyWorkLog, User } from '../../types';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
@@ -149,7 +149,7 @@ export function DailyLogsList({
               <div className="flex items-center gap-2 text-xs text-slate-600 font-semibold bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-100 self-start sm:self-auto">
                 <div className="flex items-center gap-1 text-slate-800">
                   <CalendarIcon className="w-3.5 h-3.5 text-blue-500" />
-                  <span>{log.date}</span>
+                  <span>{formatPersianDate(log.date)}</span>
                 </div>
                 <span className="text-slate-300">|</span>
                 <div className="flex items-center gap-1 text-slate-800">

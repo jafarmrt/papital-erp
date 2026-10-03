@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, History, TrendingUp, TrendingDown, Clock, User, Search, FileSpreadsheet, RotateCcw, CheckCircle2, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { PieceworkTask, PieceworkTaskRateHistory } from '../../types';
-import { formatPersianPrice } from '../../utils';
+import { formatPersianPrice, isoToJalaliDate, formatPersianDate, toEnglishDigits } from '../../utils';
 import { fetchJson } from '../../api';
 import { toast as hotToast } from 'react-hot-toast';
 
@@ -64,7 +64,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
           item.taskCode?.toLowerCase().includes(q) ||
           item.reason?.toLowerCase().includes(q) ||
           item.changedByUsername?.toLowerCase().includes(q) ||
-          item.effectiveDate?.includes(q)
+          (item.effectiveDate?.includes(q) || isoToJalaliDate(item.effectiveDate).includes(toEnglishDigits(q)))
       );
     }
 
@@ -255,7 +255,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
                         <div className="flex items-center gap-2">
                           {getChangeTypeBadge(item.changeType)}
                           <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                            {item.effectiveDate || 'تاریخ نامشخص'}
+                            {item.effectiveDate ? formatPersianDate(item.effectiveDate) : 'تاریخ نامشخص'}
                           </span>
                         </div>
 

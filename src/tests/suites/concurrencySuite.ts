@@ -899,7 +899,7 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
     const [testLog] = await orm.insert(pieceworkLogs).values({
       personnelId: testWorker.id,
       taskId: task.id,
-      date: '1405/01/15',
+      date: '2026-04-04',
       quantity: 10,
       unitRate: money(50000),
       totalAmount: money(500000),
@@ -941,8 +941,8 @@ export async function runConcurrencyTests(): Promise<TestCaseResult[]> {
           const [pr] = await tx.insert(pieceworkPayrolls).values({
             payrollNumber,
             personnelId: testWorker.id,
-            startDate: '1405/01/01',
-            endDate: '1405/01/30',
+            startDate: '2026-03-21',
+            endDate: '2026-04-19',
             title: 'ERP-TEST-MARKER فیش آزمایشی همزمانی',
             totalPieceworkAmount: money(500000),
             totalFixedAmount: money(0),

@@ -288,6 +288,13 @@
       "when": 1791745200000,
       "tag": "0040_cheque_dates_iso",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791831600000,
+      "tag": "0041_work_payroll_dates_iso",
+      "breakpoints": true
     }
   ]
 }

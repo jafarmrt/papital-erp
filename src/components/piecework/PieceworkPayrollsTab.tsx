@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Printer, Trash2, CheckCircle2, Clock, BookOpen, RefreshCw, Wallet, Info } from 'lucide-react';
 import { PieceworkPayroll } from '../../types';
-import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { PayrollPaymentModal } from './PayrollPaymentModal';
@@ -112,7 +112,7 @@ export function PieceworkPayrollsTab({
                       <td className="p-3 font-mono font-black text-slate-900">{payroll.payrollNumber}</td>
                       <td className="p-3 font-black text-slate-900">{payroll.personnelName}</td>
                       <td className="p-3 font-mono text-slate-600">
-                        {payroll.startDate} تا {payroll.endDate}
+                        {formatPersianDate(payroll.startDate)} تا {formatPersianDate(payroll.endDate)}
                       </td>
                       <td className="p-3 text-center font-mono text-slate-700">
                         {formatPersianPrice(payroll.totalPieceworkAmount)}

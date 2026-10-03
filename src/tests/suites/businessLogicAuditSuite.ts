@@ -166,8 +166,8 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       const [fixture] = await orm.insert(pieceworkPayrolls).values({
         payrollNumber: `PAY-V10T-${Date.now()}`,
         personnelId: anyPerson.id,
-        startDate: '1404/01/01',
-        endDate: '1404/01/30',
+        startDate: '2025-03-21',
+        endDate: '2025-04-19',
         title: 'V10 regression fixture',
         totalPieceworkAmount: money(0),
         totalFixedAmount: money(0),
@@ -382,7 +382,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       userId: fixtureUser.id,
       username: 'v10_test_user',
       userFullName: 'کاربر تستی V10',
-      date: jDate1,
+      date: isoExpected1, // v7.0.134 (TD-232): ستون اصلی هم میلادی ISO است
       dateIso: isoExpected1,
       startTime: '08:00',
       endTime: '16:00',
@@ -429,7 +429,7 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
     const [insertedPiecework] = await orm.insert(pieceworkLogs).values({
       personnelId: person.id,
       taskId: task.id,
-      date: jDate2,
+      date: isoExpected2,
       dateIso: isoExpected2,
       quantity: 10,
       unitRate: money(10000),

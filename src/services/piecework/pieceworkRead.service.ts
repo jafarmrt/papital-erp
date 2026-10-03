@@ -2,7 +2,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, personnel, taskCategories, productionProjects } from '../../db/schema.js';
 import { logger } from '../../middleware/logger.js';
-import { normalizePersianDate, jalaliToIsoDate } from '../../utils.js';
+import { requireStorageDate } from '../../lib/storageDate.js';
 
 /**
  * خواندن عناوین کاری، تاریخچه نرخ، دسته‌بندی‌ها، نرخ‌های اختصاصی و کارکردهای پرکیسی.
@@ -168,19 +168,11 @@ export class PieceworkReadService {
       rows = rows.filter(r => r.projectId === projId);
     }
 
-    if (startDate && String(startDate).trim()) {
-      const sRaw = String(startDate).trim();
-      const sPersian = normalizePersianDate(sRaw);
-      const sIso = jalaliToIsoDate(sRaw) || sRaw;
-      rows = rows.filter(r => (r.dateIso && r.dateIso >= sIso) || normalizePersianDate(r.date) >= sPersian);
-    }
-
-    if (endDate && String(endDate).trim()) {
-      const eRaw = String(endDate).trim();
-      const ePersian = normalizePersianDate(eRaw);
-      const eIso = jalaliToIsoDate(eRaw) || eRaw;
-      rows = rows.filter(r => (r.dateIso && r.dateIso <= eIso) || normalizePersianDate(r.date) <= ePersian);
-    }
+    // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO است؛ بازه شمسی ورودی ISO می‌شود (پیش‌تر هر ردیف میلادی از شرط «از تاریخ» رد می‌شد)
+    const sIso = requireStorageDate(startDate, 'از تاریخ');
+    const eIso = requireStorageDate(endDate, 'تا تاریخ');
+    if (sIso) rows = rows.filter(r => r.date >= sIso);
+    if (eIso) rows = rows.filter(r => r.date <= eIso);
 
     if (status && String(status) !== 'ALL') {
       rows = rows.filter(r => r.status === String(status));

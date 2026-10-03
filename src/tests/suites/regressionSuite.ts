@@ -6600,7 +6600,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }).returning({ id: bankAccounts.id });
       created.bankId = bank.id;
       const [payroll] = await orm.insert(pieceworkPayrolls).values({
-        payrollNumber: `PAY-JD-${Date.now()}`, personnelId: pers.id, startDate: '1405/06/01', endDate: '1405/06/31', title: 'فیش آزمون تاریخ پرداخت',
+        payrollNumber: `PAY-JD-${Date.now()}`, personnelId: pers.id, startDate: '2026-08-23', endDate: '2026-09-22', title: 'فیش آزمون تاریخ پرداخت',
         totalPieceworkAmount: money(500000), totalFixedAmount: money(0), totalBonuses: money(0), totalDeductions: money(0),
         netPayable: money(500000), status: 'approved', isDeleted: 0
       }).returning({ id: pieceworkPayrolls.id });
@@ -6988,7 +6988,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           }).returning({ id: treasuryTransactions.id });
           const [pers] = await tx.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل TD-231' }).returning({ id: personnel.id });
           const [pay] = await tx.insert(pieceworkPayrolls).values({
-            payrollNumber: `TD231-${base}`, personnelId: pers.id, startDate: '1405-07-01', endDate: '1405-07-10', title: 'آزمون TD-231',
+            payrollNumber: `TD231-${base}`, personnelId: pers.id, startDate: '2026-09-23', endDate: '2026-10-02', title: 'آزمون TD-231',
             netPayable: money(1000), paymentDate: '07-10-1405 AP',
           }).returning({ id: pieceworkPayrolls.id });
 
@@ -7417,6 +7417,134 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }));
     } finally {
       if (chequeIds.length > 0) await cleanTestTableData('cheques', 'id', chequeIds);
+    }
+  }
+
+  // Test: v7.0.134 (TD-232): تاریخ کارکرد روزانه، کارمزدی، فیش و نرخ میلادی ISO؛ ماه حقوق ثابت ماه شمسی است
+  if (shouldRun('reg_work_payroll_dates_iso_td_232', 'td232', 'payroll', 'piecework', 'calendar')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.134: تاریخ کارکرد، فیش و نرخ کارمزد میلادی ISO ذخیره می‌شود؛ داده قدیمی با ثبت مقدار قبلی تبدیل می‌شود؛ حقوق ثابت یک ماه شمسی در دو فیش دو بار حساب نمی‌شود (TD-232)';
+    const ROLLBACK = new Error('ROLLBACK_TD_232_PAYROLL');
+    const violations: string[] = [];
+    let personnelId: number | null = null;
+    let taskId: number | null = null;
+    const payrollIds: number[] = [];
+    const logIds: number[] = [];
+    try {
+      const { dailyWorkLogs, pieceworkLogs, pieceworkPayrolls, pieceworkTaskRateHistory, pieceworkTasks, personnel, legacyDateRepairs, users } = await import('../../db/schema.js');
+      const { toStorageDate } = await import('../../utils/calendarDate.js');
+      const { PieceworkPayrollService } = await import('../../services/piecework/payroll.service.js');
+
+      const columns = [['daily_work_logs', 'date'], ['piecework_logs', 'date'], ['piecework_payrolls', 'start_date'], ['piecework_payrolls', 'end_date'], ['piecework_payrolls', 'payment_date'], ['piecework_task_rate_history', 'effective_date']];
+      const [{ n: isoConstraints }] = (await orm.execute(sql`
+        SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+        WHERE rel.relnamespace = current_schema()::regnamespace AND pc.convalidated AND pg_get_constraintdef(pc.oid) LIKE '%''iso''%'
+          AND pc.conname = ANY(${sql.param(columns.map(([t, c]) => `chk_${t}_${c}_datefmt`))}::text[])`) as unknown as { rows: Array<{ n: number }> }).rows;
+      if (isoConstraints !== columns.length) violations.push(`قید iso معتبر: ${isoConstraints} (انتظار ${columns.length})`);
+
+      const [pers] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER پرسنل TD-232 حقوق', salaryType: 'monthly_fixed', monthlySalary: money(3000000) }).returning({ id: personnel.id });
+      personnelId = pers.id;
+      const [task] = await orm.insert(pieceworkTasks).values({ code: `TD232-${Date.now()}`, title: 'ERP-TEST-MARKER کار TD-232', defaultRate: money(1000), unit: 'عدد' }).returning({ id: pieceworkTasks.id });
+      taskId = task.id;
+
+      // ۱) تبدیل داده قدیمی (گام‌های مهاجرت 0041) در تراکنشی که برگردانده می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          for (const [t, c] of columns) await tx.execute(sql`ALTER TABLE ${sql.identifier(t)} DROP CONSTRAINT IF EXISTS ${sql.identifier(`chk_${t}_${c}_datefmt`)}`);
+          const [u] = await tx.insert(users).values({ username: `td232_${Date.now()}`, password: 'x', fullName: 'ERP-TEST-MARKER', role: 'admin' }).returning({ id: users.id });
+          const [dl] = await tx.insert(dailyWorkLogs).values({ userId: u.id, username: 'td232', date: '۱۴۰۵/۰۷/۱۰', dateIso: '', title: 'ERP-TEST-MARKER', content: 'TD-232' }).returning({ id: dailyWorkLogs.id });
+          const [pl] = await tx.insert(pieceworkLogs).values({ personnelId: pers.id, taskId: task.id, date: '1405/07/10', dateIso: '2020-01-01', quantity: 1, unitRate: money(1000), totalAmount: money(1000) }).returning({ id: pieceworkLogs.id });
+          const [pr] = await tx.insert(pieceworkPayrolls).values({ payrollNumber: `TD232-${Date.now()}`, personnelId: pers.id, startDate: '1405/07/01', endDate: '1405/07/30', paymentDate: '1405-07-10', title: 'ERP-TEST-MARKER', netPayable: money(0) }).returning({ id: pieceworkPayrolls.id });
+          const [rh] = await tx.insert(pieceworkTaskRateHistory).values({ taskId: task.id, newRate: money(1000), changeType: 'create', effectiveDate: '۱۴۰۵/۰۷/۱۱' }).returning({ id: pieceworkTaskRateHistory.id });
+          for (const [t, c] of columns) await tx.execute(sql`SELECT erp_unify_text_date_column(${t}, ${c})`);
+          await tx.execute(sql`SELECT erp_sync_iso_companion('daily_work_logs', 'date', 'date_iso')`);
+          await tx.execute(sql`SELECT erp_sync_iso_companion('piecework_logs', 'date', 'date_iso')`);
+          const [dlr] = await tx.select().from(dailyWorkLogs).where(eq(dailyWorkLogs.id, dl.id));
+          const [plr] = await tx.select().from(pieceworkLogs).where(eq(pieceworkLogs.id, pl.id));
+          const [prr] = await tx.select().from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, pr.id));
+          const [rhr] = await tx.select().from(pieceworkTaskRateHistory).where(eq(pieceworkTaskRateHistory.id, rh.id));
+          if (dlr.date !== '2026-10-02' || dlr.dateIso !== '2026-10-02') violations.push(`کارکرد روزانه: ${dlr.date}، ${dlr.dateIso}`);
+          if (plr.date !== '2026-10-02' || plr.dateIso !== '2026-10-02') violations.push(`کارکرد کارمزدی: ${plr.date}، ${plr.dateIso}`);
+          if (prr.startDate !== toStorageDate('1405/07/01') || prr.endDate !== toStorageDate('1405/07/30') || prr.paymentDate !== '2026-10-02') violations.push(`فیش: ${prr.startDate}، ${prr.endDate}، ${prr.paymentDate}`);
+          if (rhr.effectiveDate !== '2026-10-03') violations.push(`تاریخ نرخ: ${rhr.effectiveDate}`);
+          const log = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.repairKind, 'calendar'), eq(legacyDateRepairs.tableName, 'piecework_logs'), eq(legacyDateRepairs.rowId, pl.id)));
+          if (!log.some(r => r.columnName === 'date_iso' && r.oldValue === '2020-01-01')) violations.push('مقدار قبلی ناهم‌سان date_iso ثبت نشد');
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      // ۲) ثبت کارکرد با تاریخ شمسی ← ISO؛ فیلتر بازه شمسی
+      const ids = await PieceworkService.logWorkEntries([
+        { personnelId: pers.id, taskId: task.id, date: '۱۴۰۵/۰۷/۰۵', quantity: 2 },
+        { personnelId: pers.id, taskId: task.id, date: '1405/07/20', quantity: 3 },
+      ]);
+      logIds.push(...ids);
+      const stored = await orm.select({ date: pieceworkLogs.date, dateIso: pieceworkLogs.dateIso }).from(pieceworkLogs).where(inArray(pieceworkLogs.id, ids));
+      if (!stored.every(r => r.date === r.dateIso && /^\d{4}-\d{2}-\d{2}$/.test(r.date))) violations.push(`ذخیره کارکرد: ${JSON.stringify(stored)}`);
+      try {
+        const badIds = await PieceworkService.logWorkEntries([{ personnelId: pers.id, taskId: task.id, date: '1405/07/31', quantity: 1 }]);
+        logIds.push(...badIds);
+        violations.push('تاریخ کارکرد ۳۱ مهر پذیرفته شد');
+      } catch { /* انتظار: 422 */ }
+      await PieceworkService.recordTaskRateHistory({ taskId: task.id, newRate: 1000, changeType: 'create', username: 'ERP-TEST-MARKER' });
+      const [rate] = await orm.select({ d: pieceworkTaskRateHistory.effectiveDate }).from(pieceworkTaskRateHistory).where(eq(pieceworkTaskRateHistory.taskId, task.id)).orderBy(sql`id DESC`).limit(1);
+      if (rate?.d !== await businessTodayIsoDate()) violations.push(`تاریخ اعمال نرخ: ${rate?.d} (انتظار امروز ISO)`);
+      const { PieceworkReadService } = await import('../../services/piecework/pieceworkRead.service.js');
+      const ranged = await PieceworkReadService.listWorkLogs({ personnelId: String(pers.id), startDate: '1405/07/01', endDate: '1405/07/10' });
+      if (ranged.length !== 1 || ranged[0].date !== toStorageDate('1405/07/05')) violations.push(`فیلتر بازه شمسی کارکرد: ${JSON.stringify(ranged.map(r => r.date))}`);
+
+      // ۳) حقوق ثابت: دو فیش در یک ماه شمسی (مهر ۱۴۰۵ = ۲۳ سپتامبر تا ۲۲ اکتبر) فقط یک بار حقوق ثابت می‌گیرند
+      const audit = { username: 'ERP-TEST-MARKER' };
+      const first = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/07/01', endDate: '1405/07/15', ...audit });
+      if (first.status !== 201 || !('payroll' in first) || !first.payroll) throw new Error(`فیش اول: ${JSON.stringify(first)}`);
+      payrollIds.push(first.payroll.id);
+      const second = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/07/16', endDate: '1405/07/30', ...audit });
+      if (second.status !== 201 || !('payroll' in second) || !second.payroll) throw new Error(`فیش دوم: ${JSON.stringify(second)}`);
+      payrollIds.push(second.payroll.id);
+      if (first.payroll.startDate !== toStorageDate('1405/07/01') || first.payroll.endDate !== toStorageDate('1405/07/15')) violations.push(`بازه فیش: ${first.payroll.startDate}، ${first.payroll.endDate}`);
+      if (!first.payroll.totalFixedAmount?.equals(3000000)) violations.push(`حقوق ثابت فیش اول: ${first.payroll.totalFixedAmount?.toString()}`);
+      if (!second.payroll.totalFixedAmount?.equals(0)) violations.push(`حقوق ثابت فیش دوم همان ماه شمسی باید صفر باشد: ${second.payroll.totalFixedAmount?.toString()}`);
+      if (!second.payroll.totalPieceworkAmount?.equals(3000)) violations.push(`کارکرد فیش دوم: ${second.payroll.totalPieceworkAmount?.toString()}`);
+      try {
+        await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/08/10', endDate: '1405/08/01', ...audit });
+        violations.push('بازه برعکس پذیرفته شد');
+      } catch { /* انتظار: خطای بازه */ }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_work_payroll_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'تاریخ‌ها ISO ذخیره شدند، داده قدیمی با گزارش تبدیل شد، فیلتر بازه شمسی درست بود و حقوق ثابت مهر فقط در فیش اول آمد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_work_payroll_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      const { PieceworkPayrollService } = await import('../../services/piecework/payroll.service.js');
+      for (const id of payrollIds.reverse()) {
+        try { await PieceworkPayrollService.deletePayroll(id, { username: 'ERP-TEST-MARKER' }); } catch { /* ignore */ }
+      }
+      if (logIds.length > 0) await cleanTestTableData('piecework_logs', 'id', logIds);
+      if (personnelId !== null) await cleanTestTableData('piecework_logs', 'personnel_id', [personnelId]);
+      if (taskId !== null) {
+        await cleanTestTableData('piecework_task_rate_history', 'task_id', [taskId]);
+        await cleanTestTableData('piecework_tasks', 'id', [taskId]);
+      }
     }
   }
 
