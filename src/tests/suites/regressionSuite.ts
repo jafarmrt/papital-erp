@@ -8204,5 +8204,55 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // v7.0.110 (TD-240): فیلتر «all» خزانه و چک یعنی بدون فیلتر، نه «هیچ ردیف»
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_treasury_cheque_all_filter_td_240', 'td240', 'cheque', 'treasury')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.110 Regression: فیلتر all در فهرست تراکنش‌های خزانه و چک‌ها همه ردیف‌ها را برمی‌گرداند (TD-240)';
+    const suffix = `${Date.now()}`;
+    let chequeId = 0;
+    let treasuryId = 0;
+    try {
+      const { cheques, treasuryTransactions } = await import('../../db/schema.js');
+      const { AccountingService } = await import('../../services/accounting.service.js');
+      const today = await businessTodayIsoDate();
+      const [c] = await orm.insert(cheques).values({
+        type: 'received', chequeNumber: `CHQ-TD240-${suffix}`, bankName: 'ERP-TEST-MARKER بانک', issueDate: today, dueDate: today,
+        amount: money(1000), partyName: 'ERP-TEST-MARKER طرف حساب TD-240', status: 'pending',
+      }).returning();
+      chequeId = c.id;
+      const [t] = await orm.insert(treasuryTransactions).values({
+        transactionNumber: `TRX-TD240-${suffix}`, type: 'receipt', date: today, method: 'cash', amount: money(1000),
+        partyName: 'ERP-TEST-MARKER طرف حساب TD-240',
+      }).returning();
+      treasuryId = t.id;
+      const violations: string[] = [];
+      const chequesAll = await AccountingService.getCheques({ type: 'all', status: 'all' });
+      if (!chequesAll.some(x => x.id === chequeId)) violations.push(`چک با type=all و status=all برنگشت (${chequesAll.length} ردیف)`);
+      const chequesPaid = await AccountingService.getCheques({ type: 'paid' });
+      if (chequesPaid.some(x => x.id === chequeId)) violations.push('فیلتر type=paid چک دریافتی را برگرداند');
+      const txAll = await AccountingService.getTreasuryTransactions({ type: 'all' });
+      if (!txAll.some(x => x.id === treasuryId)) violations.push(`تراکنش خزانه با type=all برنگشت (${txAll.length} ردیف)`);
+      const txPayments = await AccountingService.getTreasuryTransactions({ type: 'payment' });
+      if (txPayments.some(x => x.id === treasuryId)) violations.push('فیلتر type=payment دریافت را برگرداند');
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_treasury_cheque_all_filter_td_240', scenarioId: 'multi_currency_financials_and_ratios', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: 'type=all و status=all همه چک‌ها و تراکنش‌های خزانه را برگرداندند و فیلتر نوع همچنان کار می‌کند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_treasury_cheque_all_filter_td_240', scenarioId: 'multi_currency_financials_and_ratios', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (chequeId) await cleanTestTableData('cheques', 'id', [chequeId]);
+      if (treasuryId) await cleanTestTableData('treasury_transactions', 'id', [treasuryId]);
+    }
+  }
+
   return results;
 }

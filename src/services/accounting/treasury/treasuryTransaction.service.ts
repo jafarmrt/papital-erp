@@ -207,14 +207,15 @@ export class TreasuryTransactionService {
   }
 
   static async getTreasuryTransactions(params: {
-    type?: 'receipt' | 'payment';
+    // v7.0.110 (TD-240): «all» یعنی بدون فیلتر نوع (مانند فهرست اسناد حسابداری)
+    type?: 'receipt' | 'payment' | 'all';
     bankAccountId?: number;
     startDate?: string;
     endDate?: string;
   }): Promise<TreasuryTransaction[]> {
     const conditions = [eq(treasuryTransactions.isDeleted, 0)];
 
-    if (params.type) {
+    if (params.type && params.type !== 'all') {
       conditions.push(eq(treasuryTransactions.type, params.type));
     }
     if (params.bankAccountId) {

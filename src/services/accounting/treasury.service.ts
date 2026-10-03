@@ -64,7 +64,7 @@ export class TreasuryService {
 
   // 2. Treasury Transactions
   static async getTreasuryTransactions(params: {
-    type?: 'receipt' | 'payment';
+    type?: 'receipt' | 'payment' | 'all';
     bankAccountId?: number;
     startDate?: string;
     endDate?: string;
@@ -151,7 +151,7 @@ export class TreasuryService {
 
   // 3. Cheques & Sayad Lifecycle
   static async getCheques(params: {
-    type?: 'received' | 'paid';
+    type?: 'received' | 'paid' | 'all';
     status?: string;
     startDate?: string;
     endDate?: string;

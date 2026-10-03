@@ -20,8 +20,6 @@ router.use(authenticateToken); // Protect all accounting routes
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
-type TreasuryTxFilterType = Parameters<typeof AccountingService.getTreasuryTransactions>[0]['type'];
-type ChequeFilterType = Parameters<typeof AccountingService.getCheques>[0]['type'];
 
 // ==========================================
 // 1. STATS & OVERVIEW
@@ -776,8 +774,7 @@ export const treasuryQuerySchema = z.object({
 router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
   const { type, bankAccountId, startDate, endDate } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
   const list = await AccountingService.getTreasuryTransactions({
-    // مقدار 'all' همان‌طور که قبلاً بود بدون تغییر به سرویس می‌رسد
-    type: type as TreasuryTxFilterType,
+    type,
     bankAccountId: bankAccountId ? Number(bankAccountId) : undefined,
     startDate: startDate as string,
     endDate: endDate as string,
@@ -991,8 +988,7 @@ export const chequesQuerySchema = z.object({
 router.get('/accounting/cheques', authorizePermission(...RECORD_READ_PERMISSIONS.cheque), validate(chequesQuerySchema), asyncHandler(async (req, res) => {
   const { type, status, startDate, endDate, search } = (req.query as ValidatedQuery<typeof chequesQuerySchema>) || {};
   const list = await AccountingService.getCheques({
-    // مقدار 'all' همان‌طور که قبلاً بود بدون تغییر به سرویس می‌رسد
-    type: type as ChequeFilterType,
+    type,
     status: status as string,
     startDate: startDate as string,
     endDate: endDate as string,

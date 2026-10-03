@@ -47,7 +47,8 @@ export function assertChequeTransition(current: string, next: ChequeStatus): voi
 
 export class ChequeLifecycleService {
   static async getCheques(params: {
-    type?: 'received' | 'paid';
+    // v7.0.110 (TD-240): «all» یعنی بدون فیلتر نوع یا وضعیت
+    type?: 'received' | 'paid' | 'all';
     status?: string;
     startDate?: string;
     endDate?: string;
@@ -55,10 +56,10 @@ export class ChequeLifecycleService {
   }): Promise<Cheque[]> {
     const conditions = [eq(cheques.isDeleted, 0)];
 
-    if (params.type) {
+    if (params.type && params.type !== 'all') {
       conditions.push(eq(cheques.type, params.type));
     }
-    if (params.status) {
+    if (params.status && params.status !== 'all') {
       conditions.push(eq(cheques.status, params.status));
     }
     if (params.startDate) {
