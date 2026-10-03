@@ -12,6 +12,7 @@ export interface ConceptualAccountMappingConfig {
   tradeReceivablesAccountCode: string;      // Default: '1201' (حساب‌های دریافتنی تجاری)
   tradePayablesAccountCode: string;         // Default: '3001' (حساب‌های پرداختنی تجاری)
   salesDiscountAccountCode: string;         // Default: '5102' (تخفیف فروش)
+  serviceRevenueAccountCode: string;        // Default: '5004' (درآمد حمل و خدمات — v7.0.103، TD-191)
   salesVatPayableAccountCode: string;       // Default: '3203' (مالیات بر ارزش افزوده)
   inventoryRawMaterialsCode: string;        // Default: '1401' (موجودی مواد اولیه)
   inventoryFinishedGoodsCode: string;       // Default: '1403' (موجودی کالای تولیدشده)
@@ -41,6 +42,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   tradeReceivablesAccountCode: '1201',
   tradePayablesAccountCode: '3001',
   salesDiscountAccountCode: '5102',
+  serviceRevenueAccountCode: '5004',
   salesVatPayableAccountCode: '3203',
   inventoryRawMaterialsCode: '1401',
   inventoryFinishedGoodsCode: '1403',
@@ -211,6 +213,13 @@ export class AccountMappingService {
    */
   static async getSalesDiscountAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('salesDiscountAccountCode', tx);
+  }
+
+  /**
+   * Resolve Shipping & Service Revenue Account (درآمد حمل و خدمات — v7.0.103، TD-191)
+   */
+  static async getServiceRevenueAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('serviceRevenueAccountCode', tx);
   }
 
   /**

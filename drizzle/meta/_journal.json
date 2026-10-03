@@ -232,6 +232,13 @@
       "when": 1791054000000,
       "tag": "0032_workflow_task_sla_reminder",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791140400000,
+      "tag": "0033_document_service_charge",
+      "breakpoints": true
     }
   ]
 }

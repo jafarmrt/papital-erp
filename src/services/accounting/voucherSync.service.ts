@@ -133,13 +133,17 @@ export class VoucherSyncService {
     // در دفاتر ثبت می‌کرد که در خود فاکتور وجود نداشت.
     const vatAmount = fin(doc.vatAmount).round(4);
 
-    const finalPayable = netAmount.add(vatAmount).round(4);
+    // v7.0.103 (TD-191): هزینه ارسال و کارمزد ساختاریافته فاکتور (سفارش ووکامرس) جزء مبلغ قابل وصول است
+    const serviceChargeAmount = fin(doc.serviceChargeAmount).round(4);
+
+    const finalPayable = netAmount.add(vatAmount).add(serviceChargeAmount).round(4);
 
     // Conceptual Account Resolution (Subphase 9.2 + V5.0.17 TD-120)
     const customerAcc = await AccountMappingService.getTradeReceivablesAccount(tx);
     const discountAcc = await AccountMappingService.getSalesDiscountAccount(tx);
     const revenueAcc = await AccountMappingService.getSalesRevenueAccount(tx);
     const vatAcc = await AccountMappingService.getSalesVatPayableAccount(tx);
+    const serviceAcc = serviceChargeAmount.isPositive() ? await AccountMappingService.getServiceRevenueAccount(tx) : null;
     const cogsAcc = await AccountMappingService.getCostOfGoodsSoldAccount(tx);
     const fgAcc = await AccountMappingService.getInventoryFinishedGoodsAccount(tx);
     const rmAcc = await AccountMappingService.getInventoryRawMaterialsAccount(tx);
@@ -170,6 +174,14 @@ export class VoucherSyncService {
         throw new ValidationError('سرفصل حسابداری مالیات بر ارزش افزوده (۳۲۰۳) در تنظیمات حسابداری تعریف نشده است.');
       }
       logger.warn({ message: `VAT account not found for invoice ${doc.refNumber}, skipping auto voucher to prevent unbalanced entry` });
+      return null;
+    }
+
+    if (serviceChargeAmount.isPositive() && !serviceAcc) {
+      if (isStrict) {
+        throw new ValidationError('سرفصل حسابداری درآمد حمل و خدمات (۵۰۰۴) در تنظیمات حسابداری تعریف نشده است.');
+      }
+      logger.warn({ message: `Service revenue account not found for invoice ${doc.refNumber}, skipping auto voucher to prevent unbalanced entry` });
       return null;
     }
 
@@ -249,6 +261,20 @@ export class VoucherSyncService {
         currency: doc.currency || 'IRR',
         exchangeRate: exchangeRate,
         description: `مالیات و عوارض بر ارزش افزوده فاکتور شماره ${doc.refNumber}`
+      });
+    }
+
+    // ۴-ب) v7.0.103 (TD-191): بستانکار: درآمد حمل و خدمات (هزینه ارسال و کارمزد سفارش)
+    if (serviceChargeAmount.isPositive() && serviceAcc) {
+      voucherItems.push({
+        accountId: serviceAcc.id,
+        detailedType: 'other',
+        detailedName: 'درآمد حمل و خدمات',
+        debit: 0,
+        credit: serviceChargeAmount,
+        currency: doc.currency || 'IRR',
+        exchangeRate: exchangeRate,
+        description: `هزینه ارسال و خدمات فاکتور شماره ${doc.refNumber}`
       });
     }
 

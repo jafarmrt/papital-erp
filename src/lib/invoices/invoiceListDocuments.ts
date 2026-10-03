@@ -37,6 +37,8 @@ export interface InvoiceListDocument {
   totalQuantity?: number | string;
   totalAmount?: number;
   vatAmount?: number;
+  /** v7.0.103 (TD-191): هزینه ارسال و کارمزد فاکتور (سفارش ووکامرس) */
+  serviceChargeAmount?: number;
   payableAmount?: number;
   paidAmount?: number;
   remainingAmount?: number;
@@ -74,11 +76,11 @@ export function documentAmountOf(d: InvoiceListDocument): number {
 
 /**
  * v7.0.94 (TD-235 بند ۱): مبلغ قابل پرداخت سند = خالص اقلام + مالیات ساختاریافته (AGENTS §۶)؛ payableAmount سرور،
- * وگرنه مبلغ خالص به‌علاوه vatAmount. ستون «مبلغ سند» جدول و «جمع کل ارزش نهایی سند» پنجره جزئیات همین را نشان می‌دهند.
+ * وگرنه مبلغ خالص به‌علاوه vatAmount (و از v7.0.103 هزینه ارسال و خدمات، TD-191). ستون «مبلغ سند» جدول و «جمع کل ارزش نهایی سند» پنجره جزئیات همین را نشان می‌دهند.
  */
 export function documentPayableOf(d: InvoiceListDocument): number {
   if (d.payableAmount !== undefined && d.payableAmount !== null) return Number(d.payableAmount);
-  return fin(documentAmountOf(d)).add(d.vatAmount).toNumber();
+  return fin(documentAmountOf(d)).add(d.vatAmount).add(d.serviceChargeAmount).toNumber();
 }
 
 /**

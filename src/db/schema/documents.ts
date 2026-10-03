@@ -32,6 +32,8 @@ export const documents = pgTable('documents', {
   // vat_amount مبلغ نهایی مالیات (به ارز سند) است؛ vat_percent فقط برای نمایش/ویرایش فرم نگه داشته می‌شود.
   vatPercent: numeric('vat_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
   vatAmount: moneyNumeric('vat_amount').notNull().default(sql`0`),
+  // v7.0.103 (TD-191): هزینه ارسال و کارمزد فاکتور فروش (سفارش ووکامرس)؛ در سند حسابداری به «درآمد حمل و خدمات» می‌رود
+  serviceChargeAmount: moneyNumeric('service_charge_amount').notNull().default(sql`0`),
   // v7.0.63 (TD-198): نرخ تسعیر (ریال به ازای یک واحد ارز سند)؛ برای سند غیرریالی الزامی، برای ریالی تهی.
   exchangeRate: moneyNumeric('exchange_rate'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),

@@ -102,6 +102,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '5001', name: 'درآمد فروش محصولات کارگاهی', level: 'subsidiary', parentCode: '50', accountType: 'revenue', nature: 'credit', isSystem: 1 },
   { code: '5002', name: 'درآمد فروش آنلاین ووکامرس', level: 'subsidiary', parentCode: '50', accountType: 'revenue', nature: 'credit', isSystem: 1 },
   { code: '5003', name: 'درآمد حاصل از خدمات تولید و سفارشات', level: 'subsidiary', parentCode: '50', accountType: 'revenue', nature: 'credit', isSystem: 1 },
+  { code: '5004', name: 'درآمد حمل و خدمات', level: 'subsidiary', parentCode: '50', accountType: 'revenue', nature: 'credit', isSystem: 1 },
   { code: '51', name: 'برگشت از فروش و تخفیفات', level: 'general', parentCode: '5', accountType: 'revenue', nature: 'debit', isSystem: 1 },
   { code: '5101', name: 'برگشت از فروش', level: 'subsidiary', parentCode: '51', accountType: 'revenue', nature: 'debit', isSystem: 1 },
   { code: '5102', name: 'تخفیفات نقدی اعطایی به مشتریان', level: 'subsidiary', parentCode: '51', accountType: 'revenue', nature: 'debit', isSystem: 1 },

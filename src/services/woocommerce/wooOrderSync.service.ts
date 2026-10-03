@@ -5,7 +5,7 @@ import { DocumentService } from '../document.service.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { OutboxService } from '../events/outboxService.js';
 import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
 
@@ -60,6 +60,11 @@ export interface WcOrderPayload {
   }>;
   billing?: WcAddress;
   shipping?: WcAddress;
+  /** v7.0.103 (TD-191): هزینه‌های ارسال، کارمزدها و مالیات سفارش */
+  shipping_lines?: Array<{ total?: number | string; [key: string]: unknown }>;
+  shipping_total?: number | string;
+  fee_lines?: Array<{ name?: string; total?: number | string; [key: string]: unknown }>;
+  total_tax?: number | string;
   [key: string]: unknown;
 }
 
@@ -110,6 +115,29 @@ function extractBuyer(wcOrder: WcOrderPayload, wcOrderId: string): BuyerInfo {
     buyerCity: String(billing.city || shipping.city || '').trim(),
     buyerAddress: `${billing.address_1 || shipping.address_1 || ''} ${billing.address_2 || shipping.address_2 || ''}`.trim(),
   };
+}
+
+/** مبلغ عددی ووکامرس (رشته یا عدد)؛ خالی صفر و نامعتبر null */
+function wcAmount(raw: unknown): FinancialDecimal | null {
+  if (raw === undefined || raw === null || raw === '') return fin(0);
+  const n = Number(raw);
+  return Number.isFinite(n) ? fin(String(raw).trim()) : null;
+}
+
+/**
+ * v7.0.103 (TD-191، تصمیم مالک محصول «ثبت کامل»): هزینه ارسال (shipping_lines، وگرنه shipping_total) و کارمزدها
+ * (fee_lines) و مالیات (total_tax) سفارش، به واحد ووکامرس. null یعنی مبلغی نامعتبر است.
+ */
+function orderCharges(wcOrder: WcOrderPayload): { shipping: FinancialDecimal; fees: FinancialDecimal; tax: FinancialDecimal } | null {
+  const sum = (rows: Array<{ total?: unknown }>): FinancialDecimal | null =>
+    rows.reduce<FinancialDecimal | null>((acc, r) => {
+      const v = wcAmount(r?.total);
+      return acc && v ? acc.add(v) : null;
+    }, fin(0));
+  const shipping = Array.isArray(wcOrder.shipping_lines) ? sum(wcOrder.shipping_lines) : wcAmount(wcOrder.shipping_total);
+  const fees = Array.isArray(wcOrder.fee_lines) ? sum(wcOrder.fee_lines) : fin(0);
+  const tax = wcAmount(wcOrder.total_tax);
+  return shipping && fees && tax ? { shipping, fees, tax } : null;
 }
 
 function resolveCurrency(wcOrder: WcOrderPayload): { multiplier: number; currency: string } {
@@ -270,9 +298,11 @@ export class WooOrderSyncService {
           const sku = String(li.sku || '').trim();
           const label = String(li.name || 'قلم بدون نام');
           const qty = Number(li.quantity ?? 0);
-          const rawPrice = li.price !== undefined && li.price !== null && li.price !== ''
-            ? Number(li.price)
-            : (qty > 0 ? Number(li.total || 0) / qty : NaN);
+          // v7.0.103 (TD-191): فی از جمع ردیف (total ÷ مقدار) تا جمع فاکتور با مبلغ سفارش یکی باشد؛ بدون total همان price
+          const hasLineTotal = li.total !== undefined && li.total !== null && li.total !== '';
+          const rawPrice = hasLineTotal
+            ? (qty > 0 ? Number(li.total) / qty : NaN)
+            : (li.price !== undefined && li.price !== null && li.price !== '' ? Number(li.price) : NaN);
           if (!Number.isFinite(qty) || qty <= 0) {
             problems.push(`${label} (مقدار نامعتبر: ${String(li.quantity)})`);
             continue;
@@ -290,11 +320,39 @@ export class WooOrderSyncService {
             problems.push(`${label} (SKU: ${sku})`);
             continue;
           }
-          const unitPrice = Math.round(rawPrice * multiplier);
+          const unitPrice = hasLineTotal
+            ? fin(String(li.total).trim()).multiply(multiplier).divide(qty).round(4)
+            : fin(rawPrice).multiply(multiplier).round(4);
           orderTotal = orderTotal.add(fin(qty).multiply(unitPrice));
-          docLines.push({ itemId, quantity: qty, unit_price: unitPrice, location: targetLoc });
+          docLines.push({ itemId, quantity: qty, unit_price: unitPrice.toNumber(), location: targetLoc });
         }
+
+        // v7.0.103 (TD-191، «ثبت کامل»): هزینه ارسال و کارمزدها روی فاکتور (درآمد حمل و خدمات) و مالیات سفارش در
+        // vat_amount؛ جمع فاکتور باید با مبلغ پرداختی سفارش (total) برابر باشد، وگرنه کل سفارش رد می‌شود
+        const charges = orderCharges(wcOrder);
+        if (!charges) {
+          problems.push('مبلغ ارسال، کارمزد یا مالیات سفارش نامعتبر است');
+        }
+        const serviceCharge = charges ? charges.shipping.add(charges.fees).multiply(multiplier).round(4) : fin(0);
+        const orderVat = charges ? charges.tax.multiply(multiplier).round(4) : fin(0);
+        if (serviceCharge.isNegative()) {
+          problems.push(`جمع هزینه ارسال و کارمزدهای سفارش منفی است (${serviceCharge.toString()})`);
+        }
+        if (orderVat.isNegative()) {
+          problems.push(`مالیات سفارش منفی است (${orderVat.toString()})`);
+        }
+        orderTotal = orderTotal.add(serviceCharge).add(orderVat);
         const orderTotalNum = orderTotal.round(2).toNumber();
+        const paidTotal = wcAmount(wcOrder.total);
+        if (problems.length === 0 && paidTotal && wcOrder.total !== undefined && wcOrder.total !== null && wcOrder.total !== '') {
+          const paid = paidTotal.multiply(multiplier);
+          if (orderTotal.subtract(paid).abs().greaterThan(fin(0.01).multiply(multiplier))) {
+            return this.markFailed(
+              tx, log, wcOrder, buyer.buyerName, orderTotalNum,
+              `فاکتور سفارش ووکامرس #${wcOrderId} صادر نشد؛ جمع اقلام، ارسال، کارمزد و مالیات (${orderTotal.round(2).toString()}) با مبلغ پرداختی سفارش (${paid.round(2).toString()}) برابر نیست.`
+            );
+          }
+        }
 
         if (problems.length > 0) {
           return this.markFailed(
@@ -322,6 +380,8 @@ export class WooOrderSyncService {
           buyer_address: buyer.buyerAddress,
           notes: notesTag(wcOrderId),
           currency,
+          vatAmount: orderVat.toNumber(),
+          serviceChargeAmount: serviceCharge.toNumber(),
           items: docLines,
           location: targetLoc,
           externalTx: tx,

@@ -67,6 +67,8 @@ export interface CreateDocumentInput {
   /** v7.0.81 (TD-230): فاکتور فروش اصلی سند برگشت از فروش */
   returnOfDocumentId?: number | string | null;
   return_of_document_id?: number | string | null;
+  /** v7.0.103 (TD-191): هزینه ارسال و کارمزد فاکتور فروش (فقط مسیر سرویس، مانند سفارش ووکامرس) */
+  serviceChargeAmount?: number | string | null;
 }
 
 export interface UpdateDocumentInput {
@@ -154,6 +156,9 @@ export interface FormattedDocument {
   vat_percent?: number;
   vatAmount?: number;
   vat_amount?: number;
+  /** v7.0.103 (TD-191): هزینه ارسال و کارمزد فاکتور */
+  serviceChargeAmount?: number;
+  service_charge_amount?: number;
   payableAmount?: number;
   payable_amount?: number;
   totalDiscount: number;

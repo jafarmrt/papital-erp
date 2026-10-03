@@ -5,10 +5,11 @@ import { addLineGross, addLineDiscount, amountDecimalsOf, documentPayableOf, typ
 /**
  * TD-080 (بخش ۳): نوار جمع کل، جمع ناخالص و مجموع تخفیف در مودال جزئیات.
  * v7.0.94 (TD-235 بند ۱): جمع کل = خالص اقلام + مالیات (documentPayableOf)؛ پیش‌تر مالیات حذف می‌شد و اگر سند کامل
- * بارگذاری نمی‌شد (ردیف بدون اقلام) صفر نشان می‌داد.
+ * بارگذاری نمی‌شد (ردیف بدون اقلام) صفر نشان می‌داد. v7.0.103 (TD-191): هزینه ارسال و خدمات جدا نمایش داده می‌شود.
  */
 export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetails: InvoiceListDocument }) {
   const vatAmount = Number(selectedDocDetails.vatAmount || 0);
+  const serviceChargeAmount = Number(selectedDocDetails.serviceChargeAmount || 0);
   const decimals = amountDecimalsOf(selectedDocDetails.currency);
   return (
     <div className="bg-slate-900 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -37,6 +38,14 @@ export function InvoiceDetailsTotals({ selectedDocDetails }: { selectedDocDetail
             {formatPersianPrice((selectedDocDetails.items || []).reduce(addLineDiscount, 0), undefined, decimals)}
           </span>
         </div>
+        {serviceChargeAmount > 0 && (
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 block">هزینه ارسال و خدمات:</span>
+            <span className="font-mono text-sky-300 font-bold">
+              {formatPersianPrice(serviceChargeAmount, undefined, decimals)}
+            </span>
+          </div>
+        )}
         {vatAmount > 0 && (
           <div className="text-right">
             <span className="text-[10px] text-slate-400 block">مالیات بر ارزش افزوده:</span>

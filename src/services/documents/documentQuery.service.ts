@@ -139,7 +139,8 @@ export class DocumentQueryService {
       const amounts = documentAmounts(
         dItems.map(i => ({ quantity: i.quantity, unitPrice: i.unit_price, discount: i.discount })),
         d.vatAmount,
-        settledAmount(docSettlements, isPurchase)
+        settledAmount(docSettlements, isPurchase),
+        d.serviceChargeAmount
       );
 
       return {
@@ -158,6 +159,7 @@ export class DocumentQueryService {
         grossAmount: amounts.grossAmount,
         vatPercent: Number(d.vatPercent) || 0,
         vatAmount: amounts.vatAmount,
+        serviceChargeAmount: amounts.serviceChargeAmount,
         exchangeRate: d.exchangeRate?.toNumber() ?? null,
         payableAmount: amounts.payableAmount,
         paidAmount: amounts.paidAmount,
@@ -265,7 +267,8 @@ export class DocumentQueryService {
     const amounts = documentAmounts(
       rows.map(row => ({ quantity: row.quantity as DecimalValue, unitPrice: row.unit_price as DecimalValue, discount: row.discount as DecimalValue })),
       doc.vatAmount,
-      settledAmount(settlements, isPurchase)
+      settledAmount(settlements, isPurchase),
+      doc.serviceChargeAmount
     );
 
     return {
@@ -292,6 +295,8 @@ export class DocumentQueryService {
       vat_percent: Number(doc.vatPercent) || 0,
       vatAmount: amounts.vatAmount,
       vat_amount: amounts.vatAmount,
+      serviceChargeAmount: amounts.serviceChargeAmount,
+      service_charge_amount: amounts.serviceChargeAmount,
       exchangeRate: doc.exchangeRate?.toNumber() ?? null,
       returnOfDocumentId: doc.returnOfDocumentId ?? null,
       payableAmount: amounts.payableAmount,
@@ -359,7 +364,8 @@ function settledAmount(rows: Array<{ amount: Money; type: string }>, isPurchase:
 function documentAmounts(
   lines: Array<{ quantity: DecimalValue; unitPrice: DecimalValue; discount: DecimalValue }>,
   vatAmount: DecimalValue,
-  paid: FinancialDecimal
+  paid: FinancialDecimal,
+  serviceChargeAmount: DecimalValue | null | undefined = 0
 ) {
   let quantity = fin(0);
   let gross = fin(0);
@@ -370,7 +376,8 @@ function documentAmounts(
     discount = discount.add(line.discount);
   }
   const total = gross.subtract(discount);
-  const payable = total.add(vatAmount);
+  // v7.0.103 (TD-191): هزینه ارسال و کارمزد ساختاریافته فاکتور جزء مبلغ قابل وصول است
+  const payable = total.add(vatAmount).add(serviceChargeAmount ?? 0);
   const safePaid = paid.isNegative() ? fin(0) : paid;
   const remaining = payable.subtract(safePaid);
   const settlementStatus: 'unpaid' | 'partially_paid' | 'fully_paid' =
@@ -382,6 +389,7 @@ function documentAmounts(
     totalDiscount: discount.toNumber(),
     totalAmount: total.toNumber(),
     vatAmount: fin(vatAmount).toNumber(),
+    serviceChargeAmount: fin(serviceChargeAmount ?? 0).toNumber(),
     payableAmount: payable.toNumber(),
     paidAmount: safePaid.toNumber(),
     remainingAmount: remaining.isNegative() ? 0 : remaining.toNumber(),

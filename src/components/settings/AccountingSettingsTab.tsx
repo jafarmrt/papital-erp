@@ -24,6 +24,7 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'employeeAdvanceAccountCode', label: 'مساعده و وام پرسنل (1301)', description: 'پرداخت مساعده/وام به پرسنل (مطالبات از کارکنان) تا کسر از حقوق' },
   { key: 'salesRevenueAccountCode', label: 'درآمد فروش', description: 'سند خودکار فروش (فاکتور نهایی)' },
   { key: 'salesDiscountAccountCode', label: 'تخفیف فروش', description: 'سند خودکار تخفیفات فاکتور' },
+  { key: 'serviceRevenueAccountCode', label: 'درآمد حمل و خدمات', description: 'هزینه ارسال و کارمزد سفارش ووکامرس' },
   { key: 'salesVatPayableAccountCode', label: 'مالیات بر ارزش افزوده', description: 'بستانکاری VAT در سند فروش' },
   { key: 'inventoryRawMaterialsCode', label: 'موجودی مواد اولیه (1401)', description: 'اسناد رسید مواد اولیه و حواله تولید' },
   { key: 'inventoryFinishedGoodsCode', label: 'موجودی کالای تولیدشده (1403)', description: 'اسناد رسید تولید نهایی' },

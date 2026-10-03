@@ -7976,5 +7976,116 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (itemId) await cleanTestTableData('items', 'id', [itemId]);
     }
   }
+  // ------------------------------------------------------------------
+  // v7.0.103 (TD-191، تصمیم مالک محصول «ثبت کامل»): هزینه ارسال، کارمزد و مالیات سفارش ووکامرس روی فاکتور
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_woocommerce_shipping_tax_td_191', 'td191', 'woocommerce')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.103 Regression: هزینه ارسال و کارمزد به «درآمد حمل و خدمات» و مالیات سفارش ووکامرس به vat_amount؛ جمع فاکتور = مبلغ پرداختی (TD-191)';
+    const { woocommerceOrderLogs, customers } = await import('../../db/schema.js');
+    const base = String(8100000 + Math.floor(Math.random() * 800000));
+    const ids = { ok: `${base}1`, bad: `${base}3` };
+    let itemId = 0;
+    const violations: string[] = [];
+    try {
+      const { WooOrderSyncService } = await import('../../services/woocommerce/wooOrderSync.service.js');
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ code: `WC_TD191_${base}`, name: `ERP-TEST-MARKER کالای ووکامرس TD-191 ${base}`, stocks: { '': 10 } });
+      itemId = item.id;
+      const order = (id: string, total: string) => ({
+        id, number: id, status: 'processing', currency: 'IRR', total,
+        billing: { first_name: 'خریدار', last_name: `آزمون TD-191 ${id}`, phone: '', city: 'تهران', address_1: 'خیابان آزمون' },
+        line_items: [{ id: 1, name: 'قلم آزمون', sku: item.code, quantity: 2, price: 1000, total: '2000' }],
+        shipping_lines: [{ method_title: 'پیک', total: '300' }],
+        fee_lines: [{ name: 'بسته‌بندی', total: '50' }, { name: 'تخفیف کارمزد', total: '-20' }],
+        total_tax: '230',
+      });
+
+      // ۱. سفارش سازگار: ۲۰۰۰ اقلام + ۳۳۰ ارسال و کارمزد + ۲۳۰ مالیات = ۲۵۶۰ پرداختی
+      const okResult = await WooOrderSyncService.handleOrder(order(ids.ok, '2560'));
+      if (okResult.status !== 'processed' || !okResult.docId) {
+        throw new Error(`سفارش سازگار باید فاکتور شود: ${okResult.status} ${okResult.message}`);
+      }
+      const doc = await DocumentService.getDocumentById(okResult.docId);
+      if (doc?.serviceChargeAmount !== 330) violations.push(`هزینه ارسال و خدمات فاکتور: ${doc?.serviceChargeAmount} (باید ۳۳۰)`);
+      if (doc?.vatAmount !== 230) violations.push(`مالیات فاکتور: ${doc?.vatAmount} (باید ۲۳۰)`);
+      if (doc?.payableAmount !== 2560) violations.push(`مبلغ قابل وصول فاکتور: ${doc?.payableAmount} (باید ۲۵۶۰ = مبلغ پرداختی)`);
+      const [voucher] = await orm.select().from(journalVouchers)
+        .where(and(eq(journalVouchers.sourceDocumentId, okResult.docId), eq(journalVouchers.isDeleted, 0)));
+      if (!voucher) {
+        violations.push('سند حسابداری فاکتور صادر نشد');
+      } else {
+        const rows = await orm.select({ code: accounts.code, debit: journalVoucherItems.debit, credit: journalVoucherItems.credit })
+          .from(journalVoucherItems).innerJoin(accounts, eq(journalVoucherItems.accountId, accounts.id))
+          .where(eq(journalVoucherItems.voucherId, voucher.id));
+        const credit = (code: string) => rows.filter(r => r.code === code).reduce((s, r) => s + Number(r.credit), 0);
+        const debit = (code: string) => rows.filter(r => r.code === code).reduce((s, r) => s + Number(r.debit), 0);
+        if (credit('5004') !== 330) violations.push(`بستانکار درآمد حمل و خدمات (۵۰۰۴): ${credit('5004')} (باید ۳۳۰)`);
+        if (credit('3203') !== 230) violations.push(`بستانکار مالیات (۳۲۰۳): ${credit('3203')} (باید ۲۳۰)`);
+        if (debit('1201') !== 2560) violations.push(`بدهکار مشتری (۱۲۰۱): ${debit('1201')} (باید ۲۵۶۰)`);
+      }
+
+      // ۲. جمع ناسازگار با مبلغ پرداختی: کل سفارش رد و شکست در لاگ ثبت می‌شود
+      const badResult = await WooOrderSyncService.handleOrder(order(ids.bad, '2400'));
+      const [badLog] = await orm.select().from(woocommerceOrderLogs).where(eq(woocommerceOrderLogs.wcOrderId, ids.bad));
+      if (badResult.status !== 'failed' || badLog?.erpDocumentId) violations.push(`سفارش با جمع ناسازگار باید رد شود: ${badResult.status}`);
+      if (!String(badLog?.errorMessage || '').includes('مبلغ پرداختی')) violations.push(`پیام شکست جمع ناسازگار: ${badLog?.errorMessage}`);
+
+      // ۳. مهاجرت 0033 روی پایگاه‌داده موجود (بدون حساب ۵۰۰۴) حساب «درآمد حمل و خدمات» را زیر حساب کل ۵۰ می‌سازد
+      const fs = await import('fs');
+      const migrationSql = fs.readFileSync('drizzle/0033_document_service_charge.sql', 'utf8').split('--> statement-breakpoint');
+      let createdUnder50 = false;
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`UPDATE accounts SET is_deleted = 1 WHERE code = '5004'`);
+          await tx.execute(sql.raw(migrationSql[migrationSql.length - 1]));
+          const res = await tx.execute(sql`SELECT a.name, p.code AS parent_code FROM accounts a JOIN accounts p ON p.id = a.parent_id WHERE a.code = '5004' AND a.is_deleted = 0`);
+          const row = (res.rows ?? [])[0] as { name?: string; parent_code?: string } | undefined;
+          createdUnder50 = row?.name === 'درآمد حمل و خدمات' && row?.parent_code === '50';
+          throw new Error('rollback');
+        });
+      } catch (err) {
+        if (!(err instanceof Error && err.message === 'rollback')) throw err;
+      }
+      if (!createdUnder50) violations.push('مهاجرت 0033 حساب ۵۰۰۴ را زیر حساب ۵۰ نساخت');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_woocommerce_shipping_tax_td_191',
+        scenarioId: 'woocommerce_order_lifecycle',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'فاکتور سفارش ۳۳۰ هزینه ارسال و خدمات و ۲۳۰ مالیات گرفت و قابل وصولش ۲۵۶۰ (مبلغ پرداختی) شد؛ سند حسابداری ۳۳۰ را به ۵۰۰۴ برد و سفارش با جمع ناسازگار رد شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_woocommerce_shipping_tax_td_191',
+        scenarioId: 'woocommerce_order_lifecycle',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      const orderIdList = Object.values(ids);
+      const logs = await orm.select({ docId: woocommerceOrderLogs.erpDocumentId, buyerName: woocommerceOrderLogs.buyerName })
+        .from(woocommerceOrderLogs).where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
+      await orm.delete(woocommerceOrderLogs).where(inArray(woocommerceOrderLogs.wcOrderId, orderIdList));
+      const docIds = logs.map(l => l.docId).filter((v): v is number => typeof v === 'number');
+      if (docIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', docIds);
+        await cleanTestTableData('transactions', 'document_id', docIds);
+        await cleanTestTableData('documents', 'id', docIds);
+      }
+      const buyerNames = logs.map(l => l.buyerName).filter((v): v is string => Boolean(v) && String(v).includes('TD-191'));
+      if (buyerNames.length > 0) await orm.delete(customers).where(inArray(customers.name, buyerNames));
+      if (itemId) await cleanTestTableData('items', 'id', [itemId]);
+    }
+  }
   return results;
 }

@@ -15,7 +15,7 @@ import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } from './documentRefNumber.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
-import { resolveDocumentVat, parseVatInput } from './documentVat.js';
+import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { assertReturnableInvoice, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
@@ -232,6 +232,17 @@ export class DocumentCreationService {
       throw new ValidationError('فاکتور مرجع فقط برای سند برگشت از فروش قابل ثبت است.');
     }
 
+    // v7.0.103 (TD-191): هزینه ارسال و کارمزد فقط روی فاکتور فروش، نامنفی
+    const serviceChargeAmount = fin(body.serviceChargeAmount ?? 0);
+    if (!serviceChargeAmount.isZero()) {
+      if (!VAT_DOC_TYPES.has(docType)) {
+        throw new ValidationError('هزینه ارسال و خدمات فقط روی فاکتور فروش ثبت می‌شود.');
+      }
+      if (serviceChargeAmount.isNegative()) {
+        throw new ValidationError(`هزینه ارسال و خدمات نمی‌تواند منفی باشد (مقدار دریافتی: ${serviceChargeAmount.toString()}).`);
+      }
+    }
+
     const finalBuyerName = buyerName || buyer_name || '';
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
@@ -344,6 +355,7 @@ export class DocumentCreationService {
         exchangeRate: docExchangeRate,
         vatPercent: docVat.vatPercent,
         vatAmount: docVat.vatAmount,
+        serviceChargeAmount: money(serviceChargeAmount),
         attachments: [],
         projectId: finalProjectId ?? undefined,
         returnOfDocumentId,
