@@ -6,7 +6,7 @@ import {
   warehouses,
   transactions
 } from '../../db/schema.js';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, desc, asc, type SQL } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../document.service.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -58,6 +58,175 @@ export interface ProjectBomAllocationRecord {
   } | null;
 }
 
+type AllocationRow = typeof projectBomAllocations.$inferSelect;
+type TransactionRow = typeof transactions.$inferSelect;
+type ProjectRow = typeof productionProjects.$inferSelect;
+type ItemRow = typeof items.$inferSelect;
+
+interface AllocationOperator {
+  id: number | null;
+  name: string;
+}
+
+/** ردیف تخصیص به شکل خروجی API؛ با ردیف کاردکس منبع اگر خوانده شده باشد */
+function toAllocationRecord(alloc: AllocationRow, tx?: TransactionRow | null): ProjectBomAllocationRecord {
+  const record: ProjectBomAllocationRecord = {
+    id: alloc.id,
+    projectId: alloc.projectId,
+    projectCode: alloc.projectCode,
+    itemId: alloc.itemId,
+    itemCode: alloc.itemCode,
+    itemName: alloc.itemName,
+    quantity: fin(alloc.quantity).toNumber(),
+    unit: alloc.unit || 'عدد',
+    sourceTransactionId: alloc.sourceTransactionId,
+    sourceLocation: alloc.sourceLocation || 'main',
+    status: (alloc.status || 'allocated') as ProjectBomAllocationRecord['status'],
+    userId: alloc.userId,
+    username: alloc.username || '',
+    notes: alloc.notes || '',
+    allocatedAt: alloc.allocatedAt,
+    consumedAt: alloc.consumedAt,
+    releasedAt: alloc.releasedAt,
+  };
+  if (tx === undefined) return record;
+  return {
+    ...record,
+    transactionDetails: tx
+      ? {
+          date: tx.date || '',
+          documentType: tx.documentType || '',
+          documentRef: tx.documentRef || '',
+          quantity: fin(tx.quantity).toNumber(),
+        }
+      : null,
+  };
+}
+
+function operatorOf(userId?: number, username?: string): AllocationOperator {
+  return {
+    id: typeof userId === 'number' && !isNaN(userId) && userId > 0 ? userId : null,
+    name: username || 'سیستم',
+  };
+}
+
+async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
+  return externalTx ? fn(externalTx) : orm.transaction(fn);
+}
+
+/**
+ * قفل کالاها و پروژه به ترتیب سلسله‌مراتب (Items 40 → Production 50)، خواندن پروژه و انبار پیش‌فرض
+ * (فعال با کمترین شناسه، v7.0.36 / P2-3).
+ */
+async function lockProjectForAllocation(txEngine: DbExecutor, projectId: number, itemIds: number[]): Promise<{ project: ProjectRow; defaultWh: string }> {
+  await withOrderedLocks(txEngine, [
+    { table: items, ids: itemIds, name: 'items' },
+    { table: productionProjects, id: projectId, name: 'productionProjects' }
+  ], async () => true);
+
+  const [project] = await txEngine
+    .select()
+    .from(productionProjects)
+    .where(and(eq(productionProjects.id, projectId), eq(productionProjects.isDeleted, 0)));
+
+  if (!project) {
+    throw new NotFoundError(`پروژه تولید با شناسه ${projectId} یافت نشد.`);
+  }
+
+  const activeWHs = await txEngine
+    .select({ code: warehouses.code })
+    .from(warehouses)
+    .where(eq(warehouses.isActive, 1))
+    .orderBy(asc(warehouses.id));
+  return { project, defaultWh: activeWHs[0]?.code || 'main' };
+}
+
+async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<ItemRow> {
+  const [item] = await txEngine
+    .select()
+    .from(items)
+    .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
+    .for('update');
+  if (!item) {
+    throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
+  }
+  return item;
+}
+
+/** بهای واحد حرکت انبار تخصیص: میانگین موزون، وگرنه آخرین قیمت خرید */
+function allocationUnitPrice(item: ItemRow): number {
+  return Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
+}
+
+/** ثبت ردیف تخصیص، رویداد outbox آن و خروجی API */
+async function recordAllocation(txEngine: DbExecutor, params: {
+  project: ProjectRow;
+  item: ItemRow;
+  quantity: number;
+  location: string;
+  sourceTransactionId: number | null;
+  notes: string;
+  action: 'ALLOCATED' | 'RECEIPT_ALLOCATED';
+  operator: AllocationOperator;
+}): Promise<ProjectBomAllocationRecord> {
+  const { project, item, quantity, location, sourceTransactionId, operator } = params;
+  const [allocRecord] = await txEngine
+    .insert(projectBomAllocations)
+    .values({
+      projectId: project.id,
+      projectCode: project.projectCode,
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      quantity,
+      unit: item.unit || 'عدد',
+      sourceTransactionId,
+      sourceLocation: location,
+      status: 'allocated',
+      userId: operator.id,
+      username: operator.name,
+      notes: params.notes,
+      allocatedAt: new Date().toISOString(),
+    })
+    .returning();
+
+  const domainEvent = domainEventBus.createEvent(
+    DomainEventType.STOCK_ADJUSTED,
+    'Project',
+    String(allocRecord.id),
+    {
+      allocationId: allocRecord.id,
+      projectId: project.id,
+      projectCode: project.projectCode,
+      itemId: item.id,
+      itemCode: item.code,
+      quantity,
+      location,
+      sourceTransactionId,
+      action: params.action,
+    },
+    { userId: operator.id ?? undefined, userName: operator.name }
+  );
+  await OutboxService.saveToOutbox(txEngine, domainEvent);
+
+  return toAllocationRecord(allocRecord);
+}
+
+/** فهرست تخصیص‌ها با ردیف کاردکس منبع (جدیدترین اول) */
+async function listAllocations(conditions: SQL[]): Promise<ProjectBomAllocationRecord[]> {
+  const rawList = await orm
+    .select({ alloc: projectBomAllocations, tx: transactions })
+    .from(projectBomAllocations)
+    .leftJoin(transactions, eq(projectBomAllocations.sourceTransactionId, transactions.id))
+    .where(and(eq(projectBomAllocations.isDeleted, 0), ...conditions))
+    .orderBy(desc(projectBomAllocations.allocatedAt), desc(projectBomAllocations.id));
+  return rawList.map(({ alloc, tx }) => toAllocationRecord(alloc, tx));
+}
+
+/**
+ * v7.0.115: مراحل مشترک دو مسیر تخصیص (قفل، پروژه، انبار پیش‌فرض، کالا، ثبت ردیف و رویداد، خروجی) در توابع بالا
+ * یک بار نوشته شده‌اند؛ هر مسیر فقط حرکت انبار خودش را دارد.
+ */
 export class ProjectBomAllocationService {
   /**
    * Allocates raw materials received via receiving/purchase transactions directly to a project BOM.
@@ -73,33 +242,10 @@ export class ProjectBomAllocationService {
     allocatedCount: number;
     allocations: ProjectBomAllocationRecord[];
   }> {
-    const operatorName = params.username || 'سیستم';
-    const operatorId = typeof params.userId === 'number' && !isNaN(params.userId) && params.userId > 0 ? params.userId : null;
+    const operator = operatorOf(params.userId, params.username);
 
-    const executeReceiptAlloc = async (txEngine: DbExecutor) => {
-      // Strictly observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
-      const requestedItemIds = params.allocations.map(a => a.itemId);
-      await withOrderedLocks(txEngine, [
-        { table: items, ids: requestedItemIds, name: 'items' },
-        { table: productionProjects, id: params.projectId, name: 'productionProjects' }
-      ], async () => true);
-
-      const [project] = await txEngine
-        .select()
-        .from(productionProjects)
-        .where(and(eq(productionProjects.id, params.projectId), eq(productionProjects.isDeleted, 0)));
-
-      if (!project) {
-        throw new NotFoundError(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
-      }
-
-      const activeWHs = await txEngine
-        .select({ code: warehouses.code })
-        .from(warehouses)
-        .where(eq(warehouses.isActive, 1))
-        .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی
-      const defaultWh = activeWHs[0]?.code || 'main';
-
+    return inTransaction(params.externalTx, async (txEngine) => {
+      const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
       const results: ProjectBomAllocationRecord[] = [];
 
       for (const req of params.allocations) {
@@ -107,17 +253,7 @@ export class ProjectBomAllocationService {
         if (qty <= 0) continue;
 
         const targetLocation = req.location || defaultWh;
-
-        // Fetch item
-        const [item] = await txEngine
-          .select()
-          .from(items)
-          .where(and(eq(items.id, req.itemId), eq(items.isDeleted, 0)))
-          .for('update');
-
-        if (!item) {
-          throw new NotFoundError(`کالا با شناسه ${req.itemId} یافت نشد.`);
-        }
+        const item = await lockActiveItem(txEngine, req.itemId);
 
         let resolvedTxId: number | null = req.receiptTransactionId || null;
 
@@ -142,18 +278,16 @@ export class ProjectBomAllocationService {
 
         // If no existing transaction specified, create receiving-allocation transaction log
         if (!resolvedTxId) {
-          const txDate = await businessTodayIsoDate();
-          const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
           const stockResult = await DocumentService.applyStockMovement(txEngine, {
             itemId: item.id,
             documentId: req.documentId || null,
             inOut: 'in',
             quantity: qty,
-            price: itemUnitPrice,
-            date: txDate,
+            price: allocationUnitPrice(item),
+            date: await businessTodayIsoDate(),
             documentType: 'رسید مستقیم BOM پروژه',
             documentRef: `پروژه ${project.projectCode}`,
-            user: operatorName,
+            user: operator.name,
             targetLoc: targetLocation,
             notes: req.notes || `رسید و تخصیص مستقیم مواد اولیه به پروژه ${project.title} (${project.projectCode})`,
           });
@@ -161,78 +295,20 @@ export class ProjectBomAllocationService {
           resolvedTxId = stockResult.transactionId;
         }
 
-        // Insert explicit allocation record linking to the receiving transaction
-        const [allocRecord] = await txEngine
-          .insert(projectBomAllocations)
-          .values({
-            projectId: project.id,
-            projectCode: project.projectCode,
-            itemId: item.id,
-            itemCode: item.code,
-            itemName: item.name,
-            quantity: qty,
-            unit: item.unit || 'عدد',
-            sourceTransactionId: resolvedTxId,
-            sourceLocation: targetLocation,
-            status: 'allocated',
-            userId: operatorId,
-            username: operatorName,
-            notes: req.notes || `تخصیص از محل رسید خرید/انبار به پروژه ${project.projectCode}`,
-            allocatedAt: new Date().toISOString(),
-          })
-          .returning();
-
-        // Emit domain event for outbox
-        const domainEvent = domainEventBus.createEvent(
-          DomainEventType.STOCK_ADJUSTED,
-          'Project',
-          String(allocRecord.id),
-          {
-            allocationId: allocRecord.id,
-            projectId: project.id,
-            projectCode: project.projectCode,
-            itemId: item.id,
-            itemCode: item.code,
-            quantity: qty,
-            location: targetLocation,
-            sourceTransactionId: resolvedTxId,
-            action: 'RECEIPT_ALLOCATED',
-          },
-          { userId: operatorId ?? undefined, userName: operatorName }
-        );
-        await OutboxService.saveToOutbox(txEngine, domainEvent);
-
-        results.push({
-          id: allocRecord.id,
-          projectId: allocRecord.projectId,
-          projectCode: allocRecord.projectCode,
-          itemId: allocRecord.itemId,
-          itemCode: allocRecord.itemCode,
-          itemName: allocRecord.itemName,
-          quantity: fin(allocRecord.quantity).toNumber(),
-          unit: allocRecord.unit || 'عدد',
-          sourceTransactionId: allocRecord.sourceTransactionId,
-          sourceLocation: allocRecord.sourceLocation || 'main',
-          status: (allocRecord.status || 'allocated') as ProjectBomAllocationRecord['status'],
-          userId: allocRecord.userId,
-          username: allocRecord.username || '',
-          notes: allocRecord.notes || '',
-          allocatedAt: allocRecord.allocatedAt,
-          consumedAt: allocRecord.consumedAt,
-          releasedAt: allocRecord.releasedAt,
-        });
+        results.push(await recordAllocation(txEngine, {
+          project,
+          item,
+          quantity: qty,
+          location: targetLocation,
+          sourceTransactionId: resolvedTxId,
+          notes: req.notes || `تخصیص از محل رسید خرید/انبار به پروژه ${project.projectCode}`,
+          action: 'RECEIPT_ALLOCATED',
+          operator,
+        }));
       }
 
-      return {
-        allocatedCount: results.length,
-        allocations: results,
-      };
-    };
-
-    if (params.externalTx) {
-      return await executeReceiptAlloc(params.externalTx);
-    }
-    return await orm.transaction(executeReceiptAlloc);
+      return { allocatedCount: results.length, allocations: results };
+    });
   }
 
   /**
@@ -254,33 +330,10 @@ export class ProjectBomAllocationService {
     allocatedCount: number;
     allocations: ProjectBomAllocationRecord[];
   }> {
-    const operatorName = params.username || 'سیستم';
-    const operatorId = typeof params.userId === 'number' && !isNaN(params.userId) && params.userId > 0 ? params.userId : null;
+    const operator = operatorOf(params.userId, params.username);
 
-    const executeAllocation = async (txEngine: DbExecutor) => {
-      // Strictly observe Lock Hierarchy using withOrderedLocks: Items (Level 40) -> Production (Level 50)
-      const requestedItemIds = params.allocations.map(a => a.itemId);
-      await withOrderedLocks(txEngine, [
-        { table: items, ids: requestedItemIds, name: 'items' },
-        { table: productionProjects, id: params.projectId, name: 'productionProjects' }
-      ], async () => true);
-
-      const [project] = await txEngine
-        .select()
-        .from(productionProjects)
-        .where(and(eq(productionProjects.id, params.projectId), eq(productionProjects.isDeleted, 0)));
-
-      if (!project) {
-        throw new NotFoundError(`پروژه تولید با شناسه ${params.projectId} یافت نشد.`);
-      }
-
-      const activeWHs = await txEngine
-        .select({ code: warehouses.code })
-        .from(warehouses)
-        .where(eq(warehouses.isActive, 1))
-        .orderBy(asc(warehouses.id)); // v7.0.36 (P2-3): پیش‌فرض قطعی
-      const defaultWh = activeWHs[0]?.code || 'main';
-
+    return inTransaction(params.externalTx, async (txEngine) => {
+      const { project, defaultWh } = await lockProjectForAllocation(txEngine, params.projectId, params.allocations.map(a => a.itemId));
       const results: ProjectBomAllocationRecord[] = [];
 
       for (const req of params.allocations) {
@@ -288,107 +341,36 @@ export class ProjectBomAllocationService {
         if (qty <= 0) continue;
 
         const targetLocation = req.location || defaultWh;
-
-        // Fetch item with row lock
-        const [item] = await txEngine
-          .select()
-          .from(items)
-          .where(and(eq(items.id, req.itemId), eq(items.isDeleted, 0)))
-          .for('update');
-
-        if (!item) {
-          throw new NotFoundError(`کالا با شناسه ${req.itemId} یافت نشد.`);
-        }
+        const item = await lockActiveItem(txEngine, req.itemId);
 
         // Apply stock movement using centralized DocumentService (ensures locking, negative stock policy, WAC integrity, outbox events)
-        const txDate = await businessTodayIsoDate();
-        const itemUnitPrice = Number(item.weightedAverageCost) || Number((item as { lastPurchasePrice?: number }).lastPurchasePrice) || 0;
-
         const stockResult = await DocumentService.applyStockMovement(txEngine, {
           itemId: item.id,
           inOut: 'out',
           quantity: qty,
-          price: itemUnitPrice,
-          date: txDate,
+          price: allocationUnitPrice(item),
+          date: await businessTodayIsoDate(),
           documentType: 'تخصیص مواد BOM',
           documentRef: `پروژه ${project.projectCode}`,
-          user: operatorName,
+          user: operator.name,
           targetLoc: targetLocation,
           notes: req.notes || `تخصیص به پروژه تولید ${project.title} (${project.projectCode})`,
         });
 
-        // Insert explicit allocation record
-        const [allocRecord] = await txEngine
-          .insert(projectBomAllocations)
-          .values({
-            projectId: project.id,
-            projectCode: project.projectCode,
-            itemId: item.id,
-            itemCode: item.code,
-            itemName: item.name,
-            quantity: qty,
-            unit: item.unit || 'عدد',
-            sourceTransactionId: stockResult.transactionId,
-            sourceLocation: targetLocation,
-            status: 'allocated',
-            userId: operatorId,
-            username: operatorName,
-            notes: req.notes || '',
-            allocatedAt: new Date().toISOString(),
-          })
-          .returning();
-
-        // Emit domain event for outbox
-        const domainEvent = domainEventBus.createEvent(
-          DomainEventType.STOCK_ADJUSTED,
-          'Project',
-          String(allocRecord.id),
-          {
-            allocationId: allocRecord.id,
-            projectId: project.id,
-            projectCode: project.projectCode,
-            itemId: item.id,
-            itemCode: item.code,
-            quantity: qty,
-            location: targetLocation,
-            sourceTransactionId: stockResult.transactionId,
-            action: 'ALLOCATED',
-          },
-          { userId: operatorId ?? undefined, userName: operatorName }
-        );
-        await OutboxService.saveToOutbox(txEngine, domainEvent);
-
-        results.push({
-          id: allocRecord.id,
-          projectId: allocRecord.projectId,
-          projectCode: allocRecord.projectCode,
-          itemId: allocRecord.itemId,
-          itemCode: allocRecord.itemCode,
-          itemName: allocRecord.itemName,
-          quantity: fin(allocRecord.quantity).toNumber(),
-          unit: allocRecord.unit || 'عدد',
-          sourceTransactionId: allocRecord.sourceTransactionId,
-          sourceLocation: allocRecord.sourceLocation || 'main',
-          status: (allocRecord.status || 'allocated') as ProjectBomAllocationRecord['status'],
-          userId: allocRecord.userId,
-          username: allocRecord.username || '',
-          notes: allocRecord.notes || '',
-          allocatedAt: allocRecord.allocatedAt,
-          consumedAt: allocRecord.consumedAt,
-          releasedAt: allocRecord.releasedAt,
-        });
+        results.push(await recordAllocation(txEngine, {
+          project,
+          item,
+          quantity: qty,
+          location: targetLocation,
+          sourceTransactionId: stockResult.transactionId,
+          notes: req.notes || '',
+          action: 'ALLOCATED',
+          operator,
+        }));
       }
 
-      return {
-        allocatedCount: results.length,
-        allocations: results,
-      };
-    };
-
-    if (params.externalTx) {
-      return await executeAllocation(params.externalTx);
-    }
-    return await orm.transaction(executeAllocation);
+      return { allocatedCount: results.length, allocations: results };
+    });
   }
 
   /**
@@ -533,51 +515,7 @@ export class ProjectBomAllocationService {
    * Retrieves all BOM allocations for a specific project.
    */
   static async getProjectAllocations(projectId: number): Promise<ProjectBomAllocationRecord[]> {
-    const rawList = await orm
-      .select({
-        alloc: projectBomAllocations,
-        tx: transactions,
-      })
-      .from(projectBomAllocations)
-      .leftJoin(
-        transactions,
-        eq(projectBomAllocations.sourceTransactionId, transactions.id)
-      )
-      .where(
-        and(
-          eq(projectBomAllocations.projectId, projectId),
-          eq(projectBomAllocations.isDeleted, 0)
-        )
-      )
-      .orderBy(desc(projectBomAllocations.allocatedAt), desc(projectBomAllocations.id));
-
-    return rawList.map(({ alloc, tx }) => ({
-      id: alloc.id,
-      projectId: alloc.projectId,
-      projectCode: alloc.projectCode,
-      itemId: alloc.itemId,
-      itemCode: alloc.itemCode,
-      itemName: alloc.itemName,
-      quantity: fin(alloc.quantity).toNumber(),
-      unit: alloc.unit || 'عدد',
-      sourceTransactionId: alloc.sourceTransactionId,
-      sourceLocation: alloc.sourceLocation || 'main',
-      status: (alloc.status || 'allocated') as ProjectBomAllocationRecord['status'],
-      userId: alloc.userId,
-      username: alloc.username || '',
-      notes: alloc.notes || '',
-      allocatedAt: alloc.allocatedAt,
-      consumedAt: alloc.consumedAt,
-      releasedAt: alloc.releasedAt,
-      transactionDetails: tx
-        ? {
-            date: tx.date || '',
-            documentType: tx.documentType || '',
-            documentRef: tx.documentRef || '',
-            quantity: fin(tx.quantity).toNumber(),
-          }
-        : null,
-    }));
+    return listAllocations([eq(projectBomAllocations.projectId, projectId)]);
   }
 
   /**
@@ -589,7 +527,7 @@ export class ProjectBomAllocationService {
     status?: string;
     search?: string;
   }): Promise<ProjectBomAllocationRecord[]> {
-    const conditions = [eq(projectBomAllocations.isDeleted, 0)];
+    const conditions: SQL[] = [];
 
     if (params?.projectId) {
       conditions.push(eq(projectBomAllocations.projectId, params.projectId));
@@ -601,46 +539,7 @@ export class ProjectBomAllocationService {
       conditions.push(eq(projectBomAllocations.status, params.status));
     }
 
-    const rawList = await orm
-      .select({
-        alloc: projectBomAllocations,
-        tx: transactions,
-      })
-      .from(projectBomAllocations)
-      .leftJoin(
-        transactions,
-        eq(projectBomAllocations.sourceTransactionId, transactions.id)
-      )
-      .where(and(...conditions))
-      .orderBy(desc(projectBomAllocations.allocatedAt), desc(projectBomAllocations.id));
-
-    let list = rawList.map(({ alloc, tx }) => ({
-      id: alloc.id,
-      projectId: alloc.projectId,
-      projectCode: alloc.projectCode,
-      itemId: alloc.itemId,
-      itemCode: alloc.itemCode,
-      itemName: alloc.itemName,
-      quantity: fin(alloc.quantity).toNumber(),
-      unit: alloc.unit || 'عدد',
-      sourceTransactionId: alloc.sourceTransactionId,
-      sourceLocation: alloc.sourceLocation || 'main',
-      status: (alloc.status || 'allocated') as ProjectBomAllocationRecord['status'],
-      userId: alloc.userId,
-      username: alloc.username || '',
-      notes: alloc.notes || '',
-      allocatedAt: alloc.allocatedAt,
-      consumedAt: alloc.consumedAt,
-      releasedAt: alloc.releasedAt,
-      transactionDetails: tx
-        ? {
-            date: tx.date || '',
-            documentType: tx.documentType || '',
-            documentRef: tx.documentRef || '',
-            quantity: fin(tx.quantity).toNumber(),
-          }
-        : null,
-    }));
+    let list = await listAllocations(conditions);
 
     if (params?.search) {
       const q = params.search.toLowerCase().trim();
