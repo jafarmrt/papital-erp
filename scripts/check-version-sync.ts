@@ -1,23 +1,24 @@
 import fs from 'fs';
 import path from 'path';
-import { SYSTEM_UPDATES } from '../src/data/changelogs/index.js';
-import { v7Updates } from '../src/data/changelogs/7.js';
+import { SYSTEM_UPDATES, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES } from '../src/data/changelogs/index.js';
 import { findCompactRuleViolations } from '../src/data/changelogs/compactRule.js';
+import { findChangelogSeriesViolations } from '../src/data/changelogs/seriesGuard.js';
 
 /**
  * TD-111 (v7.0.0) — گیت همگام‌سازی جامع نسخه (fail-fast)
  * ====================================================
  * تمامی منابع اعلام نسخه باید همیشه همگام باشند:
  *   1) "version" در package.json (مرجع یگانه؛ خوانده‌شده توسط src/lib/version.ts و /health)
- *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در src/data/changelogs/7.ts)
+ *   2) مدخل نخست چنج‌لاگ فعال (SYSTEM_UPDATES[0].version در ACTIVE_CHANGELOG.file — از v8.0.0 فایل 8.ts)
  *   3) مانیفست استقرار deploy/k8s/erp-deployment.yaml
  *   4) هدر مستندات README.md
+ * v8.0.0: نسخه در سری فعال است و سری‌های بسته‌شده (7.ts) منجمدند (src/data/changelogs/seriesGuard.ts).
  */
 
 function fail(message: string): never {
   console.error('❌ Version Sync Check FAILED (TD-111):');
   console.error(`   ${message}`);
-  console.error('   راه‌حل: تمامی منابع نسخه (package.json، چنج‌لاگ 7.ts، k8s manifest و README) را همگام کنید.');
+  console.error(`   راه‌حل: تمامی منابع نسخه (package.json، چنج‌لاگ فعال ${ACTIVE_CHANGELOG.file}، k8s manifest و README) را همگام کنید.`);
   process.exit(1);
 }
 
@@ -33,7 +34,7 @@ function main(): void {
   if (!pkgVersion) fail('فیلد "version" در package.json خالی است.');
 
   const topEntry = SYSTEM_UPDATES[0];
-  if (!topEntry) fail('SYSTEM_UPDATES خالی است — چنج‌لاگ فعال (7.ts) مدخل ندارد.');
+  if (!topEntry) fail(`SYSTEM_UPDATES خالی است — چنج‌لاگ فعال (${ACTIVE_CHANGELOG.file}) مدخل ندارد.`);
   const changelogVersion = String(topEntry.version || '').trim().replace(/^v/, '');
   if (!changelogVersion) fail('مدخل نخست SYSTEM_UPDATES فیلد version ندارد.');
 
@@ -66,21 +67,16 @@ function main(): void {
     }
   }
 
-  // 3) گارد نسخه تکراری در سری فعال (v7)
-  const counts = new Map<string, number>();
-  for (const u of v7Updates) {
-    const v = String(u?.version || '').replace(/^v/, '');
-    if (v) counts.set(v, (counts.get(v) || 0) + 1);
-  }
-  const duplicates = [...counts.entries()].filter(([, c]) => c > 1).map(([v]) => v);
-  if (duplicates.length > 0) {
-    fail(`نسخه(های) تکراری در چنج‌لاگ 7.ts: ${duplicates.join(', ')}`);
+  // 3) v8.0.0: نسخه در سری فعال، مدخل‌های فایل فعال در همان سری و بدون تکرار، سری‌های بسته‌شده منجمد
+  const seriesViolations = findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES);
+  if (seriesViolations.length > 0) {
+    fail(`سری‌های چنج‌لاگ ناسازگارند:\n   - ${seriesViolations.slice(0, 15).join('\n   - ')}`);
   }
 
   // 4) v7.0.54: قاعده چنج‌لاگ کوتاه سری فعال (فقط تغییرات مهم و باگ‌های مهم و بحرانی)
-  const compactViolations = findCompactRuleViolations(v7Updates);
+  const compactViolations = findCompactRuleViolations(ACTIVE_CHANGELOG.updates);
   if (compactViolations.length > 0) {
-    fail(`چنج‌لاگ 7.ts از قاعده مدخل کوتاه (src/data/changelogs/compactRule.ts) پیروی نمی‌کند:\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
+    fail(`چنج‌لاگ ${ACTIVE_CHANGELOG.file} از قاعده مدخل کوتاه (src/data/changelogs/compactRule.ts) پیروی نمی‌کند:\n   - ${compactViolations.slice(0, 15).join('\n   - ')}`);
   }
 
   console.log(`✅ Version Sync OK (TD-111): package.json == SYSTEM_UPDATES[0] == k8s (image + APP_VERSION) == README == v${pkgVersion}`);

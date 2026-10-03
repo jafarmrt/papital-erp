@@ -2,7 +2,7 @@
 
 This file is a quick reference and stub. The single source of truth for all architectural rules and governance is **AGENTS.md** (root).
 
-See also: `V7_MASTER_ROADMAP.md` (active execution roadmap) • `TECH_DEBT.md` (debt registry) • `README.md` (setup & operations).
+See also: `V8_MASTER_ROADMAP.md` (active execution roadmap; v7 archived in `V7_MASTER_ROADMAP.md`) • `TECH_DEBT.md` (debt registry) • `README.md` (setup & operations).
 
 ---
 

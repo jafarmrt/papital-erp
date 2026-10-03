@@ -1,6 +1,6 @@
 # AI Agent Instructions (AGENTS.md)
 
-> **Documentation Map (Version 7.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V7_MASTER_ROADMAP.md` • نقشه راه آرشیو v6: `V6_MASTER_ROADMAP.md` • نقشه راه آرشیو v5: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/7.ts` • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
+> **Documentation Map (Version 8.0.0 Architecture & Governance):** این فایل مرجع یگانه قواعد معماری و حاکمیت پروژه است. قوانین بنیادین: `ARCHITECTURE_RULES.md` • نقشه راه فعال: `V8_MASTER_ROADMAP.md` • نقشه راه آرشیو v7: `V7_MASTER_ROADMAP.md` • نقشه راه آرشیو v6: `V6_MASTER_ROADMAP.md` • نقشه راه آرشیو v5: `V5_MASTER_ROADMAP.md` • نقشه راه آرشیو v4: `V4_MASTER_ROADMAP.md` • نقشه راه آرشیو v3: `V3_MASTER_ROADMAP.md` • دفتر بدهی: `TECH_DEBT.md` • چنج‌لاگ فعال: `src/data/changelogs/8.ts` (سری ۷ بسته و منجمد: `7.ts`) • راه‌اندازی ویندوز: `docs/LOCAL_DEV_WINDOWS.md` • ابزار MCP: `docs/LOCAL_MCP_TOOLING.md`.
 
 هر ایجنت هوش مصنوعی برای حفظ پایداری سیستم ملزم به رعایت دقیق این قواعد است:
 
@@ -70,9 +70,9 @@
 - **Form State:** Use dedicated `editingId: number | null` and `isEditing = editingId !== null` instead of holding `id: 0`.
 
 ## 7. AI Agent Auto-Changelog Updates & Release Tracking
-- **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to the **active** changelog file (currently `src/data/changelogs/7.ts`, series `v7.x.y` — see §13 and §23) with Jalali date, version bump, title, summary, changes, and fixes.
+- **Mandatory Update Logging:** Whenever modifying code, adding features, optimizing, or fixing bugs, you MUST append a new release entry to the **active** changelog file (currently `src/data/changelogs/8.ts`, series `v8.x.y` — see §13 and §23) with Jalali date, version bump, title, summary, changes, and fixes.
 - **Short Entries, Important Points Only (v7.0.54, product-owner decision):** Every version still gets exactly one entry, but it records only important changes and important / critical bugs — no file lists, test names, debt bookkeeping or "version bumped" lines (those belong in the commit and `TECH_DEBT.md`). Limits in `src/data/changelogs/compactRule.ts` (title ≤ 90, summary ≤ 300 chars, ≤ 4 changes, ≤ 4 fixes, each ≤ 150 chars) are enforced by `npm run check:version`.
-- **Every Claim Has a Test (v7.0.64, audit P3-13):** Every fix or behaviour change recorded in the changelog is backed by at least one automated test that fails on the previous version and passes on the new one. The test id is named in the commit message and in the `TECH_DEBT.md` / `TECH_DEBT_ARCHIVE.md` row (never in `7.ts`, per the rule above). A claim without such a test (e.g. a refactor or a documentation change) is worded as such and never as a fix.
+- **Every Claim Has a Test (v7.0.64, audit P3-13):** Every fix or behaviour change recorded in the changelog is backed by at least one automated test that fails on the previous version and passes on the new one. The test id is named in the commit message and in the `TECH_DEBT.md` / `TECH_DEBT_ARCHIVE.md` row (never in the changelog file, per the rule above). A claim without such a test (e.g. a refactor or a documentation change) is worded as such and never as a fix.
 
 ## 8. Server Startup & Background Seed Execution
 - **Port 3000 Ingress:** In AI Studio preview / Cloud Run, `server.ts` MUST bind and listen on port 3000 immediately.
@@ -110,8 +110,9 @@
 - **Warehouse Stock Reconciliation (TD-200, v7.0.33):** `WarehouseStockReconciliationService` compares `item_warehouse_stocks` with the Kardex ledger (active rows, excluding reversals of soft-deleted rows). Repairs are manual only, dry-run by default, correct quantities only (never WAC), never auto-adjust negative ledger balances or items with unresolvable Kardex locations, and log every change/refusal to `inventory_reconciliation_anomalies`. Data-fixing migrations must never clamp or overwrite silently: add (`existing + EXCLUDED`) and record anomalies.
 
 ## 13. Scalable Changelog Architecture
-- **Version Partitioning:** `src/data/changelogs/0.ts` (`v1.0.0`) and `archive_1_6.ts` (condensed `v1.x`–`v6.x`, v7.0.11) are archives; `7.ts` is active.
-- **Active File:** For version 7.x releases, append to `src/data/changelogs/7.ts` and bump the version in all synced locations listed in §23.
+- **Version Partitioning:** `src/data/changelogs/0.ts` (`v1.0.0`), `archive_1_6.ts` (condensed `v1.x`–`v6.x`, v7.0.11) and `7.ts` (`v7.0.0`–`v7.0.140`, closed and frozen in v8.0.0) are archives; `8.ts` is active.
+- **Active File:** For version 8.x releases, append to `src/data/changelogs/8.ts` and bump the version in all synced locations listed in §23.
+- **Series Closure (v8.0.0, product-owner decision):** The active series and the closed series are declared once in `src/data/changelogs/index.ts` (`ACTIVE_CHANGELOG`; `CLOSED_CHANGELOG_SERIES` with final version, entry count and SHA-256 fingerprint). `npm run check:version` (`src/data/changelogs/seriesGuard.ts`) rejects a `package.json` major outside the active series, an entry of another series in the active file, and any change to a closed series file. Opening the next series repeats v8.0.0: freeze the current file with its fingerprint, add the new file, archive the roadmap with a closing report and open a new one.
 
 ## 14. Workflow Engine, Visual Canvas & SLA Analytics
 1. **Rule Engine (`ruleConditionsJson`):** Evaluate context variables using operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`).
@@ -184,9 +185,10 @@
 - **Session-Level Timeouts (DB-012):** `statement_timeout = 60000` ms and `idle_in_transaction_session_timeout = 60000` ms (defaults of `DB_STATEMENT_TIMEOUT` / `DB_IDLE_IN_TX_TIMEOUT`), sent in the pool's connection startup `options` (v7.0.39). Bulk tasks use `withLongQueryTimeout(fn)`.
 - **Single-Instance Deployment (v7.0.44, product-owner decision):** The system runs as ONE server process (one workshop, at most 20 concurrent users). In-memory caches, rate limiters and process-level locks assume a single process; do not add multi-replica infrastructure (Redis, object storage, cross-instance cache invalidation). The Kubernetes manifest uses `replicas: 1` with `strategy: Recreate` and no autoscaler.
 
-## 23. V7 Governance — Active Series, Strict Typing, Zod Coverage, N+1 Optimization & Stock Normalization
-- **Active Series (v7.x.y):** The active changelog file is `src/data/changelogs/7.ts` (`v7.x.y`). Historical changelogs reside in `0.ts` (`v1.0.0`) and `archive_1_6.ts` (condensed `v1.x.y`–`v6.x.y`, finalized at `v6.0.28`). Every change MUST append one unique, short `AIUpdateLog` entry (§7) to `src/data/changelogs/7.ts` and bump `package.json` `"version"`.
-- **Core Mission of Version 7:**
+## 23. V8 Governance — Active Series & Business-Logic Verification
+- **Active Series (v8.x.y):** The active changelog file is `src/data/changelogs/8.ts` (`v8.x.y`, from v8.0.0). Historical changelogs reside in `0.ts` (`v1.0.0`), `archive_1_6.ts` (condensed `v1.x.y`–`v6.x.y`, finalized at `v6.0.28`) and `7.ts` (`v7.x.y`, closed and frozen at `v7.0.140`). Every change MUST append one unique, short `AIUpdateLog` entry (§7) to `src/data/changelogs/8.ts` and bump `package.json` `"version"`.
+- **Core Mission of Version 8 (`V8_MASTER_ROADMAP.md`):** Prove or refute the business-logic correctness of inventory, costing, accounting, treasury, payroll and the other domains with executable invariants (balanced vouchers, three-way stock, stock value = inventory ledger accounts, one voucher per final document, exact round-trip on void, fiscal-year closing) and a seeded "one business year" simulation on real PostgreSQL 16. Every finding is reproduced by a failing test first, recorded as a `TD-###` row, and fixed in its own `v8.0.x` release; policy changes wait for a product-owner decision.
+- **Version 7 Missions (closed at v7.0.140 — complete, and their rules remain binding; closing report in `V7_MASTER_ROADMAP.md`):**
   1. **Strict TypeScript & Type Safety (فعال‌سازی Strict Mode):** `strict: true` is on (v7.0.79, audit P3-3 — catch variables are `unknown`: read them with `errorMessageOf(err)` / `getErrorMessage(err)` from `src/utils`, never `err.message`); untyped `: any` escape hatches are removed incrementally (ESLint ratchet).
   2. **100% Zod Validation Coverage (اعتبارسنجی کامل روت‌ها):** Complete Zod middleware protection on all remaining unvalidated endpoints (Procurement, Dashboard, Transactions) preventing NaN/malformed inputs.
   3. **N+1 Performance Elimination (حذف کوری‌های متوالی در لوپ‌ها):** Batch fetching of warehouse locations and item base prices in document finalization and audit loops.
@@ -201,7 +203,7 @@
   - DBHub read-only MCP configuration: see `docs/LOCAL_MCP_TOOLING.md`.
 - **Release Version Bump = 4 Synced Locations (enforced by `npm run check:version`):**
   1. `"version"` in `package.json` (single source of truth; dynamically resolved by `src/lib/version.ts` and `/health`).
-  2. Top entry in active changelog `src/data/changelogs/7.ts`.
+  2. Top entry in active changelog `src/data/changelogs/8.ts` (`ACTIVE_CHANGELOG` in `src/data/changelogs/index.ts`).
   3. `deploy/k8s/erp-deployment.yaml` — both the image tag (`erp:vX.Y.Z`) and the `APP_VERSION` env value (it overrides `package.json` at runtime).
   4. Header line of `README.md` (`نسخه مستقر: \`vX.Y.Z\``).
 

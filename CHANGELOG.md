@@ -10,12 +10,31 @@ going forward.
 |---|---|---|
 | Client-bundled update center | `src/data/changelogs/0.ts` | baseline `v1.0.0` entry |
 | Client-bundled update center (archive) | `src/data/changelogs/archive_1_6.ts` | condensed `1.x.y` – `6.x.y` series (`v1.x` - `v6.0.28`), replaced `1.ts` … `6.ts` in v7.0.11 |
-| Client-bundled update center (active) | `src/data/changelogs/7.ts` | current `7.x.y` release series (`v7.0.0` onward); short entries, important points only (v7.0.54) |
+| Client-bundled update center (archive) | `src/data/changelogs/7.ts` | closed `7.x.y` series (`v7.0.0` – `v7.0.140`), frozen in v8.0.0 (fingerprint checked by `npm run check:version`) |
+| Client-bundled update center (active) | `src/data/changelogs/8.ts` | current `8.x.y` release series (`v8.0.0` onward); short entries, important points only (v7.0.54) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 6.x Series (Archived at v6.0.28 — active series is 7.x, see `src/data/changelogs/7.ts`)
+## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
+
+### v8.0.0 — Closure of Version 7 & Launch of Version 8
+- **Version 7 Closure:** Concluded and archived the v7.x series (`v7.0.0` through `v7.0.140`). `V7_MASTER_ROADMAP.md` is archived with a closing report; the debt registry ends the series with 0 open and 236 resolved rows; `src/data/changelogs/7.ts` is frozen.
+- **Version 8 Mission:** `V8_MASTER_ROADMAP.md` — prove or refute the business-logic correctness of inventory, costing, accounting, treasury and payroll with executable invariants and a seeded one-business-year simulation on PostgreSQL 16; every finding gets a failing test, a `TD-###` row and its own `v8.0.x` fix.
+- **Governance:** The active and closed series are declared in `src/data/changelogs/index.ts`; `npm run check:version` rejects a version outside the active series and any change to a closed series file.
+
+---
+
+## Version 7.x Series (Archived at v7.0.140)
+
+### v7.0.0 – v7.0.140 — Quality Roadmap & Independent Audit Remediation
+- **V7 Roadmap:** strict TypeScript (`strict: true`, v7.0.79), Zod on procurement/transactions/dashboard routes, batched stock and voucher lines, formal Drizzle migrations, per-warehouse stock normalized into `item_warehouse_stocks`.
+- **Independent Audit Phases 0–3** (`docs/audit/TECHNICAL_AUDIT_REPORT.md`, base v7.0.17): fiscal-year reference numbering, negative-stock policy, tracked outbox delivery, WooCommerce order sync, structured VAT / exchange rate / service charges, decimal money columns, fiscal periods, attachments on disk, read permissions on every read route, flag and date CHECK constraints, Gregorian ISO date storage, Vitest and Playwright, ESLint ratchet.
+- **Closure:** 236 technical-debt rows resolved, none open; details in `V7_MASTER_ROADMAP.md` (closing report) and `TECH_DEBT_ARCHIVE.md`.
+
+---
+
+## Version 6.x Series (Archived at v6.0.28)
 
 ### v6.0.0 — Official Launch of Version 6 & Version 5 Closure
 - **Version 5 Closure:** Concluded and archived the v5.x series (`v5.0.0` through `v5.0.20`) after successfully completing inter-module integration, the 5-phase invoice-stock fix plan, 15-suite test runner isolation, and conducting the comprehensive independent data-integrity audit.
