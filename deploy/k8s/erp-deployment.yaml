@@ -39,7 +39,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v7.0.138
+        image: registry.example.com/erp:v7.0.139
         ports:
         - containerPort: 3000
         volumeMounts:
@@ -51,7 +51,7 @@ spec:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "7.0.138"
+          value: "7.0.139"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -80,6 +80,12 @@ spec:
             secretKeyRef:
               name: erp-secrets
               key: erp-webhook-secret-token
+        # v7.0.139 (TD-189): کلید رمزنگاری رمزهای شخص ثالث (رمز نوبیتکس پرسنل)
+        - name: ERP_SECRETS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: erp-secrets
+              key: erp-secrets-key
         - name: ALLOW_SEED_IN_PRODUCTION
           value: "false"
         # ... سایر env vars طبق .env.production.example

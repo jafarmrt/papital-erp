@@ -7910,6 +7910,100 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.139 (TD-189): رمز نوبیتکس پرسنل رمزنگاری‌شده ذخیره می‌شود؛ بدون کلید ساده ذخیره نمی‌شود و ذخیره فرم آن را پاک نمی‌کند
+  if (shouldRun('reg_personnel_secret_encryption_td_189', 'td189', 'nobitex', 'secret', 'encrypt')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.139: رمز نوبیتکس با AES-256-GCM رمزنگاری می‌شود و فقط برای کاربر مجاز باز می‌شود؛ بدون کلید ذخیره نمی‌شود و پاک نمی‌شود؛ رمزهای ساده قدیمی با اسکریپت رمزنگاری می‌شوند (TD-189)';
+    const violations: string[] = [];
+    const ids: number[] = [];
+    const previousKey = process.env.ERP_SECRETS_KEY;
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { personnel } = await import('../../db/schema.js');
+      const { decryptSecret, encryptSecret } = await import('../../lib/secretBox.js');
+      const { PersonnelSecretEncryptionService } = await import('../../services/system/personnelSecretEncryption.service.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const send = (method: 'post' | 'put', path: string, body: Record<string, unknown>) =>
+        request(app)[method](path).set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
+      const stored = async (id: number) => (await orm.select({ v: personnel.nobitexPassword }).from(personnel).where(eq(personnel.id, id)))[0]?.v || '';
+      process.env.ERP_SECRETS_KEY = 'td189-test-key-0123456789-abcdefghijklmnop';
+
+      // ۱) ثبت: ستون رمزشده است و متن ساده در آن نیست؛ پاسخ خواندن برای مدیر متن ساده است
+      const created = await send('post', '/api/personnel', { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'Secret#123' });
+      if (created.status !== 201) throw new Error(`ثبت پرسنل: ${created.status} ${JSON.stringify(created.body).slice(0, 200)}`);
+      const id = created.body.id as number;
+      ids.push(id);
+      const first = await stored(id);
+      if (!first.startsWith('enc:v1:') || first.includes('Secret#123')) violations.push(`ستون رمز نوبیتکس رمزنگاری نشده: ${first.slice(0, 30)}`);
+      if (created.body.nobitexPassword !== 'Secret#123') violations.push('پاسخ ثبت باید متن ساده را برگرداند نه متن رمزشده');
+      const read = await request(app).get(`/api/personnel/${id}`).set('Cookie', session.cookie);
+      if (read.body?.nobitexPassword !== 'Secret#123') violations.push(`خواندن برای مدیر: «${read.body?.nobitexPassword}»`);
+      const list = await request(app).get('/api/personnel').set('Cookie', session.cookie);
+      const listed = (Array.isArray(list.body) ? list.body : []).find((p: { id: number }) => p.id === id);
+      if (listed?.nobitexPassword !== 'Secret#123') violations.push('فهرست پرسنل باید متن ساده (برای مدیر) بدهد نه متن رمزشده');
+
+      // ۲) ذخیره فرم با همان رمز ← متن رمزشده عوض نمی‌شود؛ رمز تازه ← رمزنگاری تازه
+      await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189 ویرایش', nobitexPassword: 'Secret#123' });
+      if (await stored(id) !== first) violations.push('ذخیره با همان رمز متن رمزشده را عوض کرد');
+      await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'New#456' });
+      const second = await stored(id);
+      if (!second.startsWith('enc:v1:') || decryptSecret(second) !== 'New#456') violations.push('رمز تازه درست رمزنگاری نشد');
+
+      // ۳) دست‌کاری متن رمزشده ← باز نمی‌شود (هرگز متن نادرست برنمی‌گردد)
+      const tampered = second.slice(0, -4) + (second.endsWith('AAAA') ? 'BBBB' : 'AAAA');
+      if (decryptSecret(tampered) !== null) violations.push('متن رمزشده دست‌کاری‌شده باز شد');
+
+      // ۴) بدون کلید: خواندن متن رمزشده بیرون نمی‌دهد، فرم خالی رمز را پاک نمی‌کند، رمز تازه 503 می‌گیرد
+      delete process.env.ERP_SECRETS_KEY;
+      const noKeyRead = await request(app).get(`/api/personnel/${id}`).set('Cookie', session.cookie);
+      if (noKeyRead.body?.nobitexPassword !== '') violations.push(`بدون کلید پاسخ باید خالی باشد: «${String(noKeyRead.body?.nobitexPassword).slice(0, 20)}»`);
+      await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: '' });
+      if (await stored(id) !== second) violations.push('ذخیره فرم بدون کلید رمز ذخیره‌شده را پاک کرد');
+      const noKeySave = await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'Plain#789' });
+      if (noKeySave.status !== 503) violations.push(`رمز تازه بدون کلید باید 503 بگیرد: ${noKeySave.status}`);
+      if (await stored(id) !== second) violations.push('رمز تازه بدون کلید ذخیره شد');
+      try { encryptSecret('x'); violations.push('encryptSecret بدون کلید خطا نداد'); } catch { /* انتظار */ }
+
+      // ۵) رمز ساده قدیمی: اجرای آزمایشی چیزی را تغییر نمی‌دهد؛ اجرای واقعی با کلید رمزنگاری می‌کند
+      const [legacy] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER TD-189 قدیمی', nobitexPassword: 'old-plain' }).returning({ id: personnel.id });
+      ids.push(legacy.id);
+      process.env.ERP_SECRETS_KEY = 'td189-test-key-0123456789-abcdefghijklmnop';
+      const dry = await PersonnelSecretEncryptionService.run({ apply: false });
+      if (dry.plaintext < 1 || await stored(legacy.id) !== 'old-plain') violations.push(`اجرای آزمایشی: ${JSON.stringify(dry)}`);
+      const applied = await PersonnelSecretEncryptionService.run({ apply: true });
+      const legacyNow = await stored(legacy.id);
+      if (applied.encryptedNow < 1 || !legacyNow.startsWith('enc:v1:') || decryptSecret(legacyNow) !== 'old-plain') violations.push(`رمزنگاری رمز قدیمی: ${JSON.stringify(applied)}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_personnel_secret_encryption_td_189',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'رمز رمزنگاری‌شده ذخیره و فقط برای مدیر باز شد، بدون کلید نه ذخیره شد نه پاک، و رمز قدیمی با اسکریپت رمزنگاری شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_personnel_secret_encryption_td_189',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (previousKey === undefined) delete process.env.ERP_SECRETS_KEY; else process.env.ERP_SECRETS_KEY = previousKey;
+      if (ids.length > 0) await cleanTestTableData('personnel', 'id', ids);
+    }
+  }
+
   // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
   if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
     const tStart = Date.now();

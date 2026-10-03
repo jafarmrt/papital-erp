@@ -13,9 +13,42 @@ import { normalizePhoneNumber, normalizeNationalId, isoToJalaliDate } from '../u
 import { requireStorageDate } from '../lib/storageDate.js';
 import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money, moneyOr } from '../lib/money.js';
 
 const router = Router();
+
+/**
+ * v7.0.139 (TD-189): رمز نوبیتکس پرسنل در پایگاه‌داده رمزنگاری‌شده (AES-256-GCM، src/lib/secretBox.ts) است.
+ * پاسخ API برای کاربر مجاز متن ساده را می‌دهد (sanitizePersonnelRecord برای بقیه خالی می‌کند)؛ متن رمزشده هرگز بیرون نمی‌رود.
+ */
+function openPersonnelSecret<T extends { nobitexPassword?: string | null }>(record: T): T {
+  return { ...record, nobitexPassword: decryptSecret(record.nobitexPassword) ?? '' };
+}
+
+/**
+ * مقدار ذخیره‌شده تازه رمز نوبیتکس در ویرایش:
+ * - فیلد نیامده یا همان مقدار فعلی ← مقدار ذخیره‌شده دست نمی‌خورد (بدون رمزنگاری دوباره)
+ * - خالی، وقتی کاربر رمز فعلی را نمی‌بیند (نبود دسترسی یا کلید) ← مقدار فعلی حفظ می‌شود تا ذخیره فرم آن را پاک نکند
+ * - مقدار تازه ← رمزنگاری (بدون کلید خطای 503 و هرگز ذخیره ساده)
+ */
+async function nextNobitexPassword(
+  incoming: unknown,
+  existing: { nobitexPassword: string | null; userId: number | null },
+  user: Parameters<typeof canAccessSensitivePersonnelData>[0]
+): Promise<string> {
+  const stored = existing.nobitexPassword || '';
+  if (incoming === undefined || incoming === null) return stored;
+  const plain = String(incoming).trim();
+  const current = decryptSecret(stored);
+  if (current !== null && plain === current) return stored;
+  if (plain === '' && stored !== '') {
+    const canSee = current !== null && await canAccessSensitivePersonnelData(user, existing.userId ?? undefined);
+    if (!canSee) return stored;
+  }
+  return encryptSecret(plain);
+}
+
 router.use(authenticateToken);
 
 const createPersonnelSchema = z.object({
@@ -399,7 +432,7 @@ router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asy
     }
 
     const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
-    const sanitizedList = filtered.map(p => sanitizePersonnelRecord(p, canViewSensitive));
+    const sanitizedList = filtered.map(p => sanitizePersonnelRecord(openPersonnelSecret(p), canViewSensitive));
 
     res.json(sanitizedList);
   } catch (err) {
@@ -458,7 +491,7 @@ router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel),
     }
 
     const canViewSensitive = await canAccessSensitivePersonnelData(req.user, record.userId);
-    res.json(sanitizePersonnelRecord(record, canViewSensitive));
+    res.json(sanitizePersonnelRecord(openPersonnelSecret(record), canViewSensitive));
   } catch (err) {
     throw err;
   }
@@ -543,7 +576,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         shebaNumber: shebaNumber.trim(),
         bankName: bankName.trim(),
         nobitexUsername: nobitexUsername.trim(),
-        nobitexPassword: nobitexPassword.trim(),
+        nobitexPassword: encryptSecret(nobitexPassword.trim()),
         address: address.trim(),
         notes: notes.trim(),
         createdAt: nowIso,
@@ -560,7 +593,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
       description: `ثبت پرسنل جدید «${computedFullName}» (کد پرسنلی: ${personnelCode || '---'})`
     });
 
-    res.status(201).json(inserted);
+    res.status(201).json(openPersonnelSecret(inserted));
   } catch (err) {
     logger.error({ message: 'Error creating personnel', error: err });
     throw err;
@@ -607,7 +640,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
       shebaNumber = existing.shebaNumber,
       bankName = existing.bankName,
       nobitexUsername = existing.nobitexUsername,
-      nobitexPassword = existing.nobitexPassword,
+      nobitexPassword,
       address = existing.address,
       notes = existing.notes
     } = req.body;
@@ -662,7 +695,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         shebaNumber: shebaNumber ? shebaNumber.trim() : '',
         bankName: bankName ? bankName.trim() : '',
         nobitexUsername: nobitexUsername ? nobitexUsername.trim() : '',
-        nobitexPassword: nobitexPassword ? nobitexPassword.trim() : '',
+        nobitexPassword: await nextNobitexPassword(nobitexPassword, existing, req.user),
         address: address ? address.trim() : '',
         notes: notes ? notes.trim() : '',
         updatedAt: nowIso
