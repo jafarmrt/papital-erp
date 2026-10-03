@@ -8357,5 +8357,197 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // TD-242: سند حسابداری فیش حقوقی فقط از پیوند صریح source_payroll_id؛ سند معکوس/اصلاحی سند فیش دیگر
+  // (reference_id = شناسه «سند حسابداری مبدأ») هرگز سند فیش هم‌شناسه تلقی نمی‌شود
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_payroll_voucher_link_td_242', 'td242', 'payroll', 'voucher')) {
+    const tStart = Date.now();
+    const testName = 'TD-242 Regression: صدور، نمایش و ابطال سند فیش حقوقی سند معکوس/اصلاحی فیش دیگر را برنمی‌دارد';
+    const suffix = `${Date.now()}`;
+    const payrollIds: number[] = [];
+    let personnelId: number | null = null;
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const { personnel, pieceworkPayrolls } = await import('../../db/schema.js');
+      const { PayrollReadService } = await import('../../services/piecework/payrollRead.service.js');
+      const violations: string[] = [];
+      const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+      const todayIso = await businessTodayIsoDate();
+      const [pers] = await orm.insert(personnel).values({ fullName: `ERP-TEST-MARKER پرسنل آزمون TD-242 ${suffix}` }).returning({ id: personnel.id });
+      personnelId = pers.id;
+      const makePayroll = async (tag: string) => {
+        const [row] = await orm.insert(pieceworkPayrolls).values({
+          payrollNumber: `PAY-TD242-${tag}-${suffix}`, personnelId: pers.id, startDate: todayIso, endDate: todayIso, title: `فیش آزمون TD-242 ${tag}`,
+          totalPieceworkAmount: money(500000), totalFixedAmount: money(0), totalBonuses: money(0), totalDeductions: money(0),
+          netPayable: money(500000), status: 'approved', isDeleted: 0
+        }).returning({ id: pieceworkPayrolls.id, payrollNumber: pieceworkPayrolls.payrollNumber });
+        payrollIds.push(row.id);
+        return row;
+      };
+      // اسناد معکوس فعال یک سند (REV-V<شماره> / RE-REV-V<شماره>، reference_id = شناسه آن سند)
+      const activeReversalsOf = async (voucherId: number, voucherNumber: number) => (await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(and(
+          eq(journalVouchers.referenceId, voucherId),
+          inArray(journalVouchers.referenceNumber, [`REV-V${voucherNumber}`, `RE-REV-V${voucherNumber}`]),
+          eq(journalVouchers.isDeleted, 0)
+        ))).map(r => r.id);
+      const voucherRow = async (voucherId: number) => (await orm.select().from(journalVouchers).where(eq(journalVouchers.id, voucherId)))[0];
+      const sourcePayrollOf = async (voucherId: number) => {
+        const res = await orm.execute(sql`SELECT source_payroll_id FROM journal_vouchers WHERE id = ${voucherId}`) as unknown as { rows: Array<{ source_payroll_id: number | null }> };
+        return res.rows[0]?.source_payroll_id ?? null;
+      };
+
+      // ۱) فیش A: سند صادرشده توسط VoucherSync پیوند صریح source_payroll_id دارد
+      const payA = await makePayroll('A');
+      const payB = await makePayroll('B');
+      const vA = await VoucherSyncService.autoCreateVoucherForPayroll(payA.id, undefined, 'test-agent', undefined, { strict: true });
+      if (!vA) throw new Error('سند حسابداری فیش A صادر نشد');
+      check(await sourcePayrollOf(vA.id) === payA.id, `سند فیش A باید source_payroll_id=${payA.id} داشته باشد (دریافتی: ${await sourcePayrollOf(vA.id)})`);
+      // سند قطعی‌شده A (approved) تا بتوان آن را معکوس/اصلاح کرد
+      await orm.update(journalVouchers).set({ status: 'approved' }).where(eq(journalVouchers.id, vA.id));
+      const itemsA = (vA.items || []).map(i => ({ accountId: i.accountId, detailedType: i.detailedType || 'none', detailedId: i.detailedId ?? null, detailedName: i.detailedName || '', debit: i.debit, credit: i.credit, description: 'ردیف آزمون TD-242' }));
+
+      // ۲) سند معکوس (REV-V…) و اصلاحی (CORR-V…) سند A که reference_id آن‌ها — مانند اسناد VoucherService —
+      //    شناسه «سند حسابداری مبدأ» است و تصادفاً با شناسه فیش B برابر شده است
+      const rev = await VoucherService.createJournalVoucher({
+        date: todayIso, voucherType: 'adjustment', status: 'approved', description: 'سند معکوس آزمون TD-242',
+        referenceModule: 'payroll', referenceId: payB.id, referenceNumber: `REV-V${vA.voucherNumber}`,
+        items: itemsA.map(i => ({ ...i, debit: i.credit, credit: i.debit }))
+      });
+      const corr = await VoucherService.createJournalVoucher({
+        date: todayIso, voucherType: 'payroll', status: 'approved', description: 'سند اصلاحی آزمون TD-242',
+        referenceModule: 'payroll', referenceId: payB.id, referenceNumber: `CORR-V${vA.voucherNumber}`, items: itemsA
+      });
+      const foreign = new Set([rev.id, corr.id]);
+
+      // ۳) صدور سند فیش B: سند جدید با پیوند صریح، نه بازگرداندن سند معکوس/اصلاحی A
+      const vB = await VoucherSyncService.autoCreateVoucherForPayroll(payB.id, undefined, 'test-agent', undefined, { strict: true });
+      check(Boolean(vB) && !foreign.has(vB!.id), `برای فیش B باید سند جدید صادر شود، نه سند معکوس/اصلاحی #${rev.id}/#${corr.id} فیش A (دریافتی: #${vB?.id})`);
+      if (vB && !foreign.has(vB.id)) {
+        check(await sourcePayrollOf(vB.id) === payB.id, `سند فیش B باید source_payroll_id=${payB.id} داشته باشد`);
+        check(vB.referenceNumber === payB.payrollNumber, `شماره عطف سند فیش B: «${vB.referenceNumber}»`);
+      }
+
+      // ۴) دیتابیس دومین سند فعال برای همان فیش را رد می‌کند (ایندکس یکتای جزئی)
+      let duplicateRejected = false;
+      try {
+        await orm.execute(sql`INSERT INTO journal_vouchers (voucher_number, date, description, reference_module, reference_id, reference_number, source_payroll_id, total_debit, total_credit)
+          VALUES (nextval('journal_voucher_number_seq'), ${todayIso}, 'probe duplicate TD-242', 'payroll', ${payB.id}, 'probe', ${payB.id}, 0, 0)`);
+      } catch {
+        duplicateRejected = true;
+      }
+      check(duplicateRejected, 'درج دومین سند حسابداری فعال برای یک فیش باید توسط ایندکس یکتا رد شود (uq_jv_source_payroll_active)');
+
+      // ۵) فهرست و جزئیات فیش سند خود فیش را نشان می‌دهند
+      const detailB = await PayrollReadService.getPayrollDetail(payB.id);
+      check(detailB?.voucherLink.voucherId === vB?.id, `جزئیات فیش B باید سند #${vB?.id} را نشان دهد (دریافتی: #${detailB?.voucherLink.voucherId})`);
+      const listed = await PayrollReadService.listPayrolls({ personnelId: pers.id });
+      const listedA = listed.find(r => r.id === payA.id);
+      const listedB = listed.find(r => r.id === payB.id);
+      check(listedA?.voucherId === vA.id, `فهرست: سند فیش A باید #${vA.id} باشد (دریافتی: #${listedA?.voucherId})`);
+      check(listedB?.voucherId === vB?.id, `فهرست: سند فیش B باید #${vB?.id} باشد (دریافتی: #${listedB?.voucherId})`);
+
+      // ۶) ابطال فیش B فقط سند خودش را حذف/معکوس می‌کند؛ سند معکوس/اصلاحی فیش A دست‌نخورده می‌ماند
+      let deleteError = '';
+      try {
+        await PieceworkService.deletePayroll(payB.id, { username: 'test-agent' });
+      } catch (err) {
+        deleteError = err instanceof Error ? err.message : String(err);
+      }
+      check(!deleteError, `ابطال فیش B نباید برای سند فیش A خطا دهد: ${deleteError}`);
+      for (const fid of foreign) {
+        const row = await voucherRow(fid);
+        check(row?.isDeleted === 0, `ابطال فیش B سند #${fid} فیش A را حذف کرد`);
+        const reversals = row ? await activeReversalsOf(fid, row.voucherNumber) : [];
+        check(reversals.length === 0, `ابطال فیش B سند #${fid} فیش A را معکوس کرد (اسناد: ${reversals.join(', ')})`);
+      }
+      if (vB && !foreign.has(vB.id)) {
+        const vBAfter = await voucherRow(vB.id);
+        check(vBAfter?.isDeleted === 1, `سند پیش‌نویس فیش B باید با ابطال فیش حذف شود (is_deleted=${vBAfter?.isDeleted})`);
+      }
+
+      // ۷) سند قدیمی بدون پیوند (پیش از مهاجرت 0035): سند دوم صادر نمی‌شود و ابطال فیش آن را هم باطل می‌کند
+      const payC = await makePayroll('C');
+      const legacyItems = itemsA.map(i => ({ ...i, description: 'ردیف سند قدیمی TD-242' }));
+      const legacyVoucher = async (payrollId: number, payrollNumber: string) => {
+        const v = await VoucherService.createJournalVoucher({
+          date: todayIso, voucherType: 'payroll', status: 'draft', description: 'سند قدیمی بدون پیوند TD-242',
+          referenceModule: 'payroll', referenceId: payrollId, referenceNumber: payrollNumber, items: legacyItems
+        });
+        return v;
+      };
+      const legacyC1 = await legacyVoucher(payC.id, payC.payrollNumber);
+      const legacyC2 = await legacyVoucher(payC.id, payC.payrollNumber);
+      const ensuredC = await VoucherSyncService.autoCreateVoucherForPayroll(payC.id, undefined, 'test-agent', undefined, { strict: true });
+      check(ensuredC?.id === legacyC1.id, `فیش دارای سند قدیمی بدون پیوند باید قدیمی‌ترین سند (#${legacyC1.id}) را برگرداند، نه سند جدید (دریافتی: #${ensuredC?.id})`);
+
+      // ۸) پرکردن مهاجرت 0035: فقط فیش دارای یک سند با الگوی دقیق پیوند می‌گیرد؛ فیش دارای دو سند و سند معکوس دست‌نخورده
+      const payD = await makePayroll('D');
+      const legacyD = await legacyVoucher(payD.id, payD.payrollNumber);
+      const migrationSql = fs.readFileSync(path.join(process.cwd(), 'drizzle', '0035_journal_voucher_source_payroll.sql'), 'utf8');
+      const backfillSql = migrationSql.split('--> statement-breakpoint').find(part => /UPDATE journal_vouchers/.test(part));
+      check(Boolean(backfillSql), 'بخش پرکردن داده در مهاجرت 0035 یافت نشد');
+      if (backfillSql) {
+        try {
+          await orm.transaction(async (tx) => {
+            await tx.execute(sql.raw(backfillSql));
+            const res = await tx.execute(sql`SELECT id, source_payroll_id FROM journal_vouchers WHERE id IN (${legacyD.id}, ${legacyC1.id}, ${legacyC2.id}, ${rev.id}, ${corr.id})`) as unknown as { rows: Array<{ id: number; source_payroll_id: number | null }> };
+            const src = new Map(res.rows.map(r => [Number(r.id), r.source_payroll_id === null ? null : Number(r.source_payroll_id)]));
+            check(src.get(legacyD.id) === payD.id, `مهاجرت باید سند تنهای فیش D را پیوند دهد (دریافتی: ${src.get(legacyD.id)})`);
+            check(src.get(legacyC1.id) === null && src.get(legacyC2.id) === null, `مهاجرت نباید سندهای مبهم فیش C را پیوند دهد (${src.get(legacyC1.id)}, ${src.get(legacyC2.id)})`);
+            check(src.get(rev.id) === null && src.get(corr.id) === null, `مهاجرت نباید سند معکوس/اصلاحی را پیوند دهد (${src.get(rev.id)}, ${src.get(corr.id)})`);
+            throw new Error('rollback');
+          });
+        } catch (err) {
+          if (!(err instanceof Error && err.message === 'rollback')) throw err;
+        }
+      }
+
+      let deleteCError = '';
+      try {
+        await PieceworkService.deletePayroll(payC.id, { username: 'test-agent' });
+      } catch (err) {
+        deleteCError = err instanceof Error ? err.message : String(err);
+      }
+      check(!deleteCError, `ابطال فیش C نباید خطا دهد: ${deleteCError}`);
+      for (const lid of [legacyC1.id, legacyC2.id]) {
+        const row = await voucherRow(lid);
+        check(row?.isDeleted === 1, `ابطال فیش C باید سند قدیمی پیش‌نویس #${lid} را حذف کند`);
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_payroll_voucher_link_td_242', scenarioId: 'document_voucher_uniqueness', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: 'سند فیش با source_payroll_id و ایندکس یکتا؛ سند معکوس/اصلاحی هم‌شناسه در صدور، فهرست، جزئیات و ابطال فیش انتخاب نشد؛ سند قدیمی بدون پیوند مانع صدور دوباره شد و پرکردن مهاجرت فقط موارد بی‌ابهام را پیوند داد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_payroll_voucher_link_td_242', scenarioId: 'document_voucher_uniqueness', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (payrollIds.length > 0) {
+        const res = await orm.execute(sql`
+          WITH base AS (
+            SELECT id FROM journal_vouchers
+            WHERE reference_module = 'payroll' AND reference_id::text = ANY(${sql.param(payrollIds.map(String))}::text[])
+          )
+          SELECT id FROM base
+          UNION SELECT v.id FROM journal_vouchers v WHERE v.reference_id IN (SELECT id FROM base)`) as unknown as { rows: Array<{ id: number }> };
+        const voucherIds = res.rows.map(r => Number(r.id));
+        if (voucherIds.length > 0) {
+          await cleanTestTableData('journal_voucher_items', 'voucher_id', voucherIds);
+          await cleanTestTableData('journal_vouchers', 'id', voucherIds);
+        }
+        await cleanTestTableData('piecework_payrolls', 'id', payrollIds);
+      }
+      if (personnelId !== null) await cleanTestTableData('personnel', 'id', [personnelId]);
+    }
+  }
+
   return results;
 }

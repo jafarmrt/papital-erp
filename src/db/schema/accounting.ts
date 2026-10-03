@@ -43,6 +43,10 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // reference_id در اسناد معکوس/اصلاحی شناسه «سند حسابداری مبدأ» است، پس برای یافتن سند یک فاکتور فقط
   // از این ستون استفاده شود. ایندکس یکتای جزئی uq_jv_source_document_active (مهاجرت 0017).
   sourceDocumentId: integer('source_document_id').references(baseRelations.documentsId, { onDelete: 'set null' }),
+  // TD-242: فیش حقوقی‌ای که VoucherSync این سند حسابداری را برایش صادر کرده است (همان الگوی source_document_id)؛
+  // سند معکوس/اصلاحی فیش reference_id = شناسه «سند حسابداری مبدأ» دارد، پس سند یک فیش فقط از این ستون یافته شود.
+  // ایندکس یکتای جزئی uq_jv_source_payroll_active (مهاجرت 0035).
+  sourcePayrollId: integer('source_payroll_id').references(baseRelations.pieceworkPayrollsId, { onDelete: 'set null' }),
   currency: text('currency').default('IRR'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
@@ -55,6 +59,9 @@ export const journalVouchers = pgTable('journal_vouchers', {
   uq_jv_source_document_active: uniqueIndex('uq_jv_source_document_active')
     .on(table.sourceDocumentId)
     .where(sql`${table.isDeleted} = 0 AND ${table.sourceDocumentId} IS NOT NULL`),
+  uq_jv_source_payroll_active: uniqueIndex('uq_jv_source_payroll_active')
+    .on(table.sourcePayrollId)
+    .where(sql`${table.isDeleted} = 0 AND ${table.sourcePayrollId} IS NOT NULL`),
   idx_jv_reference: index('idx_jv_reference').on(table.referenceModule, table.referenceId),
   // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
   // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد

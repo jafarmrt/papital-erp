@@ -1,10 +1,11 @@
-import { eq, and, or, sql, inArray } from 'drizzle-orm';
+import { eq, and, or, sql, inArray, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
 import { NotFoundError, BadRequestError, ConflictError } from '../../errors/customErrors.js';
 import { normalizePersianDate } from '../../utils.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
+import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 
@@ -312,25 +313,41 @@ export class PieceworkPayrollService {
       }
 
       // Check linked voucher
-      const [linkedVoucher] = await tx
+      // TD-242: سند فیش فقط از پیوند صریح source_payroll_id (یا سند قدیمی بدون پیوند با الگوی دقیق VoucherSync)؛
+      // پیش‌تر (reference_module = 'payroll', reference_id = شناسه فیش) سند معکوس/اصلاحیِ سند فیش دیگری را — که
+      // reference_id آن شناسه «سند حسابداری مبدأ» است — برمی‌گرداند و ابطال فیش آن را معکوس یا حذف می‌کرد.
+      const voucherCandidates = await tx
         .select()
         .from(journalVouchers)
-        .where(
-          and(
-            eq(journalVouchers.referenceModule, 'payroll'),
-            eq(journalVouchers.referenceId, payrollId),
-            eq(journalVouchers.isDeleted, 0)
-          )
-        )
+        .where(payrollVouchersWhere(payrollId, pay.payrollNumber))
+        .orderBy(asc(journalVouchers.id))
         .for('update');
 
-      if (linkedVoucher && linkedVoucher.status === 'permanent') {
+      const linkedVouchers: typeof voucherCandidates = [];
+      for (const v of voucherCandidates) {
+        if (v.sourcePayrollId === payrollId) {
+          linkedVouchers.push(v);
+          continue;
+        }
+        if (!isLegacyPayrollVoucher(v, payrollId, pay.payrollNumber)) continue;
+        // سند قدیمی بدون پیوند که حسابدار قبلاً معکوسش کرده است دوباره معکوس نمی‌شود (همان رفتار TD-193 برای اسناد انبار)
+        const [alreadyReversed] = await tx.select({ id: journalVouchers.id }).from(journalVouchers)
+          .where(and(
+            eq(journalVouchers.referenceId, v.id),
+            eq(journalVouchers.referenceNumber, `REV-V${v.voucherNumber}`),
+            eq(journalVouchers.isDeleted, 0)
+          ));
+        if (!alreadyReversed) linkedVouchers.push(v);
+      }
+
+      const permanentVoucher = linkedVouchers.find(v => v.status === 'permanent');
+      if (permanentVoucher) {
         throw new BadRequestError(
-          `سند حسابداری شماره #${linkedVoucher.voucherNumber} قطعی شده است و امکان ابطال فیش حقوقی وجود ندارد.`
+          `سند حسابداری شماره #${permanentVoucher.voucherNumber} قطعی شده است و امکان ابطال فیش حقوقی وجود ندارد.`
         );
       }
 
-      if (linkedVoucher) {
+      for (const linkedVoucher of linkedVouchers) {
         if (linkedVoucher.status === 'approved') {
           // If approved, reverse the voucher formally
           await VoucherService.reverseVoucher({

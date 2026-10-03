@@ -1,6 +1,7 @@
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, pieceworkTasks, personnel, journalVouchers, treasuryTransactions, bankAccounts } from '../../db/schema.js';
+import { payrollVouchersForListWhere, payrollVouchersWhere, pickPayrollVoucher } from '../accounting/payrollVoucherLink.js';
 
 /**
  * خواندن فیش‌های حقوقی پرکیسی (فهرست، فیش‌های کاربر جاری، جزئیات فیش و سابقه پرداخت‌ها).
@@ -100,34 +101,37 @@ export class PayrollReadService {
     }
 
     // Attach linked journal voucher info
+    // TD-242: فقط اسناد فیش‌های همین فهرست، از پیوند صریح source_payroll_id (یا سند قدیمی بدون پیوند با الگوی دقیق
+    // VoucherSync)؛ سند معکوس/اصلاحی که reference_id آن شناسه «سند حسابداری مبدأ» است به فیش هم‌شناسه نسبت داده نمی‌شود.
     const payrollIds = rows.map(r => r.id);
-    let linkedVouchers: Array<{
-      id: number;
-      voucherNumber: number;
-      referenceId: number | null;
-      status: string | null;
-      date: string;
-    }> = [];
-    if (payrollIds.length > 0) {
-      linkedVouchers = await orm.select({
+    const linkedVouchers = payrollIds.length > 0
+      ? await orm.select({
         id: journalVouchers.id,
         voucherNumber: journalVouchers.voucherNumber,
-        referenceId: journalVouchers.referenceId,
         status: journalVouchers.status,
-        date: journalVouchers.date
+        date: journalVouchers.date,
+        sourcePayrollId: journalVouchers.sourcePayrollId,
+        referenceId: journalVouchers.referenceId,
+        referenceNumber: journalVouchers.referenceNumber,
+        voucherType: journalVouchers.voucherType,
       })
       .from(journalVouchers)
-      .where(and(
-        eq(journalVouchers.referenceModule, 'payroll'),
-        eq(journalVouchers.isDeleted, 0)
-      ));
-    }
+      .where(payrollVouchersForListWhere(payrollIds))
+      .orderBy(asc(journalVouchers.id))
+      : [];
 
-    const voucherMap = new Map<number, (typeof linkedVouchers)[number]>();
+    const candidatesByPayroll = new Map<number, typeof linkedVouchers>();
     for (const v of linkedVouchers) {
-      if (v.referenceId) {
-        voucherMap.set(Number(v.referenceId), v);
-      }
+      const payrollId = v.sourcePayrollId ?? v.referenceId;
+      if (payrollId === null) continue;
+      const list = candidatesByPayroll.get(payrollId) || [];
+      list.push(v);
+      candidatesByPayroll.set(payrollId, list);
+    }
+    const voucherMap = new Map<number, (typeof linkedVouchers)[number]>();
+    for (const r of rows) {
+      const picked = pickPayrollVoucher(candidatesByPayroll.get(r.id) || [], r.id, r.payrollNumber);
+      if (picked) voucherMap.set(r.id, picked);
     }
 
     return rows.map(r => ({ ...r, ...PayrollReadService.voucherLinkFields(voucherMap.get(r.id)) }));
@@ -207,20 +211,22 @@ export class PayrollReadService {
     .orderBy(pieceworkLogs.date);
 
     // Get linked journal voucher if available
-    const [linkedVoucher] = await orm.select({
+    // TD-242: سند فیش از پیوند صریح source_payroll_id (یا قدیمی‌ترین سند بدون پیوند با الگوی دقیق VoucherSync)
+    const voucherCandidates = await orm.select({
       id: journalVouchers.id,
       voucherNumber: journalVouchers.voucherNumber,
       status: journalVouchers.status,
       date: journalVouchers.date,
-      totalDebit: journalVouchers.totalDebit
+      totalDebit: journalVouchers.totalDebit,
+      sourcePayrollId: journalVouchers.sourcePayrollId,
+      referenceId: journalVouchers.referenceId,
+      referenceNumber: journalVouchers.referenceNumber,
+      voucherType: journalVouchers.voucherType,
     })
     .from(journalVouchers)
-    .where(and(
-      eq(journalVouchers.referenceModule, 'payroll'),
-      eq(journalVouchers.referenceId, id),
-      eq(journalVouchers.isDeleted, 0)
-    ))
-    .limit(1);
+    .where(payrollVouchersWhere(id, pay.payrollNumber))
+    .orderBy(asc(journalVouchers.id));
+    const linkedVoucher = pickPayrollVoucher(voucherCandidates, id, pay.payrollNumber);
 
     return { payroll: pay, items, voucherLink: PayrollReadService.voucherLinkFields(linkedVoucher) };
   }

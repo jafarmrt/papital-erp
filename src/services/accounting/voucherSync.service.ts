@@ -15,6 +15,7 @@ import { eq, and, inArray, isNull, gt, asc, notLike } from 'drizzle-orm';
 import { withAdvisoryLock, ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { VoucherService } from './voucher.service.js';
+import { payrollVouchersWhere, pickPayrollVoucher } from './payrollVoucherLink.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { logger } from '../../middleware/logger.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -1165,13 +1166,12 @@ export class VoucherSyncService {
       return null;
     }
 
-    const existing = await executor.select().from(journalVouchers)
-      .where(and(
-        eq(journalVouchers.referenceModule, 'payroll'),
-        eq(journalVouchers.referenceId, payrollId),
-        eq(journalVouchers.isDeleted, 0)
-      ));
-    if (existing.length > 0) return VoucherService.getJournalVoucherById(existing[0].id, tx);
+    // TD-242: سند فیش فقط از پیوند صریح source_payroll_id (یا سند قدیمی بدون پیوند با الگوی دقیق همین متد)؛
+    // سند معکوس/اصلاحی که reference_id آن شناسه «سند حسابداری مبدأ» است دیگر سند این فیش تلقی نمی‌شود.
+    const candidates = await executor.select().from(journalVouchers)
+      .where(payrollVouchersWhere(payrollId, pay.payrollNumber));
+    const existing = pickPayrollVoucher(candidates, payrollId, pay.payrollNumber);
+    if (existing) return VoucherService.getJournalVoucherById(existing.id, tx);
 
     const [pers] = await executor.select().from(personnel).where(eq(personnel.id, pay.personnelId));
 
@@ -1310,6 +1310,7 @@ export class VoucherSyncService {
       referenceModule: 'payroll',
       referenceId: pay.id,
       referenceNumber: pay.payrollNumber,
+      sourcePayrollId: pay.id,
       currency: 'IRR',
       userId,
       username,

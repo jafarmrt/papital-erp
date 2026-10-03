@@ -240,6 +240,8 @@ export class VoucherService {
     referenceNumber?: string;
     /** v7.0.31 (TD-193): فقط برای اسناد صادرشده توسط VoucherSync برای یک سند انبار/فاکتور */
     sourceDocumentId?: number | null;
+    /** TD-242: فقط برای سند صادرشده توسط VoucherSync برای یک فیش حقوقی */
+    sourcePayrollId?: number | null;
     currency?: string;
     attachments?: unknown[];
     userId?: number;
@@ -300,6 +302,7 @@ export class VoucherService {
         referenceId: data.referenceId || null,
         referenceNumber: data.referenceNumber?.trim() || '',
         sourceDocumentId: data.sourceDocumentId ?? null,
+        sourcePayrollId: data.sourcePayrollId ?? null,
         currency: data.currency || 'IRR',
         attachments: [],
         createdById: data.userId || null,
