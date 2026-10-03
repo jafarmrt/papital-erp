@@ -364,7 +364,7 @@ export async function runSeed(
   }
 
   // (v4.0.29) همگام‌سازی جدول changelogs حذف شد — dual-storage مذموم؛ منبع حقیقت
-  // یگانه، فایل‌های src/data/changelogs/*.ts هستند و releaseGate مستقیم می‌خواند.
+  // یگانه، فایل‌های src/data/changelogs/*.ts هستند.
 
   // 7. Task categories: No hardcoded defaults seeded as per user configuration (managed from scratch)
   logger.info('[Seeder] Task categories: skipped default seed (user defined from zero).');

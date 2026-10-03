@@ -1,7 +1,7 @@
 {
   "name": "workshop-erp-crm",
   "private": true,
-  "version": "7.0.106",
+  "version": "7.0.107",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -96,7 +96,6 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "typescript-eslint": "^8.71.0",
-    "vazirmatn": "^33.0.3",
     "vite": "^6.2.3",
     "vitest": "^3.2.7",
     "xlsx": "file:vendor/xlsx-0.20.3.tgz"

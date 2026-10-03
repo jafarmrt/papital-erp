@@ -8,7 +8,6 @@ import { IdempotencyService } from '../../services/idempotency.service.js';
 import { OutboxService } from '../../services/events/outboxService.js';
 import { FormDraftService } from '../../services/drafts/formDraft.service.js';
 import { InsufficientStockError, UnbalancedVoucherError, normalizeError } from '../../errors/customErrors.js';
-import { formatApiError } from '../../utils/errorTranslator.js';
 import { orm } from '../../db/drizzle.js';
 import { items, workflowInstances, workflowHistoryLogs, journalVouchers, journalVoucherItems, outboxEvents, accounts, documents, appSettings, warehouses, itemWarehouseStocks } from '../../db/schema.js';
 import { eq, or, and } from 'drizzle-orm';
@@ -1249,16 +1248,6 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       throw new Error(`کد خطای عدم موازنه سند نادرست است: ${normalizedVoucher.code}`);
     }
 
-    const formatted = formatApiError({
-      code: 'INSUFFICIENT_STOCK',
-      message: 'موجودی انبار مرکزی بابت کالا ۱۰۰۱ ناکافی است',
-      details: { itemId: 1001 }
-    });
-
-    if (!formatted.userFriendlyMessage.includes('موجودی انبار')) {
-      throw new Error('ترجمه خطای کلاینت بر اساس کد استاندارد ناموفق بود');
-    }
-
     results.push(makeTestCase({
       id: 'int_structured_error_contract',
       scenarioId: 'structured_error_contract',
@@ -1267,7 +1256,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t17Start,
-      details: 'ساختار یکپارچه خطاهای API شامل کدهای ثابت استاندارد (کدهای INSUFFICIENT_STOCK, ACCOUNTING_UNBALANCED) و ترجمه کلاینت تأیید گردید.'
+      details: 'ساختار یکپارچه خطاهای API شامل کدهای ثابت استاندارد (کدهای INSUFFICIENT_STOCK, ACCOUNTING_UNBALANCED) تأیید گردید.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({

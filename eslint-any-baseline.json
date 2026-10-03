@@ -256,6 +256,5 @@
   "src/types/auth.types.ts": 1,
   "src/types/inventory.types.ts": 1,
   "src/types/project.types.ts": 2,
-  "src/utils/dateUtils.ts": 4,
-  "src/utils/errorTranslator.ts": 2
+  "src/utils/dateUtils.ts": 4
 }
