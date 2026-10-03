@@ -8652,5 +8652,193 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // TD-246 (تصمیم «قید یکتا»): کد تکراری بین عناوین کاری فعال پرکیسی را برنامه با ConflictError فارسی و پایگاه‌داده
+  // با ایندکس uq_ptask_code_active (lower(btrim(code)) WHERE is_deleted = 0) رد می‌کنند؛ عنوان حذف‌شده حساب نمی‌شود؛
+  // مهاجرت 0037 روی داده تکراری ایندکس نمی‌سازد و بازرس سلامت مالی تکراری‌ها را فهرست می‌کند
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_piecework_task_code_unique_td_246', 'td246', 'piecework', 'task_code', 'unique')) {
+    const tStart = Date.now();
+    const testName = 'TD-246 Regression: کد عنوان کاری پرکیسی بین عناوین فعال یکتاست (ایجاد، ویرایش، بازیابی، ورود اکسل، مهاجرت و بازرس سلامت)';
+    const suffix = `${Date.now()}`;
+    const taskIds: number[] = [];
+    const { pieceworkTasks } = await import('../../db/schema.js');
+    try {
+      const { ConflictError } = await import('../../errors/customErrors.js');
+      const taskCodeMod: Partial<typeof import('../../services/piecework/taskCode.js')> = await import('../../services/piecework/taskCode.js');
+      const healthMod: Partial<typeof import('../../services/accounting/financialHealth.service.js')> = await import('../../services/accounting/financialHealth.service.js');
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const fs = await import('fs');
+      const path = await import('path');
+      const violations: string[] = [];
+      const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+      const title = (tag: string) => `ERP-TEST-MARKER عنوان آزمون TD-246 ${tag} ${suffix}`;
+      const code = (tag: string) => `T246-${tag}-${suffix}`;
+      const errText = (err: unknown) => err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err);
+      const indexDef = async (executor: { execute: typeof orm.execute } = orm): Promise<string | null> => {
+        const res = await executor.execute(sql`SELECT pg_get_indexdef(to_regclass('uq_ptask_code_active')) AS def`);
+        return ((res.rows?.[0] as { def?: string | null } | undefined)?.def) ?? null;
+      };
+      const activeWithKey = async (c: string) => (await orm.select({ id: pieceworkTasks.id }).from(pieceworkTasks)
+        .where(sql`${pieceworkTasks.isDeleted} = 0 AND lower(btrim(${pieceworkTasks.code})) = lower(btrim(${c}::text))`)).map(r => r.id);
+      const expectConflict = async (label: string, codeShown: string, fn: () => Promise<unknown>) => {
+        try {
+          const r = await fn();
+          const id = (r as { id?: number } | undefined)?.id;
+          if (typeof id === 'number') taskIds.push(id);
+          violations.push(`${label}: کد تکراری «${codeShown}» پذیرفته شد`);
+        } catch (err) {
+          if (!(err instanceof ConflictError)) violations.push(`${label}: باید ConflictError باشد (دریافتی ${errText(err)})`);
+          else if (!/[؀-ۿ]/.test(err.message) || !err.message.includes(codeShown.trim())) {
+            violations.push(`${label}: پیام خطا باید فارسی و شامل کد «${codeShown.trim()}» باشد (دریافتی: ${err.message})`);
+          }
+        }
+      };
+
+      // (الف) ایندکس یکتای جزئی پس از مهاجرت روی داده تمیز
+      const def = await indexDef();
+      check(def !== null, 'ایندکس uq_ptask_code_active پس از مهاجرت وجود ندارد');
+      if (def) check(/UNIQUE/i.test(def) && /lower\(btrim\(code\)\)/i.test(def) && /is_deleted = 0/i.test(def), `تعریف ایندکس نادرست است: ${def}`);
+
+      // (ب) کد دستی تکراری — عین کد، و فقط با تفاوت حروف بزرگ/کوچک و فاصله
+      const codeA = code('A');
+      const taskA = await PieceworkService.createTask({ code: codeA, title: title('A'), defaultRate: 1000, username: 'test-agent' });
+      taskIds.push(taskA.id);
+      await expectConflict('ایجاد با کد تکراری', codeA, () => PieceworkService.createTask({ code: codeA, title: title('A-تکرار'), defaultRate: 1000, username: 'test-agent' }));
+      const codeAVariant = `  ${codeA.toLowerCase()}  `;
+      await expectConflict('ایجاد با کد تکراری (حروف کوچک و فاصله)', codeAVariant, () => PieceworkService.createTask({ code: codeAVariant, title: title('A-حروف'), defaultRate: 1000, username: 'test-agent' }));
+      // قید پایگاه‌داده مستقل از برنامه (درج مستقیم)، و نگاشت 23505 آن به همان ConflictError فارسی
+      try {
+        const [raw] = await orm.insert(pieceworkTasks).values({ code: `${codeA.toLowerCase()} `, title: title('A-مستقیم'), defaultRate: money(0), isActive: 1, isDeleted: 0 })
+          .returning({ id: pieceworkTasks.id });
+        taskIds.push(raw.id);
+        violations.push('پایگاه‌داده درج مستقیم کد تکراری را پذیرفت');
+      } catch (err) {
+        const mapped = taskCodeMod.toPieceworkTaskCodeError?.(err, codeA);
+        check(mapped instanceof ConflictError && (mapped as Error).message.includes(codeA), `نقض ایندکس به ConflictError فارسی نگاشت نشد (${errText(mapped ?? err)})`);
+      }
+
+      // (ج) کد عنوان حذف‌شده دوباره قابل استفاده است؛ بازیابی عنوان حذف‌شده با کد گرفته‌شده رد می‌شود
+      const codeB = code('B');
+      const taskB = await PieceworkService.createTask({ code: codeB, title: title('B'), defaultRate: 1000, username: 'test-agent' });
+      taskIds.push(taskB.id);
+      await PieceworkService.deleteTask(taskB.id, { username: 'test-agent' });
+      try {
+        const taskB2 = await PieceworkService.createTask({ code: codeB, title: title('B-جدید'), defaultRate: 1000, username: 'test-agent' });
+        taskIds.push(taskB2.id);
+      } catch (err) {
+        violations.push(`کد عنوان حذف‌شده باید قابل استفاده باشد (دریافتی ${errText(err)})`);
+      }
+      await expectConflict('بازیابی عنوان حذف‌شده با کد گرفته‌شده', codeB, () => PieceworkService.restoreTask(taskB.id, { username: 'test-agent' }));
+      check((await activeWithKey(codeB)).length === 1, `پس از بازیابی رد‌شده باید یک عنوان فعال با کد ${codeB} باشد`);
+
+      // (د) ویرایش کد به کد گرفته‌شده رد می‌شود؛ ویرایش به کد آزاد ذخیره می‌شود
+      const taskC = await PieceworkService.createTask({ code: code('C'), title: title('C'), defaultRate: 1000, username: 'test-agent' });
+      taskIds.push(taskC.id);
+      await expectConflict('ویرایش به کد گرفته‌شده', codeA.toUpperCase(), () => PieceworkService.updateTask(taskC.id, { code: codeA.toUpperCase(), username: 'test-agent' }));
+      const [afterRejected] = await orm.select({ code: pieceworkTasks.code }).from(pieceworkTasks).where(eq(pieceworkTasks.id, taskC.id));
+      check(afterRejected?.code === code('C'), `کد عنوان پس از ویرایش رد‌شده نباید تغییر کند (دریافتی ${afterRejected?.code})`);
+      try {
+        await PieceworkService.updateTask(taskC.id, { code: code('C2'), username: 'test-agent' });
+        const [afterFree] = await orm.select({ code: pieceworkTasks.code }).from(pieceworkTasks).where(eq(pieceworkTasks.id, taskC.id));
+        check(afterFree?.code === code('C2'), `ویرایش به کد آزاد ذخیره نشد (دریافتی ${afterFree?.code})`);
+      } catch (err) {
+        violations.push(`ویرایش به کد آزاد نباید خطا بدهد (دریافتی ${errText(err)})`);
+      }
+
+      // (ه) ورود اکسل به شیوه append: کد موجود یا تکرار کد در همان فایل کل فایل را رد می‌کند و هیچ ردیفی درج نمی‌شود
+      const countByTitle = async (titles: string[]) => (await orm.select({ id: pieceworkTasks.id }).from(pieceworkTasks)
+        .where(inArray(pieceworkTasks.title, titles))).length;
+      const appendTitles = [title('اکسل-افزودن-۱'), title('اکسل-افزودن-۲')];
+      await expectConflict('ورود اکسل append با کد موجود', ` ${codeA.toLowerCase()}`, () => PieceworkService.importTasksFromExcel({
+        rows: [{ title: appendTitles[0], code: code('D') }, { title: appendTitles[1], code: ` ${codeA.toLowerCase()}` }],
+        mode: 'append', username: 'test-agent'
+      }));
+      check(await countByTitle(appendTitles) === 0, 'ورود اکسل رد‌شده نباید هیچ ردیفی درج کند');
+      const inFileTitles = [title('اکسل-درون-فایل-۱'), title('اکسل-درون-فایل-۲')];
+      await expectConflict('ورود اکسل append با کد تکراری درون فایل', code('E').toLowerCase(), () => PieceworkService.importTasksFromExcel({
+        rows: [{ title: inFileTitles[0], code: code('E') }, { title: inFileTitles[1], code: code('E').toLowerCase() }],
+        mode: 'append', username: 'test-agent'
+      }));
+      check(await countByTitle(inFileTitles) === 0, 'ورود اکسل با کد تکراری درون فایل نباید هیچ ردیفی درج کند');
+      // upsert: ردیف دوم با همان کد همان عنوان را به‌روز می‌کند، عنوان دوم ساخته نمی‌شود
+      const upsertTitles = [title('اکسل-upsert-۱'), title('اکسل-upsert-۲')];
+      const upsert = await PieceworkService.importTasksFromExcel({
+        rows: [{ title: upsertTitles[0], code: code('F') }, { title: upsertTitles[1], code: ` ${code('F').toLowerCase()} ` }],
+        mode: 'upsert', username: 'test-agent'
+      });
+      const fIds = await activeWithKey(code('F'));
+      taskIds.push(...fIds);
+      check(upsert.createdCount === 1 && upsert.updatedCount === 1 && fIds.length === 1,
+        `ورود upsert با کد تکراری درون فایل باید یک عنوان بسازد و همان را به‌روز کند (ساخته ${upsert.createdCount}، به‌روز ${upsert.updatedCount}، فعال ${fIds.length})`);
+
+      // (و) بازرس سلامت مالی: روی داده تمیز سالم
+      const report = await FinancialHealthService.runHealthCheck();
+      const entry = report.tests.find((t) => t.id === 'piecework_task_code_uniqueness');
+      if (!entry) violations.push('بازرس سلامت مالی آزمون یکتایی کد عناوین کاری ندارد');
+      else check(entry.status === 'healthy' && entry.count === 0, `آزمون سلامت روی داده بدون تکرار باید سالم باشد (وضعیت ${entry.status}، تعداد ${entry.count})`);
+
+      // (ز) داده قدیمی بدون ایندکس (تراکنش برگشت‌خورده): تکراری‌ها گزارش می‌شوند و مهاجرت 0037 ایندکس نمی‌سازد؛
+      // پس از رفع تکرار مهاجرت ایندکس را می‌سازد. طرح پایگاه‌داده پس از برگشت دست‌نخورده می‌ماند.
+      const migrationPath = path.join(process.cwd(), 'drizzle', '0037_piecework_task_code_unique.sql');
+      const { findDuplicatePieceworkTaskCodes } = taskCodeMod;
+      const { buildPieceworkTaskCodeHealthTest } = healthMod;
+      if (!fs.existsSync(migrationPath)) violations.push('مهاجرت 0037_piecework_task_code_unique.sql وجود ندارد');
+      else if (typeof findDuplicatePieceworkTaskCodes !== 'function' || typeof buildPieceworkTaskCodeHealthTest !== 'function') {
+        violations.push('یابنده کدهای تکراری یا آزمون سلامت یکتایی کد عناوین کاری تعریف نشده است');
+      } else {
+        try {
+          await orm.transaction(async (tx) => {
+            await tx.execute(sql.raw('DROP INDEX IF EXISTS uq_ptask_code_active'));
+            const dupCode = code('G');
+            const inserted = await tx.insert(pieceworkTasks).values([
+              { code: dupCode, title: title('G-1'), defaultRate: money(0), isActive: 1, isDeleted: 0 },
+              { code: ` ${dupCode.toLowerCase()}`, title: title('G-2'), defaultRate: money(0), isActive: 1, isDeleted: 0 },
+              { code: dupCode, title: title('G-حذف‌شده'), defaultRate: money(0), isActive: 1, isDeleted: 1 },
+            ]).returning({ id: pieceworkTasks.id });
+            const activeIds = inserted.slice(0, 2).map(r => r.id).sort((a, b) => a - b);
+            const reported = (await findDuplicatePieceworkTaskCodes(tx)).filter(r => r.code.trim().toLowerCase() === dupCode.toLowerCase());
+            check(JSON.stringify(reported.map(r => r.id).sort((a, b) => a - b)) === JSON.stringify(activeIds),
+              `یابنده تکراری باید فقط دو عنوان فعال ${activeIds.join(',')} را بدهد (دریافتی ${reported.map(r => r.id).join(',')})`);
+            const healthEntry = buildPieceworkTaskCodeHealthTest(await findDuplicatePieceworkTaskCodes(tx), (await indexDef(tx)) !== null);
+            check(healthEntry.status !== 'healthy' && healthEntry.count >= 1 && activeIds.every(id => healthEntry.items?.some(it => it.id === id)),
+              `آزمون سلامت باید کد تکراری را با هر دو عنوان گزارش کند (وضعیت ${healthEntry.status}، تعداد ${healthEntry.count})`);
+            const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+            await tx.execute(sql.raw(migrationSql));
+            check((await indexDef(tx)) === null, 'مهاجرت 0037 روی داده دارای کد تکراری ایندکس یکتا ساخت');
+            await tx.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.id, activeIds[1]));
+            await tx.execute(sql.raw(migrationSql));
+            check((await indexDef(tx)) !== null, 'مهاجرت 0037 پس از رفع تکرار ایندکس یکتا را نساخت');
+            throw new Error('rollback');
+          });
+        } catch (err) {
+          if (!(err instanceof Error && err.message === 'rollback')) throw err;
+        }
+        check((await indexDef()) !== null, 'ایندکس یکتا پس از برگشت تراکنش آزمون از بین رفت');
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_piecework_task_code_unique_td_246', scenarioId: 'v10_next_code_concurrent_unique', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: 'کد تکراری (عین کد، حروف/فاصله، درج مستقیم، ویرایش، بازیابی، اکسل append) رد شد؛ کد عنوان حذف‌شده دوباره استفاده شد؛ مهاجرت 0037 روی داده تکراری ایندکس نساخت و بازرس سلامت تکراری‌ها را گزارش کرد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_piecework_task_code_unique_td_246', scenarioId: 'v10_next_code_concurrent_unique', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      const marked = await orm.select({ id: pieceworkTasks.id }).from(pieceworkTasks)
+        .where(sql`position(${`TD-246`} in ${pieceworkTasks.title}) > 0 AND position(${suffix} in ${pieceworkTasks.title}) > 0`);
+      const ids = Array.from(new Set([...taskIds, ...marked.map(r => r.id)]));
+      if (ids.length > 0) {
+        await cleanTestTableData('piecework_task_rate_history', 'task_id', ids);
+        await cleanTestTableData('piecework_tasks', 'id', ids);
+      }
+    }
+  }
+
   return results;
 }

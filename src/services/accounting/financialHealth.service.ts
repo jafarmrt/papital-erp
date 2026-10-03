@@ -3,6 +3,12 @@ import { sql, asc, and, eq, or, like } from 'drizzle-orm';
 import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
+import {
+  findDuplicatePieceworkTaskCodes,
+  hasPieceworkTaskCodeUniqueIndex,
+  pieceworkTaskCodeKey,
+  type DuplicatePieceworkTaskCodeRow,
+} from '../piecework/taskCode.js';
 import type {
   FinancialHealthReport,
   HealthCheckTestResult,
@@ -10,6 +16,48 @@ import type {
   HealthCheckStatus,
 } from '../../types.js';
 import { jalaliToIsoDate, toEnglishDigits, formatPersianPrice } from '../../utils.js';
+
+/**
+ * TD-246 (تصمیم «قید یکتا»): آزمون یکتایی کد عناوین کاری فعال پرکیسی. مهاجرت 0037 ایندکس یکتا را روی داده دارای
+ * کد تکراری نمی‌سازد و کدها خودکار عوض نمی‌شوند؛ این آزمون کدهای تکراری را با شناسه عناوین فهرست می‌کند.
+ */
+export function buildPieceworkTaskCodeHealthTest(
+  duplicates: DuplicatePieceworkTaskCodeRow[],
+  uniqueIndexPresent: boolean
+): HealthCheckTestResult {
+  const idsByKey = new Map<string, number[]>();
+  for (const r of duplicates) {
+    const key = pieceworkTaskCodeKey(r.code);
+    idsByKey.set(key, [...(idsByKey.get(key) ?? []), r.id]);
+  }
+  const duplicateCodeCount = idsByKey.size;
+  const penalty = Math.min(10, duplicateCodeCount * 2);
+  return {
+    id: 'piecework_task_code_uniqueness',
+    category: 'system',
+    title: 'یکتایی کد عناوین کاری پرکیسی',
+    description: 'دو عنوان کاری فعال نباید کد یکسان داشته باشند (بدون توجه به حروف بزرگ/کوچک و فاصله)؛ پایگاه‌داده با ایندکس یکتا از کد تکراری جلوگیری می‌کند',
+    status: duplicateCodeCount > 0 || !uniqueIndexPresent ? 'warning' : 'healthy',
+    scoreImpact: -penalty,
+    count: duplicateCodeCount,
+    message: duplicateCodeCount > 0
+      ? `${duplicateCodeCount} کد بین بیش از یک عنوان کاری فعال مشترک است و قید یکتایی کد در پایگاه‌داده اعمال نشده است؛ کدها خودکار تغییر داده نمی‌شوند و باید یکی از عناوین هم‌کد ویرایش یا حذف شود.`
+      : (uniqueIndexPresent
+        ? 'کد تکراری بین عناوین کاری فعال وجود ندارد و پایگاه‌داده از ثبت کد تکراری جلوگیری می‌کند.'
+        : 'کد تکراری بین عناوین کاری فعال وجود ندارد اما قید یکتایی کد در پایگاه‌داده اعمال نشده است.'),
+    items: duplicates.map((r) => {
+      const ids = idsByKey.get(pieceworkTaskCodeKey(r.code)) ?? [r.id];
+      return {
+        id: r.id,
+        code: r.code,
+        title: r.title,
+        subtitle: `عنوان کاری #${r.id} | دسته: ${r.category || '—'} | ${r.isActive === 0 ? 'غیرفعال' : 'فعال'}`,
+        details: `عناوین هم‌کد: ${ids.map((id) => `#${id}`).join('، ')} (TD-246).`,
+      };
+    }),
+    metrics: { duplicateCodes: duplicateCodeCount, duplicateTaskRows: duplicates.length, uniqueIndexPresent: uniqueIndexPresent ? 1 : 0 },
+  };
+}
 
 export class FinancialHealthService {
   /**
@@ -909,6 +957,14 @@ export class FinancialHealthService {
       })),
       metrics: { duplicateNumbers: duplicateNumberCount, duplicateVoucherRows: duplicateNumbers.length, uniqueIndexPresent: uniqueIndexPresent ? 1 : 0 },
     });
+
+    // =========================================================================
+    // آزمون ۱۲: TD-246 یکتایی کد عناوین کاری فعال پرکیسی (مهاجرت 0037)
+    // =========================================================================
+    const [duplicateTaskCodes, taskCodeIndexPresent] = await Promise.all([findDuplicatePieceworkTaskCodes(), hasPieceworkTaskCodeUniqueIndex()]);
+    const taskCodeTest = buildPieceworkTaskCodeHealthTest(duplicateTaskCodes, taskCodeIndexPresent);
+    overallScore += taskCodeTest.scoreImpact;
+    tests.push(taskCodeTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

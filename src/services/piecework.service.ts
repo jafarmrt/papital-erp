@@ -1,10 +1,18 @@
 import { eq, and, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, taskCategories } from '../db/schema.js';
-import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
+import { NotFoundError, BadRequestError, ConflictError } from '../errors/customErrors.js';
 import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
-import { allocatePieceworkTaskCode, loadTakenPieceworkTaskNumbers, markPieceworkTaskCodeTaken } from './piecework/taskCode.js';
+import {
+  allocatePieceworkTaskCode,
+  assertPieceworkTaskCodeAvailable,
+  loadTakenPieceworkTaskNumbers,
+  markPieceworkTaskCodeTaken,
+  pieceworkTaskCodeConflictError,
+  pieceworkTaskCodeKey,
+  toPieceworkTaskCodeError,
+} from './piecework/taskCode.js';
 import { money, moneyOr } from '../lib/money.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../lib/financialDecimal.js';
 
@@ -25,6 +33,8 @@ export interface CreatePieceworkTaskInput {
 }
 
 export interface UpdatePieceworkTaskInput {
+  /** TD-246: کد جدید؛ خالی یا undefined یعنی کد فعلی بماند */
+  code?: string;
   title?: string;
   category?: string;
   defaultRate?: number | string;
@@ -68,7 +78,8 @@ export class PieceworkService {
   ) {
     try {
       const today = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-      await executor.insert(pieceworkTaskRateHistory).values({
+      // savepoint: خطای این درج تراکنش فراخواننده (مثلاً ورود اکسل یکجا، TD-246) را از کار نمی‌اندازد
+      await executor.transaction(async (sp) => sp.insert(pieceworkTaskRateHistory).values({
         taskId: data.taskId,
         taskCode: data.taskCode || '',
         taskTitle: data.taskTitle || '',
@@ -79,7 +90,7 @@ export class PieceworkService {
         changedByUserId: data.userId || null,
         changedByUsername: data.username || 'سیستم',
         effectiveDate: today,
-      });
+      }));
     } catch {
       // Safe fallback
     }
@@ -96,18 +107,26 @@ export class PieceworkService {
     if (!taskCode) {
       // TD-243: توالی اتمیک به‌جای COUNT(*)+1؛ شماره‌ای که کد موجودی دارد رد می‌شود
       taskCode = await allocatePieceworkTaskCode(executor);
+    } else {
+      // TD-246: کد دستی تکراری بین عناوین فعال پذیرفته نمی‌شود (ایندکس uq_ptask_code_active پشتیبان رقابت هم‌زمان است)
+      await assertPieceworkTaskCodeAvailable(executor, taskCode);
     }
 
-    const [newTask] = await executor.insert(pieceworkTasks).values({
-      code: taskCode,
-      title: input.title.trim(),
-      category: input.category ? String(input.category).trim() : 'سایر',
-      defaultRate: moneyOr(input.defaultRate, 0),
-      unit: input.unit ? String(input.unit).trim() : 'عدد',
-      description: input.description ? String(input.description).trim() : '',
-      isActive: 1,
-      isDeleted: 0
-    }).returning();
+    let newTask: typeof pieceworkTasks.$inferSelect;
+    try {
+      [newTask] = await executor.insert(pieceworkTasks).values({
+        code: taskCode,
+        title: input.title.trim(),
+        category: input.category ? String(input.category).trim() : 'سایر',
+        defaultRate: moneyOr(input.defaultRate, 0),
+        unit: input.unit ? String(input.unit).trim() : 'عدد',
+        description: input.description ? String(input.description).trim() : '',
+        isActive: 1,
+        isDeleted: 0
+      }).returning();
+    } catch (err) {
+      throw toPieceworkTaskCodeError(err, taskCode);
+    }
 
     await PieceworkService.recordTaskRateHistory({
       taskId: newTask.id,
@@ -140,20 +159,30 @@ export class PieceworkService {
     const oldRate = moneyOr(existing.defaultRate, 0);
     const newRate = input.defaultRate !== undefined ? money(input.defaultRate) : oldRate;
     const newTitle = input.title !== undefined ? String(input.title).trim() : existing.title;
+    const requestedCode = input.code !== undefined ? String(input.code).trim() : '';
+    const newCode = requestedCode || existing.code;
+    // TD-246: تغییر کد به کدی که عنوان فعال دیگری دارد رد می‌شود
+    if (newCode !== existing.code) await assertPieceworkTaskCodeAvailable(executor, newCode, id);
 
-    const [current] = await executor.update(pieceworkTasks).set({
-      title: newTitle,
-      category: input.category !== undefined ? String(input.category).trim() : existing.category,
-      defaultRate: newRate,
-      unit: input.unit !== undefined ? String(input.unit).trim() : existing.unit,
-      description: input.description !== undefined ? String(input.description).trim() : existing.description,
-      isActive: input.isActive !== undefined ? (input.isActive ? 1 : 0) : existing.isActive
-    }).where(eq(pieceworkTasks.id, id)).returning();
+    let current: typeof pieceworkTasks.$inferSelect | undefined;
+    try {
+      [current] = await executor.update(pieceworkTasks).set({
+        code: newCode,
+        title: newTitle,
+        category: input.category !== undefined ? String(input.category).trim() : existing.category,
+        defaultRate: newRate,
+        unit: input.unit !== undefined ? String(input.unit).trim() : existing.unit,
+        description: input.description !== undefined ? String(input.description).trim() : existing.description,
+        isActive: input.isActive !== undefined ? (input.isActive ? 1 : 0) : existing.isActive
+      }).where(eq(pieceworkTasks.id, id)).returning();
+    } catch (err) {
+      throw toPieceworkTaskCodeError(err, newCode);
+    }
 
     if (!oldRate.equals(newRate)) {
       await PieceworkService.recordTaskRateHistory({
         taskId: id,
-        taskCode: existing.code,
+        taskCode: newCode,
         taskTitle: newTitle,
         oldRate,
         newRate,
@@ -165,7 +194,7 @@ export class PieceworkService {
     } else if (existing.title !== newTitle) {
       await PieceworkService.recordTaskRateHistory({
         taskId: id,
-        taskCode: existing.code,
+        taskCode: newCode,
         taskTitle: newTitle,
         oldRate,
         newRate,
@@ -176,7 +205,7 @@ export class PieceworkService {
       }, executor);
     }
 
-    return { previous: existing, current: current || { ...existing, defaultRate: newRate, title: newTitle } };
+    return { previous: existing, current: current || { ...existing, code: newCode, defaultRate: newRate, title: newTitle } };
   }
 
   /**
@@ -291,12 +320,36 @@ export class PieceworkService {
       throw new BadRequestError('لیست ردیف‌های واردات اکسل خالی است');
     }
 
+    // TD-246: ورود اکسل یکجاست؛ ردیفی که کد تکراری دارد کل فایل را رد می‌کند و هیچ ردیفی ثبت نمی‌شود
+    // (روی تراکنش فراخواننده، savepoint)
+    return await executor.transaction(async (tx) => PieceworkService.importTaskRows(rows, mode, userId, username, tx));
+  }
+
+  /**
+   * بدنه ورود اکسل (درون تراکنش). کلید کد همان lower(btrim(code)) ایندکس uq_ptask_code_active است.
+   * - upsert / replace: ردیفی که کدش (یا در نبود کد، عنوانش) با عنوان فعال یا ردیف قبلی همین فایل یکی است،
+   *   همان عنوان را به‌روز می‌کند؛ کد عنوان عوض نمی‌شود.
+   * - append: ردیفی که کدش مال عنوان فعال یا ردیف قبلی همین فایل است با ConflictError رد می‌شود (نه درج تکراری)؛
+   *   ردیف بدون کد مانند قبل عنوان جدید با کد خودکار می‌سازد.
+   */
+  private static async importTaskRows(
+    rows: Array<Record<string, unknown>>,
+    mode: 'upsert' | 'replace' | 'append',
+    userId: number | undefined,
+    username: string | undefined,
+    executor: DbExecutor
+  ): Promise<{
+    createdCount: number;
+    updatedCount: number;
+    totalProcessed: number;
+  }> {
     if (mode === 'replace') {
       await executor.update(pieceworkTasks).set({ isDeleted: 1 }).where(eq(pieceworkTasks.isDeleted, 0));
     }
 
     const existingTasks = await executor.select().from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0));
-    const taskByCode = new Map(existingTasks.map(t => [t.code?.trim().toLowerCase(), t]));
+    const taskByCode = new Map(existingTasks.map(t => [pieceworkTaskCodeKey(t.code), t]));
+    const codesCreatedInFile = new Set<string>();
     const taskByTitle = new Map(existingTasks.map(t => [t.title?.trim().toLowerCase(), t]));
 
     let createdCount = 0;
@@ -321,7 +374,13 @@ export class PieceworkService {
         addedCategories.add(category);
       }
 
-      const existing = (code && taskByCode.get(code.toLowerCase())) || taskByTitle.get(title.toLowerCase());
+      const codeOwner = code ? taskByCode.get(pieceworkTaskCodeKey(code)) : undefined;
+      if (codeOwner && mode === 'append') {
+        const where = codesCreatedInFile.has(pieceworkTaskCodeKey(code)) ? ' (در ردیف دیگری از همین فایل)' : '';
+        const base = pieceworkTaskCodeConflictError(code, codeOwner.title);
+        throw new ConflictError(`ردیف ${i + 1} فایل اکسل${where}: ${base.message} هیچ ردیفی ثبت نشد.`, { code, row: i + 1 });
+      }
+      const existing = codeOwner || taskByTitle.get(title.toLowerCase());
 
       if (existing && mode !== 'append') {
         const oldRate = Number(existing.defaultRate) || 0;
@@ -355,19 +414,25 @@ export class PieceworkService {
           takenCodeNumbers ??= await loadTakenPieceworkTaskNumbers(executor);
           code = await allocatePieceworkTaskCode(executor, takenCodeNumbers);
         }
-        const [inserted] = await executor.insert(pieceworkTasks).values({
-          code,
-          title,
-          category,
-          defaultRate: money(defaultRate),
-          unit,
-          description,
-          isActive: 1,
-          isDeleted: 0
-        }).returning();
+        let inserted: typeof pieceworkTasks.$inferSelect;
+        try {
+          [inserted] = await executor.insert(pieceworkTasks).values({
+            code,
+            title,
+            category,
+            defaultRate: money(defaultRate),
+            unit,
+            description,
+            isActive: 1,
+            isDeleted: 0
+          }).returning();
+        } catch (err) {
+          throw toPieceworkTaskCodeError(err, code);
+        }
         createdCount++;
         if (takenCodeNumbers) markPieceworkTaskCodeTaken(takenCodeNumbers, code);
-        if (code) taskByCode.set(code.toLowerCase(), inserted);
+        taskByCode.set(pieceworkTaskCodeKey(code), inserted);
+        codesCreatedInFile.add(pieceworkTaskCodeKey(code));
         taskByTitle.set(title.toLowerCase(), inserted);
 
         await PieceworkService.recordTaskRateHistory({
@@ -442,7 +507,13 @@ export class PieceworkService {
       throw new NotFoundError('عنوان کاری یافت نشد');
     }
 
-    await executor.update(pieceworkTasks).set({ isDeleted: 0, isActive: 1 }).where(eq(pieceworkTasks.id, id));
+    // TD-246: عنوان حذف‌شده‌ای که کدش اکنون مال عنوان فعال دیگری است بازیابی نمی‌شود
+    await assertPieceworkTaskCodeAvailable(executor, existing.code, id);
+    try {
+      await executor.update(pieceworkTasks).set({ isDeleted: 0, isActive: 1 }).where(eq(pieceworkTasks.id, id));
+    } catch (err) {
+      throw toPieceworkTaskCodeError(err, existing.code);
+    }
 
     await PieceworkService.recordTaskRateHistory({
       taskId: id,

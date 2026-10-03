@@ -67,6 +67,8 @@ export const pieceworkTasks = pgTable('piecework_tasks', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
 }, (table) => ({
+  // TD-246: ایندکس یکتای جزئی uq_ptask_code_active روی lower(btrim(code)) برای عناوین فعال را مهاجرت 0037 فقط روی داده
+  // بدون کد تکراری می‌سازد (src/services/piecework/taskCode.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ساخته نشد
   idx_ptask_code: index('idx_ptask_code').on(table.code),
   idx_ptask_cat: index('idx_ptask_cat').on(table.category),
   idx_ptask_deleted: index('idx_ptask_deleted').on(table.isDeleted),

@@ -1,5 +1,5 @@
-import { sql } from 'drizzle-orm';
-import type { DbExecutor } from '../../db/drizzle.js';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkTasks } from '../../db/schema.js';
 import { ConflictError } from '../../errors/customErrors.js';
 
@@ -62,4 +62,88 @@ export async function allocatePieceworkTaskCode(executor: DbExecutor, taken?: Se
     }
   }
   throw new ConflictError(`پس از ${MAX_SKIPS} تلاش کد خودکار آزاد برای عنوان کاری پیدا نشد؛ کد را دستی وارد کنید.`);
+}
+
+/**
+ * یکتایی کد عناوین کاری فعال (TD-246، تصمیم مالک محصول «قید یکتا»): دو عنوان کاری فعال (is_deleted = 0) هم‌کد
+ * نمی‌شوند؛ عنوان حذف‌شده حساب نمی‌شود. کلید یکتایی `lower(btrim(code))` است (کدی که فقط در حروف بزرگ/کوچک یا
+ * فاصله ابتدا و انتها فرق دارد همان کد است). مهاجرت 0037 ایندکس یکتای جزئی uq_ptask_code_active را فقط روی داده
+ * بدون کد تکراری می‌سازد (کد عناوین قدیمی هرگز خودکار عوض نمی‌شود) و بازرس سلامت مالی تکراری‌ها را فهرست می‌کند.
+ * کد خودکار (allocatePieceworkTaskCode) سخت‌گیرانه‌تر است: شماره هر کد PW-<رقم> فعال یا حذف‌شده را رد می‌کند.
+ */
+export const PIECEWORK_TASK_CODE_UNIQUE_INDEX = 'uq_ptask_code_active';
+
+/** همان کلید ایندکس uq_ptask_code_active، برای مقایسه در حافظه (ورود اکسل) */
+export function pieceworkTaskCodeKey(code: string | null | undefined): string {
+  return String(code ?? '').trim().toLowerCase();
+}
+
+export function pieceworkTaskCodeConflictError(code: string, existingTitle?: string | null): ConflictError {
+  const owner = existingTitle ? ` برای عنوان کاری فعال «${existingTitle}»` : ' برای عنوان کاری فعال دیگری';
+  return new ConflictError(`کد عنوان کاری «${String(code).trim()}» قبلاً${owner} ثبت شده است؛ کد دیگری وارد کنید.`, { code: String(code).trim() });
+}
+
+/**
+ * اگر عنوان کاری فعال دیگری (جز excludeId) همین کد را داشته باشد ConflictError می‌دهد. مقایسه با همان عبارت
+ * ایندکس (lower(btrim(code))) در پایگاه‌داده انجام می‌شود تا بررسی برنامه و قید پایگاه‌داده یکسان باشند.
+ */
+export async function assertPieceworkTaskCodeAvailable(executor: DbExecutor, code: string, excludeId?: number): Promise<void> {
+  const conditions = [
+    sql`${pieceworkTasks.isDeleted} = 0`,
+    sql`lower(btrim(${pieceworkTasks.code})) = lower(btrim(${String(code)}::text))`,
+  ];
+  if (excludeId !== undefined) conditions.push(sql`${pieceworkTasks.id} <> ${excludeId}`);
+  const [taken] = await executor.select({ id: pieceworkTasks.id, title: pieceworkTasks.title })
+    .from(pieceworkTasks)
+    .where(sql.join(conditions, sql` AND `))
+    .orderBy(asc(pieceworkTasks.id))
+    .limit(1);
+  if (taken) throw pieceworkTaskCodeConflictError(code, taken.title);
+}
+
+/** خطای 23505 روی ایندکس uq_ptask_code_active (Drizzle خطای pg را در `cause` می‌پیچد) */
+export function isPieceworkTaskCodeUniqueViolation(err: unknown): boolean {
+  for (let e: unknown = err, depth = 0; e && typeof e === 'object' && depth < 3; e = (e as { cause?: unknown }).cause, depth++) {
+    const pg = e as { code?: unknown; constraint?: unknown };
+    if (pg.code === '23505' && pg.constraint === PIECEWORK_TASK_CODE_UNIQUE_INDEX) return true;
+  }
+  return false;
+}
+
+/** پنجره رقابتی بین بررسی و درج: نقض ایندکس به همان پیام فارسی تبدیل می‌شود؛ هر خطای دیگر دست‌نخورده برمی‌گردد */
+export function toPieceworkTaskCodeError(err: unknown, code: string): unknown {
+  return isPieceworkTaskCodeUniqueViolation(err) ? pieceworkTaskCodeConflictError(code) : err;
+}
+
+export interface DuplicatePieceworkTaskCodeRow {
+  id: number;
+  code: string;
+  title: string;
+  category: string | null;
+  isActive: number | null;
+}
+
+/** همه عناوین کاری فعالی که کدشان (با کلید lower(btrim)) با عنوان فعال دیگری یکی است، به ترتیب کد و شناسه */
+export async function findDuplicatePieceworkTaskCodes(executor: DbExecutor = orm): Promise<DuplicatePieceworkTaskCodeRow[]> {
+  const key = sql`lower(btrim(${pieceworkTasks.code}))`;
+  const duplicated = executor.select({ k: sql<string>`${key}`.as('k') })
+    .from(pieceworkTasks)
+    .where(eq(pieceworkTasks.isDeleted, 0))
+    .groupBy(key)
+    .having(sql`COUNT(*) > 1`);
+  return await executor.select({
+    id: pieceworkTasks.id,
+    code: pieceworkTasks.code,
+    title: pieceworkTasks.title,
+    category: pieceworkTasks.category,
+    isActive: pieceworkTasks.isActive,
+  })
+    .from(pieceworkTasks)
+    .where(and(eq(pieceworkTasks.isDeleted, 0), inArray(key, duplicated)))
+    .orderBy(asc(key), asc(pieceworkTasks.id));
+}
+
+export async function hasPieceworkTaskCodeUniqueIndex(executor: DbExecutor = orm): Promise<boolean> {
+  const res = await executor.execute(sql`SELECT to_regclass(${PIECEWORK_TASK_CODE_UNIQUE_INDEX}) IS NOT NULL AS present`);
+  return Boolean((res.rows?.[0] as { present?: boolean } | undefined)?.present);
 }

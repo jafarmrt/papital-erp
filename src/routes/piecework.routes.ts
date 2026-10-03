@@ -29,6 +29,8 @@ const createPieceworkTaskSchema = z.object({
 
 const updatePieceworkTaskSchema = z.object({
   body: z.object({
+    // TD-246: کد جدید (خالی = کد فعلی بماند)؛ کد عنوان فعال دیگر با خطای ۴۰۹ رد می‌شود
+    code: z.string().optional(),
     title: z.string().min(1, 'عنوان کاری پرکیسی الزامی است').optional(),
     category: z.string().optional(),
     defaultRate: z.union([z.number(), z.string()]).optional(),
@@ -285,9 +287,10 @@ router.post(['/piecework/tasks/clear-defaults', '/piecework/tasks/clear-all'], a
 router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), validate(updatePieceworkTaskSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { title, category, defaultRate, unit, description, isActive } = req.body;
+    const { code, title, category, defaultRate, unit, description, isActive } = req.body;
 
-    const { previous: existing } = await PieceworkService.updateTask(id, {
+    const { previous: existing, current } = await PieceworkService.updateTask(id, {
+      code,
       title,
       category,
       defaultRate,
@@ -305,7 +308,7 @@ router.put('/piecework/tasks/:id', authorize('personnel.manage', 'admin'), valid
       action: 'UPDATE',
       entity: 'عنوان پرکیسی',
       entityId: id,
-      description: `ویرایش عنوان کاری پرکیسی «${existing.title}»`
+      description: `ویرایش عنوان کاری پرکیسی «${existing.title}»${current.code !== existing.code ? ` (کد «${existing.code}» به «${current.code}»)` : ''}`
     });
 
     res.json({ status: 'ok', message: 'عنوان کاری با موفقیت به‌روزرسانی شد' });
