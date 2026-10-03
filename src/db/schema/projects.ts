@@ -101,3 +101,19 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   idx_bom_alloc_status: index('idx_bom_alloc_status').on(table.status),
   idx_bom_alloc_src_tx: index('idx_bom_alloc_src_tx').on(table.sourceTransactionId),
 }));
+
+// v7.0.105 (TD-237): هر کسر رزرو پروژه بابت حواله خروج نهایی با ردیف رزرو پیش از کسر ثبت می‌شود تا ابطال حواله
+// همان مقدار را به همان پروژه برگرداند (restored_at).
+export const projectReservationReleases = pgTable('project_reservation_releases', {
+  id: serial('id').primaryKey(),
+  documentId: integer('document_id').notNull().references(baseRelations.documentsId, { onDelete: 'cascade' }),
+  projectId: integer('project_id').notNull().references(() => productionProjects.id, { onDelete: 'cascade' }),
+  itemId: integer('item_id'),
+  qtyField: text('qty_field').notNull(),
+  quantity: numeric('quantity', { precision: 18, scale: 4, mode: 'number' }).notNull(),
+  reservationRow: jsonb('reservation_row').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+  restoredAt: timestamp('restored_at', { mode: 'string' }),
+}, (table) => ({
+  idx_prr_document: index('idx_prr_document').on(table.documentId),
+}));

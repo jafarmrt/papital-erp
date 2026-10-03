@@ -8087,5 +8087,122 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (itemId) await cleanTestTableData('items', 'id', [itemId]);
     }
   }
+  // ------------------------------------------------------------------
+  // v7.0.105 (TD-237، تصمیم مالک محصول «برگردد»): ابطال حواله خروج پروژه، رزرو کسرشده را به همان پروژه برمی‌گرداند
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_project_reservation_restore_td_237', 'td237', 'reservation', 'deleteDocument')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.105 Regression: ابطال حواله خروج پروژه، همان رزرو کسرشده را به همان پروژه برمی‌گرداند (TD-237)';
+    const suffix = `${Date.now()}`;
+    const docIds: number[] = [];
+    const projectIds: number[] = [];
+    let itemId = 0;
+    try {
+      const { productionProjects, projectReservationReleases } = await import('../../db/schema.js');
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
+      const today = await businessTodayIsoDate();
+      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای رزرو TD-237 ${suffix}`, code: `ITEM_TD237_${suffix}`, stocks: { '': 20 } });
+      itemId = item.id;
+      const newProject = async (reservedItems: unknown[]) => {
+        const [p] = await orm.insert(productionProjects).values({
+          projectCode: `PROJ_TD237_${suffix}_${projectIds.length}`,
+          title: `ERP-TEST-MARKER پروژه رزرو TD-237 ${suffix}`,
+          status: 'in_progress',
+          version: 1,
+          inventoryControl: { isReserved: true, reservedItems },
+        }).returning();
+        projectIds.push(p.id);
+        return p.id;
+      };
+      const reservedOf = async (projectId: number) => {
+        const [p] = await orm.select().from(productionProjects).where(eq(productionProjects.id, projectId));
+        const inv = (p.inventoryControl ?? {}) as { reservedItems?: Array<Record<string, unknown>>; isReserved?: boolean };
+        return { rows: Array.isArray(inv.reservedItems) ? inv.reservedItems : [], isReserved: inv.isReserved };
+      };
+      const reportedFor = async (projectId: number) => (await ItemStockReservationService.getReservedStockDetails()).allReservationEntries
+        .filter(e => e.sourceType === 'project' && Number(e.sourceId) === projectId)
+        .reduce((sum, e) => sum + Number(e.reservedQty || 0), 0);
+      const stockOf = async () => (await ItemWarehouseStockService.getStocksForItems(orm, [item.id])).get(item.id)?.total ?? -1;
+      const remittance = (projectId: number, quantity: number, status: string, ref: string): CreateDocumentInput => ({
+        docType: 'remittance', status, refNumber: ref, date: today, user: 'test-agent', inOut: 'out', location: '',
+        projectId, skipVoucherSync: true, items: [{ itemId: item.id, quantity, unit_price: 0 }],
+      });
+      const violations: string[] = [];
+
+      // ۱. خروج ۴ عدد، ردیف اول (۲ عدد) را کامل مصرف و حذف می‌کند و از ردیف دوم ۲ عدد کم می‌کند؛ ابطال هر دو را برمی‌گرداند
+      const projA = await newProject([
+        { itemId: item.id, itemCode: item.code, itemName: item.name, reservedQty: 2, unit: 'عدد' },
+        { itemCode: item.code, itemName: item.name, convertedQty: 5, reservedQty: 50, unit: 'عدد' },
+      ]);
+      const docA = await DocumentService.createDocument(remittance(projA, 4, 'final', `REM-TD237-A-${suffix}`));
+      docIds.push(docA);
+      if ((await reservedOf(projA)).rows.length !== 1) violations.push('پیش از ابطال باید فقط یک ردیف رزرو بماند');
+      await DocumentService.deleteDocument(docA, 'test-agent');
+      const restoredA = await reservedOf(projA);
+      const firstRow = restoredA.rows.find(r => Number(r.itemId) === item.id && Number(r.reservedQty) === 2);
+      const secondRow = restoredA.rows.find(r => Number(r.convertedQty) === 5 && Number(r.reservedQty) === 50);
+      if (restoredA.rows.length !== 2 || !firstRow || !secondRow) violations.push(`رزرو پروژه A پس از ابطال: ${JSON.stringify(restoredA.rows)} (باید ۲ + ۵)`);
+      if (restoredA.isReserved !== true) violations.push('پروژه A پس از ابطال باید رزرودار باشد');
+      const reportedA = await reportedFor(projA);
+      if (reportedA !== 7) violations.push(`گزارش رزروها برای پروژه A: ${reportedA} (باید ۷)`);
+      const records = await orm.select().from(projectReservationReleases).where(eq(projectReservationReleases.documentId, docA));
+      if (records.length !== 2 || records.some(r => !r.restoredAt)) violations.push(`سابقه کسر حواله A: ${records.length} ردیف، بازگشته: ${records.filter(r => r.restoredAt).length} (باید ۲ و ۲)`);
+      if (await stockOf() !== 20) violations.push(`موجودی پس از ابطال حواله A: ${await stockOf()} (باید ۲۰)`);
+
+      // ۲. رزرو کامل مصرف‌شده (فهرست خالی) هم برمی‌گردد؛ مسیر نهایی‌سازی پیش‌نویس نیز سابقه کسر ثبت می‌کند
+      const projB = await newProject([{ itemId: item.id, itemCode: item.code, reservedQty: 3, unit: 'عدد' }]);
+      const draftB = await DocumentService.createDocument(remittance(projB, 3, 'draft', `REM-TD237-B-${suffix}`));
+      docIds.push(draftB);
+      await DocumentService.finalizeDocument(draftB, 'test-agent', undefined, { strict: false });
+      const consumedB = await reservedOf(projB);
+      if (consumedB.rows.length !== 0 || consumedB.isReserved !== false) violations.push(`رزرو پروژه B پس از نهایی‌سازی: ${JSON.stringify(consumedB)} (باید خالی)`);
+      await DocumentService.deleteDocument(draftB, 'test-agent');
+      const restoredB = await reservedOf(projB);
+      if (restoredB.rows.length !== 1 || Number(restoredB.rows[0].reservedQty) !== 3 || restoredB.isReserved !== true) {
+        violations.push(`رزرو پروژه B پس از ابطال: ${JSON.stringify(restoredB)} (باید یک ردیف ۳ عددی)`);
+      }
+
+      // ۳. حذف پیش‌نویس حواله (که چیزی کسر نکرده بود) رزرو را تغییر نمی‌دهد
+      const projC = await newProject([{ itemId: item.id, reservedQty: 6, unit: 'عدد' }]);
+      const draftC = await DocumentService.createDocument(remittance(projC, 2, 'draft', `REM-TD237-C-${suffix}`));
+      docIds.push(draftC);
+      await DocumentService.deleteDocument(draftC, 'test-agent');
+      const afterC = await reservedOf(projC);
+      if (afterC.rows.length !== 1 || Number(afterC.rows[0].reservedQty) !== 6) violations.push(`حذف پیش‌نویس رزرو را تغییر داد: ${JSON.stringify(afterC.rows)}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_project_reservation_restore_td_237',
+        scenarioId: 'inventory_rebuild',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'ابطال حواله ۴ عددی هر دو ردیف رزرو (۲ و ۵) را برگرداند و گزارش رزروها ۷ نشان داد؛ رزرو کامل مصرف‌شده هم برگشت و حذف پیش‌نویس رزرو را تغییر نداد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_project_reservation_restore_td_237',
+        scenarioId: 'inventory_rebuild',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (docIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', docIds);
+        await cleanTestTableData('transactions', 'document_id', docIds);
+        await cleanTestTableData('documents', 'id', docIds);
+      }
+      if (projectIds.length > 0) await cleanTestTableData('production_projects', 'id', projectIds);
+      if (itemId) await cleanTestTableData('items', 'id', [itemId]);
+    }
+  }
+
   return results;
 }

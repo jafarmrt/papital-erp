@@ -75,7 +75,7 @@ export interface ReservedStockInfo {
   }>;
 }
 
-interface InventoryControlItem {
+export interface InventoryControlItem {
   itemCode?: string;
   code?: string;
   convertedReservedQty?: number;
@@ -95,7 +95,7 @@ interface InventoryControlItem {
 
 /** فیلدهای مقدار رزرو به ترتیب اولویت گزارش رزروها؛ اولین فیلد با مقدار مثبت، مقدار رزرو ردیف است */
 const RESERVATION_QTY_FIELDS = ['convertedReservedQty', 'convertedQty', 'reservedQty', 'warehouseStockQty', 'stockQty'] as const;
-type ReservationQtyField = typeof RESERVATION_QTY_FIELDS[number];
+export type ReservationQtyField = typeof RESERVATION_QTY_FIELDS[number];
 
 /** v7.0.102 (TD-233): یک قاعده برای مقدار رزرو ردیف — هم در گزارش رزروها و هم در کسر رزرو هنگام حواله خروج */
 export function reservationQtyField(row: Partial<Record<ReservationQtyField, unknown>>): ReservationQtyField | null {
@@ -109,6 +109,22 @@ interface InventoryControlData {
   purchaseList?: InventoryControlItem[];
   sections?: any[];
   manualPurchaseItems?: any[];
+}
+
+type ReservationRowRef = { itemId?: unknown; itemCode?: unknown; itemName?: unknown };
+
+/** یک ردیف رزرو پروژه به همان کالا اشاره می‌کند اگر شناسه، کد یا نام کالا (بدون حساسیت به حروف) برابر باشد. */
+function reservationRowMatches(row: ReservationRowRef, item: { id?: unknown; code?: unknown; name?: unknown }): boolean {
+  const same = (a: unknown, b: unknown) => !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  return (!!row.itemId && !!item.id && Number(row.itemId) === Number(item.id)) || same(row.itemCode, item.code) || same(row.itemName, item.name);
+}
+
+/** یک کسر رزرو پروژه: ردیف رزرو پیش از کسر، فیلد مقدار آن و مقدار کسرشده (v7.0.105، TD-237) */
+export interface ProjectReservationDeduction {
+  itemId: number | null;
+  qtyField: ReservationQtyField;
+  quantity: number;
+  row: InventoryControlItem;
 }
 
 export class ItemStockReservationService {
@@ -293,6 +309,7 @@ export class ItemStockReservationService {
     releasedQuantity: number;
     remainingReservedCount: number;
     projectVersion: number;
+    deductions: ProjectReservationDeduction[];
   }> {
     const projId = Number(params.projectId);
     if (!projId || Number.isNaN(projId)) {
@@ -347,6 +364,7 @@ export class ItemStockReservationService {
     // 4. کسر رزرو هر ردیف سند (تطبیق id/code/name). v7.0.102 (TD-233): مقدار هر ردیف سند از همه ردیف‌های رزرو
     // هم‌کالا به ترتیب کم می‌شود (پیش‌تر فقط از اولین ردیف) و مقدار هر ردیف رزرو همان فیلدی است که گزارش رزروها می‌خواند.
     const releasedItemIds: number[] = [];
+    const deductions: ProjectReservationDeduction[] = [];
     let releasedQuantity = fin(0);
     for (const docLine of params.docItems) {
       let remaining = fin(docLine.quantity || 0);
@@ -357,10 +375,7 @@ export class ItemStockReservationService {
       let lineReleased = false;
       for (let resIdx = 0; resIdx < reservedList.length && remaining.isPositive();) {
         const r = reservedList[resIdx];
-        const matches = (r.itemId && itemData.id && Number(r.itemId) === Number(itemData.id)) ||
-          (r.itemCode && itemData.code && String(r.itemCode).trim().toLowerCase() === String(itemData.code).trim().toLowerCase()) ||
-          (r.itemName && itemData.name && String(r.itemName).trim().toLowerCase() === String(itemData.name).trim().toLowerCase());
-        const qtyField = matches ? reservationQtyField(r) : null;
+        const qtyField = reservationRowMatches(r, itemData) ? reservationQtyField(r) : null;
         if (!qtyField) {
           resIdx++;
           continue;
@@ -371,6 +386,7 @@ export class ItemStockReservationService {
         const newResQty = currentResQty.subtract(deducted);
         remaining = remaining.subtract(deducted);
         releasedQuantity = releasedQuantity.add(deducted);
+        deductions.push({ itemId: itemData.id, qtyField, quantity: deducted.toNumber(), row: r });
         lineReleased = true;
         if (newResQty.isPositive()) {
           reservedList[resIdx] = { ...r, [qtyField]: newResQty.toNumber() };
@@ -431,8 +447,69 @@ export class ItemStockReservationService {
       releasedItemIds,
       releasedQuantity: releasedQuantity.toNumber(),
       remainingReservedCount: reservedList.length,
-      projectVersion: nextVersion(proj.version)
+      projectVersion: nextVersion(proj.version),
+      deductions
     };
+  }
+
+  /**
+   * v7.0.105 (TD-237، تصمیم مالک محصول «برگردد»): ابطال حواله خروج پروژه، رزرو کسرشده همان حواله را به همان پروژه
+   * برمی‌گرداند. مقدار هر کسر به ردیف هم‌کالای با همان فیلد مقدار اضافه می‌شود، و اگر آن ردیف کامل مصرف و حذف شده
+   * بود، ردیف ثبت‌شده پیش از کسر با همان مقدار دوباره افزوده می‌شود. قفل سطری پروژه، بامپ نسخه و لاگ ممیزی
+   * مانند آزادسازی. پروژه حذف‌شده چیزی برنمی‌گرداند.
+   */
+  static async restoreProjectReservations(
+    tx: DbExecutor,
+    params: { projectId: number; deductions: ProjectReservationDeduction[]; docId?: number | null; userId?: number; username?: string }
+  ): Promise<{ restored: boolean; restoredQuantity: number; restoredItemIds: number[] }> {
+    const [proj] = await tx.select()
+      .from(productionProjects)
+      .where(and(eq(productionProjects.id, Number(params.projectId)), eq(productionProjects.isDeleted, 0)))
+      .for('update');
+    if (!proj || params.deductions.length === 0) return { restored: false, restoredQuantity: 0, restoredItemIds: [] };
+
+    const invControl = (proj.inventoryControl as InventoryControlData) || {};
+    const reservedList: InventoryControlItem[] = Array.isArray(invControl.reservedItems) ? [...invControl.reservedItems] : [];
+    const restoredItemIds: number[] = [];
+    let restoredQuantity = fin(0);
+    for (const d of params.deductions) {
+      const qty = fin(d.quantity);
+      if (!qty.isPositive()) continue;
+      const target = { id: d.itemId ?? d.row.itemId, code: d.row.itemCode, name: d.row.itemName };
+      const idx = reservedList.findIndex(r => reservationRowMatches(r, target) && reservationQtyField(r) === d.qtyField);
+      if (idx >= 0) {
+        reservedList[idx] = { ...reservedList[idx], [d.qtyField]: fin(reservedList[idx][d.qtyField]).add(qty).toNumber() };
+      } else {
+        reservedList.push({ ...d.row, [d.qtyField]: qty.toNumber() });
+      }
+      restoredQuantity = restoredQuantity.add(qty);
+      if (d.itemId && !restoredItemIds.includes(d.itemId)) restoredItemIds.push(d.itemId);
+    }
+
+    await tx.update(productionProjects)
+      .set({
+        inventoryControl: { ...invControl, reservedItems: reservedList, isReserved: reservedList.length > 0, lastUpdated: systemNowUtcIso() },
+        version: nextVersion(proj.version)
+      })
+      .where(eq(productionProjects.id, proj.id));
+
+    await logActivity({
+      userId: params.userId,
+      username: params.username || 'سیستم',
+      action: 'UPDATE',
+      entity: 'کنترل موجودی پروژه',
+      entityId: String(proj.id),
+      description: `بازگرداندن رزرو ${params.deductions.length} ردیف کالای پروژه «${proj.title || proj.projectCode || proj.id}» بابت ابطال حواله خروج${params.docId ? ` سند #${params.docId}` : ''}`,
+      details: {
+        before: { reservedItems: invControl.reservedItems || [], version: proj.version },
+        after: { reservedItems: reservedList, version: nextVersion(proj.version) },
+        restoredItemIds,
+        documentId: params.docId ?? null
+      },
+      tx
+    });
+
+    return { restored: true, restoredQuantity: restoredQuantity.toNumber(), restoredItemIds };
   }
 
   /**

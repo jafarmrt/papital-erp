@@ -21,7 +21,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
-import { releaseReservationsForDocument } from './projectReservationRelease.js';
+import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 
 export class DocumentLifecycleService {
   /**
@@ -287,6 +287,16 @@ export class DocumentLifecycleService {
    */
   static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor): Promise<void> {
     const execute = async (tx: DbExecutor): Promise<void> => {
+      // v7.0.105 (TD-237): پروژه حواله نهایی پیش از سند قفل می‌شود (سلسله‌مراتب PRODUCTION → DOCUMENTS)، چون رزرو
+      // کسرشده آن در همین تراکنش برمی‌گردد
+      const [peek] = await tx.select({ projectId: documents.projectId, status: documents.status }).from(documents)
+        .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
+      if (peek?.status === 'final' && peek.projectId) {
+        await tx.select({ id: productionProjects.id }).from(productionProjects)
+          .where(eq(productionProjects.id, Number(peek.projectId)))
+          .for('update');
+      }
+
       const [doc] = await tx.select().from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
         .for('update');
@@ -375,6 +385,9 @@ export class DocumentLifecycleService {
             });
           }
         }
+
+        // v7.0.105 (TD-237، تصمیم «برگردد»): رزرو پروژه‌ای که همین حواله کسر کرده بود دوباره برای همان پروژه رزرو می‌شود
+        await restoreReservationsForDocument(tx, id, deletedByUser);
 
         // V9-1.1 & V6.0.5: برگشت اسناد حسابداری متناظر (صدور سند معکوس) در همان تراکنش برای کلیه انواع اسناد
         // v7.0.31 (TD-193 / audit P1-8): سند حسابداری اصلی از پیوند صریح source_document_id؛ اسناد تکراری قدیمی
