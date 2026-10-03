@@ -3,6 +3,7 @@
  * از accounting.schemas.ts (و در نتیجه src/routes/accounting.routes.ts) دوباره صادر می‌شوند.
  */
 import { z } from 'zod';
+import { storageDateParam } from '../../middleware/validate.js';
 
 // ==========================================
 // REPORTS & FINANCIAL STATEMENTS
@@ -10,8 +11,8 @@ import { z } from 'zod';
 // V1.6.0: گزارش جریان نقدی خزانه
 export const dateRangeQuerySchema = z.object({
   query: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     currency: z.string().optional()
   }).optional()
 });
@@ -19,8 +20,8 @@ export const dateRangeQuerySchema = z.object({
 export const trialBalanceQuerySchema = z.object({
   query: z.object({
     level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     currency: z.string().optional(),
   }).optional()
 });
@@ -31,8 +32,8 @@ export const accountCardQuerySchema = z.object({
     detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional(),
     detailedId: z.coerce.number().int().positive().optional(),
     detailedName: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     currency: z.string().optional(),
   }).optional()
 });
@@ -42,8 +43,8 @@ export const partyLedgerQuerySchema = z.object({
     partyId: z.coerce.number().int().positive().optional(),
     partyType: z.string().optional(),
     partyName: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     currency: z.string().optional(),
     includeDrafts: z.string().optional(),
   }).optional()
@@ -62,8 +63,8 @@ export const partiesQuerySchema = z.object({
 
 export const journalBookQuerySchema = z.object({
   query: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     search: z.string().optional(),
     currency: z.string().optional(),
   }).optional()
@@ -71,23 +72,23 @@ export const journalBookQuerySchema = z.object({
 
 export const financialRatiosQuerySchema = z.object({
   query: z.object({
-    asOfDate: z.string().optional(),
+    asOfDate: storageDateParam,
     currency: z.string().optional(),
   }).optional()
 });
 
 export const incomeStatementQuerySchema = z.object({
   query: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     currency: z.string().optional(),
   }).optional()
 });
 
 export const balanceSheetQuerySchema = z.object({
   query: z.object({
-    date: z.string().optional(),
-    asOfDate: z.string().optional(),
+    date: storageDateParam,
+    asOfDate: storageDateParam,
     currency: z.string().optional(),
   }).optional()
 });

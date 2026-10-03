@@ -7667,6 +7667,94 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.136 (TD-232): فیلترهای تاریخ شمسی گزارش‌ها و فهرست‌ها ISO می‌شوند؛ روند ماهانه خزانه شمسی است؛ قیدهای نهایی
+  if (shouldRun('reg_calendar_final_td_232', 'td232', 'calendar', 'filter', 'cashflow')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.136: فیلتر تاریخ شمسی کاردکس و اسناد خطا نمی‌دهد؛ جریان نقدی بازه شمسی را درست می‌گیرد و ماه شمسی می‌دهد؛ ستون‌های زمان سرور فقط زمان میلادی می‌پذیرند (TD-232)';
+    const violations: string[] = [];
+    let treasuryId: number | null = null;
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { treasuryTransactions } = await import('../../db/schema.js');
+      const { isoToJalaliDate } = await import('../../utils/calendarDate.js');
+      const { DateCalendarReportService } = await import('../../services/system/dateCalendarReport.service.js');
+
+      // ۱) قاعده‌های نهایی
+      const rules = (await orm.execute(sql`
+        SELECT pc.conname AS name, pg_get_constraintdef(pc.oid) AS def, pc.convalidated AS validated
+          FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+         WHERE rel.relnamespace = current_schema()::regnamespace
+           AND pc.conname IN ('chk_treasury_transactions_date_datefmt', 'chk_treasury_transactions_reconciled_at_datefmt',
+                              'chk_project_stages_completed_at_datefmt', 'chk_users_last_failed_login_at_datefmt', 'chk_journal_vouchers_date_datefmt')`) as unknown as { rows: Array<{ name: string; def: string; validated: boolean }> }).rows;
+      const ruleOf = (n: string) => rules.find(r => r.name === n);
+      const expectRule = (n: string, kind: string) => {
+        const r = ruleOf(n);
+        if (!r || !r.validated || !r.def.includes(`'${kind}'`)) violations.push(`${n}: ${r?.def} (انتظار ${kind} معتبر)`);
+      };
+      expectRule('chk_treasury_transactions_date_datefmt', 'iso');
+      expectRule('chk_treasury_transactions_reconciled_at_datefmt', 'isots');
+      expectRule('chk_project_stages_completed_at_datefmt', 'isots');
+      expectRule('chk_users_last_failed_login_at_datefmt', 'isots');
+      expectRule('chk_journal_vouchers_date_datefmt', 'any');
+      const kinds = (await orm.execute(sql`SELECT erp_date_text_ok('1405/07/10', 'isots') AS j, erp_date_text_ok('2026-10-02T10:00:00.000Z', 'isots') AS g`) as unknown as { rows: Array<{ j: boolean; g: boolean }> }).rows[0];
+      if (kinds.j || !kinds.g) violations.push(`قالب isots: شمسی=${kinds.j}، میلادی=${kinds.g}`);
+      const report = await DateCalendarReportService.buildReport();
+      const tr = report.columns.find(c => c.table === 'treasury_transactions' && c.column === 'date');
+      if (tr?.rule !== 'iso' || !tr.ruleValidated) violations.push(`گزارش قاعده تاریخ خزانه: ${tr?.rule}`);
+
+      // ۲) فیلتر شمسی در query (پیش‌تر «1405/07/01» خام به ستون timestamp می‌رسید)
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const q = (path: string) => request(app).get(path).set('Cookie', session.cookie);
+      const kardex = await q(`/api/transactions?startDate=${encodeURIComponent('1405/07/01')}&endDate=${encodeURIComponent('۱۴۰۵/۰۷/۳۰')}`);
+      if (kardex.status !== 200) violations.push(`کاردکس با بازه شمسی: ${kardex.status} ${JSON.stringify(kardex.body).slice(0, 150)}`);
+      const docs = await q(`/api/documents?startDate=${encodeURIComponent('1405/07/01')}&endDate=${encodeURIComponent('1405/07/30')}`);
+      if (docs.status !== 200) violations.push(`اسناد با بازه شمسی: ${docs.status}`);
+      const bad = await q(`/api/transactions?startDate=${encodeURIComponent('1405/07/31')}`);
+      if (bad.status !== 400) violations.push(`تاریخ نامعتبر در فیلتر باید 400 بگیرد: ${bad.status}`);
+
+      // ۳) جریان نقدی: بازه شمسی و ماه شمسی
+      const today = await businessTodayIsoDate();
+      const [t] = await orm.insert(treasuryTransactions).values({
+        transactionNumber: `TRX-TD232-${Date.now()}`, type: 'receipt', date: today, method: 'cash', amount: money(7777), partyName: 'ERP-TEST-MARKER TD-232',
+      }).returning({ id: treasuryTransactions.id });
+      treasuryId = t.id;
+      const yesterday = new Date(`${today}T00:00:00Z`);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const cash = await AccountingService.getCashFlowReport({ startDate: isoToJalaliDate(yesterday.toISOString().slice(0, 10)), endDate: isoToJalaliDate(today) });
+      const monthKey = isoToJalaliDate(today).slice(0, 7);
+      const month = cash.months.find(m => m.month === monthKey);
+      if (!month || month.receipts < 7777) violations.push(`روند ماهانه شمسی ${monthKey}: ${JSON.stringify(cash.months)}`);
+      if (cash.months.some(m => /^\d{4}-/.test(m.month))) violations.push(`ماه میلادی در روند ماهانه: ${JSON.stringify(cash.months.map(m => m.month))}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_calendar_final_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'فیلترهای شمسی ISO شدند، تاریخ نامعتبر 400 گرفت، جریان نقدی ماه شمسی داد و قاعده‌های نهایی معتبر بودند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_calendar_final_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (treasuryId !== null) await cleanTestTableData('treasury_transactions', 'id', [treasuryId]);
+    }
+  }
+
   // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
   if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
     const tStart = Date.now();

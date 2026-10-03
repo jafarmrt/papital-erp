@@ -10,6 +10,8 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar, Layers, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate } from '../../utils';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 
 interface UserItem {
   id: number;
@@ -40,8 +42,9 @@ export function WorkflowDelegationTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // New Delegation Form State
-  const today = new Date().toISOString().split('T')[0];
-  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // v7.0.136 (TD-232): امروز و هفته بعد در منطقه زمانی کسب‌وکار؛ انتخاب با تقویم شمسی، مقدار ISO
+  const today = toStorageDate(getTodayJalaliDate()) || '';
+  const nextWeek = toStorageDate(getFutureJalaliDate(7)) || '';
 
   const [toUserId, setToUserId] = useState<number | ''>('');
   const [scope, setScope] = useState('ALL');
@@ -363,11 +366,9 @@ export function WorkflowDelegationTab() {
                   <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                     تاریخ شروع تفویض <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="date"
+                  <JalaliDateInput
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    required
+                    onChange={setStartDate}
                     className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
                   />
                 </div>
@@ -376,11 +377,9 @@ export function WorkflowDelegationTab() {
                   <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                     تاریخ پایان تفویض <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="date"
+                  <JalaliDateInput
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    required
+                    onChange={setEndDate}
                     className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
                   />
                 </div>

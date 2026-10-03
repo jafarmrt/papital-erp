@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { asyncHandler } from './asyncHandler.js';
+import { toStorageDate } from '../utils/calendarDate.js';
 
 const fieldTranslations: Record<string, string> = {
   name: 'نام',
@@ -112,6 +113,21 @@ const fieldTranslations: Record<string, string> = {
 };
 
 import { z } from 'zod';
+
+/**
+ * v7.0.136 (TD-232): پارامتر تاریخ فیلتر در query (از/تا تاریخ گزارش‌ها و فهرست‌ها). DatePicker شمسی می‌فرستد؛
+ * این‌جا به ISO میلادی (`YYYY-MM-DD`) تبدیل می‌شود تا با تاریخ‌های ذخیره‌شده مقایسه شود. خالی ← undefined؛
+ * تاریخ نامعتبر خطای اعتبارسنجی. پیش‌تر «1405/07/01» خام با ستون timestamp یا متن ISO مقایسه می‌شد.
+ */
+export const storageDateParam = z.string().max(40).optional().transform((v, ctx) => {
+  if (v === undefined) return undefined;
+  const iso = toStorageDate(v);
+  if (iso === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `تاریخ «${v}» معتبر نیست؛ مانند ۱۴۰۵/۰۷/۱۰ وارد کنید` });
+    return z.NEVER;
+  }
+  return iso || undefined;
+});
 
 export const numericIdString = z.string().min(1, 'شناسه الزامی است')
   .regex(/^[1-9]\d*$/, 'شناسه باید عدد صحیح مثبت باشد');

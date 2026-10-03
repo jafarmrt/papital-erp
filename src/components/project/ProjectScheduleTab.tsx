@@ -9,7 +9,7 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate } from '../../utils';
+import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import toast from 'react-hot-toast';
 
@@ -941,7 +941,7 @@ export default function ProjectScheduleTab({
                   const rate = Number(log.unitRate || log.unit_rate || 0);
                   return (
                     <tr key={log.id || lIdx} className="hover:bg-slate-50">
-                      <td className="p-2 font-mono text-slate-500">{log.date || '---'}</td>
+                      <td className="p-2 font-mono text-slate-500">{log.date ? formatPersianDate(log.date) : '---'}</td>
                       <td className="p-2 font-bold text-slate-800">
                         {log.personnelName || log.personnel_name || `پرسنل #${log.personnelId || log.personnel_id}`}
                       </td>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PackageCheck, Clock, CheckCircle2, Building2, Search, Truck, FileText, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProcurementOrder } from '../../types';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 
 interface ProcurementOrderListProps {
   orders: ProcurementOrder[];
@@ -141,7 +141,7 @@ export function ProcurementOrderList({
                             <span>فاکتور #{order.refNumber}</span>
                           </div>
                           <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
-                            {order.date || '---'}
+                            {order.date ? formatPersianDate(order.date) : '---'}
                           </span>
                         </td>
 

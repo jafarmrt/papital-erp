@@ -1,14 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
-import { 
-  formatPersianPrice, 
-  formatPersianNumber, 
-  formatPersianDate, 
-  formatPersianCode
-} from '../../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatPersianCode, toStorageDate, getTodayJalaliDate, getPastJalaliDate } from '../../../utils';
 import toast from 'react-hot-toast';
 import type { PartyOption } from '../../../types';
 import { usePartiesQuery, usePartyLedgerReport } from '../../../hooks/accounting/usePartyProjectReportQueries';
+import { JalaliDateInput } from '../../common/JalaliDateInput';
 
 type PartyTypeFilter = 'all' | 'customer' | 'supplier' | 'personnel';
 type CurrencyFilter = 'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP';
@@ -86,23 +82,21 @@ export function PartyLedgerReportView({
   // Quick date presets
   const handleApplyDatePreset = (preset: 'all' | 'month' | 'three_months' | 'year') => {
     setActiveDatePreset(preset);
-    const now = new Date();
-    const todayIso = now.toISOString().split('T')[0];
+    // v7.0.136 (TD-232): بازه‌های آماده از امروز منطقه زمانی کسب‌وکار (ISO) و نمایش شمسی در JalaliDateInput
+    const todayIso = toStorageDate(getTodayJalaliDate()) || '';
+    const daysAgoIso = (days: number) => toStorageDate(getPastJalaliDate(days)) || '';
 
     if (preset === 'all') {
       setStartDate('');
       setEndDate('');
     } else if (preset === 'month') {
-      const past = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      setStartDate(past.toISOString().split('T')[0]);
+      setStartDate(daysAgoIso(30));
       setEndDate(todayIso);
     } else if (preset === 'three_months') {
-      const past = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-      setStartDate(past.toISOString().split('T')[0]);
+      setStartDate(daysAgoIso(90));
       setEndDate(todayIso);
     } else if (preset === 'year') {
-      const past = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-      setStartDate(past.toISOString().split('T')[0]);
+      setStartDate(daysAgoIso(365));
       setEndDate(todayIso);
     }
   };
@@ -457,20 +451,21 @@ export function PartyLedgerReportView({
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="از تاریخ (مثلاً 1403/01/01)"
+              <JalaliDateInput
+                placeholder="از تاریخ"
                 value={startDate}
-                onChange={e => { setStartDate(e.target.value); setActiveDatePreset('all'); }}
-                className="w-1/2 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
+                onChange={iso => { setStartDate(iso); setActiveDatePreset('all'); }}
+                containerClassName="w-1/2"
+                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
               />
               <span className="text-slate-400 text-xs">تا</span>
-              <input
-                type="text"
-                placeholder="تا تاریخ (مثلاً 1403/12/29)"
+              <JalaliDateInput
+                placeholder="تا تاریخ"
                 value={endDate}
-                onChange={e => { setEndDate(e.target.value); setActiveDatePreset('all'); }}
-                className="w-1/2 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
+                onChange={iso => { setEndDate(iso); setActiveDatePreset('all'); }}
+                containerClassName="w-1/2"
+                calendarPosition="bottom-left"
+                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
               />
             </div>
           </div>

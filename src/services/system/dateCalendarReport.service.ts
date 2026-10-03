@@ -11,8 +11,10 @@ import { orm } from '../../db/drizzle.js';
 export interface DateColumnCalendarStats {
   table: string;
   column: string;
-  /** قید قالب این ستون فقط ISO می‌پذیرد (ستون یکسان‌شده) */
-  isoOnly: boolean;
+  /** قاعده قید قالب ستون: 'iso' تاریخ میلادی، 'isots' زمان میلادی سرور، 'any' شمسی یا میلادی (فقط تاریخ سند حسابداری)، null بی‌قید */
+  rule: 'iso' | 'isots' | 'any' | null;
+  /** قید معتبرشده است (همه ردیف‌های موجود هم قاعده را رعایت می‌کنند) */
+  ruleValidated: boolean;
   total: number;
   empty: number;
   iso: number;
@@ -61,13 +63,14 @@ export class DateCalendarReportService {
         ? rowsOf<{ v: string }>(await orm.execute(sql`
             SELECT DISTINCT ${c} AS v FROM ${t} WHERE erp_text_date_kind(${c}) = 'invalid' ORDER BY 1 LIMIT 5`)).map(r => r.v)
         : [];
-      const [{ iso_only: isoOnly }] = rowsOf<{ iso_only: boolean }>(await orm.execute(sql`
-        SELECT EXISTS (
-          SELECT 1 FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
-           WHERE rel.relname = ${table} AND rel.relnamespace = current_schema()::regnamespace
-             AND pc.conname = ${`chk_${table}_${column}_datefmt`}
-             AND pg_get_constraintdef(pc.oid) LIKE '%''iso''%') AS iso_only`));
-      columns.push({ table, column, isoOnly, ...stats, invalidSamples: samples });
+      const [constraint] = rowsOf<{ def: string; validated: boolean }>(await orm.execute(sql`
+        SELECT pg_get_constraintdef(pc.oid) AS def, pc.convalidated AS validated
+          FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+         WHERE rel.relname = ${table} AND rel.relnamespace = current_schema()::regnamespace
+           AND pc.conname = ${`chk_${table}_${column}_datefmt`}`));
+      const ruleMatch = constraint?.def.match(/'(iso|isots|any)'/);
+      const rule = (ruleMatch?.[1] ?? null) as DateColumnCalendarStats['rule'];
+      columns.push({ table, column, rule, ruleValidated: !!constraint?.validated, ...stats, invalidSamples: samples });
     }
     const sum = (k: 'iso' | 'gregorian' | 'jalali' | 'invalid') => columns.reduce((acc, col) => acc + col[k], 0);
     return {

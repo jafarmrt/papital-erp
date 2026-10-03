@@ -1,6 +1,6 @@
 import React from 'react';
 import { Printer, X, ShieldAlert } from 'lucide-react';
-import { formatPersianDateTime, formatPersianNumber } from '../../utils';
+import { formatPersianDateTime, formatPersianNumber, formatPersianDate } from '../../utils';
 import { parseUserAgent } from '../../utils/userAgentParser';
 
 interface AuditPrintModalProps {
@@ -113,7 +113,7 @@ export const AuditPrintModal: React.FC<AuditPrintModalProps> = ({ logs, onClose,
                 <span className="text-slate-400 block mb-0.5">بازه تاریخی:</span>
                 <span className="font-bold text-slate-900">
                   {filterSummary.startDate || filterSummary.endDate
-                    ? `${filterSummary.startDate || 'ابتدا'} تا ${filterSummary.endDate || 'اکنون'}`
+                    ? `${filterSummary.startDate ? formatPersianDate(filterSummary.startDate) : 'ابتدا'} تا ${filterSummary.endDate ? formatPersianDate(filterSummary.endDate) : 'اکنون'}`
                     : 'کل سوابق ثبت‌شده'}
                 </span>
               </div>

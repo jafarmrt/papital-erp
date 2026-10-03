@@ -18,7 +18,8 @@ async function main(): Promise<void> {
   console.log('   قالب نهایی ذخیره: میلادی ISO (YYYY-MM-DD)؛ نمایش همه‌جا شمسی\n');
   console.table(report.columns.map(c => ({
     'ستون': `${c.table}.${c.column}`,
-    'یکسان‌شده': c.isoOnly ? '✓' : '',
+    'قاعده': c.rule === 'iso' ? 'ISO' : c.rule === 'isots' ? 'زمان میلادی' : c.rule === 'any' ? 'آزاد' : '—',
+    'معتبر': c.ruleValidated ? '✓' : '✗',
     'کل': c.total,
     'خالی': c.empty,
     'ISO': c.iso,

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { fetchJson } from '../api';
 import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
-import { formatPersianNumber, parseCleanNumber, errorMessageOf } from '../utils';
+import { formatPersianNumber, parseCleanNumber, errorMessageOf, toStorageDate, getTodayJalaliDate } from '../utils';
+import { JalaliDateInput } from './common/JalaliDateInput';
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -23,7 +24,8 @@ export default function WarehouseTransferModal({
   const [fromLocation, setFromLocation] = useState<string>('');
   const [toLocation, setToLocation] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  // v7.0.136 (TD-232): امروز در منطقه زمانی کسب‌وکار (نه UTC) و انتخاب با تقویم شمسی؛ مقدار ISO می‌ماند
+  const [date, setDate] = useState<string>(() => toStorageDate(getTodayJalaliDate()) || '');
   const [refNumber, setRefNumber] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
@@ -322,10 +324,9 @@ export default function WarehouseTransferModal({
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     تاریخ انتقال
                   </label>
-                  <input
-                    type="date"
+                  <JalaliDateInput
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
+                    onChange={setDate}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

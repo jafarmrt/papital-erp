@@ -14,6 +14,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { CRMLeadModal } from '../components/crm/CRMLeadModal';
 import { CRMLeadDrawer } from '../components/crm/CRMLeadDrawer';
 import { CustomerDossierDrawer } from '../components/crm/CustomerDossierDrawer';
+import { JalaliDateInput } from '../components/common/JalaliDateInput';
 
 export default function CRMPage({ user }: { user: any }) {
   const crm = useCRMData(user);
@@ -118,25 +119,26 @@ export default function CRMPage({ user }: { user: any }) {
 
           <div className="flex items-center gap-2 w-full sm:w-auto text-xs">
             <span className="text-slate-500 text-[11px]">از:</span>
-            <input
-              type="text"
-              placeholder="1403/01/01"
+            <JalaliDateInput
+              placeholder="از تاریخ"
               value={crm.fromDate}
-              onChange={(e) => {
+              onChange={(iso) => {
                 crm.setDatePreset('custom');
-                crm.setFromDate(e.target.value);
+                crm.setFromDate(iso);
               }}
+              containerClassName="inline-block"
               className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-center font-mono outline-none focus:border-blue-500"
             />
             <span className="text-slate-500 text-[11px]">تا:</span>
-            <input
-              type="text"
-              placeholder="1403/12/29"
+            <JalaliDateInput
+              placeholder="تا تاریخ"
               value={crm.toDate}
-              onChange={(e) => {
+              onChange={(iso) => {
                 crm.setDatePreset('custom');
-                crm.setToDate(e.target.value);
+                crm.setToDate(iso);
               }}
+              containerClassName="inline-block"
+              calendarPosition="bottom-left"
               className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-center font-mono outline-none focus:border-blue-500"
             />
           </div>

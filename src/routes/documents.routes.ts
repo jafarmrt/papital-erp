@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
@@ -197,8 +197,8 @@ export const documentsQuerySchema = z.object({
     type: z.enum(['receipt', 'production_receipt', 'invoice', 'proforma', 'return', 'audit', 'transfer', 'remittance', 'waste']).optional(),
     status: z.enum(['draft', 'proforma', 'final']).optional(),
     search: z.string().max(100).optional(),
-    startDate: z.string().max(30).optional(),
-    endDate: z.string().max(30).optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     projectId: z.union([z.string(), z.number()]).optional(),
     page: z.union([z.string(), z.number()]).optional(),
     limit: z.union([z.string(), z.number()]).optional(),

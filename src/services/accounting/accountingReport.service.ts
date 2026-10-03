@@ -6,6 +6,7 @@ import { TreasuryService } from './treasury.service.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
 import { fin, FinancialMath, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { toStorageDate, isoToJalaliDate } from '../../utils/calendarDate.js';
 import type { 
   TrialBalanceRow, 
   FinancialSummaryStats, 
@@ -1335,8 +1336,10 @@ export class AccountingReportService {
     .where(eq(treasuryTransactions.isDeleted, 0))
     .orderBy(asc(treasuryTransactions.date), asc(treasuryTransactions.id));
 
-    const start = params.startDate || '';
-    const end = params.endDate || '9999-12-31';
+    // v7.0.136 (TD-232): تاریخ تراکنش خزانه ISO است؛ بازه شمسی ورودی ISO می‌شود (پیش‌تر «1405/07/30» با «2026-…» متنی
+    // مقایسه می‌شد و با «تا تاریخ» هیچ تراکنشی در دوره نمی‌افتاد)
+    const start = toStorageDate(params.startDate) || '';
+    const end = toStorageDate(params.endDate) || '9999-12-31';
 
     // v7.0.71 (P2-6 بخش ۳): جمع‌ها با Decimal
     const rows = banks.map(b => {
@@ -1371,7 +1374,8 @@ export class AccountingReportService {
       const d = String(t.date).slice(0, 10);
       if (start && d < start) continue;
       if (d > end) continue;
-      const monthKey = d.slice(0, 7);
+      // ماه شمسی (مثلاً «1405/07»)؛ پیش‌تر ماه میلادی بود
+      const monthKey = isoToJalaliDate(d).slice(0, 7) || d.slice(0, 7);
       const agg = monthMap.get(monthKey) || { receipts: fin(0), payments: fin(0) };
       if (t.type === 'receipt') agg.receipts = agg.receipts.add(t.amount);
       else agg.payments = agg.payments.add(t.amount);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Database, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { formatPersianDateTime } from '../../utils';
+import { formatPersianDateTime, formatPersianDate } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 
 interface WooCommerceTabProps {
@@ -371,7 +371,7 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
                       <td className="p-3 font-bold text-blue-600 dir-ltr text-right">#{doc.refNumber}</td>
                       <td className="p-3 font-medium">{doc.notes || 'سفارش ووکامرس'}</td>
                       <td className="p-3">{doc.buyerName || 'خریدار آنلاین'}</td>
-                      <td className="p-3 text-slate-500">{doc.date}</td>
+                      <td className="p-3 text-slate-500">{formatPersianDate(doc.date)}</td>
                       <td className="p-3 text-center">
                         <span className="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded-full font-medium">
                           فاکتور و کسر انبار ثبت شد

@@ -5,7 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
-import { validate } from '../middleware/validate.js';
+import { validate, storageDateParam } from '../middleware/validate.js';
 import { transactions, items, users } from '../db/schema.js';
 import { eq, desc, sql, and, gte, lte, or, ilike, type SQL } from 'drizzle-orm';
 import { parsePagination } from '../lib/pagination.js';
@@ -17,8 +17,8 @@ const listTransactionsSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(500).default(50),
-    startDate: z.string().max(50).optional(),
-    endDate: z.string().max(50).optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     search: z.string().max(120).optional(),
     type: z.enum(['in', 'out', 'all']).optional(),
     documentType: z.string().max(50).optional(),

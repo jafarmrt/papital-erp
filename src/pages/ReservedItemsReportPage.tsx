@@ -184,7 +184,7 @@ export default function ReservedItemsReportPage() {
     } else {
       csvContent += 'کد کالا,نام کالا,دسته‌بندی,نوع منبع,شناسه مرجع,عنوان مرجع/مشتری,مقدار رزرو,واحد,قیمت واحد,ارزش کل,تاریخ ثبت\n';
       filteredLedgerEntries.forEach(e => {
-        csvContent += `"${e.itemCode}","${e.itemName}","${e.category}","${e.sourceLabel}","${e.sourceRef}","${e.sourceTitle}",${e.reservedQty},"${e.unit}",${e.unitPrice},${e.totalValue},"${e.date}"\n`;
+        csvContent += `"${e.itemCode}","${e.itemName}","${e.category}","${e.sourceLabel}","${e.sourceRef}","${e.sourceTitle}",${e.reservedQty},"${e.unit}",${e.unitPrice},${e.totalValue},"${formatPersianDate(e.date, { englishDigits: true })}"\n`;
       });
     }
 

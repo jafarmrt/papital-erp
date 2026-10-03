@@ -1,6 +1,6 @@
 import React from 'react';
 import { PackageCheck, Warehouse, FileText, CheckCircle2, X, Loader2, Building2 } from 'lucide-react';
-import { formatPersianNumber, formatPersianPrice } from '../../utils';
+import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../utils';
 
 export interface ConfirmWarehouseDeliveryModalProps {
   isOpen: boolean;
@@ -95,7 +95,7 @@ export const ConfirmWarehouseDeliveryModal: React.FC<ConfirmWarehouseDeliveryMod
                   <span className="font-mono text-emerald-700 font-black">{order.refNumber}</span>
                 </div>
                 {order.date && (
-                  <span className="text-[11px] text-slate-500 font-mono">تاریخ: {order.date}</span>
+                  <span className="text-[11px] text-slate-500 font-mono">تاریخ: {formatPersianDate(order.date)}</span>
                 )}
               </div>
 

@@ -60,6 +60,12 @@ export function buildPieceworkTaskCodeHealthTest(
   };
 }
 
+/** v7.0.136 (TD-232): تاریخ زیرعنوان یافته‌ها شمسی نمایش داده می‌شود؛ مقدار غیرتاریخی همان‌طور می‌ماند */
+const jalaliLabel = (v: unknown): string => {
+  const raw = typeof v === 'string' ? v : v instanceof Date ? v.toISOString() : '';
+  return isoToJalaliDate(raw) || String(v ?? '').substring(0, 10);
+};
+
 export class FinancialHealthService {
   /**
    * اجرای جامع اسکن سلامت دفاتر و آزمون‌های ممیزی خودکار
@@ -342,7 +348,7 @@ export class FinancialHealthService {
           id: r.id,
           code: `سند #${r.voucher_number}`,
           title: r.description || `سند شماره ${r.voucher_number}`,
-          subtitle: `تاریخ: ${r.date} — بدهکار: ${formatPersianPrice(r.calc_debit)} | بستانکار: ${formatPersianPrice(r.calc_credit)}`,
+          subtitle: `تاریخ: ${jalaliLabel(r.date)} — بدهکار: ${formatPersianPrice(r.calc_debit)} | بستانکار: ${formatPersianPrice(r.calc_credit)}`,
           amount: r.discrepancy,
           discrepancy: r.discrepancy,
           date: r.date,
@@ -571,7 +577,7 @@ export class FinancialHealthService {
           id: d.id,
           code: `سند تجاری #${d.ref_number}`,
           title: `فاکتور نهایی فاقد سند: ${d.ref_number} (${d.buyer_name || 'بدون نام'})`,
-          subtitle: `نوع: ${d.type} | مبلغ کل: ${formatPersianPrice(d.total_amount)} ریال | تاریخ: ${d.date?.substring(0, 10)}`,
+          subtitle: `نوع: ${d.type} | مبلغ کل: ${formatPersianPrice(d.total_amount)} ریال | تاریخ: ${jalaliLabel(d.date)}`,
           amount: d.total_amount,
           date: d.date?.substring(0, 10),
           linkType: 'document',
@@ -584,7 +590,7 @@ export class FinancialHealthService {
           id: d.id,
           code: `پیش‌نویس #${d.ref_number}`,
           title: `پیش‌نویس معوق قدیمی: ${d.ref_number} (${d.buyer_name || 'بدون نام'})`,
-          subtitle: `تاریخ ایجاد: ${d.date?.substring(0, 10)} — بیش از ۱۴ روز در وضعیت معلق قرار دارد.`,
+          subtitle: `تاریخ ایجاد: ${jalaliLabel(d.date)} — بیش از ۱۴ روز در وضعیت معلق قرار دارد.`,
           amount: d.total_amount,
           date: d.date?.substring(0, 10),
           linkType: 'document',
@@ -795,7 +801,7 @@ export class FinancialHealthService {
           id: r.id,
           code: `سند حسابداری #${r.voucher_number}`,
           title: `سند تکراری برای سند شماره ${r.ref_number} (${r.doc_type})`,
-          subtitle: `سند اصلی: #${r.primary_voucher_number} | وضعیت سند تکراری: ${r.status} | تاریخ: ${String(r.date || '').substring(0, 10)}`,
+          subtitle: `سند اصلی: #${r.primary_voucher_number} | وضعیت سند تکراری: ${r.status} | تاریخ: ${jalaliLabel(r.date)}`,
           amount: r.amount,
           date: String(r.date || '').substring(0, 10),
           linkType: 'voucher' as const,
@@ -831,7 +837,7 @@ export class FinancialHealthService {
         title: c.status === 'conflict'
           ? `منتقل نشد: هم‌شماره با سندی از نوع ${c.docType} در سال ${c.newFiscalYear}`
           : `از سال ${c.oldFiscalYear} به ${c.newFiscalYear} منتقل شد`,
-        subtitle: `نوع: ${c.docType} | تاریخ: ${String(c.documentDate || '').substring(0, 10)}`,
+        subtitle: `نوع: ${c.docType} | تاریخ: ${jalaliLabel(c.documentDate)}`,
         date: String(c.documentDate || '').substring(0, 10),
         linkType: 'document' as const,
         linkId: c.documentId,
@@ -872,7 +878,7 @@ export class FinancialHealthService {
         id: d.id,
         code: `پیش‌فاکتور ${d.refNumber}`,
         title: `خریدار: ${d.buyerName || '—'}`,
-        subtitle: `تاریخ: ${String(d.date || '').substring(0, 10)}`,
+        subtitle: `تاریخ: ${jalaliLabel(d.date)}`,
         date: String(d.date || '').substring(0, 10),
         linkType: 'document' as const,
         linkId: d.id,
@@ -972,7 +978,7 @@ export class FinancialHealthService {
         id: r.id,
         code: `سند حسابداری #${r.voucherNumber}`,
         title: r.description,
-        subtitle: `نوع: ${r.voucherType || '—'} | وضعیت: ${r.isDeleted === 1 ? 'حذف‌شده' : (r.status || '—')} | تاریخ: ${String(r.date || '').substring(0, 10)}`,
+        subtitle: `نوع: ${r.voucherType || '—'} | وضعیت: ${r.isDeleted === 1 ? 'حذف‌شده' : (r.status || '—')} | تاریخ: ${jalaliLabel(r.date)}`,
         date: String(r.date || '').substring(0, 10),
         linkType: 'voucher' as const,
         linkId: r.id,

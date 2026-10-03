@@ -14,7 +14,7 @@ import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
-import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber } from '../utils';
+import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
 
 export default function CustomersPage({ user }: { user: User }) {
@@ -715,7 +715,7 @@ export default function CustomersPage({ user }: { user: User }) {
                         {ledgerData.items.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-slate-50">
                             <td className="p-2.5 text-center text-slate-400">{i + 1}</td>
-                            <td className="p-2.5 text-center text-slate-700">{row.date}</td>
+                            <td className="p-2.5 text-center text-slate-700">{formatPersianDate(row.date)}</td>
                             <td className="p-2.5 text-center font-bold text-blue-700">#{row.voucherNumber}</td>
                             <td className="p-2.5 text-right font-sans text-slate-800">{row.itemDescription || row.description}</td>
                             <td className="p-2.5 text-left text-blue-700 font-bold">{row.debit > 0 ? formatPersianPrice(row.debit) : '—'}</td>

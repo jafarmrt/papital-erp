@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { computeVoucherBalance, VOUCHER_BALANCE_TOLERANCE, type VoucherBalanceRow } from '../../lib/voucherBalance.js';
 import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
+import { storageDateParam } from '../../middleware/validate.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -71,8 +72,8 @@ export const vouchersQuerySchema = z.object({
     search: z.string().optional(),
     status: z.enum(['draft', 'approved', 'permanent', 'all']).optional(),
     voucherType: z.enum(['general', 'opening', 'closing', 'sales', 'purchase', 'treasury', 'payroll', 'adjustment', 'settlement', 'all']).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     referenceModule: z.enum(['manual', 'invoice', 'payroll', 'cheque', 'treasury', 'inventory', 'all']).optional(),
     referenceId: z.coerce.number().int().positive().optional(),
   }).optional()
@@ -255,8 +256,8 @@ export const treasuryQuerySchema = z.object({
   query: z.object({
     type: z.enum(['receipt', 'payment', 'all']).optional(),
     bankAccountId: z.coerce.number().int().positive().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(1000).optional(),
   }).optional()
@@ -342,8 +343,8 @@ export const chequesQuerySchema = z.object({
   query: z.object({
     type: z.enum(['received', 'paid', 'all']).optional(),
     status: z.enum(['pending', 'passed', 'cashed', 'returned', 'voided', 'bounced', 'all']).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
     search: z.string().optional(),
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(1000).optional(),

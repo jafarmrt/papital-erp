@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { FileText, Plus, Search, Printer, Edit3, Trash2, ChevronDown, ChevronRight, CheckCircle2, Clock, Lock, RotateCcw, History, ShieldCheck, FileCheck, MoreVertical, CheckSquare, GitFork, X } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString, toStorageDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import type { JournalVoucher, Account, Customer, Personnel, FinancialAttachment } from '../../types';
 import { VoucherReversalModal } from './VoucherReversalModal';
@@ -256,8 +256,10 @@ export function JournalVouchersTab({
       (v.referenceNumber && v.referenceNumber.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchType = selectedType === 'all' || v.voucherType === selectedType;
     const matchStatus = selectedStatus === 'all' || v.status === selectedStatus;
-    const matchStart = !startDate || v.date >= startDate;
-    const matchEnd = !endDate || v.date <= endDate;
+    // v7.0.136 (TD-232): تاریخ سند (ISO یا شمسی قدیمی) و فیلتر شمسی هر دو ISO مقایسه می‌شوند
+    const vDate = toStorageDate(v.date) || '';
+    const matchStart = !startDate || vDate >= (toStorageDate(startDate) || '');
+    const matchEnd = !endDate || vDate <= (toStorageDate(endDate) || '');
     return matchSearch && matchType && matchStatus && matchStart && matchEnd;
   });
 

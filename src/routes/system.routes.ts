@@ -4,7 +4,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
-import { validate } from '../middleware/validate.js';
+import { validate, storageDateParam } from '../middleware/validate.js';
 import { parsePagination } from '../lib/pagination.js';
 import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity } from '../lib/auditLogger.js';
 import { BUILD_INFO } from '../lib/version.js';
@@ -50,8 +50,8 @@ export const activityLogsQuerySchema = z.object({
       message: 'دسته تاریخچه ممیزی نامعتبر است'
     }).optional(),
     search: optionalQueryText(200),
-    startDate: optionalQueryText(40),
-    endDate: optionalQueryText(40),
+    startDate: storageDateParam,
+    endDate: storageDateParam,
   }).optional()
 });
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { ShieldCheck, UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, Search, X, ArrowDownLeft, ArrowUpRight, RefreshCw, Check, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BankAccount } from '../../../types';
-import { formatPersianNumber, formatPersianPrice } from '../../../utils';
+import { formatPersianNumber, formatPersianPrice, formatPersianDate } from '../../../utils';
 import { confirmAction } from '../../ConfirmDialogHost';
 import { 
   parseBankStatementBuffer, 
@@ -543,7 +543,7 @@ export function BankReconciliationModal({
                             </td>
 
                             <td className="p-2.5 font-mono text-slate-600 dark:text-slate-300 text-[11px]">
-                              {row.date || '—'}
+                              {row.date ? formatPersianDate(row.date) : '—'}
                             </td>
 
                             <td className="p-2.5 font-mono font-bold text-slate-900 dark:text-white">

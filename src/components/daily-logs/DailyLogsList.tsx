@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { DailyWorkLog, User } from '../../types';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
-import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
@@ -235,7 +235,7 @@ export function DailyLogsList({
             {/* Actions Footer */}
             <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 print:hidden">
               <span className="text-[10px] text-slate-400">
-                ثبت شده: {log.created_at || log.createdAt}
+                ثبت شده: {formatPersianDateTime(log.created_at || log.createdAt)}
               </span>
 
               <div className="flex items-center gap-1.5">
