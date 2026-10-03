@@ -1,0 +1,125 @@
+/**
+ * طرح‌های Zod کوئری گزارش‌های مالی و بستن سال مالی (src/routes/accounting/reports.routes.ts و fiscal.routes.ts).
+ * از accounting.schemas.ts (و در نتیجه src/routes/accounting.routes.ts) دوباره صادر می‌شوند.
+ */
+import { z } from 'zod';
+
+// ==========================================
+// REPORTS & FINANCIAL STATEMENTS
+// ==========================================
+// V1.6.0: گزارش جریان نقدی خزانه
+export const dateRangeQuerySchema = z.object({
+  query: z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional()
+  }).optional()
+});
+
+export const trialBalanceQuerySchema = z.object({
+  query: z.object({
+    level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+export const accountCardQuerySchema = z.object({
+  query: z.object({
+    accountId: z.coerce.number().int().positive().optional(),
+    detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional(),
+    detailedId: z.coerce.number().int().positive().optional(),
+    detailedName: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+export const partyLedgerQuerySchema = z.object({
+  query: z.object({
+    partyId: z.coerce.number().int().positive().optional(),
+    partyType: z.string().optional(),
+    partyName: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+    includeDrafts: z.string().optional(),
+  }).optional()
+});
+
+// v7.0.127 (TD-247): فهرست طرف‌های حساب (getPartiesList)
+export const partiesQuerySchema = z.object({
+  query: z.object({
+    search: z.string().max(200).optional(),
+    type: z.preprocess(
+      v => (v === '' ? undefined : v),
+      z.enum(['all', 'customer', 'supplier', 'personnel'], { message: 'نوع طرف حساب باید all، customer، supplier یا personnel باشد' }).optional()
+    ),
+  }).optional()
+});
+
+export const journalBookQuerySchema = z.object({
+  query: z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    search: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+export const financialRatiosQuerySchema = z.object({
+  query: z.object({
+    asOfDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+export const incomeStatementQuerySchema = z.object({
+  query: z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+export const balanceSheetQuerySchema = z.object({
+  query: z.object({
+    date: z.string().optional(),
+    asOfDate: z.string().optional(),
+    currency: z.string().optional(),
+  }).optional()
+});
+
+export const projectDetailQuerySchema = z.object({
+  query: z.object({
+    projectId: z.coerce.number().int().positive('شناسه پروژه الزامی است و باید عدد مثبت باشد')
+  })
+});
+
+export const docSignaturesQuerySchema = z.object({
+  query: z.object({
+    entityId: z.string().min(1, 'شناسه سند الزامی است')
+  })
+});
+
+// ==========================================
+// FISCAL YEAR CLOSING
+// ==========================================
+export const fiscalClosingPreviewQuerySchema = z.object({
+  query: z.object({
+    year: z.string().min(1, 'سال مالی الزامی است'),
+    closingDate: z.string().min(1, 'تاریخ سند اختتامیه الزامی است'),
+    openingDateNewYear: z.string().optional(),
+  })
+});
+
+export const fiscalClosingExecuteSchema = z.object({
+  body: z.object({
+    year: z.string().min(1, 'سال مالی الزامی است'),
+    closingDate: z.string().min(1, 'تاریخ سند بستن سال الزامی است'),
+    openingDateNewYear: z.string().optional(),
+    createOpeningVoucher: z.boolean().optional(),
+  })
+});

@@ -9,7 +9,7 @@ import { AccountingService } from '../../services/accounting.service.js';
 import { validate } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { orm } from '../../db/drizzle.js';
-import { sql, eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { workflowInstances, workflowHistoryLogs, workflowStates } from '../../db/schema.js';
 import {
   type ValidatedQuery,
@@ -17,6 +17,7 @@ import {
   trialBalanceQuerySchema,
   accountCardQuerySchema,
   partyLedgerQuerySchema,
+  partiesQuerySchema,
   journalBookQuerySchema,
   financialRatiosQuerySchema,
   incomeStatementQuerySchema,
@@ -99,12 +100,9 @@ router.get('/accounting/reports/party-ledger', authorizePermission('accounting.r
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), asyncHandler(async (req, res) => {
-  const { search, type } = req.query || {};
-  const data = await AccountingService.getPartiesList({
-    search: search as string,
-    type: type as string,
-  });
+router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(partiesQuerySchema), asyncHandler(async (req, res) => {
+  const { search, type } = (req.query as ValidatedQuery<typeof partiesQuerySchema>) || {};
+  const data = await AccountingService.getPartiesList({ search, type });
   res.json({ data });
 }));
 
@@ -157,97 +155,16 @@ router.get('/accounting/reports/health-check', authorizePermission('accounting.r
 // PROJECT REPORT & DOC SIGNATURES (V10-PHASE6)
 // ==========================================
 
-/** ردیف خام SQL گزارش per-project (ستون‌های numeric در node-postgres رشته برمی‌گردند). */
-type ProjectSummaryRow = {
-  project_id: number | null;
-  project_code: string | null;
-  project_title: string | null;
-  entries_count: number | string | null;
-  total_debit: number | string | null;
-  total_credit: number | string | null;
-};
-
-/** ردیف خام SQL ریز گردش یک پروژه. */
-type ProjectDetailRow = {
-  line_id: number;
-  voucher_number: number | string | null;
-  voucher_date: string | null;
-  voucher_description: string | null;
-  account_code: string;
-  account_name: string;
-  line_description: string | null;
-  debit: number | string | null;
-  credit: number | string | null;
-};
-
 // V10-6.1: گزارش حسابداری per-project — خلاصه گردش بدهکار/بستانکار به تفکیک پروژه
+// v7.0.127 (TD-247): محاسبه در AccountingReportService با Decimal (AGENTS.md §1.8)؛ همان شکل پاسخ پیشین
 router.get('/accounting/reports/project-summary', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
-  const result = await orm.execute(sql`
-    SELECT jvi.detailed_id AS project_id,
-           MAX(pp.project_code) AS project_code,
-           MAX(pp.title) AS project_title,
-           COUNT(jvi.id)::int AS entries_count,
-           COALESCE(SUM(jvi.debit), 0) AS total_debit,
-           COALESCE(SUM(jvi.credit), 0) AS total_credit
-    FROM journal_voucher_items jvi
-    INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
-    LEFT JOIN production_projects pp ON pp.id = jvi.detailed_id
-    WHERE jvi.detailed_type = 'project'
-    GROUP BY jvi.detailed_id
-    ORDER BY MAX(pp.created_at) DESC NULLS LAST
-  `);
-
-  const rows = (result.rows || []) as ProjectSummaryRow[];
-  res.json(rows.map(r => ({
-    projectId: r.project_id,
-    projectCode: r.project_code || '',
-    projectTitle: r.project_title || 'پروژه نامشخص / حذف‌شده',
-    entriesCount: Number(r.entries_count) || 0,
-    totalDebit: Number(r.total_debit) || 0,
-    totalCredit: Number(r.total_credit) || 0,
-    balance: (Number(r.total_debit) || 0) - (Number(r.total_credit) || 0)
-  })));
+  res.json(await AccountingService.getProjectSummaryReport());
 }));
 
 // V10-6.1: ریز گردش یک پروژه با تراز جاری (read-model ساده، بدون سطح ۵)
 router.get('/accounting/reports/project-detail', authorizePermission('accounting.reports', 'accounting.view'), validate(projectDetailQuerySchema), asyncHandler(async (req, res) => {
   const projectId = Number(req.query.projectId);
-
-  const result = await orm.execute(sql`
-    SELECT jvi.id AS line_id,
-           jv.voucher_number AS voucher_number,
-           jv.date AS voucher_date,
-           jv.description AS voucher_description,
-           COALESCE(a.code, '') AS account_code,
-           COALESCE(a.name, '') AS account_name,
-           jvi.description AS line_description,
-           jvi.debit, jvi.credit
-    FROM journal_voucher_items jvi
-    INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
-    LEFT JOIN accounts a ON a.id = jvi.account_id
-    WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId}
-    ORDER BY jv.date ASC, jv.id ASC, jvi.id ASC
-  `);
-
-  const rows = (result.rows || []) as ProjectDetailRow[];
-  let running = 0;
-  const detail = rows.map(r => {
-    const debit = Number(r.debit) || 0;
-    const credit = Number(r.credit) || 0;
-    running += debit - credit;
-    return {
-      voucherNumber: r.voucher_number || '-',
-      voucherDate: r.voucher_date,
-      voucherDescription: r.voucher_description || '',
-      accountCode: r.account_code,
-      accountName: r.account_name,
-      lineDescription: r.line_description || '',
-      debit,
-      credit,
-      runningBalance: running
-    };
-  });
-
+  const detail = await AccountingService.getProjectDetailReport(projectId);
   res.json({ projectId, detail });
 }));
 
@@ -255,16 +172,19 @@ router.get('/accounting/reports/project-detail', authorizePermission('accounting
 router.get('/accounting/doc-signatures', authorizePermission('accounting.reports', 'accounting.view', 'documents.view'), validate(docSignaturesQuerySchema), asyncHandler(async (req, res) => {
   const entityId = String(req.query.entityId || '').trim();
 
-  const instances = await orm
+  // v7.0.127 (TD-247): همان نمونه‌ای که GET /workflow/instance/:entityType/:entityId نشان می‌دهد — جدیدترین بر اساس
+  // created_at و در زمان برابر بزرگ‌ترین شناسه (پیش‌تر اولین ردیف بدون ORDER BY، که ترتیبش در PostgreSQL ثابت نیست)
+  const [instance] = await orm
     .select({ id: workflowInstances.id })
     .from(workflowInstances)
-    .where(and(eq(workflowInstances.entityType, 'document'), eq(workflowInstances.entityId, entityId)));
+    .where(and(eq(workflowInstances.entityType, 'document'), eq(workflowInstances.entityId, entityId)))
+    .orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id))
+    .limit(1);
 
-  if (instances.length === 0) {
+  if (!instance) {
     return res.json({ signatures: [] });
   }
 
-  const instanceIds = instances.map(i => i.id);
   const logs = await orm
     .select({
       name: workflowHistoryLogs.performedByName,
@@ -276,7 +196,7 @@ router.get('/accounting/doc-signatures', authorizePermission('accounting.reports
     .from(workflowHistoryLogs)
     .leftJoin(workflowStates, eq(workflowHistoryLogs.toStateId, workflowStates.id))
     .where(and(
-      eq(workflowHistoryLogs.instanceId, instanceIds[0]),
+      eq(workflowHistoryLogs.instanceId, instance.id),
       eq(workflowHistoryLogs.actionKey, 'approve')
     ))
     .orderBy(workflowHistoryLogs.createdAt);

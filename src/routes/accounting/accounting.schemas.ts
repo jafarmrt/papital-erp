@@ -1,8 +1,11 @@
 /**
  * طرح‌های Zod مسیرهای حسابداری (src/routes/accounting/*.routes.ts).
  * از src/routes/accounting.routes.ts هم دوباره صادر می‌شوند تا واردکننده‌های قبلی تغییر نکنند.
+ * طرح‌های کوئری گزارش‌ها و بستن سال مالی در reports.schemas.ts هستند و از همین فایل دوباره صادر می‌شوند.
  */
 import { z } from 'zod';
+import { computeVoucherBalance, VOUCHER_BALANCE_TOLERANCE, type VoucherBalanceRow } from '../../lib/voucherBalance.js';
+import { DEFAULT_ACCOUNT_MAPPINGS, type ConceptualAccountMappingConfig } from '../../services/accounting/accountMapping.service.js';
 
 /** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
 export type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
@@ -19,6 +22,42 @@ export const createAccountSchema = z.object({
     accountType: z.enum(['asset', 'liability', 'equity', 'revenue', 'expense', 'cost_of_sales']),
     nature: z.enum(['debit', 'credit', 'both']),
     description: z.string().optional(),
+  })
+});
+
+/**
+ * v7.0.127 (TD-247): ویرایش حساب — فقط فیلدهایی که ChartOfAccountsService.updateAccount می‌پذیرد (همه اختیاری).
+ * `code` را فرم کدینگ هم می‌فرستد ولی سرویس آن را تغییر نمی‌دهد؛ مانند پیش پذیرفته و نادیده گرفته می‌شود.
+ */
+export const updateAccountSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^[1-9]\d*$/, 'شناسه حساب باید عدد صحیح مثبت باشد')
+  }),
+  body: z.object({
+    code: z.string().optional(),
+    name: z.string().trim().min(1, 'عنوان حساب الزامی است').optional(),
+    level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
+    parentId: z.number().int().positive().nullable().optional(),
+    accountType: z.enum(['asset', 'liability', 'equity', 'revenue', 'expense', 'cost_of_sales']).optional(),
+    nature: z.enum(['debit', 'credit', 'both']).optional(),
+    description: z.string().nullable().optional(),
+    isActive: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(v => Boolean(v)).optional(),
+  })
+});
+
+/**
+ * v7.0.127 (TD-247): نگاشت مفهومی سرفصل‌ها — فقط کلیدهای ConceptualAccountMappingConfig (کد حساب، رشته) و فهرست
+ * مفاهیم غیرفعال. کلیدهای دیگر (مانند chartHasAccounts که تب تنظیمات از پاسخ GET پس می‌فرستد) حذف می‌شوند.
+ */
+const accountMappingValueSchema = z.string().max(50, 'کد حساب نگاشت حداکثر ۵۰ نویسه است').optional();
+const accountMappingShape = Object.fromEntries(
+  (Object.keys(DEFAULT_ACCOUNT_MAPPINGS) as Array<keyof ConceptualAccountMappingConfig>).map(key => [key, accountMappingValueSchema])
+) as Record<keyof ConceptualAccountMappingConfig, typeof accountMappingValueSchema>;
+
+export const saveAccountMappingsSchema = z.object({
+  body: z.object({
+    ...accountMappingShape,
+    disabled: z.array(z.string().max(100)).max(200).optional(),
   })
 });
 
@@ -53,6 +92,15 @@ export const voucherItemSchema = z.object({
   message: 'هر ردیف سند باید حداقل دارای مبلغ بدهکار یا بستانکار بزرگتر از صفر باشد'
 });
 
+/**
+ * v7.0.127 (TD-247): تراز سند در طرح Zod با جمع اعشاری (computeVoucherBalance) و همان آستانه سرویس
+ * (VOUCHER_BALANCE_TOLERANCE؛ VoucherService اختلاف بیشتر از آن را رد می‌کند).
+ */
+const isVoucherBalanced = (rows: readonly VoucherBalanceRow[]): boolean => {
+  const balance = computeVoucherBalance(rows);
+  return balance.totalDebit > 0 && balance.difference <= VOUCHER_BALANCE_TOLERANCE;
+};
+
 export const createVoucherSchema = z.object({
   body: z.object({
     date: z.string().min(1, 'تاریخ سند الزامی است'),
@@ -66,11 +114,7 @@ export const createVoucherSchema = z.object({
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است')
-  }).refine((data) => {
-    const totalDebit = data.items.reduce((s, it) => s + (it.debit || 0), 0);
-    const totalCredit = data.items.reduce((s, it) => s + (it.credit || 0), 0);
-    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
-  }, {
+  }).refine((data) => isVoucherBalanced(data.items), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
   })
@@ -88,12 +132,7 @@ export const updateVoucherSchema = z.object({
     currency: z.string().optional(),
     attachments: z.array(z.any()).optional(),
     items: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند دوبل الزامی است').optional(),
-  }).refine((data) => {
-    if (!data.items) return true;
-    const totalDebit = data.items.reduce((s, it) => s + (it.debit || 0), 0);
-    const totalCredit = data.items.reduce((s, it) => s + (it.credit || 0), 0);
-    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
-  }, {
+  }).refine((data) => !data.items || isVoucherBalanced(data.items), {
     message: 'سند حسابداری تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['items']
   })
@@ -120,11 +159,7 @@ export const correctVoucherSchema = z.object({
     reason: z.string().min(1, 'علت اصلاح سند الزامی است'),
     newDescription: z.string().optional(),
     newItems: z.array(voucherItemSchema).min(2, 'حداقل دو ردیف برای سند اصلاحی الزامی است')
-  }).refine((data) => {
-    const totalDebit = data.newItems.reduce((s, it) => s + (it.debit || 0), 0);
-    const totalCredit = data.newItems.reduce((s, it) => s + (it.credit || 0), 0);
-    return Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
-  }, {
+  }).refine((data) => isVoucherBalanced(data.newItems), {
     message: 'سند اصلاحی تراز نیست؛ مجموع مبالغ بدهکار و بستانکار باید برابر و بزرگتر از صفر باشند',
     path: ['newItems']
   })
@@ -203,6 +238,16 @@ export const updateBankAccountSchema = z.object({
     accountName: z.string().optional(),
     notes: z.string().optional(),
   })
+});
+
+// v7.0.127 (TD-247): نوع حساب خزانه برای پیشنهاد کد (خالی = bank، مانند پیش)
+export const nextBankCodeQuerySchema = z.object({
+  query: z.object({
+    type: z.preprocess(
+      v => (v === '' ? undefined : v),
+      z.enum(['bank', 'cash', 'pos', 'petty_cash'], { message: 'نوع حساب باید bank، cash، pos یا petty_cash باشد' }).optional()
+    ),
+  }).optional()
 });
 
 // Treasury Transactions (دریافت و پرداخت)
@@ -357,111 +402,4 @@ export const updateChequeStatusSchema = z.object({
   })
 });
 
-// ==========================================
-// REPORTS & FINANCIAL STATEMENTS
-// ==========================================
-// V1.6.0: گزارش جریان نقدی خزانه
-export const dateRangeQuerySchema = z.object({
-  query: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    currency: z.string().optional()
-  }).optional()
-});
-
-export const trialBalanceQuerySchema = z.object({
-  query: z.object({
-    level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    currency: z.string().optional(),
-  }).optional()
-});
-
-export const accountCardQuerySchema = z.object({
-  query: z.object({
-    accountId: z.coerce.number().int().positive().optional(),
-    detailedType: z.enum(['none', 'customer', 'personnel', 'project', 'bank_account', 'other', 'supplier']).optional(),
-    detailedId: z.coerce.number().int().positive().optional(),
-    detailedName: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    currency: z.string().optional(),
-  }).optional()
-});
-
-export const partyLedgerQuerySchema = z.object({
-  query: z.object({
-    partyId: z.coerce.number().int().positive().optional(),
-    partyType: z.string().optional(),
-    partyName: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    currency: z.string().optional(),
-    includeDrafts: z.string().optional(),
-  }).optional()
-});
-
-export const journalBookQuerySchema = z.object({
-  query: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    search: z.string().optional(),
-    currency: z.string().optional(),
-  }).optional()
-});
-
-export const financialRatiosQuerySchema = z.object({
-  query: z.object({
-    asOfDate: z.string().optional(),
-    currency: z.string().optional(),
-  }).optional()
-});
-
-export const incomeStatementQuerySchema = z.object({
-  query: z.object({
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    currency: z.string().optional(),
-  }).optional()
-});
-
-export const balanceSheetQuerySchema = z.object({
-  query: z.object({
-    date: z.string().optional(),
-    asOfDate: z.string().optional(),
-    currency: z.string().optional(),
-  }).optional()
-});
-
-export const projectDetailQuerySchema = z.object({
-  query: z.object({
-    projectId: z.coerce.number().int().positive('شناسه پروژه الزامی است و باید عدد مثبت باشد')
-  })
-});
-
-export const docSignaturesQuerySchema = z.object({
-  query: z.object({
-    entityId: z.string().min(1, 'شناسه سند الزامی است')
-  })
-});
-
-// ==========================================
-// FISCAL YEAR CLOSING
-// ==========================================
-export const fiscalClosingPreviewQuerySchema = z.object({
-  query: z.object({
-    year: z.string().min(1, 'سال مالی الزامی است'),
-    closingDate: z.string().min(1, 'تاریخ سند اختتامیه الزامی است'),
-    openingDateNewYear: z.string().optional(),
-  })
-});
-
-export const fiscalClosingExecuteSchema = z.object({
-  body: z.object({
-    year: z.string().min(1, 'سال مالی الزامی است'),
-    closingDate: z.string().min(1, 'تاریخ سند بستن سال الزامی است'),
-    openingDateNewYear: z.string().optional(),
-    createOpeningVoucher: z.boolean().optional(),
-  })
-});
+export * from './reports.schemas.js';

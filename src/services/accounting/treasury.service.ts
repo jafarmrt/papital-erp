@@ -11,6 +11,7 @@ export class TreasuryService {
   // 1. Bank Accounts & Cash Funds
   static getBankAccounts = BankAccountService.getBankAccounts.bind(BankAccountService);
   static recalculateAndSyncBankBalances = BankAccountService.recalculateAndSyncBankBalances.bind(BankAccountService);
+  static getBankReconciliationReport = BankAccountService.getBankReconciliationReport.bind(BankAccountService);
   static generateNextAccountCode = BankAccountService.generateNextAccountCode.bind(BankAccountService);
   static createBankAccount = BankAccountService.createBankAccount.bind(BankAccountService);
   static updateBankAccount = BankAccountService.updateBankAccount.bind(BankAccountService);

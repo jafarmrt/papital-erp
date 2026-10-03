@@ -10,6 +10,17 @@ import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 
+/** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
+export interface BankReconciliationReport {
+  syncedCount: number;
+  discrepantCount: number;
+  unlinkedCount: number;
+  totalCashAndBankLedger: number;
+  totalCashAndBankTreasury: number;
+  totalDiscrepancy: number;
+  accounts: BankAccount[];
+}
+
 export class BankAccountService {
   /** v7.0.67 (P2-6): مانده‌ها با Decimal محاسبه می‌شوند؛ خروجی API (getBankAccounts) عدد است. */
   private static async computeBankBalances() {
@@ -169,17 +180,25 @@ export class BankAccountService {
     }) as BankAccount;
   }
 
-  static async recalculateAndSyncBankBalances(): Promise<{
-    syncedCount: number;
-    discrepantCount: number;
-    unlinkedCount: number;
-    totalCashAndBankLedger: number;
-    totalCashAndBankTreasury: number;
-    totalDiscrepancy: number;
-    accounts: BankAccount[];
-  }> {
+  /**
+   * گزارش تطبیق مانده حساب‌های خزانه با دفاتر (بدون ذخیره). v7.0.127 (TD-247): جمع کل‌ها با Decimal، نه `+=`
+   * اعداد جاوااسکریپت (AGENTS.md §1.8)؛ خروجی API عدد است.
+   */
+  static async getBankReconciliationReport(): Promise<BankReconciliationReport> {
+    return this.summarizeReconciliation(await this.computeBankBalances());
+  }
+
+  static async recalculateAndSyncBankBalances(): Promise<BankReconciliationReport> {
     const computed = await this.computeBankBalances();
-    const banks = computed.map(c => this.toBankAccountDto(c));
+    for (const bank of computed) {
+      await orm.update(bankAccounts).set({
+        currentBalance: money(bank.currentBalance)
+      }).where(eq(bankAccounts.id, bank.row.id));
+    }
+    return this.summarizeReconciliation(computed);
+  }
+
+  private static summarizeReconciliation(computed: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>): BankReconciliationReport {
     let syncedCount = 0;
     let discrepantCount = 0;
     let unlinkedCount = 0;
@@ -188,10 +207,6 @@ export class BankAccountService {
     let totalDiscrepancy = fin(0);
 
     for (const bank of computed) {
-      await orm.update(bankAccounts).set({
-        currentBalance: money(bank.currentBalance)
-      }).where(eq(bankAccounts.id, bank.row.id));
-
       totalCashAndBankLedger = totalCashAndBankLedger.add(bank.ledgerBalance);
       totalCashAndBankTreasury = totalCashAndBankTreasury.add(bank.treasuryBalance);
       totalDiscrepancy = totalDiscrepancy.add(bank.discrepancy);
@@ -201,6 +216,7 @@ export class BankAccountService {
       else unlinkedCount++;
     }
 
+    const banks = computed.map(c => this.toBankAccountDto(c));
     return {
       syncedCount,
       discrepantCount,

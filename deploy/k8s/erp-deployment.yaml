@@ -39,7 +39,7 @@ spec:
         emptyDir: {}
       containers:
       - name: erp
-        image: registry.example.com/erp:v7.0.126
+        image: registry.example.com/erp:v7.0.127
         ports:
         - containerPort: 3000
         volumeMounts:
@@ -51,7 +51,7 @@ spec:
         - name: NODE_ENV
           value: "production"
         - name: APP_VERSION
-          value: "7.0.126"
+          value: "7.0.127"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:

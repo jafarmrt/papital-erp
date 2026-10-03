@@ -8840,5 +8840,216 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // v7.0.127 (TD-247): یافته‌های تفکیک روتر حسابداری — جمع پول با Decimal در گزارش پروژه و تطبیق بانک، آستانه تراز
+  // طرح Zod سند برابر سرویس، اعتبارسنجی ورودی‌های بدون Zod، و انتخاب قطعی نمونه گردش کار در امضای چاپ سند
+  if (shouldRun('reg_accounting_route_findings_td_247', 'td247', 'accounting_routes')) {
+    const tStart = Date.now();
+    const testName = 'TD-247 Regression: جمع اعشاری گزارش پروژه و تطبیق بانک، آستانه تراز طرح سند، اعتبارسنجی ورودی مسیرهای حسابداری و نمونه قطعی امضای سند';
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const { bankAccounts, appSettings, workflowInstances, workflowHistoryLogs } = await import('../../db/schema.js');
+    const createdAccountIds: number[] = [];
+    const createdVoucherIds: number[] = [];
+    const createdBankIds: number[] = [];
+    const createdInstanceIds: number[] = [];
+    const createdDefinitionIds: number[] = [];
+    const settingKeys = ['accounting_account_mappings', 'accounting_mappings_disabled'];
+    const savedSettings = await orm.select().from(appSettings).where(inArray(appSettings.key, settingKeys));
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { createTestVoucher, createTestWorkflow } = await import('../fixtures/factories.js');
+      const { updateVoucherSchema, correctVoucherSchema } = await import('../../routes/accounting.routes.js');
+      const { FinancialMath } = await import('../../lib/financialDecimal.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const violations: string[] = [];
+      const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+      const get = (url: string) => request(app).get(url).set('Cookie', session.cookie);
+      const send = (method: 'post' | 'put', url: string, body: object) => request(app)[method](url)
+        .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
+
+      const account = await AccountingService.createAccount({
+        code: `T247${suffix}`, name: `ERP-TEST-MARKER حساب TD-247 ${suffix}`, level: 'detailed', parentId: null,
+        accountType: 'asset', nature: 'debit', description: '',
+      });
+      createdAccountIds.push(account.id);
+
+      // (الف) گزارش پروژه: ۰٫۱ + ۰٫۲ بدهکار و ۰٫۱ بستانکار — تراز جاری ۰٫۱، ۰٫۳، ۰٫۲ و مانده خلاصه ۰٫۲ (نه 0.30000000000000004 / 0.19999999999999998)
+      const projectId = 1_900_000_000 + Math.floor(Math.random() * 200_000_000);
+      const { voucher } = await createTestVoucher({ date: '2026-01-01', status: 'approved', totalDebit: money(0.3), totalCredit: money(0.1) }, []);
+      createdVoucherIds.push(voucher.id);
+      const lines: Array<[number, number]> = [[0.1, 0], [0.2, 0], [0, 0.1]];
+      for (let i = 0; i < lines.length; i++) {
+        await orm.insert(journalVoucherItems).values({
+          voucherId: voucher.id, accountId: account.id, rowOrder: i + 1, detailedType: 'project', detailedId: projectId,
+          debit: money(lines[i][0]), credit: money(lines[i][1]), description: 'ERP-TEST-MARKER TD-247',
+        });
+      }
+      const detailRes = await get(`/api/accounting/reports/project-detail?projectId=${projectId}`);
+      const detail = ((detailRes.body as { detail?: Array<{ runningBalance: number; debit: number; credit: number }> })?.detail) ?? [];
+      const running = detail.map(d => d.runningBalance);
+      check(detailRes.status === 200 && JSON.stringify(running) === JSON.stringify([0.1, 0.3, 0.2]),
+        `تراز جاری ریز گردش پروژه باید [0.1,0.3,0.2] باشد (وضعیت ${detailRes.status}، دریافتی ${JSON.stringify(running)})`);
+      check(detail.length === 3 && detail[1].debit === 0.2 && detail[2].credit === 0.1, `مبالغ ردیف‌های ریز گردش پروژه نادرست است: ${JSON.stringify(detail)}`);
+      const summaryRes = await get('/api/accounting/reports/project-summary');
+      const summaryRows = Array.isArray(summaryRes.body) ? summaryRes.body as Array<{ projectId: number; totalDebit: number; totalCredit: number; balance: number; entriesCount: number }> : [];
+      const summary = summaryRows.find(r => Number(r.projectId) === projectId);
+      check(summaryRes.status === 200 && !!summary && summary.totalDebit === 0.3 && summary.totalCredit === 0.1 && summary.balance === 0.2 && summary.entriesCount === 3,
+        `خلاصه گردش پروژه باید بدهکار 0.3، بستانکار 0.1 و مانده 0.2 باشد (وضعیت ${summaryRes.status}، دریافتی ${JSON.stringify(summary)})`);
+
+      // (ب) گزارش تطبیق بانک: جمع کل‌ها برابر جمع اعشاری مانده حساب‌های همان گزارش. مبالغ دو حساب آزمون از میان
+      // نامزدها چنان انتخاب می‌شوند که جمع `+=` اعداد جاوااسکریپت (روش پیشین) با جمع دقیق فرق کند.
+      const bankCodes = [`ZZT247A${suffix}`, `ZZT247B${suffix}`];
+      for (const code of bankCodes) {
+        const [b] = await orm.insert(bankAccounts).values({
+          code, title: `ERP-TEST-MARKER صندوق TD-247 ${code}`, type: 'cash', initialBalance: money(0), currentBalance: money(0), currency: 'IRR', isDeleted: 0,
+        }).returning({ id: bankAccounts.id });
+        createdBankIds.push(b.id);
+      }
+      type ReconAccount = { id: number; ledgerBalance: number; treasuryBalance: number; discrepancy: number };
+      type ReconReport = { totalCashAndBankLedger: number; totalCashAndBankTreasury: number; totalDiscrepancy: number; unlinkedCount: number; accounts: ReconAccount[] };
+      const candidates: Array<[string, string]> = [['0.1', '0.2'], ['1234567890123.45', '0.1'], ['0.7', '0.1'], ['0.3', '0.6'], ['1.1', '2.2'], ['987654321.17', '0.03']];
+      let recon: ReconReport | null = null;
+      let reconStatus = 0;
+      let meaningful = false;
+      for (const [a, b] of candidates) {
+        await orm.update(bankAccounts).set({ initialBalance: money(a) }).where(eq(bankAccounts.id, createdBankIds[0]));
+        await orm.update(bankAccounts).set({ initialBalance: money(b) }).where(eq(bankAccounts.id, createdBankIds[1]));
+        const res = await get('/api/accounting/banks/reconciliation-report');
+        reconStatus = res.status;
+        recon = (res.body as { report?: ReconReport })?.report ?? null;
+        const accs = recon?.accounts ?? [];
+        const jsSum = accs.reduce((s, x) => s + (x.ledgerBalance || 0), 0);
+        if (jsSum !== FinancialMath.sum(accs.map(x => x.ledgerBalance)).toNumber()) { meaningful = true; break; }
+      }
+      const accs = recon?.accounts ?? [];
+      check(reconStatus === 200 && createdBankIds.every(id => accs.some(x => x.id === id)), `گزارش تطبیق بانک باید حساب‌های آزمون را برگرداند (وضعیت ${reconStatus})`);
+      check(meaningful, 'هیچ‌یک از مبالغ نامزد خطای جمع اعشاری جاوااسکریپت ایجاد نکرد؛ آزمون معنادار نیست');
+      for (const key of ['ledgerBalance', 'treasuryBalance', 'discrepancy'] as const) {
+        const totalKey = key === 'ledgerBalance' ? 'totalCashAndBankLedger' : key === 'treasuryBalance' ? 'totalCashAndBankTreasury' : 'totalDiscrepancy';
+        const exact = FinancialMath.sum(accs.map(x => x[key])).toNumber();
+        check(recon?.[totalKey] === exact, `${totalKey} گزارش تطبیق بانک باید جمع اعشاری ${exact} باشد (دریافتی ${recon?.[totalKey]})`);
+      }
+
+      // (ج) تراز طرح Zod سند: اختلاف ۰٫۰۰۵ و دقیقاً ۰٫۰۱ مانند VoucherService پذیرفته، ۰٫۰۲ رد می‌شود
+      const items = (debit: number) => [
+        { accountId: account.id, debit, credit: 0 },
+        { accountId: account.id, debit: 0, credit: 100 },
+      ];
+      const base = { date: '1405/01/15', description: 'ERP-TEST-MARKER سند TD-247' };
+      for (const [debit, want] of [[100.005, true], [100.01, true], [100.02, false]] as Array<[number, boolean]>) {
+        const c = createVoucherSchema.safeParse({ body: { ...base, items: items(debit) } }).success;
+        const u = updateVoucherSchema.safeParse({ params: { id: '1' }, body: { items: items(debit) } }).success;
+        const k = correctVoucherSchema.safeParse({ params: { id: '1' }, body: { reason: 'اصلاح آزمون', newItems: items(debit) } }).success;
+        check(c === want && u === want && k === want, `طرح سند با بدهکار ${debit} و بستانکار 100 باید ${want ? 'پذیرفته' : 'رد'} شود (ایجاد ${c}، ویرایش ${u}، اصلاحی ${k})`);
+      }
+      const createRes = await send('post', '/api/accounting/vouchers', { ...base, status: 'draft', items: items(100.005) });
+      const createdId = (createRes.body as { id?: number })?.id;
+      if (typeof createdId === 'number') createdVoucherIds.push(createdId);
+      check(createRes.status === 201 || createRes.status === 200, `ایجاد سند با اختلاف 0.005 از مسیر HTTP باید مانند سرویس پذیرفته شود (وضعیت ${createRes.status}: ${JSON.stringify(createRes.body).slice(0, 200)})`);
+
+      // (د) ورودی‌های تازه اعتبارسنجی‌شده: بدنه واقعی رابط کاربری می‌گذرد، ورودی نامعتبر 400
+      const expectStatus = (label: string, got: number, want: number) => check(got === want, `${label}: وضعیت ${got} (انتظار ${want})`);
+      // نگاشت سرفصل‌ها — همان کاری که AccountingSettingsTab می‌کند: پاسخ GET بدون disabled/accountsCount، به‌علاوه disabled
+      const mappingsGet = await get('/api/accounting/mappings');
+      const { disabled: currentDisabled, accountsCount: _count, ...uiMappings } = (mappingsGet.body || {}) as Record<string, unknown>;
+      void _count;
+      const uiSave = await send('post', '/api/accounting/mappings', { ...uiMappings, disabled: Array.isArray(currentDisabled) ? currentDisabled : [] });
+      expectStatus('ذخیره نگاشت با بدنه رابط کاربری', uiSave.status, 200);
+      const savedData = (uiSave.body as { data?: Record<string, unknown> })?.data ?? {};
+      check(!('chartHasAccounts' in savedData), 'کلید غیرنگاشتی chartHasAccounts نباید در نگاشت سرفصل‌ها ذخیره شود');
+      expectStatus('نگاشت با کد عددی', (await send('post', '/api/accounting/mappings', { salesRevenueAccountCode: 5001 })).status, 400);
+      expectStatus('نگاشت با disabled غیرآرایه', (await send('post', '/api/accounting/mappings', { disabled: 'salesRevenueAccountCode' })).status, 400);
+      // ویرایش حساب — همان بدنه فرم ChartOfAccountsTab
+      const uiAccount = { code: account.code, name: `${account.name} ویرایش`, level: 'detailed', parentId: null, accountType: 'asset', nature: 'debit', description: 'شرح' };
+      const accRes = await send('put', `/api/accounting/accounts/${account.id}`, uiAccount);
+      expectStatus('ویرایش حساب با بدنه رابط کاربری', accRes.status, 200);
+      check((accRes.body as { name?: string })?.name === uiAccount.name, `نام حساب ویرایش نشد: ${JSON.stringify(accRes.body).slice(0, 200)}`);
+      expectStatus('ویرایش حساب با سطح نامعتبر', (await send('put', `/api/accounting/accounts/${account.id}`, { level: 'bogus' })).status, 400);
+      expectStatus('ویرایش حساب با نام عددی', (await send('put', `/api/accounting/accounts/${account.id}`, { name: 123 })).status, 400);
+      const [accAfter] = await orm.select({ level: accounts.level, name: accounts.name }).from(accounts).where(eq(accounts.id, account.id));
+      check(accAfter?.level === 'detailed' && accAfter?.name === uiAccount.name, `حساب پس از ورودی نامعتبر نباید تغییر کند: ${JSON.stringify(accAfter)}`);
+      // فهرست طرف‌های حساب
+      expectStatus('فهرست طرف‌های حساب بدون پارامتر (رابط کاربری)', (await get('/api/accounting/reports/parties')).status, 200);
+      expectStatus('فهرست طرف‌های حساب با نوع معتبر', (await get('/api/accounting/reports/parties?type=personnel&search=x')).status, 200);
+      expectStatus('فهرست طرف‌های حساب با نوع نامعتبر', (await get('/api/accounting/reports/parties?type=bogus')).status, 400);
+      expectStatus('فهرست طرف‌های حساب با جستجوی تکراری', (await get('/api/accounting/reports/parties?search=a&search=b')).status, 400);
+      // کد پیشنهادی حساب خزانه
+      const cashCode = await get('/api/accounting/banks/next-code?type=cash');
+      check(cashCode.status === 200 && /^CASH-\d+$/.test(String((cashCode.body as { code?: string })?.code)), `کد پیشنهادی صندوق نادرست است (${cashCode.status} ${JSON.stringify(cashCode.body)})`);
+      const emptyCode = await get('/api/accounting/bank-accounts/next-code?type=');
+      check(emptyCode.status === 200 && /^BANK-\d+$/.test(String((emptyCode.body as { code?: string })?.code)), `نوع خالی باید مانند پیش bank باشد (${emptyCode.status} ${JSON.stringify(emptyCode.body)})`);
+      expectStatus('کد پیشنهادی با نوع نامعتبر', (await get('/api/accounting/banks/next-code?type=bogus')).status, 400);
+
+      // (ه) امضای چاپ سند: با دو نمونه گردش کار برای یک سند، جدیدترین (created_at، در زمان برابر بزرگ‌ترین شناسه)
+      // — همان نمونه GET /workflow/instance — نه اولین ردیف بدون ORDER BY
+      const wf = await createTestWorkflow();
+      createdDefinitionIds.push(wf.definition.id);
+      const approvedState = wf.states.approved;
+      const addInstance = async (entityId: string, createdAt: string, signer: string) => {
+        const [inst] = await orm.insert(workflowInstances).values({
+          workflowDefinitionId: wf.definition.id, definitionVersion: 1, entityType: 'document', entityId,
+          currentStateId: approvedState.id, status: 'COMPLETED', version: 1, createdAt, updatedAt: createdAt,
+        }).returning({ id: workflowInstances.id });
+        createdInstanceIds.push(inst.id);
+        await orm.insert(workflowHistoryLogs).values({
+          instanceId: inst.id, toStateId: approvedState.id, performedByName: signer, actionKey: 'approve', actionTitle: 'تایید', createdAt,
+        });
+        return inst.id;
+      };
+      const signersOf = async (entityId: string) => {
+        const res = await get(`/api/accounting/doc-signatures?entityId=${encodeURIComponent(entityId)}`);
+        return { status: res.status, names: (((res.body as { signatures?: Array<{ name: string }> })?.signatures) ?? []).map(s => s.name) };
+      };
+      const entityLatest = `TD247-LATEST-${suffix}`;
+      await addInstance(entityLatest, '2026-01-01 10:00:00', 'امضاکننده قدیمی');
+      await addInstance(entityLatest, '2026-02-01 10:00:00', 'امضاکننده جدید');
+      const latest = await signersOf(entityLatest);
+      check(latest.status === 200 && JSON.stringify(latest.names) === JSON.stringify(['امضاکننده جدید']),
+        `امضای سند باید از جدیدترین نمونه باشد (وضعیت ${latest.status}، دریافتی ${JSON.stringify(latest.names)})`);
+      const entityTie = `TD247-TIE-${suffix}`;
+      await addInstance(entityTie, '2026-03-01 10:00:00', 'امضاکننده شناسه کوچک');
+      const highId = await addInstance(entityTie, '2026-03-01 10:00:00', 'امضاکننده شناسه بزرگ');
+      const tie = await signersOf(entityTie);
+      check(tie.status === 200 && JSON.stringify(tie.names) === JSON.stringify(['امضاکننده شناسه بزرگ']),
+        `در زمان ایجاد برابر امضا باید از نمونه با شناسه بزرگ‌تر باشد (وضعیت ${tie.status}، دریافتی ${JSON.stringify(tie.names)})`);
+      const instRes = await get(`/api/workflow/instance/document/${encodeURIComponent(entityTie)}`);
+      const shownId = (instRes.body as { instance?: { id?: number } | null })?.instance?.id;
+      check(instRes.status === 200 && shownId === highId, `GET /workflow/instance باید همان نمونه امضای چاپ (${highId}) را نشان دهد (وضعیت ${instRes.status}، دریافتی ${shownId})`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_accounting_route_findings_td_247', scenarioId: 'v4_accounting_treasury_runtime_contracts_guard', name: testName, layer: 'regression',
+        executionType: 'real_api', passed: true, durationMs: Date.now() - tStart,
+        details: 'تراز جاری و مانده پروژه و جمع کل تطبیق بانک دقیق (Decimal)؛ طرح سند اختلاف ≤ ۰٫۰۱ را مانند سرویس پذیرفت و ۰٫۰۲ را رد کرد؛ نگاشت، ویرایش حساب، طرف‌های حساب و کد خزانه ورودی نامعتبر را با 400 رد و بدنه رابط کاربری را پذیرفتند؛ امضای سند از جدیدترین نمونه گردش کار آمد.'
+      }));
+    } catch (err: unknown) {
+      results.push(makeTestCase({
+        id: 'reg_accounting_route_findings_td_247', scenarioId: 'v4_accounting_treasury_runtime_contracts_guard', name: testName, layer: 'regression',
+        executionType: 'real_api', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      // بازگرداندن تنظیمات نگاشت به پیش از آزمون
+      await orm.delete(appSettings).where(inArray(appSettings.key, settingKeys));
+      for (const row of savedSettings) {
+        await orm.insert(appSettings).values({ key: row.key, value: row.value });
+      }
+      if (createdInstanceIds.length > 0) await cleanTestTableData('workflow_instances', 'id', createdInstanceIds);
+      if (createdDefinitionIds.length > 0) {
+        await cleanTestTableData('workflow_transitions', 'workflow_definition_id', createdDefinitionIds);
+        await cleanTestTableData('workflow_states', 'workflow_definition_id', createdDefinitionIds);
+        await cleanTestTableData('workflow_definition_versions', 'definition_id', createdDefinitionIds);
+        await cleanTestTableData('workflow_definitions', 'id', createdDefinitionIds);
+      }
+      if (createdBankIds.length > 0) await cleanTestTableData('bank_accounts', 'id', createdBankIds);
+      if (createdVoucherIds.length > 0) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
+        await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
+      }
+      if (createdAccountIds.length > 0) await cleanTestTableData('accounts', 'id', createdAccountIds);
+    }
+  }
+
   return results;
 }

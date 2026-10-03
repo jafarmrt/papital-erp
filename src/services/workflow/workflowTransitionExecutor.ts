@@ -754,7 +754,7 @@ export class WorkflowTransitionExecutor {
     const [inst] = await txExecutor.select().from(workflowInstances).where(and(
       eq(workflowInstances.entityType, entityType),
       eq(workflowInstances.entityId, String(entityId))
-    )).orderBy(desc(workflowInstances.createdAt));
+    )).orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id)); // v7.0.127 (TD-247): زمان برابر → بزرگ‌ترین شناسه
 
     if (!inst) return null;
 

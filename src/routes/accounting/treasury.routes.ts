@@ -10,7 +10,6 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
-import type { BankAccountType } from '../../types.js';
 import {
   type ValidatedQuery,
   createBankAccountSchema,
@@ -24,6 +23,7 @@ import {
   chequesQuerySchema,
   createChequeSchema,
   updateChequeStatusSchema,
+  nextBankCodeQuerySchema,
 } from './accounting.schemas.js';
 
 const router = Router();
@@ -57,64 +57,22 @@ const syncBanksHandler = asyncHandler(async (req, res) => {
 router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
 router.post('/accounting/bank-accounts/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
 
+// v7.0.127 (TD-247): جمع کل‌ها در TreasuryService با Decimal (AGENTS.md §1.8)؛ همان شکل پاسخ پیشین
 const reportBanksHandler = asyncHandler(async (req, res) => {
-  const banks = await AccountingService.getBankAccounts();
-  let syncedCount = 0;
-  let discrepantCount = 0;
-  let unlinkedCount = 0;
-  let totalCashAndBankLedger = 0;
-  let totalCashAndBankTreasury = 0;
-  let totalDiscrepancy = 0;
-
-  for (const bank of banks) {
-    totalCashAndBankLedger += (bank.ledgerBalance || 0);
-    totalCashAndBankTreasury += (bank.treasuryBalance || 0);
-    totalDiscrepancy += (bank.discrepancy || 0);
-
-    if (bank.syncStatus === 'synced') syncedCount++;
-    else if (bank.syncStatus === 'discrepant') discrepantCount++;
-    else unlinkedCount++;
-  }
-
-  res.json({
-    report: {
-      syncedCount,
-      discrepantCount,
-      unlinkedCount,
-      totalCashAndBankLedger,
-      totalCashAndBankTreasury,
-      totalDiscrepancy,
-      accounts: banks.map((b) => ({
-        id: b.id,
-        code: b.code,
-        title: b.title,
-        type: b.type,
-        accountCode: b.accountCode,
-        accountName: b.accountName,
-        initialBalance: b.initialBalance || 0,
-        ledgerBalance: b.ledgerBalance || 0,
-        treasuryBalance: b.treasuryBalance || 0,
-        currentBalance: b.currentBalance || 0,
-        totalDebit: b.totalDebit || 0,
-        totalCredit: b.totalCredit || 0,
-        discrepancy: b.discrepancy || 0,
-        syncStatus: b.syncStatus || 'synced',
-        notes: b.notes,
-      }))
-    }
-  });
+  const report = await AccountingService.getBankReconciliationReport();
+  res.json({ report });
 });
 router.get('/accounting/banks/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 router.get('/accounting/bank-accounts/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
 
 // V4.0.37: تولید کد خودکار حساب خزانه بر اساس نوع
 const getNextBankCodeHandler = asyncHandler(async (req, res) => {
-  const type = (req.query.type as BankAccountType | undefined) || 'bank';
-  const nextCode = await AccountingService.generateNextAccountCode(type);
+  const { type } = (req.query as ValidatedQuery<typeof nextBankCodeQuerySchema>) || {};
+  const nextCode = await AccountingService.generateNextAccountCode(type || 'bank');
   res.json({ code: nextCode });
 });
-router.get('/accounting/banks/next-code', authorizePermission('accounting.treasury'), getNextBankCodeHandler);
-router.get('/accounting/bank-accounts/next-code', authorizePermission('accounting.treasury'), getNextBankCodeHandler);
+router.get('/accounting/banks/next-code', authorizePermission('accounting.treasury'), validate(nextBankCodeQuerySchema), getNextBankCodeHandler);
+router.get('/accounting/bank-accounts/next-code', authorizePermission('accounting.treasury'), validate(nextBankCodeQuerySchema), getNextBankCodeHandler);
 
 const createBankHandler = asyncHandler(async (req, res) => {
   const bank = await AccountingService.createBankAccount({

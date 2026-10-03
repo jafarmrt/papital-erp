@@ -3,13 +3,14 @@
  * authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
  */
 import { Router } from 'express';
+import type { z } from 'zod';
 import { authorize, authorizePermission } from '../../middleware/authorize.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { logActivity, extractClientIp } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
-import { createAccountSchema } from './accounting.schemas.js';
+import { createAccountSchema, updateAccountSchema, saveAccountMappingsSchema } from './accounting.schemas.js';
 
 const router = Router();
 
@@ -59,7 +60,7 @@ router.post('/accounting/accounts', authorizePermission('accounting.coa'), valid
   res.status(201).json(account);
 }));
 
-router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.put('/accounting/accounts/:id', authorizePermission('accounting.coa'), validate(updateAccountSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const updated = await AccountingService.updateAccount(id, req.body);
   await logActivity({
@@ -125,9 +126,9 @@ router.get('/accounting/mappings', authorizePermission('accounting.coa', 'accoun
   });
 }));
 
-router.post('/accounting/mappings', authorizePermission('accounting.coa'), asyncHandler(async (req, res) => {
-  const { disabled, ...mappings } = req.body || {};
-  const updated = await AccountingService.saveAccountMappings(mappings || {});
+router.post('/accounting/mappings', authorizePermission('accounting.coa'), validate(saveAccountMappingsSchema), asyncHandler(async (req, res) => {
+  const { disabled, ...mappings } = (req.body || {}) as z.infer<typeof saveAccountMappingsSchema>['body'];
+  const updated = await AccountingService.saveAccountMappings(mappings);
   if (Array.isArray(disabled)) {
     await AccountMappingService.setDisabledMappings(disabled);
   }

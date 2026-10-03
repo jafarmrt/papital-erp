@@ -17,6 +17,30 @@ import type {
   PartyOption
 } from '../../types.js';
 
+/** ردیف گزارش خلاصه گردش پروژه (GET /accounting/reports/project-summary) */
+export interface ProjectSummaryReportRow {
+  projectId: number | null;
+  projectCode: string;
+  projectTitle: string;
+  entriesCount: number;
+  totalDebit: number;
+  totalCredit: number;
+  balance: number;
+}
+
+/** ردیف ریز گردش یک پروژه (GET /accounting/reports/project-detail) */
+export interface ProjectDetailReportRow {
+  voucherNumber: number | string;
+  voucherDate: string | null;
+  voucherDescription: string;
+  accountCode: string;
+  accountName: string;
+  lineDescription: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+}
+
 export class AccountingReportService {
   /**
    * Trial Balance (تراز آزمایشی ۲، ۴، ۶ و ۸ ستونی در هر ۴ سطح: گروه، کل، معین، تفصیلی و درختی جامع با پشتیبانی از فیلتر ارز و تراکنش ایزوله)
@@ -1370,6 +1394,101 @@ export class AccountingReportService {
     };
 
     return { period: { startDate: start, endDate: end }, rows, months, totals };
+  }
+
+  /**
+   * V10-6.1: خلاصه گردش بدهکار/بستانکار به تفکیک پروژه (ردیف‌های تفصیلی پروژه در اسناد حذف‌نشده).
+   * v7.0.127 (TD-247): جمع‌ها در SQL به صورت متن و مانده با Decimal (AGENTS.md §1.8)؛ خروجی API عدد است.
+   */
+  static async getProjectSummaryReport(): Promise<ProjectSummaryReportRow[]> {
+    const result = await orm.execute(sql`
+      SELECT jvi.detailed_id AS project_id,
+             MAX(pp.project_code) AS project_code,
+             MAX(pp.title) AS project_title,
+             COUNT(jvi.id)::int AS entries_count,
+             COALESCE(SUM(jvi.debit), 0)::text AS total_debit,
+             COALESCE(SUM(jvi.credit), 0)::text AS total_credit
+      FROM journal_voucher_items jvi
+      INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
+      LEFT JOIN production_projects pp ON pp.id = jvi.detailed_id
+      WHERE jvi.detailed_type = 'project'
+      GROUP BY jvi.detailed_id
+      ORDER BY MAX(pp.created_at) DESC NULLS LAST
+    `);
+
+    const rows = (result.rows || []) as Array<{
+      project_id: number | null;
+      project_code: string | null;
+      project_title: string | null;
+      entries_count: number | string | null;
+      total_debit: string | null;
+      total_credit: string | null;
+    }>;
+    return rows.map(r => {
+      const totalDebit = fin(r.total_debit);
+      const totalCredit = fin(r.total_credit);
+      return {
+        projectId: r.project_id,
+        projectCode: r.project_code || '',
+        projectTitle: r.project_title || 'پروژه نامشخص / حذف‌شده',
+        entriesCount: Number(r.entries_count) || 0,
+        totalDebit: totalDebit.toNumber(),
+        totalCredit: totalCredit.toNumber(),
+        balance: totalDebit.subtract(totalCredit).toNumber(),
+      };
+    });
+  }
+
+  /**
+   * V10-6.1: ریز گردش یک پروژه با تراز جاری (read-model ساده، بدون سطح ۵).
+   * v7.0.127 (TD-247): تراز جاری با Decimal جمع می‌شود، نه `+=` اعداد جاوااسکریپت (AGENTS.md §1.8).
+   */
+  static async getProjectDetailReport(projectId: number): Promise<ProjectDetailReportRow[]> {
+    const result = await orm.execute(sql`
+      SELECT jvi.id AS line_id,
+             jv.voucher_number AS voucher_number,
+             jv.date AS voucher_date,
+             jv.description AS voucher_description,
+             COALESCE(a.code, '') AS account_code,
+             COALESCE(a.name, '') AS account_name,
+             jvi.description AS line_description,
+             jvi.debit::text AS debit,
+             jvi.credit::text AS credit
+      FROM journal_voucher_items jvi
+      INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
+      LEFT JOIN accounts a ON a.id = jvi.account_id
+      WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId}
+      ORDER BY jv.date ASC, jv.id ASC, jvi.id ASC
+    `);
+
+    const rows = (result.rows || []) as Array<{
+      line_id: number;
+      voucher_number: number | string | null;
+      voucher_date: string | null;
+      voucher_description: string | null;
+      account_code: string;
+      account_name: string;
+      line_description: string | null;
+      debit: string | null;
+      credit: string | null;
+    }>;
+    let running = fin(0);
+    return rows.map(r => {
+      const debit = fin(r.debit);
+      const credit = fin(r.credit);
+      running = running.add(debit).subtract(credit);
+      return {
+        voucherNumber: r.voucher_number || '-',
+        voucherDate: r.voucher_date,
+        voucherDescription: r.voucher_description || '',
+        accountCode: r.account_code,
+        accountName: r.account_name,
+        lineDescription: r.line_description || '',
+        debit: debit.toNumber(),
+        credit: credit.toNumber(),
+        runningBalance: running.toNumber(),
+      };
+    });
   }
 
   /**
