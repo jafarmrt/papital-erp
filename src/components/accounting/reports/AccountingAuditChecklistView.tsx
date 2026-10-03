@@ -17,7 +17,7 @@ import {
   Sparkles,
   Info
 } from 'lucide-react';
-import { fetchJson } from '../../../api.js';
+import { useFinancialHealthQuery, useSyncMissingVouchers } from '../../../hooks/accounting/useAccountingAuditQueries';
 import type { FinancialHealthReport, HealthCheckTestResult } from '../../../types.js';
 import { formatPersianPrice, toPersianDigits } from '../../../utils.js';
 import { PillBadge, type PillBadgeVariants } from '../../common/PillBadge';
@@ -31,59 +31,47 @@ const HEALTH_STATUS_BADGES: PillBadgeVariants = {
 };
 
 export function AccountingAuditChecklistView() {
-  const [report, setReport] = useState<FinancialHealthReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // گزارش سلامت و صدور خودکار اسناد با React Query (لغو درخواست با بسته شدن زیرتب)
+  const healthQuery = useFinancialHealthQuery();
+  const syncVouchers = useSyncMissingVouchers();
+  const report: FinancialHealthReport | null = healthQuery.data ?? null;
+  const loading = healthQuery.isFetching;
+  const error = healthQuery.isError
+    ? (healthQuery.error instanceof Error ? healthQuery.error.message : 'خطا در اسکن سلامت دفاتر حسابداری')
+    : null;
   const [expandedTestIds, setExpandedTestIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [isSyncingVouchers, setIsSyncingVouchers] = useState(false);
+  const isSyncingVouchers = syncVouchers.isPending;
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [showStandards, setShowStandards] = useState(false);
 
-  const loadHealthReport = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchJson<FinancialHealthReport>('/api/accounting/reports/health-check');
-      setReport(data);
+  const { refetch: refetchHealth } = healthQuery;
+  const loadHealthReport = useCallback(() => { void refetchHealth(); }, [refetchHealth]);
 
-      // به‌طور پیش‌فرض آزمون‌های دارای خطا یا هشدار را باز نگه می‌داریم
-      const initialExpanded: Record<string, boolean> = {};
-      data?.tests?.forEach((t) => {
-        if (t.status !== 'healthy') {
-          initialExpanded[t.id] = true;
-        }
-      });
-      setExpandedTestIds(initialExpanded);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'خطا در اسکن سلامت دفاتر حسابداری');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // به‌طور پیش‌فرض آزمون‌های دارای خطا یا هشدار را باز نگه می‌داریم (پس از هر بار خواندن گزارش)
   useEffect(() => {
-    loadHealthReport();
-  }, [loadHealthReport]);
+    const initialExpanded: Record<string, boolean> = {};
+    report?.tests?.forEach((t) => {
+      if (t.status !== 'healthy') {
+        initialExpanded[t.id] = true;
+      }
+    });
+    setExpandedTestIds(initialExpanded);
+  }, [report]);
 
   const toggleExpand = (id: string) => {
     setExpandedTestIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleQuickSyncVouchers = async () => {
+    if (syncVouchers.isPending) return;
+    setSyncMessage(null);
     try {
-      setIsSyncingVouchers(true);
-      setSyncMessage(null);
-      const res = await fetchJson<{ success: boolean; message: string; syncedCount: number }>(
-        '/api/accounting/quick-fix/sync-all-vouchers',
-        { method: 'POST' }
-      );
+      // پس از صدور، گزارش سلامت (همراه دیگر کلیدهای اسناد حسابداری) دوباره خوانده می‌شود
+      const res = await syncVouchers.mutateAsync();
       setSyncMessage(res.message || 'اسناد دوبل فاکتورها با موفقیت صادر شدند.');
-      await loadHealthReport();
     } catch (err: unknown) {
       setSyncMessage(err instanceof Error ? err.message : 'خطا در صدور خودکار اسناد');
-    } finally {
-      setIsSyncingVouchers(false);
     }
   };
 

@@ -21,8 +21,7 @@ import type {
   TrialBalanceRow
 } from '../../types';
 import toast from 'react-hot-toast';
-import { fetchJson } from '../../api';
-import { useLatestRequest } from '../../hooks/useLatestRequest';
+import { useFinancialRatiosReport, useJournalBookReport } from '../../hooks/accounting/useFinancialReportQueries';
 
 import { TrialBalanceView } from './reports/TrialBalanceView';
 import { JournalBookView } from './reports/JournalBookView';
@@ -34,7 +33,6 @@ import { FinancialRatiosView } from './reports/FinancialRatiosView';
 import { AccountingAuditChecklistView } from './reports/AccountingAuditChecklistView';
 import { AutomationStatusView } from './reports/AutomationStatusView';
 import { ProjectReportView } from './reports/ProjectReportView';
-import { errorMessageOf } from '../../utils';
 
 interface FinancialReportsTabProps {
   accounts: Account[];
@@ -65,12 +63,11 @@ export function FinancialReportsTab({
   const validSubTabs = ['trial_balance', 'party_ledger', 'journal_book', 'income_statement', 'balance_sheet', 'ledger', 'ratios', 'audit', 'automation', 'project'] as const;
 
   // Navigation
-  const [activeSubTab, setActiveSubTab] = useState<
-    'trial_balance' | 'party_ledger' | 'journal_book' | 'income_statement' | 'balance_sheet' | 'ledger' | 'ratios' | 'audit' | 'automation' | 'project'
-  >(() => {
+  type ReportSubTab = typeof validSubTabs[number];
+  const [activeSubTab, setActiveSubTab] = useState<ReportSubTab>(() => {
     const sub = searchParams.get('subTab');
     if (sub && (validSubTabs as readonly string[]).includes(sub)) {
-      return sub as any;
+      return sub as ReportSubTab;
     }
     return 'trial_balance';
   });
@@ -78,7 +75,7 @@ export function FinancialReportsTab({
   useEffect(() => {
     const sub = searchParams.get('subTab');
     if (sub && (validSubTabs as readonly string[]).includes(sub) && sub !== activeSubTab) {
-      setActiveSubTab(sub as any);
+      setActiveSubTab(sub as ReportSubTab);
     }
   }, [searchParams]);
 
@@ -94,13 +91,12 @@ export function FinancialReportsTab({
   // Expand / Collapse state for tree view
   const [, setExpandedNodes] = useState<Record<string, boolean>>({});
 
-  // Journal Book State
-  const [journalBookData, setJournalBookData] = useState<any>(null);
-  const [journalLoading, setJournalLoading] = useState(false);
-
-  // Financial Ratios State
-  const [ratiosData, setRatiosData] = useState<any>(null);
-  const [, setRatiosLoading] = useState(false);
+  // دفتر روزنامه و نسبت‌های مالی با React Query: بازه تاریخ/ارز بخشی از کلید است، پس پاسخ دیررس پارامترهای
+  // قدیمی جای نتیجه تازه را نمی‌گیرد و درخواست با بسته شدن تب لغو می‌شود (P3-8)
+  const journalBook = useJournalBookReport();
+  const ratios = useFinancialRatiosReport();
+  const { journalBookData, journalLoading } = journalBook;
+  const { ratiosData } = ratios;
 
   // Initial fetch of trial balance and ratios
   useEffect(() => {
@@ -129,40 +125,12 @@ export function FinancialReportsTab({
     onFetchLedger(Number(selectedLedgerAccountId), startDate || undefined, endDate || undefined);
   };
 
-  // P3-8 (v7.0.104): دفتر روزنامه و نسبت‌ها فقط پاسخ آخرین درخواست خود را نشان می‌دهند
-  const beginJournalRequest = useLatestRequest();
-  const beginRatiosRequest = useLatestRequest();
-
-  const fetchJournalBook = async () => {
-    const req = beginJournalRequest();
-    setJournalLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      const res = await fetchJson(`/accounting/reports/journal-book?${params.toString()}`, { signal: req.signal });
-      if (req.isCurrent()) setJournalBookData(res?.report || res);
-    } catch (err) {
-      if (req.isCurrent()) toast.error(errorMessageOf(err) || 'خطا در بارگذاری دفتر روزنامه');
-    } finally {
-      if (req.isCurrent()) setJournalLoading(false);
-    }
+  const fetchJournalBook = () => {
+    void journalBook.fetchJournalBook(startDate, endDate);
   };
 
-  const fetchFinancialRatios = async (currency?: string) => {
-    const req = beginRatiosRequest();
-    setRatiosLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (asOfDate) params.append('asOfDate', asOfDate);
-      if (currency && currency !== 'all') params.append('currency', currency);
-      const res = await fetchJson(`/accounting/reports/financial-ratios?${params.toString()}`, { signal: req.signal });
-      if (req.isCurrent()) setRatiosData(res?.report || res);
-    } catch (err) {
-      if (req.isCurrent()) toast.error(errorMessageOf(err) || 'خطا در محاسبه نسبت‌های مالی');
-    } finally {
-      if (req.isCurrent()) setRatiosLoading(false);
-    }
+  const fetchFinancialRatios = (currency?: string) => {
+    void ratios.fetchFinancialRatios(asOfDate, currency);
   };
 
   const handlePrint = () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Layers, ChevronLeft, Search, Printer, Download, Eye, ArrowUpRight, ArrowDownLeft, User, Users, FolderKanban, RotateCcw, FileText, X } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -6,7 +6,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, extractDateString, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SearchableSelect } from '../SearchableSelect';
-import { fetchJson } from '../../api';
+import { useExplorerLedgerQuery, type ExplorerLedgerParams, type ExplorerLedgerRow } from '../../hooks/accounting/useAccountExplorerQueries';
+import { useVoucherDetailLoader } from '../../hooks/accounting/useVoucherQueries';
 import type { Account, Customer, Personnel, BankAccount, JournalVoucher } from '../../types';
 
 interface AccountExplorerTabProps {
@@ -19,19 +20,7 @@ interface AccountExplorerTabProps {
   onViewVoucher?: (voucher: JournalVoucher) => void;
 }
 
-interface VoucherItemRow {
-  voucherId: number;
-  voucherNumber: number;
-  date: string;
-  description: string;
-  accountName: string;
-  accountCode: string;
-  detailedName?: string;
-  detailedType?: string;
-  debit: number;
-  credit: number;
-  runningBalance: number;
-}
+type VoucherItemRow = ExplorerLedgerRow;
 
 export function AccountExplorerTab({
   accounts = [],
@@ -74,17 +63,12 @@ export function AccountExplorerTab({
   // Search Filter
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Transactions Data & Loading State
-  const [transactions, setTransactions] = useState<VoucherItemRow[]>([]);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState<boolean>(false);
-  const [summaryStats, setSummaryStats] = useState({ totalDebit: 0, totalCredit: 0, finalBalance: 0 });
-
   // Single Voucher Detail View Modal State
   const [selectedVoucherModal, setSelectedVoucherModal] = useState<JournalVoucher | null>(null);
-  const [, setIsLoadingVoucherDetail] = useState<boolean>(false);
+  const loadVoucherDetail = useVoucherDetailLoader();
 
-  // Fetch Ledger / Transactions Data when selection changes
-  useEffect(() => {
+  // Ledger / Transactions of the current selection (React Query: همه فیلترها بخشی از کلیدند)
+  const ledgerParams = useMemo<ExplorerLedgerParams>(() => {
     let targetAccountId: number | undefined = undefined;
     let targetDetailedType: string | undefined = undefined;
     let targetDetailedId: number | undefined = undefined;
@@ -109,61 +93,43 @@ export function AccountExplorerTab({
       }
     }
 
-    const loadTransactions = async () => {
-      setIsLoadingTransactions(true);
-      try {
-        const queryParams = new URLSearchParams();
-        if (targetAccountId) queryParams.set('accountId', targetAccountId.toString());
-        if (targetDetailedType) queryParams.set('detailedType', targetDetailedType);
-        if (targetDetailedId) queryParams.set('detailedId', targetDetailedId.toString());
-        if (detailedSearchName) queryParams.set('detailedName', detailedSearchName);
-        if (startDate) queryParams.set('startDate', startDate);
-        if (endDate) queryParams.set('endDate', endDate);
-
-        const res = await fetchJson<{ items: VoucherItemRow[]; totalDebit: number; totalCredit: number; finalBalance: number }>(
-          `/accounting/reports/ledger?${queryParams.toString()}`
-        );
-        if (res) {
-          setTransactions(Array.isArray(res.items) ? res.items : []);
-          setSummaryStats({
-            totalDebit: res.totalDebit || 0,
-            totalCredit: res.totalCredit || 0,
-            finalBalance: res.finalBalance || 0
-          });
-        }
-      } catch (err) {
-        console.error('Error fetching explorer transactions:', err);
-      } finally {
-        setIsLoadingTransactions(false);
-      }
+    return {
+      accountId: targetAccountId || undefined,
+      detailedType: targetDetailedType,
+      detailedId: targetDetailedId || undefined,
+      detailedName: detailedSearchName || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
     };
-
-    loadTransactions();
   }, [
-    activeMode, 
-    selectedGroupId, 
-    selectedGeneralId, 
-    selectedSubsidiaryId, 
-    detailedType, 
-    selectedDetailedEntityId, 
+    activeMode,
+    selectedGroupId,
+    selectedGeneralId,
+    selectedSubsidiaryId,
+    detailedType,
+    selectedDetailedEntityId,
     selectedFilterAccountId,
     detailedSearchName,
-    startDate, 
+    startDate,
     endDate
   ]);
+  const { ledger, loading: isLoadingTransactions } = useExplorerLedgerQuery(ledgerParams);
+  const transactions: VoucherItemRow[] = ledger.items;
+  const summaryStats = useMemo(() => ({
+    totalDebit: ledger.totalDebit,
+    totalCredit: ledger.totalCredit,
+    finalBalance: ledger.finalBalance,
+  }), [ledger]);
 
-  // Load Voucher details for Drill-down modal
+  // Load Voucher details for Drill-down modal (همیشه تازه؛ با بسته شدن تب لغو می‌شود)
   const handleOpenVoucherModal = async (voucherId: number) => {
-    setIsLoadingVoucherDetail(true);
     try {
-      const v = await fetchJson<JournalVoucher>(`/accounting/vouchers/${voucherId}`);
+      const v = await loadVoucherDetail(voucherId);
       if (v) {
         setSelectedVoucherModal(v);
       }
     } catch (err) {
       console.error('Error fetching voucher detail:', err);
-    } finally {
-      setIsLoadingVoucherDetail(false);
     }
   };
 
@@ -278,7 +244,7 @@ export function AccountExplorerTab({
               <select
                 value={detailedType}
                 onChange={(e) => {
-                  setDetailedType(e.target.value as any);
+                  setDetailedType(e.target.value as typeof detailedType);
                   setSelectedDetailedEntityId('');
                 }}
                 className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white font-medium"
@@ -389,7 +355,7 @@ export function AccountExplorerTab({
             <div className="flex items-center gap-1.5">
               <DatePicker
                 value={startDate}
-                onChange={(date: any) => setStartDate(extractDateString(date))}
+                onChange={(date) => setStartDate(extractDateString(date))}
                 calendar={persian}
                 locale={persian_fa}
                 calendarPosition="bottom-right"
@@ -399,7 +365,7 @@ export function AccountExplorerTab({
               <span className="text-slate-400 text-xs">تا</span>
               <DatePicker
                 value={endDate}
-                onChange={(date: any) => setEndDate(extractDateString(date))}
+                onChange={(date) => setEndDate(extractDateString(date))}
                 calendar={persian}
                 locale={persian_fa}
                 calendarPosition="bottom-right"

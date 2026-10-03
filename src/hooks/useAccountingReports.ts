@@ -1,97 +1,50 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { fetchJson } from '../api';
-import { errorMessageOf } from '../utils';
-import type {
-  TrialBalanceReport,
-  IncomeStatementReport,
-  BalanceSheetReport,
-  AccountLedgerReport
-} from '../types';
-
-type ReportKind = 'trialBalance' | 'incomeStatement' | 'balanceSheet' | 'ledger';
+import { useCallback } from 'react';
+import { useOnDemandReport } from './accounting/useOnDemandReport';
+import {
+  BALANCE_SHEET_REPORT,
+  INCOME_STATEMENT_REPORT,
+  LEDGER_REPORT,
+  TRIAL_BALANCE_REPORT,
+} from './accounting/useFinancialReportQueries';
 
 /**
- * P3-8 (v7.0.104): هر گزارش فقط پاسخ آخرین درخواست خودش را نشان می‌دهد. درخواست قبلی همان گزارش لغو می‌شود
- * (پیش‌تر پاسخ کندتر یک تاریخ/سطح قدیمی می‌توانست روی گزارش تازه بنشیند) و «در حال بارگذاری» تا پایان آخرین
- * درخواست در جریان می‌ماند (پیش‌تر پایان هر درخواست آن را خاموش می‌کرد).
+ * P3-8 (v7.0.104): هر گزارش فقط نتیجه آخرین پارامترهای خودش را نشان می‌دهد و «در حال بارگذاری» تا پایان همه
+ * درخواست‌های در جریان می‌ماند. از نسخه React Query، پارامترها (سطح، بازه تاریخ، حساب) بخشی از کلید کش‌اند:
+ * پاسخ دیررس پارامترهای قدیمی فقط در کش همان پارامترها می‌نشیند و درخواست قبلی با رفتن به پارامتر دیگر یا بسته
+ * شدن صفحه لغو می‌شود. ذخیره سند/خزانه/چک این گزارش‌ها را باطل و دوباره خوانده می‌کند.
  */
 export function useAccountingReports() {
-  const [pendingCount, setPendingCount] = useState(0);
-  const [trialBalance, setTrialBalance] = useState<TrialBalanceReport | null>(null);
-  const [incomeStatement, setIncomeStatement] = useState<IncomeStatementReport | null>(null);
-  const [balanceSheet, setBalanceSheet] = useState<BalanceSheetReport | null>(null);
-  const [ledgerReport, setLedgerReport] = useState<AccountLedgerReport | null>(null);
-  const controllers = useRef<Partial<Record<ReportKind, AbortController>>>({});
-
-  useEffect(() => {
-    const active = controllers.current;
-    return () => {
-      Object.values(active).forEach(c => c?.abort());
-    };
-  }, []);
-
-  const loadReport = useCallback(async <T,>(
-    kind: ReportKind,
-    url: string,
-    apply: (report: T) => void,
-    errorText: string
-  ) => {
-    controllers.current[kind]?.abort();
-    const controller = new AbortController();
-    controllers.current[kind] = controller;
-    setPendingCount(n => n + 1);
-    try {
-      const res = await fetchJson(url, { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      if (res?.report) {
-        apply(res.report as T);
-      } else if (res) {
-        apply(res as T);
-      }
-    } catch (err: unknown) {
-      if (!controller.signal.aborted) toast.error(errorMessageOf(err) || errorText);
-    } finally {
-      if (controllers.current[kind] === controller) delete controllers.current[kind];
-      setPendingCount(n => Math.max(0, n - 1));
-    }
-  }, []);
+  const trial = useOnDemandReport(TRIAL_BALANCE_REPORT);
+  const income = useOnDemandReport(INCOME_STATEMENT_REPORT);
+  const balance = useOnDemandReport(BALANCE_SHEET_REPORT);
+  const ledger = useOnDemandReport(LEDGER_REPORT);
+  const runTrial = trial.run;
+  const runIncome = income.run;
+  const runBalance = balance.run;
+  const runLedger = ledger.run;
 
   const fetchTrialBalance = useCallback(async (level = 'subsidiary', startDate?: string, endDate?: string) => {
-    const params = new URLSearchParams();
-    params.append('level', level);
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    await loadReport<TrialBalanceReport>('trialBalance', `/accounting/reports/trial-balance?${params.toString()}`, setTrialBalance, 'خطا در دریافت تراز آزمایشی');
-  }, [loadReport]);
+    await runTrial({ level, startDate: startDate || undefined, endDate: endDate || undefined });
+  }, [runTrial]);
 
   const fetchIncomeStatement = useCallback(async (startDate?: string, endDate?: string) => {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    await loadReport<IncomeStatementReport>('incomeStatement', `/accounting/reports/income-statement?${params.toString()}`, setIncomeStatement, 'خطا در دریافت صورت سود و زیان');
-  }, [loadReport]);
+    await runIncome({ startDate: startDate || undefined, endDate: endDate || undefined });
+  }, [runIncome]);
 
   const fetchBalanceSheet = useCallback(async (asOfDate?: string) => {
-    const params = new URLSearchParams();
-    if (asOfDate) params.append('asOfDate', asOfDate);
-    await loadReport<BalanceSheetReport>('balanceSheet', `/accounting/reports/balance-sheet?${params.toString()}`, setBalanceSheet, 'خطا در دریافت ترازنامه');
-  }, [loadReport]);
+    await runBalance({ asOfDate: asOfDate || undefined });
+  }, [runBalance]);
 
   const fetchLedger = useCallback(async (accountId: number, startDate?: string, endDate?: string) => {
-    const params = new URLSearchParams();
-    params.append('accountId', String(accountId));
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    await loadReport<AccountLedgerReport>('ledger', `/accounting/reports/ledger?${params.toString()}`, setLedgerReport, 'خطا در دریافت گردش حساب');
-  }, [loadReport]);
+    await runLedger({ accountId, startDate: startDate || undefined, endDate: endDate || undefined });
+  }, [runLedger]);
 
   return {
-    reportsLoading: pendingCount > 0,
-    trialBalance,
-    incomeStatement,
-    balanceSheet,
-    ledgerReport,
+    reportsLoading: trial.loading || income.loading || balance.loading || ledger.loading,
+    trialBalance: trial.data,
+    incomeStatement: income.data,
+    balanceSheet: balance.data,
+    ledgerReport: ledger.data,
     fetchTrialBalance,
     fetchIncomeStatement,
     fetchBalanceSheet,

@@ -4,41 +4,31 @@ import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import { formatPersianPrice, extractDateString } from '../../../utils';
+import { useCashFlowReport } from '../../../hooks/accounting/useTreasuryQueries';
 
 interface CashFlowModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoadReport?: (startDate?: string, endDate?: string) => Promise<any>;
 }
 
 export const CashFlowModal: React.FC<CashFlowModalProps> = ({
   isOpen,
   onClose,
-  onLoadReport,
 }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [report, setReport] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // گزارش با React Query: بازه تاریخ بخشی از کلید است و بستن مودال درخواست در جریان را لغو می‌کند
+  const { data: report, loading: isLoading, run, reset } = useCashFlowReport();
 
-  const fetchReport = async (start?: string, end?: string) => {
-    if (!onLoadReport) return;
-    setIsLoading(true);
-    try {
-      const data = await onLoadReport(start || undefined, end || undefined);
-      setReport(data);
-    } catch {
-      // Handled in parent
-    } finally {
-      setIsLoading(false);
-    }
+  const fetchReport = (start?: string, end?: string) => {
+    void run({ startDate: start || undefined, endDate: end || undefined });
   };
 
   useEffect(() => {
     if (isOpen) {
       fetchReport(dateFrom, dateTo);
     } else {
-      setReport(null);
+      reset();
     }
   }, [isOpen]);
 
@@ -66,7 +56,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
             <span className="text-xs text-slate-600 dark:text-slate-400">از تاریخ:</span>
             <DatePicker
               value={dateFrom}
-              onChange={(d: any) => setDateFrom(extractDateString(d))}
+              onChange={(d) => setDateFrom(extractDateString(d))}
               calendar={persian}
               locale={persian_fa}
               calendarPosition="bottom-right"
@@ -77,7 +67,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
             <span className="text-xs text-slate-600 dark:text-slate-400">تا تاریخ:</span>
             <DatePicker
               value={dateTo}
-              onChange={(d: any) => setDateTo(extractDateString(d))}
+              onChange={(d) => setDateTo(extractDateString(d))}
               calendar={persian}
               locale={persian_fa}
               calendarPosition="bottom-right"
@@ -149,7 +139,7 @@ export const CashFlowModal: React.FC<CashFlowModalProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                      {report.monthly.map((m: any, idx: number) => (
+                      {report.monthly.map((m, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
                           <td className="p-2.5 font-bold font-mono">{m.month}</td>
                           <td className="p-2.5 font-mono text-emerald-600">+{formatPersianPrice(m.inflow)}</td>

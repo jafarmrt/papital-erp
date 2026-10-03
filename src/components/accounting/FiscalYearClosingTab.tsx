@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
-import { fetchJson } from '../../api';
 import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
 import toast from 'react-hot-toast';
+import { useExecuteFiscalClosing, useFiscalClosingPreview } from '../../hooks/accounting/useFiscalClosing';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -26,9 +26,12 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   const [openingDateNewYear, setOpeningDateNewYear] = useState<string>(`${Number(currentJalaliYear) + 1}/01/01`);
   const [createOpeningVoucher, setCreateOpeningVoucher] = useState<boolean>(true);
 
-  const [isLoadingPreview, setIsLoadingPreview] = useState<boolean>(false);
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [previewData, setPreviewData] = useState<FiscalYearClosingPreview | null>(null);
+  // پیش‌نمایش و اجرای بستن سال با React Query: پیش‌نمایش سال قبلی که دیر برسد جای پیش‌نمایش سال تازه را نمی‌گیرد
+  const preview = useFiscalClosingPreview();
+  const executeClosing = useExecuteFiscalClosing();
+  const isLoadingPreview = preview.loading;
+  const isExecuting = executeClosing.isPending;
+  const previewData: FiscalYearClosingPreview | null = preview.data;
   const [executionResult, setExecutionResult] = useState<FiscalYearClosingResult | null>(null);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState<boolean>(false);
 
@@ -47,7 +50,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
     setSelectedYear(newYear);
     setClosingDate(`${newYear}/12/29`);
     setOpeningDateNewYear(`${Number(newYear) + 1}/01/01`);
-    setPreviewData(null);
+    preview.reset();
     setExecutionResult(null);
   };
 
@@ -56,18 +59,11 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
       toast.error('لطفاً سال مالی را مشخص کنید');
       return;
     }
-    setIsLoadingPreview(true);
     setExecutionResult(null);
-    try {
-      const data = await fetchJson<FiscalYearClosingPreview>(
-        `/accounting/fiscal-closing/preview?year=${selectedYear}&closingDate=${closingDate}&openingDateNewYear=${openingDateNewYear}`
-      );
-      setPreviewData(data);
+    // خطا با پیام «خطا در محاسبه پیش‌نمایش بستن سال مالی» در خود پرس‌وجو اعلام می‌شود
+    const data = await preview.run({ year: selectedYear, closingDate, openingDateNewYear });
+    if (data !== undefined) {
       toast.success(`پیش‌نمایش بستن سال مالی ${toPersianDigits(selectedYear)} با موفقیت محاسبه شد.`);
-    } catch (error) {
-      toast.error(errorMessageOf(error) || 'خطا در محاسبه پیش‌نمایش بستن سال مالی');
-    } finally {
-      setIsLoadingPreview(false);
     }
   };
 
@@ -91,7 +87,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
         revs = previewData.temporaryAccounts.filter(a => a.accountType === 'revenue');
         exps = previewData.temporaryAccounts.filter(a => a.accountType === 'expense' || a.accountType === 'cost_of_sales');
       } else if (typeof previewData.temporaryAccounts === 'object') {
-        const rawObj = previewData.temporaryAccounts as any;
+        const rawObj = previewData.temporaryAccounts as { revenues?: unknown; expenses?: unknown };
         revs = Array.isArray(rawObj.revenues) ? rawObj.revenues : [];
         exps = Array.isArray(rawObj.expenses) ? rawObj.expenses : [];
       }
@@ -109,7 +105,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
         assets = previewData.permanentAccounts.filter(a => a.accountType === 'asset');
         liabs = previewData.permanentAccounts.filter(a => a.accountType === 'liability' || a.accountType === 'equity');
       } else if (typeof previewData.permanentAccounts === 'object') {
-        const rawObj = previewData.permanentAccounts as any;
+        const rawObj = previewData.permanentAccounts as { assets?: unknown; liabilitiesAndEquity?: unknown };
         assets = Array.isArray(rawObj.assets) ? rawObj.assets : [];
         liabs = Array.isArray(rawObj.liabilitiesAndEquity) ? rawObj.liabilitiesAndEquity : [];
       }
@@ -118,25 +114,20 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   }, [previewData]);
 
   const handleExecuteClosing = async () => {
-    setIsExecuting(true);
+    if (executeClosing.isPending) return;
     try {
-      const result = await fetchJson<FiscalYearClosingResult>('/accounting/fiscal-closing/execute', {
-        method: 'POST',
-        body: JSON.stringify({
-          year: selectedYear,
-          closingDate,
-          openingDateNewYear,
-          createOpeningVoucher,
-        }),
+      const result = await executeClosing.mutateAsync({
+        year: selectedYear,
+        closingDate,
+        openingDateNewYear,
+        createOpeningVoucher,
       });
 
       setExecutionResult(result);
       setIsConfirmModalOpen(false);
-      toast.success(result.message || 'عملیات بستن سال مالی با موفقیت کامل انجام شد!');
+      toast.success(result?.message || 'عملیات بستن سال مالی با موفقیت کامل انجام شد!');
     } catch (error) {
       toast.error(errorMessageOf(error) || 'خطا در بستن سال مالی');
-    } finally {
-      setIsExecuting(false);
     }
   };
 
@@ -182,7 +173,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               </label>
               <DatePicker
                 value={closingDate}
-                onChange={(dateObj: any) => {
+                onChange={(dateObj) => {
                   setClosingDate(extractDateString(dateObj));
                 }}
                 calendar={persian}
@@ -199,7 +190,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               </label>
               <DatePicker
                 value={openingDateNewYear}
-                onChange={(dateObj: any) => {
+                onChange={(dateObj) => {
                   setOpeningDateNewYear(extractDateString(dateObj));
                 }}
                 calendar={persian}

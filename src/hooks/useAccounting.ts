@@ -1,523 +1,230 @@
-import { useState, useEffect, useCallback } from 'react';
-import { fetchJson } from '../api';
-import type { 
-  Account, 
-  JournalVoucher, 
-  BankAccount, 
-  BankReconciliationReport,
-  Cheque, 
-  TreasuryTransaction, 
-  FinancialSummaryStats,
-  Customer,
-  Personnel
-} from '../types';
+import { useState, useCallback } from 'react';
+import type { JournalVoucher } from '../types';
 import toast from 'react-hot-toast';
 import { useAccountingReports } from './useAccountingReports';
 import { errorMessageOf } from '../utils';
+import {
+  useAccountingSummaryQuery,
+  useAccountsListQuery,
+  useAccountsTreeQuery,
+  useAccountMutations,
+  type AccountPayload,
+} from './accounting/useAccountsQueries';
+import {
+  useVouchersQuery,
+  useVoucherMutations,
+  type VoucherCorrectionPayload,
+  type VoucherPayload,
+  type VoucherStatus,
+} from './accounting/useVoucherQueries';
+import {
+  useBankAccountsQuery,
+  useTreasuryTransactionsQuery,
+  useTreasuryMutations,
+  type TreasuryPayload,
+} from './accounting/useTreasuryQueries';
+import { useChequesQuery, useChequeMutations, type ChequePayload } from './accounting/useChequeQueries';
+import { useAccountingCustomersQuery, useAccountingPersonnelQuery } from './accounting/useAccountingParties';
 
+// آرایه‌های خالی ثابت تا محاسبات وابسته به لیست‌ها در زمان بارگذاری با هر رندر دوباره اجرا نشوند
+const NO_ACCOUNTS: never[] = [];
+const NO_VOUCHERS: never[] = [];
+const NO_BANK_ACCOUNTS: never[] = [];
+const NO_CHEQUES: never[] = [];
+const NO_TREASURY_TRANSACTIONS: never[] = [];
+const NO_CUSTOMERS: never[] = [];
+const NO_PERSONNEL: never[] = [];
+
+type AccountingTab = 'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing' | 'explorer';
+
+/**
+ * صفحه حسابداری: داده‌ها با React Query (FE-005) از هوک‌های هر بخش (حساب‌ها، اسناد، خزانه، چک‌ها، گزارش‌ها) خوانده و
+ * ذخیره می‌شوند؛ این هوک همان رابط پیشین را برای AccountingPage و تب‌ها نگه می‌دارد. هر ذخیره کش بخش‌های متاثر
+ * (و صفحات دیگر: اسناد، لیست حقوق) را باطل می‌کند — نگاه کنید به accounting/accountingInvalidation.ts.
+ */
 export function useAccounting() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'coa' | 'vouchers' | 'treasury' | 'cheques' | 'reports' | 'fiscal-closing' | 'explorer'>('dashboard');
-  const [loading, setLoading] = useState(false);
-  const [isSyncingBanks, setIsSyncingBanks] = useState(false);
+  const [activeTab, setActiveTab] = useState<AccountingTab>('dashboard');
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Core Data
-  const [stats, setStats] = useState<FinancialSummaryStats | null>(null);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [treeAccounts, setTreeAccounts] = useState<Account[]>([]);
-  const [vouchers, setVouchers] = useState<JournalVoucher[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-  const [reconciliationReport, setReconciliationReport] = useState<BankReconciliationReport | null>(null);
-  const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [treasuryTransactions, setTreasuryTransactions] = useState<TreasuryTransaction[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
+  const summaryQuery = useAccountingSummaryQuery();
+  const accountsQuery = useAccountsListQuery();
+  const treeQuery = useAccountsTreeQuery();
+  const vouchersQuery = useVouchersQuery();
+  const bankAccountsQuery = useBankAccountsQuery();
+  const treasuryQuery = useTreasuryTransactionsQuery();
+  const chequesQuery = useChequesQuery();
+  const customersQuery = useAccountingCustomersQuery();
+  const personnelQuery = useAccountingPersonnelQuery();
 
   // V3.2.1 (TD-080 / Playbook Scenario 6): گزارش‌ها به هوک اختصاصی useAccountingReports منتقل شدند
   const reports = useAccountingReports();
+
+  const accountMutations = useAccountMutations();
+  const voucherMutations = useVoucherMutations();
+  const treasuryMutations = useTreasuryMutations();
+  const chequeMutations = useChequeMutations();
 
   // Modals & Active Edit Entities
   const [isNewVoucherModalOpen, setIsNewVoucherModalOpen] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<JournalVoucher | null>(null);
   const [printingVoucher, setPrintingVoucher] = useState<JournalVoucher | null>(null);
 
-  // Fetch Summary Stats
-  const loadStats = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetchJson('/accounting/summary', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return null;
-      });
-      if (res && res.stats) {
-        setStats(res.stats);
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading accounting stats:', err);
-    }
-  }, []);
+  const { refetch: refetchSummary } = summaryQuery;
+  const { refetch: refetchAccounts } = accountsQuery;
+  const { refetch: refetchTree } = treeQuery;
+  const { refetch: refetchVouchers } = vouchersQuery;
+  const { refetch: refetchBankAccounts } = bankAccountsQuery;
+  const { refetch: refetchTreasury } = treasuryQuery;
+  const { refetch: refetchCheques } = chequesQuery;
+  const { refetch: refetchCustomers } = customersQuery;
+  const { refetch: refetchPersonnel } = personnelQuery;
 
-  // Fetch Chart of Accounts
-  const loadAccounts = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetchJson('/accounting/accounts', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const items = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      setAccounts(items);
-
-      const treeRes = await fetchJson('/accounting/accounts/tree', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const tree = Array.isArray(treeRes?.data) ? treeRes.data : (Array.isArray(treeRes) ? treeRes : []);
-      setTreeAccounts(tree);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading accounts:', err);
-    }
-  }, []);
-
-  // Fetch Journal Vouchers
-  const loadVouchers = useCallback(async (filters?: any, signal?: AbortSignal) => {
-    try {
-      let query = '';
-      if (filters) {
-        const params = new URLSearchParams();
-        if (filters.startDate) params.append('startDate', filters.startDate);
-        if (filters.endDate) params.append('endDate', filters.endDate);
-        if (filters.type) params.append('type', filters.type);
-        if (filters.search) params.append('search', filters.search);
-        query = `?${params.toString()}`;
-      }
-      const res = await fetchJson(`/accounting/vouchers${query}`, { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const items = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      setVouchers(items);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading vouchers:', err);
-    }
-  }, []);
-
-  // Fetch Bank Accounts & Treasury
-  const loadBankAndTreasury = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const banksRes = await fetchJson('/accounting/bank-accounts', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const banks = Array.isArray(banksRes?.data) ? banksRes.data : (Array.isArray(banksRes) ? banksRes : []);
-      setBankAccounts(banks);
-
-      const txRes = await fetchJson('/accounting/treasury', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const txs = Array.isArray(txRes?.data) ? txRes.data : (Array.isArray(txRes) ? txRes : []);
-      setTreasuryTransactions(txs);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading bank accounts and treasury:', err);
-    }
-  }, []);
-
-  // Fetch Cheques
-  const loadCheques = useCallback(async (filters?: any, signal?: AbortSignal) => {
-    try {
-      let query = '';
-      if (filters) {
-        const params = new URLSearchParams();
-        if (filters.type) params.append('type', filters.type);
-        if (filters.status) params.append('status', filters.status);
-        query = `?${params.toString()}`;
-      }
-      const res = await fetchJson(`/accounting/cheques${query}`, { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const items = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      setCheques(items);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading cheques:', err);
-    }
-  }, []);
-
-  // Load auxiliary lists (Customers, Personnel)
-  const loadAuxData = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const custRes = await fetchJson('/customers?limit=1000', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const custs = Array.isArray(custRes?.data) ? custRes.data : (Array.isArray(custRes) ? custRes : []);
-      setCustomers(custs);
-
-      const persRes = await fetchJson('/personnel?limit=1000', { signal }).catch((err) => {
-        if (err?.name === 'AbortError') throw err;
-        return [];
-      });
-      const pers = Array.isArray(persRes?.data) ? persRes.data : (Array.isArray(persRes) ? persRes : []);
-      setPersonnelList(pers);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error loading auxiliary data:', err);
-    }
-  }, []);
-
-  // Fetch Reports
-  // Refresh All Data
-  const refreshAll = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+  // Refresh All Data (دکمه «به‌روزرسانی» و بازنشانی خطای تب)
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
     try {
       await Promise.all([
-        loadStats(signal),
-        loadAccounts(signal),
-        loadVouchers(undefined, signal),
-        loadBankAndTreasury(signal),
-        loadCheques(undefined, signal),
-        loadAuxData(signal),
+        refetchSummary(),
+        refetchAccounts(),
+        refetchTree(),
+        refetchVouchers(),
+        refetchBankAccounts(),
+        refetchTreasury(),
+        refetchCheques(),
+        refetchCustomers(),
+        refetchPersonnel(),
       ]);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      console.error('Error refreshing accounting data:', err);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  }, [loadStats, loadAccounts, loadVouchers, loadBankAndTreasury, loadCheques, loadAuxData]);
+  }, [refetchSummary, refetchAccounts, refetchTree, refetchVouchers, refetchBankAccounts, refetchTreasury, refetchCheques, refetchCustomers, refetchPersonnel]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    refreshAll(controller.signal);
-    return () => controller.abort();
-  }, [refreshAll]);
+  const initialLoading = [
+    summaryQuery, accountsQuery, treeQuery, vouchersQuery, bankAccountsQuery, treasuryQuery, chequesQuery, customersQuery, personnelQuery,
+  ].some(q => q.isLoading);
 
   // Account Operations
-  const handleCreateAccount = async (data: any) => {
-    await fetchJson('/accounting/accounts', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    await loadAccounts();
-    await loadStats();
+  const handleCreateAccount = async (data: AccountPayload) => {
+    await accountMutations.createAccount.mutateAsync(data);
   };
 
-  const handleUpdateAccount = async (id: number, data: any) => {
-    await fetchJson(`/accounting/accounts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    await loadAccounts();
-    await loadStats();
+  const handleUpdateAccount = async (id: number, data: AccountPayload) => {
+    await accountMutations.updateAccount.mutateAsync({ id, data });
   };
 
   const handleDeleteAccount = async (id: number) => {
-    await fetchJson(`/accounting/accounts/${id}`, {
-      method: 'DELETE',
-    });
-    await loadAccounts();
-    await loadStats();
+    await accountMutations.deleteAccount.mutateAsync(id);
   };
 
   const handleSeedStandardAccounts = async () => {
-    setLoading(true);
+    if (accountMutations.seedStandardAccounts.isPending) return;
     try {
-      const res = await fetchJson('/accounting/accounts/seed-standard', {
-        method: 'POST',
-      });
-      toast.success(res.message || 'کدینگ استاندارد با موفقیت همگام‌سازی شد');
-      await loadAccounts();
-      await loadStats();
+      const res = await accountMutations.seedStandardAccounts.mutateAsync();
+      toast.success(res?.message || 'کدینگ استاندارد با موفقیت همگام‌سازی شد');
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در بارگذاری کدینگ استاندارد');
-    } finally {
-      setLoading(false);
     }
   };
 
   // Voucher Operations
-  const handleSaveVoucher = async (data: any) => {
-    if (editingVoucher) {
-      await fetchJson(`/accounting/vouchers/${editingVoucher.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
-    } else {
-      await fetchJson('/accounting/vouchers', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-    }
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
+  const handleSaveVoucher = async (data: VoucherPayload) => {
+    await voucherMutations.saveVoucher.mutateAsync({ editingId: editingVoucher ? editingVoucher.id : null, data });
   };
 
   const handleDeleteVoucher = async (id: number) => {
-    await fetchJson(`/accounting/vouchers/${id}`, {
-      method: 'DELETE',
-    });
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
+    await voucherMutations.deleteVoucher.mutateAsync(id);
   };
 
   const handleReverseVoucher = async (voucherId: number, reason?: string, date?: string) => {
-    const res = await fetchJson(`/accounting/vouchers/${voucherId}/reverse`, {
-      method: 'POST',
-      body: JSON.stringify({ reason, date }),
-    });
-    toast.success(res?.message || 'سند معکوس با موفقیت صادر شد');
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
-    return res;
+    await voucherMutations.reverseVoucher.mutateAsync({ voucherId, reason, date });
   };
 
-  const handleCorrectVoucher = async (voucherId: number, data: { reason: string; newItems: any[]; newDescription?: string; date?: string }) => {
-    const res = await fetchJson(`/accounting/vouchers/${voucherId}/correct`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    toast.success(res?.message || 'سند عکس و سند اصلاحی با موفقیت صادر شدند');
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
-    return res;
+  const handleCorrectVoucher = async (voucherId: number, data: VoucherCorrectionPayload) => {
+    await voucherMutations.correctVoucher.mutateAsync({ voucherId, data });
   };
 
   const handleFinalizeVoucher = async (voucherId: number) => {
-    const res = await fetchJson(`/accounting/vouchers/${voucherId}/finalize`, {
-      method: 'POST',
-    });
-    toast.success(res?.message || 'سند با موفقیت قطعی و دائم شد');
-    await loadVouchers();
-    await loadStats();
-    return res;
+    await voucherMutations.finalizeVoucher.mutateAsync(voucherId);
   };
 
-  const handleBatchFinalizeVouchers = async (ids: number[]) => {
-    const res = await fetchJson('/accounting/vouchers/batch-finalize', {
-      method: 'POST',
-      body: JSON.stringify({ ids }),
-    });
-    toast.success(res?.message || 'اسناد با موفقیت قطعی و دائم شدند');
-    await loadVouchers();
-    await loadStats();
-    return res;
-  };
+  const handleBatchFinalizeVouchers = (ids: number[]) => voucherMutations.batchFinalizeVouchers.mutateAsync(ids);
 
-  const handleBatchApproveVouchers = async (ids: number[]) => {
-    const res = await fetchJson('/accounting/vouchers/batch-approve', {
-      method: 'POST',
-      body: JSON.stringify({ ids }),
-    });
-    toast.success(res?.message || 'اسناد پیش‌نویس با موفقیت تایید حسابداری شدند');
-    await loadVouchers();
-    await loadStats();
-    return res;
-  };
+  const handleBatchApproveVouchers = (ids: number[]) => voucherMutations.batchApproveVouchers.mutateAsync(ids);
 
-  const handleSetVoucherStatus = async (voucherId: number, status: 'draft' | 'approved' | 'permanent', reason?: string) => {
-    const res = await fetchJson(`/accounting/vouchers/${voucherId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status, reason }),
-    });
-    const statusFarsi = {
-      draft: 'پیش‌نویس (یادداشت اولیه)',
-      approved: 'تایید شده (حسابرسی‌شده)',
-      permanent: 'دائم و قطعی (قفل دفاتر)'
-    }[status] || status;
-    toast.success(`وضعیت سند با موفقیت به «${statusFarsi}» تغییر یافت`);
-    await loadVouchers();
-    await loadStats();
-    return res;
-  };
-
+  const handleSetVoucherStatus = (voucherId: number, status: VoucherStatus, reason?: string) =>
+    voucherMutations.setVoucherStatus.mutateAsync({ voucherId, status, reason });
 
   // Bank & Treasury Operations
-  const handleCreateBankAccount = async (data: any) => {
-    await fetchJson('/accounting/bank-accounts', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    await loadBankAndTreasury();
-    await loadStats();
+  const handleCreateBankAccount = async (data: TreasuryPayload) => {
+    await treasuryMutations.createBankAccount.mutateAsync(data);
   };
 
-  const handleUpdateBankAccount = async (id: number, data: any) => {
-    await fetchJson(`/accounting/bank-accounts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    await loadBankAndTreasury();
-    await loadStats();
+  const handleUpdateBankAccount = async (id: number, data: TreasuryPayload) => {
+    await treasuryMutations.updateBankAccount.mutateAsync({ id, data });
   };
 
   const handleDeleteBankAccount = async (id: number) => {
-    await fetchJson(`/accounting/bank-accounts/${id}`, {
-      method: 'DELETE',
-    });
-    await loadBankAndTreasury();
-    await loadStats();
+    await treasuryMutations.deleteBankAccount.mutateAsync(id);
   };
 
-  const handleCreateTreasuryTransaction = async (data: any) => {
-    const created = await fetchJson('/accounting/treasury', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    await loadBankAndTreasury();
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
-    return created;
+  const handleCreateTreasuryTransaction = async (data: TreasuryPayload) => {
+    await treasuryMutations.createTransaction.mutateAsync(data);
   };
 
   // V1.4.0: ابطال تراکنش خزانه با سند معکوس
   const handleVoidTreasuryTransaction = async (id: number, reason: string) => {
-    await fetchJson(`/accounting/treasury/${id}/void`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    });
-    await loadBankAndTreasury();
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
+    await treasuryMutations.voidTransaction.mutateAsync({ id, reason });
   };
 
   // V1.5.0: انتقال بین‌بانکی
-  const handleCreateTreasuryTransfer = async (data: any) => {
-    await fetchJson('/accounting/treasury/transfer', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    await loadBankAndTreasury();
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
+  const handleCreateTreasuryTransfer = async (data: TreasuryPayload) => {
+    await treasuryMutations.createTransfer.mutateAsync(data);
   };
 
   // V1.6.0: ثبت گروهی آشتی‌سنجی بانکی
   const handleReconcileTransactions = async (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => {
-    await fetchJson('/accounting/treasury/reconcile', {
-      method: 'POST',
-      body: JSON.stringify({ bankAccountId, txIds, batch, reconciled }),
-    });
-    await loadBankAndTreasury();
+    await treasuryMutations.reconcileTransactions.mutateAsync({ bankAccountId, txIds, batch, reconciled });
   };
 
-  // V1.6.0: گزارش جریان نقدی
-  const loadCashFlowReport = useCallback(async (startDate?: string, endDate?: string) => {
-    const q = new URLSearchParams();
-    if (startDate) q.append('startDate', startDate);
-    if (endDate) q.append('endDate', endDate);
-    const res = await fetchJson(`/accounting/reports/cash-flow?${q.toString()}`);
-    return res;
-  }, []);
-
-  // V1.6.0: آشتی‌سنجی دفتر چک صیادی
-  const loadChequeReconciliation = useCallback(async () => {
-    return await fetchJson('/accounting/reports/cheque-reconciliation');
-  }, []);
-
   // Cheques Operations
-  const handleCreateCheque = async (data: any) => {
-    await fetchJson('/accounting/cheques', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    await loadCheques();
-    await loadVouchers();
-    await loadStats();
-    await loadAccounts();
+  const handleCreateCheque = async (data: ChequePayload) => {
+    await chequeMutations.createCheque.mutateAsync(data);
   };
 
   const handleUpdateChequeStatus = async (
-    id: number, 
-    status: string, 
-    description?: string, 
+    id: number,
+    status: string,
+    description?: string,
     bankAccountId?: number,
     transfereePartyName?: string
   ) => {
-    await fetchJson(`/accounting/cheques/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status, description, notes: description, bankAccountId, transfereePartyName }),
-    });
-    await loadCheques();
-    await loadVouchers();
-    await loadBankAndTreasury();
-    await loadStats();
-    await loadAccounts();
+    await chequeMutations.updateChequeStatus.mutateAsync({ id, status, description, bankAccountId, transfereePartyName });
   };
 
   const handleDeleteCheque = async (id: number) => {
-    await fetchJson(`/accounting/cheques/${id}`, {
-      method: 'DELETE',
-    });
-    await loadCheques();
-    await loadStats();
+    await chequeMutations.deleteCheque.mutateAsync(id);
   };
 
-  // Dynamic Bank & Ledger Synchronization and Reconciliation
-  const loadBankReconciliationReport = useCallback(async () => {
-    try {
-      const res = await fetchJson('/accounting/bank-accounts/reconciliation-report');
-      if (res?.report) {
-        setReconciliationReport(res.report);
-      }
-    } catch (err) {
-      console.error('Error loading bank reconciliation report:', err);
-    }
-  }, []);
-
+  // Dynamic Bank & Ledger Synchronization and Reconciliation (پیام نتیجه و خطا در خود mutation)
   const syncAndReconcileBanks = async () => {
-    setIsSyncingBanks(true);
-    try {
-      const res = await fetchJson('/accounting/bank-accounts/sync-reconcile', {
-        method: 'POST',
-      });
-      if (res?.report) {
-        setReconciliationReport(res.report);
-        const { syncedCount, discrepantCount } = res.report;
-        if (discrepantCount === 0) {
-          toast.success(`تمام ${syncedCount} حساب بانکی و صندوق با دفاتر اسناد دوبل همگام و تراز شدند.`);
-        } else {
-          toast(`همگام‌سازی انجام شد: ${syncedCount} حساب تراز، ${discrepantCount} حساب دارای مغایرت شناسایی شد.`, {
-            icon: '⚠️',
-            duration: 5000,
-          });
-        }
-      }
-      await loadBankAndTreasury();
-      await loadAccounts();
-      await loadStats();
-    } catch (err) {
-      console.error('Error syncing banks:', err);
-      toast.error(errorMessageOf(err) || 'خطا در همگام‌سازی مانده حساب‌های بانکی');
-    } finally {
-      setIsSyncingBanks(false);
-    }
+    if (treasuryMutations.syncAndReconcileBanks.isPending) return;
+    await treasuryMutations.syncAndReconcileBanks.mutateAsync().catch(() => undefined);
   };
 
   return {
     activeTab,
     setActiveTab,
-    loading: loading || reports.reportsLoading,
-    isSyncingBanks,
-    stats,
-    accounts,
-    treeAccounts,
-    vouchers,
-    bankAccounts,
-    reconciliationReport,
-    cheques,
-    treasuryTransactions,
-    customers,
-    personnelList,
+    loading: refreshing || initialLoading || accountMutations.seedStandardAccounts.isPending || reports.reportsLoading,
+    isSyncingBanks: treasuryMutations.syncAndReconcileBanks.isPending,
+    stats: summaryQuery.data ?? null,
+    accounts: accountsQuery.data ?? NO_ACCOUNTS,
+    treeAccounts: treeQuery.data ?? NO_ACCOUNTS,
+    vouchers: vouchersQuery.data ?? NO_VOUCHERS,
+    bankAccounts: bankAccountsQuery.data ?? NO_BANK_ACCOUNTS,
+    cheques: chequesQuery.data ?? NO_CHEQUES,
+    treasuryTransactions: treasuryQuery.data ?? NO_TREASURY_TRANSACTIONS,
+    customers: customersQuery.data ?? NO_CUSTOMERS,
+    personnelList: personnelQuery.data ?? NO_PERSONNEL,
     trialBalance: reports.trialBalance,
     incomeStatement: reports.incomeStatement,
     balanceSheet: reports.balanceSheet,
@@ -552,12 +259,9 @@ export function useAccounting() {
     handleVoidTreasuryTransaction,
     handleCreateTreasuryTransfer,
     handleReconcileTransactions,
-    loadCashFlowReport,
-    loadChequeReconciliation,
     handleCreateCheque,
     handleUpdateChequeStatus,
     handleDeleteCheque,
     syncAndReconcileBanks,
-    loadBankReconciliationReport,
   };
 }

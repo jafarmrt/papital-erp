@@ -1,16 +1,18 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Users, Search, Calendar, Printer, Download, RefreshCw, CheckCircle2, AlertCircle, User, Building, Briefcase, ChevronDown, X } from 'lucide-react';
 import { 
   formatPersianPrice, 
   formatPersianNumber, 
   formatPersianDate, 
-  formatPersianCode,
-  errorMessageOf
+  formatPersianCode
 } from '../../../utils';
-import { fetchJson } from '../../../api';
-import { useLatestRequest } from '../../../hooks/useLatestRequest';
 import toast from 'react-hot-toast';
-import type { DetailedPartyLedgerResult, PartyOption } from '../../../types';
+import type { PartyOption } from '../../../types';
+import { usePartiesQuery, usePartyLedgerReport } from '../../../hooks/accounting/usePartyProjectReportQueries';
+
+type PartyTypeFilter = 'all' | 'customer' | 'supplier' | 'personnel';
+type CurrencyFilter = 'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP';
+const NO_PARTIES: PartyOption[] = [];
 
 interface PartyLedgerReportViewProps {
   initialPartyId?: number;
@@ -24,11 +26,12 @@ export function PartyLedgerReportView({
   initialPartyName
 }: PartyLedgerReportViewProps) {
   // Party selection states
-  const [parties, setParties] = useState<PartyOption[]>([]);
-  const [, setLoadingParties] = useState(false);
-  const [partyTypeFilter, setPartyTypeFilter] = useState<'all' | 'customer' | 'supplier' | 'personnel'>(() => {
+  // فهرست طرف‌های حساب و صورت‌حساب با React Query (لغو درخواست با بسته شدن زیرتب، P3-8)
+  const partiesQuery = usePartiesQuery();
+  const parties = partiesQuery.data ?? NO_PARTIES;
+  const [partyTypeFilter, setPartyTypeFilter] = useState<PartyTypeFilter>(() => {
     if (initialPartyType && ['customer', 'supplier', 'personnel'].includes(initialPartyType)) {
-      return initialPartyType as any;
+      return initialPartyType as PartyTypeFilter;
     }
     return 'all';
   });
@@ -38,7 +41,7 @@ export function PartyLedgerReportView({
 
   useEffect(() => {
     if (initialPartyType && ['customer', 'supplier', 'personnel'].includes(initialPartyType)) {
-      setPartyTypeFilter(initialPartyType as any);
+      setPartyTypeFilter(initialPartyType as PartyTypeFilter);
     }
   }, [initialPartyType]);
 
@@ -48,47 +51,37 @@ export function PartyLedgerReportView({
   const [activeDatePreset, setActiveDatePreset] = useState<'all' | 'month' | 'three_months' | 'year'>('all');
 
   // Currency & options
-  const [currency, setCurrency] = useState<'all' | 'IRR' | 'USD' | 'EUR' | 'AED' | 'GBP'>('all');
+  const [currency, setCurrency] = useState<CurrencyFilter>('all');
   const [includeDrafts] = useState(false);
 
   // Report data & loading
-  const [reportData, setReportData] = useState<DetailedPartyLedgerResult | null>(null);
-  const [loadingReport, setLoadingReport] = useState(false);
+  const partyLedger = usePartyLedgerReport();
+  const reportData = partyLedger.data;
+  const loadingReport = partyLedger.loading;
 
-  // Load parties list on mount
-  const fetchParties = useCallback(async () => {
-    try {
-      setLoadingParties(true);
-      const res = await fetchJson('/accounting/reports/parties');
-      const list: PartyOption[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      setParties(list);
-
-      // Match initial party if provided
-      if (initialPartyId || initialPartyName) {
-        const found = list.find(p => 
-          (initialPartyId && p.id === initialPartyId) || 
-          (initialPartyName && p.name.trim().toLowerCase() === initialPartyName.trim().toLowerCase())
-        );
-        if (found) {
-          setSelectedParty(found);
-        } else if (initialPartyName) {
-          setSelectedParty({
-            id: initialPartyId || 0,
-            name: initialPartyName,
-            partyType: (initialPartyType as any) || 'customer',
-          });
-        }
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در بارگذاری لیست طرف‌های حساب');
-    } finally {
-      setLoadingParties(false);
-    }
-  }, [initialPartyId, initialPartyName, initialPartyType]);
-
+  // Match initial party once the parties list is loaded (مثل قبل یک بار برای هر طرف‌حساب اولیه)
+  const appliedInitialParty = useRef<string | null>(null);
   useEffect(() => {
-    fetchParties();
-  }, [fetchParties]);
+    if (!partiesQuery.isSuccess) return;
+    const initialKey = `${initialPartyId ?? ''}|${initialPartyName ?? ''}|${initialPartyType ?? ''}`;
+    if (appliedInitialParty.current === initialKey) return;
+    appliedInitialParty.current = initialKey;
+    if (initialPartyId || initialPartyName) {
+      const found = parties.find(p =>
+        (initialPartyId && p.id === initialPartyId) ||
+        (initialPartyName && p.name.trim().toLowerCase() === initialPartyName.trim().toLowerCase())
+      );
+      if (found) {
+        setSelectedParty(found);
+      } else if (initialPartyName) {
+        setSelectedParty({
+          id: initialPartyId || 0,
+          name: initialPartyName,
+          partyType: (initialPartyType as PartyOption['partyType']) || 'customer',
+        });
+      }
+    }
+  }, [partiesQuery.isSuccess, parties, initialPartyId, initialPartyName, initialPartyType]);
 
   // Quick date presets
   const handleApplyDatePreset = (preset: 'all' | 'month' | 'three_months' | 'year') => {
@@ -114,38 +107,25 @@ export function PartyLedgerReportView({
     }
   };
 
-  // Fetch report for selected party (P3-8: فقط پاسخ آخرین درخواست اعمال می‌شود)
-  const beginLedgerRequest = useLatestRequest();
+  // Fetch report for selected party (P3-8: پارامترها بخشی از کلید کش‌اند و فقط نتیجه آخرین پارامترها نمایش داده می‌شود)
+  const { run: runPartyLedger } = partyLedger;
   const fetchLedger = useCallback(async () => {
     if (!selectedParty && !partySearchQuery.trim()) {
       toast('لطفاً یک طرف‌حساب انتخاب کنید', { icon: 'ℹ️' });
       return;
     }
 
-    const req = beginLedgerRequest();
-    try {
-      setLoadingReport(true);
-      const params = new URLSearchParams();
-      if (selectedParty?.id) params.append('partyId', String(selectedParty.id));
-      if (selectedParty?.partyType) params.append('partyType', selectedParty.partyType);
-      const partyName = selectedParty?.name || partySearchQuery.trim();
-      if (partyName) params.append('partyName', partyName);
-
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
-      if (currency !== 'all') params.append('currency', currency);
-      if (includeDrafts) params.append('includeDrafts', 'true');
-
-      const res = await fetchJson(`/accounting/reports/party-ledger?${params.toString()}`, { signal: req.signal });
-      if (!req.isCurrent()) return;
-      const data: DetailedPartyLedgerResult = res?.report || res;
-      setReportData(data);
-    } catch (err: unknown) {
-      if (req.isCurrent()) toast.error(errorMessageOf(err) || 'خطا در دریافت صورت‌حساب طرف‌حساب');
-    } finally {
-      if (req.isCurrent()) setLoadingReport(false);
-    }
-  }, [selectedParty, partySearchQuery, startDate, endDate, currency, includeDrafts, beginLedgerRequest]);
+    const partyName = selectedParty?.name || partySearchQuery.trim();
+    await runPartyLedger({
+      partyId: selectedParty?.id || undefined,
+      partyType: selectedParty?.partyType || undefined,
+      partyName: partyName || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      currency: currency !== 'all' ? currency : undefined,
+      includeDrafts: includeDrafts || undefined,
+    });
+  }, [selectedParty, partySearchQuery, startDate, endDate, currency, includeDrafts, runPartyLedger]);
 
   // Auto-fetch when selectedParty changes
   useEffect(() => {
@@ -317,7 +297,7 @@ export function PartyLedgerReportView({
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedParty(null);
-                        setReportData(null);
+                        partyLedger.reset();
                       }}
                       className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-slate-400"
                     >
@@ -502,7 +482,7 @@ export function PartyLedgerReportView({
             </label>
             <select
               value={currency}
-              onChange={e => setCurrency(e.target.value as any)}
+              onChange={e => setCurrency(e.target.value as CurrencyFilter)}
               className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white"
             >
               <option value="all">همه ارزها</option>

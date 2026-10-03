@@ -1,0 +1,118 @@
+import { useCallback } from 'react';
+import { QUERY_KEYS } from '../../lib/queryKeys';
+import type {
+  AccountLedgerReport,
+  BalanceSheetReport,
+  FinancialRatiosReport,
+  IncomeStatementReport,
+  TrialBalanceReport,
+} from '../../types';
+import { reportFromResponse, useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
+
+/**
+ * گزارش‌های تب «صورت‌ها و گزارش‌های مالی» با React Query: تراز آزمایشی، صورت سود و زیان، ترازنامه، گردش حساب،
+ * دفتر روزنامه و نسبت‌های مالی. همه پارامترها (سطح، بازه تاریخ، حساب، ارز) بخشی از کلید کش‌اند و هر ذخیره سند،
+ * خزانه یا چک این گزارش‌ها را باطل و دوباره خوانده می‌کند. همان آدرس‌ها و پیام‌های خطای صفحه پیشین.
+ */
+
+const R = QUERY_KEYS.accounting.report;
+
+export interface TrialBalanceParams { level: string; startDate?: string; endDate?: string }
+export interface DateRangeParams { startDate?: string; endDate?: string }
+export interface BalanceSheetParams { asOfDate?: string }
+export interface LedgerParams { accountId: number; startDate?: string; endDate?: string }
+export interface RatiosParams { asOfDate?: string; currency?: string }
+
+function dateRange(params: URLSearchParams, { startDate, endDate }: DateRangeParams): URLSearchParams {
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  return params;
+}
+
+export const TRIAL_BALANCE_REPORT: OnDemandReportSpec<TrialBalanceParams, TrialBalanceReport | null> = {
+  key: (p) => R('trial-balance', p),
+  idleKey: R('trial-balance', { idle: true }),
+  url: (p) => {
+    const params = new URLSearchParams();
+    params.append('level', p.level);
+    return `/accounting/reports/trial-balance?${dateRange(params, p).toString()}`;
+  },
+  parse: reportFromResponse<TrialBalanceReport>,
+  errorText: 'خطا در دریافت تراز آزمایشی',
+};
+
+export const INCOME_STATEMENT_REPORT: OnDemandReportSpec<DateRangeParams, IncomeStatementReport | null> = {
+  key: (p) => R('income-statement', p),
+  idleKey: R('income-statement', { idle: true }),
+  url: (p) => `/accounting/reports/income-statement?${dateRange(new URLSearchParams(), p).toString()}`,
+  parse: reportFromResponse<IncomeStatementReport>,
+  errorText: 'خطا در دریافت صورت سود و زیان',
+};
+
+export const BALANCE_SHEET_REPORT: OnDemandReportSpec<BalanceSheetParams, BalanceSheetReport | null> = {
+  key: (p) => R('balance-sheet', p),
+  idleKey: R('balance-sheet', { idle: true }),
+  url: ({ asOfDate }) => {
+    const params = new URLSearchParams();
+    if (asOfDate) params.append('asOfDate', asOfDate);
+    return `/accounting/reports/balance-sheet?${params.toString()}`;
+  },
+  parse: reportFromResponse<BalanceSheetReport>,
+  errorText: 'خطا در دریافت ترازنامه',
+};
+
+export const LEDGER_REPORT: OnDemandReportSpec<LedgerParams, AccountLedgerReport | null> = {
+  key: (p) => R('ledger', p),
+  idleKey: R('ledger', { idle: true }),
+  url: (p) => {
+    const params = new URLSearchParams();
+    params.append('accountId', String(p.accountId));
+    return `/accounting/reports/ledger?${dateRange(params, p).toString()}`;
+  },
+  parse: reportFromResponse<AccountLedgerReport>,
+  errorText: 'خطا در دریافت گردش حساب',
+};
+
+const JOURNAL_BOOK_REPORT: OnDemandReportSpec<DateRangeParams, unknown> = {
+  key: (p) => R('journal-book', p),
+  idleKey: R('journal-book', { idle: true }),
+  url: (p) => `/accounting/reports/journal-book?${dateRange(new URLSearchParams(), p).toString()}`,
+  parse: reportFromResponse<unknown>,
+  errorText: 'خطا در بارگذاری دفتر روزنامه',
+};
+
+const FINANCIAL_RATIOS_REPORT: OnDemandReportSpec<RatiosParams, FinancialRatiosReport | null> = {
+  key: (p) => R('financial-ratios', p),
+  idleKey: R('financial-ratios', { idle: true }),
+  url: ({ asOfDate, currency }) => {
+    const params = new URLSearchParams();
+    if (asOfDate) params.append('asOfDate', asOfDate);
+    if (currency && currency !== 'all') params.append('currency', currency);
+    return `/accounting/reports/financial-ratios?${params.toString()}`;
+  },
+  parse: reportFromResponse<FinancialRatiosReport>,
+  errorText: 'خطا در محاسبه نسبت‌های مالی',
+};
+
+/** دفتر روزنامه رسمی (تب گزارش‌ها) */
+export function useJournalBookReport() {
+  const report = useOnDemandReport(JOURNAL_BOOK_REPORT);
+  const { run } = report;
+  const fetchJournalBook = useCallback(async (startDate?: string, endDate?: string) => {
+    await run({ startDate: startDate || undefined, endDate: endDate || undefined });
+  }, [run]);
+  return { journalBookData: report.data, journalLoading: report.loading, fetchJournalBook };
+}
+
+/** نسبت‌ها و سلامت مالی (تب گزارش‌ها) */
+export function useFinancialRatiosReport() {
+  const report = useOnDemandReport(FINANCIAL_RATIOS_REPORT);
+  const { run } = report;
+  const fetchFinancialRatios = useCallback(async (asOfDate?: string, currency?: string) => {
+    await run({
+      asOfDate: asOfDate || undefined,
+      currency: currency && currency !== 'all' ? currency : undefined,
+    });
+  }, [run]);
+  return { ratiosData: report.data, ratiosLoading: report.loading, fetchFinancialRatios };
+}

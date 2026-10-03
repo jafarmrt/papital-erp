@@ -286,7 +286,8 @@ export function ChartOfAccountsTab({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => onSeedStandardAccounts()}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition"
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition disabled:opacity-50"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>همگام‌سازی کدینگ پیش‌فرض</span>

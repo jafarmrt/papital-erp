@@ -81,10 +81,22 @@ export const QUERY_KEYS = {
   accounting: {
     all: ['accounting'] as const,
     summary: () => ['accounting', 'summary'] as const,
+    // پیشوند فهرست و درخت حساب‌ها
     accounts: () => ['accounting', 'accounts'] as const,
+    accountsList: () => ['accounting', 'accounts', 'list'] as const,
+    accountsTree: () => ['accounting', 'accounts', 'tree'] as const,
+    // vouchers() / cheques() بدون فیلتر ({}) پیشوند همه فهرست‌های فیلترشده هم هست
     vouchers: (filters?: Record<string, unknown> | object) => ['accounting', 'vouchers', filters ?? {}] as const,
+    voucherDetail: (id: number) => ['accounting', 'voucher-detail', id] as const,
     cheques: (filters?: Record<string, unknown> | object) => ['accounting', 'cheques', filters ?? {}] as const,
+    // پیشوند حساب‌های بانکی و تراکنش‌های خزانه
     treasury: () => ['accounting', 'treasury'] as const,
+    bankAccounts: () => ['accounting', 'treasury', 'bank-accounts'] as const,
+    treasuryTransactions: () => ['accounting', 'treasury', 'transactions'] as const,
+    // گزارش‌های مالی (تراز آزمایشی، دفتر کل، صورت‌ها، جریان نقد، ...): پارامترها بخشی از کلیدند
+    reports: () => ['accounting', 'reports'] as const,
+    report: (kind: string, params?: Record<string, unknown> | object) => ['accounting', 'reports', kind, params ?? {}] as const,
+    fiscalClosingPreview: (params: Record<string, unknown> | object) => ['accounting', 'fiscal-closing', params] as const,
   },
 
   // CRM
@@ -99,6 +111,8 @@ export const QUERY_KEYS = {
   personnel: {
     all: ['personnel'] as const,
     list: () => ['personnel', 'list'] as const,
+    // فهرست انتخاب پرسنل با پارامترهای درخواست (مثلاً GET /personnel?limit=1000 صفحه حسابداری)
+    lookup: (params: Record<string, unknown> | object) => ['personnel', 'list', params] as const,
   },
 
   // Piecework & Work Logs

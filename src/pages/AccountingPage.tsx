@@ -86,8 +86,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
     handleVoidTreasuryTransaction,
     handleCreateTreasuryTransfer,
     handleReconcileTransactions,
-    loadCashFlowReport,
-    loadChequeReconciliation,
     handleCreateCheque,
     handleUpdateChequeStatus,
     handleDeleteCheque,
@@ -300,7 +298,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onVoidTreasuryTransaction={handleVoidTreasuryTransaction}
               onCreateTreasuryTransfer={handleCreateTreasuryTransfer}
               onReconcileTransactions={handleReconcileTransactions}
-              onLoadCashFlowReport={loadCashFlowReport}
             />
           )}
 
@@ -315,7 +312,6 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
               onCreateCheque={handleCreateCheque}
               onUpdateStatus={handleUpdateChequeStatus}
               onDeleteCheque={handleDeleteCheque}
-              onLoadChequeReconciliation={loadChequeReconciliation}
             />
           )}
 

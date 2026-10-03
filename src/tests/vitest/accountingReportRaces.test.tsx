@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAccountingReports } from '../../hooks/useAccountingReports';
 import { useLatestRequest } from '../../hooks/useLatestRequest';
 
 // P3-8 (v7.0.104): پاسخ کندِ درخواست قدیمی یک گزارش نباید روی گزارش تازه بنشیند
+// (از نسخه React Query صفحه حسابداری: پارامترها بخشی از کلید کش‌اند)
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
 vi.mock('react-hot-toast', () => {
@@ -15,6 +18,12 @@ function deferred<T>() {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>(r => { resolve = r; });
   return { promise, resolve };
+}
+
+function withClient() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return { client, wrapper };
 }
 
 afterEach(() => fetchJson.mockReset());
@@ -31,7 +40,7 @@ describe('accounting report requests (P3-8)', () => {
         void d.promise.then(resolve);
       });
     });
-    const { result } = renderHook(() => useAccountingReports());
+    const { result } = renderHook(() => useAccountingReports(), { wrapper: withClient().wrapper });
 
     let first!: Promise<void>;
     let second!: Promise<void>;
@@ -44,7 +53,8 @@ describe('accounting report requests (P3-8)', () => {
       newer.resolve({ report: { rows: ['subsidiary'] } });
       await second;
     });
-    expect(result.current.reportsLoading).toBe(false);
+    await waitFor(() => expect(result.current.reportsLoading).toBe(false));
+    expect(result.current.trialBalance).toEqual({ rows: ['subsidiary'] });
     await act(async () => {
       older.resolve({ report: { rows: ['group'] } });
       await first;
@@ -56,7 +66,7 @@ describe('accounting report requests (P3-8)', () => {
     const tb = deferred<unknown>();
     const is = deferred<unknown>();
     fetchJson.mockImplementation((url: string) => (url.includes('trial-balance') ? tb.promise : is.promise));
-    const { result } = renderHook(() => useAccountingReports());
+    const { result } = renderHook(() => useAccountingReports(), { wrapper: withClient().wrapper });
 
     let a!: Promise<void>;
     let b!: Promise<void>;
@@ -73,7 +83,7 @@ describe('accounting report requests (P3-8)', () => {
       is.resolve({ report: { totals: {} } });
       await b;
     });
-    expect(result.current.reportsLoading).toBe(false);
+    await waitFor(() => expect(result.current.reportsLoading).toBe(false));
   });
 
   it('useLatestRequest supersedes the previous request and aborts on unmount', () => {
@@ -98,27 +108,35 @@ describe('report views pass an abortable signal (P3-8)', () => {
     .filter(([url]) => String(url).includes(part))
     .map(([, init]) => (init as { signal?: AbortSignal } | undefined)?.signal);
 
-  it('journal book and ratios abort the previous request when reloaded', async () => {
+  it('journal book and ratios: a repeated click is not re-sent, a new currency aborts the previous request, closing aborts all', async () => {
     fetchJson.mockImplementation(pendingAbortable);
     const { FinancialReportsTab } = await import('../../components/accounting/FinancialReportsTab');
     const noop = vi.fn(() => Promise.resolve());
-    const { render, screen, fireEvent, cleanup } = await import('@testing-library/react');
+    const { render, screen, fireEvent, waitFor } = await import('@testing-library/react');
     const { MemoryRouter } = await import('react-router-dom');
-    render(
-      <MemoryRouter><FinancialReportsTab accounts={[]} trialBalance={null} incomeStatement={null} balanceSheet={null} ledgerReport={null}
-        loading={false} onFetchTrialBalance={noop} onFetchIncomeStatement={noop} onFetchBalanceSheet={noop} onFetchLedger={noop} /></MemoryRouter>
+    const { wrapper: Wrapper } = withClient();
+    const view = render(
+      <Wrapper><MemoryRouter><FinancialReportsTab accounts={[]} trialBalance={null} incomeStatement={null} balanceSheet={null} ledgerReport={null}
+        loading={false} onFetchTrialBalance={noop} onFetchIncomeStatement={noop} onFetchBalanceSheet={noop} onFetchLedger={noop} /></MemoryRouter></Wrapper>
     );
     fireEvent.click(screen.getByText('دفتر روزنامه رسمی'));
     fireEvent.click(screen.getByText('دفتر روزنامه رسمی'));
+    // همان پارامترها: درخواست در جریان دوباره فرستاده نمی‌شود
+    expect(signalsOf('journal-book')).toHaveLength(1);
+    expect(signalsOf('journal-book')[0]?.aborted).toBe(false);
+
     fireEvent.click(screen.getByText('نسبت‌ها و سلامت مالی'));
-    fireEvent.click(screen.getByText('نسبت‌ها و سلامت مالی'));
-    for (const part of ['journal-book', 'financial-ratios']) {
-      const signals = signalsOf(part);
-      expect(signals).toHaveLength(2);
-      expect(signals[0]?.aborted).toBe(true);
-      expect(signals[1]?.aborted).toBe(false);
-    }
-    cleanup();
+    await waitFor(() => expect(signalsOf('financial-ratios')).toHaveLength(1));
+    fireEvent.click(await screen.findByText('USD'));
+    await waitFor(() => expect(signalsOf('financial-ratios')).toHaveLength(2));
+    const ratios = signalsOf('financial-ratios');
+    expect(fetchJson.mock.calls.filter(([url]) => String(url).includes('financial-ratios'))[1][0]).toBe('/accounting/reports/financial-ratios?currency=USD');
+    expect(ratios[0]?.aborted).toBe(true);
+    expect(ratios[1]?.aborted).toBe(false);
+
+    view.unmount();
+    expect(signalsOf('journal-book')[0]?.aborted).toBe(true);
+    expect(signalsOf('financial-ratios')[1]?.aborted).toBe(true);
   });
 
   it('the party ledger request is aborted when the view closes', async () => {
@@ -128,7 +146,8 @@ describe('report views pass an abortable signal (P3-8)', () => {
         : pendingAbortable(url, init));
     const { PartyLedgerReportView } = await import('../../components/accounting/reports/PartyLedgerReportView');
     const { render, waitFor } = await import('@testing-library/react');
-    const view = render(<PartyLedgerReportView initialPartyId={4} initialPartyName="نگار کریمی" initialPartyType="customer" />);
+    const { wrapper: Wrapper } = withClient();
+    const view = render(<Wrapper><PartyLedgerReportView initialPartyId={4} initialPartyName="نگار کریمی" initialPartyType="customer" /></Wrapper>);
     await waitFor(() => expect(signalsOf('party-ledger')).toHaveLength(1));
     view.unmount();
     expect(signalsOf('party-ledger')[0]?.aborted).toBe(true);

@@ -16,6 +16,7 @@ import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -27,7 +28,6 @@ interface ChequesTabProps {
   onCreateCheque: (data: any) => Promise<void>;
   onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyName?: string) => Promise<void>;
   onDeleteCheque: (id: number) => Promise<void>;
-  onLoadChequeReconciliation?: () => Promise<any[]>;
 }
 
 export function ChequesTab({
@@ -40,7 +40,6 @@ export function ChequesTab({
   onCreateCheque,
   onUpdateStatus,
   onDeleteCheque,
-  onLoadChequeReconciliation,
 }: ChequesTabProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
@@ -242,23 +241,17 @@ export function ChequesTab({
   const [dueFromFilter, setDueFromFilter] = useState('');
   const [dueToFilter, setDueToFilter] = useState('');
   // V1.6.0: آشتی‌سنجی دفتر چک
-  const [chqReconRows, setChqReconRows] = useState<any[]>([]);
-  const [isLoadingChqRecon, setIsLoadingChqRecon] = useState(false);
+  // با React Query: درخواست با بسته شدن تب لغو می‌شود و خطا با پیام «خطا در آشتی‌سنجی دفتر چک» اعلام می‌شود
+  const chequeReconciliation = useChequeReconciliationReport();
+  const chqReconRows = chequeReconciliation.data ?? [];
+  const isLoadingChqRecon = chequeReconciliation.loading;
 
   const handleLoadChequeReconciliation = async () => {
-    if (!onLoadChequeReconciliation) return;
-    setIsLoadingChqRecon(true);
-    try {
-      const rows = await onLoadChequeReconciliation();
-      setChqReconRows(Array.isArray(rows) ? rows : []);
-      if (Array.isArray(rows) && rows.length > 0) {
-        const clean = rows.filter(r => Math.abs(r.discrepancy) < 0.01).length;
-        toast.success(`آشتی‌سنجی انجام شد — ${clean} از ${rows.length} حساب بدون مغایرت`);
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در آشتی‌سنجی دفتر چک');
-    } finally {
-      setIsLoadingChqRecon(false);
+    if (isLoadingChqRecon) return;
+    const rows = await chequeReconciliation.run({});
+    if (Array.isArray(rows) && rows.length > 0) {
+      const clean = rows.filter(r => Math.abs(r.discrepancy) < 0.01).length;
+      toast.success(`آشتی‌سنجی انجام شد — ${clean} از ${rows.length} حساب بدون مغایرت`);
     }
   };
 

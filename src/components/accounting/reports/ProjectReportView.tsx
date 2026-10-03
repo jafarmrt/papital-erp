@@ -1,77 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { FolderKanban, RefreshCw } from 'lucide-react';
-import { fetchJson } from '../../../api';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate, formatCurrencyLabel } from '../../../utils';
 import { useAppCurrency } from '../../../hooks/useAppCurrency';
+import { useProjectDetailQuery, useProjectSummaryQuery } from '../../../hooks/accounting/usePartyProjectReportQueries';
 
 // V10-6.1: گزارش حسابداری per-project — خلاصه گردش + ریز با تراز جاری (فیلتر پروژه)
-interface ProjectSummaryRow {
-  projectId: number;
-  projectCode: string;
-  projectTitle: string;
-  entriesCount: number;
-  totalDebit: number;
-  totalCredit: number;
-  balance: number;
-}
-
-interface ProjectDetailRow {
-  voucherNumber: string;
-  voucherDate: string;
-  voucherDescription: string;
-  accountCode: string;
-  accountName: string;
-  lineDescription: string;
-  debit: number;
-  credit: number;
-  runningBalance: number;
-}
-
 export const ProjectReportView: React.FC = () => {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
 
-  const [summary, setSummary] = useState<ProjectSummaryRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<number | ''>('');
-  const [detail, setDetail] = useState<ProjectDetailRow[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
+  // React Query: پروژه انتخاب‌شده بخشی از کلید است؛ پاسخ دیررس پروژه قبلی جای ریز پروژه تازه را نمی‌گیرد
+  const summaryQuery = useProjectSummaryQuery();
+  const detailQuery = useProjectDetailQuery(selectedProjectId === '' ? null : Number(selectedProjectId));
+  const summary = summaryQuery.data ?? [];
+  const loading = summaryQuery.isFetching;
+  const detail = selectedProjectId === '' || detailQuery.isError ? [] : (detailQuery.data ?? []);
+  const detailLoading = detailQuery.isFetching;
 
-  const loadSummary = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetchJson('/accounting/reports/project-summary', { signal });
-      setSummary(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadDetail = async (projectId: number) => {
-    setDetailLoading(true);
-    try {
-      const res = await fetchJson(`/accounting/reports/project-detail?projectId=${projectId}`);
-      setDetail(Array.isArray(res?.detail) ? res.detail : []);
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return;
-      setDetail([]);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadSummary(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const loadSummary = () => { void summaryQuery.refetch(); };
 
   const handleSelectProject = (projectId: number | '') => {
     setSelectedProjectId(projectId);
-    if (projectId !== '') loadDetail(Number(projectId));
-    else setDetail([]);
   };
 
   const selectedSummary = summary.find(s => s.projectId === selectedProjectId);

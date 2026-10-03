@@ -1,90 +1,73 @@
-import { useState, useEffect, useCallback } from 'react';
-import { fetchJson } from '../../api';
+import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { ChartOfAccountsTab } from '../accounting/ChartOfAccountsTab';
+import { errorMessageOf } from '../../utils';
 import type { Account } from '../../types';
+import {
+  useAccountMutations,
+  useAccountsListQuery,
+  useAccountsTreeQuery,
+  type AccountPayload,
+} from '../../hooks/accounting/useAccountsQueries';
 
+const NO_ACCOUNTS: Account[] = [];
+
+/**
+ * تنظیمات › کدینگ حساب‌ها (مقصد تب «کدینگ» صفحه حسابداری): همان کش و ذخیره‌های React Query صفحه حسابداری،
+ * پس تغییر کدینگ در هر دو جا نمایش داده می‌شود.
+ */
 export function ChartOfAccountsSettingsTab() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [treeAccounts, setTreeAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(false);
+  const accountsQuery = useAccountsListQuery();
+  const treeQuery = useAccountsTreeQuery();
+  const { createAccount, updateAccount, deleteAccount, seedStandardAccounts } = useAccountMutations();
+  const accounts = accountsQuery.data ?? NO_ACCOUNTS;
+  const treeAccounts = treeQuery.data ?? NO_ACCOUNTS;
+  const loading = accountsQuery.isFetching || treeQuery.isFetching || seedStandardAccounts.isPending;
 
-  const loadData = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+  const { refetch: refetchAccounts } = accountsQuery;
+  const { refetch: refetchTree } = treeQuery;
+  const loadData = useCallback(() => {
+    void refetchAccounts();
+    void refetchTree();
+  }, [refetchAccounts, refetchTree]);
+
+  const handleCreateAccount = async (data: AccountPayload) => {
     try {
-      const [accRes, treeRes] = await Promise.all([
-        fetchJson('/accounting/accounts', { signal }).catch(() => []),
-        fetchJson('/accounting/accounts/tree', { signal }).catch(() => [])
-      ]);
-      const safeAccounts = Array.isArray(accRes?.data) ? accRes.data : (Array.isArray(accRes) ? accRes : []);
-      const safeTree = Array.isArray(treeRes?.data) ? treeRes.data : (Array.isArray(treeRes) ? treeRes : []);
-      setAccounts(safeAccounts);
-      setTreeAccounts(safeTree);
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') {
-        toast.error('خطا در دریافت کدینگ حساب‌ها');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadData(controller.signal);
-    return () => controller.abort();
-  }, [loadData]);
-
-  const handleCreateAccount = async (data: any) => {
-    try {
-      await fetchJson('/accounting/accounts', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
+      await createAccount.mutateAsync(data);
       toast.success('حساب جدید با موفقیت ایجاد شد');
-      await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در ایجاد حساب');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در ایجاد حساب');
       throw err;
     }
   };
 
-  const handleUpdateAccount = async (id: number, data: any) => {
+  const handleUpdateAccount = async (id: number, data: AccountPayload) => {
     try {
-      await fetchJson(`/accounting/accounts/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-      });
+      await updateAccount.mutateAsync({ id, data });
       toast.success('حساب با موفقیت ویرایش شد');
-      await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در ویرایش حساب');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در ویرایش حساب');
       throw err;
     }
   };
 
   const handleDeleteAccount = async (id: number) => {
     try {
-      await fetchJson(`/accounting/accounts/${id}`, {
-        method: 'DELETE'
-      });
+      await deleteAccount.mutateAsync(id);
       toast.success('حساب با موفقیت حذف شد');
-      await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در حذف حساب');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در حذف حساب');
       throw err;
     }
   };
 
   const handleSeedStandardAccounts = async () => {
+    if (seedStandardAccounts.isPending) return;
     try {
-      await fetchJson('/accounting/accounts/seed-standard', {
-        method: 'POST'
-      });
+      await seedStandardAccounts.mutateAsync();
       toast.success('کدینگ استاندارد با موفقیت بارگذاری شد');
-      await loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در ایجاد سرفصل‌های پیش‌فرض');
+    } catch (err: unknown) {
+      toast.error(errorMessageOf(err) || 'خطا در ایجاد سرفصل‌های پیش‌فرض');
       throw err;
     }
   };

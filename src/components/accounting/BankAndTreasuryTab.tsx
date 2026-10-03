@@ -53,7 +53,6 @@ export interface BankAndTreasuryTabProps {
   onVoidTreasuryTransaction: (id: number, reason: string) => Promise<void>;
   onCreateTreasuryTransfer: (data: any) => Promise<void>;
   onReconcileTransactions?: (bankAccountId: number, txIds: number[], batch: string, reconciled: boolean) => Promise<void>;
-  onLoadCashFlowReport?: (startDate?: string, endDate?: string) => Promise<any>;
 }
 
 export function BankAndTreasuryTab({
@@ -73,7 +72,6 @@ export function BankAndTreasuryTab({
   onVoidTreasuryTransaction,
   onCreateTreasuryTransfer,
   onReconcileTransactions,
-  onLoadCashFlowReport,
 }: BankAndTreasuryTabProps) {
   const appCurrency = useAppCurrency();
 
@@ -229,15 +227,13 @@ export function BankAndTreasuryTab({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {onLoadCashFlowReport && (
-            <button
-              onClick={() => setIsCashFlowModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200 dark:border-indigo-800/60 transition cursor-pointer"
-            >
-              <TrendingUp size={14} />
-              گزارش جریان نقدینگی
-            </button>
-          )}
+          <button
+            onClick={() => setIsCashFlowModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-xl border border-indigo-200 dark:border-indigo-800/60 transition cursor-pointer"
+          >
+            <TrendingUp size={14} />
+            گزارش جریان نقدینگی
+          </button>
 
           {onSyncAndReconcileBanks && (
             <button
@@ -344,7 +340,6 @@ export function BankAndTreasuryTab({
       <CashFlowModal
         isOpen={isCashFlowModalOpen}
         onClose={() => setIsCashFlowModalOpen(false)}
-        onLoadReport={onLoadCashFlowReport}
       />
 
       {/* Inter-bank Transfer Modal */}

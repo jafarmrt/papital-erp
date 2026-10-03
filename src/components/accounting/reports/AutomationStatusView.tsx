@@ -1,49 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Factory, RefreshCw, FileWarning, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { fetchJson } from '../../../api';
 import { formatPersianNumber } from '../../../utils';
+import { useAutomationStatusQuery } from '../../../hooks/accounting/useAccountingAuditQueries';
 
 // V10-6.1: پنل وضعیت اتوماسیون صدور اسناد دوبل — پوشش واقعی voucherها به تفکیک نوع سند
-interface AutomationRow {
-  docType: string;
-  label: string;
-  autoSupported: boolean;
-  totalDocs: number;
-  withVoucher: number;
-  missingVoucher: number;
-}
-
-interface AutomationSummary {
-  totalDocs: number;
-  coveredDocs: number;
-  coveragePercent: number;
-  gapTypes: string[];
-}
-
 export const AutomationStatusView: React.FC = () => {
-  const [report, setReport] = useState<AutomationRow[]>([]);
-  const [summary, setSummary] = useState<AutomationSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetchJson('/accounting/automation-status', { signal });
-      setReport(Array.isArray(res?.report) ? res.report : []);
-      setSummary(res?.summary || null);
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return;
-      // toast handled globally? keep local minimal
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // React Query: با بسته شدن زیرتب درخواست لغو می‌شود؛ خطا مثل قبل پیام جداگانه ندارد
+  const automationQuery = useAutomationStatusQuery();
+  const report = automationQuery.data?.report ?? [];
+  const summary = automationQuery.data?.summary ?? null;
+  const loading = automationQuery.isFetching;
+  const load = () => { void automationQuery.refetch(); };
 
   return (
     <div className="space-y-4">
