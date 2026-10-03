@@ -99,6 +99,8 @@ export const legacyDateRepairs = pgTable('legacy_date_repairs', {
   newValue: text('new_value').notNull(),
   status: text('status').notNull(),
   reason: text('reason'),
+  // v7.0.131 (TD-232, مهاجرت 0038): 'mdy' اصلاح «07-10-1405 AP» (TD-231)؛ 'calendar' یکسان‌سازی تاریخ متنی به ISO میلادی
+  repairKind: text('repair_kind').notNull().default('mdy'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
 });
 

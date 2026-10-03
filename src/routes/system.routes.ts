@@ -16,6 +16,7 @@ import { FactoryResetService } from '../services/system/factoryReset.service.js'
 import { SystemHealthService } from '../services/system/systemHealth.service.js';
 import { SystemReconciliationService } from '../services/system/systemReconciliation.service.js';
 import { GlobalSearchService } from '../services/system/globalSearch.service.js';
+import { DateCalendarReportService } from '../services/system/dateCalendarReport.service.js';
 
 const router = Router();
 
@@ -258,6 +259,11 @@ router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) =
     // لحظه مطلق استعلام (UTC ISO) — مرورگر آن را در منطقه زمانی توافقی نمایش می‌دهد
     checkTimestamp: systemNowUtcIso()
   });
+}));
+
+// v7.0.131 (TD-232): گزارش فقط‌خواندنی تقویم ستون‌های تاریخ متنی (همان npm run dates:report)
+router.get('/system/date-calendar-report', authorize('admin'), asyncHandler(async (_req, res) => {
+  res.json(await DateCalendarReportService.buildReport());
 }));
 
 // Automated System Integrity & Reconciliation Scan

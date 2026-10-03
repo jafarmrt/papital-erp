@@ -7054,6 +7054,117 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.131 (TD-232): ابزار یکسان‌سازی تاریخ متنی به میلادی ISO (مهاجرت 0038) و گزارش فقط‌خواندنی تقویم
+  if (shouldRun('reg_calendar_date_tools_td_232', 'td232', 'calendar', 'date')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.131: تبدیل تاریخ SQL با مبدل برنامه یکی است؛ یکسان‌سازی ستون مقدار قبلی را ثبت و تاریخ نامعتبر را رد می‌کند؛ گزارش تقویم ستون‌ها را می‌شمارد (TD-232)';
+    const ROLLBACK = new Error('ROLLBACK_TD_232');
+    const violations: string[] = [];
+    let reportPersonnelId: number | null = null;
+    try {
+      const { personnel, legacyDateRepairs } = await import('../../db/schema.js');
+      const { toStorageDate } = await import('../../utils/calendarDate.js');
+      const { toEnglishDigits } = await import('../../utils/persianNumber.js');
+      const { requireStorageDate } = await import('../../lib/storageDate.js');
+      const { normalizeError } = await import('../../errors/customErrors.js');
+      const { DateCalendarReportService } = await import('../../services/system/dateCalendarReport.service.js');
+
+      // ۱) erp_text_date_to_iso همان نتیجه toStorageDate را می‌دهد
+      const samples = ['1405/07/10', '1405-7-1', '۱۴۰۵/۰۷/۱۰', '1403/12/30', '1404/12/30', '1405/07/31', '1405/13/01', '2026-10-02',
+        '2026/2/9', '2026-02-29', '2024-02-29', '2026-10-02 18:30:00', '07-10-1405 AP', 'abc', '1600/01/01', '1300/01/01', '1500/12/29'];
+      for (const v of samples) {
+        const rows = (await orm.execute(sql`SELECT erp_text_date_to_iso(${v}::text) AS iso, erp_text_date_kind(${v}::text) AS kind`) as unknown as { rows: Array<{ iso: string | null; kind: string }> }).rows;
+        const expected = toStorageDate(v);
+        if ((rows[0]?.iso ?? null) !== expected) violations.push(`«${v}»: SQL ${rows[0]?.iso}، برنامه ${expected}`);
+        const expectedKind = expected === null ? 'invalid' : expected === v ? 'iso' : /^1[345]\d{2}/.test(toEnglishDigits(v).trim()) ? 'jalali' : 'gregorian';
+        if (rows[0]?.kind !== expectedKind) violations.push(`نوع «${v}»: ${rows[0]?.kind} (انتظار ${expectedKind})`);
+      }
+
+      // ۲) ورودی API: تاریخ نامعتبر با 422 رد می‌شود
+      try {
+        requireStorageDate('1405/07/31', 'تاریخ آزمون');
+        violations.push('requireStorageDate تاریخ ۳۱ مهر را پذیرفت');
+      } catch (err) {
+        const n = normalizeError(err);
+        if (n.statusCode !== 422) violations.push(`requireStorageDate: پاسخ ${n.statusCode} (انتظار 422)`);
+      }
+      if (requireStorageDate('۱۴۰۵/۰۷/۱۰', 'تاریخ آزمون') !== '2026-10-02') violations.push('requireStorageDate شمسی را به ISO تبدیل نکرد');
+
+      // ۳) یکسان‌سازی یک ستون در تراکنشی که برگردانده می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`ALTER TABLE personnel DROP CONSTRAINT IF EXISTS chk_personnel_birth_date_datefmt`);
+          const ids: Record<string, number> = {};
+          for (const [key, birthDate] of Object.entries({ jalali: '1370/05/12', persian: '۱۳۷۰/۰۵/۱۲', loose: '1990-8-3', iso: '1990-08-03', empty: '', bad: '1370/13/40' })) {
+            const [row] = await tx.insert(personnel).values({ fullName: `ERP-TEST-MARKER TD-232 ${key}`, birthDate }).returning({ id: personnel.id });
+            ids[key] = row.id;
+          }
+          await tx.execute(sql`SELECT erp_unify_text_date_column('personnel', 'birth_date')`);
+          const read = async (id: number) => (await tx.select({ v: personnel.birthDate }).from(personnel).where(eq(personnel.id, id)))[0]?.v;
+          const expectations: Record<string, string> = { jalali: '1991-08-03', persian: '1991-08-03', loose: '1990-08-03', iso: '1990-08-03', empty: '', bad: '1370/13/40' };
+          for (const [key, want] of Object.entries(expectations)) {
+            const got = await read(ids[key]);
+            if (got !== want) violations.push(`personnel.birth_date ${key}: ${got} (انتظار ${want})`);
+          }
+          const log = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.tableName, 'personnel'), eq(legacyDateRepairs.repairKind, 'calendar')));
+          const entry = (key: string) => log.find(r => r.rowId === ids[key]);
+          if (entry('jalali')?.oldValue !== '1370/05/12' || entry('jalali')?.status !== 'corrected') violations.push(`گزارش شمسی: ${JSON.stringify(entry('jalali'))}`);
+          if (entry('bad')?.status !== 'refused') violations.push(`تاریخ نامعتبر باید refused باشد: ${JSON.stringify(entry('bad'))}`);
+          if (entry('iso') || entry('empty')) violations.push('ردیف ISO یا خالی نباید در گزارش بیاید');
+
+          await tx.execute(sql`SELECT erp_unify_text_date_column('personnel', 'birth_date')`);
+          const again = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.tableName, 'personnel'), eq(legacyDateRepairs.repairKind, 'calendar')));
+          if (again.length !== log.length) violations.push(`اجرای دوباره ${again.length - log.length} ردیف گزارش تازه ساخت`);
+
+          const constraintWithBad = (await tx.execute(sql`SELECT erp_set_iso_date_constraint('personnel', 'birth_date') AS ok`) as unknown as { rows: Array<{ ok: boolean }> }).rows[0].ok;
+          if (constraintWithBad) violations.push('قید iso با ردیف نامعتبر معتبرشده اعلام شد');
+          await tx.delete(personnel).where(eq(personnel.id, ids.bad));
+          const constraintClean = (await tx.execute(sql`SELECT erp_set_iso_date_constraint('personnel', 'birth_date') AS ok`) as unknown as { rows: Array<{ ok: boolean }> }).rows[0].ok;
+          if (!constraintClean) violations.push('قید iso روی ستون تمیز معتبر نشد');
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      // ۴) گزارش فقط‌خواندنی: ستون‌ها و شمار ردیف شمسی
+      const [pers] = await orm.insert(personnel).values({ fullName: 'ERP-TEST-MARKER TD-232 گزارش', birthDate: '1370/05/12' }).returning({ id: personnel.id });
+      reportPersonnelId = pers.id;
+      const report = await DateCalendarReportService.buildReport();
+      const col = (t: string, c: string) => report.columns.find(x => x.table === t && x.column === c);
+      for (const [t, c] of [['crm_activities', 'activity_date'], ['cheques', 'due_date'], ['journal_vouchers', 'date'], ['personnel', 'birth_date']]) {
+        if (!col(t, c)) violations.push(`ستون ${t}.${c} در گزارش نیست`);
+      }
+      if ((col('personnel', 'birth_date')?.jalali ?? 0) < 1) violations.push('گزارش تاریخ تولد شمسی را نشمرد');
+      if (report.columns.some(x => x.table === 'legacy_date_repairs')) violations.push('جدول legacy_date_repairs نباید در گزارش باشد');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_calendar_date_tools_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'تبدیل SQL و برنامه یکی بود؛ یکسان‌سازی ستون با گزارش و رد تاریخ نامعتبر و گزارش تقویم کار کرد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_calendar_date_tools_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (reportPersonnelId !== null) await cleanTestTableData('personnel', 'id', [reportPersonnelId]);
+    }
+  }
+
   // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
   if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
     const tStart = Date.now();

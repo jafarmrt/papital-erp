@@ -891,7 +891,8 @@ export class FinancialHealthService {
     // =========================================================================
     // آزمون ۱۰: v7.0.82 (TD-231) اصلاح تاریخ‌های قدیمی «07-10-1405 AP» (مهاجرت 0030)
     // =========================================================================
-    const dateRepairs = await orm.select().from(legacyDateRepairs).orderBy(asc(legacyDateRepairs.id));
+    const allDateRepairs = await orm.select().from(legacyDateRepairs).orderBy(asc(legacyDateRepairs.id));
+    const dateRepairs = allDateRepairs.filter((r) => r.repairKind === 'mdy');
     const refusedDateRepairs = dateRepairs.filter((r) => r.status === 'refused');
     const dateRepairTableLabel: Record<string, string> = {
       journal_vouchers: 'سند حسابداری',
@@ -922,6 +923,35 @@ export class FinancialHealthService {
         details: 'مقدار قبلی در جدول legacy_date_repairs نگه داشته شده است.',
       })),
       metrics: { corrected: dateRepairs.length - refusedDateRepairs.length, refused: refusedDateRepairs.length },
+    });
+
+    // =========================================================================
+    // آزمون ۱۰-ب: v7.0.131 (TD-232) یکسان‌سازی تاریخ‌های متنی به میلادی ISO (مهاجرت 0038 و بعدی‌ها)
+    // =========================================================================
+    const calendarRepairs = allDateRepairs.filter((r) => r.repairKind === 'calendar');
+    const refusedCalendarRepairs = calendarRepairs.filter((r) => r.status === 'refused');
+    tests.push({
+      id: 'calendar_date_unification',
+      category: 'system',
+      title: 'یکسان‌سازی تقویم تاریخ‌ها',
+      description: 'تاریخ‌های متنی که شمسی یا با قالب‌های مختلف ذخیره شده بودند به قالب واحد ذخیره (میلادی) برگردانده شدند و همه‌جا شمسی نمایش داده می‌شوند؛ مقدار قبلی هر ردیف نگه داشته شد',
+      status: refusedCalendarRepairs.length > 0 ? 'warning' : 'healthy',
+      scoreImpact: 0,
+      count: refusedCalendarRepairs.length,
+      message: calendarRepairs.length === 0
+        ? 'تاریخی برای یکسان‌سازی یافت نشد.'
+        : `${calendarRepairs.length - refusedCalendarRepairs.length} تاریخ یکسان‌سازی شد${refusedCalendarRepairs.length > 0 ? `؛ ${refusedCalendarRepairs.length} تاریخ قابل تشخیص نبود و دست نخورد — باید دستی اصلاح شود` : ''}.`,
+      items: calendarRepairs.map((r) => ({
+        id: r.id,
+        code: `${r.tableName} #${r.rowId}`,
+        title: r.status === 'refused'
+          ? `اصلاح نشد: ${r.reason || ''} (مقدار فعلی «${r.oldValue}»)`
+          : `«${r.oldValue}» به «${r.newValue}» تبدیل شد`,
+        subtitle: `ستون: ${r.columnName}`,
+        date: r.status === 'refused' ? '' : r.newValue,
+        details: 'مقدار قبلی در جدول legacy_date_repairs نگه داشته شده است.',
+      })),
+      metrics: { corrected: calendarRepairs.length - refusedCalendarRepairs.length, refused: refusedCalendarRepairs.length },
     });
 
     // =========================================================================
