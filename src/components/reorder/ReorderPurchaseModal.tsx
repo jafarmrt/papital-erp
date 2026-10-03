@@ -1,25 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, ShoppingCart, CheckCircle2, Loader2, Building2, FileText, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fetchJson } from '../../api';
-import { Customer } from '../../types';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, errorMessageOf } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
+import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAlertsQueries';
+import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
 
-export interface ReorderModalItem {
-  id: number;
-  name: string;
-  code: string;
-  unit: string;
-  current_stock: number;
-  reorder_point: number;
-  deficit: number;
-  weighted_average_cost: number;
-  type: 'product' | 'raw_material';
-  orderQty: number;
-  unitPrice: number;
-}
+export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
+
+type Priority = 'urgent' | 'high' | 'normal' | 'low';
+type DocStatus = 'draft' | 'final';
 
 interface ReorderPurchaseModalProps {
   isOpen: boolean;
@@ -37,16 +29,18 @@ export function ReorderPurchaseModal({
   const [items, setItems] = useState<ReorderModalItem[]>([]);
   const [orderTarget, setOrderTarget] = useState<'requisition' | 'direct_document'>('requisition');
   const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
+  const [priority, setPriority] = useState<Priority>('normal');
   const [requiredDate, setRequiredDate] = useState(() => getTodayJalaliDate());
   const [supplierName, setSupplierName] = useState('');
-  const [docStatus, setDocStatus] = useState<'draft' | 'final'>('draft');
+  const [docStatus, setDocStatus] = useState<DocStatus>('draft');
   const [targetWarehouse] = useState('');
   const [notes, setNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // ثبت با useMutation (ابطال کش تدارکات/اسناد/کالاها در خود hook)؛ دکمه ثبت تا پایان درخواست غیرفعال است
+  const purchaseSubmit = useReorderPurchaseSubmit();
+  const isSubmitting = purchaseSubmit.isPending;
 
-  const [suppliers, setSuppliers] = useState<Customer[]>([]);
-  const [, setIsLoadingSuppliers] = useState(false);
+  // Load suppliers list (React Query؛ فقط با باز بودن مودال، با بسته شدن صفحه لغو می‌شود)
+  const suppliers = useReorderSuppliersQuery(isOpen);
 
   // Sync items when modal opens or selection changes
   useEffect(() => {
@@ -64,19 +58,6 @@ export function ReorderPurchaseModal({
     );
     setNotes(`تامین کسری نقطه سفارش مواد اولیه از طریق میز کار هشدار انبار`);
   }, [isOpen, selectedItems]);
-
-  // Load suppliers list
-  useEffect(() => {
-    if (!isOpen) return;
-    setIsLoadingSuppliers(true);
-    fetchJson('/customers?limit=1000')
-      .then(res => {
-        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        setSuppliers(list);
-      })
-      .catch(err => console.error('Error fetching suppliers:', err))
-      .finally(() => setIsLoadingSuppliers(false));
-  }, [isOpen]);
 
   const supplierOptions = useMemo(() => {
     return suppliers.map(s => ({
@@ -102,7 +83,7 @@ export function ReorderPurchaseModal({
 
   const grandTotal = items.reduce((s, it) => s + (it.orderQty * it.unitPrice), 0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (items.length === 0) {
@@ -117,74 +98,72 @@ export function ReorderPurchaseModal({
       }
     }
 
-    setIsSubmitting(true);
-    try {
-      if (orderTarget === 'requisition') {
-        // Submit Purchase Requisition to Procurement Workflow
-        const res = await fetchJson<{ success: boolean; message?: string }>('/api/procurement/requisitions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: title.trim(),
-            priority,
-            requiredDate,
-            notes: notes.trim(),
-            items: items.map(it => ({
-              itemId: it.id,
-              itemCode: it.code,
-              itemName: it.name,
-              unit: it.unit || 'عدد',
-              requestedQty: Number(it.orderQty),
-              unitPriceEstimate: Number(it.unitPrice || 0),
-              notes: `کسری نقطه سفارش: موجودی فعلی ${it.current_stock} / حد آستانه ${it.reorder_point}`
-            }))
-          })
-        });
-
-        toast.success(res.message || 'درخواست خرید با موفقیت در سیستم تدارکات ثبت شد.');
-      } else {
-        // Direct Document (Purchase Order / Receipt)
-        if (!supplierName || supplierName.trim() === '') {
-          toast.error('انتخاب تامین‌کننده برای صدور مستقیم سند الزامی است.');
-          setIsSubmitting(false);
-          return;
+    let variables: ReorderPurchaseVariables;
+    if (orderTarget === 'requisition') {
+      // Submit Purchase Requisition to Procurement Workflow
+      variables = {
+        target: 'requisition',
+        payload: {
+          title: title.trim(),
+          priority,
+          requiredDate,
+          notes: notes.trim(),
+          items: items.map(it => ({
+            itemId: it.id,
+            itemCode: it.code,
+            itemName: it.name,
+            unit: it.unit || 'عدد',
+            requestedQty: Number(it.orderQty),
+            unitPriceEstimate: Number(it.unitPrice || 0),
+            notes: `کسری نقطه سفارش: موجودی فعلی ${it.current_stock} / حد آستانه ${it.reorder_point}`
+          }))
         }
-
-        await fetchJson<{ success: boolean; data?: any; message?: string }>('/documents', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            docType: 'receipt',
-            status: docStatus,
-            partyName: supplierName.trim(),
-            location: targetWarehouse.trim() || undefined,
-            date: requiredDate || getTodayJalaliDate(),
-            notes: notes.trim() || `تامین کسری نقطه سفارش انبار`,
-            items: items.map(it => ({
-              itemId: it.id,
-              itemCode: it.code,
-              itemName: it.name,
-              unit: it.unit || 'عدد',
-              quantity: Number(it.orderQty),
-              unitPrice: Number(it.unitPrice || 0),
-              totalPrice: Number(it.orderQty) * Number(it.unitPrice || 0)
-            }))
-          })
-        });
-
-        toast.success(docStatus === 'final' 
-          ? 'رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'
-          : 'پیش‌نویس سفارش خرید با موفقیت در اسناد انبار ثبت گردید.'
-        );
+      };
+    } else {
+      // Direct Document (Purchase Order / Receipt)
+      if (!supplierName || supplierName.trim() === '') {
+        toast.error('انتخاب تامین‌کننده برای صدور مستقیم سند الزامی است.');
+        return;
       }
-
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در ثبت سفارش خرید');
-    } finally {
-      setIsSubmitting(false);
+      variables = {
+        target: 'direct_document',
+        payload: {
+          docType: 'receipt',
+          status: docStatus,
+          partyName: supplierName.trim(),
+          location: targetWarehouse.trim() || undefined,
+          date: requiredDate || getTodayJalaliDate(),
+          notes: notes.trim() || `تامین کسری نقطه سفارش انبار`,
+          items: items.map(it => ({
+            itemId: it.id,
+            itemCode: it.code,
+            itemName: it.name,
+            unit: it.unit || 'عدد',
+            quantity: Number(it.orderQty),
+            unitPrice: Number(it.unitPrice || 0),
+            totalPrice: Number(it.orderQty) * Number(it.unitPrice || 0)
+          }))
+        }
+      };
     }
+
+    purchaseSubmit.mutate(variables, {
+      onSuccess: (res) => {
+        if (variables.target === 'requisition') {
+          toast.success(res.message || 'درخواست خرید با موفقیت در سیستم تدارکات ثبت شد.');
+        } else {
+          toast.success(variables.payload.status === 'final'
+            ? 'رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'
+            : 'پیش‌نویس سفارش خرید با موفقیت در اسناد انبار ثبت گردید.'
+          );
+        }
+        onSuccess();
+        onClose();
+      },
+      onError: (err) => {
+        toast.error(errorMessageOf(err) || 'خطا در ثبت سفارش خرید');
+      },
+    });
   };
 
   return (
@@ -282,7 +261,7 @@ export function ReorderPurchaseModal({
               <label className="block font-bold text-slate-700 mb-1">اولویت نیاز:</label>
               <select
                 value={priority}
-                onChange={e => setPriority(e.target.value as any)}
+                onChange={e => setPriority(e.target.value as Priority)}
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
               >
                 <option value="urgent">فوری / اضطراری</option>
@@ -311,7 +290,7 @@ export function ReorderPurchaseModal({
                   <label className="block font-bold text-slate-700 mb-1">نوع و وضعیت سند:</label>
                   <select
                     value={docStatus}
-                    onChange={e => setDocStatus(e.target.value as any)}
+                    onChange={e => setDocStatus(e.target.value as DocStatus)}
                     className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none"
                   >
                     <option value="draft">پیش‌نویس سفارش خرید (عدم تغییر موجودی)</option>

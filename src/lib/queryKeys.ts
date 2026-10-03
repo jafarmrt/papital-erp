@@ -16,6 +16,8 @@ export const QUERY_KEYS = {
     all: ['items'] as const,
     list: (params?: Record<string, unknown> | object) => ['items', 'list', params ?? {}] as const,
     detail: (id: number) => ['items', 'detail', id] as const,
+    // صفحه نقطه سفارش (GET /items/reorder-alerts): زیر items تا ذخیره کالا و هر تغییر موجودی (preset inventoryChange) تازه‌اش کند
+    reorderAlerts: () => ['items', 'reorder-alerts'] as const,
   },
 
   // Transfers
@@ -61,6 +63,11 @@ export const QUERY_KEYS = {
   warehouses: {
     all: ['warehouses'] as const,
     list: () => ['warehouses', 'list'] as const,
+  },
+
+  // تدارکات: درخواست‌های خرید و سفارش‌ها (صفحه نقطه سفارش درخواست خرید ثبت می‌کند)
+  procurement: {
+    all: ['procurement'] as const,
   },
 
   // Projects & Production
