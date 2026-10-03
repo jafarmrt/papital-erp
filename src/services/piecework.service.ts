@@ -4,6 +4,7 @@ import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, piec
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { normalizePersianDate, parseQuantityOrTime, jalaliToIsoDate } from '../utils.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
+import { allocatePieceworkTaskCode, loadTakenPieceworkTaskNumbers, markPieceworkTaskCodeTaken } from './piecework/taskCode.js';
 import { money, moneyOr } from '../lib/money.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../lib/financialDecimal.js';
 
@@ -93,9 +94,8 @@ export class PieceworkService {
   ): Promise<typeof pieceworkTasks.$inferSelect> {
     let taskCode = input.code ? String(input.code).trim() : '';
     if (!taskCode) {
-      const countRes = await executor.select({ count: sql<number>`count(*)` }).from(pieceworkTasks);
-      const nextId = Number(countRes[0]?.count || 0) + 1;
-      taskCode = `PW-${String(nextId).padStart(3, '0')}`;
+      // TD-243: توالی اتمیک به‌جای COUNT(*)+1؛ شماره‌ای که کد موجودی دارد رد می‌شود
+      taskCode = await allocatePieceworkTaskCode(executor);
     }
 
     const [newTask] = await executor.insert(pieceworkTasks).values({
@@ -303,14 +303,8 @@ export class PieceworkService {
     let updatedCount = 0;
     const addedCategories = new Set<string>();
 
-    let maxSeq = existingTasks.reduce((max, t) => {
-      const m = t.code?.match(/PW-(\d+)/i);
-      if (m) {
-        const num = parseInt(m[1], 10);
-        return num > max ? num : max;
-      }
-      return max;
-    }, 0);
+    // TD-243: کد خودکار از توالی اتمیک؛ شماره‌های گرفته‌شده شامل عناوین حذف‌شده هم هست
+    let takenCodeNumbers: Set<string> | null = null;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -325,11 +319,6 @@ export class PieceworkService {
 
       if (category && category !== 'سایر') {
         addedCategories.add(category);
-      }
-
-      if (!code) {
-        maxSeq++;
-        code = `PW-${String(maxSeq).padStart(3, '0')}`;
       }
 
       const existing = (code && taskByCode.get(code.toLowerCase())) || taskByTitle.get(title.toLowerCase());
@@ -361,6 +350,11 @@ export class PieceworkService {
           }, executor);
         }
       } else {
+        if (!code) {
+          // کد فقط برای ردیفی که واقعاً درج می‌شود تخصیص می‌یابد (ردیف به‌روزشده شماره توالی مصرف نمی‌کند)
+          takenCodeNumbers ??= await loadTakenPieceworkTaskNumbers(executor);
+          code = await allocatePieceworkTaskCode(executor, takenCodeNumbers);
+        }
         const [inserted] = await executor.insert(pieceworkTasks).values({
           code,
           title,
@@ -372,6 +366,7 @@ export class PieceworkService {
           isDeleted: 0
         }).returning();
         createdCount++;
+        if (takenCodeNumbers) markPieceworkTaskCodeTaken(takenCodeNumbers, code);
         if (code) taskByCode.set(code.toLowerCase(), inserted);
         taskByTitle.set(title.toLowerCase(), inserted);
 

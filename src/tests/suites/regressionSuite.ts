@@ -8549,5 +8549,108 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // TD-243: کد خودکار عنوان کاری پرکیسی از توالی اتمیک (نه COUNT(*)+1 / MAX()+1)؛ ایجاد هم‌زمان، کد دستی
+  // جلوتر از شمارنده، ردیف حذف‌شده و ورود اکسل هرگز کد تکراری نمی‌سازند
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_piecework_task_code_atomic_td_243', 'td243', 'piecework', 'task_code')) {
+    const tStart = Date.now();
+    const testName = 'TD-243 Regression: کد خودکار عنوان کاری پرکیسی در ایجاد هم‌زمان، کنار کد دستی/حذف‌شده و ورود اکسل یکتاست';
+    const suffix = `${Date.now()}`;
+    const taskIds: number[] = [];
+    try {
+      const { pieceworkTasks } = await import('../../db/schema.js');
+      const violations: string[] = [];
+      const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+      const codeNumber = (code: string): string | null => {
+        const m = String(code ?? '').trim().match(/^PW-0*(\d+)$/i);
+        return m ? m[1] : null;
+      };
+      const pad = (n: number) => `PW-${String(n).padStart(3, '0')}`;
+      const title = (tag: string) => `ERP-TEST-MARKER عنوان آزمون TD-243 ${tag} ${suffix}`;
+      const insertRaw = async (code: string, tag: string, isDeleted: 0 | 1) => {
+        const [row] = await orm.insert(pieceworkTasks).values({ code, title: title(tag), defaultRate: money(0), isActive: 1, isDeleted })
+          .returning({ id: pieceworkTasks.id, code: pieceworkTasks.code });
+        taskIds.push(row.id);
+        return row;
+      };
+      // هر کد خودکار نباید با کد (یا شماره PW) هیچ ردیف دیگری — فعال یا حذف‌شده — برابر باشد
+      const assertUniqueAgainstAll = async (label: string, created: Array<{ id: number; code: string }>) => {
+        const all = await orm.select({ id: pieceworkTasks.id, code: pieceworkTasks.code }).from(pieceworkTasks);
+        for (const t of created) {
+          check(/^PW-\d{3,}$/.test(t.code), `${label}: قالب کد خودکار باید PW- و دست‌کم سه رقم باشد (دریافتی: ${t.code})`);
+          const num = codeNumber(t.code);
+          const clashes = all.filter(r => r.id !== t.id && (
+            r.code.trim().toLowerCase() === t.code.trim().toLowerCase() || (num !== null && codeNumber(r.code) === num)
+          ));
+          check(clashes.length === 0, `${label}: کد خودکار ${t.code} (#${t.id}) با ردیف(های) موجود تکراری است: ${clashes.map(c => `#${c.id}=${c.code}`).join(', ')}`);
+        }
+      };
+
+      // (الف) چند ایجاد هم‌زمان بدون کد → کدهای متمایز
+      const concurrent = await Promise.all(Array.from({ length: 6 }, (_, i) =>
+        PieceworkService.createTask({ title: title(`هم‌زمان-${i}`), defaultRate: 1000, username: 'test-agent' })
+      ));
+      taskIds.push(...concurrent.map(t => t.id));
+      const concurrentCodes = concurrent.map(t => t.code);
+      check(new Set(concurrentCodes).size === concurrentCodes.length, `ایجاد هم‌زمان کد تکراری داد: ${concurrentCodes.join(', ')}`);
+      await assertUniqueAgainstAll('ایجاد هم‌زمان', concurrent);
+
+      // (ب) کد دستی برابر با کدی که روش قدیمی (COUNT(*)+1) بعدی می‌ساخت، سپس ایجاد خودکار
+      const [{ count: rowCount }] = await orm.select({ count: sql<number>`count(*)` }).from(pieceworkTasks);
+      const manual = await PieceworkService.createTask({ code: pad(Number(rowCount) + 2), title: title('دستی'), defaultRate: 1000, username: 'test-agent' });
+      taskIds.push(manual.id);
+      const afterManual = await PieceworkService.createTask({ title: title('پس از دستی'), defaultRate: 1000, username: 'test-agent' });
+      taskIds.push(afterManual.id);
+      await assertUniqueAgainstAll('پس از کد دستی', [afterManual]);
+
+      // (ج) ورود اکسل بدون کد کنار ردیف حذف‌شده‌ای که کد «بیشینه فعال + ۱» را دارد (روش قدیمی MAX فعال + 1)
+      const activeRows = await orm.select({ code: pieceworkTasks.code }).from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0));
+      const maxActive = activeRows.reduce((max, r) => Math.max(max, Number(codeNumber(r.code) ?? 0)), 0);
+      await insertRaw(pad(maxActive + 1), 'حذف‌شده-اکسل', 1);
+      const importResult = await PieceworkService.importTasksFromExcel({
+        rows: [{ title: title('اکسل-۱'), defaultRate: 500 }, { title: title('اکسل-۲'), defaultRate: 700 }],
+        mode: 'upsert',
+        username: 'test-agent'
+      });
+      check(importResult.createdCount === 2, `ورود اکسل باید دو عنوان جدید بسازد (دریافتی: ${importResult.createdCount})`);
+      const imported = await orm.select({ id: pieceworkTasks.id, code: pieceworkTasks.code }).from(pieceworkTasks)
+        .where(inArray(pieceworkTasks.title, [title('اکسل-۱'), title('اکسل-۲')]));
+      taskIds.push(...imported.map(t => t.id));
+      await assertUniqueAgainstAll('ورود اکسل', imported);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+
+      // (د) کد دستی دقیقاً جلوتر از شمارنده (فعال، و حذف‌شده با حروف کوچک و صفر اضافه) → شماره رد می‌شود، خطا نمی‌دهد
+      const seqRes = await orm.execute(sql`SELECT last_value, is_called FROM piecework_task_code_seq`) as unknown as { rows: Array<{ last_value: string | number; is_called: boolean }> };
+      const seqRow = seqRes.rows[0];
+      const nextSeq = Number(seqRow.last_value) + (seqRow.is_called ? 1 : 0);
+      await insertRaw(pad(nextSeq), 'جلوتر-فعال', 0);
+      await insertRaw(`pw-0${String(nextSeq + 1).padStart(3, '0')}`, 'جلوتر-حذف‌شده', 1);
+      const skipped = await PieceworkService.createTask({ title: title('رد شماره'), defaultRate: 1000, username: 'test-agent' });
+      taskIds.push(skipped.id);
+      check(Number(codeNumber(skipped.code)) >= nextSeq + 2, `کد خودکار باید از شماره‌های گرفته‌شده ${nextSeq} و ${nextSeq + 1} بگذرد (دریافتی: ${skipped.code})`);
+      await assertUniqueAgainstAll('رد شماره گرفته‌شده', [skipped]);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_piecework_task_code_atomic_td_243', scenarioId: 'v10_next_code_concurrent_unique', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: `کدهای هم‌زمان ${concurrentCodes.join(', ')} متمایز؛ پس از کد دستی ${manual.code} کد ${afterManual.code}؛ ورود اکسل ${imported.map(t => t.code).join(', ')}؛ رد شماره‌های گرفته‌شده → ${skipped.code}.`
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_piecework_task_code_atomic_td_243', scenarioId: 'v10_next_code_concurrent_unique', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (taskIds.length > 0) {
+        await cleanTestTableData('piecework_task_rate_history', 'task_id', taskIds);
+        await cleanTestTableData('piecework_tasks', 'id', taskIds);
+      }
+    }
+  }
+
   return results;
 }
