@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react';
-import { fetchJson } from '../api';
-import { Transaction } from '../types';
+import { useState } from 'react';
 import { Search, ArrowDownRight, ArrowUpRight, Download, ChevronRight, ChevronLeft, Eye } from 'lucide-react';
-import * as xlsx from 'xlsx';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -10,18 +7,26 @@ import { useSearch } from '../SearchContext';
 import { formatPersianNumber, formatPersianCode, formatPersianDate, extractDateString } from '../utils';
 import RunningKardexModal from '../components/RunningKardexModal';
 import { useTransactionsQuery } from '../hooks/queries';
+import { useTransactionsExport } from '../hooks/transactions/useTransactionsExport';
 
 export default function TransactionsPage() {
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch, clearSearch } = useSearch();
-  const [startDate, setStartDate] = useState<any>('');
-  const [endDate, setEndDate] = useState<any>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [selectedItemIdForKardex, setSelectedItemIdForKardex] = useState<number | null>(null);
 
-  // V9 Phase 5.1: مهاجرت به React Query
-  const formatToGregorian = (d: any): string => extractDateString(d);
+  // بازگشت به صفحه ۱ با تغییر فیلترها، همان رندر (الگوی تنظیم state هنگام رندر در React): پیش‌تر effect پس از رندر
+  // صفحه را ۱ می‌کرد و پیش از آن یک درخواست اضافه برای صفحه قبلیِ فیلتر تازه فرستاده می‌شد
+  const filterKey = JSON.stringify([debouncedSearchQuery, filterType, startDate, endDate, pageSize]);
+  const [pageState, setPageState] = useState({ page: 1, filterKey });
+  if (pageState.filterKey !== filterKey) setPageState({ page: 1, filterKey });
+  const page = pageState.filterKey === filterKey ? pageState.page : 1;
+  const setPage = (next: number) => setPageState({ page: next, filterKey });
+
+  const startStr = extractDateString(startDate);
+  const endStr = extractDateString(endDate);
 
   // V4 Phase 6.2 (U-1): اتصال کوئری تراکنش‌ها به debouncedSearchQuery
   const txsQuery = useTransactionsQuery({
@@ -29,8 +34,8 @@ export default function TransactionsPage() {
     limit: pageSize,
     search: debouncedSearchQuery,
     type: filterType,
-    startDate: formatToGregorian(startDate) || undefined,
-    endDate: formatToGregorian(endDate) || undefined,
+    startDate: startStr || undefined,
+    endDate: endStr || undefined,
   });
 
   const txs = txsQuery.data?.transactions ?? [];
@@ -38,45 +43,9 @@ export default function TransactionsPage() {
   const totalItems = txsQuery.data?.total || 0;
   const loading = txsQuery.isFetching;
 
-  // Reset to page 1 on filter change
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearchQuery, filterType, startDate, endDate, pageSize]);
-
-  const handleExport = async () => {
-    try {
-      const query = new URLSearchParams({
-        export: 'true',
-      });
-      if (search && search.trim() !== '') query.append('search', search.trim());
-      if (filterType && filterType !== 'all') query.append('type', filterType);
-
-      const startStr = formatToGregorian(startDate);
-      const endStr = formatToGregorian(endDate);
-      if (startStr) query.append('startDate', startStr);
-      if (endStr) query.append('endDate', endStr);
-
-      const res = await fetchJson(`/transactions?${query.toString()}`);
-      const fullData: Transaction[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-
-      const ws = xlsx.utils.json_to_sheet(fullData.map(t => ({
-        'تاریخ': formatPersianDate(t.date),
-        'کاربر': t.user || '-',
-        'نوع تراکنش': t.type === 'in' ? 'ورود به انبار' : 'خروج از انبار',
-        'نام کالا': t.item_name,
-        'کد کالا': t.item_code,
-        'نوع کالا': t.item_type === 'product' ? 'محصول' : 'ماده اولیه',
-        'مقدار': t.quantity,
-        'واحد': t.item_unit,
-        'کد پیگیری/سند': t.document_ref,
-        'نوع سند': t.document_type
-      })));
-      const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, 'تراکنش‌ها');
-      xlsx.writeFile(wb, `Transactions.xlsx`);
-    } catch(err) {
-      console.error(err);
-    }
+  const exportMutation = useTransactionsExport();
+  const handleExport = () => {
+    exportMutation.mutate({ search, type: filterType, startDate: startStr, endDate: endStr });
   };
 
   const safeTxs = Array.isArray(txs) ? txs : [];
@@ -105,7 +74,11 @@ export default function TransactionsPage() {
                 <option value={100}>۱۰۰</option>
               </select>
             </div>
-            <button onClick={handleExport} className="px-3 py-1.5 text-xs font-medium border border-slate-300 rounded hover:bg-slate-50 transition-colors flex items-center gap-1 text-slate-700 cursor-pointer">
+            <button
+              onClick={handleExport}
+              disabled={exportMutation.isPending}
+              className="px-3 py-1.5 text-xs font-medium border border-slate-300 rounded hover:bg-slate-50 transition-colors flex items-center gap-1 text-slate-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Download size={14} /> خروجی اکسل
             </button>
           </div>
@@ -138,7 +111,7 @@ export default function TransactionsPage() {
                <span className="text-slate-500">از:</span>
                <DatePicker 
                  value={startDate} 
-                 onChange={(dateObj: any) => setStartDate(extractDateString(dateObj))} 
+                 onChange={(dateObj) => setStartDate(extractDateString(dateObj))} 
                  calendar={persian} 
                  locale={persian_fa} 
                  calendarPosition="bottom-right"
@@ -150,7 +123,7 @@ export default function TransactionsPage() {
                <span className="text-slate-500">تا:</span>
                <DatePicker 
                  value={endDate} 
-                 onChange={(dateObj: any) => setEndDate(extractDateString(dateObj))} 
+                 onChange={(dateObj) => setEndDate(extractDateString(dateObj))} 
                  calendar={persian} 
                  locale={persian_fa} 
                  calendarPosition="bottom-right"
@@ -255,7 +228,7 @@ export default function TransactionsPage() {
               اولین
             </button>
             <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1 || loading}
               className="p-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 cursor-pointer"
               title="صفحه قبلی"
@@ -266,7 +239,7 @@ export default function TransactionsPage() {
               {formatPersianNumber(page)} / {formatPersianNumber(totalPages)}
             </span>
             <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages || loading}
               className="p-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 cursor-pointer"
               title="صفحه بعدی"

@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { fetchJson } from '../api';
+import { useState, useMemo } from 'react';
 import { X, RefreshCw, ArrowDownRight, ArrowUpRight, Download, Search, Layers, ShieldCheck } from 'lucide-react';
 import * as xlsx from 'xlsx';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate, errorMessageOf } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
+import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
+import type { RunningKardexEntry } from '../lib/transactions/runningKardex';
 
 interface RunningKardexModalProps {
   itemId: number;
@@ -11,55 +12,24 @@ interface RunningKardexModalProps {
   onClose: () => void;
 }
 
+const NO_ENTRIES: RunningKardexEntry[] = [];
+
 export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningKardexModalProps) {
   const appCurrency = useAppCurrency();
-  const [data, setData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'in' | 'out'>('all');
 
-  const loadKardex = async () => {
-    if (!itemId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res: any = await fetchJson(`/inventory/item-kardex/${itemId}`);
-      // V10-0.2: نرمال‌سازی دفاعی — هر شکل پاسخ (پاکت کامل یا آرایه خام legacy)
-      // به ساختار { item, summary, entries } تبدیل می‌شود؛ هیچ deref بدون گارد نیست.
-      let normalized: any;
-      if (Array.isArray(res)) {
-        normalized = { item: null, summary: null, entries: res };
-      } else if (Array.isArray(res?.entries)) {
-        normalized = res;
-      } else if (Array.isArray(res?.data)) {
-        normalized = { item: res.data.item ?? null, summary: res.data.summary ?? null, entries: res.data.entries ?? [] };
-      } else {
-        normalized = { item: null, summary: null, entries: [] };
-      }
-      setData(normalized);
-    } catch (err) {
-      setError(errorMessageOf(err) || 'خطا در بارگذاری کاردکس کالا');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // کاردکس کالا با React Query: هر بار باز شدن مودال تازه خوانده می‌شود و بستن مودال/صفحه درخواست را لغو می‌کند
+  const kardexQuery = useItemKardexQuery(itemId, isOpen);
+  const data = kardexQuery.data ?? null;
+  const loading = kardexQuery.isFetching;
+  const error = kardexQuery.isError ? (errorMessageOf(kardexQuery.error) || 'خطا در بارگذاری کاردکس کالا') : null;
 
-  useEffect(() => {
-    if (isOpen && itemId) {
-      loadKardex();
-    }
-  }, [isOpen, itemId]);
-
-  const safeEntries = useMemo(() => {
-    if (Array.isArray(data?.entries)) return data.entries;
-    if (Array.isArray(data?.data?.entries)) return data.data.entries;
-    return [];
-  }, [data]);
+  const safeEntries = data?.entries ?? NO_ENTRIES;
 
   const filteredEntries = useMemo(() => {
-    return safeEntries.filter((entry: any) => {
+    return safeEntries.filter((entry) => {
       if (filterType !== 'all' && entry.type !== filterType) return false;
       if (selectedLocation !== 'all' && entry.location !== selectedLocation) return false;
       if (search.trim()) {
@@ -76,7 +46,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
 
   const uniqueLocations = useMemo(() => {
     const locs = new Set<string>();
-    safeEntries.forEach((e: any) => {
+    safeEntries.forEach((e) => {
       if (e.location) locs.add(e.location);
     });
     return Array.from(locs);
@@ -85,7 +55,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
   const handleExport = () => {
     if (!data?.item || !filteredEntries.length) return;
     try {
-      const rows = filteredEntries.map((e: any, idx: number) => ({
+      const rows = filteredEntries.map((e, idx) => ({
         'ردیف': idx + 1,
         'تاریخ': formatPersianDate(e.date),
         'نوع تراکنش': e.type === 'in' ? 'ورود به انبار' : 'خروج از انبار',
@@ -328,7 +298,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                         </td>
                       </tr>
                     ) : (
-                      filteredEntries.map((entry: any, idx: number) => {
+                      filteredEntries.map((entry, idx) => {
                         const isIn = entry.type === 'in';
                         return (
                           <tr key={entry.transactionId || idx} className="hover:bg-slate-50/60 transition-colors">
@@ -363,7 +333,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                               {entry.unitPrice > 0 ? formatPersianPrice(entry.unitPrice) : '-'}
                             </td>
                             <td className="p-3 text-center font-mono text-amber-800 font-medium">
-                              {entry.runningWAC > 0 ? formatPersianPrice(entry.runningWAC) : '-'}
+                              {(entry.runningWAC ?? 0) > 0 ? formatPersianPrice(entry.runningWAC) : '-'}
                             </td>
                             <td className="p-3">
                               <div className="font-mono text-slate-800 font-medium">{entry.documentRef || '-'}</div>

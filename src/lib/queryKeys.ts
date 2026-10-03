@@ -7,7 +7,7 @@ export const QUERY_KEYS = {
   // Customers
   customers: {
     all: ['customers'] as const,
-    list: (params?: Record<string, any>) => ['customers', 'list', params ?? {}] as const,
+    list: (params?: Record<string, unknown> | object) => ['customers', 'list', params ?? {}] as const,
     detail: (id: number) => ['customers', 'detail', id] as const,
   },
 
@@ -168,6 +168,8 @@ export const QUERY_KEYS = {
   transactions: {
     all: ['transactions'] as const,
     list: (filters?: Record<string, unknown> | object) => ['transactions', 'list', filters ?? {}] as const,
+    // کاردکس تفصیلی یک کالا (مودال کاردکس صفحه کاردکس و انبارگردانی): زیر transactions تا هر ابطال کاردکس تازه‌اش کند
+    itemKardex: (itemId: number) => ['transactions', 'item-kardex', itemId] as const,
   },
 
   // V9 Phase 5.1 — Item Pricing
