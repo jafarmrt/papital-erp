@@ -8300,5 +8300,62 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // v7.0.113 (TD-239): مبلغ سفارش خرید و ارزش رزرو پیش‌فاکتور با FinancialDecimal، نه ضرب و جمع عدد JS
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_procurement_reservation_decimal_td_239', 'td239', 'procurement', 'reservation')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.113 Regression: جمع سفارش خرید و ارزش رزرو پیش‌فاکتور خطای ممیز شناور ندارد (TD-239)';
+    const suffix = `${Date.now()}`;
+    const docIds: number[] = [];
+    let itemId = 0;
+    try {
+      const { createTestItem, createTestDocument } = await import('../fixtures/factories.js');
+      const { ProcurementService } = await import('../../services/procurement.service.js');
+      const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
+      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای اعشاری TD-239 ${suffix}`, code: `ITEM_TD239_${suffix}`, stocks: { '': 10 } });
+      itemId = item.id;
+      const violations: string[] = [];
+      // 3 × 0.1 در عدد JS برابر 0.30000000000000004 است
+      const receiptRef = `PO-TD239-${suffix}`;
+      const receipt = await createTestDocument({ type: 'receipt', status: 'draft', refNumber: receiptRef, notes: `[تدارکات: درخواست TD239-${suffix}]` }, [
+        { itemId: item.id, quantity: 3, unitPrice: 0.1 },
+        { itemId: item.id, quantity: 1, unitPrice: 0.2 },
+      ]);
+      docIds.push(receipt.document.id);
+      const orders = await ProcurementService.getProcurementOrders({ search: receiptRef });
+      const order = orders.data.find(o => o.id === receipt.document.id);
+      if (!order) violations.push('سفارش خرید آزمایشی در فهرست نیامد');
+      else {
+        if (order.totalAmount !== 0.5) violations.push(`جمع سفارش خرید: ${order.totalAmount} (باید 0.5)`);
+        if (order.items[0]?.totalPrice !== 0.3) violations.push(`جمع ردیف سفارش: ${order.items[0]?.totalPrice} (باید 0.3)`);
+      }
+      const proforma = await createTestDocument({ type: 'invoice', status: 'proforma', refNumber: `PF-TD239-${suffix}` }, [{ itemId: item.id, quantity: 3, unitPrice: 0.1 }]);
+      docIds.push(proforma.document.id);
+      const report = await ItemStockReservationService.getReservedStockDetails(undefined, true);
+      const entry = report.allReservationEntries.find(e => e.sourceType === 'proforma' && Number(e.sourceId) === proforma.document.id);
+      if (!entry) violations.push('رزرو پیش‌فاکتور آزمایشی در گزارش نیامد');
+      else if (entry.totalValue !== 0.3) violations.push(`ارزش رزرو پیش‌فاکتور: ${entry.totalValue} (باید 0.3)`);
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_procurement_reservation_decimal_td_239', scenarioId: 'multi_currency_financials_and_ratios', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: 'جمع سفارش خرید 0.5، ردیف 3 × 0.1 = 0.3 و ارزش رزرو پیش‌فاکتور 0.3 بدون خطای ممیز شناور.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_procurement_reservation_decimal_td_239', scenarioId: 'multi_currency_financials_and_ratios', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (docIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', docIds);
+        await cleanTestTableData('documents', 'id', docIds);
+      }
+      if (itemId) await cleanTestTableData('items', 'id', [itemId]);
+    }
+  }
+
   return results;
 }

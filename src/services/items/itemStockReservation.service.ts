@@ -264,7 +264,7 @@ export class ItemStockReservationService {
                 category: matchedDbItem.category || alloc.category,
                 unit: matchedDbItem.unit || alloc.unit,
                 reservedQty,
-                unitPrice: Number(matchedDbItem.weightedAverageCost || 0)
+                unitPrice: fin(matchedDbItem.weightedAverageCost).toNumber()
               });
             }
           }
@@ -599,7 +599,8 @@ export class ItemStockReservationService {
           const qty = Number(line.quantity || 0);
           if (qty <= 0) continue;
 
-          const price = Number(line.unitPrice || 0);
+          // v7.0.113 (TD-239): ارزش رزرو با FinancialDecimal (AGENTS §1.8)
+          const price = fin(line.unitPrice);
           allReservationEntries.push({
             id: `proforma-${doc.id}-${line.itemId}`,
             sourceType: 'proforma',
@@ -614,8 +615,8 @@ export class ItemStockReservationService {
             category: line.category || 'عمومی',
             unit: line.unit || 'عدد',
             reservedQty: qty,
-            unitPrice: price,
-            totalValue: qty * price,
+            unitPrice: price.toNumber(),
+            totalValue: price.multiply(qty).toNumber(),
             date: doc.date || new Date().toISOString()
           });
         }
@@ -677,7 +678,7 @@ export class ItemStockReservationService {
           const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) 
             || (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
             || (rowName ? itemsByNameMap.get(rowName.trim().toLowerCase()) : null);
-          const price = matchedDbItem ? Number(matchedDbItem.weightedAverageCost || 0) : Number(item.unitPrice || 0);
+          const price = fin(matchedDbItem ? matchedDbItem.weightedAverageCost : item.unitPrice);
 
           allReservationEntries.push({
             id: `project-${proj.id}-${matchedDbItem?.id || idx}-${code || idx}`,
@@ -693,8 +694,8 @@ export class ItemStockReservationService {
             category: item.category || matchedDbItem?.category || 'عمومی',
             unit: item.convertedUnit || item.warehouseUnit || item.unit || matchedDbItem?.unit || 'عدد',
             reservedQty,
-            unitPrice: price,
-            totalValue: reservedQty * price,
+            unitPrice: price.toNumber(),
+            totalValue: price.multiply(reservedQty).toNumber(),
             date: proj.createdAt || new Date().toISOString()
           });
         }
@@ -713,8 +714,8 @@ export class ItemStockReservationService {
           unit: it.unit || 'عدد',
           currentStock: Number(it.currentStock || 0),
           stocks: tableStockMap.get(it.id)?.byCode ?? {},
-          buyPrice: Number(it.weightedAverageCost || 0),
-          sellPrice: Number(it.weightedAverageCost || 0),
+          buyPrice: fin(it.weightedAverageCost).toNumber(),
+          sellPrice: fin(it.weightedAverageCost).toNumber(),
           proformaReservedQty: 0,
           projectReservedQty: 0,
           totalReservedQty: 0,
@@ -762,8 +763,8 @@ export class ItemStockReservationService {
 
         summary.totalReservedQty += entry.reservedQty;
         summary.availableStock = Math.max(0, summary.currentStock - summary.totalReservedQty);
-        const val = entry.totalValue || (entry.reservedQty * summary.sellPrice);
-        summary.totalReservedValue += val;
+        const val = entry.totalValue || fin(summary.sellPrice).multiply(entry.reservedQty).toNumber();
+        summary.totalReservedValue = fin(summary.totalReservedValue).add(val).toNumber();
         summary.reservations.push(entry);
       }
 
@@ -771,7 +772,7 @@ export class ItemStockReservationService {
 
       const totalReservedItemsCount = itemSummaries.filter(s => s.totalReservedQty > 0).length;
       const totalReservedQty = allReservationEntries.reduce((sum, e) => sum + e.reservedQty, 0);
-      const totalReservedValue = allReservationEntries.reduce((sum, e) => sum + (e.totalValue || 0), 0);
+      const totalReservedValue = allReservationEntries.reduce((sum, e) => sum.add(e.totalValue), fin(0)).toNumber();
 
       return {
         summaryMetrics: {

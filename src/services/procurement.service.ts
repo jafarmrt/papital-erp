@@ -12,6 +12,7 @@ import { DocumentService } from './document.service.js';
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
+import { fin } from '../lib/financialDecimal.js';
 
 type DbClient = DbExecutor;
 
@@ -167,12 +168,12 @@ export class ProcurementService {
       throw new ValidationError('حداقل یک قلم کالا برای درخواست خرید باید مشخص شود.');
     }
 
-    // Sanitize and calculate totals
-    let totalEst = 0;
+    // Sanitize and calculate totals — v7.0.113 (TD-239): مبلغ با FinancialDecimal (AGENTS §1.8)
+    let totalEst = fin(0);
     const sanitizedItems: PurchaseRequisitionItemRow[] = input.items.map((item, idx) => {
       const qty = Number(item.requestedQty || item.requested_qty || 0);
       const price = Number(item.unitPriceEstimate || item.unit_price_estimate || 0);
-      totalEst += (qty * price);
+      totalEst = totalEst.add(fin(qty).multiply(price));
       return {
         id: item.id || `item-${Date.now()}-${idx}`,
         itemId: item.itemId ?? item.item_id ?? null,
@@ -255,7 +256,7 @@ export class ProcurementService {
           title: inserted.title,
           projectId: inserted.projectId,
           itemCount: sanitizedItems.length,
-          totalEstimatedAmount: totalEst
+          totalEstimatedAmount: totalEst.toNumber()
         }
       });
 
@@ -346,15 +347,15 @@ export class ProcurementService {
     const existing = await this.getRequisitionById(id);
 
     let newItems = existing.items;
-    let newTotalEst = existing.totalEstimatedAmount || 0;
+    let newTotalEst = fin(existing.totalEstimatedAmount);
 
     if (updates.items && Array.isArray(updates.items)) {
-      newTotalEst = 0;
+      newTotalEst = fin(0);
       newItems = updates.items.map((item, idx) => {
         const qty = Number(item.requestedQty || item.requested_qty || 0);
         const ordered = Number(item.orderedQty || item.ordered_qty || 0);
         const price = Number(item.unitPriceEstimate || item.unit_price_estimate || 0);
-        newTotalEst += (qty * price);
+        newTotalEst = newTotalEst.add(fin(qty).multiply(price));
         return {
           id: item.id || `item-${Date.now()}-${idx}`,
           itemId: item.itemId ?? item.item_id ?? null,
@@ -397,7 +398,7 @@ export class ProcurementService {
       details: {
         code: updated.code,
         before: { title: existing.title, itemsCount: existing.items.length },
-        after: { title: updated.title, itemsCount: newItems.length, totalEstimatedAmount: newTotalEst }
+        after: { title: updated.title, itemsCount: newItems.length, totalEstimatedAmount: newTotalEst.toNumber() }
       }
     });
 
@@ -1039,13 +1040,14 @@ export class ProcurementService {
         if (rMatch) requisitionC = rMatch[1].trim();
       }
 
-      let totalAmt = 0;
+      // v7.0.113 (TD-239): جمع مبلغ سفارش خرید با FinancialDecimal؛ خروجی API عددی می‌ماند
+      let totalAmt = fin(0);
       const mappedItems = docLines.map(l => {
         const cat = itemMap.get(l.itemId);
         const lineQty = Number(l.quantity || 0);
-        const linePrice = Number(l.unitPrice || 0);
-        const lineTotal = lineQty * linePrice;
-        totalAmt += lineTotal;
+        const linePrice = fin(l.unitPrice);
+        const lineTotal = linePrice.multiply(lineQty);
+        totalAmt = totalAmt.add(lineTotal);
 
         return {
           id: l.id,
@@ -1054,8 +1056,8 @@ export class ProcurementService {
           itemCode: cat?.code || '',
           unit: cat?.unit || 'عدد',
           quantity: lineQty,
-          unitPrice: linePrice,
-          totalPrice: lineTotal,
+          unitPrice: linePrice.toNumber(),
+          totalPrice: lineTotal.toNumber(),
           location: l.location || docLines[0]?.location || ''
         };
       });
@@ -1072,7 +1074,7 @@ export class ProcurementService {
         requisitionCode: requisitionC,
         projectName: projectN,
         location: docLines[0]?.location || '',
-        totalAmount: totalAmt,
+        totalAmount: totalAmt.toNumber(),
         itemsCount: mappedItems.length,
         items: mappedItems,
         user: doc.user || 'کارشناس تدارکات'
