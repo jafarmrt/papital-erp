@@ -7623,5 +7623,229 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (createdIds.length > 0) await orm.delete(journalVouchers).where(inArray(journalVouchers.id, createdIds));
     }
   }
+
+  // Test: v7.0.101 (TD-085 بند ۴): پس از گذشتن مهلت کار تاییدی، هر کاربر مسئول (نقش کار) یک اعلان می‌گیرد، بدون تکرار
+  if (shouldRun('reg_workflow_sla_reminder_td_085', 'td085', 'workflow', 'sla', 'reminder')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.101: یادآوری یک‌باره مهلت کار تاییدی به مسئول کار (TD-085)';
+    const {
+      workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users, notifications,
+    } = await import('../../db/schema.js');
+    const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+    const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+    const { WorkflowSlaReminderService, WORKFLOW_SLA_REMINDER_LINK } = await import('../../services/workflow/workflowSlaReminderService.js');
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const entityType = `reg_td085s_${suffix}`;
+    const role = `reg_sla_${suffix}`;
+    let defId: number | undefined;
+    const userIds: number[] = [];
+    try {
+      const violations: string[] = [];
+      for (const [name, userRole] of [['a', role], ['b', role], ['other', `reg_other_${suffix}`]] as const) {
+        const [u] = await orm.insert(users).values({
+          username: `reg_sla_${name}_${suffix}`, password: 'x', fullName: `کاربر آزمون مهلت ${name}`, role: userRole,
+        }).returning({ id: users.id });
+        userIds.push(u.id);
+      }
+      const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+        code: `REG_TD085S_${suffix}`, title: 'ورکفلو آزمون مهلت', entityType,
+        states: [
+          { stateKey: 'review', title: 'بررسی', stateType: 'initial', stepOrder: 1, slaHours: 1 },
+          { stateKey: 'done', title: 'تایید', stateType: 'terminal', stepOrder: 2 },
+        ],
+        transitions: [{ fromStateKey: 'review', toStateKey: 'done', actionKey: 'approve', title: 'تایید مدیر', requiredRole: role }],
+      });
+      defId = saved?.definition?.id;
+      if (!defId) throw new Error('تعریف ذخیره نشد');
+      const instance = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '7' });
+      const ours = async () => orm.select().from(notifications).where(inArray(notifications.userId, userIds));
+
+      await WorkflowSlaReminderService.sendDueReminders(new Date());
+      if ((await ours()).length !== 0) violations.push('پیش از گذشتن مهلت اعلان فرستاده شد');
+
+      const later = new Date(Date.now() + 2 * 3600 * 1000);
+      await WorkflowSlaReminderService.sendDueReminders(later);
+      await WorkflowSlaReminderService.sendDueReminders(new Date(later.getTime() + 3600 * 1000));
+      const sent = await ours();
+      for (const [i, id] of userIds.slice(0, 2).entries()) {
+        const mine = sent.filter((n) => n.userId === id);
+        if (mine.length !== 1) violations.push(`کاربر مسئول ${i + 1}: ${mine.length} اعلان (باید ۱)`);
+        else if (mine[0].link !== WORKFLOW_SLA_REMINDER_LINK || !mine[0].message.includes('تایید مدیر')) violations.push(`متن اعلان: ${mine[0].message}`);
+      }
+      if (sent.some((n) => n.userId === userIds[2])) violations.push('کاربر با نقش دیگر اعلان گرفت');
+      const tasks = await orm.select().from(workflowTasks).where(eq(workflowTasks.instanceId, instance.id));
+      if (tasks.length === 0 || tasks.some((t) => t.status !== 'pending' || !t.slaRemindedAt)) {
+        violations.push(`وضعیت کار پس از یادآوری: ${tasks.map((t) => `${t.status}/${t.slaRemindedAt ? 'reminded' : '-'}`).join('،') || '-'}`);
+      }
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_workflow_sla_reminder_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'پیش از مهلت اعلانی نرفت؛ پس از مهلت هر کاربر نقش کار یک اعلان گرفت، اجرای دوباره تکرار نکرد، نقش دیگر اعلان نگرفت و کار باز ماند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_workflow_sla_reminder_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (userIds.length > 0) await orm.delete(notifications).where(inArray(notifications.userId, userIds));
+      if (defId) {
+        const instanceIds = (await orm.select({ id: workflowInstances.id }).from(workflowInstances)
+          .where(eq(workflowInstances.workflowDefinitionId, defId))).map((r) => r.id);
+        if (instanceIds.length > 0) {
+          await orm.delete(workflowTasks).where(inArray(workflowTasks.instanceId, instanceIds));
+          await orm.delete(workflowPendingApprovals).where(inArray(workflowPendingApprovals.instanceId, instanceIds));
+          await orm.delete(workflowHistoryLogs).where(inArray(workflowHistoryLogs.instanceId, instanceIds));
+          await orm.delete(workflowInstances).where(inArray(workflowInstances.id, instanceIds));
+        }
+        await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
+        await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+        await orm.delete(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, defId));
+        await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
+      }
+      if (userIds.length > 0) await orm.delete(users).where(inArray(users.id, userIds));
+    }
+  }
+
+  // Test: v7.0.101 (TD-085، تصمیم «بازگشایی با گزارش»): کار تاییدی با گذشتن مهلت منقضی نمی‌شود و مهاجرت 0032
+  // کار منقضی‌شده مرحله جاری فرایند در جریان را باز می‌کند، بقیه را با دلیل منقضی نگه می‌دارد و همه را گزارش می‌کند
+  if (shouldRun('reg_workflow_task_reopen_td_085', 'td085', 'workflow', 'expired', 'reopen')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.101: کار تاییدی منقضی نمی‌شود و کارهای منقضی‌شده مرحله جاری با گزارش بازگشایی می‌شوند (TD-085)';
+    const {
+      workflowDefinitions, workflowStates, workflowTransitions, workflowInstances, workflowHistoryLogs,
+      workflowPendingApprovals, workflowDefinitionVersions, workflowTasks, users,
+    } = await import('../../db/schema.js');
+    const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+    const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+    const { WorkflowTaskService } = await import('../../services/workflow/workflowTaskService.js');
+    const fs = await import('fs');
+    const path = await import('path');
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const entityType = `reg_td085r_${suffix}`;
+    const role = `reg_reopen_${suffix}`;
+    let defId: number | undefined;
+    let userId: number | undefined;
+    try {
+      const violations: string[] = [];
+      const [u] = await orm.insert(users).values({
+        username: `reg_reopen_${suffix}`, password: 'x', fullName: 'کاربر آزمون بازگشایی', role,
+      }).returning({ id: users.id });
+      userId = u.id;
+      const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+        code: `REG_TD085R_${suffix}`, title: 'ورکفلو آزمون بازگشایی', entityType,
+        states: [
+          { stateKey: 'review', title: 'بررسی', stateType: 'initial', stepOrder: 1, slaHours: 1 },
+          { stateKey: 'check', title: 'کنترل', stateType: 'normal', stepOrder: 2, slaHours: 1 },
+          { stateKey: 'done', title: 'تایید', stateType: 'terminal', stepOrder: 3 },
+        ],
+        transitions: [
+          { fromStateKey: 'review', toStateKey: 'check', actionKey: 'pass', title: 'ارسال به کنترل', requiredRole: role },
+          { fromStateKey: 'check', toStateKey: 'done', actionKey: 'approve', title: 'تایید نهایی', requiredRole: role },
+        ],
+      });
+      defId = saved?.definition?.id;
+      if (!defId) throw new Error('تعریف ذخیره نشد');
+      const transitions = await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
+      const passId = transitions.find((t) => t.actionKey === 'pass')!.id;
+      const approveId = transitions.find((t) => t.actionKey === 'approve')!.id;
+
+      // ۱) کار مرحله جاری با مهلت گذشته پس از باز کردن کارتابل در انتظار می‌ماند
+      const running = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '1' });
+      const past = new Date(Date.now() - 5 * 3600 * 1000).toISOString();
+      await orm.update(workflowTasks).set({ dueAt: past }).where(eq(workflowTasks.instanceId, running.id));
+      await WorkflowTaskService.getMyTasks({ userId: u.id, userRole: role });
+      const afterInbox = await orm.select().from(workflowTasks).where(eq(workflowTasks.instanceId, running.id));
+      if (afterInbox.length === 0 || afterInbox.some((t) => t.status !== 'pending')) {
+        violations.push(`کار با مهلت گذشته پس از کارتابل: ${afterInbox.map((t) => t.status).join('،') || '-'}`);
+      }
+
+      // ۲) داده قدیمی: کار منقضی مرحله جاری، کار منقضی مرحله گذشته و کار منقضی فرایند پایان‌یافته (تراکنش برگشت‌خورده)
+      const finished = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: defId, entityType, entityId: '2' });
+      let outcome: Record<string, string> = {};
+      let logged: Array<{ taskId: number; action: string; reason: string }> = [];
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.update(workflowTasks).set({ status: 'expired' }).where(eq(workflowTasks.instanceId, running.id));
+          const [stale] = await tx.insert(workflowTasks).values({
+            instanceId: running.id, transitionId: approveId, assignedRole: role, status: 'expired', title: 'کار مرحله دیگر', dueAt: past,
+          }).returning({ id: workflowTasks.id });
+          await tx.update(workflowTasks).set({ status: 'expired' }).where(eq(workflowTasks.instanceId, finished.id));
+          await tx.update(workflowInstances).set({ status: 'COMPLETED' }).where(eq(workflowInstances.id, finished.id));
+          const migrationSql = fs.readFileSync(path.join(process.cwd(), 'drizzle', '0032_workflow_task_sla_reminder.sql'), 'utf8');
+          await tx.execute(sql.raw(migrationSql));
+          const rows = await tx.select().from(workflowTasks).where(inArray(workflowTasks.instanceId, [running.id, finished.id]));
+          for (const r of rows) {
+            const kind = r.id === stale.id ? 'stale' : r.instanceId === finished.id ? 'finished' : r.transitionId === passId ? 'current' : `other${r.id}`;
+            outcome[kind] = r.status;
+          }
+          const log = await tx.execute(sql`SELECT task_id, action, reason FROM workflow_task_reopen_log WHERE task_id IN (${sql.join(rows.map((r) => sql`${r.id}`), sql`, `)})`);
+          logged = (log.rows ?? []).map((r) => ({ taskId: Number(r.task_id), action: String(r.action), reason: String(r.reason) }));
+          throw new Error('rollback');
+        });
+      } catch (err) {
+        if (!(err instanceof Error && err.message === 'rollback')) throw err;
+      }
+      if (outcome.current !== 'pending') violations.push(`کار منقضی مرحله جاری: ${outcome.current} (باید pending)`);
+      if (outcome.stale !== 'expired') violations.push(`کار منقضی مرحله دیگر: ${outcome.stale} (باید expired)`);
+      if (outcome.finished !== 'expired') violations.push(`کار منقضی فرایند پایان‌یافته: ${outcome.finished} (باید expired)`);
+      if (logged.length !== 3) violations.push(`ردیف گزارش: ${logged.length} (باید ۳)`);
+      if (logged.filter((l) => l.action === 'reopened').length !== 1) violations.push('گزارش باید دقیقاً یک بازگشایی داشته باشد');
+      if (logged.some((l) => !l.reason)) violations.push('ردیف گزارش بدون دلیل');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_workflow_task_reopen_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'کار با مهلت گذشته در انتظار ماند؛ مهاجرت فقط کار مرحله جاری فرایند در جریان را باز کرد و هر سه کار منقضی با دلیل گزارش شدند.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_workflow_task_reopen_td_085',
+        scenarioId: 'workflow_approval_postgres',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (defId) {
+        const instanceIds = (await orm.select({ id: workflowInstances.id }).from(workflowInstances)
+          .where(eq(workflowInstances.workflowDefinitionId, defId))).map((r) => r.id);
+        if (instanceIds.length > 0) {
+          await orm.delete(workflowTasks).where(inArray(workflowTasks.instanceId, instanceIds));
+          await orm.delete(workflowPendingApprovals).where(inArray(workflowPendingApprovals.instanceId, instanceIds));
+          await orm.delete(workflowHistoryLogs).where(inArray(workflowHistoryLogs.instanceId, instanceIds));
+          await orm.delete(workflowInstances).where(inArray(workflowInstances.id, instanceIds));
+        }
+        await orm.delete(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, defId));
+        await orm.delete(workflowStates).where(eq(workflowStates.workflowDefinitionId, defId));
+        await orm.delete(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, defId));
+        await orm.delete(workflowDefinitions).where(eq(workflowDefinitions.id, defId));
+      }
+      if (userId) await orm.delete(users).where(eq(users.id, userId));
+    }
+  }
+
   return results;
 }

@@ -105,17 +105,31 @@ export const workflowTasks = pgTable('workflow_tasks', {
   candidateUsers: jsonb('candidate_users').default([]),
   candidateRoles: jsonb('candidate_roles').default([]),
   delegatedToUserId: integer('delegated_to_user_id').references(() => users.id),
-  status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected', 'delegated', 'expired', 'canceled'
+  status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected', 'delegated', 'canceled' ('expired' only on pre-v7.0.101 rows)
   title: text('title').notNull(),
   description: text('description').default(''),
   dueAt: timestamp('due_at', { mode: 'string' }),
   completedAt: timestamp('completed_at', { mode: 'string' }),
+  // v7.0.101 (TD-085 بند ۴): زمان ارسال یادآوری یک‌باره مهلت به مسئول کار (migration 0032)
+  slaRemindedAt: timestamp('sla_reminded_at', { mode: 'string' }),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 }, (table) => ({
   idx_wft_instance: index('idx_wft_instance').on(table.instanceId),
   idx_wft_assigned_user: index('idx_wft_assigned_user').on(table.assignedUserId),
   idx_wft_status: index('idx_wft_status').on(table.status)
 }));
+
+// v7.0.101 (TD-085، تصمیم مالک محصول «بازگشایی با گزارش»): کارهای منقضی‌شده خودکار پیش از این نسخه و سرنوشت هرکدام (migration 0032)
+export const workflowTaskReopenLog = pgTable('workflow_task_reopen_log', {
+  id: serial('id').primaryKey(),
+  taskId: integer('task_id').notNull(),
+  instanceId: integer('instance_id').notNull(),
+  taskTitle: text('task_title').notNull().default(''),
+  dueAt: timestamp('due_at', { mode: 'string' }),
+  action: text('action').notNull(), // 'reopened' | 'kept_expired'
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
+});
 
 export const workflowDelegations = pgTable('workflow_delegations', {
   id: serial('id').primaryKey(),

@@ -225,6 +225,13 @@
       "when": 1790967600000,
       "tag": "0031_journal_voucher_number_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791054000000,
+      "tag": "0032_workflow_task_sla_reminder",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ export const ADVISORY_LOCK_KEYS = {
   WAREHOUSE_STOCK_REPAIR: 91003,
   INLINE_ATTACHMENTS_MIGRATION: 91004,
   ATTACHMENT_ORPHAN_CLEANUP: 91005,
+  WORKFLOW_SLA_REMINDER: 91006,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

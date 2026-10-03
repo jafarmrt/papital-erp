@@ -2,8 +2,10 @@ import { orm } from '../../db/drizzle';
 import { 
   workflowInstances, 
   workflowStates, 
-  workflowHistoryLogs 
+  workflowHistoryLogs,
+  workflowTaskReopenLog
 } from '../../db/schema';
+import { desc } from 'drizzle-orm';
 
 export interface OverdueInstance {
   instanceId: number;
@@ -30,7 +32,23 @@ export interface StateSlaReportItem {
   isBottleneck: boolean;
 }
 
+/** v7.0.101 (TD-085، «بازگشایی با گزارش»): کارهایی که پیش از این نسخه خودکار منقضی شده بودند و سرنوشت هرکدام */
+export interface ReopenedTasksReport {
+  reopenedCount: number;
+  keptExpiredCount: number;
+  rows: Array<{ taskId: number; instanceId: number; taskTitle: string; dueAt: string | null; action: string; reason: string }>;
+}
+
 export class WorkflowSlaEvaluator {
+  static async getReopenedTasksReport(): Promise<ReopenedTasksReport> {
+    const rows = await orm.select().from(workflowTaskReopenLog).orderBy(desc(workflowTaskReopenLog.id));
+    return {
+      reopenedCount: rows.filter(r => r.action === 'reopened').length,
+      keptExpiredCount: rows.filter(r => r.action === 'kept_expired').length,
+      rows: rows.map(r => ({ taskId: r.taskId, instanceId: r.instanceId, taskTitle: r.taskTitle, dueAt: r.dueAt, action: r.action, reason: r.reason })),
+    };
+  }
+
   /**
    * SLA Analytics & Process Bottleneck Analysis
    */
@@ -170,7 +188,8 @@ export class WorkflowSlaEvaluator {
         bottleneckState: bottleneck ? bottleneck.stateTitle : 'بدون گلوگاه'
       },
       overdueInstances,
-      stateSlaReport
+      stateSlaReport,
+      reopenedTasks: await this.getReopenedTasksReport()
     };
   }
 

@@ -1,4 +1,4 @@
-import { orm, DbExecutor } from '../../db/drizzle.js';
+import { orm } from '../../db/drizzle.js';
 import { 
   workflowInstances, 
   workflowPendingApprovals, 
@@ -13,26 +13,8 @@ import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
 export class WorkflowTaskService {
-  /**
-   * Automatically mark overdue tasks as expired
-   */
-  static async markExpiredTasks(txExecutor: DbExecutor = orm) {
-    const nowIso = new Date().toISOString();
-    const expiredTasks = await txExecutor.select()
-      .from(workflowTasks)
-      .where(and(
-        eq(workflowTasks.status, 'pending'),
-        sql`${workflowTasks.dueAt} IS NOT NULL`,
-        sql`${workflowTasks.dueAt} <= ${nowIso}`
-      ));
-
-    if (expiredTasks.length > 0) {
-      await txExecutor.update(workflowTasks)
-        .set({ status: 'expired' })
-        .where(inArray(workflowTasks.id, expiredTasks.map(t => t.id)));
-    }
-    return expiredTasks.length;
-  }
+  // v7.0.101 (TD-085، تصمیم مالک محصول «بازگشایی با گزارش»): markExpiredTasks حذف شد؛ کار تاییدی با گذشتن مهلت
+  // منقضی نمی‌شود و در کارتابل می‌ماند، و مسئولش یک بار یادآوری می‌گیرد (WorkflowSlaReminderService).
 
   /**
    * Get User's Active Tasks Inbox with Delegation Evaluation
@@ -45,7 +27,6 @@ export class WorkflowTaskService {
     page?: number;
     limit?: number;
   }) {
-    await this.markExpiredTasks();
     const userId = params.userId;
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';

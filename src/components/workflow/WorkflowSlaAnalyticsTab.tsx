@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, AlertTriangle, CheckCircle2, Activity, TrendingDown, ShieldAlert } from 'lucide-react';
 import { useWorkflowSlaAnalyticsQuery } from '../../hooks/queries/useWorkflowQueries';
+import { ReopenedTasksReportCard } from './ReopenedTasksReportCard';
 
 export const WorkflowSlaAnalyticsTab: React.FC = () => {
   const { data, isLoading, refetch } = useWorkflowSlaAnalyticsQuery();
@@ -27,6 +28,8 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ReopenedTasksReportCard report={data?.reopenedTasks} />
+
       {/* Top Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: SLA Compliance */}
