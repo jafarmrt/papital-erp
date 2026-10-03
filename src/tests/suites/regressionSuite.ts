@@ -7866,6 +7866,50 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.138 (TD-249): تراز آزمایشی با سطح «all» (پیش‌فرض صفحه صورت‌ها و گزارش‌های مالی) خطای اعتبارسنجی نمی‌دهد
+  if (shouldRun('reg_trial_balance_level_all_td_249', 'td249', 'trial', 'balance', 'level')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.138: تراز آزمایشی با سطح all و tree پاسخ می‌دهد و سطح نامعتبر 400 می‌گیرد (TD-249)';
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const violations: string[] = [];
+      const get = (q: string) => request(app).get(`/api/accounting/reports/trial-balance?${q}`).set('Cookie', session.cookie);
+      for (const level of ['all', 'tree', 'group', 'detailed']) {
+        const res = await get(`level=${level}`);
+        if (res.status !== 200) violations.push(`level=${level}: ${res.status} ${String(res.body?.message || '').slice(0, 120)}`);
+      }
+      const withDates = await get(`level=all&startDate=${encodeURIComponent('1405/01/01')}&endDate=${encodeURIComponent('1405/12/29')}`);
+      if (withDates.status !== 200) violations.push(`level=all با بازه شمسی: ${withDates.status}`);
+      const bad = await get('level=bogus');
+      if (bad.status !== 400) violations.push(`سطح نامعتبر باید 400 بگیرد: ${bad.status}`);
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_trial_balance_level_all_td_249',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'تراز آزمایشی با سطح all، tree، group و detailed و با بازه شمسی 200 داد و سطح نامعتبر 400 گرفت.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_trial_balance_level_all_td_249',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    }
+  }
+
   // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
   if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
     const tStart = Date.now();

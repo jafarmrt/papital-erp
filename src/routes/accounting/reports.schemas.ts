@@ -19,7 +19,8 @@ export const dateRangeQuerySchema = z.object({
 
 export const trialBalanceQuerySchema = z.object({
   query: z.object({
-    level: z.enum(['group', 'general', 'subsidiary', 'detailed']).optional(),
+    // v7.0.138 (TD-249): «all» (درخت ۴ سطحی، پیش‌فرض صفحه صورت‌ها و گزارش‌های مالی) و «tree» را سرویس پشتیبانی می‌کند
+    level: z.enum(['all', 'tree', 'group', 'general', 'subsidiary', 'detailed']).optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
     currency: z.string().optional(),
