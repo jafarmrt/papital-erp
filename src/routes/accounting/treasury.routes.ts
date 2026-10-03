@@ -1,0 +1,378 @@
+/**
+ * مسیرهای خزانه: حساب‌های بانکی و صندوق‌ها، تطبیق مانده، دریافت و پرداخت، انتقال وجه، آشتی‌سنجی و دفتر چک صیادی
+ * (TreasuryService، AGENTS.md §11). authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
+ */
+import { Router } from 'express';
+import { authorizePermission } from '../../middleware/authorize.js';
+import { RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
+import { AccountingService } from '../../services/accounting.service.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { validate, paramsIdSchema } from '../../middleware/validate.js';
+import { idempotency } from '../../middleware/idempotency.js';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
+import type { BankAccountType } from '../../types.js';
+import {
+  type ValidatedQuery,
+  createBankAccountSchema,
+  updateBankAccountSchema,
+  treasuryQuerySchema,
+  createTreasuryTxSchema,
+  previewTreasurySchema,
+  transferSchema,
+  reconcileSchema,
+  voidTreasuryTxSchema,
+  chequesQuerySchema,
+  createChequeSchema,
+  updateChequeStatusSchema,
+} from './accounting.schemas.js';
+
+const router = Router();
+
+// ==========================================
+// 4. BANK ACCOUNTS & TREASURY
+// ==========================================
+const getBanksHandler = asyncHandler(async (req, res) => {
+  const list = await AccountingService.getBankAccounts();
+  res.json(list);
+});
+router.get('/accounting/banks', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
+router.get('/accounting/bank-accounts', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
+
+// Dynamic Bank & Ledger Synchronization and Reconciliation
+const syncBanksHandler = asyncHandler(async (req, res) => {
+  const report = await AccountingService.recalculateAndSyncBankBalances();
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'bank_reconciliation',
+    entityId: 'sync',
+    description: `همگام‌سازی و تطبیق مانده حساب‌های بانکی با دفاتر اسناد دوبل (${report.syncedCount} حساب همگام، ${report.discrepantCount} مغایرت)`,
+    details: { report },
+    ipAddress: req.ip || '',
+  });
+  res.json({ message: 'عملیات تطبیق و همگام‌سازی با دفاتر اسناد دوبل با موفقیت انجام شد', report });
+});
+router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
+router.post('/accounting/bank-accounts/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
+
+const reportBanksHandler = asyncHandler(async (req, res) => {
+  const banks = await AccountingService.getBankAccounts();
+  let syncedCount = 0;
+  let discrepantCount = 0;
+  let unlinkedCount = 0;
+  let totalCashAndBankLedger = 0;
+  let totalCashAndBankTreasury = 0;
+  let totalDiscrepancy = 0;
+
+  for (const bank of banks) {
+    totalCashAndBankLedger += (bank.ledgerBalance || 0);
+    totalCashAndBankTreasury += (bank.treasuryBalance || 0);
+    totalDiscrepancy += (bank.discrepancy || 0);
+
+    if (bank.syncStatus === 'synced') syncedCount++;
+    else if (bank.syncStatus === 'discrepant') discrepantCount++;
+    else unlinkedCount++;
+  }
+
+  res.json({
+    report: {
+      syncedCount,
+      discrepantCount,
+      unlinkedCount,
+      totalCashAndBankLedger,
+      totalCashAndBankTreasury,
+      totalDiscrepancy,
+      accounts: banks.map((b) => ({
+        id: b.id,
+        code: b.code,
+        title: b.title,
+        type: b.type,
+        accountCode: b.accountCode,
+        accountName: b.accountName,
+        initialBalance: b.initialBalance || 0,
+        ledgerBalance: b.ledgerBalance || 0,
+        treasuryBalance: b.treasuryBalance || 0,
+        currentBalance: b.currentBalance || 0,
+        totalDebit: b.totalDebit || 0,
+        totalCredit: b.totalCredit || 0,
+        discrepancy: b.discrepancy || 0,
+        syncStatus: b.syncStatus || 'synced',
+        notes: b.notes,
+      }))
+    }
+  });
+});
+router.get('/accounting/banks/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
+router.get('/accounting/bank-accounts/reconciliation-report', authorizePermission('accounting.treasury'), reportBanksHandler);
+
+// V4.0.37: تولید کد خودکار حساب خزانه بر اساس نوع
+const getNextBankCodeHandler = asyncHandler(async (req, res) => {
+  const type = (req.query.type as BankAccountType | undefined) || 'bank';
+  const nextCode = await AccountingService.generateNextAccountCode(type);
+  res.json({ code: nextCode });
+});
+router.get('/accounting/banks/next-code', authorizePermission('accounting.treasury'), getNextBankCodeHandler);
+router.get('/accounting/bank-accounts/next-code', authorizePermission('accounting.treasury'), getNextBankCodeHandler);
+
+const createBankHandler = asyncHandler(async (req, res) => {
+  const bank = await AccountingService.createBankAccount({
+    ...req.body,
+    shebaNumber: req.body.shebaNumber || req.body.shabaNumber,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'CREATE',
+    entity: 'bank_account',
+    entityId: String(bank.id),
+    description: `تعریف حساب بانکی/صندوق جدید: ${bank.title}`,
+    details: { bank },
+    ipAddress: req.ip || '',
+  });
+  res.status(201).json(bank);
+});
+router.post('/accounting/banks', authorizePermission('accounting.treasury'), validate(createBankAccountSchema), createBankHandler);
+router.post('/accounting/bank-accounts', authorizePermission('accounting.treasury'), validate(createBankAccountSchema), createBankHandler);
+
+const updateBankHandler = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  // V1.4.0: snapshot قبل برای audit
+  const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
+  const updated = await AccountingService.updateBankAccount(id, {
+    ...req.body,
+    ...(req.body.shebaNumber || req.body.shabaNumber ? { shebaNumber: req.body.shebaNumber || req.body.shabaNumber } : {}),
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'bank_account',
+    entityId: String(id),
+    description: `ویرایش حساب بانکی/صندوق: ${updated.title}`,
+    details: { before, after: updated },
+    ipAddress: req.ip || '',
+  });
+  res.json(updated);
+});
+router.put('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(updateBankAccountSchema), updateBankHandler);
+router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(updateBankAccountSchema), updateBankHandler);
+
+const deleteBankHandler = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
+  const result = await AccountingService.deleteBankAccount(id);
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'DELETE',
+    entity: 'bank_account',
+    entityId: String(id),
+    description: `حذف حساب بانکی/صندوق: ${before?.title || id}`,
+    details: { before },
+    ipAddress: req.ip || '',
+  });
+  res.json(result);
+});
+router.delete('/accounting/banks/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), deleteBankHandler);
+router.delete('/accounting/bank-accounts/:id', authorizePermission('accounting.treasury'), validate(paramsIdSchema), deleteBankHandler);
+
+// Treasury Transactions (دریافت و پرداخت)
+
+router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
+  const { type, bankAccountId, startDate, endDate } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
+  const list = await AccountingService.getTreasuryTransactions({
+    type,
+    bankAccountId: bankAccountId ? Number(bankAccountId) : undefined,
+    startDate: startDate as string,
+    endDate: endDate as string,
+  });
+  res.json(list);
+}));
+
+// V1.4.0: Idempotency — retry همین درخواست هرگز دوبار وجه ثبت نمی‌کند
+router.post('/accounting/treasury', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(createTreasuryTxSchema), asyncHandler(async (req, res) => {
+  const tx = await AccountingService.createTreasuryTransaction({
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'CREATE',
+    entity: 'treasury_transaction',
+    entityId: String(tx.id),
+    description: `ثبت ${tx.type === 'receipt' ? 'دریافت' : 'پرداخت'} شماره ${tx.transactionNumber} به مبلغ ${tx.amount.toLocaleString('fa-IR')}`,
+    details: { tx },
+    ipAddress: req.ip || '',
+  });
+  res.status(201).json(tx);
+}));
+
+router.post('/accounting/treasury/preview-voucher', authorizePermission('accounting.treasury'), validate(previewTreasurySchema), asyncHandler(async (req, res) => {
+  const preview = await AccountingService.previewTreasuryVoucher(req.body);
+  res.json(preview);
+}));
+
+router.post('/accounting/treasury/transfer', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(transferSchema), asyncHandler(async (req, res) => {
+  const result = await AccountingService.createTreasuryTransfer({
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'CREATE',
+    entity: 'treasury_transfer',
+    entityId: `${result.payment.id}/${result.receipt.id}`,
+    description: `انتقال وجه ${req.body.amount.toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
+    details: { paymentId: result.payment.id, receiptId: result.receipt.id, voucherId: result.voucherId },
+    ipAddress: req.ip || '',
+  });
+  res.status(201).json(result);
+}));
+
+router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
+  const { bankAccountId, txIds, batch, reconciled } = req.body;
+  const result = await AccountingService.reconcileTransactions({
+    bankAccountId,
+    txIds,
+    batch: batch || `stmt-${Date.now()}`,
+    reconciled,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: reconciled ? 'UPDATE' : 'UPDATE',
+    entity: 'treasury_reconciliation',
+    entityId: String(bankAccountId),
+    description: `${reconciled ? 'آشتی‌سنجی' : 'لغو آشتی‌سنجی'} ${txIds.length} تراکنش حساب بانکی شناسه ${bankAccountId}`,
+    details: { bankAccountId, txIds, batch, reconciled },
+    ipAddress: req.ip || '',
+  });
+  res.json(result);
+}));
+
+router.post('/accounting/treasury/:id/void', authorizePermission('accounting.treasury'), validate(voidTreasuryTxSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const reversal = await AccountingService.voidTreasuryTransaction(id, {
+    reason: req.body.reason,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'treasury_transaction',
+    entityId: String(id),
+    description: `ابطال تراکنش شناسه ${id} با سند معکوس ${reversal.transactionNumber} — دلیل: ${req.body.reason}`,
+    details: { voidedTxId: id, reversalTxId: reversal.id, reason: req.body.reason },
+    ipAddress: req.ip || '',
+  });
+  res.json(reversal);
+}));
+
+// ==========================================
+// 5. CHEQUES (دفتر چک صیادی)
+// ==========================================
+
+router.get('/accounting/cheques', authorizePermission(...RECORD_READ_PERMISSIONS.cheque), validate(chequesQuerySchema), asyncHandler(async (req, res) => {
+  const { type, status, startDate, endDate, search } = (req.query as ValidatedQuery<typeof chequesQuerySchema>) || {};
+  const list = await AccountingService.getCheques({
+    type,
+    status: status as string,
+    startDate: startDate as string,
+    endDate: endDate as string,
+    search: search as string,
+  });
+  res.json(list);
+}));
+
+router.post('/accounting/cheques', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(createChequeSchema), asyncHandler(async (req, res) => {
+  const chq = await AccountingService.createCheque({
+    ...req.body,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'CREATE',
+    entity: 'cheque',
+    entityId: String(chq.id),
+    description: `ثبت چک ${chq.type === 'received' ? 'دریافتی' : 'پرداختی'} شماره ${chq.chequeNumber} (مبلغ: ${chq.amount.toLocaleString('fa-IR')})`,
+    details: { chq },
+    ipAddress: req.ip || '',
+  });
+  res.status(201).json(chq);
+}));
+
+const updateChequeStatusHandler = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const notes = req.body.notes || req.body.description;
+  const chq = await AccountingService.updateChequeStatus(id, {
+    status: req.body.status,
+    actionDate: req.body.actionDate,
+    bankAccountId: req.body.bankAccountId,
+    transfereePartyId: req.body.transfereePartyId,
+    transfereePartyName: req.body.transfereePartyName,
+    notes,
+    description: req.body.description,
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'UPDATE',
+    entity: 'cheque',
+    entityId: String(id),
+    description: `تغییر وضعیت چک شماره ${chq.chequeNumber} به ${chq.status}`,
+    details: { status: chq.status },
+    ipAddress: req.ip || '',
+  });
+  res.json(chq);
+});
+router.put('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
+router.patch('/accounting/cheques/:id/status', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(updateChequeStatusSchema), updateChequeStatusHandler);
+
+router.delete('/accounting/cheques/:id', authorizePermission('accounting.cheques'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await AccountingService.deleteCheque(id, {
+    userId: req.user?.id,
+    username: req.user?.fullName || req.user?.username,
+  });
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'system',
+    userFullName: req.user?.fullName || '',
+    action: 'DELETE',
+    entity: 'cheque',
+    entityId: String(id),
+    description: `حذف چک شناسه ${id}`,
+    details: { chequeId: id },
+    ipAddress: req.ip || '',
+  });
+  res.json(result);
+}));
+
+export default router;

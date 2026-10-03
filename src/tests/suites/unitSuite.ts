@@ -1468,7 +1468,8 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const violations: string[] = [];
 
     const routeFiles = [
-      ...fs.readdirSync('src/routes').filter(f => f.endsWith('.ts')).map(f => path.join('src/routes', f)),
+      // زیرروترهای پوشه‌ای (مثل src/routes/accounting/) هم بررسی می‌شوند
+      ...fs.readdirSync('src/routes', { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.ts')).map(f => path.join('src/routes', f)),
       'src/app.ts',
       'src/modules/_template/routes.ts',
     ];

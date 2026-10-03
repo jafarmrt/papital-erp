@@ -19,12 +19,13 @@
 | TD-189 | Plaintext Third-Party Credential | ستون `personnel.nobitex_password` رمز حساب صرافی پرسنل را به‌صورت متن ساده در پایگاه‌داده نگه می‌دارد (از v7.0.29 در خروجی داده‌ها حذف می‌شود، اما در دیتابیس و احتمالاً پاسخ‌های API پرسنل باقی است) | src/db/schema/personnel.ts:34 | open — حذف نگهداری رمز شخص ثالث یا رمزنگاری در سطح برنامه با کلید جدا، و حذف از پاسخ‌های API |
 | TD-232 | Mixed-Calendar Text Date Columns | قید قالب v7.0.75 (P3-15) فقط تاریخ بدشکل را رد می‌کند؛ ستون‌های تاریخ متنی (چک، پرسنل، CRM، پروژه، فیش حقوقی، کارکرد روزانه) هنوز هم تاریخ شمسی و هم میلادی، و گاهی ارقام فارسی (`effective_date` نرخ کارمزدی) نگه می‌دارند و مقایسه متنی بازه‌ها روی آن‌ها دقیق نیست | drizzle/0028 و 0030، ستون‌های تاریخ متنی | open — یکسان‌سازی تقویم هر ستون (نرمال‌سازی ورودی سرور و تبدیل داده قدیمی با گزارش) نیازمند تصمیم مالک محصول؛ سپس قید `iso` |
 | TD-245 | System Route Findings | یافته‌های انتقال روت سیستم به سرویس (v7.0.123)، بدون تغییر: (۱) بازنشانی کارخانه‌ای `runSeed()` را بی قفل seed اجرا می‌کند و `fiscal_periods`، `file_attachments` (و فایل‌ها)، `legacy_date_repairs`، `ref_fiscal_year_corrections`، `workflow_task_reopen_log` را پاک نمی‌کند؛ پس از بستن سال احتمالاً با خطای FK `fiscal_periods.closing_voucher_id` شکست می‌خورد؛ (۲) `requeue_dlq` ردیف‌های replayed/dismissed را هم دوباره می‌فرستد، ردیف‌ها را سخت حذف می‌کند و تراکنشی نیست؛ شمارش DLQ در سلامت سیستم ردیف‌های بسته‌شده را هم می‌شمارد؛ (۳) بررسی سند نامتوازن بدون `VOUCHER_BALANCE_TOLERANCE` و با اسناد حذف‌شده؛ `totalVouchers` و شمارش کالاها فیلتر حذف نرم ندارند؛ `unbalancedVouchers` همیشه ۰؛ (۴) `clear_stuck_outbox` و `requeue_dlq` بدون `logActivity` کامل؛ (۵) `new Date()` به جای businessClock و ورودی‌های بی Zod در activity-logs و reconciliation-fix | src/services/system/factoryReset.service.ts، systemReconciliation.service.ts، systemHealth.service.ts، src/routes/system.routes.ts | open |
+| TD-247 | Accounting Route Findings | یافته‌های تقسیم روت حسابداری (v7.0.126)، بدون تغییر: (۱) جمع مبالغ با عدد JS خلاف §1.8 — مانده جاری گزارش جزئیات پروژه (`reports.routes.ts` ~233)، خلاصه پروژه با `Number()` (~206)، جمع گزارش تطبیق بانک با `+=` (`treasury.routes.ts` ~70)؛ (۲) طرح‌های Zod ثبت/ویرایش/اصلاح سند تراز را با reduce عددی و تلورانس 0.001 به جای `VOUCHER_BALANCE_TOLERANCE` می‌سنجند (`accounting.schemas.ts` ~72، 95، 126)؛ (۳) ورودی‌های بی Zod: `POST /accounting/mappings`، بدنه `PUT /accounting/accounts/:id`، کوئری `reports/parties` و `banks/next-code`؛ (۴) `doc-signatures` اولین نمونه گردش‌کار را بی `orderBy` برمی‌دارد | src/routes/accounting/reports.routes.ts، treasury.routes.ts، accounts.routes.ts، accounting.schemas.ts | open |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۳ ردیف
+- **فعال:** ۴ ردیف
 - **آرشیو شده (resolved):** ۲۳۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
@@ -34,4 +35,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v7.0.125 — TD-246: قید یکتای کد کار کارمزدی (ثبت و رفع در همین نسخه).*
+*آخرین بازبینی: v7.0.126 — تقسیم روت حسابداری؛ یافته‌های آن در TD-247 ثبت شد.*

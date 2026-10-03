@@ -23,6 +23,7 @@ export const MONEY_STOCK_PATHS = [
   'src/services/transfer.service.ts',
   'src/services/warehouse.service.ts',
   'src/routes/accounting.routes.ts',
+  'src/routes/accounting/**/*.ts',
   'src/routes/documents.routes.ts',
   'src/routes/inventory.routes.ts',
   'src/routes/items*.routes.ts',
