@@ -19,6 +19,7 @@ export const MONEY_STOCK_PATHS = [
   'src/services/woocommerce/**/*.ts',
   'src/services/procurement.service.ts',
   'src/services/piecework.service.ts',
+  'src/services/piecework/**/*.ts',
   'src/services/transfer.service.ts',
   'src/services/warehouse.service.ts',
   'src/routes/accounting.routes.ts',

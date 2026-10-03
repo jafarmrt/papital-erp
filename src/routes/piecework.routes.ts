@@ -2,18 +2,10 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
-import { orm } from '../db/drizzle.js';
-import { pieceworkTasks, pieceworkTaskRateHistory, pieceworkPersonnelRates, pieceworkLogs, pieceworkPayrolls, personnel, taskCategories, productionProjects, journalVouchers, treasuryTransactions, bankAccounts } from '../db/schema.js';
-import { eq, and, desc, or, sql, inArray } from 'drizzle-orm';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
-import { normalizePersianDate, jalaliToIsoDate } from '../utils.js';
-import { VoucherSyncService } from '../services/accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
-import { ConflictError } from '../errors/customErrors.js';
-import { fin } from '../lib/financialDecimal.js';
-import { money } from '../lib/money.js';
-import { PieceworkService } from '../services/piecework.service.js';
+import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -161,36 +153,8 @@ const registerPayrollPaymentSchema = z.object({
 // GET /api/piecework/tasks - List tasks (active, archived, or all)
 router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
-    const { category, search, status = 'active' } = req.query;
-    
-    let whereClause = eq(pieceworkTasks.isDeleted, 0);
-    if (status === 'archived') {
-      whereClause = eq(pieceworkTasks.isDeleted, 1);
-    } else if (status === 'all') {
-      whereClause = sql`1=1`;
-    }
-
-    let query = orm.select()
-      .from(pieceworkTasks)
-      .where(whereClause)
-      .orderBy(pieceworkTasks.category, pieceworkTasks.id);
-
-    const tasks = await query;
-
-    let filtered = tasks;
-    if (category && String(category) !== 'ALL' && String(category) !== 'all') {
-      filtered = filtered.filter(t => t.category === String(category));
-    }
-
-    if (search && String(search).trim()) {
-      const q = String(search).trim().toLowerCase();
-      filtered = filtered.filter(t => 
-        t.title.toLowerCase().includes(q) || 
-        t.code.toLowerCase().includes(q) || 
-        (t.category && t.category.toLowerCase().includes(q))
-      );
-    }
-
+    const { category, search, status } = req.query;
+    const filtered = await PieceworkReadService.listTasks({ category, search, status });
     res.json(filtered);
   } catch (err) {
     logger.error({ message: 'Error fetching piecework tasks', error: err });
@@ -202,10 +166,7 @@ router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.piecework
 router.get('/piecework/tasks-history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
-    const history = await orm.select()
-      .from(pieceworkTaskRateHistory)
-      .orderBy(desc(pieceworkTaskRateHistory.id))
-      .limit(limit);
+    const history = await PieceworkReadService.listRateHistory(limit);
     res.json(history);
   } catch (err) {
     logger.error({ message: 'Error fetching global piecework task rate history', error: err });
@@ -217,10 +178,7 @@ router.get('/piecework/tasks-history', authorizePermission(...READ_PERMISSIONS.p
 router.get('/piecework/tasks/:id/history', authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const history = await orm.select()
-      .from(pieceworkTaskRateHistory)
-      .where(eq(pieceworkTaskRateHistory.taskId, id))
-      .orderBy(desc(pieceworkTaskRateHistory.id));
+    const history = await PieceworkReadService.listTaskRateHistory(id);
     res.json(history);
   } catch (err) {
     logger.error({ message: 'Error fetching piecework task rate history', error: err });
@@ -414,44 +372,7 @@ router.post('/piecework/tasks/:id/restore', authorize('personnel.manage', 'admin
 // GET /api/piecework/categories
 router.get('/piecework/categories', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
-    let dbCats: Array<typeof taskCategories.$inferSelect> = [];
-    try {
-      dbCats = await orm.select().from(taskCategories).where(eq(taskCategories.isDeleted, 0));
-    } catch (e) {
-      logger.warn({ message: 'taskCategories table query error, falling back to empty list', error: e });
-    }
-
-    let tasks: Array<{ cat: string | null }> = [];
-    try {
-      tasks = await orm.select({ cat: pieceworkTasks.category }).from(pieceworkTasks).where(eq(pieceworkTasks.isDeleted, 0));
-    } catch (e) {
-      logger.warn({ message: 'pieceworkTasks query error', error: e });
-    }
-
-    // Map categories from the database (user created) and any active categories used in tasks
-    const catMap = new Map<string, { id: number | string; name: string; description: string }>();
-    
-    // First, add all active database categories
-    for (const c of dbCats) {
-      catMap.set(c.name, {
-        id: c.id,
-        name: c.name,
-        description: c.description || ''
-      });
-    }
-
-    // Also include any distinct category names present in existing tasks that may not yet be in taskCategories table
-    for (const t of tasks) {
-      if (t.cat && t.cat.trim() && !catMap.has(t.cat.trim())) {
-        catMap.set(t.cat.trim(), {
-          id: t.cat.trim(),
-          name: t.cat.trim(),
-          description: ''
-        });
-      }
-    }
-
-    const resultList = Array.from(catMap.values());
+    const resultList = await PieceworkReadService.listCategories();
     res.json(resultList);
   } catch (err) {
     logger.error({ message: 'Error fetching task categories', error: err });
@@ -535,10 +456,8 @@ router.delete('/piecework/categories/:id', authorize('personnel.manage', 'admin'
 router.get(['/piecework/personnel-rates/:personnelId', '/piecework/rates/:personnelId'], authorizePermission(...READ_PERMISSIONS.pieceworkReference), validate(paramsPersonnelIdSchema), asyncHandler(async (req, res) => {
   try {
     const personnelId = Number(req.params.personnelId);
-    const rates = await orm.select()
-      .from(pieceworkPersonnelRates)
-      .where(and(eq(pieceworkPersonnelRates.personnelId, personnelId), eq(pieceworkPersonnelRates.isDeleted, 0)));
-    
+    const rates = await PieceworkReadService.listPersonnelRates(personnelId);
+
     res.json(rates);
   } catch (err) {
     logger.error({ message: 'Error fetching custom rates', error: err });
@@ -567,66 +486,7 @@ router.post(['/piecework/personnel-rates', '/piecework/rates'], authorize('perso
 router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkReference), asyncHandler(async (req, res) => {
   try {
     const { personnelId, projectId, startDate, endDate, status } = req.query;
-
-    let rows = await orm.select({
-      id: pieceworkLogs.id,
-      personnelId: pieceworkLogs.personnelId,
-      personnelName: personnel.fullName,
-      personnelCode: personnel.personnelCode,
-      taskId: pieceworkLogs.taskId,
-      taskTitle: pieceworkTasks.title,
-      taskCode: pieceworkTasks.code,
-      taskCategory: pieceworkTasks.category,
-      unit: pieceworkTasks.unit,
-      projectId: pieceworkLogs.projectId,
-      projectCode: productionProjects.projectCode,
-      projectTitle: productionProjects.title,
-      date: pieceworkLogs.date,
-      dateIso: pieceworkLogs.dateIso,
-      quantity: pieceworkLogs.quantity,
-      unitRate: pieceworkLogs.unitRate,
-      totalAmount: pieceworkLogs.totalAmount,
-      notes: pieceworkLogs.notes,
-      payrollId: pieceworkLogs.payrollId,
-      status: pieceworkLogs.status,
-      createdById: pieceworkLogs.createdById,
-      createdByUsername: pieceworkLogs.createdByUsername,
-      createdAt: pieceworkLogs.createdAt
-    })
-    .from(pieceworkLogs)
-    .innerJoin(personnel, eq(pieceworkLogs.personnelId, personnel.id))
-    .innerJoin(pieceworkTasks, eq(pieceworkLogs.taskId, pieceworkTasks.id))
-    .leftJoin(productionProjects, eq(pieceworkLogs.projectId, productionProjects.id))
-    .where(eq(pieceworkLogs.isDeleted, 0))
-    .orderBy(desc(pieceworkLogs.date), desc(pieceworkLogs.id));
-
-    if (personnelId && String(personnelId) !== 'ALL') {
-      const pId = Number(personnelId);
-      rows = rows.filter(r => r.personnelId === pId);
-    }
-
-    if (projectId && String(projectId) !== 'ALL') {
-      const projId = Number(projectId);
-      rows = rows.filter(r => r.projectId === projId);
-    }
-
-    if (startDate && String(startDate).trim()) {
-      const sRaw = String(startDate).trim();
-      const sPersian = normalizePersianDate(sRaw);
-      const sIso = jalaliToIsoDate(sRaw) || sRaw;
-      rows = rows.filter(r => (r.dateIso && r.dateIso >= sIso) || normalizePersianDate(r.date) >= sPersian);
-    }
-
-    if (endDate && String(endDate).trim()) {
-      const eRaw = String(endDate).trim();
-      const ePersian = normalizePersianDate(eRaw);
-      const eIso = jalaliToIsoDate(eRaw) || eRaw;
-      rows = rows.filter(r => (r.dateIso && r.dateIso <= eIso) || normalizePersianDate(r.date) <= ePersian);
-    }
-
-    if (status && String(status) !== 'ALL') {
-      rows = rows.filter(r => r.status === String(status));
-    }
+    const rows = await PieceworkReadService.listWorkLogs({ personnelId, projectId, startDate, endDate, status });
 
     res.json(rows);
   } catch (err) {
@@ -706,89 +566,7 @@ router.delete('/piecework/logs/:id', authorize('personnel.manage', 'admin'), val
 router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrolls), asyncHandler(async (req, res) => {
   try {
     const { personnelId, status } = req.query;
-
-    let rows = await orm.select({
-      id: pieceworkPayrolls.id,
-      payrollNumber: pieceworkPayrolls.payrollNumber,
-      personnelId: pieceworkPayrolls.personnelId,
-      personnelName: personnel.fullName,
-      personnelCode: personnel.personnelCode,
-      jobTitle: personnel.jobTitle,
-      cardNumber: personnel.cardNumber,
-      shebaNumber: personnel.shebaNumber,
-      bankName: personnel.bankName,
-      startDate: pieceworkPayrolls.startDate,
-      endDate: pieceworkPayrolls.endDate,
-      title: pieceworkPayrolls.title,
-      totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
-      totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
-      advanceDeduction: pieceworkPayrolls.advanceDeduction,
-      totalBonuses: pieceworkPayrolls.totalBonuses,
-      totalDeductions: pieceworkPayrolls.totalDeductions,
-      netPayable: pieceworkPayrolls.netPayable,
-      paidAmount: pieceworkPayrolls.paidAmount,
-      status: pieceworkPayrolls.status,
-      paymentDate: pieceworkPayrolls.paymentDate,
-      paymentMethod: pieceworkPayrolls.paymentMethod,
-      paymentReference: pieceworkPayrolls.paymentReference,
-      notes: pieceworkPayrolls.notes,
-      createdAt: pieceworkPayrolls.createdAt
-    })
-    .from(pieceworkPayrolls)
-    .innerJoin(personnel, eq(pieceworkPayrolls.personnelId, personnel.id))
-    .where(eq(pieceworkPayrolls.isDeleted, 0))
-    .orderBy(desc(pieceworkPayrolls.id));
-
-    if (personnelId && String(personnelId) !== 'ALL') {
-      const pId = Number(personnelId);
-      rows = rows.filter(r => r.personnelId === pId);
-    }
-
-    if (status && String(status) !== 'ALL') {
-      rows = rows.filter(r => r.status === String(status));
-    }
-
-    // Attach linked journal voucher info
-    const payrollIds = rows.map(r => r.id);
-    let linkedVouchers: Array<{
-      id: number;
-      voucherNumber: number;
-      referenceId: number | null;
-      status: string | null;
-      date: string;
-    }> = [];
-    if (payrollIds.length > 0) {
-      linkedVouchers = await orm.select({
-        id: journalVouchers.id,
-        voucherNumber: journalVouchers.voucherNumber,
-        referenceId: journalVouchers.referenceId,
-        status: journalVouchers.status,
-        date: journalVouchers.date
-      })
-      .from(journalVouchers)
-      .where(and(
-        eq(journalVouchers.referenceModule, 'payroll'),
-        eq(journalVouchers.isDeleted, 0)
-      ));
-    }
-
-    const voucherMap = new Map<number, (typeof linkedVouchers)[number]>();
-    for (const v of linkedVouchers) {
-      if (v.referenceId) {
-        voucherMap.set(Number(v.referenceId), v);
-      }
-    }
-
-    const enhancedRows = rows.map(r => {
-      const v = voucherMap.get(r.id);
-      return {
-        ...r,
-        voucherId: v ? v.id : null,
-        voucherNumber: v ? v.voucherNumber : null,
-        voucherStatus: v ? v.status : null,
-        isVoucherSynced: !!v
-      };
-    });
+    const enhancedRows = await PayrollReadService.listPayrolls({ personnelId, status });
 
     const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
     const sanitizedRows = enhancedRows.map(r => sanitizePayrollRecord(r, canViewSensitive));
@@ -801,15 +579,6 @@ router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrol
   }
 }));
 
-/** ریز کارکرد هر فیش در پاسخ /piecework/payrolls/mine (همان ستون‌های select زیر). */
-type PayrollLogItem = Pick<typeof pieceworkLogs.$inferSelect,
-  'id' | 'payrollId' | 'date' | 'dateIso' | 'taskId' | 'quantity' | 'unitRate' | 'totalAmount' | 'notes'> & {
-  taskTitle: typeof pieceworkTasks.$inferSelect['title'];
-  taskCode: typeof pieceworkTasks.$inferSelect['code'];
-  taskCategory: typeof pieceworkTasks.$inferSelect['category'];
-  unit: typeof pieceworkTasks.$inferSelect['unit'];
-};
-
 // GET /api/piecework/payrolls/mine - فیش‌های حقوقی کاربر جاری
 // برای پرسنلی که همزمان کاربر سیستم هستند: لینک personnel.userId → users.id
 router.get('/piecework/payrolls/mine', asyncHandler(async (req, res) => {
@@ -817,78 +586,7 @@ router.get('/piecework/payrolls/mine', asyncHandler(async (req, res) => {
     const uid = Number(req.user?.id);
     if (!uid || isNaN(uid)) return res.json([]);
 
-    const linkedPersonnel = await orm.select({ id: personnel.id })
-      .from(personnel)
-      .where(and(eq(personnel.userId, uid), eq(personnel.isDeleted, 0)));
-
-    if (!linkedPersonnel.length) return res.json([]);
-
-    const pIds = linkedPersonnel.map(p => p.id);
-    const rows = await orm.select({
-      id: pieceworkPayrolls.id,
-      payrollNumber: pieceworkPayrolls.payrollNumber,
-      personnelId: pieceworkPayrolls.personnelId,
-      personnelName: personnel.fullName,
-      personnelCode: personnel.personnelCode,
-      jobTitle: personnel.jobTitle,
-      cardNumber: personnel.cardNumber,
-      shebaNumber: personnel.shebaNumber,
-      bankName: personnel.bankName,
-      startDate: pieceworkPayrolls.startDate,
-      endDate: pieceworkPayrolls.endDate,
-      title: pieceworkPayrolls.title,
-      totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
-      totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
-      advanceDeduction: pieceworkPayrolls.advanceDeduction,
-      totalBonuses: pieceworkPayrolls.totalBonuses,
-      totalDeductions: pieceworkPayrolls.totalDeductions,
-      netPayable: pieceworkPayrolls.netPayable,
-      status: pieceworkPayrolls.status,
-      paymentDate: pieceworkPayrolls.paymentDate,
-      paymentMethod: pieceworkPayrolls.paymentMethod,
-      paymentReference: pieceworkPayrolls.paymentReference,
-      notes: pieceworkPayrolls.notes,
-      createdAt: pieceworkPayrolls.createdAt
-    })
-    .from(pieceworkPayrolls)
-    .innerJoin(personnel, eq(pieceworkPayrolls.personnelId, personnel.id))
-    .where(and(eq(pieceworkPayrolls.isDeleted, 0), inArray(pieceworkPayrolls.personnelId, pIds)))
-    .orderBy(desc(pieceworkPayrolls.id));
-
-    // ریز کارکردهای هر فیش — تا فیشی که پرسنل می‌بیند کاملاً با فیش صدورکننده یکسان باشد
-    const payrollIds = rows.map(r => r.id);
-    let itemsByPayroll = new Map<number, PayrollLogItem[]>();
-    if (payrollIds.length > 0) {
-      const logs = await orm.select({
-        id: pieceworkLogs.id,
-        payrollId: pieceworkLogs.payrollId,
-        date: pieceworkLogs.date,
-        dateIso: pieceworkLogs.dateIso,
-        taskId: pieceworkLogs.taskId,
-        taskTitle: pieceworkTasks.title,
-        taskCode: pieceworkTasks.code,
-        taskCategory: pieceworkTasks.category,
-        unit: pieceworkTasks.unit,
-        quantity: pieceworkLogs.quantity,
-        unitRate: pieceworkLogs.unitRate,
-        totalAmount: pieceworkLogs.totalAmount,
-        notes: pieceworkLogs.notes
-      })
-      .from(pieceworkLogs)
-      .innerJoin(pieceworkTasks, eq(pieceworkLogs.taskId, pieceworkTasks.id))
-      .where(and(inArray(pieceworkLogs.payrollId, payrollIds), eq(pieceworkLogs.isDeleted, 0)))
-      .orderBy(pieceworkLogs.date);
-      for (const lg of logs) {
-        const pid = Number(lg.payrollId);
-        if (pid) {
-          const arr = itemsByPayroll.get(pid) || [];
-          arr.push(lg);
-          itemsByPayroll.set(pid, arr);
-        }
-      }
-    }
-
-    res.json(rows.map(r => ({ ...r, items: itemsByPayroll.get(r.id) || [] })));
+    res.json(await PayrollReadService.listPayrollsForUser(uid));
   } catch (err) {
     logger.error({ message: 'Error fetching my payrolls', error: err });
     throw err;
@@ -900,90 +598,20 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
   try {
     const id = Number(req.params.id);
 
-    const [pay] = await orm.select({
-      id: pieceworkPayrolls.id,
-      payrollNumber: pieceworkPayrolls.payrollNumber,
-      personnelId: pieceworkPayrolls.personnelId,
-      personnelUserId: personnel.userId,
-      personnelName: personnel.fullName,
-      personnelCode: personnel.personnelCode,
-      jobTitle: personnel.jobTitle,
-      cardNumber: personnel.cardNumber,
-      shebaNumber: personnel.shebaNumber,
-      bankName: personnel.bankName,
-      nobitexUsername: personnel.nobitexUsername,
-      startDate: pieceworkPayrolls.startDate,
-      endDate: pieceworkPayrolls.endDate,
-      title: pieceworkPayrolls.title,
-      totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
-      // V1.3.5: بدون این فیلد، ردیف حقوق ثابت در فیش چاپی نمایش داده نمی‌شد
-      totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
-      advanceDeduction: pieceworkPayrolls.advanceDeduction,
-      totalBonuses: pieceworkPayrolls.totalBonuses,
-      totalDeductions: pieceworkPayrolls.totalDeductions,
-      netPayable: pieceworkPayrolls.netPayable,
-      paidAmount: pieceworkPayrolls.paidAmount,
-      status: pieceworkPayrolls.status,
-      paymentDate: pieceworkPayrolls.paymentDate,
-      paymentMethod: pieceworkPayrolls.paymentMethod,
-      paymentReference: pieceworkPayrolls.paymentReference,
-      notes: pieceworkPayrolls.notes,
-      createdAt: pieceworkPayrolls.createdAt
-    })
-    .from(pieceworkPayrolls)
-    .innerJoin(personnel, eq(pieceworkPayrolls.personnelId, personnel.id))
-    .where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0)));
+    const detail = await PayrollReadService.getPayrollDetail(id);
 
-    if (!pay) {
+    if (!detail) {
       return res.status(404).json({ error: 'فیش حقوقی یافت نشد' });
     }
 
-    // Get work log items attached to this payroll
-    const items = await orm.select({
-      id: pieceworkLogs.id,
-      date: pieceworkLogs.date,
-      dateIso: pieceworkLogs.dateIso,
-      taskId: pieceworkLogs.taskId,
-      taskTitle: pieceworkTasks.title,
-      taskCode: pieceworkTasks.code,
-      taskCategory: pieceworkTasks.category,
-      unit: pieceworkTasks.unit,
-      quantity: pieceworkLogs.quantity,
-      unitRate: pieceworkLogs.unitRate,
-      totalAmount: pieceworkLogs.totalAmount,
-      notes: pieceworkLogs.notes
-    })
-    .from(pieceworkLogs)
-    .innerJoin(pieceworkTasks, eq(pieceworkLogs.taskId, pieceworkTasks.id))
-    .where(and(eq(pieceworkLogs.payrollId, id), eq(pieceworkLogs.isDeleted, 0)))
-    .orderBy(pieceworkLogs.date);
-
-    // Get linked journal voucher if available
-    const [linkedVoucher] = await orm.select({
-      id: journalVouchers.id,
-      voucherNumber: journalVouchers.voucherNumber,
-      status: journalVouchers.status,
-      date: journalVouchers.date,
-      totalDebit: journalVouchers.totalDebit
-    })
-    .from(journalVouchers)
-    .where(and(
-      eq(journalVouchers.referenceModule, 'payroll'),
-      eq(journalVouchers.referenceId, id),
-      eq(journalVouchers.isDeleted, 0)
-    ))
-    .limit(1);
-
+    const { payroll: pay, items, voucherLink } = detail;
     const canViewSensitive = await canAccessSensitivePersonnelData(req.user, pay.personnelUserId);
     const sanitizedPay = sanitizePayrollRecord(pay, canViewSensitive);
 
     res.json({
       ...sanitizedPay,
       items,
-      voucherId: linkedVoucher ? linkedVoucher.id : null,
-      voucherNumber: linkedVoucher ? linkedVoucher.voucherNumber : null,
-      voucherStatus: linkedVoucher ? linkedVoucher.status : null,
-      isVoucherSynced: !!linkedVoucher
+      ...voucherLink
     });
   } catch (err) {
     logger.error({ message: 'Error fetching payroll detail', error: err });
@@ -999,152 +627,19 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
     const currentUsername = req.user?.username || 'سیستم';
     const { personnelId, startDate, endDate, title, bonuses, totalBonuses, deductions, totalDeductions, advanceDeduction: reqAdvanceDeduction, notes } = req.body;
 
-    const pId = Number(personnelId);
-    const sDate = normalizePersianDate(String(startDate));
-    const eDate = normalizePersianDate(String(endDate));
-
-    // V4.0.4 (TD-091 / Subphase 3.1): کل چرخه صدور فیش، قفل ردیفی کارکردها، محاسبه مالی و سند دوبل داخل یک تراکنش واحد اتمیک
-    const result = await orm.transaction(async (tx) => {
-      const [pInfo] = await tx.select().from(personnel).where(and(eq(personnel.id, pId), eq(personnel.isDeleted, 0))).for('update');
-      if (!pInfo) {
-        return { status: 404, error: 'پرسنل انتخاب شده یافت نشد' };
-      }
-
-      // 1. Find pending work logs in this date range WITH ROW LOCKING (.for('update'))
-      const allPersonnelLogs = await tx.select()
-        .from(pieceworkLogs)
-        .where(and(
-          eq(pieceworkLogs.personnelId, pId),
-          eq(pieceworkLogs.isDeleted, 0),
-          or(eq(pieceworkLogs.status, 'pending'), sql`${pieceworkLogs.payrollId} IS NULL`)
-        ))
-        .for('update');
-
-      const eligibleLogs = allPersonnelLogs.filter(log => {
-        const d = normalizePersianDate(log.date);
-        return d >= sDate && d <= eDate;
-      });
-
-      // 2. Fixed salary deduction & dedup within transaction
-      const salaryType = String(pInfo.salaryType || 'none');
-      const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
-      let fixedPortionFin = fixedIncluded ? fin(pInfo.monthlySalary || 0) : fin(0);
-
-      let fixedDedupNote = '';
-      if (fixedIncluded && fixedPortionFin.greaterThan(0)) {
-        const targetMonthKey = sDate.slice(0, 7); // '1405/06'
-        const priorFixedPayrolls = await tx.select({
-          id: pieceworkPayrolls.id,
-          payrollNumber: pieceworkPayrolls.payrollNumber,
-          startDate: pieceworkPayrolls.startDate,
-          totalFixedAmount: pieceworkPayrolls.totalFixedAmount
-        })
-        .from(pieceworkPayrolls)
-        .where(and(
-          eq(pieceworkPayrolls.personnelId, pId),
-          eq(pieceworkPayrolls.isDeleted, 0)
-        ))
-        .for('update');
-
-        const sameMonthFixed = priorFixedPayrolls.filter(pr => String(pr.startDate || '').slice(0, 7) === targetMonthKey);
-        const alreadyGranted = sameMonthFixed.reduce((sum, pr) => sum.add(pr.totalFixedAmount || 0), fin(0));
-        if (alreadyGranted.greaterThan(0)) {
-          fixedPortionFin = fixedPortionFin.subtract(alreadyGranted);
-          if (fixedPortionFin.isNegative()) {
-            fixedPortionFin = fin(0);
-          }
-          const refs = sameMonthFixed.map(pr => pr.payrollNumber).join('، ');
-          fixedDedupNote = alreadyGranted.greaterThanOrEqual(pInfo.monthlySalary || 0)
-            ? `سهم حقوق ثابت ماه ${targetMonthKey} قبلاً به‌طور کامل در فیش(های) ${refs} محاسبه شده است؛ این فیش فقط کارکرد پرکیسی را پوشش می‌دهد.`
-            : `سهم حقوق ثابت این ماه با کسر مبلغ قبلی (فیش ${refs}) محاسبه شد.`;
-        }
-      }
-
-      if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
-        return { status: 400, error: 'هیچ کارکرد معوقی در این بازه زمانی برای پرسنل انتخاب‌شده پیدا نشد.' };
-      }
-
-      // 3. Financial calculations with financialDecimal (TD-091)
-      let pieceworkTotalFin = fin(0);
-      for (const log of eligibleLogs) {
-        pieceworkTotalFin = pieceworkTotalFin.add(log.totalAmount || 0);
-      }
-      const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
-      const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
-      const advanceDeductionFin = fin(Math.max(0, Number(reqAdvanceDeduction) || 0));
-
-      const netFin = pieceworkTotalFin
-        .add(fixedPortionFin)
-        .add(totBonusesFin)
-        .subtract(totDeductionsFin)
-        .subtract(advanceDeductionFin)
-        .round(4);
-
-      if (netFin.isNegative()) {
-        return { status: 400, error: 'جمع کسورات و کسر مساعده از اجزای فیش بیشتر است — مقادیر را اصلاح کنید.' };
-      }
-
-      const pieceworkTotal = money(pieceworkTotalFin.round(4));
-      const fixedPortion = money(fixedPortionFin.round(4));
-      const totBonuses = money(totBonusesFin.round(4));
-      const totDeductions = money(totDeductionsFin.round(4));
-      const advanceDeduction = money(advanceDeductionFin.round(4));
-      const net = money(netFin);
-
-      // 4. Atomic Sequence Numbering from piecework_payroll_number_seq
-      const seqResult = await tx.execute(sql`SELECT nextval('piecework_payroll_number_seq') AS num`);
-      const seq = Number(seqResult.rows?.[0]?.num);
-      const payrollNumber = `PAY-${seq}`;
-
-      const defaultTitle = title && String(title).trim() ? String(title).trim() : `فیش کارکرد ${pInfo.fullName} (${sDate} تا ${eDate})`;
-      const finalNotes = [notes ? String(notes).trim() : '', fixedDedupNote].filter(Boolean).join(' | ');
-
-      // 5. Insert payroll record
-      const [newPayroll] = await tx.insert(pieceworkPayrolls).values({
-        payrollNumber,
-        personnelId: pId,
-        startDate: sDate,
-        endDate: eDate,
-        title: defaultTitle,
-        totalPieceworkAmount: pieceworkTotal,
-        totalFixedAmount: fixedPortion,
-        totalBonuses: totBonuses,
-        totalDeductions: totDeductions,
-        advanceDeduction,
-        netPayable: net,
-        status: 'approved',
-        notes: finalNotes,
-        createdById: currentUserId,
-        isDeleted: 0
-      }).returning();
-
-      // 6. Link logs to payroll with atomic WHERE payrollId IS NULL guard
-      const logIds = eligibleLogs.map(l => l.id);
-      if (logIds.length > 0) {
-        await tx.update(pieceworkLogs)
-          .set({ payrollId: newPayroll.id, status: 'approved' })
-          .where(and(
-            inArray(pieceworkLogs.id, logIds),
-            sql`${pieceworkLogs.payrollId} IS NULL`
-          ));
-      }
-
-      // 7. Synchronize double-entry journal voucher inside the same transaction
-      // V4.0.5 (F-3 / TD-093): صدور الزامی سند دوبل حسابداری در حالت strict — جلوگیری از ایجاد فیش‌های معلق بدون سند
-      const autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
-        newPayroll.id,
-        currentUserId,
-        currentUsername,
-        tx,
-        { strict: true }
-      );
-
-      return {
-        status: 201,
-        payroll: newPayroll,
-        personnelName: pInfo.fullName,
-        voucher: autoVoucher
-      };
+    const result = await PieceworkPayrollService.generatePayroll({
+      personnelId,
+      startDate,
+      endDate,
+      title,
+      bonuses,
+      totalBonuses,
+      deductions,
+      totalDeductions,
+      advanceDeduction: reqAdvanceDeduction,
+      notes,
+      userId: currentUserId,
+      username: currentUsername
     });
 
     if (result.error || !result.payroll) {
@@ -1180,55 +675,17 @@ router.put('/piecework/payrolls/:id/status', authorize('personnel.manage', 'admi
     const id = Number(req.params.id);
     const { status, paymentDate, paymentMethod, paymentReference, notes } = req.body;
 
-    // V10-4.4: گذار وضعیت به «paid» دیگر مستقیم مجاز نیست — فقط از مسیر خزانه‌داری
-    if (status && String(status).trim().toLowerCase() === 'paid') {
-      throw new ConflictError(
-        'علامت‌گذاری دستی «پرداخت‌شده» مجاز نیست. پرداخت حقوق باید از طریق دکمه «ثبت پرداخت» با انتخاب حساب خزانه/بانک انجام شود تا تراکنش مالی و سند تسویه اتمیک صادر گردد.'
-      );
-    }
-
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
 
-    const result = await orm.transaction(async (tx) => {
-      const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
-      if (!pay) {
-        return { status: 404, error: 'فیش حقوقی یافت نشد' };
-      }
-
-      const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
-      if (status) updates.status = String(status);
-      if (paymentDate !== undefined) updates.paymentDate = String(paymentDate).trim();
-      if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
-      if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
-      if (notes !== undefined) updates.notes = String(notes).trim();
-
-      await tx.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));
-
-      // Also update attached logs status
-      if (status) {
-        await tx.update(pieceworkLogs)
-          .set({ status: String(status) })
-          .where(eq(pieceworkLogs.payrollId, id));
-      }
-
-      // Trigger or verify journal voucher inside transaction
-      let autoVoucher: { id: number; voucherNumber: number } | null = null;
-      if (status === 'approved' || status === 'paid') {
-        autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
-          id,
-          currentUserId,
-          currentUsername,
-          tx,
-          { strict: true }
-        );
-      }
-
-      return {
-        status: 200,
-        payroll: pay,
-        voucher: autoVoucher
-      };
+    const result = await PieceworkPayrollService.updatePayrollStatus(id, {
+      status,
+      paymentDate,
+      paymentMethod,
+      paymentReference,
+      notes,
+      userId: currentUserId,
+      username: currentUsername
     });
 
     if (result.error || !result.payroll) {
@@ -1306,29 +763,7 @@ router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'pers
   try {
     const id = Number(req.params.id);
 
-    const txs = await orm.select({
-      id: treasuryTransactions.id,
-      transactionNumber: treasuryTransactions.transactionNumber,
-      date: treasuryTransactions.date,
-      method: treasuryTransactions.method,
-      amount: treasuryTransactions.amount,
-      currency: treasuryTransactions.currency,
-      bankAccountId: treasuryTransactions.bankAccountId,
-      bankAccountTitle: bankAccounts.title,
-      trackingNumber: treasuryTransactions.trackingNumber,
-      voucherId: treasuryTransactions.voucherId,
-      description: treasuryTransactions.description,
-      status: treasuryTransactions.status,
-      createdAt: treasuryTransactions.createdAt
-    })
-    .from(treasuryTransactions)
-    .leftJoin(bankAccounts, eq(treasuryTransactions.bankAccountId, bankAccounts.id))
-    .where(and(
-      eq(treasuryTransactions.payrollId, id),
-      eq(treasuryTransactions.type, 'payment'),
-      eq(treasuryTransactions.isDeleted, 0)
-    ))
-    .orderBy(desc(treasuryTransactions.id));
+    const txs = await PayrollReadService.listPayrollPayments(id);
 
     res.json(txs);
   } catch (err) {
@@ -1354,25 +789,9 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
   try {
     const id = Number(req.params.id);
 
-    const result = await orm.transaction(async (tx) => {
-      const [pay] = await tx.select().from(pieceworkPayrolls).where(and(eq(pieceworkPayrolls.id, id), eq(pieceworkPayrolls.isDeleted, 0))).for('update');
-      if (!pay) {
-        return { status: 404, error: 'فیش حقوقی یافت نشد' };
-      }
-
-      const voucher = await VoucherSyncService.autoCreateVoucherForPayroll(
-        id,
-        req.user?.id,
-        req.user?.username || 'سیستم',
-        tx,
-        { strict: true }
-      );
-
-      if (!voucher) {
-        return { status: 400, error: 'ایجاد سند حسابداری برای این فیش حقوقی ناموفق بود یا سرفصل‌های معین دستمزد تعریف نشده‌اند.' };
-      }
-
-      return { status: 200, payroll: pay, voucher };
+    const result = await PieceworkPayrollService.syncPayrollVoucher(id, {
+      userId: req.user?.id,
+      username: req.user?.username || 'سیستم'
     });
 
     if (result.error || !result.voucher || !result.payroll) {
@@ -1394,7 +813,7 @@ router.post('/piecework/payrolls/:id/sync-voucher', authorizePermission('piecewo
 router.delete('/piecework/payrolls/:id', authorize('personnel.manage', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
-  const deletedPayroll = await PieceworkService.deletePayroll(id, {
+  const deletedPayroll = await PieceworkPayrollService.deletePayroll(id, {
     userId: req.user?.id,
     username: req.user?.username || 'سیستم',
     reason: `ابطال و حذف فیش حقوقی توسط کاربر`
