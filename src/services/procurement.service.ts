@@ -7,6 +7,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { ValidationError, NotFoundError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
+import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
@@ -429,6 +430,22 @@ export class ProcurementService {
   }
 
   /**
+   * v7.0.111 (TD-238): وضعیت‌ها و انتقال‌های فرایند درخواست خرید — از تصویر خود فرایند فقط وقتی با شناسه‌های پایگاه‌داده
+   * ساخته شده (isUsableSnapshot، AGENTS.md §14.3)، وگرنه از جدول‌های جاری تعریف؛ تصویر قدیمی بدون شناسه به کار نمی‌رود.
+   */
+  static async workflowGraphOf(
+    wfInst: Pick<typeof workflowInstances.$inferSelect, 'snapshotDsl' | 'workflowDefinitionId'>
+  ): Promise<{ states: WorkflowStateRef[]; transitions: WorkflowTransitionRef[] }> {
+    const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
+    if (isUsableSnapshot(snapshot)) return { states: snapshot.states ?? [], transitions: snapshot.transitions ?? [] };
+    const [states, transitions] = await Promise.all([
+      orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId)),
+      orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId)),
+    ]);
+    return { states, transitions };
+  }
+
+  /**
    * Execute workflow transition on purchase requisition
    */
   static async executeWorkflowAction(
@@ -459,11 +476,7 @@ export class ProcurementService {
       throw new ValidationError('نمونه فرآیند گردش کار مرتبط یافت نشد');
     }
 
-    const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
-    const transitions: WorkflowTransitionRef[] = snapshot?.transitions || 
-      await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
-    const states: WorkflowStateRef[] = snapshot?.states ||
-      await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
+    const { states, transitions } = await this.workflowGraphOf(wfInst);
 
     // Auto-heal / synchronize workflow instance state if desynchronized from requisition business status
     const statusToStateKeyMap: Record<string, string> = {
@@ -1170,13 +1183,8 @@ export class ProcurementService {
       if (allDelivered && linkedReq.workflowInstanceId) {
         const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
         if (wfInst && wfInst.status === 'IN_PROGRESS') {
-          const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
-          const states: WorkflowStateRef[] = snapshot?.states || 
-            await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
+          const { states, transitions } = await this.workflowGraphOf(wfInst);
           const receivedState = states.find(s => s.stateKey === 'received');
-          
-          const transitions: WorkflowTransitionRef[] = snapshot?.transitions ||
-            await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
           const trToReceived = transitions.find(t => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
 
           if (trToReceived) {

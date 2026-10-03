@@ -8254,5 +8254,51 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // v7.0.111 (TD-238): فرایند درخواست خرید از تصویر قدیمی بدون شناسه پایگاه‌داده استفاده نمی‌کند (AGENTS §14.3)
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_procurement_workflow_snapshot_td_238', 'td238', 'procurement', 'snapshot')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.111 Regression: درخواست خرید تصویر فرایند بدون شناسه را کنار می‌گذارد و جدول‌های جاری را می‌خواند (TD-238)';
+    const defIds: number[] = [];
+    try {
+      const { createTestWorkflow } = await import('../fixtures/factories.js');
+      const { ProcurementService } = await import('../../services/procurement.service.js');
+      const wf = await createTestWorkflow({ definition: { entityType: 'purchase_requisition' } });
+      defIds.push(wf.definition.id);
+      const violations: string[] = [];
+      // تصویر نسخه ۱ قدیمی: payload خام طراح با کلید وضعیت و بدون شناسه پایگاه‌داده
+      const legacy = await ProcurementService.workflowGraphOf({
+        workflowDefinitionId: wf.definition.id,
+        snapshotDsl: { states: [{ stateKey: 'draft' }, { stateKey: 'review' }], transitions: [{ actionKey: 'submit', fromStateKey: 'draft', toStateKey: 'review' }] },
+      });
+      if (legacy.states.length !== 3 || legacy.states.some(st => !st.id)) violations.push(`وضعیت‌ها از تصویر قدیمی خوانده شد: ${JSON.stringify(legacy.states)}`);
+      const submit = legacy.transitions.find(t => t.actionKey === 'submit');
+      if (!submit || submit.fromStateId !== wf.states.draft.id || submit.toStateId !== wf.states.review.id) violations.push(`انتقال submit از جدول خوانده نشد: ${JSON.stringify(legacy.transitions)}`);
+      // تصویر معتبر (با شناسه) همچنان منبع فرایند در جریان است
+      const usable = { states: [{ id: wf.states.draft.id, stateKey: 'draft' }], transitions: [{ id: 999999, fromStateId: wf.states.draft.id, toStateId: wf.states.draft.id, actionKey: 'loop' }] };
+      const fromSnapshot = await ProcurementService.workflowGraphOf({ workflowDefinitionId: wf.definition.id, snapshotDsl: usable });
+      if (fromSnapshot.states.length !== 1 || fromSnapshot.transitions[0]?.id !== 999999) violations.push('تصویر معتبر فرایند باید منبع وضعیت‌ها و انتقال‌ها بماند');
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_procurement_workflow_snapshot_td_238', scenarioId: 'workflow_approval_postgres', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: 'تصویر بدون شناسه کنار گذاشته شد و ۳ وضعیت و انتقال submit از جدول خوانده شد؛ تصویر معتبر همچنان استفاده شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_procurement_workflow_snapshot_td_238', scenarioId: 'workflow_approval_postgres', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (defIds.length > 0) {
+        await cleanTestTableData('workflow_transitions', 'workflow_definition_id', defIds);
+        await cleanTestTableData('workflow_states', 'workflow_definition_id', defIds);
+        await cleanTestTableData('workflow_definitions', 'id', defIds);
+      }
+    }
+  }
+
   return results;
 }
