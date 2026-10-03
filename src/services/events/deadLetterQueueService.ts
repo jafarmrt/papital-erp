@@ -1,10 +1,31 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbTransaction } from '../../db/drizzle.js';
 import { deadLetterEvents, outboxEvents } from '../../db/schema.js';
-import { eq, and, sql, desc, count, type SQL } from 'drizzle-orm';
+import { eq, and, sql, desc, count, inArray, notInArray, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { systemNowUtcIso } from '../../lib/businessClock.js';
+
+/**
+ * TD-245: وضعیت‌های «حل‌شده» صف قرنطینه — رویداد بازپخش‌شده یا صرف‌نظرشده دیگر خطای باز نیست.
+ * شمارنده‌های سلامت سیستم، ممیزی یکپارچگی، بازگردانی گروهی به Outbox و پاکسازی همه همین قاعده را می‌خوانند.
+ */
+export const DLQ_RESOLVED_STATUSES = ['replayed', 'dismissed'] as const;
+
+/** شرط ردیف‌های حل‌نشده DLQ (هر وضعیتی جز replayed / dismissed) */
+export function unresolvedDeadLetterCondition(): SQL {
+  return notInArray(deadLetterEvents.status, [...DLQ_RESOLVED_STATUSES]);
+}
+
+export interface DeadLetterRequeueResult {
+  requeuedCount: number;
+  dlqIds: number[];
+  originalEventIds: string[];
+  /** رویدادهایی که ردیف Outbox نداشتند (پاک‌شده) و با همان شناسه دوباره درج شدند */
+  reinsertedEventIds: string[];
+  before: Array<{ id: number; originalEventId: string; status: string; outboxStatus: string | null }>;
+}
 
 export interface DLQQueryFilters {
   status?: string;
@@ -16,6 +37,18 @@ export interface DLQQueryFilters {
 }
 
 export class DeadLetterQueueService {
+
+  /**
+   * فیلدهای علامت‌گذاری حل‌شدن یک رویداد DLQ (بازپخش، صرف‌نظر یا بازگردانی به Outbox) — یکسان در همه مسیرها.
+   */
+  static resolutionFields(status: typeof DLQ_RESOLVED_STATUSES[number], userId: number | undefined, notes: string, nowIso = systemNowUtcIso()) {
+    return {
+      status,
+      resolvedAt: nowIso,
+      resolvedBy: userId || null,
+      resolutionNotes: notes
+    };
+  }
 
   /**
    * Quarantines an event into Dead Letter Queue (DLQ) with detailed diagnostic info.
@@ -290,11 +323,8 @@ export class DeadLetterQueueService {
       const [updatedDlq] = await orm
         .update(deadLetterEvents)
         .set({
-          status: 'replayed',
-          payload: payload,
-          resolvedAt: nowIso,
-          resolvedBy: userId || null,
-          resolutionNotes: `بازپخش موفق در تاریخ ${nowIso} توسط کاربر ${userId || 'مدیر'}`
+          ...this.resolutionFields('replayed', userId, `بازپخش موفق در تاریخ ${nowIso} توسط کاربر ${userId || 'مدیر'}`, nowIso),
+          payload: payload
         })
         .where(eq(deadLetterEvents.id, id))
         .returning();
@@ -365,12 +395,7 @@ export class DeadLetterQueueService {
 
     const [updated] = await orm
       .update(deadLetterEvents)
-      .set({
-        status: 'dismissed',
-        resolvedAt: new Date().toISOString(),
-        resolvedBy: userId || null,
-        resolutionNotes: notes || 'صرف‌نظر شده توسط کاربر مدیر'
-      })
+      .set(this.resolutionFields('dismissed', userId, notes || 'صرف‌نظر شده توسط کاربر مدیر'))
       .where(eq(deadLetterEvents.id, id))
       .returning();
 
@@ -379,14 +404,77 @@ export class DeadLetterQueueService {
   }
 
   /**
+   * TD-245: بازگردانی همه رویدادهای حل‌نشده DLQ به صف Outbox در تراکنش فراخواننده.
+   * ردیف Outbox همان رویداد (شناسه اصلی) به pending با شمارنده صفر برمی‌گردد و completed_handlers آن حفظ می‌شود
+   * تا هندلرهای موفق قبلی دوباره اجرا نشوند (TD-183)؛ اگر ردیف Outbox پاک شده باشد با همان شناسه درج می‌شود.
+   * ردیف DLQ حذف نمی‌شود و مانند بازپخش با وضعیت replayed علامت می‌خورد؛ شکست دوباره در Outbox همان ردیف را
+   * با moveToDeadLetter دوباره قرنطینه می‌کند. ردیف‌های replayed / dismissed دست نمی‌خورند.
+   */
+  static async requeueUnresolvedToOutbox(tx: DbTransaction, userId?: number): Promise<DeadLetterRequeueResult> {
+    const pending = await tx
+      .select()
+      .from(deadLetterEvents)
+      .where(unresolvedDeadLetterCondition())
+      .orderBy(deadLetterEvents.id)
+      .for('update');
+
+    if (pending.length === 0) {
+      return { requeuedCount: 0, dlqIds: [], originalEventIds: [], reinsertedEventIds: [], before: [] };
+    }
+
+    const eventIds = pending.map(r => r.originalEventId);
+    const existingOutbox = await tx
+      .select({ eventId: outboxEvents.eventId, status: outboxEvents.status })
+      .from(outboxEvents)
+      .where(inArray(outboxEvents.eventId, eventIds))
+      .for('update');
+    const outboxStatusById = new Map(existingOutbox.map(r => [r.eventId, r.status]));
+
+    const nowIso = systemNowUtcIso();
+    if (existingOutbox.length > 0) {
+      await tx
+        .update(outboxEvents)
+        .set({ status: 'pending', retryCount: 0, nextRetryAt: null, lastError: null, processedAt: null, lockedAt: null, lockedBy: null })
+        .where(inArray(outboxEvents.eventId, existingOutbox.map(r => r.eventId)));
+    }
+
+    const missing = pending.filter(r => !outboxStatusById.has(r.originalEventId));
+    if (missing.length > 0) {
+      await tx.insert(outboxEvents).values(missing.map(r => ({
+        eventId: r.originalEventId,
+        eventType: r.eventType,
+        aggregateType: r.aggregateType,
+        aggregateId: r.aggregateId,
+        status: 'pending',
+        payload: r.payload || {},
+        metadata: { ...((r.metadata as Record<string, unknown>) || {}), replayedFromDlq: true },
+        retryCount: 0
+      })));
+    }
+
+    const dlqIds = pending.map(r => r.id);
+    await tx
+      .update(deadLetterEvents)
+      .set(this.resolutionFields('replayed', userId, `بازگردانی به صف Outbox در تاریخ ${nowIso} توسط کاربر ${userId || 'مدیر'}`, nowIso))
+      .where(inArray(deadLetterEvents.id, dlqIds));
+
+    logger.info(`[DLQ] Requeued ${pending.length} unresolved DLQ event(s) to the outbox by user ${userId || 'system'}`);
+    return {
+      requeuedCount: pending.length,
+      dlqIds,
+      originalEventIds: eventIds,
+      reinsertedEventIds: missing.map(r => r.originalEventId),
+      before: pending.map(r => ({ id: r.id, originalEventId: r.originalEventId, status: r.status, outboxStatus: outboxStatusById.get(r.originalEventId) ?? null }))
+    };
+  }
+
+  /**
    * Purge resolved or dismissed DLQ items.
    */
   static async purgeResolved() {
     const deleted = await orm
       .delete(deadLetterEvents)
-      .where(
-        sql`${deadLetterEvents.status} IN ('replayed', 'dismissed')`
-      )
+      .where(inArray(deadLetterEvents.status, [...DLQ_RESOLVED_STATUSES]))
       .returning();
 
     logger.info(`[DLQ] Purged ${deleted.length} resolved/dismissed records from Dead Letter Queue.`);

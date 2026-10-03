@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
-import { getDisplayTimezoneClient, errorMessageOf } from '../utils';
+import { getDisplayTimezoneClient, errorMessageOf, formatPersianNumber } from '../utils';
 import { Database, HardDrive, ShieldCheck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Cpu, Send, FileText, GitPullRequest, Wrench, Play, Activity } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -263,8 +263,10 @@ export default function SystemHealthDiagnostic() {
               {health.accounting?.totalVouchers || 0} سند
             </span>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">
-            تراز اسناد و کدینگ حساب‌ها در لایه دیتابیس پایدار است.
+          <p className={`text-xs mb-2 ${(health.accounting?.unbalancedVouchers || 0) > 0 ? 'text-rose-600 font-bold' : 'text-slate-600 dark:text-slate-300'}`}>
+            {(health.accounting?.unbalancedVouchers || 0) > 0
+              ? `${formatPersianNumber(health.accounting?.unbalancedVouchers)} سند ناتراز (اختلاف بدهکار و بستانکار بیش از ۰٫۰۱) یافت شد.`
+              : 'همه اسناد فعال تراز هستند.'}
           </p>
         </div>
 

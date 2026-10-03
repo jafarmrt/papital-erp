@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { sql, eq, and } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { outboxEvents, deadLetterEvents, journalVouchers, workflowInstances, workflowTasks } from '../../db/schema.js';
+import { outboxEvents, deadLetterEvents, journalVouchers, journalVoucherItems, workflowInstances, workflowTasks } from '../../db/schema.js';
+import { unresolvedDeadLetterCondition } from '../events/deadLetterQueueService.js';
+import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { logger } from '../../middleware/logger.js';
 import { errorMessageOf } from '../../utils.js';
 
@@ -32,10 +34,26 @@ export interface SubsystemHealth {
 }
 
 export class SystemHealthService {
-  /** تعداد رویدادهای صف قرنطینه DLQ */
+  /** تعداد رویدادهای حل‌نشده صف قرنطینه DLQ (TD-245: ردیف‌های replayed / dismissed شمرده نمی‌شوند) */
   static async countDeadLetterEvents(): Promise<number> {
-    const [dlqRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(deadLetterEvents);
+    const [dlqRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(deadLetterEvents)
+      .where(unresolvedDeadLetterCondition());
     return dlqRes?.count || 0;
+  }
+
+  /**
+   * TD-245: اسناد حسابداری فعال که قدر مطلق اختلاف جمع بدهکار و بستانکار ردیف‌های فعالشان از
+   * VOUCHER_BALANCE_TOLERANCE (۰٫۰۱، همان آستانه ثبت سند) بیشتر است. سند و ردیف حذف‌شده نرم کنار گذاشته می‌شوند.
+   * مشترک میان صفحه سلامت سیستم و ممیزی یکپارچگی.
+   */
+  static async findUnbalancedVouchers(): Promise<Array<{ id: number; voucherNumber: number }>> {
+    return orm.select({ id: journalVouchers.id, voucherNumber: journalVouchers.voucherNumber })
+      .from(journalVouchers)
+      .innerJoin(journalVoucherItems, and(eq(journalVoucherItems.voucherId, journalVouchers.id), eq(journalVoucherItems.isDeleted, 0)))
+      .where(eq(journalVouchers.isDeleted, 0))
+      .groupBy(journalVouchers.id, journalVouchers.voucherNumber)
+      .having(sql`ABS(SUM(${journalVoucherItems.debit}) - SUM(${journalVoucherItems.credit})) > ${String(VOUCHER_BALANCE_TOLERANCE)}::numeric`)
+      .orderBy(journalVouchers.id);
   }
 
   /** تعداد وظایف در انتظاری که مهلت SLA آن‌ها گذشته است */
@@ -92,8 +110,11 @@ export class SystemHealthService {
       outboxMetrics.dlqCount = dlqCount;
       if (outboxMetrics.dlqCount > 0) outboxMetrics.status = 'warning';
 
-      const [vouchersRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(journalVouchers);
+      const [vouchersRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(journalVouchers)
+        .where(eq(journalVouchers.isDeleted, 0));
       accountingMetrics.totalVouchers = vouchersRes?.count || 0;
+      accountingMetrics.unbalancedVouchers = (await this.findUnbalancedVouchers()).length;
+      if (accountingMetrics.unbalancedVouchers > 0) accountingMetrics.status = 'error';
 
       const [wfRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(workflowInstances).where(eq(workflowInstances.status, 'IN_PROGRESS'));
       const overdueSlaTasks = await this.countOverdueSlaTasks();

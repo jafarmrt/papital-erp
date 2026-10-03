@@ -9051,5 +9051,265 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  if (shouldRun('reg_system_route_findings_td_245', 'td245', 'system_routes', 'dead_letter', 'reconciliation')) {
+    const tStart = Date.now();
+    const testName = 'TD-245 Regression: بازگردانی فقط رویدادهای حل‌نشده DLQ با علامت‌گذاری و ممیزی، شمارنده‌های سلامت و ممیزی یکپارچگی (DLQ، تراز ۰٫۰۱، حذف نرم)، ممیزی بازنشانی Outbox، تاریخ کسب‌وکار نام فایل خروجی و اعتبارسنجی Zod';
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const { deadLetterEvents, outboxEvents, activityLogs, appSettings, users } = await import('../../db/schema.js');
+    const createdDlqIds: number[] = [];
+    const createdOutboxEventIds: string[] = [];
+    const createdVoucherIds: number[] = [];
+    const createdAccountIds: number[] = [];
+    const createdItemIds: number[] = [];
+    const createdLogIds: number[] = [];
+    const [savedTz] = await orm.select().from(appSettings).where(eq(appSettings.key, 'display_timezone'));
+    // ردیف‌های حل‌نشده DLQ سایر آزمون‌ها: بازگردانی گروهی آن‌ها را هم علامت می‌زند؛ پس از آزمون به حالت قبل برمی‌گردند
+    const foreignDlq = await orm.select().from(deadLetterEvents).where(sql`${deadLetterEvents.status} NOT IN ('replayed', 'dismissed')`);
+    const foreignOutbox = foreignDlq.length > 0
+      ? await orm.select().from(outboxEvents).where(inArray(outboxEvents.eventId, foreignDlq.map(r => r.originalEventId)))
+      : [];
+    const RealDate = Date;
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { createTestVoucher, createTestItem } = await import('../fixtures/factories.js');
+      const { invalidateTimezoneCache } = await import('../../lib/businessClock.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const [admin] = await orm.select({ id: users.id }).from(users).where(eq(users.username, 'pen_admin'));
+      const violations: string[] = [];
+      const check = (cond: boolean, msg: string) => { if (!cond) violations.push(msg); };
+      const get = (url: string) => request(app).get(url).set('Cookie', session.cookie);
+      const post = (url: string, body: object) => request(app).post(url)
+        .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
+      const [{ maxLogId }] = (await orm.execute(sql`SELECT COALESCE(MAX(id), 0)::int AS "maxLogId" FROM activity_logs`)).rows as Array<{ maxLogId: number }>;
+      const unresolvedDlqCount = async () => Number(((await orm.execute(sql`SELECT count(*)::int AS n FROM dead_letter_events WHERE status NOT IN ('replayed', 'dismissed')`)).rows[0] as { n: number }).n);
+      type Health = { outbox?: { dlqCount?: number }; accounting?: { totalVouchers?: number; unbalancedVouchers?: number } };
+      type Scan = { checks?: Array<{ id: string; details: string }> };
+      const health = async () => { const r = await get('/api/system/health'); return { status: r.status, body: r.body as Health }; };
+      const scan = async () => { const r = await get('/api/system/reconciliation-check'); return { status: r.status, body: r.body as Scan }; };
+      const scanNumber = (s: Scan, id: string, re: RegExp) => {
+        const details = s.checks?.find(c => c.id === id)?.details ?? '';
+        const m = details.match(re);
+        return m ? Number(m[1]) : 0;
+      };
+
+      // (الف) DLQ: یک ردیف قرنطینه با ردیف Outbox ناموفق، یک ردیف قرنطینه بدون Outbox، یک replayed و یک dismissed
+      const ev = (tag: string) => `TD245-${tag}-${suffix}`;
+      const dlqRow = (tag: string, status: string) => ({
+        originalEventId: ev(tag), eventType: 'td245.test', aggregateType: 'test', aggregateId: tag, source: 'outbox',
+        payload: { tag }, metadata: {}, failureReason: 'ERP-TEST-MARKER TD-245', status,
+        resolutionNotes: status === 'quarantined' ? '' : `یادداشت پیشین ${tag}`,
+      });
+      const inserted = await orm.insert(deadLetterEvents).values([
+        dlqRow('A', 'quarantined'), dlqRow('D', 'quarantined'), dlqRow('B', 'replayed'), dlqRow('C', 'dismissed'),
+      ]).returning();
+      createdDlqIds.push(...inserted.map(r => r.id));
+      const byTag = (tag: string) => inserted.find(r => r.originalEventId === ev(tag))!;
+      await orm.insert(outboxEvents).values({
+        eventId: ev('A'), eventType: 'td245.test', aggregateType: 'test', aggregateId: 'A', status: 'failed',
+        payload: { tag: 'A' }, retryCount: 5, lastError: 'خطای آزمون', completedHandlers: ['td245-handler-ok'],
+      });
+      createdOutboxEventIds.push(ev('A'), ev('B'), ev('C'), ev('D'));
+
+      const h1 = await health();
+      const wantUnresolved = await unresolvedDlqCount();
+      check(h1.status === 200 && h1.body.outbox?.dlqCount === wantUnresolved,
+        `dlqCount صفحه سلامت باید فقط ردیف‌های حل‌نشده (${wantUnresolved}) را بشمارد (وضعیت ${h1.status}، دریافتی ${h1.body.outbox?.dlqCount})`);
+      const s1 = await scan();
+      check(s1.status === 200 && scanNumber(s1.body, 'outbox_dlq', /تعداد (\d+) رویداد/) === wantUnresolved,
+        `ممیزی یکپارچگی باید ${wantUnresolved} رویداد حل‌نشده DLQ گزارش کند (دریافتی ${s1.body.checks?.find(c => c.id === 'outbox_dlq')?.details})`);
+
+      const requeueRes = await post('/api/system/reconciliation-fix', { action: 'requeue_dlq' });
+      check(requeueRes.status === 200 && (requeueRes.body as { success?: boolean })?.success === true,
+        `requeue_dlq با بدنه رابط کاربری باید 200 بدهد (وضعیت ${requeueRes.status}: ${JSON.stringify(requeueRes.body).slice(0, 200)})`);
+      const after = await orm.select().from(deadLetterEvents).where(inArray(deadLetterEvents.id, createdDlqIds));
+      const afterTag = (tag: string) => after.find(r => r.originalEventId === ev(tag));
+      for (const tag of ['A', 'D']) {
+        const r = afterTag(tag);
+        check(!!r, `ردیف DLQ ${tag} نباید حذف شود`);
+        check(r?.status === 'replayed' && !!r?.resolvedAt && r?.resolvedBy === admin?.id && /Outbox/.test(r?.resolutionNotes || ''),
+          `ردیف DLQ ${tag} باید مانند بازپخش با وضعیت replayed، زمان و کاربر حل علامت بخورد (دریافتی ${JSON.stringify(r ? { status: r.status, resolvedAt: r.resolvedAt, resolvedBy: r.resolvedBy, notes: r.resolutionNotes } : null)})`);
+      }
+      for (const tag of ['B', 'C']) {
+        const r = afterTag(tag);
+        const orig = byTag(tag);
+        check(!!r && r.status === orig.status && r.resolutionNotes === orig.resolutionNotes && r.resolvedAt === orig.resolvedAt,
+          `ردیف حل‌شده DLQ ${tag} (${orig.status}) نباید دوباره بازگردانده یا تغییر داده شود (دریافتی ${JSON.stringify(r ? { status: r.status, notes: r.resolutionNotes } : null)})`);
+      }
+      const outboxRows = await orm.select().from(outboxEvents).where(sql`${outboxEvents.eventId} LIKE ${`TD245-%-${suffix}%`}`);
+      for (const r of outboxRows) if (!createdOutboxEventIds.includes(r.eventId)) createdOutboxEventIds.push(r.eventId);
+      const outA = outboxRows.filter(r => r.eventId.startsWith(ev('A')));
+      check(outA.length === 1 && outA[0].eventId === ev('A') && outA[0].status === 'pending' && outA[0].retryCount === 0
+        && JSON.stringify(outA[0].completedHandlers) === JSON.stringify(['td245-handler-ok']),
+        `ردیف Outbox رویداد A باید همان ردیف (شناسه اصلی) با وضعیت pending، شمارنده صفر و هندلرهای موفق قبلی باشد (دریافتی ${JSON.stringify(outA.map(r => ({ id: r.eventId, status: r.status, retry: r.retryCount, handlers: r.completedHandlers })))})`);
+      const outD = outboxRows.filter(r => r.eventId.startsWith(ev('D')));
+      check(outD.length === 1 && outD[0].eventId === ev('D') && outD[0].status === 'pending',
+        `رویداد D بدون ردیف Outbox باید با همان شناسه یک بار درج شود (دریافتی ${JSON.stringify(outD.map(r => r.eventId))})`);
+      check(!outboxRows.some(r => r.eventId.startsWith(ev('B')) || r.eventId.startsWith(ev('C'))), 'رویدادهای replayed / dismissed نباید به Outbox برگردند');
+      const [requeueLog] = await orm.select().from(activityLogs)
+        .where(and(sql`${activityLogs.id} > ${maxLogId}`, eq(activityLogs.entityId, 'dlq_requeue'))).orderBy(sql`${activityLogs.id} DESC`).limit(1);
+      if (requeueLog) createdLogIds.push(requeueLog.id);
+      const requeueDetails = (requeueLog?.details || {}) as { before?: Array<{ id: number; status: string }>; after?: Array<{ id: number; status: string }> };
+      check(!!requeueLog && !!requeueLog.ipAddress && requeueLog.userId === admin?.id
+        && [byTag('A').id, byTag('D').id].every(id => requeueDetails.before?.some(b => b.id === id && b.status === 'quarantined') && requeueDetails.after?.some(a => a.id === id && a.status === 'replayed'))
+        && !requeueDetails.before?.some(b => b.id === byTag('B').id || b.id === byTag('C').id),
+        `ثبت ممیزی requeue_dlq باید IP، کاربر و وضعیت پیش و پس ردیف‌های A و D را داشته باشد (دریافتی ${JSON.stringify(requeueLog ? { ip: requeueLog.ipAddress, userId: requeueLog.userId, details: requeueLog.details } : null).slice(0, 300)})`);
+      const h2 = await health();
+      const wantAfter = await unresolvedDlqCount();
+      check(h2.body.outbox?.dlqCount === wantAfter, `پس از بازگردانی dlqCount باید ${wantAfter} باشد (دریافتی ${h2.body.outbox?.dlqCount})`);
+
+      // (ب) تراز اسناد: حذف‌شده نرم ناتراز، اختلاف ۰٫۰۰۵، ردیف حذف‌شده نرم و اختلاف ۰٫۰۲ — فقط آخری ناتراز است
+      const baseHealth = await health();
+      const baseScan = await scan();
+      const baseUnbalanced = scanNumber(baseScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
+      const baseTotal = baseHealth.body.accounting?.totalVouchers ?? -1;
+      const account = await AccountingService.createAccount({
+        code: `T245${suffix}`, name: `ERP-TEST-MARKER حساب TD-245 ${suffix}`, level: 'detailed', parentId: null,
+        accountType: 'asset', nature: 'debit', description: '',
+      });
+      createdAccountIds.push(account.id);
+      const addVoucher = async (lines: Array<[number, number, number?]>, isDeleted = 0) => {
+        const { voucher } = await createTestVoucher({ date: '2026-01-01', status: 'approved', isDeleted }, []);
+        createdVoucherIds.push(voucher.id);
+        for (let i = 0; i < lines.length; i++) {
+          await orm.insert(journalVoucherItems).values({
+            voucherId: voucher.id, accountId: account.id, rowOrder: i + 1,
+            debit: money(lines[i][0]), credit: money(lines[i][1]), isDeleted: lines[i][2] ?? 0, description: 'ERP-TEST-MARKER TD-245',
+          });
+        }
+        return voucher.id;
+      };
+      await addVoucher([[100, 0], [0, 50]], 1);
+      await addVoucher([[100.005, 0], [0, 100]]);
+      await addVoucher([[100, 0], [0, 100], [50, 0, 1]]);
+      await addVoucher([[100.02, 0], [0, 100]]);
+      const vScan = await scan();
+      const vHealth = await health();
+      const scanUnbalanced = scanNumber(vScan.body, 'accounting_vouchers', /تعداد (\d+) سند/);
+      check(scanUnbalanced === baseUnbalanced + 1,
+        `ممیزی یکپارچگی فقط سند با اختلاف ۰٫۰۲ را باید ناتراز بداند (پایه ${baseUnbalanced}، دریافتی ${scanUnbalanced}: ${vScan.body.checks?.find(c => c.id === 'accounting_vouchers')?.details})`);
+      check(vHealth.body.accounting?.unbalancedVouchers === scanUnbalanced,
+        `unbalancedVouchers صفحه سلامت (${vHealth.body.accounting?.unbalancedVouchers}) باید با ممیزی یکپارچگی (${scanUnbalanced}) برابر باشد`);
+      check(vHealth.body.accounting?.totalVouchers === baseTotal + 3,
+        `totalVouchers نباید سند حذف‌شده نرم را بشمارد (پایه ${baseTotal}، دریافتی ${vHealth.body.accounting?.totalVouchers})`);
+
+      // (ج) شمار کالاهای فعال در ممیزی یکپارچگی بدون کالای حذف‌شده نرم
+      const deletedItem = await createTestItem({ isDeleted: 1, stocks: {} });
+      createdItemIds.push(deletedItem.id);
+      const iScan = await scan();
+      const [{ n: activeItems }] = (await orm.execute(sql`SELECT count(*)::int AS n FROM items WHERE is_deleted = 0`)).rows as Array<{ n: number }>;
+      const scanItems = scanNumber(iScan.body, 'inventory_kardex', /: (\d+) قلم/);
+      check(scanItems === Number(activeItems), `ممیزی یکپارچگی باید ${activeItems} کالای فعال گزارش کند (دریافتی ${scanItems})`);
+
+      // (د) بازنشانی رویدادهای متوقف Outbox ثبت ممیزی دارد
+      const stuckId = ev('STUCK');
+      createdOutboxEventIds.push(stuckId);
+      await orm.insert(outboxEvents).values({
+        eventId: stuckId, eventType: 'td245.test', aggregateType: 'test', aggregateId: 'STUCK', status: 'processing',
+        payload: {}, retryCount: 2, occurredAt: sql`now() - interval '10 minutes'` as unknown as string,
+      });
+      const stuckRes = await post('/api/system/reconciliation-fix', { action: 'clear_stuck_outbox' });
+      check(stuckRes.status === 200, `clear_stuck_outbox با بدنه رابط کاربری باید 200 بدهد (وضعیت ${stuckRes.status})`);
+      const [stuckRow] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, stuckId));
+      check(stuckRow?.status === 'pending' && stuckRow?.retryCount === 0, `رویداد متوقف باید به pending برگردد (دریافتی ${stuckRow?.status})`);
+      const [stuckLog] = await orm.select().from(activityLogs)
+        .where(and(sql`${activityLogs.id} > ${maxLogId}`, eq(activityLogs.entityId, 'outbox_stuck_reset'))).orderBy(sql`${activityLogs.id} DESC`).limit(1);
+      if (stuckLog) createdLogIds.push(stuckLog.id);
+      const stuckDetails = (stuckLog?.details || {}) as { eventIds?: string[]; before?: { status?: string }; after?: { status?: string } };
+      check(!!stuckLog && !!stuckLog.ipAddress && !!stuckDetails.eventIds?.includes(stuckId) && stuckDetails.before?.status === 'processing' && stuckDetails.after?.status === 'pending',
+        `clear_stuck_outbox باید ثبت ممیزی با IP، شناسه رویداد و وضعیت پیش و پس داشته باشد (دریافتی ${JSON.stringify(stuckLog ? { ip: stuckLog.ipAddress, details: stuckLog.details } : null).slice(0, 300)})`);
+
+      // (ه) نام فایل خروجی با تاریخ امروز کسب‌وکار: ساعت ۲۳:۰۰ UTC (اخیرترین گذشته) در تهران روز بعد است
+      await orm.insert(appSettings).values({ key: 'display_timezone', value: 'Asia/Tehran' })
+        .onConflictDoUpdate({ target: appSettings.key, set: { value: 'Asia/Tehran' } });
+      const realNow = RealDate.now();
+      let fixedMs = RealDate.parse(`${new RealDate(realNow).toISOString().slice(0, 10)}T23:00:00Z`);
+      if (fixedMs > realNow) fixedMs -= 24 * 60 * 60 * 1000;
+      const utcDay = new RealDate(fixedMs).toISOString().slice(0, 10);
+      const tehranDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new RealDate(fixedMs));
+      check(utcDay !== tehranDay, `تاریخ UTC و تهران در لحظه آزمون باید متفاوت باشند (${utcDay} / ${tehranDay})`);
+      class FixedDate extends RealDate {
+        constructor(...args: unknown[]) {
+          if (args.length === 0) super(fixedMs);
+          else super(...(args as [number]));
+        }
+        static now() { return fixedMs; }
+      }
+      let disposition = '';
+      let exportStatus = 0;
+      invalidateTimezoneCache();
+      globalThis.Date = FixedDate as DateConstructor;
+      try {
+        const exportRes = await get('/api/export-backup');
+        exportStatus = exportRes.status;
+        disposition = String(exportRes.headers['content-disposition'] || '');
+      } finally {
+        globalThis.Date = RealDate;
+        invalidateTimezoneCache();
+      }
+      check(exportStatus === 200 && disposition.includes(`erp-data-export-${tehranDay}.json`),
+        `نام فایل خروجی باید تاریخ کسب‌وکار ${tehranDay} (نه تاریخ UTC ${utcDay}) باشد (وضعیت ${exportStatus}، دریافتی ${disposition})`);
+
+      // (و) Zod: بدنه / کوئری واقعی رابط کاربری می‌گذرد، ورودی نامعتبر 400
+      const expectStatus = (label: string, got: number, want: number) => check(got === want, `${label}: وضعیت ${got} (انتظار ${want})`);
+      const uiLogs = await get(`/api/activity-logs?page=1&limit=25&search=${encodeURIComponent('ERP')}&category=settings_system&user=pen_admin&action=RESTORE&entity=${encodeURIComponent('رویدادهای سیستم')}&startDate=2026-01-01&endDate=2026-12-31`);
+      expectStatus('تاریخچه ممیزی با کوئری رابط کاربری', uiLogs.status, 200);
+      check(Array.isArray((uiLogs.body as { data?: unknown[] })?.data) && (uiLogs.body as { limit?: number })?.limit === 25, `پاسخ تاریخچه ممیزی نادرست است: ${JSON.stringify(uiLogs.body).slice(0, 200)}`);
+      expectStatus('تاریخچه ممیزی بدون پارامتر', (await get('/api/activity-logs')).status, 200);
+      expectStatus('تاریخچه ممیزی با کاربر تکراری (آرایه)', (await get('/api/activity-logs?user=a&user=b')).status, 400);
+      expectStatus('تاریخچه ممیزی با دسته نامعتبر', (await get('/api/activity-logs?category=bogus')).status, 400);
+      expectStatus('تاریخچه ممیزی با صفحه غیرعددی', (await get('/api/activity-logs?page=abc')).status, 400);
+      expectStatus('پاکسازی ممیزی با بدنه رابط کاربری', (await post('/api/activity-logs/purge', { retentionDays: 730, preserveCritical: true })).status, 200);
+      expectStatus('پاکسازی ممیزی با مدت آرایه', (await post('/api/activity-logs/purge', { retentionDays: [36500] })).status, 400);
+      expectStatus('پاکسازی ممیزی با allowForceRecent رشته‌ای', (await post('/api/activity-logs/purge', { retentionDays: 36500, allowForceRecent: 'false' })).status, 400);
+      expectStatus('پاکسازی ممیزی با مدت غیرعددی', (await post('/api/activity-logs/purge', { retentionDays: 'abc' })).status, 400);
+      for (const [label, body] of [['عملیات ناشناخته', { action: 'bogus' }], ['بدون عملیات', {}], ['عملیات آرایه', { action: ['requeue_dlq'] }]] as Array<[string, object]>) {
+        const r = await post('/api/system/reconciliation-fix', body);
+        check(r.status === 400 && (r.body as { code?: string })?.code === 'VALIDATION_ERROR',
+          `اقدام اصلاحی با ${label} باید خطای اعتبارسنجی 400 بدهد (وضعیت ${r.status}، ${JSON.stringify(r.body).slice(0, 150)})`);
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_system_route_findings_td_245', scenarioId: 'recovery_outbox_webhook_retry', name: testName, layer: 'regression',
+        executionType: 'real_api', passed: true, durationMs: Date.now() - tStart,
+        details: 'requeue_dlq فقط ردیف‌های حل‌نشده را با همان شناسه به Outbox برگرداند و علامت replayed زد (بدون حذف، با ممیزی IP و پیش/پس)؛ شمارنده DLQ، تراز ۰٫۰۱ بدون حذف نرم، totalVouchers و کالاهای فعال درست شمرده شدند؛ بازنشانی Outbox ممیزی شد؛ نام فایل خروجی تاریخ کسب‌وکار گرفت؛ ورودی نامعتبر 400.'
+      }));
+    } catch (err: unknown) {
+      results.push(makeTestCase({
+        id: 'reg_system_route_findings_td_245', scenarioId: 'recovery_outbox_webhook_retry', name: testName, layer: 'regression',
+        executionType: 'real_api', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      globalThis.Date = RealDate;
+      await orm.delete(appSettings).where(eq(appSettings.key, 'display_timezone'));
+      if (savedTz) await orm.insert(appSettings).values({ key: savedTz.key, value: savedTz.value });
+      const { invalidateTimezoneCache } = await import('../../lib/businessClock.js');
+      invalidateTimezoneCache();
+      for (const row of foreignDlq) {
+        await orm.update(deadLetterEvents).set({ status: row.status, resolvedAt: row.resolvedAt, resolvedBy: row.resolvedBy, resolutionNotes: row.resolutionNotes })
+          .where(eq(deadLetterEvents.id, row.id));
+      }
+      for (const row of foreignOutbox) {
+        await orm.update(outboxEvents).set({ status: row.status, retryCount: row.retryCount, nextRetryAt: row.nextRetryAt, lastError: row.lastError, processedAt: row.processedAt, lockedAt: row.lockedAt, lockedBy: row.lockedBy })
+          .where(eq(outboxEvents.eventId, row.eventId));
+      }
+      const foreignOutboxIds = new Set(foreignOutbox.map(r => r.eventId));
+      const reinsertedForeign = foreignDlq.map(r => r.originalEventId).filter(id => !foreignOutboxIds.has(id));
+      if (reinsertedForeign.length > 0) await cleanTestTableData('outbox_events', 'event_id', reinsertedForeign);
+      if (createdLogIds.length > 0) await cleanTestTableData('activity_logs', 'id', createdLogIds);
+      if (createdDlqIds.length > 0) await cleanTestTableData('dead_letter_events', 'id', createdDlqIds);
+      if (createdOutboxEventIds.length > 0) await cleanTestTableData('outbox_events', 'event_id', createdOutboxEventIds);
+      if (createdItemIds.length > 0) await cleanTestTableData('items', 'id', createdItemIds);
+      if (createdVoucherIds.length > 0) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', createdVoucherIds);
+        await cleanTestTableData('journal_vouchers', 'id', createdVoucherIds);
+      }
+      if (createdAccountIds.length > 0) await cleanTestTableData('accounts', 'id', createdAccountIds);
+    }
+  }
+
   return results;
 }

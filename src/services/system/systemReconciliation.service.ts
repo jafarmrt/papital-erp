@@ -1,7 +1,9 @@
 import { sql, eq, and } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { items, outboxEvents, deadLetterEvents } from '../../db/schema.js';
+import { items, outboxEvents } from '../../db/schema.js';
 import { validateDbSchema } from '../../db/migrator.js';
+import { logActivity } from '../../lib/auditLogger.js';
+import { DeadLetterQueueService } from '../events/deadLetterQueueService.js';
 import { SystemHealthService } from './systemHealth.service.js';
 
 /**
@@ -21,6 +23,14 @@ export interface IntegrityScanResult {
   checks: IntegrityCheck[];
   okChecks: number;
   healthScorePercentage: number;
+}
+
+/** کاربر اجراکننده اقدام اصلاحی برای ثبت در تاریخچه ممیزی */
+export interface ReconciliationActor {
+  userId?: number;
+  username?: string;
+  fullName?: string;
+  ipAddress?: string;
 }
 
 export class SystemReconciliationService {
@@ -49,14 +59,8 @@ export class SystemReconciliationService {
     });
 
     // Check 3: Accounting Journal Vouchers Integrity
-    const unbalancedQuery = await orm.execute(sql`
-      SELECT jv.id, jv.voucher_number
-      FROM journal_vouchers jv
-      JOIN journal_voucher_items jvi ON jvi.voucher_id = jv.id
-      GROUP BY jv.id, jv.voucher_number
-      HAVING SUM(jvi.debit) <> SUM(jvi.credit)
-    `);
-    const unbalancedCount = unbalancedQuery.rows?.length || 0;
+    // TD-245: همان پرس‌وجوی صفحه سلامت — آستانه ۰٫۰۱ و بدون سند / ردیف حذف‌شده نرم
+    const unbalancedCount = (await SystemHealthService.findUnbalancedVouchers()).length;
     checks.push({
       id: 'accounting_vouchers',
       category: 'حسابداری دوبل',
@@ -66,7 +70,7 @@ export class SystemReconciliationService {
     });
 
     // Check 4: Inventory Items Count & Stock Consistency
-    const [itemsCountRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(items);
+    const [itemsCountRes] = await orm.select({ count: sql<number>`count(*)::int` }).from(items).where(eq(items.isDeleted, 0));
     checks.push({
       id: 'inventory_kardex',
       category: 'انبارداری و کالاهها',
@@ -92,34 +96,63 @@ export class SystemReconciliationService {
     return { checks, okChecks, healthScorePercentage };
   }
 
-  /** همه رویدادهای DLQ را به صف Outbox برمی‌گرداند و تعداد منتقل‌شده را برمی‌گرداند. */
-  static async requeueDeadLetterEvents(): Promise<number> {
-    const dlqEvents = await orm.select().from(deadLetterEvents);
-    let requeuedCount = 0;
-
-    for (const dlq of dlqEvents) {
-      await orm.insert(outboxEvents).values({
-        eventId: `${dlq.originalEventId}_replayed_${Date.now()}`,
-        eventType: dlq.eventType,
-        aggregateType: dlq.aggregateType,
-        aggregateId: dlq.aggregateId,
-        status: 'pending',
-        payload: dlq.payload || {},
-        metadata: { ...((dlq.metadata as Record<string, unknown>) || {}), replayedFromDlq: true },
-        retryCount: 0
-      }).onConflictDoNothing();
-
-      await orm.delete(deadLetterEvents).where(eq(deadLetterEvents.id, dlq.id));
-      requeuedCount++;
-    }
-
-    return requeuedCount;
+  /**
+   * TD-245: رویدادهای حل‌نشده DLQ را در یک تراکنش به صف Outbox برمی‌گرداند (منطق DeadLetterQueueService؛
+   * ردیف‌های replayed / dismissed دست نمی‌خورند و ردیف‌ها حذف نمی‌شوند، علامت replayed می‌خورند) و
+   * ثبت ممیزی با وضعیت پیش و پس در همان تراکنش انجام می‌شود.
+   */
+  static async requeueDeadLetterEvents(actor: ReconciliationActor): Promise<number> {
+    return orm.transaction(async (tx) => {
+      const result = await DeadLetterQueueService.requeueUnresolvedToOutbox(tx, actor.userId);
+      await logActivity({
+        tx,
+        userId: actor.userId,
+        username: actor.username || 'سیستم',
+        userFullName: actor.fullName || '',
+        action: 'RESTORE',
+        entity: 'رویدادهای سیستم',
+        entityId: 'dlq_requeue',
+        description: `بازگردانی ${result.requeuedCount} رویداد حل‌نشده قرنطینه DLQ به صف Outbox`,
+        details: {
+          requeuedCount: result.requeuedCount,
+          reinsertedEventIds: result.reinsertedEventIds,
+          before: result.before,
+          after: result.before.map(r => ({ id: r.id, originalEventId: r.originalEventId, status: 'replayed', outboxStatus: 'pending' }))
+        },
+        ipAddress: actor.ipAddress || ''
+      });
+      return result.requeuedCount;
+    });
   }
 
-  /** رویدادهای Outbox که بیش از ۵ دقیقه در حالت processing مانده‌اند را به pending برمی‌گرداند. */
-  static async resetStuckOutboxEvents(): Promise<void> {
-    await orm.update(outboxEvents)
-      .set({ status: 'pending', retryCount: 0 })
-      .where(and(eq(outboxEvents.status, 'processing'), sql`occurred_at < now() - interval '5 minutes'`));
+  /**
+   * رویدادهای Outbox که بیش از ۵ دقیقه در حالت processing مانده‌اند را به pending برمی‌گرداند.
+   * TD-245: شناسه رویدادهای بازنشانی‌شده با وضعیت پیش و پس در همان تراکنش در تاریخچه ممیزی ثبت می‌شود.
+   */
+  static async resetStuckOutboxEvents(actor: ReconciliationActor): Promise<number> {
+    return orm.transaction(async (tx) => {
+      const reset = await tx.update(outboxEvents)
+        .set({ status: 'pending', retryCount: 0 })
+        .where(and(eq(outboxEvents.status, 'processing'), sql`occurred_at < now() - interval '5 minutes'`))
+        .returning({ id: outboxEvents.id, eventId: outboxEvents.eventId });
+      await logActivity({
+        tx,
+        userId: actor.userId,
+        username: actor.username || 'سیستم',
+        userFullName: actor.fullName || '',
+        action: 'UPDATE',
+        entity: 'رویدادهای سیستم',
+        entityId: 'outbox_stuck_reset',
+        description: `بازنشانی ${reset.length} رویداد متوقف‌شده Outbox از حالت processing به pending`,
+        details: {
+          resetCount: reset.length,
+          eventIds: reset.map(r => r.eventId),
+          before: { status: 'processing' },
+          after: { status: 'pending', retryCount: 0 }
+        },
+        ipAddress: actor.ipAddress || ''
+      });
+      return reset.length;
+    });
   }
 }

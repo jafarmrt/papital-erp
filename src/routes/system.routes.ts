@@ -8,6 +8,7 @@ import { validate } from '../middleware/validate.js';
 import { parsePagination } from '../lib/pagination.js';
 import { logActivity, extractClientIp, purgeOldAuditLogs, checkAuditLogIntegrity } from '../lib/auditLogger.js';
 import { BUILD_INFO } from '../lib/version.js';
+import { systemNowUtcIso } from '../lib/businessClock.js';
 import { SystemSettingsService } from '../services/settings/systemSettings.service.js';
 import { DataExportService } from '../services/system/dataExport.service.js';
 import { ActivityLogQueryService } from '../services/system/activityLogQuery.service.js';
@@ -31,6 +32,41 @@ const clearDataSchema = z.object({
   body: z.object({
     mode: z.string().optional(),
   }).optional()
+});
+
+// TD-245 (§23): ورودی‌های مسیرهای تاریخچه ممیزی و اقدام اصلاحی ممیزی یکپارچگی
+const optionalQueryText = (max: number) => z.string().max(max, `حداکثر ${max} نویسه مجاز است`).optional();
+const digitsQuery = z.string().regex(/^\d+$/, 'باید عدد صحیح نامنفی باشد').optional();
+
+export const activityLogsQuerySchema = z.object({
+  query: z.object({
+    page: digitsQuery,
+    limit: digitsQuery,
+    user: optionalQueryText(200),
+    action: optionalQueryText(100),
+    entity: optionalQueryText(200),
+    category: z.enum(['all', 'auth_security', 'financial_docs', 'inventory_items', 'settings_system'], {
+      message: 'دسته تاریخچه ممیزی نامعتبر است'
+    }).optional(),
+    search: optionalQueryText(200),
+    startDate: optionalQueryText(40),
+    endDate: optionalQueryText(40),
+  }).optional()
+});
+
+export const purgeActivityLogsSchema = z.object({
+  body: z.object({
+    retentionDays: z.number({ message: 'مدت نگه‌داشت باید عدد باشد' }).int('مدت نگه‌داشت باید عدد صحیح باشد')
+      .positive('مدت نگه‌داشت باید مثبت باشد').max(36500, 'مدت نگه‌داشت حداکثر ۳۶۵۰۰ روز است').optional(),
+    preserveCritical: z.boolean({ message: 'preserveCritical باید true یا false باشد' }).optional(),
+    allowForceRecent: z.boolean({ message: 'allowForceRecent باید true یا false باشد' }).optional(),
+  }).optional()
+});
+
+export const reconciliationFixSchema = z.object({
+  body: z.object({
+    action: z.enum(['requeue_dlq', 'clear_stuck_outbox'], { message: 'عملیات درخواستی نامعتبر است' }),
+  })
 });
 
 router.use(authenticateToken);
@@ -109,18 +145,19 @@ router.post('/settings', authorize('admin', 'manager', 'settings.manage'), valid
   res.json({ success: true, ...result });
 }));
 
-router.get('/activity-logs', authorize('admin', 'manager'), asyncHandler(async (req, res) => {
+router.get('/activity-logs', authorize('admin', 'manager'), validate(activityLogsQuerySchema), asyncHandler(async (req, res) => {
+  const query = (req.query || {}) as NonNullable<z.infer<typeof activityLogsQuerySchema>['query']>;
   // V9-1.3: صفحه‌بندی NaN-safe با سقف
-  const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 30 });
+  const { page, limit, offset } = parsePagination(query, { page: 1, limit: 30 });
 
   const { data, count } = await ActivityLogQueryService.listLogs({
-    user: req.query.user as string,
-    action: req.query.action as string,
-    entity: req.query.entity as string,
-    category: req.query.category as string,
-    search: req.query.search as string,
-    startDate: req.query.startDate as string,
-    endDate: req.query.endDate as string,
+    user: query.user,
+    action: query.action,
+    entity: query.entity,
+    category: query.category,
+    search: query.search,
+    startDate: query.startDate,
+    endDate: query.endDate,
   }, limit, offset);
 
   res.json({
@@ -137,12 +174,12 @@ router.get('/activity-logs/filters', authorize('admin', 'manager'), asyncHandler
 }));
 
 // Purge old audit logs (Admin only with strict retention policy enforcement - Sub-phase 1.5 / D-2)
-router.post('/activity-logs/purge', authorize('admin'), asyncHandler(async (req, res) => {
-  const { retentionDays, preserveCritical, allowForceRecent } = req.body || {};
+router.post('/activity-logs/purge', authorize('admin'), validate(purgeActivityLogsSchema), asyncHandler(async (req, res) => {
+  const { retentionDays, preserveCritical, allowForceRecent } = (req.body || {}) as NonNullable<z.infer<typeof purgeActivityLogsSchema>['body']>;
   const report = await purgeOldAuditLogs({
-    retentionDays: retentionDays !== undefined ? Number(retentionDays) : undefined,
-    preserveCritical: preserveCritical !== undefined ? Boolean(preserveCritical) : true,
-    allowForceRecent: Boolean(allowForceRecent),
+    retentionDays,
+    preserveCritical: preserveCritical ?? true,
+    allowForceRecent: allowForceRecent === true,
     actorUsername: req.user?.username,
     actorUserId: req.user?.id,
     actorIp: extractClientIp(req)
@@ -218,7 +255,8 @@ router.get('/system/health', authorize('admin'), asyncHandler(async (req, res) =
       host: req.headers.host || ''
     },
     server,
-    checkTimestamp: new Date().toISOString()
+    // لحظه مطلق استعلام (UTC ISO) — مرورگر آن را در منطقه زمانی توافقی نمایش می‌دهد
+    checkTimestamp: systemNowUtcIso()
   });
 }));
 
@@ -241,36 +279,29 @@ router.get('/system/reconciliation-check', authorize('admin'), asyncHandler(asyn
     totalChecks: checks.length,
     okChecks,
     checks,
-    timestamp: new Date().toISOString()
+    timestamp: systemNowUtcIso()
   });
 }));
 
 // Execute Non-Destructive Auto-Fix Actions
-router.post('/system/reconciliation-fix', authorize('admin'), asyncHandler(async (req, res) => {
-  const { action } = req.body || {};
+// TD-245: فقط رویدادهای حل‌نشده DLQ بازگردانده و علامت replayed می‌خورند (بدون حذف)، در یک تراکنش با ثبت ممیزی؛
+// بازنشانی رویدادهای متوقف Outbox هم ثبت ممیزی دارد.
+router.post('/system/reconciliation-fix', authorize('admin'), validate(reconciliationFixSchema), asyncHandler(async (req, res) => {
+  const { action } = req.body as z.infer<typeof reconciliationFixSchema>['body'];
+  const actor = {
+    userId: req.user?.id,
+    username: req.user?.username,
+    fullName: req.user?.full_name,
+    ipAddress: extractClientIp(req)
+  };
 
   if (action === 'requeue_dlq') {
-    const requeuedCount = await SystemReconciliationService.requeueDeadLetterEvents();
-
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      userFullName: req.user?.full_name || '',
-      action: 'RESTORE',
-      entity: 'رویدادهای سیستم',
-      description: `بازبازیابی و انتقال ${requeuedCount} رویداد قرنطینه DLQ به صف Outbox`
-    });
-
-    return res.json({ success: true, message: `تعداد ${requeuedCount} رویداد از صف قرنطینه به صف پردازش Outbox منتقل شدند.` });
+    const requeuedCount = await SystemReconciliationService.requeueDeadLetterEvents(actor);
+    return res.json({ success: true, requeuedCount, message: `تعداد ${requeuedCount} رویداد از صف قرنطینه به صف پردازش Outbox منتقل شدند.` });
   }
 
-  if (action === 'clear_stuck_outbox') {
-    await SystemReconciliationService.resetStuckOutboxEvents();
-
-    return res.json({ success: true, message: 'رویدادهای متوقف‌شده در حالت Processing با موفقیت بازنشانی شدند.' });
-  }
-
-  return res.status(400).json({ error: 'عملیات درخواستی نامعتبر است' });
+  const resetCount = await SystemReconciliationService.resetStuckOutboxEvents(actor);
+  return res.json({ success: true, resetCount, message: `تعداد ${resetCount} رویداد متوقف‌شده در حالت Processing با موفقیت بازنشانی شدند.` });
 }));
 
 // (v4.0.29) توابع assertTestEndpointsAllowed/assertTestEndpointsEnabled حذف شدند —
@@ -328,7 +359,8 @@ router.get('/export-backup', authorize('admin'), asyncHandler(async (req, res) =
   });
 
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="erp-data-export-${new Date().toISOString().split('T')[0]}.json"`);
+  // TD-245: تاریخ نام فایل، تاریخ امروز کسب‌وکار (منطقه زمانی توافقی) است، نه تاریخ UTC
+  res.setHeader('Content-Disposition', `attachment; filename="${await DataExportService.buildExportFileName()}"`);
   res.json(exportData);
 }));
 

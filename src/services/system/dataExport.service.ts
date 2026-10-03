@@ -7,6 +7,7 @@ import {
   pieceworkLogs, pieceworkPayrolls, purchaseRequisitions,
 } from '../../db/schema.js';
 import { BUILD_INFO } from '../../lib/version.js';
+import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.js';
 import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js';
 
 /**
@@ -25,6 +26,11 @@ import { SENSITIVE_SETTING_PATTERN } from '../settings/systemSettings.service.js
 export const DATA_EXPORT_FORMAT = 'papital-erp/data-export@2';
 
 export class DataExportService {
+  /** TD-245: نام فایل خروجی با تاریخ امروز کسب‌وکار (منطقه زمانی توافقی، businessClock) */
+  static async buildExportFileName(): Promise<string> {
+    return `erp-data-export-${await businessTodayIsoDate()}.json`;
+  }
+
   static async buildExport(): Promise<Record<string, unknown>> {
     // Users WITHOUT password hash, lockout state or token version
     const safeUsers = await orm.select({
@@ -81,7 +87,7 @@ export class DataExportService {
 
     return {
       format: DATA_EXPORT_FORMAT,
-      exportedAt: new Date().toISOString(),
+      exportedAt: systemNowUtcIso(),
       version: BUILD_INFO.version,
       buildInfo: BUILD_INFO,
       notice: 'این فایل خروجی داده‌های کسب‌وکاری برای گزارش و بایگانی است و نسخه پشتیبان قابل بازگردانی نیست. رمزهای عبور و کلیدهای محرمانه در آن وجود ندارد. پشتیبان واقعی با scripts/backup.sh گرفته و با scripts/restore.sh بازگردانی می‌شود.',
