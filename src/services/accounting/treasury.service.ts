@@ -1,204 +1,33 @@
 import { BankAccountService } from './treasury/bankAccount.service.js';
 import { TreasuryTransactionService } from './treasury/treasuryTransaction.service.js';
 import { ChequeLifecycleService } from './treasury/chequeLifecycle.service.js';
-import type { BankAccount, TreasuryTransaction, Cheque, ChequeStatus } from '../../types.js';
-import type { DbExecutor } from '../../db/drizzle.js';
 
+/**
+ * زیرسرویس خزانه (AGENTS.md §11): حساب‌های بانکی و صندوق‌ها، تراکنش‌های خزانه و چرخه چک صیادی.
+ * v7.0.114: لایه واسط تکراری حذف شد؛ هر متد مستقیماً به همان متد زیرسرویس خود وصل است (مانند نمای AccountingService)
+ * تا نوع پارامترها فقط یک‌جا، در زیرسرویس، تعریف شود.
+ */
 export class TreasuryService {
   // 1. Bank Accounts & Cash Funds
-  static async getBankAccounts(): Promise<BankAccount[]> {
-    return BankAccountService.getBankAccounts();
-  }
-
-  static async recalculateAndSyncBankBalances() {
-    return BankAccountService.recalculateAndSyncBankBalances();
-  }
-
-  static async generateNextAccountCode(type: 'bank' | 'cash' | 'pos' | 'petty_cash', tx?: DbExecutor): Promise<string> {
-    return BankAccountService.generateNextAccountCode(type, tx);
-  }
-
-  static async createBankAccount(data: {
-    code?: string;
-    title: string;
-    type: 'bank' | 'cash' | 'pos' | 'petty_cash';
-    bankName?: string;
-    accountNumber?: string;
-    shebaNumber?: string;
-    cardNumber?: string;
-    branch?: string;
-    initialBalance?: number;
-    currency?: string;
-    accountId?: number | null;
-    notes?: string;
-    userId?: number;
-    username?: string;
-    strict?: boolean;
-  }, tx?: DbExecutor): Promise<BankAccount> {
-    return BankAccountService.createBankAccount(data, tx);
-  }
-
-  static async updateBankAccount(id: number, data: Partial<{
-    title: string;
-    code: string;
-    type: 'bank' | 'cash' | 'pos' | 'petty_cash';
-    bankName: string;
-    accountNumber: string;
-    shebaNumber: string;
-    cardNumber: string;
-    branch: string;
-    initialBalance: number;
-    accountId: number | null;
-    isActive: number;
-    notes: string;
-    userId?: number;
-    username?: string;
-    strict?: boolean;
-  }>, tx?: DbExecutor): Promise<BankAccount> {
-    return BankAccountService.updateBankAccount(id, data, tx);
-  }
-
-  static async deleteBankAccount(id: number): Promise<{ success: boolean }> {
-    return BankAccountService.deleteBankAccount(id);
-  }
+  static getBankAccounts = BankAccountService.getBankAccounts.bind(BankAccountService);
+  static recalculateAndSyncBankBalances = BankAccountService.recalculateAndSyncBankBalances.bind(BankAccountService);
+  static generateNextAccountCode = BankAccountService.generateNextAccountCode.bind(BankAccountService);
+  static createBankAccount = BankAccountService.createBankAccount.bind(BankAccountService);
+  static updateBankAccount = BankAccountService.updateBankAccount.bind(BankAccountService);
+  static deleteBankAccount = BankAccountService.deleteBankAccount.bind(BankAccountService);
 
   // 2. Treasury Transactions
-  static async getTreasuryTransactions(params: {
-    type?: 'receipt' | 'payment' | 'all';
-    bankAccountId?: number;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<TreasuryTransaction[]> {
-    return TreasuryTransactionService.getTreasuryTransactions(params);
-  }
-
-  static async generateTransactionNumber(type: 'receipt' | 'payment', tx?: DbExecutor): Promise<string> {
-    return TreasuryTransactionService.generateTransactionNumber(type, tx);
-  }
-
-  static async createTreasuryTransaction(data: {
-    type: 'receipt' | 'payment';
-    date: string;
-    method: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
-    amount: number;
-    currency?: string;
-    exchangeRate?: number;
-    bankAccountId: number;
-    partyType?: 'customer' | 'personnel' | 'supplier' | 'other';
-    partyId?: number | null;
-    partyName: string;
-    trackingNumber?: string;
-    documentId?: number | null;
-    description?: string;
-    userId?: number;
-    username?: string;
-    createVoucher?: boolean;
-  }): Promise<TreasuryTransaction> {
-    return TreasuryTransactionService.createTreasuryTransaction(data);
-  }
-
-  // V1.5.0: انتقال بین‌بانکی/بین‌صندوقی
-  static async createTreasuryTransfer(data: {
-    date: string;
-    amount: number;
-    currency?: string;
-    fromBankAccountId: number;
-    toBankAccountId: number;
-    trackingNumber?: string;
-    description?: string;
-    userId?: number;
-    username?: string;
-    createVoucher?: boolean;
-  }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
-    return TreasuryTransactionService.createTreasuryTransfer(data);
-  }
-
-  // V1.4.0: ابطال تراکنش با سند معکوس (DB-009)
-  static async voidTreasuryTransaction(id: number, params: {
-    reason: string;
-    userId?: number;
-    username?: string;
-  }): Promise<TreasuryTransaction> {
-    return TreasuryTransactionService.voidTreasuryTransaction(id, params);
-  }
-
-  // V1.6.0: آشتی‌سنجی بانکی — ثبت گروهی وضعیت تطبیق
-  static async reconcileTransactions(params: {
-    bankAccountId: number;
-    txIds: number[];
-    batch: string;
-    reconciled: boolean;
-    userId?: number;
-    username?: string;
-  }): Promise<{ success: boolean; updated: number }> {
-    return TreasuryTransactionService.reconcileTransactions(params);
-  }
-
-  // V1.8.0: پیش‌نمایش سند دوبل (بدون ذخیره‌سازی)
-  static async previewTreasuryVoucher(data: {
-    type: 'receipt' | 'payment';
-    method?: 'cash' | 'bank_transfer' | 'pos' | 'cheque';
-    amount: number;
-    currency?: string;
-    bankAccountId: number;
-    partyType?: string;
-    purpose?: string;
-    partyId?: number | null;
-    partyName?: string;
-  }) {
-    return TreasuryTransactionService.previewTreasuryVoucher(data);
-  }
+  static getTreasuryTransactions = TreasuryTransactionService.getTreasuryTransactions.bind(TreasuryTransactionService);
+  static generateTransactionNumber = TreasuryTransactionService.generateTransactionNumber.bind(TreasuryTransactionService);
+  static createTreasuryTransaction = TreasuryTransactionService.createTreasuryTransaction.bind(TreasuryTransactionService);
+  static createTreasuryTransfer = TreasuryTransactionService.createTreasuryTransfer.bind(TreasuryTransactionService);
+  static voidTreasuryTransaction = TreasuryTransactionService.voidTreasuryTransaction.bind(TreasuryTransactionService);
+  static reconcileTransactions = TreasuryTransactionService.reconcileTransactions.bind(TreasuryTransactionService);
+  static previewTreasuryVoucher = TreasuryTransactionService.previewTreasuryVoucher.bind(TreasuryTransactionService);
 
   // 3. Cheques & Sayad Lifecycle
-  static async getCheques(params: {
-    type?: 'received' | 'paid' | 'all';
-    status?: string;
-    startDate?: string;
-    endDate?: string;
-    search?: string;
-  }): Promise<Cheque[]> {
-    return ChequeLifecycleService.getCheques(params);
-  }
-
-  static async createCheque(data: {
-    type: 'received' | 'paid';
-    chequeNumber: string;
-    sayadNumber?: string;
-    bankName: string;
-    branch?: string;
-    issueDate: string;
-    dueDate: string;
-    amount: number;
-    currency?: string;
-    partyType?: 'customer' | 'personnel' | 'supplier' | 'other';
-    partyId?: number | null;
-    partyName: string;
-    drawerName?: string;
-    payeeName?: string;
-    bankAccountId?: number | null;
-    description?: string;
-    userId?: number;
-    username?: string;
-    createVoucher?: boolean;
-  }): Promise<Cheque> {
-    return ChequeLifecycleService.createCheque(data);
-  }
-
-  static async updateChequeStatus(id: number, data: {
-    status: ChequeStatus;
-    actionDate?: string;
-    bankAccountId?: number | null;
-    transfereePartyId?: number;
-    transfereePartyName?: string;
-    notes?: string;
-    description?: string;
-    userId?: number;
-    username?: string;
-  }): Promise<Cheque> {
-    return ChequeLifecycleService.updateChequeStatus(id, data);
-  }
-
-  static async deleteCheque(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
-    return ChequeLifecycleService.deleteCheque(id, user);
-  }
+  static getCheques = ChequeLifecycleService.getCheques.bind(ChequeLifecycleService);
+  static createCheque = ChequeLifecycleService.createCheque.bind(ChequeLifecycleService);
+  static updateChequeStatus = ChequeLifecycleService.updateChequeStatus.bind(ChequeLifecycleService);
+  static deleteCheque = ChequeLifecycleService.deleteCheque.bind(ChequeLifecycleService);
 }
