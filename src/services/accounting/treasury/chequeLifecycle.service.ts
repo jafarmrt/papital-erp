@@ -13,6 +13,8 @@ import { money } from '../../../lib/money.js';
 import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { containsLikePattern } from '../../../lib/sqlLike.js';
+import { requireStorageDate } from '../../../lib/storageDate.js';
+import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 
 /**
  * V1.4.0 — ماشین وضعیت چک صیادی
@@ -62,11 +64,14 @@ export class ChequeLifecycleService {
     if (params.status && params.status !== 'all') {
       conditions.push(eq(cheques.status, params.status));
     }
-    if (params.startDate) {
-      conditions.push(gte(cheques.dueDate, params.startDate));
+    // v7.0.133 (TD-232): سررسید میلادی ISO ذخیره می‌شود؛ بازه شمسی (یا میلادی) ورودی پیش از مقایسه ISO می‌شود
+    const startDate = requireStorageDate(params.startDate, 'از تاریخ سررسید');
+    const endDate = requireStorageDate(params.endDate, 'تا تاریخ سررسید');
+    if (startDate) {
+      conditions.push(gte(cheques.dueDate, startDate));
     }
-    if (params.endDate) {
-      conditions.push(lte(cheques.dueDate, params.endDate));
+    if (endDate) {
+      conditions.push(lte(cheques.dueDate, endDate));
     }
     if (params.search && params.search.trim()) {
       const q = containsLikePattern(params.search.trim());
@@ -158,9 +163,14 @@ export class ChequeLifecycleService {
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
+    // v7.0.133 (TD-232): تاریخ صدور و سررسید چک میلادی ISO ذخیره می‌شوند (ورودی شمسی تبدیل، نامعتبر 422)
+    const issueDate = requireStorageDate(data.issueDate, 'تاریخ صدور چک');
+    const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');
+    if (!issueDate || !dueDate) throw new ValidationError('تاریخ صدور و تاریخ سررسید چک الزامی است');
+    const dueJalali = isoToJalaliDate(dueDate);
 
     const initialHistory = [{
-      date: data.issueDate || await businessTodayIsoDate(),
+      date: issueDate,
       status: (data.type === 'received' ? 'received' : 'in_treasury') as ChequeStatus,
       user: data.username || 'سیستم',
       notes: `ثبت اولیه چک ${data.type === 'received' ? 'دریافتی' : 'پرداختی'}`
@@ -177,7 +187,7 @@ export class ChequeLifecycleService {
           const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
           const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
 
-        const voucherIssueDate = normalizeDateToIso(data.issueDate) || (await businessTodayIsoDate());
+        const voucherIssueDate = issueDate;
 
         if (data.type === 'received') {
           if (!chequeReceivableAcc || !customerAcc) {
@@ -186,7 +196,7 @@ export class ChequeLifecycleService {
           const v = await VoucherService.createJournalVoucher({
             date: voucherIssueDate,
             voucherType: 'treasury',
-            description: `دریافت چک شماره ${data.chequeNumber} از ${data.partyName} (سررسید: ${data.dueDate})`,
+            description: `دریافت چک شماره ${data.chequeNumber} از ${data.partyName} (سررسید: ${dueJalali})`,
             referenceModule: 'cheque',
             referenceNumber: data.chequeNumber,
             currency: data.currency || 'IRR',
@@ -222,7 +232,7 @@ export class ChequeLifecycleService {
           const v = await VoucherService.createJournalVoucher({
             date: voucherIssueDate,
             voucherType: 'treasury',
-            description: `صدور چک شماره ${data.chequeNumber} در وجه ${data.partyName} (سررسید: ${data.dueDate})`,
+            description: `صدور چک شماره ${data.chequeNumber} در وجه ${data.partyName} (سررسید: ${dueJalali})`,
             referenceModule: 'cheque',
             referenceNumber: data.chequeNumber,
             currency: data.currency || 'IRR',
@@ -260,8 +270,8 @@ export class ChequeLifecycleService {
         sayadNumber: data.sayadNumber?.trim() || '',
         bankName: data.bankName.trim(),
         branch: data.branch?.trim() || '',
-        issueDate: data.issueDate.trim(),
-        dueDate: data.dueDate.trim(),
+        issueDate,
+        dueDate,
         amount: money(amount),
         currency: data.currency || 'IRR',
         partyType: data.partyType || 'customer',

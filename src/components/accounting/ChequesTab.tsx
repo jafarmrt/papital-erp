@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, toEnglishDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -11,7 +11,6 @@ import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import DateObject from "react-date-object";
 import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
@@ -263,21 +262,21 @@ export function ChequesTab({
       c.bankName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchType = selectedTypeFilter === 'all' || c.type === selectedTypeFilter;
     const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
-    const due = toEnglishDigits(String(c.dueDate || '')).slice(0, 10);
-    const matchDue = (!dueFromFilter || due >= dueFromFilter) && (!dueToFilter || due <= dueToFilter);
+    // v7.0.133 (TD-232): سررسید میلادی ISO است و فیلتر شمسی انتخاب می‌شود؛ هر دو ISO مقایسه می‌شوند
+    const due = toStorageDate(c.dueDate) || '';
+    const dueFrom = toStorageDate(dueFromFilter) || '';
+    const dueTo = toStorageDate(dueToFilter) || '';
+    const matchDue = (!dueFrom || due >= dueFrom) && (!dueTo || due <= dueTo);
     return matchSearch && matchType && matchStatus && matchDue;
   });
 
   // V1.5.0: aging سررسید — روزهای باقی‌مانده تا سررسید (با تقویم جلالی)
   const getDueDays = (dueDate: string): number | null => {
-    try {
-      const d1 = new DateObject(toEnglishDigits(String(dueDate || '')).replace(/-/g, '/'));
-      const d2 = new DateObject(getTodayJalaliDate().replace(/\//g, '-'));
-      if (isNaN(d1.toDate().getTime())) return null;
-      return Math.round((d1.toDate().getTime() - d2.toDate().getTime()) / 86400000);
-    } catch {
-      return null;
-    }
+    // v7.0.133 (TD-232): فاصله روز با تاریخ‌های ISO (پیش‌تر رشته شمسی با تقویم میلادی پارس می‌شد)
+    const dueIso = toStorageDate(dueDate);
+    const todayIso = toStorageDate(getTodayJalaliDate());
+    if (!dueIso || !todayIso) return null;
+    return Math.round((Date.parse(dueIso) - Date.parse(todayIso)) / 86400000);
   };
 
   const dueAging = (c: Cheque): { label: string; cls: string } => {
@@ -303,8 +302,8 @@ export function ChequesTab({
           'بانک': c.bankName,
           'شعبه': c.branch || '',
           'طرف حساب': c.partyName,
-          'تاریخ صدور': c.issueDate,
-          'سررسید': c.dueDate,
+          'تاریخ صدور': isoToJalaliDate(c.issueDate) || c.issueDate,
+          'سررسید': isoToJalaliDate(c.dueDate) || c.dueDate,
           'وضعیت': statusLabels[c.status as ChequeStatus]?.label || c.status,
           'وضعیت سررسید': days === null ? '' : days < 0 ? `گذشته ${Math.abs(days)} روز` : `${days} روز مانده`,
           'مبلغ': Number(c.amount) || 0,
@@ -775,7 +774,7 @@ export function ChequesTab({
                       تاریخ صدور
                     </label>
                     <DatePicker
-                      value={newFormData.issueDate}
+                      value={isoToJalaliDate(newFormData.issueDate) || newFormData.issueDate}
                       onChange={(dateObj: any) => {
                         setNewFormData({ ...newFormData, issueDate: extractDateString(dateObj) });
                       }}
@@ -792,7 +791,7 @@ export function ChequesTab({
                       تاریخ سررسید *
                     </label>
                     <DatePicker
-                      value={newFormData.dueDate}
+                      value={isoToJalaliDate(newFormData.dueDate) || newFormData.dueDate}
                       onChange={(dateObj: any) => {
                         setNewFormData({ ...newFormData, dueDate: extractDateString(dateObj) });
                       }}

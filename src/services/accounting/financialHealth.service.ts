@@ -2,6 +2,7 @@ import { orm } from '../../db/drizzle.js';
 import { sql, asc, and, eq, or, like } from 'drizzle-orm';
 import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import {
   findDuplicatePieceworkTaskCodes,
@@ -15,7 +16,7 @@ import type {
   HealthCheckIssueItem,
   HealthCheckStatus,
 } from '../../types.js';
-import { jalaliToIsoDate, toEnglishDigits, formatPersianPrice } from '../../utils.js';
+import { formatPersianPrice, toStorageDate, isoToJalaliDate } from '../../utils.js';
 
 /**
  * TD-246 (تصمیم «قید یکتا»): آزمون یکتایی کد عناوین کاری فعال پرکیسی. مهاجرت 0037 ایندکس یکتا را روی داده دارای
@@ -68,7 +69,8 @@ export class FinancialHealthService {
 
     // 1. محاسبه تاریخ جاری میلادی و شمسی
     const now = new Date();
-    const todayIso = now.toISOString().split('T')[0];
+    // v7.0.133: «امروز» کسب‌وکار (منطقه زمانی توافقی) برای سررسید چک‌ها
+    const businessToday = await businessTodayIsoDate();
     const todayJalaliParts = new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
       year: 'numeric',
       month: '2-digit',
@@ -630,20 +632,11 @@ export class FinancialHealthService {
     const overdueList: Array<typeof chequesRows[0] & { daysOverdue: number }> = [];
     for (const chq of chequesRows) {
       if (!chq.due_date) continue;
-      // تبدیل تاریخ سررسید به ISO
-      const dueIso = jalaliToIsoDate(chq.due_date);
-      if (dueIso && dueIso < todayIso) {
-        const dueMs = new Date(dueIso).getTime();
-        const nowMs = now.getTime();
-        const daysOverdue = Math.max(1, Math.floor((nowMs - dueMs) / (1000 * 60 * 60 * 24)));
+      // v7.0.133 (TD-232): سررسید میلادی ISO ذخیره می‌شود (مقدار قدیمی شمسی هم تبدیل می‌شود)
+      const dueIso = toStorageDate(chq.due_date);
+      if (dueIso && dueIso < businessToday) {
+        const daysOverdue = Math.max(1, Math.round((Date.parse(businessToday) - Date.parse(dueIso)) / (1000 * 60 * 60 * 24)));
         overdueList.push({ ...chq, daysOverdue });
-      } else {
-        // مقایسه مستقیم رشته‌ای جلالی
-        const cleanDue = toEnglishDigits(chq.due_date).replace(/-/g, '/');
-        const cleanToday = toEnglishDigits(todayJalali).replace(/-/g, '/');
-        if (cleanDue < cleanToday) {
-          overdueList.push({ ...chq, daysOverdue: 1 });
-        }
       }
     }
 
@@ -681,7 +674,7 @@ export class FinancialHealthService {
           id: c.id,
           code: `چک #${c.cheque_number}`,
           title: `چک ${c.type === 'received' ? 'دریافتی' : 'پرداختی'} - ${c.party_name || 'طرف‌حساب نامشخص'}`,
-          subtitle: `بانک ${c.bank_name} | سررسید: ${c.due_date} (${c.daysOverdue} روز تأخیر) | مبلغ: ${formatPersianPrice(c.amount)} ریال`,
+          subtitle: `بانک ${c.bank_name} | سررسید: ${isoToJalaliDate(c.due_date) || c.due_date} (${c.daysOverdue} روز تأخیر) | مبلغ: ${formatPersianPrice(c.amount)} ریال`,
           amount: c.amount,
           date: c.due_date,
           linkType: 'cheque',

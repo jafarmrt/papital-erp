@@ -7310,6 +7310,116 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.133 (TD-232): تاریخ صدور و سررسید چک میلادی ISO ذخیره می‌شوند؛ فیلتر بازه شمسی و چک سررسیدگذشته درست‌اند
+  if (shouldRun('reg_cheque_dates_iso_td_232', 'td232', 'cheque', 'calendar')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.133: تاریخ چک میلادی ISO ذخیره می‌شود؛ تاریخ قدیمی با ثبت مقدار قبلی تبدیل می‌شود؛ فیلتر بازه شمسی و چک سررسیدگذشته درست‌اند (TD-232)';
+    const ROLLBACK = new Error('ROLLBACK_TD_232_CHEQUE');
+    const violations: string[] = [];
+    const chequeIds: number[] = [];
+    try {
+      const { cheques, legacyDateRepairs } = await import('../../db/schema.js');
+      const { toStorageDate, isoToJalaliDate } = await import('../../utils/calendarDate.js');
+      const { ChequeLifecycleService } = await import('../../services/accounting/treasury/chequeLifecycle.service.js');
+      const { normalizeError } = await import('../../errors/customErrors.js');
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+
+      const [{ n: isoConstraints }] = (await orm.execute(sql`
+        SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+        WHERE rel.relnamespace = current_schema()::regnamespace AND pc.convalidated AND pg_get_constraintdef(pc.oid) LIKE '%''iso''%'
+          AND pc.conname IN ('chk_cheques_issue_date_datefmt', 'chk_cheques_due_date_datefmt')`) as unknown as { rows: Array<{ n: number }> }).rows;
+      if (isoConstraints !== 2) violations.push(`قید iso معتبر ستون‌های چک: ${isoConstraints} (انتظار ۲)`);
+
+      // ۱) تبدیل داده قدیمی (گام‌های مهاجرت 0040) در تراکنشی که برگردانده می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`ALTER TABLE cheques DROP CONSTRAINT IF EXISTS chk_cheques_issue_date_datefmt`);
+          await tx.execute(sql`ALTER TABLE cheques DROP CONSTRAINT IF EXISTS chk_cheques_due_date_datefmt`);
+          const legacy = [['1405/07/10', '1405-8-1'], ['۱۴۰۵/۰۷/۱۰', '2026-11-05']];
+          const ids: number[] = [];
+          for (const [i, [issueDate, dueDate]] of legacy.entries()) {
+            const [row] = await tx.insert(cheques).values({
+              type: 'received', chequeNumber: `TD232-${Date.now()}-${i}`, bankName: 'ERP-TEST-MARKER بانک', issueDate, dueDate,
+              amount: money(1000), partyName: 'ERP-TEST-MARKER',
+            }).returning({ id: cheques.id });
+            ids.push(row.id);
+          }
+          await tx.execute(sql`SELECT erp_unify_text_date_column('cheques', 'issue_date')`);
+          await tx.execute(sql`SELECT erp_unify_text_date_column('cheques', 'due_date')`);
+          for (const [i, [issueDate, dueDate]] of legacy.entries()) {
+            const [row] = await tx.select({ issueDate: cheques.issueDate, dueDate: cheques.dueDate }).from(cheques).where(eq(cheques.id, ids[i]));
+            if (row.issueDate !== toStorageDate(issueDate) || row.dueDate !== toStorageDate(dueDate)) violations.push(`چک قدیمی ${i}: ${row.issueDate}، ${row.dueDate}`);
+          }
+          const log = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.tableName, 'cheques'), eq(legacyDateRepairs.repairKind, 'calendar'), inArray(legacyDateRepairs.rowId, ids)));
+          if (log.length !== 3) violations.push(`گزارش تبدیل چک: ${log.length} ردیف (انتظار ۳؛ سررسید ISO ثبت نمی‌شود)`);
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      // ۲) ثبت با تاریخ شمسی ← ISO؛ تاریخ نامعتبر 422
+      const todayIso = await businessTodayIsoDate();
+      const shiftIso = (days: number) => {
+        const d = new Date(`${todayIso}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + days);
+        return d.toISOString().slice(0, 10);
+      };
+      const base = { type: 'received' as const, bankName: 'ERP-TEST-MARKER بانک', amount: 1000, partyName: 'ERP-TEST-MARKER TD-232 چک', createVoucher: false };
+      const overdue = await ChequeLifecycleService.createCheque({ ...base, chequeNumber: `TD232-A-${Date.now()}`, issueDate: isoToJalaliDate(shiftIso(-30)), dueDate: isoToJalaliDate(shiftIso(-3)) });
+      chequeIds.push(overdue.id);
+      const future = await ChequeLifecycleService.createCheque({ ...base, chequeNumber: `TD232-B-${Date.now()}`, issueDate: isoToJalaliDate(shiftIso(-1)), dueDate: isoToJalaliDate(shiftIso(40)) });
+      chequeIds.push(future.id);
+      const [stored] = await orm.select().from(cheques).where(eq(cheques.id, overdue.id));
+      if (stored.issueDate !== shiftIso(-30) || stored.dueDate !== shiftIso(-3)) violations.push(`ذخیره چک: ${stored.issueDate}، ${stored.dueDate}`);
+      try {
+        const bad = await ChequeLifecycleService.createCheque({ ...base, chequeNumber: `TD232-C-${Date.now()}`, issueDate: '1405/07/10', dueDate: '1405/07/31' });
+        chequeIds.push(bad.id);
+        violations.push('سررسید ۳۱ مهر پذیرفته شد');
+      } catch (err) {
+        if (normalizeError(err).statusCode !== 422) violations.push(`سررسید نامعتبر: ${normalizeError(err).statusCode} (انتظار 422)`);
+      }
+
+      // ۳) فیلتر بازه شمسی سررسید
+      const inRange = await ChequeLifecycleService.getCheques({ type: 'all', startDate: isoToJalaliDate(shiftIso(-5)), endDate: isoToJalaliDate(shiftIso(0)), search: 'TD-232 چک' });
+      const ids = inRange.map(c => c.id);
+      if (!ids.includes(overdue.id) || ids.includes(future.id)) violations.push(`فیلتر بازه شمسی: ${JSON.stringify(ids)} (انتظار فقط ${overdue.id})`);
+
+      // ۴) چک سررسیدگذشته در بازرس سلامت با تاریخ شمسی
+      const health = await FinancialHealthService.runHealthCheck();
+      const overdueTest = health.tests.find(t => t.id === 'overdue_cheques');
+      const item = overdueTest?.items?.find(i => i.id === overdue.id);
+      if (!item) violations.push('چک سررسیدگذشته در بازرس سلامت نیامد');
+      else if (!String(item.subtitle).includes(isoToJalaliDate(shiftIso(-3))) || !String(item.subtitle).includes('3 روز')) violations.push(`زیرعنوان چک سررسیدگذشته: ${item.subtitle}`);
+      if (overdueTest?.items?.some(i => i.id === future.id)) violations.push('چک آینده سررسیدگذشته اعلام شد');
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_cheque_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'تاریخ چک ISO ذخیره شد، تاریخ نامعتبر 422 گرفت، فیلتر بازه شمسی و چک سررسیدگذشته درست بودند و داده قدیمی با گزارش تبدیل شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_cheque_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (chequeIds.length > 0) await cleanTestTableData('cheques', 'id', chequeIds);
+    }
+  }
+
   // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
   if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
     const tStart = Date.now();
