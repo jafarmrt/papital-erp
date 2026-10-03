@@ -5,6 +5,8 @@ import { Boxes, Plus, Search, RefreshCw, CheckCircle2, Clock, RotateCcw, User, W
 import * as xlsx from 'xlsx';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
 import { formatPersianDate, formatPersianNumber, parseCleanNumber, errorMessageOf } from '../../utils';
 
 interface ProjectBomAllocationsTabProps {
@@ -12,6 +14,8 @@ interface ProjectBomAllocationsTabProps {
 }
 
 export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps) {
+  // تخصیص، مصرف و آزادسازی موجودی را تغییر می‌دهند: کش صفحات دیگر (کالاها، کاردکس، داشبورد، رزروها) باطل می‌شود
+  const queryClient = useQueryClient();
   const [allocations, setAllocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -127,6 +131,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       });
 
       setShowAllocateModal(false);
+      void invalidateAfterStockAdjustment(queryClient);
       loadAllocations();
     } catch (err) {
       setErrorMsg(errorMessageOf(err) || 'خطا در ثبت تخصیص به پروژه');
@@ -143,6 +148,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       await fetchJson(`/inventory/allocations/${alloc.id}/consume`, {
         method: 'POST'
       });
+      void invalidateAfterStockAdjustment(queryClient);
       loadAllocations();
     } catch (err) {
       toast.error((err as any)?.message || 'خطا در ثبت مصرف');
@@ -158,6 +164,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
         body: JSON.stringify({ reason: releaseReason })
       });
       setReleaseTarget(null);
+      void invalidateAfterStockAdjustment(queryClient);
       loadAllocations();
     } catch (err) {
       toast.error((err as any)?.message || 'خطا در آزادسازی تخصیص');

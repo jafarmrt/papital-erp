@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ClipboardCheck, Search } from 'lucide-react';
 import { formatPersianNumber, parseCleanNumber } from '../../utils';
-import { fetchJson } from '../../api';
 import toast from 'react-hot-toast';
+import { useWarehousesQuery, type WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+
+const NO_WAREHOUSES: WarehouseItem[] = [];
 
 interface AuditItemInput {
   id: number;
@@ -56,28 +58,17 @@ export function PhysicalAuditSheetTab({
   handleSubmitAudit
 }: PhysicalAuditSheetTabProps) {
   const auditedCount = Object.keys(auditedItemsMap).length;
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  // فهرست انبارها از کش مشترک React Query (همان GET /warehouses)؛ با بستن صفحه درخواست در جریان لغو می‌شود
+  const warehousesQuery = useWarehousesQuery();
+  const warehouses = Array.isArray(warehousesQuery.data) ? warehousesQuery.data : NO_WAREHOUSES;
+  const warehousesFailed = warehousesQuery.isError;
+  const warehousesError = warehousesQuery.error;
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchJson('/warehouses', { signal: controller.signal })
-      .then((res: any) => {
-        const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-        if (list.length > 0) {
-          setWarehouses(list);
-        } else {
-          setWarehouses([]);
-        }
-      })
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load warehouses in audit sheet:', err);
-        toast.error('خطا در دریافت لیست انبارها');
-        setWarehouses([]);
-      });
-
-    return () => controller.abort();
-  }, []);
+    if (!warehousesFailed) return;
+    console.error('Failed to load warehouses in audit sheet:', warehousesError);
+    toast.error('خطا در دریافت لیست انبارها');
+  }, [warehousesFailed, warehousesError]);
 
   return (
     <div className="space-y-6">
@@ -113,7 +104,7 @@ export function PhysicalAuditSheetTab({
               onChange={(e) => setSelectedLocation(e.target.value)}
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {warehouses.map((w: any) => (
+              {warehouses.map((w) => (
                 <option key={w.id || w.code || w.name} value={w.name}>
                   {w.name}
                 </option>

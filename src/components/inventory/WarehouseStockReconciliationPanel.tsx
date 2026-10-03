@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Scale, RefreshCw, FlaskConical, Wrench, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
 import { formatPersianNumber } from '../../utils';
 
 /**
@@ -50,6 +52,7 @@ const STATUS_LABELS: Record<ReconRow['status'], { label: string; className: stri
 };
 
 export function WarehouseStockReconciliationPanel() {
+  const queryClient = useQueryClient();
   const [report, setReport] = useState<ReconReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -86,6 +89,8 @@ export function WarehouseStockReconciliationPanel() {
       } else {
         setPreview(null);
         toast.success(res.message || 'ترمیم موجودی انبارها انجام شد');
+        // ترمیم موجودی انبارها را تغییر داده است: کش صفحات دیگر (کالاها، کاردکس، داشبورد، گزارش سلامت) باطل می‌شود
+        void invalidateAfterStockAdjustment(queryClient);
         await loadReport();
       }
     } catch (err: any) {

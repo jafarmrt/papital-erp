@@ -130,6 +130,9 @@ export const QUERY_KEYS = {
   inventory: {
     all: ['inventory'] as const,
     reservedItems: () => ['inventory', 'reserved-items'] as const,
+    // صفحه انبارگردانی: گزارش سلامت سه‌طرفه و اقلام شمارش یک انبار (زیر inventory تا هر تغییر موجودی تازه‌شان کند)
+    integrityAudit: () => ['inventory', 'integrity-audit'] as const,
+    auditItems: (location: string) => ['inventory', 'audit-items', location] as const,
   },
 
   // V9 Phase 5.1 — Activity / Audit Logs

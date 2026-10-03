@@ -1,0 +1,196 @@
+import * as xlsx from 'xlsx';
+import type { User } from '../../types';
+import { parseCleanNumber } from '../../utils';
+
+/**
+ * صفحه انبارگردانی: انواع داده و محاسبات خالص برگه شمارش و گزارش سلامت موجودی.
+ * همان محاسبات و همان بدنه درخواست InventoryAuditPage پیش از انتقال به React Query.
+ */
+
+/** ردیف اقلام شمارش (GET /documents/audit-items) پس از نرمال‌سازی موجودی سیستمی */
+export interface AuditItemRow {
+  id: number;
+  code: string;
+  name: string;
+  category: string;
+  unit: string;
+  system_stock_computed: number;
+  [key: string]: unknown;
+}
+
+/** ردیف برگه شمارش با مقدار شمارش‌شده (رشته ورودی کاربر) */
+export interface AuditSheetItem extends AuditItemRow {
+  physical_stock: string;
+}
+
+export type AuditedItemsMap = Record<number, AuditSheetItem>;
+
+export interface AuditSummary {
+  list: AuditSheetItem[];
+  counted: number;
+  matched: number;
+  surplus: number;
+  shortage: number;
+  surplusQty: number;
+  shortageQty: number;
+}
+
+export interface AuditSavePayload {
+  docType: 'audit';
+  refNumber: string;
+  date: string;
+  location: string;
+  user: string;
+  notes: string;
+  status: 'final';
+  items: Array<{ itemId: number; system_stock: number; physical_stock: number; quantity: number; location: string }>;
+}
+
+export interface IntegrityItem {
+  itemId?: number;
+  itemCode?: string;
+  itemName?: string;
+  category?: string;
+  unit?: string;
+  currentStock?: number;
+  warehouseStocksSum?: number;
+  ledgerStock?: number;
+  variance?: number;
+  isSynchronized?: boolean;
+  discrepancyType?: string;
+  transactionCount?: number;
+  storedWac?: number;
+  recalculatedWac?: number;
+  [key: string]: unknown;
+}
+
+export interface IntegrityReport {
+  summary?: { discrepancyItems?: number; [key: string]: unknown };
+  items?: IntegrityItem[];
+  [key: string]: unknown;
+}
+
+type RawAuditItem = Partial<AuditItemRow> & {
+  id: number;
+  system_stock?: unknown;
+  current_stock?: unknown;
+  currentStock?: unknown;
+};
+
+/** موجودی سیستمی هر ردیف: system_stock_computed، system_stock، current_stock یا currentStock */
+export function normalizeAuditItems(raw: unknown[]): AuditItemRow[] {
+  return (raw as RawAuditItem[]).map(i => ({
+    ...i,
+    system_stock_computed: Number(i.system_stock_computed ?? i.system_stock ?? i.current_stock ?? i.currentStock ?? 0),
+  }) as AuditItemRow);
+}
+
+/** ردیف‌های برگه با مقدار شمارش‌شده‌ای که کاربر وارد کرده است */
+export function withPhysicalStock(items: AuditItemRow[], audited: AuditedItemsMap): AuditSheetItem[] {
+  return items.map(i => ({ ...i, physical_stock: audited[i.id]?.physical_stock || '' }));
+}
+
+/** خلاصه شمارش برای مودال تایید پیش از ثبت نهایی (V10-3.4) */
+export function summarizeAudit(list: AuditSheetItem[]): AuditSummary {
+  let matched = 0;
+  let surplus = 0;
+  let shortage = 0;
+  let surplusQty = 0;
+  let shortageQty = 0;
+  for (const it of list) {
+    const phys = Number(it.physical_stock) || 0;
+    const sys = Number(it.system_stock_computed) || 0;
+    const variance = phys - sys;
+    if (Math.abs(variance) < 1e-9) {
+      matched += 1;
+    } else if (variance > 0) {
+      surplus += 1;
+      surplusQty += variance;
+    } else {
+      shortage += 1;
+      shortageQty += Math.abs(variance);
+    }
+  }
+  return { list, counted: list.length, matched, surplus, shortage, surplusQty, shortageQty };
+}
+
+/** بدنه POST /documents برای سند انبارگردانی نهایی */
+export function buildAuditPayload(
+  list: AuditSheetItem[],
+  opts: { nextRef: string; location: string; notes: string; user: User | null | undefined },
+): AuditSavePayload {
+  const { nextRef, location, notes, user } = opts;
+  return {
+    docType: 'audit',
+    refNumber: nextRef,
+    date: new Date().toISOString().split('T')[0],
+    location,
+    user: user?.full_name || user?.username || 'انباردار',
+    notes: notes || `ثبت انبارگردانی در موقعیت ${location}`,
+    status: 'final',
+    items: list.map(i => {
+      const phys = parseCleanNumber(i.physical_stock, 0);
+      return {
+        itemId: i.id,
+        system_stock: i.system_stock_computed,
+        physical_stock: phys,
+        quantity: phys,
+        location,
+      };
+    }),
+  };
+}
+
+export function filterAuditItems(items: AuditSheetItem[], categoryFilter: string, searchQuery: string): AuditSheetItem[] {
+  return items.filter(i => {
+    if (categoryFilter !== 'all' && i.category !== categoryFilter) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return i.name?.toLowerCase().includes(q) || i.code?.toLowerCase().includes(q);
+  });
+}
+
+export function auditCategories(items: AuditSheetItem[]): string[] {
+  return Array.from(new Set(items.map(i => i.category).filter(Boolean)));
+}
+
+export function filterIntegrityItems(report: IntegrityReport | null, search: string, discrepancyOnly: boolean): IntegrityItem[] {
+  return (report?.items || []).filter(item => {
+    if (discrepancyOnly && item.isSynchronized) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      item.itemName?.toLowerCase().includes(q) ||
+      item.itemCode?.toLowerCase().includes(q) ||
+      item.category?.toLowerCase().includes(q)
+    );
+  });
+}
+
+export function exportIntegrityExcel(report: IntegrityReport | null): void {
+  if (!report?.items?.length) return;
+  try {
+    const rows = report.items.map((i, idx) => ({
+      'ردیف': idx + 1,
+      'کد کالا': i.itemCode,
+      'نام کالا': i.itemName,
+      'دسته‌بندی': i.category,
+      'واحد': i.unit,
+      'موجودی کل کالا': i.currentStock,
+      'مجموع موجودی انبارها': i.warehouseStocksSum,
+      'مانده کاردکس': i.ledgerStock,
+      'مغایرت مقداری': i.variance,
+      'وضعیت تطبیق': i.isSynchronized ? 'منطبق' : i.discrepancyType,
+      'تعداد تراکنش‌ها': i.transactionCount,
+      'میانگین بهای خرید': i.storedWac,
+      'میانگین بهای بازسازی‌شده': i.recalculatedWac
+    }));
+
+    const ws = xlsx.utils.json_to_sheet(rows);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'ممیزی سلامت انبار');
+    xlsx.writeFile(wb, `Inventory_Integrity_Audit.xlsx`);
+  } catch (err) {
+    console.error(err);
+  }
+}
