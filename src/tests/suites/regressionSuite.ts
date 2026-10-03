@@ -9311,5 +9311,186 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: TD-245 (تصمیم مالک محصول «همه پاک شود»): بازنشانی کامل سال‌های مالی بسته، پیوست‌ها و فایل‌هایشان، گزارش‌های
+  // اصلاح داده و جداول وابسته را هم پاک می‌کند، زیر قفل seed اجرا می‌شود و ممیزی آن می‌ماند. اجرا در اسکیمای ایزوله
+  // داخلی (setupTestSchema) تا داده بقیه آزمون‌ها در اسکیمای اجرای جاری دست نخورد.
+  if (shouldRun('reg_factory_reset_complete_td_245', 'td245', 'factory', 'reset', 'clear-data', 'wipeAndReseed')) {
+    const tStart = Date.now();
+    const testName = 'TD-245: پاک کردن داده‌ها سال مالی بسته، پیوست‌ها و فایل‌هایشان و گزارش‌های اصلاح را هم پاک می‌کند، زیر قفل seed و با ممیزی';
+    const violations: string[] = [];
+    const savedPurge = process.env.ALLOW_DANGEROUS_DATA_PURGE;
+    const savedAttachmentsDir = process.env.ATTACHMENTS_DIR;
+    const fsMod = (await import('fs')).default;
+    const pathMod = (await import('path')).default;
+    const osMod = (await import('os')).default;
+    const cryptoMod = (await import('crypto')).default;
+    const pg = (await import('pg')).default;
+    const { pool } = await import('../../db/drizzle.js');
+    let inner: { schema: string; teardown: () => Promise<void> } | null = null;
+    let lockClient: InstanceType<typeof pg.Client> | null = null;
+    const tmpRoot = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), 'erp-td245-'));
+    try {
+      const { setupTestSchema } = await import('../setup/testDb.js');
+      const { FactoryResetService } = await import('../../services/system/factoryReset.service.js');
+      const schema = await import('../../db/schema.js');
+      const {
+        users, productionProjects, fiscalPeriods, fileAttachments, legacyDateRepairs, refFiscalYearCorrections,
+        workflowTaskReopenLog, projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks, activityLogs, roles
+      } = schema;
+
+      inner = await setupTestSchema();
+      const current = (await pool.query('SELECT current_schema() AS s')).rows[0]?.s;
+      if (current !== inner.schema) throw new Error(`اسکیمای ایزوله داخلی فعال نشد (${current} به‌جای ${inner.schema})؛ بازنشانی اجرا نشد`);
+
+      const attachmentsDir = pathMod.join(tmpRoot, '.attachments');
+      process.env.ATTACHMENTS_DIR = attachmentsDir;
+      process.env.ALLOW_DANGEROUS_DATA_PURGE = 'true';
+
+      // داده: کاربر، انبار و کالا با موجودی، مغایرت انبار، پروژه، سند پروژه با کسر رزرو و اصلاح سال مرجع، سند حسابداری
+      // اختتامیه با سال مالی بسته، اصلاح تاریخ قدیمی، گزارش بازگشایی کار گردش‌کار، پیوست با فایل واقعی و یک ردیف ممیزی
+      await orm.insert(users).values({ username: 'td245_admin', role: 'admin', fullName: 'آزمون TD-245', password: 'x' });
+      const [wh] = await orm.insert(warehouses).values({ code: 'TD245', name: 'انبار TD-245' }).returning({ id: warehouses.id });
+      const [item] = await orm.insert(items).values({ code: 'TD245-1', name: 'کالای TD-245', unit: 'عدد', type: 'raw_material' }).returning({ id: items.id });
+      await orm.insert(itemWarehouseStocks).values({ itemId: item.id, warehouseId: wh.id, warehouseCode: 'TD245', currentStock: 5 });
+      await orm.insert(inventoryReconciliationAnomalies).values({ runId: 'td245', itemId: item.id, warehouseId: wh.id, kind: 'test' });
+      const [project] = await orm.insert(productionProjects).values({ title: 'پروژه TD-245', projectCode: 'TD245' }).returning({ id: productionProjects.id });
+      const [doc] = await orm.insert(documents).values({ type: 'remittance', date: '2026-01-10 00:00:00', refNumber: 'TD245-REF', projectId: project.id }).returning({ id: documents.id });
+      await orm.insert(projectReservationReleases).values({ documentId: doc.id, projectId: project.id, itemId: item.id, qtyField: 'reservedQty', quantity: 1, reservationRow: {} });
+      await orm.insert(refFiscalYearCorrections).values({ documentId: doc.id, docType: 'remittance', refNumber: 'TD245-REF', documentDate: '2026-01-10 00:00:00', oldFiscalYear: 1405, newFiscalYear: 1404, status: 'corrected' });
+      const voucherNumber = await VoucherService.getNextVoucherNumber();
+      const [closing] = await orm.insert(journalVouchers).values({ voucherNumber, date: '1403/12/30', description: 'سند اختتامیه TD-245', voucherType: 'closing' }).returning({ id: journalVouchers.id });
+      await orm.insert(fiscalPeriods).values({ fiscalYear: 1403, status: 'closed', closedAt: '2025-03-20 00:00:00', closedBy: 'td245_admin', closingVoucherId: closing.id });
+      await orm.insert(legacyDateRepairs).values({ tableName: 'journal_vouchers', rowId: closing.id, columnName: 'date', oldValue: '12-30-1403', newValue: '1403/12/30', status: 'corrected' });
+      await orm.insert(workflowTaskReopenLog).values({ taskId: 1, instanceId: 1, action: 'reopened', reason: 'آزمون TD-245' });
+      await orm.insert(activityLogs).values({ username: 'td245_admin', action: 'CREATE', entity: 'آزمون TD-245', description: 'ردیف ممیزی پیش از بازنشانی', timestamp: new Date().toISOString() });
+
+      const attachmentId = cryptoMod.randomUUID();
+      const storagePath = `document/${attachmentId}.txt`;
+      const attachmentFile = pathMod.join(attachmentsDir, storagePath);
+      fsMod.mkdirSync(pathMod.dirname(attachmentFile), { recursive: true });
+      fsMod.writeFileSync(attachmentFile, 'td245');
+      await orm.insert(fileAttachments).values({ id: attachmentId, entityType: 'document', entityId: doc.id, storagePath, sizeBytes: 5, sha256: cryptoMod.createHash('sha256').update('td245').digest('hex') });
+      // فایل‌هایی که به انبار پیوست‌ها تعلق ندارند (یا ثبت نشده‌اند) نباید پاک شوند
+      const foreignFile = pathMod.join(tmpRoot, 'keep-me.txt');
+      const unregisteredFile = pathMod.join(attachmentsDir, 'document', 'notes.txt');
+      fsMod.writeFileSync(foreignFile, 'keep');
+      fsMod.writeFileSync(unregisteredFile, 'keep');
+
+      const countOf = async (table: string): Promise<number> =>
+        Number((await pool.query(`SELECT count(*)::int AS n FROM "${inner!.schema}"."${table}"`)).rows[0]?.n ?? -1);
+      const wipedTables = [
+        'fiscal_periods', 'file_attachments', 'legacy_date_repairs', 'ref_fiscal_year_corrections', 'workflow_task_reopen_log',
+        'project_reservation_releases', 'inventory_reconciliation_anomalies', 'item_warehouse_stocks',
+        'documents', 'journal_vouchers', 'production_projects', 'items', 'users'
+      ];
+      const assertIntact = async (stage: string): Promise<void> => {
+        for (const t of ['fiscal_periods', 'file_attachments', 'legacy_date_repairs', 'documents', 'users']) {
+          if ((await countOf(t)) === 0) violations.push(`${stage}: جدول ${t} پاک شد در حالی که بازنشانی نباید انجام می‌شد`);
+        }
+        if (!fsMod.existsSync(attachmentFile)) violations.push(`${stage}: فایل پیوست پیش از commit پاک شد`);
+      };
+      const actor = { username: 'td245_admin', ip: '127.0.0.245' };
+
+      // الف) seed دیگری قفل 89345 را دارد: بازنشانی با تداخل رد می‌شود و هیچ چیز پاک نمی‌شود
+      lockClient = new pg.Client({ connectionString: process.env.DATABASE_URL });
+      await lockClient.connect();
+      await lockClient.query('SELECT pg_advisory_lock(89345)');
+      let lockedError: unknown = null;
+      try {
+        await FactoryResetService.wipeAndReseed(actor);
+      } catch (e: unknown) {
+        lockedError = e;
+      }
+      await lockClient.query('SELECT pg_advisory_unlock(89345)');
+      await lockClient.end();
+      lockClient = null;
+      if ((lockedError as { statusCode?: number } | null)?.statusCode !== 409) {
+        violations.push(`بازنشانی هنگام نگه‌داشتن قفل seed باید با 409 رد شود: ${lockedError instanceof Error ? lockedError.message : String(lockedError)}`);
+      }
+      await assertIntact('قفل seed گرفته‌شده');
+
+      // ب) شکست درون تراکنش (کلید خارجی ناشناخته به users): همه چیز برمی‌گردد و فایل پیوست روی دیسک می‌ماند
+      await pool.query(`CREATE TABLE "${inner.schema}".td245_blocker (user_id integer REFERENCES "${inner.schema}".users(id))`);
+      await pool.query(`INSERT INTO "${inner.schema}".td245_blocker (user_id) SELECT id FROM "${inner.schema}".users`);
+      let blockedError: unknown = null;
+      try {
+        await FactoryResetService.wipeAndReseed(actor);
+      } catch (e: unknown) {
+        blockedError = e;
+      }
+      await pool.query(`DROP TABLE "${inner.schema}".td245_blocker`);
+      if (!blockedError) violations.push('بازنشانی با ردیف وابسته ناشناخته به users باید شکست بخورد');
+      await assertIntact('تراکنش برگشت‌خورده');
+
+      // ج) بازنشانی موفق
+      let report: Awaited<ReturnType<typeof FactoryResetService.wipeAndReseed>>;
+      try {
+        report = await FactoryResetService.wipeAndReseed(actor);
+      } catch (e: unknown) {
+        violations.push(`بازنشانی شکست خورد: ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(violations.join(' | '));
+      }
+      if ((await countOf('fiscal_periods')) !== 0 || (await countOf('journal_vouchers')) !== 0) {
+        violations.push('سال مالی بسته یا سند اختتامیه پس از بازنشانی ماند');
+      }
+      for (const t of wipedTables) {
+        const n = await countOf(t);
+        if (n !== 0) violations.push(`جدول ${t} پس از بازنشانی ${n} ردیف دارد`);
+      }
+      if (fsMod.existsSync(attachmentFile)) violations.push('فایل پیوست ثبت‌شده پس از بازنشانی روی دیسک ماند');
+      if (!fsMod.existsSync(foreignFile) || !fsMod.existsSync(unregisteredFile)) violations.push('فایلی که متعلق به پیوست‌های ثبت‌شده نبود پاک شد');
+      if ((report as { attachmentFiles?: { removed?: number } } | undefined)?.attachmentFiles?.removed !== 1) {
+        violations.push(`گزارش بازنشانی باید یک فایل حذف‌شده نشان دهد: ${JSON.stringify((report as unknown as Record<string, unknown> | undefined)?.attachmentFiles)}`);
+      }
+
+      // seed دوباره اجرا شد و قفل آن آزاد است
+      const categoryCount = await countOf('categories');
+      if (categoryCount < 22) violations.push(`پس از بازنشانی seed دسته‌بندی‌ها را نساخت (${categoryCount})`);
+      if ((await countOf('accounts')) === 0) violations.push('پس از بازنشانی seed سرفصل‌های حساب را نساخت');
+      const [adminRole] = await orm.select({ code: roles.code }).from(roles).where(eq(roles.code, 'admin'));
+      if (!adminRole) violations.push('پس از بازنشانی نقش admin وجود ندارد');
+      const held = Number((await pool.query(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND classid = 0 AND objid = 89345 AND granted`)).rows[0]?.n ?? -1);
+      if (held !== 0) violations.push(`قفل seed پس از بازنشانی آزاد نشد (${held})`);
+
+      // ممیزی: ردیف قبلی پاک و فقط ردیف بازنشانی با نام کاربر و IP مانده است
+      const logs = await orm.select().from(activityLogs);
+      if (logs.some(l => l.entity === 'آزمون TD-245')) violations.push('ردیف ممیزی پیش از بازنشانی پاک نشد');
+      const resetLogs = logs.filter(l => l.action === 'PURGE' && l.entity === 'سیستم:بازنشانی کامل');
+      if (resetLogs.length !== 1 || resetLogs[0].username !== 'td245_admin' || resetLogs[0].ipAddress !== '127.0.0.245' || resetLogs[0].userId !== null) {
+        violations.push(`باید دقیقاً یک ردیف ممیزی بازنشانی با نام کاربر و IP و بدون user_id بماند: ${JSON.stringify(resetLogs.map(l => ({ u: l.username, ip: l.ipAddress, uid: l.userId })))}`);
+      }
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_factory_reset_complete_td_245', scenarioId: 'test_runner_real_database_guard', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: true, durationMs: Date.now() - tStart,
+        details: 'در اسکیمای ایزوله داخلی: با قفل seed گرفته‌شده بازنشانی 409 داد و چیزی پاک نشد؛ با شکست درون تراکنش همه چیز و فایل پیوست ماند؛ بازنشانی موفق سال مالی بسته با سند اختتامیه، پیوست‌ها و فایل ثبت‌شده، گزارش‌های اصلاح و جداول وابسته را پاک کرد، فایل‌های دیگر ماندند، seed دوباره اجرا و قفل آزاد شد و یک ردیف ممیزی PURGE ماند.'
+      }));
+    } catch (err: unknown) {
+      results.push(makeTestCase({
+        id: 'reg_factory_reset_complete_td_245', scenarioId: 'test_runner_real_database_guard', name: testName, layer: 'regression',
+        executionType: 'real_database', passed: false, durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (lockClient) {
+        await lockClient.query('SELECT pg_advisory_unlock_all()').catch(() => undefined);
+        await lockClient.end().catch(() => undefined);
+      }
+      if (inner) await inner.teardown();
+      if (savedPurge === undefined) delete process.env.ALLOW_DANGEROUS_DATA_PURGE; else process.env.ALLOW_DANGEROUS_DATA_PURGE = savedPurge;
+      if (savedAttachmentsDir === undefined) delete process.env.ATTACHMENTS_DIR; else process.env.ATTACHMENTS_DIR = savedAttachmentsDir;
+      fsMod.rmSync(tmpRoot, { recursive: true, force: true });
+      // کش‌های درون‌حافظه‌ای داده اسکیمای داخلی را برای آزمون‌های بعدی نگه ندارند
+      const { invalidateRoleCache, invalidateSettingsCache } = await import('../../lib/memoryCache.js');
+      const { invalidateUserAuthCache } = await import('../../middleware/auth.js');
+      const { invalidateTimezoneCache } = await import('../../lib/businessClock.js');
+      invalidateRoleCache();
+      invalidateSettingsCache();
+      invalidateUserAuthCache();
+      invalidateTimezoneCache();
+    }
+  }
+
   return results;
 }
