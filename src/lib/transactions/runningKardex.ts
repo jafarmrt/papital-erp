@@ -37,11 +37,6 @@ export interface RunningKardexEntry {
   runningLocationStock?: number;
   runningGlobalStock?: number;
   runningWac?: number;
-  /**
-   * ستون «میانگین بهای خرید» جدول مودال از پیش این نام را می‌خواند، اما سرور `runningWac` می‌فرستد
-   * (پس آن ستون همیشه «-» نشان می‌دهد). انتقال به React Query این رفتار را تغییر نداده است.
-   */
-  runningWAC?: number;
   runningTotalValue?: number;
   notes?: string;
   createdBy?: string;

@@ -333,7 +333,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                               {entry.unitPrice > 0 ? formatPersianPrice(entry.unitPrice) : '-'}
                             </td>
                             <td className="p-3 text-center font-mono text-amber-800 font-medium">
-                              {(entry.runningWAC ?? 0) > 0 ? formatPersianPrice(entry.runningWAC) : '-'}
+                              {(entry.runningWac ?? 0) > 0 ? formatPersianPrice(entry.runningWac) : '-'}
                             </td>
                             <td className="p-3">
                               <div className="font-mono text-slate-800 font-medium">{entry.documentRef || '-'}</div>

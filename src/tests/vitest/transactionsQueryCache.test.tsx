@@ -7,6 +7,7 @@ import InventoryAuditPage from '../../pages/InventoryAuditPage';
 import { SearchProvider } from '../../SearchContext';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
 import type { User } from '../../types';
+import { formatPersianPrice } from '../../utils';
 
 // صفحه کاردکس با React Query: فهرست تراکنش‌ها و کاردکس تفصیلی کالا سیگنال لغو می‌گیرند، پاسخ دیررس فیلتر قدیمی
 // جای نتیجه فیلتر تازه را نمی‌گیرد، تغییر فیلتر روی صفحه ۲ درخواست اضافه برای صفحه ۲ فیلتر تازه نمی‌فرستد،
@@ -214,5 +215,22 @@ describe('RunningKardexModal on the stock-count page', () => {
     await waitFor(() => expect(callsTo(KARDEX_URL)).toBeGreaterThan(before));
 
     unmount();
+  });
+});
+
+describe('RunningKardexModal running WAC column', () => {
+  // ستون «میانگین بهای خرید» باید میانگین موزون هر ردیف را از runningWac پاسخ سرور نشان دهد (پیش‌تر همیشه «-»)
+  it('shows each row running WAC sent by the server', async () => {
+    const wacKardex = { ...kardex, entries: [{ ...kardex.entries[0], runningWac: 1234 }] };
+    fetchJson.mockImplementation((url: string) => {
+      if (url === LIST_ALL) return Promise.resolve({ data: [tx(1, 'سیم نقره')], total: 1, totalPages: 1, page: 1 });
+      if (url === KARDEX_URL) return Promise.resolve(wacKardex);
+      return Promise.resolve([]);
+    });
+    renderKardexPage(newClient());
+    await screen.findByText('سیم نقره');
+    fireEvent.click(screen.getByRole('button', { name: /کاردکس/ }));
+    expect(await screen.findByText('RC-KX-1')).toBeTruthy();
+    expect(screen.getByText(formatPersianPrice(1234))).toBeTruthy();
   });
 });
