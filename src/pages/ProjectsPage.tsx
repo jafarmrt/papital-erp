@@ -38,6 +38,19 @@ const PROJECT_STATUS_BADGES: PillBadgeVariants = {
 };
 const PROJECT_STATUS_FALLBACK: PillBadgeVariant = { label: 'برنامه‌ریزی‌شده', icon: Clock, iconClassName: 'w-3.5 h-3.5', className: `${PROJECT_STATUS_BASE} bg-slate-100 text-slate-700` };
 
+// v7.0.140: سه ستون کانبان از یک پیکربندی ساخته می‌شوند (پیش‌تر سه بار تکرار شده بود)
+const KANBAN_COLUMNS = [
+  { status: 'planned', title: 'برنامه‌ریزی‌شده', icon: Clock, iconClassName: 'text-slate-500',
+    columnClassName: 'bg-slate-100/80 border-slate-200', headerBorderClassName: 'border-slate-200/80',
+    titleClassName: 'text-slate-800', countClassName: 'bg-slate-200 text-slate-700' },
+  { status: 'in_progress', title: 'در حال انجام تولید', icon: PlayCircle, iconClassName: 'text-blue-600',
+    columnClassName: 'bg-blue-50/60 border-blue-200/70', headerBorderClassName: 'border-blue-200',
+    titleClassName: 'text-blue-900', countClassName: 'bg-blue-200 text-blue-900' },
+  { status: 'completed', title: 'تکمیل شده', icon: CheckCircle2, iconClassName: 'text-emerald-600',
+    columnClassName: 'bg-emerald-50/60 border-emerald-200/70', headerBorderClassName: 'border-emerald-200',
+    titleClassName: 'text-emerald-900', countClassName: 'bg-emerald-200 text-emerald-900' },
+] as const;
+
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const projectsQuery = useProjectsQuery();
@@ -302,89 +315,34 @@ export default function ProjectsPage() {
       ) : viewMode === 'kanban' ? (
         /* KANBAN BOARD VIEW */
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Planned Column */}
-          <div className="bg-slate-100/80 p-4 rounded-3xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
-              <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-slate-500" />
-                برنامه‌ریزی‌شده
-              </span>
-              <span className="w-5 h-5 rounded-full bg-slate-200 font-bold text-slate-700 flex items-center justify-center text-[10px]">
-                {formatPersianNumber(filteredByStatus.planned.length)}
-              </span>
-            </div>
+          {KANBAN_COLUMNS.map((col) => (
+            <div key={col.status} className={`${col.columnClassName} p-4 rounded-3xl border space-y-3`}>
+              <div className={`flex items-center justify-between pb-2 border-b ${col.headerBorderClassName}`}>
+                <span className={`font-bold ${col.titleClassName} flex items-center gap-1.5`}>
+                  <col.icon className={`w-4 h-4 ${col.iconClassName}`} />
+                  {col.title}
+                </span>
+                <span className={`w-5 h-5 rounded-full ${col.countClassName} font-bold flex items-center justify-center text-[10px]`}>
+                  {formatPersianNumber(filteredByStatus[col.status].length)}
+                </span>
+              </div>
 
-            <div className="space-y-3">
-              {filteredByStatus.planned.map(p => (
-                <ProjectKanbanCard 
-                  key={p.id} 
-                  project={p} 
-                  onDetail={() => handleOpenDetailModal(p.id, 'overview')}
-                  onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
-                  onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
-                  onEdit={() => handleOpenEditModal(p)}
-                  onDelete={() => handleDeleteProject(p.id, p.project_code)}
-                  priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
-                />
-              ))}
+              <div className="space-y-3">
+                {filteredByStatus[col.status].map(p => (
+                  <ProjectKanbanCard
+                    key={p.id}
+                    project={p}
+                    onDetail={() => handleOpenDetailModal(p.id, 'overview')}
+                    onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
+                    onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
+                    onEdit={() => handleOpenEditModal(p)}
+                    onDelete={() => handleDeleteProject(p.id, p.project_code)}
+                    priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-
-          {/* In Progress Column */}
-          <div className="bg-blue-50/60 p-4 rounded-3xl border border-blue-200/70 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-blue-200">
-              <span className="font-bold text-blue-900 flex items-center gap-1.5">
-                <PlayCircle className="w-4 h-4 text-blue-600" />
-                در حال انجام تولید
-              </span>
-              <span className="w-5 h-5 rounded-full bg-blue-200 font-bold text-blue-900 flex items-center justify-center text-[10px]">
-                {formatPersianNumber(filteredByStatus.in_progress.length)}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {filteredByStatus.in_progress.map(p => (
-                <ProjectKanbanCard 
-                  key={p.id} 
-                  project={p} 
-                  onDetail={() => handleOpenDetailModal(p.id, 'overview')}
-                  onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
-                  onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
-                  onEdit={() => handleOpenEditModal(p)}
-                  onDelete={() => handleDeleteProject(p.id, p.project_code)}
-                  priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Completed Column */}
-          <div className="bg-emerald-50/60 p-4 rounded-3xl border border-emerald-200/70 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-emerald-200">
-              <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                تکمیل شده
-              </span>
-              <span className="w-5 h-5 rounded-full bg-emerald-200 font-bold text-emerald-900 flex items-center justify-center text-[10px]">
-                {formatPersianNumber(filteredByStatus.completed.length)}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {filteredByStatus.completed.map(p => (
-                <ProjectKanbanCard 
-                  key={p.id} 
-                  project={p} 
-                  onDetail={() => handleOpenDetailModal(p.id, 'overview')}
-                  onInventory={() => handleOpenDetailModal(p.id, 'inventory')}
-                  onProductProgress={() => handleOpenDetailModal(p.id, 'product_progress')}
-                  onEdit={() => handleOpenEditModal(p)}
-                  onDelete={() => handleDeleteProject(p.id, p.project_code)}
-                  priorityBadge={<PillBadge variants={PROJECT_PRIORITY_BADGES} value={p.priority} fallback={PROJECT_PRIORITY_FALLBACK} />}
-                />
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       ) : viewMode === 'list' ? (
         /* TABLE LIST VIEW */

@@ -25,6 +25,7 @@ import {
   useDeletePendingMaterialMutation
 } from '../hooks/queries';
 import { WorkflowStepperWidget } from '../components/workflow/WorkflowStepperWidget';
+import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from '../components/project/materialFormFields';
 
 const COMMON_UNITS = [
   'عدد', 'برگ', 'کیلوگرم', 'گرم', 'متر', 'سانتی‌متر', 'مترمربع', 'لیتر', 'میلی‌لیتر',
@@ -589,95 +590,17 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
                   />
                 </div>
 
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">عنوان کامل ماده اولیه *</label>
-                  <input
-                    type="text"
-                    required
-                    value={approveForm.name}
-                    onChange={(e) => setApproveForm({ ...approveForm, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">واحد شمارش *</label>
-                  <select
-                    value={approveForm.unit}
-                    onChange={(e) => setApproveForm({ ...approveForm, unit: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  >
-                    {COMMON_UNITS.map(u => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">نقطه سفارش اولیه</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={approveForm.reorder_point}
-                    onChange={(e) => setApproveForm({ ...approveForm, reorder_point: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">قیمت / هزینه واحد تخمینی</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={approveForm.weighted_average_cost}
-                    onChange={(e) => setApproveForm({ ...approveForm, weighted_average_cost: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">رنگ</label>
-                  <input
-                    type="text"
-                    value={approveForm.color}
-                    onChange={(e) => setApproveForm({ ...approveForm, color: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">جنس</label>
-                  <input
-                    type="text"
-                    value={approveForm.material}
-                    onChange={(e) => setApproveForm({ ...approveForm, material: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">سایز / ابعاد</label>
-                  <input
-                    type="text"
-                    value={approveForm.size}
-                    onChange={(e) => setApproveForm({ ...approveForm, size: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">وزن (کیلوگرم)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={approveForm.weight}
-                    onChange={(e) => setApproveForm({ ...approveForm, weight: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:outline-none"
-                  />
-                </div>
+                <MaterialNameField label="عنوان کامل ماده اولیه *" value={approveForm.name} onChange={(v) => setApproveForm({ ...approveForm, name: v })} />
+                <MaterialUnitSelect value={approveForm.unit} onChange={(v) => setApproveForm({ ...approveForm, unit: v })} units={COMMON_UNITS} />
+                <MaterialNumberField label="نقطه سفارش اولیه" value={approveForm.reorder_point} onChange={(v) => setApproveForm({ ...approveForm, reorder_point: v })} />
+                <MaterialNumberField label="قیمت / هزینه واحد تخمینی" value={approveForm.weighted_average_cost} onChange={(v) => setApproveForm({ ...approveForm, weighted_average_cost: v })} />
+                <MaterialAttributeFields
+                  color={approveForm.color}
+                  material={approveForm.material}
+                  size={approveForm.size}
+                  onChange={(field, v) => setApproveForm({ ...approveForm, [field]: v })}
+                />
+                <MaterialNumberField label="وزن (کیلوگرم)" value={approveForm.weight} onChange={(v) => setApproveForm({ ...approveForm, weight: v })} bold={false} />
               </div>
 
               {/* Modal Action Buttons */}

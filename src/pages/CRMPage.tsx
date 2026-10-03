@@ -9,11 +9,10 @@ import { CRMStatsCards } from '../components/crm/CRMStatsCards';
 import { CRMKanbanPipeline } from '../components/crm/CRMKanbanPipeline';
 import { CRMLeadsTable } from '../components/crm/CRMLeadsTable';
 import { CRMFollowupsView } from '../components/crm/CRMFollowupsView';
-import { CRMInteractionModal } from '../components/crm/CRMInteractionModal';
+import { CrmInteractionModalHost, CrmCustomerDossierHost } from '../components/crm/crmSharedHosts';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { CRMLeadModal } from '../components/crm/CRMLeadModal';
 import { CRMLeadDrawer } from '../components/crm/CRMLeadDrawer';
-import { CustomerDossierDrawer } from '../components/crm/CustomerDossierDrawer';
 import { JalaliDateInput } from '../components/common/JalaliDateInput';
 
 export default function CRMPage({ user }: { user: any }) {
@@ -299,28 +298,7 @@ export default function CRMPage({ user }: { user: any }) {
       </div>
 
       {/* Modal 1 & 2: Activity Log & Followup Completion */}
-      <CRMInteractionModal
-        isActivityModalOpen={crm.isActivityModalOpen}
-        onCloseActivityModal={() => crm.setIsActivityModalOpen(false)}
-        selectedLeadForActivity={crm.selectedLeadForActivity}
-        setSelectedLeadForActivity={crm.setSelectedLeadForActivity}
-        leads={crm.leads}
-        activityForm={crm.activityForm}
-        setActivityForm={crm.setActivityForm}
-        isSavingActivity={crm.isSavingActivity}
-        onSaveActivity={crm.handleSaveActivity}
-        personnelList={crm.personnelList}
-        mentionUsers={crm.mentionUsers}
-        currentUser={user}
-        currentLoggedInUser={crm.currentLoggedInUser}
-        isFollowupResultModalOpen={crm.isFollowupResultModalOpen}
-        onCloseFollowupResultModal={() => crm.setIsFollowupResultModalOpen(false)}
-        selectedFollowupAct={crm.selectedFollowupAct}
-        followupResultForm={crm.followupResultForm}
-        setFollowupResultForm={crm.setFollowupResultForm}
-        isSubmittingFollowupResult={crm.isSubmittingFollowupResult}
-        onConfirmFollowupResult={crm.handleConfirmFollowupResult}
-      />
+      <CrmInteractionModalHost crm={crm} currentUser={user} />
 
       {/* Modal 3: Lead Create / Edit */}
       <CRMLeadModal
@@ -354,28 +332,12 @@ export default function CRMPage({ user }: { user: any }) {
       />
 
       {/* Drawer: Full Customer Dossier */}
-      <CustomerDossierDrawer
+      <CrmCustomerDossierHost
+        crm={crm}
         customer={selectedCustomerDossier}
         onClose={() => setSelectedCustomerDossier(null)}
         allLeads={crm.leads}
         allActivities={crm.activities}
-        onOpenLeadDrawer={crm.openLeadDrawer}
-        onOpenLeadModal={(lead, defaultCustName) => {
-          crm.openLeadModal(lead);
-          if (defaultCustName) {
-            crm.setLeadForm((prev: any) => ({ ...prev, customerName: defaultCustName }));
-          }
-        }}
-        onOpenActivityModal={(lead, defaultCustName, defaultCustId) => {
-          crm.openActivityModal(lead, 'call', defaultCustName, defaultCustId);
-          if (defaultCustName || defaultCustId) {
-            crm.setActivityForm((prev: any) => ({
-              ...prev,
-              customerName: defaultCustName || prev.customerName,
-              customerId: defaultCustId || prev.customerId
-            }));
-          }
-        }}
         onEditCustomer={(cust) => {
           setSelectedCustomerDossier(null);
           navigate('/customers', { state: { editCustomerId: cust.id, editCustomer: cust } });

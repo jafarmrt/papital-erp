@@ -18,6 +18,44 @@ import { money, moneyOr } from '../lib/money.js';
 
 const router = Router();
 
+// v7.0.140: ستون‌های فهرست و جزئیات پرسنل یکی است (پیش‌تر دو بار تکرار شده بود)
+const PERSONNEL_DETAIL_COLUMNS = {
+  id: personnel.id,
+  firstName: personnel.firstName,
+  lastName: personnel.lastName,
+  fullName: personnel.fullName,
+  personnelCode: personnel.personnelCode,
+  userId: personnel.userId,
+  username: users.username,
+  userFullName: users.fullName,
+  gender: personnel.gender,
+  birthDate: personnel.birthDate,
+  nationality: personnel.nationality,
+  nationalId: personnel.nationalId,
+  phone: personnel.phone,
+  employmentStatus: personnel.employmentStatus,
+  // V1.3.3 (باگ اصلی): بدون این دو فیلد، فرم پرسنل پس از ذخیره/رفرش به پیش‌فرض برمی‌گشت
+  salaryType: personnel.salaryType,
+  monthlySalary: personnel.monthlySalary,
+  jobTitle: personnel.jobTitle,
+  education: personnel.education,
+  endDate: personnel.endDate,
+  terminationReason: personnel.terminationReason,
+  specializedSkills: personnel.specializedSkills,
+  otherSkills: personnel.otherSkills,
+  referralSource: personnel.referralSource,
+  cardNumber: personnel.cardNumber,
+  accountNumber: personnel.accountNumber,
+  shebaNumber: personnel.shebaNumber,
+  bankName: personnel.bankName,
+  nobitexUsername: personnel.nobitexUsername,
+  nobitexPassword: personnel.nobitexPassword,
+  address: personnel.address,
+  notes: personnel.notes,
+  createdAt: personnel.createdAt,
+  updatedAt: personnel.updatedAt
+};
+
 /**
  * v7.0.139 (TD-189): رمز نوبیتکس پرسنل در پایگاه‌داده رمزنگاری‌شده (AES-256-GCM، src/lib/secretBox.ts) است.
  * پاسخ API برای کاربر مجاز متن ساده را می‌دهد (sanitizePersonnelRecord برای بقیه خالی می‌کند)؛ متن رمزشده هرگز بیرون نمی‌رود.
@@ -51,70 +89,44 @@ async function nextNobitexPassword(
 
 router.use(authenticateToken);
 
+// v7.0.140: بدنه ثبت و ویرایش پرسنل یکی است (پیش‌تر دو بار تکرار شده بود)
+const personnelBodySchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  fullName: z.string().optional(),
+  personnelCode: z.string().optional(),
+  userId: z.union([z.number(), z.string(), z.null()]).optional(),
+  gender: z.string().optional(),
+  birthDate: z.string().optional(),
+  nationality: z.string().optional(),
+  nationalId: z.string().optional(),
+  phone: z.string().optional(),
+  employmentStatus: z.string().optional(),
+  salaryType: z.enum(['none', 'piecework', 'monthly_fixed', 'mixed']).optional(),
+  monthlySalary: z.union([z.number(), z.string()]).optional(),
+  jobTitle: z.string().optional(),
+  education: z.string().optional(),
+  endDate: z.string().optional(),
+  terminationReason: z.string().optional(),
+  specializedSkills: z.string().optional(),
+  otherSkills: z.string().optional(),
+  referralSource: z.string().optional(),
+  cardNumber: z.string().optional(),
+  accountNumber: z.string().optional(),
+  shebaNumber: z.string().optional(),
+  bankName: z.string().optional(),
+  nobitexUsername: z.string().optional(),
+  nobitexPassword: z.string().optional(),
+  address: z.string().optional(),
+  notes: z.string().optional()
+});
+
 const createPersonnelSchema = z.object({
-  body: z.object({
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
-    fullName: z.string().optional(),
-    personnelCode: z.string().optional(),
-    userId: z.union([z.number(), z.string(), z.null()]).optional(),
-    gender: z.string().optional(),
-    birthDate: z.string().optional(),
-    nationality: z.string().optional(),
-    nationalId: z.string().optional(),
-    phone: z.string().optional(),
-    employmentStatus: z.string().optional(),
-    salaryType: z.enum(['none', 'piecework', 'monthly_fixed', 'mixed']).optional(),
-    monthlySalary: z.union([z.number(), z.string()]).optional(),
-    jobTitle: z.string().optional(),
-    education: z.string().optional(),
-    endDate: z.string().optional(),
-    terminationReason: z.string().optional(),
-    specializedSkills: z.string().optional(),
-    otherSkills: z.string().optional(),
-    referralSource: z.string().optional(),
-    cardNumber: z.string().optional(),
-    accountNumber: z.string().optional(),
-    shebaNumber: z.string().optional(),
-    bankName: z.string().optional(),
-    nobitexUsername: z.string().optional(),
-    nobitexPassword: z.string().optional(),
-    address: z.string().optional(),
-    notes: z.string().optional()
-  })
+  body: personnelBodySchema
 });
 
 const updatePersonnelSchema = z.object({
-  body: z.object({
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
-    fullName: z.string().optional(),
-    personnelCode: z.string().optional(),
-    userId: z.union([z.number(), z.string(), z.null()]).optional(),
-    gender: z.string().optional(),
-    birthDate: z.string().optional(),
-    nationality: z.string().optional(),
-    nationalId: z.string().optional(),
-    phone: z.string().optional(),
-    employmentStatus: z.string().optional(),
-    salaryType: z.enum(['none', 'piecework', 'monthly_fixed', 'mixed']).optional(),
-    monthlySalary: z.union([z.number(), z.string()]).optional(),
-    jobTitle: z.string().optional(),
-    education: z.string().optional(),
-    endDate: z.string().optional(),
-    terminationReason: z.string().optional(),
-    specializedSkills: z.string().optional(),
-    otherSkills: z.string().optional(),
-    referralSource: z.string().optional(),
-    cardNumber: z.string().optional(),
-    accountNumber: z.string().optional(),
-    shebaNumber: z.string().optional(),
-    bankName: z.string().optional(),
-    nobitexUsername: z.string().optional(),
-    nobitexPassword: z.string().optional(),
-    address: z.string().optional(),
-    notes: z.string().optional()
-  }),
+  body: personnelBodySchema,
   params: z.object({
     id: numericIdString
   })
@@ -365,42 +377,7 @@ router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asy
     const status = (req.query.status as string) || '';
 
     const allPersonnel = await orm
-      .select({
-        id: personnel.id,
-        firstName: personnel.firstName,
-        lastName: personnel.lastName,
-        fullName: personnel.fullName,
-        personnelCode: personnel.personnelCode,
-        userId: personnel.userId,
-        username: users.username,
-        userFullName: users.fullName,
-        gender: personnel.gender,
-        birthDate: personnel.birthDate,
-        nationality: personnel.nationality,
-        nationalId: personnel.nationalId,
-        phone: personnel.phone,
-        employmentStatus: personnel.employmentStatus,
-        // V1.3.3 (باگ اصلی): بدون این دو فیلد، فرم پرسنل پس از ذخیره/رفرش به پیش‌فرض برمی‌گشت
-        salaryType: personnel.salaryType,
-        monthlySalary: personnel.monthlySalary,
-        jobTitle: personnel.jobTitle,
-        education: personnel.education,
-        endDate: personnel.endDate,
-        terminationReason: personnel.terminationReason,
-        specializedSkills: personnel.specializedSkills,
-        otherSkills: personnel.otherSkills,
-        referralSource: personnel.referralSource,
-        cardNumber: personnel.cardNumber,
-        accountNumber: personnel.accountNumber,
-        shebaNumber: personnel.shebaNumber,
-        bankName: personnel.bankName,
-        nobitexUsername: personnel.nobitexUsername,
-        nobitexPassword: personnel.nobitexPassword,
-        address: personnel.address,
-        notes: personnel.notes,
-        createdAt: personnel.createdAt,
-        updatedAt: personnel.updatedAt
-      })
+      .select(PERSONNEL_DETAIL_COLUMNS)
       .from(personnel)
       .leftJoin(users, eq(personnel.userId, users.id))
       .where(eq(personnel.isDeleted, 0))
@@ -446,42 +423,7 @@ router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel),
   try {
     const id = Number(req.params.id);
     const [record] = await orm
-      .select({
-        id: personnel.id,
-        firstName: personnel.firstName,
-        lastName: personnel.lastName,
-        fullName: personnel.fullName,
-        personnelCode: personnel.personnelCode,
-        userId: personnel.userId,
-        username: users.username,
-        userFullName: users.fullName,
-        gender: personnel.gender,
-        birthDate: personnel.birthDate,
-        nationality: personnel.nationality,
-        nationalId: personnel.nationalId,
-        phone: personnel.phone,
-        employmentStatus: personnel.employmentStatus,
-        // V1.3.3: فیلدهای مدل حقوق
-        salaryType: personnel.salaryType,
-        monthlySalary: personnel.monthlySalary,
-        jobTitle: personnel.jobTitle,
-        education: personnel.education,
-        endDate: personnel.endDate,
-        terminationReason: personnel.terminationReason,
-        specializedSkills: personnel.specializedSkills,
-        otherSkills: personnel.otherSkills,
-        referralSource: personnel.referralSource,
-        cardNumber: personnel.cardNumber,
-        accountNumber: personnel.accountNumber,
-        shebaNumber: personnel.shebaNumber,
-        bankName: personnel.bankName,
-        nobitexUsername: personnel.nobitexUsername,
-        nobitexPassword: personnel.nobitexPassword,
-        address: personnel.address,
-        notes: personnel.notes,
-        createdAt: personnel.createdAt,
-        updatedAt: personnel.updatedAt
-      })
+      .select(PERSONNEL_DETAIL_COLUMNS)
       .from(personnel)
       .leftJoin(users, eq(personnel.userId, users.id))
       .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)));

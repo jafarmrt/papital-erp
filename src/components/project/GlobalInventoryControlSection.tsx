@@ -1,27 +1,15 @@
-import { Boxes, Plus, Trash2, Search, Scale, Tag, AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
+import { Boxes, Plus, Trash2, Scale, AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
 import { ProjectInventoryControlSectionData, Item } from '../../types';
 import { COMMON_UNITS } from './projectInventoryUtils';
 import { formatPersianNumber } from '../../utils';
+import { MaterialNameCell, CurrentStockCell, ProcurementStatusCell, NotesCell, type OpenUnitConversionModalHandler } from './inventoryRowCells';
 
 interface GlobalInventoryControlSectionProps {
   sections: ProjectInventoryControlSectionData[];
   warehouseItems: Item[];
   handleOpenAddMaterialModal: (secIdx: number, prodId?: string) => void;
   handleOpenChangeMaterialModal: (secIdx: number, itemId: string, prodId?: string, gIdx?: number) => void;
-  handleOpenUnitConversionModal: (
-    secIdx: number,
-    itemId: string,
-    prodId: string | undefined,
-    gIdx: number | undefined,
-    itemName: string,
-    itemCode: string | undefined,
-    originalQty: number,
-    originalUnit: string,
-    warehouseUnit: string,
-    convertedUnit?: string,
-    conversionRate?: number,
-    convertedQty?: number
-  ) => void;
+  handleOpenUnitConversionModal: OpenUnitConversionModalHandler;
   handleRemoveItemFromSection: (secIdx: number, itemId: string, prodIdOrItemIdx?: string | number, itemIdx?: number) => void;
   handleUpdateGlobalItem: (secIdx: number, gIdx: number, field: string, value: any) => void;
   handleAddNewSectionOnTheFly: () => void;
@@ -256,49 +244,15 @@ export function GlobalInventoryControlSection({
                               className={isNeedsProcurement ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}
                             >
                               {/* Material Name + Category + Warehouse Link */}
-                              <td className="p-2.5 font-semibold text-slate-800 border-l border-slate-100 align-middle min-w-[220px]">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="min-w-0 flex-1 space-y-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                        <Tag className="w-2.5 h-2.5 text-slate-500" />
-                                        {displayCategory}
-                                      </span>
-                                      <span className="font-bold text-slate-900 text-xs truncate" title={effectiveName}>
-                                        {effectiveName}
-                                      </span>
-                                    </div>
-                                    {effectiveCode && (
-                                      <div className="font-mono text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block">
-                                        کد: {effectiveCode}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenChangeMaterialModal(originalIdx, item.itemId, undefined, gIdx)}
-                                    className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-[10px] flex items-center gap-1 transition-colors shrink-0 cursor-pointer border border-slate-300 shadow-2xs"
-                                    title="اتصال این ردیف به کالای موجود در انبار"
-                                  >
-                                    <Search className="w-3 h-3 text-slate-500" />
-                                    <span>اتصال انبار</span>
-                                  </button>
-                                </div>
-                              </td>
+                              <MaterialNameCell
+                                displayCategory={displayCategory}
+                                effectiveName={effectiveName}
+                                effectiveCode={effectiveCode}
+                                onLinkWarehouse={() => handleOpenChangeMaterialModal(originalIdx, item.itemId, undefined, gIdx)}
+                              />
 
                               {/* Current Stock */}
-                              <td className="p-2.5 text-center font-mono font-bold whitespace-nowrap border-l border-slate-100 align-middle">
-                                {currentStock > 0 ? (
-                                  <span className="px-2 py-1 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs">
-                                    {formatPersianNumber(currentStock)} {effectiveWarehouseUnit || reqUnit}
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg border border-slate-200 text-xs">
-                                    ۰ {effectiveWarehouseUnit || reqUnit}
-                                  </span>
-                                )}
-                              </td>
+                              <CurrentStockCell currentStock={currentStock} unit={effectiveWarehouseUnit || reqUnit} />
 
                               {/* Required Quantity & Unit & Conversion */}
                               <td className="p-2.5 text-center border-l border-slate-100 align-middle min-w-[140px]">
@@ -357,38 +311,10 @@ export function GlobalInventoryControlSection({
                               </td>
 
                               {/* Procurement Status & Shortfall */}
-                              <td className="p-2.5 border-l border-slate-100 align-middle min-w-[190px]">
-                                <div className="flex flex-col gap-1">
-                                  <select
-                                    value={item.status}
-                                    onChange={(e) => handleUpdateGlobalItem(originalIdx, gIdx, 'status', e.target.value)}
-                                    className={`px-2 py-1 rounded-xl font-bold text-xs border focus:outline-none cursor-pointer w-full ${
-                                      item.status === 'available'
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                        : 'bg-amber-100 text-amber-950 border-amber-400'
-                                    }`}
-                                  >
-                                    <option value="available">✓ موجود در انبار</option>
-                                    <option value="needs_procurement">⚠ نیاز به تامین / خرید</option>
-                                  </select>
-                                  {shortfall > 0 && (
-                                    <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-center">
-                                      کسری خرید: {formatPersianNumber(shortfall)} {reqUnit}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
+                              <ProcurementStatusCell status={item.status} onChange={(v) => handleUpdateGlobalItem(originalIdx, gIdx, 'status', v)} shortfall={shortfall} unit={reqUnit} />
 
                               {/* Notes */}
-                              <td className="p-2.5 border-l border-slate-100 align-middle">
-                                <input
-                                  type="text"
-                                  value={item.notes || ''}
-                                  onChange={(e) => handleUpdateGlobalItem(originalIdx, gIdx, 'notes', e.target.value)}
-                                  placeholder="یادداشت..."
-                                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                                />
-                              </td>
+                              <NotesCell value={item.notes || ''} onChange={(v) => handleUpdateGlobalItem(originalIdx, gIdx, 'notes', v)} />
 
                               {/* Actions */}
                               <td className="p-2.5 text-center align-middle whitespace-nowrap">

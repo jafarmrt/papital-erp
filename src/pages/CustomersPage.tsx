@@ -6,8 +6,7 @@ import { Customer, User, CRMLead, CRMActivity } from '../types';
 import { Search, Plus, ChevronRight, ChevronLeft, Edit2, Trash2, X, Phone, Building2, Briefcase, Truck, Users, FileText, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSearch } from '../SearchContext';
-import { CustomerDossierDrawer } from '../components/crm/CustomerDossierDrawer';
-import { CRMInteractionModal } from '../components/crm/CRMInteractionModal';
+import { CrmInteractionModalHost, CrmCustomerDossierHost } from '../components/crm/crmSharedHosts';
 import CustomerFormModal, { FormContactPerson } from '../components/customers/CustomerFormModal';
 import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
@@ -751,28 +750,12 @@ export default function CustomersPage({ user }: { user: User }) {
       )}
 
       {/* Customer Dossier Drawer */}
-      <CustomerDossierDrawer
+      <CrmCustomerDossierHost
+        crm={crm}
         customer={selectedDossierCustomer}
         onClose={() => setSelectedDossierCustomer(null)}
         allLeads={crm.leads.length > 0 ? crm.leads : crmLeads}
         allActivities={crm.activities.length > 0 ? crm.activities : crmActivities}
-        onOpenLeadDrawer={crm.openLeadDrawer}
-        onOpenLeadModal={(lead, defaultCustName) => {
-          crm.openLeadModal(lead);
-          if (defaultCustName) {
-            crm.setLeadForm((prev: any) => ({ ...prev, customerName: defaultCustName }));
-          }
-        }}
-        onOpenActivityModal={(lead, defaultCustName, defaultCustId) => {
-          crm.openActivityModal(lead, 'call', defaultCustName, defaultCustId);
-          if (defaultCustName || defaultCustId) {
-            crm.setActivityForm((prev: any) => ({
-              ...prev,
-              customerName: defaultCustName || prev.customerName,
-              customerId: defaultCustId || prev.customerId
-            }));
-          }
-        }}
         onEditCustomer={(cust) => {
           setSelectedDossierCustomer(null);
           handleEdit(cust);
@@ -780,28 +763,7 @@ export default function CustomersPage({ user }: { user: User }) {
       />
 
       {/* Modal: Activity / Interaction Log */}
-      <CRMInteractionModal
-        isActivityModalOpen={crm.isActivityModalOpen}
-        onCloseActivityModal={() => crm.setIsActivityModalOpen(false)}
-        selectedLeadForActivity={crm.selectedLeadForActivity}
-        setSelectedLeadForActivity={crm.setSelectedLeadForActivity}
-        leads={crm.leads}
-        activityForm={crm.activityForm}
-        setActivityForm={crm.setActivityForm}
-        isSavingActivity={crm.isSavingActivity}
-        onSaveActivity={crm.handleSaveActivity}
-        personnelList={crm.personnelList}
-        mentionUsers={crm.mentionUsers}
-        currentUser={user}
-        currentLoggedInUser={crm.currentLoggedInUser}
-        isFollowupResultModalOpen={crm.isFollowupResultModalOpen}
-        onCloseFollowupResultModal={() => crm.setIsFollowupResultModalOpen(false)}
-        selectedFollowupAct={crm.selectedFollowupAct}
-        followupResultForm={crm.followupResultForm}
-        setFollowupResultForm={crm.setFollowupResultForm}
-        isSubmittingFollowupResult={crm.isSubmittingFollowupResult}
-        onConfirmFollowupResult={crm.handleConfirmFollowupResult}
-      />
+      <CrmInteractionModalHost crm={crm} currentUser={user} />
 
       {/* Counterparties Excel Import, Update & Export Modal */}
       <CustomerExcelModal

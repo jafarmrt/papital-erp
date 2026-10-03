@@ -5,6 +5,7 @@ import {
 import { Item, Category, ProjectInventoryControlSectionData } from '../../types';
 import { formatPersianNumber } from '../../utils';
 import { COMMON_UNITS } from './projectInventoryUtils';
+import { MaterialNameField, MaterialUnitSelect, MaterialNumberField, MaterialAttributeFields } from './materialFormFields';
 
 interface AddMaterialModalProps {
   isOpen: boolean;
@@ -233,84 +234,21 @@ export function AddMaterialModal({
                   </div>
                 </div>
 
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">عنوان ماده اولیه *</label>
-                  <input
-                    type="text"
-                    required
-                    value={customMaterialForm.name}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, name: e.target.value })}
-                    placeholder="مثلاً: کاغذ ترنسفر سفارشی ۷۰x۱۰۰"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">واحد شمارش *</label>
-                  <select
-                    value={customMaterialForm.unit}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, unit: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  >
-                    {COMMON_UNITS.map(u => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">موجودی اولیه (در صورت وجود)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={customMaterialForm.stockQty}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, stockQty: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">قیمت تخمینی / هزینه واحد</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={customMaterialForm.weightedAverageCost}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, weightedAverageCost: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">رنگ</label>
-                  <input
-                    type="text"
-                    value={customMaterialForm.color}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, color: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">جنس</label>
-                  <input
-                    type="text"
-                    value={customMaterialForm.material}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, material: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 text-xs">سایز / ابعاد</label>
-                  <input
-                    type="text"
-                    value={customMaterialForm.size}
-                    onChange={(e) => setCustomMaterialForm({ ...customMaterialForm, size: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none"
-                  />
-                </div>
+                <MaterialNameField
+                  label="عنوان ماده اولیه *"
+                  value={customMaterialForm.name}
+                  onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, name: v })}
+                  placeholder="مثلاً: کاغذ ترنسفر سفارشی ۷۰x۱۰۰"
+                />
+                <MaterialUnitSelect value={customMaterialForm.unit} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, unit: v })} units={COMMON_UNITS} />
+                <MaterialNumberField label="موجودی اولیه (در صورت وجود)" value={customMaterialForm.stockQty} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, stockQty: v })} />
+                <MaterialNumberField label="قیمت تخمینی / هزینه واحد" value={customMaterialForm.weightedAverageCost} onChange={(v) => setCustomMaterialForm({ ...customMaterialForm, weightedAverageCost: v })} />
+                <MaterialAttributeFields
+                  color={customMaterialForm.color}
+                  material={customMaterialForm.material}
+                  size={customMaterialForm.size}
+                  onChange={(field, v) => setCustomMaterialForm({ ...customMaterialForm, [field]: v })}
+                />
               </div>
 
               <div className="space-y-1">

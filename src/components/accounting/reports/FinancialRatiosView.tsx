@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Activity, Coins, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, RefreshCw, BarChart2, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import type React from 'react';
+import { Activity, Coins, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, RefreshCw, BarChart2, Wallet, ArrowUpRight, ArrowDownRight, type LucideIcon } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../../utils';
 import type { FinancialRatiosReport } from '../../../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../../common/PillBadge';
@@ -12,6 +13,96 @@ const RATIO_STATUS_BADGES: PillBadgeVariants = {
   warning: { label: 'هشدار', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: `${RATIO_BADGE_BASE} bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200 dark:border-amber-800` },
 };
 const RATIO_STATUS_DANGER: PillBadgeVariant = { label: 'بحرانی', icon: AlertTriangle, iconClassName: 'w-3 h-3', className: `${RATIO_BADGE_BASE} bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800` };
+
+type RatioStatusKey = 'liquidity' | 'solvency' | 'profitability' | 'efficiency';
+
+// v7.0.140: کارت‌ها و بخش‌های نسبت‌ها داده‌محورند (پیش‌تر ۱۵ کارت تقریباً یکسان تکرار شده بود)
+const STATUS_TILES: Array<[string, RatioStatusKey]> = [
+  ['نقدینگی', 'liquidity'], ['اهرم بدهی', 'solvency'], ['سودآوری', 'profitability'], ['کارایی', 'efficiency'],
+];
+
+interface RatioCardSpec {
+  label: string;
+  value: React.ReactNode;
+  valueClassName: string;
+  hint: string;
+  statusKey?: RatioStatusKey;
+}
+
+interface RatioSectionSpec {
+  title: string;
+  icon: LucideIcon;
+  iconClassName: string;
+  gridClassName: string;
+  cards: RatioCardSpec[];
+}
+
+const BIG = 'text-2xl font-black font-mono';
+const NEUTRAL = 'text-slate-900 dark:text-white';
+const INDIGO = 'text-indigo-600 dark:text-indigo-400';
+const EMERALD = 'text-emerald-600 dark:text-emerald-400';
+
+function withSuffix(value: number | undefined, suffix: string) {
+  return <>{formatPersianNumber(value ?? 0)} <span className="text-xs font-normal text-slate-400">{suffix}</span></>;
+}
+
+function buildRatioSections(r: FinancialRatiosReport | null): RatioSectionSpec[] {
+  const pct = (v: number | undefined) => `${formatPersianNumber(v ?? 0)}٪`;
+  return [
+    {
+      title: '۱. نسبت‌های نقدینگی (Liquidity Ratios)', icon: Wallet, iconClassName: 'text-indigo-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
+      cards: [
+        { label: 'نسبت جاری (Current)', value: formatPersianNumber(r?.currentRatio ?? 0), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'دارایی جاری ÷ بدهی جاری (معیار: > ۱.۵)', statusKey: 'liquidity' },
+        { label: 'نسبت آنی / سریع (Quick)', value: formatPersianNumber(r?.quickRatio ?? 0), valueClassName: `${BIG} ${INDIGO}`, hint: '(دارایی جاری - کالا) ÷ بدهی جاری (معیار: > ۱.۰)' },
+        { label: 'نسبت نقدی (Cash Ratio)', value: formatPersianNumber(r?.cashRatio ?? 0), valueClassName: `${BIG} ${EMERALD}`, hint: 'موجودی نقد و بانک ÷ بدهی جاری' },
+        { label: 'سرمایه در گردش خالص (NWC)', value: formatPersianPrice(r?.netWorkingCapital ?? 0), valueClassName: `text-xl font-bold font-mono ${NEUTRAL}`, hint: 'دارایی جاری منهای بدهی جاری' },
+      ],
+    },
+    {
+      title: '۲. نسبت‌های اهرمی و ساختار سرمایه (Solvency Ratios)', icon: ShieldCheck, iconClassName: 'text-amber-600', gridClassName: 'grid-cols-1 sm:grid-cols-3',
+      cards: [
+        { label: 'نسبت بدهی (Debt Ratio)', value: pct(r?.debtRatio), valueClassName: `${BIG} text-amber-600 dark:text-amber-400`, hint: 'کل بدهی‌ها به کل دارایی‌ها (معیار: < ۵۰٪)', statusKey: 'solvency' },
+        { label: 'نسبت بدهی به حقوق صاحبان سهام (D/E)', value: pct(r?.debtToEquityRatio), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'میزان اتکا به استقراض نسبت به سرمایه سهامداران' },
+        { label: 'نسبت مالکانه (Equity Ratio)', value: pct(r?.equityRatio), valueClassName: `${BIG} ${INDIGO}`, hint: 'سهم حقوق مالکانه از کل دارایی‌های شرکت' },
+      ],
+    },
+    {
+      title: '۳. نسبت‌های سودآوری و بازدهی (Profitability Ratios)', icon: TrendingUp, iconClassName: 'text-emerald-600', gridClassName: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5',
+      cards: [
+        { label: 'حاشیه سود ناخالص', value: pct(r?.grossMargin), valueClassName: `${BIG} ${EMERALD}`, hint: 'سود ناخالص ÷ کل درآمد فروش' },
+        { label: 'حاشیه سود عملیاتی', value: pct(r?.operatingMargin), valueClassName: `${BIG} ${INDIGO}`, hint: 'سود عملیاتی ÷ درآمد فروش' },
+        { label: 'حاشیه سود خالص', value: pct(r?.netProfitMargin), valueClassName: `${BIG} ${EMERALD}`, hint: 'سود خالص ÷ درآمد فروش', statusKey: 'profitability' },
+        { label: 'بازده دارایی‌ها (ROA)', value: pct(r?.returnOnAssets), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'سود خالص ÷ کل دارایی‌ها' },
+        { label: 'بازده حقوق صاحبان سهام (ROE)', value: pct(r?.returnOnEquity), valueClassName: `${BIG} ${INDIGO}`, hint: 'سود خالص ÷ کل حقوق مالکانه' },
+      ],
+    },
+    {
+      title: '۴. نسبت‌های کارایی و گردش دارایی‌ها (Activity Ratios)', icon: BarChart2, iconClassName: 'text-blue-600', gridClassName: 'grid-cols-1 sm:grid-cols-3',
+      cards: [
+        { label: 'گردش کل دارایی‌ها (Asset Turnover)', value: withSuffix(r?.assetTurnover, 'مرتبه'), valueClassName: `${BIG} ${NEUTRAL}`, hint: 'درآمد فروش ÷ میانگین کل دارایی‌ها', statusKey: 'efficiency' },
+        { label: 'گردش حساب‌های دریافتنی', value: withSuffix(r?.receivablesTurnover, 'مرتبه'), valueClassName: `${BIG} text-blue-600 dark:text-blue-400`, hint: 'درآمد فروش ÷ مطالبات و دریافتنی‌ها' },
+        { label: 'دوره گردش کالا و انبار', value: withSuffix(r?.inventoryTurnoverDays, 'روز'), valueClassName: `${BIG} ${INDIGO}`, hint: 'مدت زمان متوسط تبدیل کالا به فروش' },
+      ],
+    },
+  ];
+}
+
+function RatioCard({ card, status }: { card: RatioCardSpec; status?: string }) {
+  return (
+    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
+      {card.statusKey ? (
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-semibold text-slate-500">{card.label}</span>
+          <PillBadge variants={RATIO_STATUS_BADGES} value={status} fallback={RATIO_STATUS_DANGER} />
+        </div>
+      ) : (
+        <span className="text-xs font-semibold text-slate-500">{card.label}</span>
+      )}
+      <div className={card.valueClassName}>{card.value}</div>
+      <p className="text-[11px] text-slate-400">{card.hint}</p>
+    </div>
+  );
+}
 
 interface FinancialRatiosViewProps {
   ratiosData: FinancialRatiosReport | null;
@@ -93,192 +184,28 @@ export function FinancialRatiosView({
 
         {/* Status Badges Group */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full md:w-auto">
-          <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
-            <span className="text-[11px] text-indigo-200 block">نقدینگی</span>
-            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.liquidity} fallback={RATIO_STATUS_DANGER} />
-          </div>
-          <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
-            <span className="text-[11px] text-indigo-200 block">اهرم بدهی</span>
-            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.solvency} fallback={RATIO_STATUS_DANGER} />
-          </div>
-          <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
-            <span className="text-[11px] text-indigo-200 block">سودآوری</span>
-            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.profitability} fallback={RATIO_STATUS_DANGER} />
-          </div>
-          <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
-            <span className="text-[11px] text-indigo-200 block">کارایی</span>
-            <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.efficiency} fallback={RATIO_STATUS_DANGER} />
-          </div>
+          {STATUS_TILES.map(([label, key]) => (
+            <div key={key} className="bg-white/10 backdrop-blur-xs p-3 rounded-xl text-center space-y-1">
+              <span className="text-[11px] text-indigo-200 block">{label}</span>
+              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.[key]} fallback={RATIO_STATUS_DANGER} />
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* 1. LIQUIDITY RATIOS */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-indigo-600" />
-          <h5 className="font-bold text-slate-800 dark:text-white text-sm">۱. نسبت‌های نقدینگی (Liquidity Ratios)</h5>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold text-slate-500">نسبت جاری (Current)</span>
-              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.liquidity} fallback={RATIO_STATUS_DANGER} />
-            </div>
-            <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-              {formatPersianNumber(ratiosData?.currentRatio ?? 0)}
-            </div>
-            <p className="text-[11px] text-slate-400">دارایی جاری ÷ بدهی جاری (معیار: &gt; ۱.۵)</p>
+      {buildRatioSections(ratiosData).map((section) => (
+        <div key={section.title} className="space-y-3">
+          <div className="flex items-center gap-2">
+            <section.icon className={`w-4 h-4 ${section.iconClassName}`} />
+            <h5 className="font-bold text-slate-800 dark:text-white text-sm">{section.title}</h5>
           </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">نسبت آنی / سریع (Quick)</span>
-            <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-              {formatPersianNumber(ratiosData?.quickRatio ?? 0)}
-            </div>
-            <p className="text-[11px] text-slate-400">(دارایی جاری - کالا) ÷ بدهی جاری (معیار: &gt; ۱.۰)</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">نسبت نقدی (Cash Ratio)</span>
-            <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-              {formatPersianNumber(ratiosData?.cashRatio ?? 0)}
-            </div>
-            <p className="text-[11px] text-slate-400">موجودی نقد و بانک ÷ بدهی جاری</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">سرمایه در گردش خالص (NWC)</span>
-            <div className="text-xl font-bold font-mono text-slate-900 dark:text-white">
-              {formatPersianPrice(ratiosData?.netWorkingCapital ?? 0)}
-            </div>
-            <p className="text-[11px] text-slate-400">دارایی جاری منهای بدهی جاری</p>
+          <div className={`grid gap-4 ${section.gridClassName}`}>
+            {section.cards.map((card) => (
+              <RatioCard key={card.label} card={card} status={card.statusKey ? ratiosData?.status?.[card.statusKey] : undefined} />
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* 2. SOLVENCY & LEVERAGE RATIOS */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-amber-600" />
-          <h5 className="font-bold text-slate-800 dark:text-white text-sm">۲. نسبت‌های اهرمی و ساختار سرمایه (Solvency Ratios)</h5>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold text-slate-500">نسبت بدهی (Debt Ratio)</span>
-              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.solvency} fallback={RATIO_STATUS_DANGER} />
-            </div>
-            <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
-              {formatPersianNumber(ratiosData?.debtRatio ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">کل بدهی‌ها به کل دارایی‌ها (معیار: &lt; ۵۰٪)</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">نسبت بدهی به حقوق صاحبان سهام (D/E)</span>
-            <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-              {formatPersianNumber(ratiosData?.debtToEquityRatio ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">میزان اتکا به استقراض نسبت به سرمایه سهامداران</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">نسبت مالکانه (Equity Ratio)</span>
-            <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-              {formatPersianNumber(ratiosData?.equityRatio ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">سهم حقوق مالکانه از کل دارایی‌های شرکت</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. PROFITABILITY RATIOS */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-emerald-600" />
-          <h5 className="font-bold text-slate-800 dark:text-white text-sm">۳. نسبت‌های سودآوری و بازدهی (Profitability Ratios)</h5>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">حاشیه سود ناخالص</span>
-            <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-              {formatPersianNumber(ratiosData?.grossMargin ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">سود ناخالص ÷ کل درآمد فروش</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">حاشیه سود عملیاتی</span>
-            <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-              {formatPersianNumber(ratiosData?.operatingMargin ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">سود عملیاتی ÷ درآمد فروش</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold text-slate-500">حاشیه سود خالص</span>
-              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.profitability} fallback={RATIO_STATUS_DANGER} />
-            </div>
-            <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-              {formatPersianNumber(ratiosData?.netProfitMargin ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">سود خالص ÷ درآمد فروش</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">بازده دارایی‌ها (ROA)</span>
-            <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-              {formatPersianNumber(ratiosData?.returnOnAssets ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">سود خالص ÷ کل دارایی‌ها</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">بازده حقوق صاحبان سهام (ROE)</span>
-            <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-              {formatPersianNumber(ratiosData?.returnOnEquity ?? 0)}٪
-            </div>
-            <p className="text-[11px] text-slate-400">سود خالص ÷ کل حقوق مالکانه</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. ACTIVITY & TURNOVER RATIOS */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <BarChart2 className="w-4 h-4 text-blue-600" />
-          <h5 className="font-bold text-slate-800 dark:text-white text-sm">۴. نسبت‌های کارایی و گردش دارایی‌ها (Activity Ratios)</h5>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold text-slate-500">گردش کل دارایی‌ها (Asset Turnover)</span>
-              <PillBadge variants={RATIO_STATUS_BADGES} value={ratiosData?.status?.efficiency} fallback={RATIO_STATUS_DANGER} />
-            </div>
-            <div className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-              {formatPersianNumber(ratiosData?.assetTurnover ?? 0)} <span className="text-xs font-normal text-slate-400">مرتبه</span>
-            </div>
-            <p className="text-[11px] text-slate-400">درآمد فروش ÷ میانگین کل دارایی‌ها</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">گردش حساب‌های دریافتنی</span>
-            <div className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400">
-              {formatPersianNumber(ratiosData?.receivablesTurnover ?? 0)} <span className="text-xs font-normal text-slate-400">مرتبه</span>
-            </div>
-            <p className="text-[11px] text-slate-400">درآمد فروش ÷ مطالبات و دریافتنی‌ها</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2">
-            <span className="text-xs font-semibold text-slate-500">دوره گردش کالا و انبار</span>
-            <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-              {formatPersianNumber(ratiosData?.inventoryTurnoverDays ?? 0)} <span className="text-xs font-normal text-slate-400">روز</span>
-            </div>
-            <p className="text-[11px] text-slate-400">مدت زمان متوسط تبدیل کالا به فروش</p>
-          </div>
-        </div>
-      </div>
+      ))}
 
       {/* 5. MULTI-CURRENCY PORTFOLIO SUMMARY */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-hidden space-y-4 p-5">
