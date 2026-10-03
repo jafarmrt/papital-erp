@@ -36,6 +36,30 @@ export interface NextItemCodeResult {
   prefix?: string;
 }
 
+/**
+ * بدنه ایجاد/ویرایش کالا (خروجی itemCreateUpdateSchema مسیر کالا با passthrough)؛
+ * کلیدهای پویای stock_<کد انبار> نیز در همین شیء می‌آیند.
+ */
+export interface ItemWriteBody {
+  [key: string]: unknown;
+  type?: string;
+  name: string;
+  code: string;
+  unit: string;
+  category?: string;
+  image?: string;
+  thumbnail?: string;
+  reorder_point?: string | number;
+  weighted_average_cost?: string | number;
+  initial_cost?: string | number;
+  current_stock?: string | number;
+  stocks?: Record<string, unknown>;
+  color?: string;
+  weight?: string | number;
+  material?: string;
+  size?: string;
+}
+
 function cleanSegment(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -798,7 +822,7 @@ export class ItemCatalogService {
    * Creates a new item with initial inventory stocks in a domain-level atomic transaction (RULE 01 compliant)
    */
   static async createItem(
-    body: Record<string, any>,
+    body: ItemWriteBody,
     user?: { id?: number; username?: string; fullName?: string; full_name?: string },
     externalTx?: DbExecutor
   ): Promise<{
@@ -910,7 +934,7 @@ export class ItemCatalogService {
    */
   static async updateItem(
     itemId: number,
-    body: Record<string, any>,
+    body: ItemWriteBody,
     user?: { id?: number; username?: string; fullName?: string },
     externalTx?: DbExecutor
   ): Promise<{

@@ -102,14 +102,37 @@ export function reservationQtyField(row: Partial<Record<ReservationQtyField, unk
   return RESERVATION_QTY_FIELDS.find(f => Number(row[f] || 0) > 0) ?? null;
 }
 
+/** ردیف مواد بخش‌های کنترل موجودی پروژه (JSONB فرم پروژه؛ نام‌های قدیمی code/itemName هم خوانده می‌شوند) */
+interface InventoryControlMaterialRow {
+  itemCode?: string;
+  code?: string;
+  name?: string;
+  itemName?: string;
+  category?: string;
+  unit?: string;
+  requiredQty?: number | string;
+  totalRequiredQty?: number | string;
+  procurementStatus?: string;
+}
+
+/** بخش کنترل موجودی پروژه: per_item (نتایج به ازای هر محصول) یا global (فهرست مشترک) */
+interface InventoryControlSection {
+  checkType?: string;
+  perItemResults?: Record<string, Record<string, InventoryControlMaterialRow | null | undefined> | null | undefined>;
+  globalItems?: Array<InventoryControlMaterialRow | null | undefined>;
+}
+
 interface InventoryControlData {
   isFinalized?: boolean;
   isReserved?: boolean;
   reservedItems?: InventoryControlItem[];
   purchaseList?: InventoryControlItem[];
-  sections?: any[];
-  manualPurchaseItems?: any[];
+  sections?: InventoryControlSection[];
+  manualPurchaseItems?: Array<InventoryControlMaterialRow | null | undefined>;
 }
+
+/** ستون‌های کالا که برای تبدیل تخصیص مواد پروژه به رزرو خوانده می‌شوند */
+type ReservationLookupItem = Pick<typeof items.$inferSelect, 'id' | 'code' | 'name' | 'category' | 'unit' | 'currentStock' | 'weightedAverageCost'>;
 
 type ReservationRowRef = { itemId?: unknown; itemCode?: unknown; itemName?: unknown };
 
@@ -133,10 +156,10 @@ export class ItemStockReservationService {
    */
   static deriveProjectReservedItems(
     invControl: InventoryControlData | null | undefined,
-    itemsByCodeMap: Map<string, any>,
-    itemsByNameMap: Map<string, any>,
-    itemsByIdMap: Map<number, any>
-  ): any[] {
+    itemsByCodeMap: Map<string, ReservationLookupItem>,
+    itemsByNameMap: Map<string, ReservationLookupItem>,
+    itemsByIdMap: Map<number, ReservationLookupItem>
+  ): InventoryControlItem[] {
     if (!invControl) return [];
 
     if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
@@ -149,7 +172,7 @@ export class ItemStockReservationService {
       return [];
     }
 
-    const itemsList: any[] = [];
+    const itemsList: InventoryControlItem[] = [];
     if (Array.isArray(invControl.sections) && invControl.sections.length > 0) {
       const allocMap = new Map<string, {
         itemCode: string;
@@ -255,7 +278,7 @@ export class ItemStockReservationService {
   /**
    * Fetch active project's reserved items directly from DB.
    */
-  static async getProjectReservedItems(targetProj: { id: number; inventoryControl: any }, executor: DbExecutor = orm): Promise<any[]> {
+  static async getProjectReservedItems(targetProj: { id: number; inventoryControl: unknown }, executor: DbExecutor = orm): Promise<InventoryControlItem[]> {
     const invControl = targetProj.inventoryControl as InventoryControlData | null;
     if (!invControl) return [];
     if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
@@ -294,7 +317,7 @@ export class ItemStockReservationService {
    * - Audit: logActivity با snapshot قبل/بعد داخل همان executor (tx)
    */
   static async releaseProjectReservations(
-    tx: { select: Function; update: Function },
+    tx: DbExecutor,
     params: {
       projectId: number;
       docItems: Array<{ itemId?: unknown; itemCode?: unknown; itemName?: unknown; quantity: number }>;
@@ -322,7 +345,7 @@ export class ItemStockReservationService {
     }
 
     // 1. قفل سطری پروژه (ترتیب قفل: production_projects سطح پروژه، مطابق سلسله‌مراتب)
-    const [proj] = await (tx as any).select()
+    const [proj] = await tx.select()
       .from(productionProjects)
       .where(and(eq(productionProjects.id, projId), eq(productionProjects.isDeleted, 0)))
       .for('update');
@@ -346,7 +369,7 @@ export class ItemStockReservationService {
     const invControl = (proj.inventoryControl as InventoryControlData) || {};
     let reservedList: InventoryControlItem[] = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
       ? [...invControl.reservedItems]
-      : (await ItemStockReservationService.getProjectReservedItems(proj, tx as DbExecutor)) as InventoryControlItem[];
+      : await ItemStockReservationService.getProjectReservedItems(proj, tx);
 
     // 3. مپینگ اقلام سند
     const rawItemIds = Array.from(new Set(
@@ -357,8 +380,8 @@ export class ItemStockReservationService {
 
     let itemDataMap = new Map<number, typeof items.$inferSelect>();
     if (rawItemIds.length > 0) {
-      const fetchedItems = await (tx as any).select().from(items).where(inArray(items.id, rawItemIds));
-      itemDataMap = new Map(fetchedItems.map((it: typeof items.$inferSelect) => [it.id, it]));
+      const fetchedItems = await tx.select().from(items).where(inArray(items.id, rawItemIds));
+      itemDataMap = new Map(fetchedItems.map((it): [number, typeof items.$inferSelect] => [it.id, it]));
     }
 
     // 4. کسر رزرو هر ردیف سند (تطبیق id/code/name). v7.0.102 (TD-233): مقدار هر ردیف سند از همه ردیف‌های رزرو
@@ -408,7 +431,7 @@ export class ItemStockReservationService {
       };
 
       // 5. بامپ اتمیک version در شرط UPDATE (دفاع دوم OCC در سطح SQL)
-      const [updatedRow] = await (tx as any).update(productionProjects)
+      const [updatedRow] = await tx.update(productionProjects)
         .set({
           inventoryControl: updatedInvControl,
           version: nextVersion(proj.version)
@@ -650,9 +673,10 @@ export class ItemStockReservationService {
           const reservedQty = qtyField ? Number(item[qtyField]) : 0;
           if (reservedQty <= 0) continue;
 
+          const rowName = item.itemName || item.name;
           const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) 
             || (item.itemId ? itemsByIdMap.get(Number(item.itemId)) : null)
-            || ((item.itemName || item.name) ? itemsByNameMap.get((item.itemName || item.name).trim().toLowerCase()) : null);
+            || (rowName ? itemsByNameMap.get(rowName.trim().toLowerCase()) : null);
           const price = matchedDbItem ? Number(matchedDbItem.weightedAverageCost || 0) : Number(item.unitPrice || 0);
 
           allReservationEntries.push({

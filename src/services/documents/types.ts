@@ -60,7 +60,7 @@ export interface CreateDocumentInput {
   /** v7.0.63 (TD-198): نرخ تسعیر سند غیرریالی */
   exchangeRate?: number | string | null;
   exchange_rate?: number | string | null;
-  attachments?: any[];
+  attachments?: unknown[];
   projectId?: number | string | null;
   project_id?: number | string | null;
   excludeDocumentId?: number | string | null;
@@ -87,7 +87,7 @@ export interface UpdateDocumentInput {
   notes?: string;
   location?: string;
   currency?: string;
-  attachments?: any[];
+  attachments?: unknown[];
   items?: DocumentLineItemInput[];
   /** v7.0.32 (TD-197): مالیات ساختاریافته اسناد فروش */
   vatPercent?: number | string | null;

@@ -153,7 +153,7 @@ export class ChequeLifecycleService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
-    attachments?: any[];
+    attachments?: unknown[];
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');

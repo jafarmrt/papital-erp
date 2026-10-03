@@ -750,7 +750,7 @@ export class AccountingReportService {
         result.push({
           id: c.id,
           name: c.name,
-          partyType: (pType === 'both' ? (typeFilter === 'supplier' ? 'supplier' : 'customer') : pType) as any,
+          partyType: (pType === 'both' ? (typeFilter === 'supplier' ? 'supplier' : 'customer') : pType) as PartyOption['partyType'],
           phone: c.phone || undefined,
           city: c.city || undefined,
         });

@@ -302,7 +302,7 @@ export class TreasuryTransactionService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
-    attachments?: any[];
+    attachments?: unknown[];
     // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده)
     purpose?: string;
   }): Promise<TreasuryTransaction> {

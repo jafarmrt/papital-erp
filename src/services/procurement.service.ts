@@ -2,17 +2,28 @@ import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
 import { resolveJalaliFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
-import { getTodayJalaliDate } from '../utils.js';
+import { getTodayJalaliDate, errorMessageOf } from '../utils.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { ValidationError, NotFoundError } from '../errors/customErrors.js';
-import { WorkflowTransitionExecutor } from './workflow/workflowTransitionExecutor.js';
+import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
 import { DocumentService } from './document.service.js';
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
 
 type DbClient = DbExecutor;
+
+/** فیلدهای وضعیت ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_states) */
+type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey'>;
+/** فیلدهای انتقال ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_transitions) */
+type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title'>;
+
+/** ردیف درخواست خرید پس از تحویل انبار (receivedQty در ردیف JSONB نوشته می‌شود) */
+type RequisitionItemWithReceipt = PurchaseRequisitionItemRow & { receivedQty?: number | string };
+
+/** سند خرید صادرشده از درخواست: ردیف documents، یا شناسه و شماره وقتی ردیف خوانده نشد */
+type CreatedProcurementDocument = typeof documents.$inferSelect | { id: number; refNumber: string };
 
 export interface CreateRequisitionInput {
   title: string;
@@ -448,9 +459,10 @@ export class ProcurementService {
       throw new ValidationError('نمونه فرآیند گردش کار مرتبط یافت نشد');
     }
 
-    const transitions = ((wfInst.snapshotDsl as any)?.transitions as any[]) || 
+    const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
+    const transitions: WorkflowTransitionRef[] = snapshot?.transitions || 
       await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
-    const states = ((wfInst.snapshotDsl as any)?.states as any[]) ||
+    const states: WorkflowStateRef[] = snapshot?.states ||
       await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
 
     // Auto-heal / synchronize workflow instance state if desynchronized from requisition business status
@@ -466,10 +478,10 @@ export class ProcurementService {
       cancelled: 'rejected'
     };
     const expectedStateKey = statusToStateKeyMap[req.status] || 'pending';
-    const currentStateObj = states.find((s: any) => s.id === wfInst.currentStateId);
+    const currentStateObj = states.find(s => s.id === wfInst.currentStateId);
 
     if (currentStateObj && currentStateObj.stateKey !== expectedStateKey) {
-      const correctState = states.find((s: any) => s.stateKey === expectedStateKey);
+      const correctState = states.find(s => s.stateKey === expectedStateKey);
       if (correctState) {
         await orm.update(workflowInstances).set({
           currentStateId: correctState.id,
@@ -504,7 +516,7 @@ export class ProcurementService {
 
     // If receiving items while still at pending, auto-advance to ordered state first so receive_items can execute
     if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
-      const orderedState = states.find((s: any) => s.stateKey === 'ordered');
+      const orderedState = states.find(s => s.stateKey === 'ordered');
       if (orderedState && wfInst.currentStateId !== orderedState.id) {
         await orm.update(workflowInstances).set({
           currentStateId: orderedState.id,
@@ -600,8 +612,8 @@ export class ProcurementService {
       for (const docId of docIdsToFinalize) {
         try {
           await DocumentService.finalizeDocument(docId, user.username || 'سیستم تدارکات');
-        } catch (err: any) {
-          logger.warn({ message: `[Procurement] Error finalizing linked document #${docId}: ${err.message}` });
+        } catch (err) {
+          logger.warn({ message: `[Procurement] Error finalizing linked document #${docId}: ${errorMessageOf(err)}` });
         }
       }
 
@@ -642,8 +654,8 @@ export class ProcurementService {
             }
             return it;
           });
-        } catch (err: any) {
-          logger.warn({ message: `[Procurement] Error auto-generating receipt document for unhandled items: ${err.message}` });
+        } catch (err) {
+          logger.warn({ message: `[Procurement] Error auto-generating receipt document for unhandled items: ${errorMessageOf(err)}` });
         }
       }
     }
@@ -694,14 +706,14 @@ export class ProcurementService {
   static async convertToPurchaseOrders(
     params: ConvertToOrdersInput,
     user: { id?: number; username?: string; role?: string }
-  ): Promise<{ createdDocuments: any[]; requisition: PurchaseRequisition }> {
+  ): Promise<{ createdDocuments: CreatedProcurementDocument[]; requisition: PurchaseRequisition }> {
     const { requisitionId, orderGroups } = params;
     if (!orderGroups || !Array.isArray(orderGroups) || orderGroups.length === 0) {
       throw new ValidationError('حداقل یک گروه سفارش خرید باید تعیین شود.');
     }
 
     const req = await this.getRequisitionById(requisitionId);
-    const createdDocuments: any[] = [];
+    const createdDocuments: CreatedProcurementDocument[] = [];
     const updatedItems = [...req.items];
 
     for (const group of orderGroups) {
@@ -807,8 +819,8 @@ export class ProcurementService {
           });
           wfId = instance.id;
           await orm.update(purchaseRequisitions).set({ workflowInstanceId: wfId }).where(eq(purchaseRequisitions.id, req.id));
-        } catch (wfErr: any) {
-          logger.warn({ message: `[Procurement] Error starting workflow for req #${req.id}: ${wfErr.message}` });
+        } catch (wfErr) {
+          logger.warn({ message: `[Procurement] Error starting workflow for req #${req.id}: ${errorMessageOf(wfErr)}` });
         }
       }
       if (wfId) {
@@ -816,7 +828,7 @@ export class ProcurementService {
         if (wf) {
           const wStates = await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wf.workflowDefinitionId));
           const targetStateKey = newStatus === 'ordered' ? 'ordered' : 'pending';
-          const targetState = wStates.find((s: any) => s.stateKey === targetStateKey);
+          const targetState = wStates.find(s => s.stateKey === targetStateKey);
           if (targetState && wf.currentStateId !== targetState.id) {
             await orm.update(workflowInstances).set({
               currentStateId: targetState.id,
@@ -837,7 +849,7 @@ export class ProcurementService {
       details: {
         code: req.code,
         createdDocsCount: createdDocuments.length,
-        docNumbers: createdDocuments.map(d => d.refNumber || d.ref_number || d.id),
+        docNumbers: createdDocuments.map(d => d.refNumber || d.id),
         newStatus
       }
     });
@@ -991,11 +1003,11 @@ export class ProcurementService {
     const lines = await orm.select().from(documentItems).where(inArray(documentItems.documentId, docIds));
     const allItemIds = Array.from(new Set(lines.map(l => l.itemId)));
 
-    let catalogItems: any[] = [];
+    let catalogItems: (typeof items.$inferSelect)[] = [];
     if (allItemIds.length > 0) {
       catalogItems = await orm.select().from(items).where(inArray(items.id, allItemIds));
     }
-    const itemMap = new Map<number, any>();
+    const itemMap = new Map<number, typeof items.$inferSelect>();
     catalogItems.forEach(it => itemMap.set(it.id, it));
 
     const result: ProcurementOrder[] = pagedDocs.map(doc => {
@@ -1082,7 +1094,7 @@ export class ProcurementService {
     const matchCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
     const reqCode = matchCode ? matchCode[1].trim() : null;
 
-    let linkedReq: any = null;
+    let linkedReq: typeof purchaseRequisitions.$inferSelect | null | undefined = null;
     if (reqCode) {
       const [r] = await orm.select().from(purchaseRequisitions).where(and(
         eq(purchaseRequisitions.code, reqCode),
@@ -1094,7 +1106,7 @@ export class ProcurementService {
     if (!linkedReq) {
       const allReqs = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.isDeleted, 0));
       for (const r of allReqs) {
-        if (Array.isArray(r.items) && r.items.some((it: any) => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.includes(documentId))) {
+        if (Array.isArray(r.items) && (r.items as PurchaseRequisitionItemRow[]).some(it => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.includes(documentId))) {
           linkedReq = r;
           break;
         }
@@ -1103,7 +1115,7 @@ export class ProcurementService {
 
     if (linkedReq) {
       const allDocIds = new Set<number>();
-      for (const it of (linkedReq.items || [])) {
+      for (const it of ((linkedReq.items || []) as PurchaseRequisitionItemRow[])) {
         if (Array.isArray(it.linkedDocumentIds)) {
           for (const dId of it.linkedDocumentIds) {
             allDocIds.add(Number(dId));
@@ -1133,7 +1145,7 @@ export class ProcurementService {
       }
 
       const docLines = await orm.select().from(documentItems).where(eq(documentItems.documentId, documentId));
-      const updatedReqItems = (linkedReq.items || []).map((rit: any) => {
+      const updatedReqItems = ((linkedReq.items || []) as RequisitionItemWithReceipt[]).map(rit => {
         const line = docLines.find(dl => dl.itemId === rit.itemId);
         if (line) {
           const prevRcv = Number(rit.receivedQty || 0);
@@ -1158,13 +1170,14 @@ export class ProcurementService {
       if (allDelivered && linkedReq.workflowInstanceId) {
         const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
         if (wfInst && wfInst.status === 'IN_PROGRESS') {
-          const states = ((wfInst.snapshotDsl as any)?.states as any[]) || 
+          const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
+          const states: WorkflowStateRef[] = snapshot?.states || 
             await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
-          const receivedState = states.find((s: any) => s.stateKey === 'received');
+          const receivedState = states.find(s => s.stateKey === 'received');
           
-          const transitions = ((wfInst.snapshotDsl as any)?.transitions as any[]) ||
+          const transitions: WorkflowTransitionRef[] = snapshot?.transitions ||
             await orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
-          const trToReceived = transitions.find((t: any) => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
+          const trToReceived = transitions.find(t => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
 
           if (trToReceived) {
             try {
@@ -1175,8 +1188,8 @@ export class ProcurementService {
                 userName: user.username || 'انباردار تحویل‌گیرنده',
                 comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
               });
-            } catch (trErr: any) {
-              logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${trErr.message}` });
+            } catch (trErr) {
+              logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${errorMessageOf(trErr)}` });
               if (receivedState) {
                 await orm.update(workflowInstances).set({
                   currentStateId: receivedState.id,

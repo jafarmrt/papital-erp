@@ -241,7 +241,7 @@ export class VoucherService {
     /** v7.0.31 (TD-193): فقط برای اسناد صادرشده توسط VoucherSync برای یک سند انبار/فاکتور */
     sourceDocumentId?: number | null;
     currency?: string;
-    attachments?: any[];
+    attachments?: unknown[];
     userId?: number;
     username?: string;
     items: {
@@ -339,7 +339,7 @@ export class VoucherService {
     manualVoucherNumber?: string;
     description?: string;
     status?: 'draft' | 'approved' | 'permanent';
-    attachments?: any[];
+    attachments?: unknown[];
     items?: {
       accountId: number;
       detailedType?: 'none' | 'customer' | 'personnel' | 'project' | 'bank_account' | 'other' | 'supplier' | string;
