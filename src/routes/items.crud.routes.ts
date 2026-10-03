@@ -162,10 +162,10 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
 
     const whereClause = and(...conditions);
 
-    let query = orm.select().from(items).where(whereClause).orderBy(desc(items.id));
+    let query = orm.select().from(items).where(whereClause).orderBy(desc(items.id)).$dynamic();
 
     if (!isExport && limit > 0) {
-      query = query.limit(limit).offset(offset) as any;
+      query = query.limit(limit).offset(offset);
     }
 
     const fetchedItems = await query;

@@ -55,7 +55,7 @@ router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSI
 
     // 1. Fetch saved transfer details
     const savedTransfers = await orm.select().from(transfers).where(eq(transfers.isDeleted, 0));
-    const savedMap = new Map<string, any>();
+    const savedMap = new Map<string, typeof transfers.$inferSelect>();
     for (const tr of savedTransfers) {
       savedMap.set(tr.code, tr);
     }
@@ -81,7 +81,7 @@ router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSI
     .where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
 
     // 3. Map products to transfer codes
-    const transferProductsMap = new Map<string, any[]>();
+    const transferProductsMap = new Map<string, typeof allProducts>();
     for (const prod of allProducts) {
       const trCode = extractTransferCode(prod.code);
       if (trCode) {

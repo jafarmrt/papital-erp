@@ -30,3 +30,31 @@ describe('per-file any ratchet (TD-106)', () => {
     expect(countByRule([lint('src/a.ts', [any, { ruleId: 'max-lines' }])]).counts).toEqual({ 'max-lines': 1 });
   });
 });
+
+describe('no any in server money/stock paths (TD-106, v7.0.109)', () => {
+  it('rejects error-level messages, active or silenced with eslint-disable, whatever the baseline', async () => {
+    const { findBlockingErrors } = await import('../../../scripts/eslint-ratchet');
+    const blocking = findBlockingErrors([
+      { filePath: path.join(cwd, 'src/routes/accounting.routes.ts'), messages: [{ ruleId: ANY_RULE, severity: 2, line: 3 }], suppressedMessages: [{ ruleId: ANY_RULE, severity: 2, line: 9 }] },
+      { filePath: path.join(cwd, 'src/pages/ItemsPage.tsx'), messages: [{ ruleId: ANY_RULE, severity: 1, line: 4 }] },
+    ], cwd);
+    expect(blocking).toEqual([
+      { file: 'src/routes/accounting.routes.ts', line: 3, ruleId: ANY_RULE, suppressed: false },
+      { file: 'src/routes/accounting.routes.ts', line: 9, ruleId: ANY_RULE, suppressed: true },
+    ]);
+  });
+
+  it('marks any as an error in money/stock files and leaves other files on the per-file ratchet', async () => {
+    const { ESLint } = await import('eslint');
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const severityIn = async (filePath: string) => {
+      const config = await eslint.calculateConfigForFile(filePath) as { rules?: Record<string, unknown> };
+      const rule = config.rules?.[ANY_RULE];
+      return Array.isArray(rule) ? rule[0] : rule;
+    };
+    for (const file of ['src/services/procurement.service.ts', 'src/services/items/itemStockReservation.service.ts', 'src/routes/accounting.routes.ts', 'src/routes/inventory.routes.ts', 'src/lib/stockAvailability.ts']) {
+      expect(await severityIn(file), file).toBe(2);
+    }
+    expect(await severityIn('src/pages/ItemsPage.tsx')).toBe(1);
+  });
+});

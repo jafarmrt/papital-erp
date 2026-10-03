@@ -12,9 +12,16 @@ import { KardexBackfillService } from '../services/inventory/kardexBackfill.serv
 import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
 router.use(authenticateToken);
+
+/**
+ * کاربر جاری برای نام لاگ. فیلد قدیمی `name` در payload توکن‌های فعلی وجود ندارد
+ * (generateToken آن را نمی‌نویسد)، پس عملاً همیشه username استفاده می‌شود؛ برای حفظ رفتار نگه داشته شده است.
+ */
+type LegacyNamedUser = AuthUserPayload & { name?: string };
 
 export const paramsItemIdSchema = z.object({
   params: z.object({
@@ -181,8 +188,8 @@ router.post(
   validate(warehouseStockRepairSchema),
   asyncHandler(async (req, res) => {
     const { dryRun, itemIds } = req.body as { dryRun: boolean; itemIds?: number[] };
-    const userId = (req as any).user?.id;
-    const username = (req as any).user?.username || 'مدیر سیستم';
+    const userId = req.user?.id;
+    const username = req.user?.username || 'مدیر سیستم';
     const result = await WarehouseStockReconciliationService.repair({ dryRun, itemIds, userId, username });
     if (result.locked) {
       throw new ConflictError('ترمیم موجودی انبارها هم‌اکنون توسط کاربر یا نمونه دیگری در حال اجراست.');
@@ -241,8 +248,9 @@ router.post(
   validate(rebuildStockSchema),
   asyncHandler(async (req, res) => {
     const { itemId, fixWAC } = req.body || {};
-    const userName = (req as any).user?.name || (req as any).user?.username || 'مدیر سیستم';
-    const userId = (req as any).user?.id;
+    const user: LegacyNamedUser | undefined = req.user;
+    const userName = user?.name || user?.username || 'مدیر سیستم';
+    const userId = user?.id;
 
     if (itemId) {
       const singleResult = await InventoryIntegrityService.rebuildItemFromLedger(itemId, {
@@ -297,7 +305,8 @@ router.post(
   idempotency({ scope: 'inventory' }),
   validate(transferStockSchema),
   asyncHandler(async (req, res) => {
-    const userName = (req as any).user?.name || (req as any).user?.username || 'مدیر سیستم';
+    const user: LegacyNamedUser | undefined = req.user;
+    const userName = user?.name || user?.username || 'مدیر سیستم';
     const result = await InventoryIntegrityService.executeWarehouseTransfer({
       ...req.body,
       user: userName
@@ -397,7 +406,7 @@ router.post(
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
     const { projectId, allocations } = req.body;
-    const user = (req as any).user;
+    const user: LegacyNamedUser | undefined = req.user;
     const result = await InventoryIntegrityService.allocateMaterialsForProject({
       projectId: Number(projectId),
       allocations,
@@ -434,7 +443,7 @@ router.post(
       throw new BadRequestError('شناسه تخصیص نامعتبر است.');
     }
 
-    const user = (req as any).user;
+    const user: LegacyNamedUser | undefined = req.user;
     const updated = await InventoryIntegrityService.consumeAllocation(id, {
       userId: user?.id,
       username: user?.name || user?.username || 'سیستم'
@@ -470,7 +479,7 @@ router.post(
     }
 
     const { reason } = req.body || {};
-    const user = (req as any).user;
+    const user: LegacyNamedUser | undefined = req.user;
     const updated = await InventoryIntegrityService.releaseAllocation(id, {
       reason,
       userId: user?.id,

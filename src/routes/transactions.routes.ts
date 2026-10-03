@@ -101,16 +101,17 @@ router.get('/transactions', authorize('warehouse.view', 'accounting.view'), vali
     .from(transactions)
     .innerJoin(items, eq(transactions.itemId, items.id))
     // یک موجودیت هویت کاربر: نمایش همیشه «نام کامل» کاربر (resolve از جدول users) با fallback به مقدار ثبت‌شده
-    .leftJoin(users, eq(users.username, transactions.createdBy));
+    .leftJoin(users, eq(users.username, transactions.createdBy))
+    .$dynamic();
 
     if (whereClause) {
-      query = query.where(whereClause) as any;
+      query = query.where(whereClause);
     }
 
-    query = query.orderBy(desc(transactions.date), desc(transactions.id)) as any;
+    query = query.orderBy(desc(transactions.date), desc(transactions.id));
 
     if (!isExport && limit > 0) {
-      query = query.limit(limit).offset(offset) as any;
+      query = query.limit(limit).offset(offset);
     }
 
     const result = await query;
@@ -145,10 +146,11 @@ router.get('/transactions', authorize('warehouse.view', 'accounting.view'), vali
     let countQuery = orm.select({ count: sql`count(*)`.mapWith(Number) })
       .from(transactions)
       .innerJoin(items, eq(transactions.itemId, items.id))
-      .leftJoin(users, eq(users.username, transactions.createdBy));
+      .leftJoin(users, eq(users.username, transactions.createdBy))
+      .$dynamic();
 
     if (whereClause) {
-      countQuery = countQuery.where(whereClause) as any;
+      countQuery = countQuery.where(whereClause);
     }
     
     const totalCountQuery = await countQuery;

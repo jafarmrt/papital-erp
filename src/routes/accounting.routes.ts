@@ -13,9 +13,15 @@ import { NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { orm } from '../db/drizzle.js';
 import { sql, eq, and } from 'drizzle-orm';
 import { workflowInstances, workflowHistoryLogs, workflowStates } from '../db/schema.js';
+import type { BankAccountType } from '../types.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all accounting routes
+
+/** query پس از validate: میدل‌ور validate مقدار req.query را با خروجی parse شده Zod جایگزین می‌کند. */
+type ValidatedQuery<S extends z.ZodTypeAny> = z.infer<S> extends { query?: infer Q } ? Partial<NonNullable<Q>> : never;
+type TreasuryTxFilterType = Parameters<typeof AccountingService.getTreasuryTransactions>[0]['type'];
+type ChequeFilterType = Parameters<typeof AccountingService.getCheques>[0]['type'];
 
 // ==========================================
 // 1. STATS & OVERVIEW
@@ -188,7 +194,7 @@ export const vouchersQuerySchema = z.object({
 });
 
 router.get('/accounting/vouchers', authorizePermission(...RECORD_READ_PERMISSIONS.journal_voucher), validate(vouchersQuerySchema), asyncHandler(async (req, res) => {
-  const { page, limit, search, status, voucherType, startDate, endDate } = (req.query as any) || {};
+  const { page, limit, search, status, voucherType, startDate, endDate } = (req.query as ValidatedQuery<typeof vouchersQuerySchema>) || {};
   const result = await AccountingService.getJournalVouchers({
     page: page ? Number(page) : undefined,
     limit: limit ? Number(limit) : undefined,
@@ -609,7 +615,7 @@ const reportBanksHandler = asyncHandler(async (req, res) => {
       totalCashAndBankLedger,
       totalCashAndBankTreasury,
       totalDiscrepancy,
-      accounts: (banks as any[]).map((b: any) => ({
+      accounts: banks.map((b) => ({
         id: b.id,
         code: b.code,
         title: b.title,
@@ -634,7 +640,7 @@ router.get('/accounting/bank-accounts/reconciliation-report', authorizePermissio
 
 // V4.0.37: تولید کد خودکار حساب خزانه بر اساس نوع
 const getNextBankCodeHandler = asyncHandler(async (req, res) => {
-  const type = (req.query.type as any) || 'bank';
+  const type = (req.query.type as BankAccountType | undefined) || 'bank';
   const nextCode = await AccountingService.generateNextAccountCode(type);
   res.json({ code: nextCode });
 });
@@ -712,7 +718,7 @@ router.post('/accounting/bank-accounts', authorizePermission('accounting.treasur
 const updateBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // V1.4.0: snapshot قبل برای audit
-  const before = (await AccountingService.getBankAccounts()).find((b: any) => b.id === id) || null;
+  const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
   const updated = await AccountingService.updateBankAccount(id, {
     ...req.body,
     ...(req.body.shebaNumber || req.body.shabaNumber ? { shebaNumber: req.body.shebaNumber || req.body.shabaNumber } : {}),
@@ -737,7 +743,7 @@ router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.trea
 
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const before = (await AccountingService.getBankAccounts()).find((b: any) => b.id === id) || null;
+  const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
   const result = await AccountingService.deleteBankAccount(id);
   await logActivity({
     userId: req.user?.id,
@@ -768,9 +774,10 @@ export const treasuryQuerySchema = z.object({
 });
 
 router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
-  const { type, bankAccountId, startDate, endDate } = (req.query as any) || {};
+  const { type, bankAccountId, startDate, endDate } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
   const list = await AccountingService.getTreasuryTransactions({
-    type: type as any,
+    // مقدار 'all' همان‌طور که قبلاً بود بدون تغییر به سرویس می‌رسد
+    type: type as TreasuryTxFilterType,
     bankAccountId: bankAccountId ? Number(bankAccountId) : undefined,
     startDate: startDate as string,
     endDate: endDate as string,
@@ -887,7 +894,7 @@ export const dateRangeQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/cash-flow', authorizePermission('accounting.reports', 'accounting.treasury', 'accounting.view'), validate(dateRangeQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate } = (req.query as any) || {};
+  const { startDate, endDate } = (req.query as ValidatedQuery<typeof dateRangeQuerySchema>) || {};
   const report = await AccountingService.getCashFlowReport({
     startDate: startDate as string,
     endDate: endDate as string,
@@ -982,9 +989,10 @@ export const chequesQuerySchema = z.object({
 });
 
 router.get('/accounting/cheques', authorizePermission(...RECORD_READ_PERMISSIONS.cheque), validate(chequesQuerySchema), asyncHandler(async (req, res) => {
-  const { type, status, startDate, endDate, search } = (req.query as any) || {};
+  const { type, status, startDate, endDate, search } = (req.query as ValidatedQuery<typeof chequesQuerySchema>) || {};
   const list = await AccountingService.getCheques({
-    type: type as any,
+    // مقدار 'all' همان‌طور که قبلاً بود بدون تغییر به سرویس می‌رسد
+    type: type as ChequeFilterType,
     status: status as string,
     startDate: startDate as string,
     endDate: endDate as string,
@@ -1128,9 +1136,9 @@ export const trialBalanceQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/trial-balance', authorizePermission('accounting.reports', 'accounting.view'), validate(trialBalanceQuerySchema), asyncHandler(async (req, res) => {
-  const { level, startDate, endDate, currency } = (req.query as any) || {};
+  const { level, startDate, endDate, currency } = (req.query as ValidatedQuery<typeof trialBalanceQuerySchema>) || {};
   const data = await AccountingService.getTrialBalance({
-    level: level as any,
+    level,
     startDate: startDate as string,
     endDate: endDate as string,
     currency: currency as string,
@@ -1151,10 +1159,10 @@ export const accountCardQuerySchema = z.object({
 });
 
 const accountCardReportHandler = asyncHandler(async (req, res) => {
-  const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency } = (req.query as any) || {};
+  const { accountId, detailedType, detailedId, detailedName, startDate, endDate, currency } = (req.query as ValidatedQuery<typeof accountCardQuerySchema>) || {};
   const data = await AccountingService.getDetailedAccountCard({
     accountId: accountId ? Number(accountId) : undefined,
-    detailedType: detailedType as any,
+    detailedType,
     detailedId: detailedId ? Number(detailedId) : undefined,
     detailedName: detailedName as string,
     startDate: startDate as string,
@@ -1179,7 +1187,7 @@ export const partyLedgerQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(partyLedgerQuerySchema), asyncHandler(async (req, res) => {
-  const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = (req.query as any) || {};
+  const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = (req.query as ValidatedQuery<typeof partyLedgerQuerySchema>) || {};
   const data = await AccountingService.getDetailedPartyLedger({
     partyId: partyId ? Number(partyId) : undefined,
     partyType: partyType as string,
@@ -1193,7 +1201,7 @@ router.get('/accounting/reports/party-ledger', authorizePermission('accounting.r
 }));
 
 router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), asyncHandler(async (req, res) => {
-  const { search, type } = (req.query as any) || {};
+  const { search, type } = req.query || {};
   const data = await AccountingService.getPartiesList({
     search: search as string,
     type: type as string,
@@ -1211,7 +1219,7 @@ export const journalBookQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/journal-book', authorizePermission('accounting.reports', 'accounting.view'), validate(journalBookQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate, search, currency } = (req.query as any) || {};
+  const { startDate, endDate, search, currency } = (req.query as ValidatedQuery<typeof journalBookQuerySchema>) || {};
   const data = await AccountingService.getJournalBook({
     startDate: startDate as string,
     endDate: endDate as string,
@@ -1229,7 +1237,7 @@ export const financialRatiosQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/financial-ratios', authorizePermission('accounting.reports', 'accounting.view'), validate(financialRatiosQuerySchema), asyncHandler(async (req, res) => {
-  const { asOfDate, currency } = (req.query as any) || {};
+  const { asOfDate, currency } = (req.query as ValidatedQuery<typeof financialRatiosQuerySchema>) || {};
   const data = await AccountingService.getFinancialRatios({
     asOfDate: asOfDate as string,
     currency: currency as string,
@@ -1246,7 +1254,7 @@ export const incomeStatementQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/income-statement', authorizePermission('accounting.reports', 'accounting.view'), validate(incomeStatementQuerySchema), asyncHandler(async (req, res) => {
-  const { startDate, endDate, currency } = (req.query as any) || {};
+  const { startDate, endDate, currency } = (req.query as ValidatedQuery<typeof incomeStatementQuerySchema>) || {};
   const data = await AccountingService.getIncomeStatement({
     startDate: startDate as string,
     endDate: endDate as string,
@@ -1264,7 +1272,7 @@ export const balanceSheetQuerySchema = z.object({
 });
 
 router.get('/accounting/reports/balance-sheet', authorizePermission('accounting.reports', 'accounting.view'), validate(balanceSheetQuerySchema), asyncHandler(async (req, res) => {
-  const { date, asOfDate, currency } = (req.query as any) || {};
+  const { date, asOfDate, currency } = (req.query as ValidatedQuery<typeof balanceSheetQuerySchema>) || {};
   const data = await AccountingService.getBalanceSheet({
     date: (date || asOfDate) as string,
     currency: currency as string,
@@ -1367,6 +1375,29 @@ router.get('/accounting/automation-status', authorizePermission('accounting.repo
   });
 }));
 
+/** ردیف خام SQL گزارش per-project (ستون‌های numeric در node-postgres رشته برمی‌گردند). */
+type ProjectSummaryRow = {
+  project_id: number | null;
+  project_code: string | null;
+  project_title: string | null;
+  entries_count: number | string | null;
+  total_debit: number | string | null;
+  total_credit: number | string | null;
+};
+
+/** ردیف خام SQL ریز گردش یک پروژه. */
+type ProjectDetailRow = {
+  line_id: number;
+  voucher_number: number | string | null;
+  voucher_date: string | null;
+  voucher_description: string | null;
+  account_code: string;
+  account_name: string;
+  line_description: string | null;
+  debit: number | string | null;
+  credit: number | string | null;
+};
+
 // V10-6.1: گزارش حسابداری per-project — خلاصه گردش بدهکار/بستانکار به تفکیک پروژه
 router.get('/accounting/reports/project-summary', authorizePermission('accounting.reports', 'accounting.view'), asyncHandler(async (req, res) => {
   const result = await orm.execute(sql`
@@ -1384,7 +1415,7 @@ router.get('/accounting/reports/project-summary', authorizePermission('accountin
     ORDER BY MAX(pp.created_at) DESC NULLS LAST
   `);
 
-  const rows = (result.rows || []) as Array<any>;
+  const rows = (result.rows || []) as ProjectSummaryRow[];
   res.json(rows.map(r => ({
     projectId: r.project_id,
     projectCode: r.project_code || '',
@@ -1422,7 +1453,7 @@ router.get('/accounting/reports/project-detail', authorizePermission('accounting
     ORDER BY jv.date ASC, jv.id ASC, jvi.id ASC
   `);
 
-  const rows = (result.rows || []) as Array<any>;
+  const rows = (result.rows || []) as ProjectDetailRow[];
   let running = 0;
   const detail = rows.map(r => {
     const debit = Number(r.debit) || 0;
@@ -1504,7 +1535,7 @@ export const fiscalClosingPreviewQuerySchema = z.object({
 });
 
 router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting.vouchers'), validate(fiscalClosingPreviewQuerySchema), asyncHandler(async (req, res) => {
-  const { year, closingDate, openingDateNewYear } = (req.query as any) || {};
+  const { year, closingDate, openingDateNewYear } = (req.query as ValidatedQuery<typeof fiscalClosingPreviewQuerySchema>) || {};
   const data = await AccountingService.getFiscalYearClosingPreview({
     year: year as string,
     closingDate: closingDate as string,

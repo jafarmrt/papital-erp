@@ -87,6 +87,8 @@ const pieceworkLogItemSchema = z.object({
   notes: z.string().optional(),
 });
 
+type PieceworkLogItemInput = z.infer<typeof pieceworkLogItemSchema>;
+
 const createPieceworkLogsSchema = z.object({
   body: z.union([
     z.object({
@@ -165,7 +167,7 @@ router.get('/piecework/tasks', authorizePermission(...READ_PERMISSIONS.piecework
     if (status === 'archived') {
       whereClause = eq(pieceworkTasks.isDeleted, 1);
     } else if (status === 'all') {
-      whereClause = sql`1=1` as any;
+      whereClause = sql`1=1`;
     }
 
     let query = orm.select()
@@ -646,7 +648,7 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     }
 
     const insertedIds = await PieceworkService.logWorkEntries(
-      items.map((item: any) => ({
+      items.map((item: PieceworkLogItemInput) => ({
         ...item,
         createdById: currentUserId,
         createdByUsername: currentUsername
@@ -799,11 +801,20 @@ router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrol
   }
 }));
 
+/** ریز کارکرد هر فیش در پاسخ /piecework/payrolls/mine (همان ستون‌های select زیر). */
+type PayrollLogItem = Pick<typeof pieceworkLogs.$inferSelect,
+  'id' | 'payrollId' | 'date' | 'dateIso' | 'taskId' | 'quantity' | 'unitRate' | 'totalAmount' | 'notes'> & {
+  taskTitle: typeof pieceworkTasks.$inferSelect['title'];
+  taskCode: typeof pieceworkTasks.$inferSelect['code'];
+  taskCategory: typeof pieceworkTasks.$inferSelect['category'];
+  unit: typeof pieceworkTasks.$inferSelect['unit'];
+};
+
 // GET /api/piecework/payrolls/mine - فیش‌های حقوقی کاربر جاری
 // برای پرسنلی که همزمان کاربر سیستم هستند: لینک personnel.userId → users.id
 router.get('/piecework/payrolls/mine', asyncHandler(async (req, res) => {
   try {
-    const uid = Number((req as any).user?.id);
+    const uid = Number(req.user?.id);
     if (!uid || isNaN(uid)) return res.json([]);
 
     const linkedPersonnel = await orm.select({ id: personnel.id })
@@ -846,7 +857,7 @@ router.get('/piecework/payrolls/mine', asyncHandler(async (req, res) => {
 
     // ریز کارکردهای هر فیش — تا فیشی که پرسنل می‌بیند کاملاً با فیش صدورکننده یکسان باشد
     const payrollIds = rows.map(r => r.id);
-    let itemsByPayroll = new Map<number, any[]>();
+    let itemsByPayroll = new Map<number, PayrollLogItem[]>();
     if (payrollIds.length > 0) {
       const logs = await orm.select({
         id: pieceworkLogs.id,
@@ -1015,7 +1026,7 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorize('
       });
 
       // 2. Fixed salary deduction & dedup within transaction
-      const salaryType = String((pInfo as any).salaryType || 'none');
+      const salaryType = String(pInfo.salaryType || 'none');
       const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
       let fixedPortionFin = fixedIncluded ? fin(pInfo.monthlySalary || 0) : fin(0);
 

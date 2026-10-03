@@ -17,6 +17,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -538,7 +539,7 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
         type: 'note',
         title: 'حذف پیش‌فاکتور',
         description: `پیش‌فاکتور شماره "${beforeDoc.ref_number || docId}" حذف شد؛ پرونده فروش جهت صدور مجدد پیش‌فاکتور بازگشایی گردید.`,
-        loggedBy: (req as any).user?.full_name || (req as any).user?.username || 'سیستم',
+        loggedBy: req.user?.full_name || req.user?.username || 'سیستم',
         assignedTo: linkedLead.assignedTo || '',
         activityDate: getTodayJalaliDate(),
         createdAt: new Date().toISOString(),
@@ -547,7 +548,9 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
     }
   }
 
-  const currentUser = (req as any).user?.username || (req as any).user?.name || 'system';
+  // فیلد قدیمی `name` در payload توکن‌های فعلی وجود ندارد؛ برای حفظ رفتار fallback نگه داشته شده است
+  const sessionUser: (AuthUserPayload & { name?: string }) | undefined = req.user;
+  const currentUser = sessionUser?.username || sessionUser?.name || 'system';
   await DocumentService.deleteDocument(docId, currentUser);
 
   await logActivity({

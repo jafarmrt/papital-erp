@@ -15,6 +15,9 @@ import { ESLint } from 'eslint';
  *   - هیچ فایلی نمی‌تواند any بیشتری از عدد پایه خود بگیرد؛ فایل تازه (بدون ردیف) باید صفر any داشته باشد
  *   - any خاموش‌شده با `eslint-disable` هم شمرده می‌شود تا راه فرار نباشد
  *   - جابه‌جایی any از یک فایل به فایل دیگر (حتی با جمع ثابت) رد می‌شود
+ *
+ * v7.0.109 (TD-106): هر پیام با سطح error (any در مسیرهای پول و انبار، MONEY_STOCK_PATHS در eslint.config.js) بدون
+ * توجه به فایل پایه رد می‌شود؛ خاموش کردن آن با eslint-disable هم رد می‌شود.
  */
 
 export const BASELINE_FILE = 'eslint-baseline.json';
@@ -56,6 +59,20 @@ export function countAnyByFile(
     if (n > 0) counts[path.relative(cwd, r.filePath).split(path.sep).join('/')] = n;
   }
   return counts;
+}
+
+/** پیام‌های سطح error (فعال یا خاموش‌شده با eslint-disable) که فایل پایه آن‌ها را نمی‌پذیرد */
+export function findBlockingErrors(
+  results: Array<{ filePath: string; messages: Array<{ ruleId: string | null; severity: number; line?: number }>; suppressedMessages?: Array<{ ruleId: string | null; severity: number; line?: number }> }>,
+  cwd: string
+): Array<{ file: string; line: number; ruleId: string; suppressed: boolean }> {
+  const blocking: Array<{ file: string; line: number; ruleId: string; suppressed: boolean }> = [];
+  for (const r of results) {
+    const file = path.relative(cwd, r.filePath).split(path.sep).join('/');
+    for (const m of r.messages) if (m.ruleId && m.severity === 2) blocking.push({ file, line: m.line ?? 0, ruleId: m.ruleId, suppressed: false });
+    for (const m of r.suppressedMessages ?? []) if (m.ruleId && m.severity === 2) blocking.push({ file, line: m.line ?? 0, ruleId: m.ruleId, suppressed: true });
+  }
+  return blocking;
 }
 
 /** مقایسه any هر فایل با عدد پایه همان فایل؛ فایلی که در پایه نیست عدد پایه صفر دارد */
@@ -107,6 +124,13 @@ async function main(): Promise<void> {
       .filter(r => r.messages.length > 0);
     console.error(await formatter.format(fatalOnly));
     console.error(`❌ ESLint: ${fatal} خطای پارس`);
+    process.exit(1);
+  }
+
+  const blocking = findBlockingErrors(results, process.cwd());
+  if (blocking.length > 0) {
+    for (const b of blocking) console.error(`❌ ${b.file}:${b.line} ${b.ruleId}${b.suppressed ? ' (خاموش‌شده با eslint-disable)' : ''}`);
+    console.error('این قاعده در این مسیر خطاست و فایل پایه آن را نمی‌پذیرد (any در مسیرهای پول و انبار سرور ممنوع است).');
     process.exit(1);
   }
 

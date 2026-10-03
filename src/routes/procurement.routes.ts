@@ -132,7 +132,7 @@ router.get('/inbox/summary', authorize('procurement.view', 'procurement_officer'
  * List purchase requisitions
  */
 router.get('/requisitions', authorize('procurement.view', 'procurement_officer', 'manager', 'admin', 'projects.view'), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
-  const { status, projectId, priority, search, page, limit } = req.query as any;
+  const { status, projectId, priority, search, page, limit } = req.query as z.infer<typeof listRequisitionsSchema>['query'];
 
   const result = await ProcurementService.getRequisitions({
     status: status && status !== 'all' ? String(status) : undefined,
@@ -284,7 +284,7 @@ router.post('/consolidate', authorize('procurement.manage', 'procurement_officer
  * List purchase orders / invoices created through procurement
  */
 router.get('/orders', authorize('procurement.view', 'procurement_officer', 'manager', 'admin', 'projects.view'), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
-  const { status, requisitionId, search, page, limit } = req.query as any;
+  const { status, requisitionId, search, page, limit } = req.query as z.infer<typeof listProcurementOrdersSchema>['query'];
 
   const result = await ProcurementService.getProcurementOrders({
     status: status ? String(status) : undefined,

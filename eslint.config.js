@@ -4,6 +4,38 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
+// v7.0.109 (TD-106، تصمیم مالک محصول): مسیرهای پول و انبار سرور any ندارند و any تازه در آن‌ها اصلاً پذیرفته نمی‌شود
+// (سطح error؛ scripts/eslint-ratchet.ts هر پیام error را بدون توجه به فایل پایه رد می‌کند و any خاموش‌شده با
+// eslint-disable در این مسیرها را هم خطا می‌شمرد).
+export const MONEY_STOCK_PATHS = [
+  'src/services/accounting/**/*.ts',
+  'src/services/accounting.service.ts',
+  'src/services/documents/**/*.ts',
+  'src/services/document.service.ts',
+  'src/services/inventory/**/*.ts',
+  'src/services/items/**/*.ts',
+  'src/services/items.service.ts',
+  'src/services/reconciliation/**/*.ts',
+  'src/services/woocommerce/**/*.ts',
+  'src/services/procurement.service.ts',
+  'src/services/piecework.service.ts',
+  'src/services/transfer.service.ts',
+  'src/services/warehouse.service.ts',
+  'src/routes/accounting.routes.ts',
+  'src/routes/documents.routes.ts',
+  'src/routes/inventory.routes.ts',
+  'src/routes/items*.routes.ts',
+  'src/routes/piecework.routes.ts',
+  'src/routes/procurement.routes.ts',
+  'src/routes/transactions.routes.ts',
+  'src/routes/transfers.routes.ts',
+  'src/routes/woocommerce.routes.ts',
+  'src/lib/money.ts',
+  'src/lib/financialDecimal.ts',
+  'src/lib/voucherBalance.ts',
+  'src/lib/stockAvailability.ts',
+];
+
 export default tseslint.config(
   {
     ignores: ['dist/**', 'node_modules/**', 'public/**', 'vendor/**', 'drizzle/**', 'coverage/**', 'logs/**', '**/*.js', '**/*.cjs', '**/*.mjs'],
@@ -30,5 +62,9 @@ export default tseslint.config(
     // FE-003: کامپوننت‌ها کمتر از ۳۰۰ خط
     files: ['src/**/*.tsx'],
     rules: { 'max-lines': ['warn', { max: 300, skipBlankLines: true, skipComments: true }] },
+  },
+  {
+    files: MONEY_STOCK_PATHS,
+    rules: { '@typescript-eslint/no-explicit-any': 'error' },
   },
 );
