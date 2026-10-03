@@ -4,9 +4,11 @@ import {
   formatPersianPrice, 
   formatPersianNumber, 
   formatPersianDate, 
-  formatPersianCode 
+  formatPersianCode,
+  errorMessageOf
 } from '../../../utils';
 import { fetchJson } from '../../../api';
+import { useLatestRequest } from '../../../hooks/useLatestRequest';
 import toast from 'react-hot-toast';
 import type { DetailedPartyLedgerResult, PartyOption } from '../../../types';
 
@@ -112,13 +114,15 @@ export function PartyLedgerReportView({
     }
   };
 
-  // Fetch report for selected party
+  // Fetch report for selected party (P3-8: فقط پاسخ آخرین درخواست اعمال می‌شود)
+  const beginLedgerRequest = useLatestRequest();
   const fetchLedger = useCallback(async () => {
     if (!selectedParty && !partySearchQuery.trim()) {
       toast('لطفاً یک طرف‌حساب انتخاب کنید', { icon: 'ℹ️' });
       return;
     }
 
+    const req = beginLedgerRequest();
     try {
       setLoadingReport(true);
       const params = new URLSearchParams();
@@ -132,15 +136,16 @@ export function PartyLedgerReportView({
       if (currency !== 'all') params.append('currency', currency);
       if (includeDrafts) params.append('includeDrafts', 'true');
 
-      const res = await fetchJson(`/accounting/reports/party-ledger?${params.toString()}`);
+      const res = await fetchJson(`/accounting/reports/party-ledger?${params.toString()}`, { signal: req.signal });
+      if (!req.isCurrent()) return;
       const data: DetailedPartyLedgerResult = res?.report || res;
       setReportData(data);
-    } catch (err: any) {
-      toast.error(err?.message || 'خطا در دریافت صورت‌حساب طرف‌حساب');
+    } catch (err: unknown) {
+      if (req.isCurrent()) toast.error(errorMessageOf(err) || 'خطا در دریافت صورت‌حساب طرف‌حساب');
     } finally {
-      setLoadingReport(false);
+      if (req.isCurrent()) setLoadingReport(false);
     }
-  }, [selectedParty, partySearchQuery, startDate, endDate, currency, includeDrafts]);
+  }, [selectedParty, partySearchQuery, startDate, endDate, currency, includeDrafts, beginLedgerRequest]);
 
   // Auto-fetch when selectedParty changes
   useEffect(() => {

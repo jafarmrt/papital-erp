@@ -22,6 +22,7 @@ import type {
 } from '../../types';
 import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
+import { useLatestRequest } from '../../hooks/useLatestRequest';
 
 import { TrialBalanceView } from './reports/TrialBalanceView';
 import { JournalBookView } from './reports/JournalBookView';
@@ -128,33 +129,39 @@ export function FinancialReportsTab({
     onFetchLedger(Number(selectedLedgerAccountId), startDate || undefined, endDate || undefined);
   };
 
+  // P3-8 (v7.0.104): دفتر روزنامه و نسبت‌ها فقط پاسخ آخرین درخواست خود را نشان می‌دهند
+  const beginJournalRequest = useLatestRequest();
+  const beginRatiosRequest = useLatestRequest();
+
   const fetchJournalBook = async () => {
+    const req = beginJournalRequest();
     setJournalLoading(true);
     try {
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      const res = await fetchJson(`/accounting/reports/journal-book?${params.toString()}`);
-      setJournalBookData(res?.report || res);
+      const res = await fetchJson(`/accounting/reports/journal-book?${params.toString()}`, { signal: req.signal });
+      if (req.isCurrent()) setJournalBookData(res?.report || res);
     } catch (err) {
-      toast.error(errorMessageOf(err) || 'خطا در بارگذاری دفتر روزنامه');
+      if (req.isCurrent()) toast.error(errorMessageOf(err) || 'خطا در بارگذاری دفتر روزنامه');
     } finally {
-      setJournalLoading(false);
+      if (req.isCurrent()) setJournalLoading(false);
     }
   };
 
   const fetchFinancialRatios = async (currency?: string) => {
+    const req = beginRatiosRequest();
     setRatiosLoading(true);
     try {
       const params = new URLSearchParams();
       if (asOfDate) params.append('asOfDate', asOfDate);
       if (currency && currency !== 'all') params.append('currency', currency);
-      const res = await fetchJson(`/accounting/reports/financial-ratios?${params.toString()}`);
-      setRatiosData(res?.report || res);
+      const res = await fetchJson(`/accounting/reports/financial-ratios?${params.toString()}`, { signal: req.signal });
+      if (req.isCurrent()) setRatiosData(res?.report || res);
     } catch (err) {
-      toast.error(errorMessageOf(err) || 'خطا در محاسبه نسبت‌های مالی');
+      if (req.isCurrent()) toast.error(errorMessageOf(err) || 'خطا در محاسبه نسبت‌های مالی');
     } finally {
-      setRatiosLoading(false);
+      if (req.isCurrent()) setRatiosLoading(false);
     }
   };
 
