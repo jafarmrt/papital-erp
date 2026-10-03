@@ -15,6 +15,7 @@ import { runPenetrationTests } from './suites/penetrationSuite.js';
 import { runCriticalPathTests } from './suites/criticalPathSuite.js';
 import { runDocumentIntegrityTests } from './suites/documentIntegritySuite.js';
 import { runBusinessLogicAuditTests } from './suites/businessLogicAuditSuite.js';
+import { runBusinessInvariantTests } from './suites/businessInvariantSuite.js';
 
 const LAYER_LABELS: Record<TestLayer, string> = {
   unit: 'تست‌های واحد (Unit Tests)',
@@ -31,7 +32,8 @@ const LAYER_LABELS: Record<TestLayer, string> = {
   penetration: 'آزمون‌های نفوذ واقعی HTTP (Phase 8 Penetration Suite — TST-004/005)',
   critical_path: 'آزمون‌های یکپارچگی مسیرهای بحرانی (Phase 8 Critical Path Suite — TST-006)',
   document_integrity: 'آزمون‌های یکپارچگی اسناد و انبار (Document Integrity Suite)',
-  business_logic: 'آزمون‌های ممیزی منطق کسب‌وکار (Business Logic Audit Suite)'
+  business_logic: 'آزمون‌های ممیزی منطق کسب‌وکار (Business Logic Audit Suite)',
+  business_invariants: 'ناوردایی‌های منطق کاری و شبیه‌ساز یک سال کاری (v8 Business Invariants)'
 };
 
 const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
@@ -251,6 +253,10 @@ export class Phase21TestRunner {
       }
       if (!layerFilter || layerFilter === 'penetration') {
         allCases = allCases.concat(await runPenetrationTests());
+      }
+      // v8.0.1: ناوردایی‌های منطق کاری و خط پایه یافته‌ها — آخرین سوئیت، چون سال مالی آزمون (۱۳۹۰) را می‌بندد
+      if (!layerFilter || layerFilter === 'business_invariants') {
+        allCases = allCases.concat(await runBusinessInvariantTests());
       }
 
       // اعمال فیلتر دقیق تکی روی تمام نتایج

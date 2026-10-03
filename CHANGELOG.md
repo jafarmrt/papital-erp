@@ -18,6 +18,10 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.1 — Business-Logic Verification Tooling (test only)
+- Executable inventory/ledger invariants, a seeded one-business-year simulator (`npm run simulate:year`) and the `business_invariants` suite with a shrink-only known-findings baseline.
+- First evaluation report `docs/audit/BUSINESS_LOGIC_AUDIT_V8.md` (inventory and accounting): 12 proven findings registered as TD-250 – TD-261; no application behaviour changed.
+
 ### v8.0.0 — Closure of Version 7 & Launch of Version 8
 - **Version 7 Closure:** Concluded and archived the v7.x series (`v7.0.0` through `v7.0.140`). `V7_MASTER_ROADMAP.md` is archived with a closing report; the debt registry ends the series with 0 open and 236 resolved rows; `src/data/changelogs/7.ts` is frozen.
 - **Version 8 Mission:** `V8_MASTER_ROADMAP.md` — prove or refute the business-logic correctness of inventory, costing, accounting, treasury and payroll with executable invariants and a seeded one-business-year simulation on PostgreSQL 16; every finding gets a failing test, a `TD-###` row and its own `v8.0.x` fix.

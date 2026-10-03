@@ -55,6 +55,7 @@ Available Suites:
   regression (or reg) Regression suite for critical production fixes
   document_integrity  Document finalization, stock reservation, voucher reversal
   business_logic      Kardex invariants, atomic codes, menu deny-list
+  business_invariants Business-logic invariants, one-year simulator, known-findings baseline (v8)
   critical_path       Voucher sequences, single stock deduction, idempotency
   penetration (or pen) HTTP penetration tests (XSS, SQLi, SSRF, brute-force resistance)
   security (or sec)   Authorization policies, token validation, password hashing
@@ -114,7 +115,10 @@ Available Suites:
       docs: 'document_integrity',
       businesslogic: 'business_logic',
       businesslogicaudit: 'business_logic',
-      audit: 'business_logic'
+      audit: 'business_logic',
+      businessinvariants: 'business_invariants',
+      invariants: 'business_invariants',
+      inv: 'business_invariants'
     };
     layerArg = aliasMap[normalized] || layerArg;
   }

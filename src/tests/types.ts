@@ -13,7 +13,8 @@ export type TestLayer =
   | 'penetration'
   | 'critical_path'
   | 'document_integrity'
-  | 'business_logic';
+  | 'business_logic'
+  | 'business_invariants';
 
 export type TestStatus = 'PASS' | 'FAIL' | 'BLOCKED' | 'NOT_RUN' | 'N/A';
 
