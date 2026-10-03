@@ -6,7 +6,8 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { parsePagination } from '../lib/pagination.js';
-import { getTodayJalaliDate, jalaliToIsoDate } from '../utils.js';
+import { isoToJalaliDate, toPersianDigits } from '../utils.js';
+import { requireStorageDate, optionalStorageDate, crmTodayActivityDates } from '../lib/storageDate.js';
 import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -183,12 +184,13 @@ function formatActivity(act: (Partial<typeof crmActivities.$inferSelect> & Recor
     mentions: Array.isArray(act.mentions) ? act.mentions : [],
     activity_date: act.activityDate || '',
     activityDate: act.activityDate || '',
-    activity_date_iso: act.activityDateIso || jalaliToIsoDate(act.activityDate) || '',
-    activityDateIso: act.activityDateIso || jalaliToIsoDate(act.activityDate) || '',
+    // v7.0.132 (TD-232): ستون اصلی میلادی ISO است؛ ستون *_iso همان مقدار را دارد
+    activity_date_iso: act.activityDate || '',
+    activityDateIso: act.activityDate || '',
     next_followup_date: act.nextFollowUpDate || '',
     nextFollowUpDate: act.nextFollowUpDate || '',
-    next_followup_date_iso: act.nextFollowUpDateIso || jalaliToIsoDate(act.nextFollowUpDate) || '',
-    nextFollowUpDateIso: act.nextFollowUpDateIso || jalaliToIsoDate(act.nextFollowUpDate) || '',
+    next_followup_date_iso: act.nextFollowUpDate || '',
+    nextFollowUpDateIso: act.nextFollowUpDate || '',
     next_followup_task: act.nextFollowUpTask || '',
     nextFollowUpTask: act.nextFollowUpTask || '',
     is_followup_completed: act.isFollowUpCompleted || 0,
@@ -202,8 +204,6 @@ function formatActivity(act: (Partial<typeof crmActivities.$inferSelect> & Recor
 
 // GET /api/crm/stats - CRM KPI summary and stage totals
 router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
-  const todayJalali = getTodayJalaliDate();
-
   // Total active leads
   const [allActiveLeads] = await orm.select({
     count: sql<number>`count(*)`,
@@ -229,11 +229,9 @@ router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'cust
   .where(and(
     eq(crmActivities.isDeleted, 0),
     eq(crmActivities.isFollowUpCompleted, 0),
-    sql`length(COALESCE(${crmActivities.nextFollowUpDate}, '')) > 0`,
-    sql`(
-      (${crmActivities.nextFollowUpDateIso} IS NOT NULL AND ${crmActivities.nextFollowUpDateIso} <= ${todayIso}::text) OR
-      (COALESCE(${crmActivities.nextFollowUpDate}, '') <= ${todayJalali}::text)
-    )`
+    // v7.0.132 (TD-232): سررسید میلادی ISO است و با «امروز» میلادی مقایسه می‌شود
+    sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <> ''`,
+    sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`
   ));
 
   // Stage counts
@@ -609,7 +607,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     probability: probability !== undefined ? Number(probability) : 50,
     assignedTo: assignee.name || authorName,
     assignedPersonnelId: assignee.id,
-    expectedCloseDate: expectedCloseDate || '',
+    expectedCloseDate: requireStorageDate(expectedCloseDate, 'تاریخ پیش‌بینی بستن فرصت فروش'),
     notes: notes || '',
     status: stage === 'won' ? 'won' : stage === 'lost' ? 'lost' : 'active',
     createdAt: nowIso,
@@ -630,7 +628,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     title: 'ایجاد فرصت فروش',
     description: `پرونده فروش "${newLead.title}" توسط ${authorName} ایجاد شد.`,
     loggedBy: authorName,
-    activityDate: await businessTodayIsoDate(),
+    ...(await crmTodayActivityDates()),
     createdAt: nowIso,
     isDeleted: 0
   });
@@ -731,7 +729,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     probability: probability !== undefined ? Number(probability) : existing.probability,
     assignedTo: targetAssignee ? (targetAssignee.name || authorName) : existing.assignedTo,
     assignedPersonnelId: targetAssignee ? targetAssignee.id : existing.assignedPersonnelId,
-    expectedCloseDate: expectedCloseDate !== undefined ? expectedCloseDate : existing.expectedCloseDate,
+    expectedCloseDate: optionalStorageDate(expectedCloseDate, 'تاریخ پیش‌بینی بستن فرصت فروش') ?? existing.expectedCloseDate,
     notes: notes !== undefined ? notes : existing.notes,
     status: newStatus,
     updatedAt: nowIso
@@ -757,7 +755,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
       title: 'تغییر مرحله فروش',
       description: `مرحله فروش از "${stageLabels[existing.stage || ''] || existing.stage || ''}" به "${stageLabels[stage] || stage}" تغییر یافت.`,
       loggedBy: authorName,
-      activityDate: await businessTodayIsoDate(),
+      ...(await crmTodayActivityDates()),
       createdAt: nowIso,
       isDeleted: 0
     });
@@ -823,7 +821,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
     title: 'تبدیل لید به مشتری و صدور پیش‌فاکتور',
     description: `پرونده فروش CRM "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
     loggedBy: authorName,
-    activityDate: await businessTodayIsoDate(),
+    ...(await crmTodayActivityDates()),
     createdAt: nowIso,
     isDeleted: 0
   });
@@ -879,16 +877,15 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     conditions.push(sql`length(COALESCE(${crmActivities.nextFollowUpDate}, '')) > 0`);
   }
 
+  // v7.0.132 (TD-232): بازه شمسی (یا میلادی) ورودی به ISO تبدیل و با تاریخ ذخیره‌شده ISO مقایسه می‌شود
   if (fromDate && typeof fromDate === 'string' && fromDate.trim()) {
-    const f = fromDate.trim();
-    const fIso = jalaliToIsoDate(f) || f;
-    conditions.push(sql`(${crmActivities.activityDateIso} >= ${fIso}::text OR ${crmActivities.activityDate} >= ${f}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
+    const fIso = requireStorageDate(fromDate, 'از تاریخ');
+    conditions.push(sql`(${crmActivities.activityDate} >= ${fIso}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
   }
 
   if (toDate && typeof toDate === 'string' && toDate.trim()) {
-    const t = toDate.trim();
-    const tIso = jalaliToIsoDate(t) || t;
-    conditions.push(sql`(${crmActivities.activityDateIso} <= ${tIso}::text OR ${crmActivities.activityDate} <= ${t}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
+    const tIso = requireStorageDate(toDate, 'تا تاریخ');
+    conditions.push(sql`(${crmActivities.activityDate} <= ${tIso}::text OR COALESCE(${crmActivities.activityDate}, '') = '')`);
   }
 
   const activities = await orm.select({
@@ -945,9 +942,9 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
   const nowIso = systemNowUtcIso();
-  const todayStr = activityDate || await businessTodayIsoDate();
-  const actDateIso = jalaliToIsoDate(todayStr) || (todayStr.includes('-') ? todayStr.slice(0, 10) : nowIso.slice(0, 10));
-  const nextFollowIso = nextFollowUpDate ? (jalaliToIsoDate(nextFollowUpDate) || (nextFollowUpDate.includes('-') ? nextFollowUpDate.slice(0, 10) : null)) : null;
+  // v7.0.132 (TD-232): تاریخ شمسی ورودی میلادی ISO ذخیره می‌شود؛ تاریخ نامعتبر با 422 رد می‌شود
+  const actDateIso = requireStorageDate(activityDate, 'تاریخ اقدام') || await businessTodayIsoDate();
+  const nextFollowIso = requireStorageDate(nextFollowUpDate, 'تاریخ پیگیری بعدی');
 
   // V10-4.1: مسئول تسک از پرسنل (id) + snapshot نام
   const taskAssignee = await resolveAssignee({
@@ -967,9 +964,9 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     assignedTo: taskAssignee.name,
     assignedPersonnelId: taskAssignee.id,
     mentions: mentionsList,
-    activityDate: todayStr,
+    activityDate: actDateIso,
     activityDateIso: actDateIso,
-    nextFollowUpDate: nextFollowUpDate || '',
+    nextFollowUpDate: nextFollowIso,
     nextFollowUpDateIso: nextFollowIso,
     nextFollowUpTask: nextFollowUpTask || '',
     isFollowUpCompleted: 0,
@@ -1046,7 +1043,7 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
           senderName: authorName,
           type: 'task',
           title: 'تسک / پیگیری جدید CRM',
-          message: `${authorName} تسک پیگیری جدید برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${nextFollowUpDate || todayStr})`,
+          message: `${authorName} تسک پیگیری جدید برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
           link: `/crm?activityId=${newAct.id}`,
           isRead: 0
         });
@@ -1096,7 +1093,7 @@ router.put('/crm/activities/:id/toggle-followup', authorizePermission('crm.manag
 
   if (resultNote && typeof resultNote === 'string' && resultNote.trim()) {
     const currentDesc = act.description || '';
-    const todayJalali = getTodayJalaliDate();
+    const todayJalali = isoToJalaliDate(await businessTodayIsoDate());
     const noteAppend = `\n[نتیجه پیگیری (${todayJalali})]: ${resultNote.trim()}`;
     updateData.description = currentDesc ? `${currentDesc}${noteAppend}` : `[نتیجه پیگیری (${todayJalali})]: ${resultNote.trim()}`;
   }

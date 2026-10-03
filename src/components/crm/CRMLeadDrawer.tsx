@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Edit3, Trash2, Clock, Check, FileText, Search, Package, Copy, Building2 } from 'lucide-react';
 import { CRMLead, CRMActivity, Item } from '../../types';
 import { getActivityTypeBadge } from './CRMFollowupsView';
-import { formatPersianPrice, formatPersianNumber, formatPersianPhone } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianPhone, formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
@@ -285,7 +285,7 @@ export function CRMLeadDrawer({
                         <Icon size={12} />
                         {badge.label}
                       </span>
-                      <span className="text-[10px] text-slate-400">{act.activityDate || act.createdAt}</span>
+                      <span className="text-[10px] text-slate-400">{formatPersianDate(act.activityDate || act.createdAt)}</span>
                     </div>
 
                     <h5 className="font-bold text-xs text-slate-900">{act.title}</h5>
@@ -305,7 +305,7 @@ export function CRMLeadDrawer({
                     {act.nextFollowUpDate && (
                       <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-900 flex items-center justify-between">
                         <span>
-                          پیگیری بعدی ({act.nextFollowUpDate}): {act.nextFollowUpTask || 'تماس پیگیری'}
+                          پیگیری بعدی ({formatPersianDate(act.nextFollowUpDate)}): {act.nextFollowUpTask || 'تماس پیگیری'}
                         </span>
                         <button
                           onClick={() => onToggleFollowup(act)}

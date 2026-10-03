@@ -3,7 +3,7 @@ import { eq, desc, and, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { notifications, crmActivities, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { getTodayJalaliDate } from '../utils.js';
+import { isoToJalaliDate, toPersianDigits } from '../utils.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { z } from 'zod';
 import { validate, numericIdString } from '../middleware/validate.js';
@@ -28,8 +28,9 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
     const userFullName = (u.fullName || '').trim();
     const username = (u.username || '').trim();
 
-    const todayJalali = getTodayJalaliDate();
-    const todayGregorian = await businessTodayIsoDate();
+    // v7.0.132 (TD-232): سررسید پیگیری میلادی ISO ذخیره می‌شود و فقط با «امروز» میلادی مقایسه می‌شود.
+    // پیش‌تر «1405/08/01» (آینده) با «2026-10-03» مقایسه متنی می‌شد و همان روز ثبت، سررسیدشده اعلام می‌شد.
+    const todayIso = await businessTodayIsoDate();
 
     const pendingActs = await orm
       .select()
@@ -38,7 +39,8 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
         and(
           eq(crmActivities.isDeleted, 0),
           eq(crmActivities.isFollowUpCompleted, 0),
-          sql`length(COALESCE(${crmActivities.nextFollowUpDate}, '')) > 0`
+          sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <> ''`,
+          sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`
         )
       );
 
@@ -52,9 +54,7 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
 
       if (!isMyTask) continue;
 
-      const dueDate = (act.nextFollowUpDate || '').trim();
-      const isDue = dueDate <= todayJalali || dueDate <= todayGregorian;
-      if (!isDue) continue;
+      const dueDate = toPersianDigits(isoToJalaliDate(act.nextFollowUpDate));
 
       const notifLink = `/crm?activityId=${act.id}`;
       const [existingNotif] = await orm
@@ -63,7 +63,9 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
         .where(
           and(
             eq(notifications.userId, userId),
-            eq(notifications.link, notifLink)
+            eq(notifications.link, notifLink),
+            // v7.0.132: اعلان «تسک جدید» همین پیوند را دارد و پیش‌تر جلوی یادآوری سررسید را می‌گرفت
+            eq(notifications.type, 'crm_due_task')
           )
         );
 

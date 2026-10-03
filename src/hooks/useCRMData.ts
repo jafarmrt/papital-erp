@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
-import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf } from '../utils';
+import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf, isoToJalaliDate } from '../utils';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
@@ -213,7 +213,8 @@ export function useCRMData(user: any) {
         probability: lead.probability ?? 50,
         assignedTo: defaultSellerName,
         assignedPersonnelId: defaultSellerId,
-        expectedCloseDate: lead.expectedCloseDate || getFutureJalaliDate(30),
+        // v7.0.132 (TD-232): تاریخ ذخیره‌شده میلادی ISO است؛ فرم شمسی می‌گیرد
+        expectedCloseDate: isoToJalaliDate(lead.expectedCloseDate) || getFutureJalaliDate(30),
         notes: lead.notes || ''
       });
     } else {

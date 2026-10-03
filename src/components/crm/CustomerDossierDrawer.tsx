@@ -331,7 +331,7 @@ export function CustomerDossierDrawer({
                         </div>
                         <div>
                           <span>تاریخ بسته‌شدن: </span>
-                          <span className="font-bold text-slate-700">{lead.expectedCloseDate || '-'}</span>
+                          <span className="font-bold text-slate-700">{formatPersianDate(lead.expectedCloseDate)}</span>
                         </div>
                       </div>
 
@@ -405,7 +405,7 @@ export function CustomerDossierDrawer({
                       <span>ثبت‌کننده: {act.loggedBy || 'فروشنده'}</span>
                       {act.nextFollowUpDate && (
                         <span className="font-bold text-amber-800 bg-amber-100/60 px-2 py-0.5 rounded-md">
-                          پیگیری بعدی: {act.nextFollowUpDate} ({act.isFollowUpCompleted ? 'انجام شده' : 'معوقه'})
+                          پیگیری بعدی: {formatPersianDate(act.nextFollowUpDate)} ({act.isFollowUpCompleted ? 'انجام شده' : 'معوقه'})
                         </span>
                       )}
                     </div>

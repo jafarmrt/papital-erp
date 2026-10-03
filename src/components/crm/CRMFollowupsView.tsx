@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PhoneCall, Plus, Check, Clock, Calendar, Video, MessageSquare, Mail, FileText, Search, ChevronRight, ChevronLeft, UserCheck, User, Briefcase } from 'lucide-react';
 import { CRMActivity, CRMLead } from '../../types';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, formatPersianDate } from '../../utils';
 
 interface CRMFollowupsViewProps {
   activeTab: 'activities' | 'followups';
@@ -228,12 +228,12 @@ export function CRMFollowupsView({
                         </span>
                       </td>
                       <td className="p-3 font-medium text-slate-700">{act.loggedBy || '-'}</td>
-                      <td className="p-3 text-slate-500 font-mono text-[11px]">{act.activityDate || '-'}</td>
+                      <td className="p-3 text-slate-500 font-mono text-[11px]">{formatPersianDate(act.activityDate)}</td>
                       <td className="p-3">
                         {act.nextFollowUpDate ? (
                           <div className="flex items-center gap-1.5">
                             <span className={`text-[11px] font-bold ${act.isFollowUpCompleted ? 'text-slate-400 line-through' : 'text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200'}`}>
-                              {act.nextFollowUpDate}: {act.nextFollowUpTask || 'پیگیری'}
+                              {formatPersianDate(act.nextFollowUpDate)}: {act.nextFollowUpTask || 'پیگیری'}
                             </span>
                             <button
                               onClick={() => onToggleFollowup(act)}
@@ -410,7 +410,7 @@ export function CRMFollowupsView({
                 <div className="flex items-start justify-between gap-2">
                   <span className="px-2.5 py-1 bg-amber-100 text-amber-900 text-[11px] font-mono font-bold rounded-lg flex items-center gap-1 border border-amber-200">
                     <Calendar size={13} />
-                    {act.nextFollowUpDate}
+                    {formatPersianDate(act.nextFollowUpDate)}
                   </span>
 
                   <button

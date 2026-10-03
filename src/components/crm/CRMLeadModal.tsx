@@ -6,7 +6,7 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
 import { STAGES, SOURCES } from '../../hooks/useCRMData';
-import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString } from '../../utils';
+import { formatPersianPrice, formatCurrencyLabel, getFutureJalaliDate, extractDateString, isoToJalaliDate } from '../../utils';
 import { IranianPhoneInput } from '../common';
 
 interface CRMLeadModalProps {
@@ -314,7 +314,7 @@ export function CRMLeadModal({
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ پیش‌بینی بسته‌شدن</label>
               <DatePicker
-                value={leadForm.expectedCloseDate || getFutureJalaliDate(30)}
+                value={isoToJalaliDate(leadForm.expectedCloseDate) || getFutureJalaliDate(30)}
                 onChange={(dateObj: any) => {
                   setLeadForm({ ...leadForm, expectedCloseDate: extractDateString(dateObj) });
                 }}

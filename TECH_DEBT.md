@@ -17,7 +17,7 @@
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
 | TD-189 | Plaintext Third-Party Credential | ستون `personnel.nobitex_password` رمز حساب صرافی پرسنل را به‌صورت متن ساده در پایگاه‌داده نگه می‌دارد (از v7.0.29 در خروجی داده‌ها حذف می‌شود، اما در دیتابیس و احتمالاً پاسخ‌های API پرسنل باقی است) | src/db/schema/personnel.ts:34 | open — حذف نگهداری رمز شخص ثالث یا رمزنگاری در سطح برنامه با کلید جدا، و حذف از پاسخ‌های API |
-| TD-232 | Mixed-Calendar Text Date Columns | قید قالب v7.0.75 (P3-15) فقط تاریخ بدشکل را رد می‌کند؛ ستون‌های تاریخ متنی (چک، پرسنل، CRM، پروژه، فیش حقوقی، کارکرد روزانه) هنوز هم تاریخ شمسی و هم میلادی، و گاهی ارقام فارسی (`effective_date` نرخ کارمزدی) نگه می‌دارند و مقایسه متنی بازه‌ها روی آن‌ها دقیق نیست | drizzle/0028 و 0030، ستون‌های تاریخ متنی | in_progress — تصمیم مالک محصول (۱۱ مهر ۱۴۰۵): ذخیره میلادی ISO، نمایش و ورود همه‌جا شمسی؛ `journal_vouchers.date` شمسی می‌ماند. گام ۱ v7.0.131: مبدل واحد `src/utils/calendarDate.ts`، `requireStorageDate`، توابع SQL مهاجرت 0038 (`erp_text_date_to_iso`، `erp_unify_text_date_column`، `erp_set_iso_date_constraint`) و گزارش `npm run dates:report` (تست `reg_calendar_date_tools_td_232`، Vitest `calendarDate.test.ts`). گام‌های بعد ستون‌به‌ستون: CRM، چک، کارکرد و حقوق، پروژه و درخواست خرید و پرسنل، نمایش |
+| TD-232 | Mixed-Calendar Text Date Columns | قید قالب v7.0.75 (P3-15) فقط تاریخ بدشکل را رد می‌کند؛ ستون‌های تاریخ متنی (چک، پرسنل، CRM، پروژه، فیش حقوقی، کارکرد روزانه) هنوز هم تاریخ شمسی و هم میلادی، و گاهی ارقام فارسی (`effective_date` نرخ کارمزدی) نگه می‌دارند و مقایسه متنی بازه‌ها روی آن‌ها دقیق نیست | drizzle/0028 و 0030، ستون‌های تاریخ متنی | in_progress — تصمیم مالک محصول (۱۱ مهر ۱۴۰۵): ذخیره میلادی ISO، نمایش و ورود همه‌جا شمسی؛ `journal_vouchers.date` شمسی می‌ماند. گام ۱ v7.0.131: مبدل واحد `src/utils/calendarDate.ts`، `requireStorageDate`، توابع SQL مهاجرت 0038 (`erp_text_date_to_iso`، `erp_unify_text_date_column`، `erp_set_iso_date_constraint`) و گزارش `npm run dates:report` (تست `reg_calendar_date_tools_td_232`، Vitest `calendarDate.test.ts`). گام ۲ v7.0.132: CRM (مهاجرت 0039، `requireStorageDate` در مسیرهای CRM، یادآوری سررسید فقط با امروز ISO؛ تست `reg_crm_dates_iso_td_232`، Vitest `crmTasksWidgetDates.test.tsx`). گام‌های بعد ستون‌به‌ستون: چک، کارکرد و حقوق، پروژه و درخواست خرید و پرسنل، نمایش |
 
 ---
 
@@ -33,4 +33,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v7.0.131 — TD-232 در حال اجرا (گام ۱: ابزار و گزارش تقویم تاریخ‌ها).*
+*آخرین بازبینی: v7.0.132 — TD-232 در حال اجرا (گام ۲: تاریخ‌های CRM).*

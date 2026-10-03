@@ -12,7 +12,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
 import { crmLeads, crmActivities, items, documents } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { getTodayJalaliDate } from '../utils.js';
+import { crmTodayActivityDates } from '../lib/storageDate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
@@ -307,7 +307,8 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
       description: `پیش‌فاکتور رسمی به شماره ${req.body.refNumber} در سیستم ثبت گردید.`,
       loggedBy: req.user?.full_name || 'سیستم',
       assignedTo: req.user?.full_name || '',
-      activityDate: new Date().toLocaleDateString('fa-IR')
+      // v7.0.132 (TD-232): تاریخ اقدام CRM میلادی ISO (پیش‌تر «۱۴۰۵/۷/۱۱» با ارقام فارسی)
+      ...(await crmTodayActivityDates())
     });
   }
 
@@ -541,7 +542,7 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
         description: `پیش‌فاکتور شماره "${beforeDoc.ref_number || docId}" حذف شد؛ پرونده فروش جهت صدور مجدد پیش‌فاکتور بازگشایی گردید.`,
         loggedBy: req.user?.full_name || req.user?.username || 'سیستم',
         assignedTo: linkedLead.assignedTo || '',
-        activityDate: getTodayJalaliDate(),
+        ...(await crmTodayActivityDates()),
         createdAt: new Date().toISOString(),
         isDeleted: 0
       });

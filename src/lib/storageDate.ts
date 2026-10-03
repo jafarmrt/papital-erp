@@ -1,5 +1,6 @@
 import { ValidationError } from '../errors/customErrors.js';
 import { toStorageDate } from '../utils/calendarDate.js';
+import { businessTodayIsoDate } from './businessClock.js';
 
 /**
  * v7.0.131 (TD-232): نرمال‌سازی تاریخ ورودی API پیش از ذخیره در ستون‌های تاریخ متنیِ یکسان‌شده.
@@ -17,4 +18,10 @@ export function requireStorageDate(value: unknown, label: string): string {
 /** برای ویرایش جزئی: مقدار نیامده (undefined) همان undefined می‌ماند تا ستون دست نخورد */
 export function optionalStorageDate(value: unknown, label: string): string | undefined {
   return value === undefined ? undefined : requireStorageDate(value, label);
+}
+
+/** v7.0.132: اقدام‌های خودکار CRM (ایجاد فرصت، تغییر مرحله، پیش‌فاکتور …) تاریخ امروز را میلادی ISO در هر دو ستون می‌گیرند */
+export async function crmTodayActivityDates(): Promise<{ activityDate: string; activityDateIso: string }> {
+  const today = await businessTodayIsoDate();
+  return { activityDate: today, activityDateIso: today };
 }

@@ -7165,6 +7165,151 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // Test: v7.0.132 (TD-232): تاریخ‌های CRM میلادی ISO ذخیره می‌شوند؛ ورودی شمسی تبدیل و یادآوری پیگیری آینده زودتر اعلان نمی‌شود
+  if (shouldRun('reg_crm_dates_iso_td_232', 'td232', 'crm', 'calendar', 'followup')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.132: تاریخ اقدام، پیگیری و بستن فرصت CRM میلادی ISO ذخیره می‌شود؛ تاریخ قدیمی با ثبت مقدار قبلی تبدیل می‌شود؛ پیگیری آینده سررسید اعلام نمی‌شود (TD-232)';
+    const ROLLBACK = new Error('ROLLBACK_TD_232_CRM');
+    const violations: string[] = [];
+    const activityIds: number[] = [];
+    try {
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const { crmActivities, crmLeads, legacyDateRepairs, notifications } = await import('../../db/schema.js');
+      const { toStorageDate, isoToJalaliDate } = await import('../../utils/calendarDate.js');
+      const { toPersianDigits } = await import('../../utils/persianNumber.js');
+
+      // ۱) قید iso روی سه ستون اصلی CRM معتبر است
+      const [{ n: isoConstraints }] = (await orm.execute(sql`
+        SELECT count(*)::int AS n FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+        WHERE rel.relnamespace = current_schema()::regnamespace AND pc.convalidated AND pg_get_constraintdef(pc.oid) LIKE '%''iso''%'
+          AND pc.conname IN ('chk_crm_activities_activity_date_datefmt', 'chk_crm_activities_next_followup_date_datefmt', 'chk_crm_leads_expected_close_date_datefmt')`) as unknown as { rows: Array<{ n: number }> }).rows;
+      if (isoConstraints !== 3) violations.push(`قید iso معتبر ستون‌های CRM: ${isoConstraints} (انتظار ۳)`);
+
+      // ۲) تبدیل داده قدیمی (همان گام‌های مهاجرت 0039) در تراکنشی که برگردانده می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          for (const c of ['chk_crm_activities_activity_date_datefmt', 'chk_crm_activities_next_followup_date_datefmt']) {
+            await tx.execute(sql`ALTER TABLE crm_activities DROP CONSTRAINT IF EXISTS ${sql.identifier(c)}`);
+          }
+          await tx.execute(sql`ALTER TABLE crm_leads DROP CONSTRAINT IF EXISTS chk_crm_leads_expected_close_date_datefmt`);
+          const [lead] = await tx.insert(crmLeads).values({ title: 'ERP-TEST-MARKER TD-232 CRM', expectedCloseDate: '1405/08/15' }).returning({ id: crmLeads.id });
+          const legacy: Record<string, { activityDate: string; nextFollowUpDate: string; nextFollowUpDateIso: string }> = {
+            picker: { activityDate: '1405/07/10', nextFollowUpDate: '1405/08/01', nextFollowUpDateIso: '' },
+            proforma: { activityDate: '۱۴۰۵/۷/۱۱', nextFollowUpDate: '', nextFollowUpDateIso: '' },
+            server: { activityDate: '2026-10-02', nextFollowUpDate: '', nextFollowUpDateIso: '' },
+            stale: { activityDate: '1405/07/10', nextFollowUpDate: '1405/08/01', nextFollowUpDateIso: '2020-01-01' },
+            bad: { activityDate: 'دیروز', nextFollowUpDate: '', nextFollowUpDateIso: '' },
+          };
+          const ids: Record<string, number> = {};
+          for (const [key, v] of Object.entries(legacy)) {
+            const [row] = await tx.insert(crmActivities).values({ leadId: lead.id, type: 'note', title: `ERP-TEST-MARKER TD-232 ${key}`, ...v }).returning({ id: crmActivities.id });
+            ids[key] = row.id;
+          }
+          await tx.execute(sql`SELECT erp_unify_text_date_column('crm_activities', 'activity_date')`);
+          await tx.execute(sql`SELECT erp_unify_text_date_column('crm_activities', 'next_followup_date')`);
+          await tx.execute(sql`SELECT erp_unify_text_date_column('crm_leads', 'expected_close_date')`);
+          await tx.execute(sql`SELECT erp_sync_crm_iso_companions()`);
+
+          const [leadRow] = await tx.select({ d: crmLeads.expectedCloseDate }).from(crmLeads).where(eq(crmLeads.id, lead.id));
+          if (leadRow.d !== toStorageDate('1405/08/15')) violations.push(`expected_close_date: ${leadRow.d}`);
+          for (const [key, v] of Object.entries(legacy)) {
+            const [row] = await tx.select().from(crmActivities).where(eq(crmActivities.id, ids[key]));
+            const wantAct = key === 'bad' ? 'دیروز' : toStorageDate(v.activityDate);
+            const wantNext = toStorageDate(v.nextFollowUpDate) ?? '';
+            if (row.activityDate !== wantAct) violations.push(`${key}.activity_date: ${row.activityDate} (انتظار ${wantAct})`);
+            if (row.nextFollowUpDate !== wantNext) violations.push(`${key}.next_followup_date: ${row.nextFollowUpDate} (انتظار ${wantNext})`);
+            if (key !== 'bad' && (row.activityDateIso !== wantAct || row.nextFollowUpDateIso !== wantNext)) {
+              violations.push(`${key}: ستون‌های _iso هم‌سان نشدند (${row.activityDateIso}، ${row.nextFollowUpDateIso})`);
+            }
+          }
+          const log = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.repairKind, 'calendar'), inArray(legacyDateRepairs.rowId, Object.values(ids))));
+          const find = (key: string, column: string) => log.find(r => r.rowId === ids[key] && r.tableName === 'crm_activities' && r.columnName === column);
+          if (find('proforma', 'activity_date')?.oldValue !== '۱۴۰۵/۷/۱۱') violations.push('مقدار قبلی تاریخ پیش‌فاکتور ثبت نشد');
+          if (find('bad', 'activity_date')?.status !== 'refused') violations.push('تاریخ نامعتبر باید refused ثبت شود');
+          if (find('server', 'activity_date')) violations.push('تاریخ ISO نباید در گزارش بیاید');
+          if (find('stale', 'next_followup_date_iso')?.oldValue !== '2020-01-01') violations.push('مقدار قبلی next_followup_date_iso ناهم‌سان ثبت نشد');
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      // ۳) API: ورودی شمسی میلادی ISO ذخیره می‌شود، تاریخ نامعتبر 422 و فیلتر بازه شمسی کار می‌کند
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const todayIso = await businessTodayIsoDate();
+      const shiftIso = (days: number) => {
+        const d = new Date(`${todayIso}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + days);
+        return d.toISOString().slice(0, 10);
+      };
+      const futureIso = shiftIso(20);
+      const post = (body: Record<string, unknown>) => request(app).post('/api/crm/activities')
+        .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
+      const created = await post({ title: 'ERP-TEST-MARKER TD-232 پیگیری آینده', type: 'call', activityDate: '۱۴۰۵/۰۷/۱۰', nextFollowUpDate: isoToJalaliDate(futureIso), nextFollowUpTask: 'تماس' });
+      if (created.status !== 201) throw new Error(`ثبت اقدام: ${created.status} ${JSON.stringify(created.body)}`);
+      activityIds.push(created.body.id);
+      if (created.body.activityDate !== '2026-10-02' || created.body.nextFollowUpDate !== futureIso) {
+        violations.push(`پاسخ ثبت باید ISO باشد: ${created.body.activityDate}، ${created.body.nextFollowUpDate}`);
+      }
+      const [stored] = await orm.select().from(crmActivities).where(eq(crmActivities.id, created.body.id));
+      if (stored.activityDate !== '2026-10-02' || stored.activityDateIso !== '2026-10-02' || stored.nextFollowUpDate !== futureIso || stored.nextFollowUpDateIso !== futureIso) {
+        violations.push(`ذخیره: ${JSON.stringify({ a: stored.activityDate, ai: stored.activityDateIso, n: stored.nextFollowUpDate, ni: stored.nextFollowUpDateIso })}`);
+      }
+      const invalid = await post({ title: 'ERP-TEST-MARKER TD-232 نامعتبر', activityDate: '1405/07/31' });
+      if (invalid.status !== 422) {
+        violations.push(`تاریخ ۳۱ مهر باید 422 بگیرد: ${invalid.status}`);
+        if (invalid.body?.id) activityIds.push(invalid.body.id);
+      }
+      const inRange = await request(app).get(`/api/crm/activities?fromDate=${encodeURIComponent('1405/07/09')}&toDate=${encodeURIComponent('۱۴۰۵/۰۷/۱۰')}&limit=500`).set('Cookie', session.cookie);
+      const outRange = await request(app).get(`/api/crm/activities?fromDate=${encodeURIComponent('1405/07/11')}&limit=500`).set('Cookie', session.cookie);
+      if (!(Array.isArray(inRange.body) && inRange.body.some((a: { id: number }) => a.id === created.body.id))) violations.push('فیلتر بازه شمسی اقدام داخل بازه را نیاورد');
+      if (Array.isArray(outRange.body) && outRange.body.some((a: { id: number }) => a.id === created.body.id)) violations.push('فیلتر «از ۱۱ مهر» اقدام ۱۰ مهر را آورد');
+
+      // ۴) یادآوری: پیگیری آینده سررسید اعلام نمی‌شود؛ پیگیری گذشته اعلام می‌شود و تاریخ پیام شمسی است
+      const link = `/crm?activityId=${created.body.id}`;
+      const dueNotifs = async () => orm.select().from(notifications).where(and(eq(notifications.link, link), eq(notifications.type, 'crm_due_task')));
+      await request(app).get('/api/notifications').set('Cookie', session.cookie);
+      if ((await dueNotifs()).length > 0) violations.push('پیگیری ۲۰ روز آینده همین امروز سررسید اعلام شد');
+      const pastIso = shiftIso(-1);
+      await orm.update(crmActivities).set({ nextFollowUpDate: pastIso, nextFollowUpDateIso: pastIso }).where(eq(crmActivities.id, created.body.id));
+      await request(app).get('/api/notifications').set('Cookie', session.cookie);
+      const due = await dueNotifs();
+      // اعلان «تسک جدید» همین پیوند را دارد و نباید جلوی یادآوری سررسید را بگیرد
+      if (due.length !== 1) violations.push(`پیگیری دیروز باید یک اعلان سررسید بسازد: ${due.length}`);
+      else if (!due[0].message?.includes(toPersianDigits(isoToJalaliDate(pastIso)))) violations.push(`تاریخ پیام اعلان شمسی نیست: ${due[0].message}`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_crm_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'تاریخ شمسی ورودی ISO ذخیره شد، تاریخ نامعتبر 422 گرفت، فیلتر بازه شمسی درست بود، داده قدیمی با گزارش تبدیل شد و یادآوری فقط برای پیگیری گذشته ساخته شد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_crm_dates_iso_td_232',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (activityIds.length > 0) {
+        await orm.execute(sql`DELETE FROM notifications WHERE link = ANY(${sql.param(activityIds.map(id => `/crm?activityId=${id}`))}::text[])`);
+        await cleanTestTableData('crm_activities', 'id', activityIds);
+      }
+    }
+  }
+
   // Test: v7.0.83 (TD-224): پاک‌سازی دستی فایل‌های پیوست بدون ثبت؛ فایل ثبت‌شده، جداشده و تازه دست نمی‌خورند
   if (shouldRun('reg_attachment_orphan_cleanup_td_224', 'td224', 'attachment', 'orphan', 'cleanup')) {
     const tStart = Date.now();

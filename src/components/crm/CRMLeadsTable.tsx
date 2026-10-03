@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PhoneCall, Edit3, Trash2, FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { CRMLead } from '../../types';
 import { STAGES } from '../../hooks/useCRMData';
-import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
 
 interface CRMLeadsTableProps {
   leads: CRMLead[];
@@ -97,7 +97,7 @@ export function CRMLeadsTable({
                     </td>
                     <td className="p-3 font-bold text-blue-600">{formatPersianNumber(lead.probability)}٪</td>
                     <td className="p-3 text-slate-700 font-medium">{lead.assignedTo || '-'}</td>
-                    <td className="p-3 text-slate-500">{lead.expectedCloseDate || '-'}</td>
+                    <td className="p-3 text-slate-500">{formatPersianDate(lead.expectedCloseDate)}</td>
                     <td className="p-3">
                       <div className="flex items-center justify-center gap-1">
                         {onConvertToInvoice && lead.stage === 'proposal' && (

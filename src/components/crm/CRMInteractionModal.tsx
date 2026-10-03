@@ -4,7 +4,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { CRMLead, CRMActivity } from '../../types';
-import { getTodayJalaliDate, extractDateString } from '../../utils';
+import { getTodayJalaliDate, extractDateString, isoToJalaliDate, formatPersianDate } from '../../utils';
 import { MentionTextarea } from '../MentionTextarea';
 
 interface CRMInteractionModalProps {
@@ -189,7 +189,7 @@ export function CRMInteractionModal({
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">تاریخ انجام این تماس / اقدام</label>
                   <DatePicker
-                    value={activityForm.activityDate || getTodayJalaliDate()}
+                    value={isoToJalaliDate(activityForm.activityDate) || getTodayJalaliDate()}
                     onChange={(dateObj: any) => {
                       setActivityForm({ ...activityForm, activityDate: extractDateString(dateObj) });
                     }}
@@ -243,7 +243,7 @@ export function CRMInteractionModal({
                   <div>
                     <label className="block text-[11px] font-semibold text-amber-800 mb-1">تاریخ پیگیری بعدی</label>
                     <DatePicker
-                      value={activityForm.nextFollowUpDate}
+                      value={isoToJalaliDate(activityForm.nextFollowUpDate)}
                       onChange={(dateObj: any) => {
                         setActivityForm({ ...activityForm, nextFollowUpDate: extractDateString(dateObj) });
                       }}
@@ -333,7 +333,7 @@ export function CRMInteractionModal({
                 عنوان کار: {selectedFollowupAct.nextFollowUpTask || selectedFollowupAct.title}
               </span>
               <span className="text-amber-700 block text-[11px]">
-                تاریخ سررسید: {selectedFollowupAct.nextFollowUpDate || 'تعیین نشده'}
+                تاریخ سررسید: {selectedFollowupAct.nextFollowUpDate ? formatPersianDate(selectedFollowupAct.nextFollowUpDate) : 'تعیین نشده'}
               </span>
             </div>
 

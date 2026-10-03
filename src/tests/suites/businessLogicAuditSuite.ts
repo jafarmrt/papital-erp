@@ -453,9 +453,10 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       type: 'call',
       title: 'تماس پیگیری تستی استاندارد تاریخ',
       loggedBy: 'v10_tester',
-      activityDate: jDateAct,
+      // v7.0.132 (TD-232): ستون اصلی هم میلادی ISO ذخیره می‌شود (قید iso)
+      activityDate: isoActExpected,
       activityDateIso: isoActExpected,
-      nextFollowUpDate: jDateFollow,
+      nextFollowUpDate: isoFollowExpected,
       nextFollowUpDateIso: isoFollowExpected,
       isFollowUpCompleted: 0,
       isDeleted: 0

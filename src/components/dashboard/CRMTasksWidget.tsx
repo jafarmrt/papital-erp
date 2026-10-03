@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, Clock, CheckCircle2, ArrowLeft, Sparkles, Search, X } from 'lucide-react';
-import { toPersianDigits, formatPersianPrice, getTodayJalaliDate } from '../../utils';
+import { toPersianDigits, formatPersianPrice, getTodayJalaliDate, isoToJalaliDate } from '../../utils';
 import { CRMLead, CRMActivity } from '../../types';
 
 interface CRMTasksWidgetProps {
@@ -33,8 +33,8 @@ export function CRMTasksWidget({
 
   const todayAndOverdueFollowups = useMemo(() => {
     return pendingFollowups.filter((act) => {
-      const d = act.nextFollowUpDate || '';
-      return d <= todayJalali;
+      // v7.0.132 (TD-232): سررسید ذخیره‌شده میلادی ISO است؛ برای مقایسه با امروز به شمسی YYYY/MM/DD تبدیل می‌شود
+      return isoToJalaliDate(act.nextFollowUpDate) <= todayJalali;
     });
   }, [pendingFollowups, todayJalali]);
 
@@ -243,8 +243,9 @@ export function CRMTasksWidget({
           ))
         ) : (
           (displayedItems as CRMActivity[]).map((act) => {
-            const isOverdue = (act.nextFollowUpDate || '') < todayJalali;
-            const isToday = (act.nextFollowUpDate || '') === todayJalali;
+            const dueJalali = isoToJalaliDate(act.nextFollowUpDate);
+            const isOverdue = dueJalali < todayJalali;
+            const isToday = dueJalali === todayJalali;
 
             return (
               <div
@@ -284,7 +285,7 @@ export function CRMTasksWidget({
                         : 'bg-slate-200 text-slate-700'
                     }`}
                   >
-                    {isOverdue ? 'معوق' : isToday ? 'امروز' : toPersianDigits(act.nextFollowUpDate || '')}
+                    {isOverdue ? 'معوق' : isToday ? 'امروز' : toPersianDigits(dueJalali)}
                   </span>
                 </div>
 

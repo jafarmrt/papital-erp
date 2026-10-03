@@ -9,7 +9,7 @@ import { InteractiveJalaliCalendar, CalendarEventItem } from '../components/dash
 import { CRMTasksWidget } from '../components/dashboard/CRMTasksWidget';
 import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentionsWidget';
 import { Warehouse, ArrowLeft, Sparkles } from 'lucide-react';
-import { toEnglishDigits } from '../utils';
+import { toEnglishDigits, isoToJalaliDate } from '../utils';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -55,7 +55,8 @@ export default function Dashboard() {
           items.push({
             id: `crm-act-${act.id}`,
             title: act.title || 'پیگیری CRM',
-            date: toEnglishDigits(act.nextFollowUpDate).replace(/-/g, '/'),
+            // v7.0.132 (TD-232): سررسید میلادی ISO ذخیره می‌شود؛ تقویم داشبورد شمسی YYYY/MM/DD می‌خواهد
+            date: isoToJalaliDate(act.nextFollowUpDate),
             type: 'crm_followup',
             customerName: act.customerName || '',
             assignedTo: act.assignedTo || '',
@@ -72,7 +73,7 @@ export default function Dashboard() {
           items.push({
             id: `crm-lead-${lead.id}`,
             title: `سررسید معامله: ${lead.title}`,
-            date: toEnglishDigits(lead.expectedCloseDate).replace(/-/g, '/'),
+            date: isoToJalaliDate(lead.expectedCloseDate),
             type: 'crm_close',
             customerName: lead.customerName || lead.company || '',
             assignedTo: lead.assignedTo || '',
