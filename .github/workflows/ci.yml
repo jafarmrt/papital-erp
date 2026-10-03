@@ -54,7 +54,7 @@ jobs:
         run: npm run lint
 
       - name: ESLint Ratchet Gate (v7.0.65 / audit P3-4)
-        # تعداد تخلف هر قاعده نباید از eslint-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
+        # تعداد تخلف هر قاعده نباید از eslint-baseline.json و any هر فایل نباید از eslint-any-baseline.json بیشتر شود (scripts/eslint-ratchet.ts)
         run: npm run lint:eslint
 
       - name: Frontend & Unit Tests (Vitest, v7.0.76 / audit P3-6)

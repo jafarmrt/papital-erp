@@ -1424,9 +1424,11 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (cmp.increased.length !== 1 || cmp.increased[0].rule !== 'max-lines' || cmp.decreased.length !== 1) violations.push(`مقایسه با فایل پایه نادرست است: ${JSON.stringify(cmp)}`);
     const fs = await import('fs');
     const baseline = JSON.parse(fs.readFileSync(ratchet.BASELINE_FILE, 'utf8')) as Record<string, number>;
-    for (const rule of ['@typescript-eslint/no-floating-promises', '@typescript-eslint/no-misused-promises', '@typescript-eslint/no-explicit-any', 'react-hooks/exhaustive-deps', 'max-lines']) {
+    for (const rule of ['@typescript-eslint/no-floating-promises', '@typescript-eslint/no-misused-promises', 'react-hooks/exhaustive-deps', 'max-lines']) {
       if (typeof baseline[rule] !== 'number') violations.push(`قاعده ${rule} در فایل پایه نیست`);
     }
+    // v7.0.106 (TD-106): any به تفکیک فایل در فایل پایه جدا شمرده می‌شود
+    if (!fs.existsSync(ratchet.ANY_BASELINE_FILE)) violations.push(`فایل پایه any (${ratchet.ANY_BASELINE_FILE}) نیست`);
 
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
