@@ -6617,7 +6617,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       } else {
         violations.push('سند حسابداری پرداخت صادر نشد');
       }
-      if (result.payroll.paymentDate !== jalaliDash) violations.push(`تاریخ پرداخت فیش: «${result.payroll.paymentDate}» (انتظار ${jalaliDash})`);
+      // v7.0.134 (TD-232): تاریخ پرداخت فیش هم میلادی ISO ذخیره می‌شود
+      if (result.payroll.paymentDate !== todayIso) violations.push(`تاریخ پرداخت فیش: «${result.payroll.paymentDate}» (انتظار ${todayIso})`);
 
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
