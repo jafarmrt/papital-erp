@@ -93,6 +93,15 @@ interface InventoryControlItem {
   unit?: string;
 }
 
+/** فیلدهای مقدار رزرو به ترتیب اولویت گزارش رزروها؛ اولین فیلد با مقدار مثبت، مقدار رزرو ردیف است */
+const RESERVATION_QTY_FIELDS = ['convertedReservedQty', 'convertedQty', 'reservedQty', 'warehouseStockQty', 'stockQty'] as const;
+type ReservationQtyField = typeof RESERVATION_QTY_FIELDS[number];
+
+/** v7.0.102 (TD-233): یک قاعده برای مقدار رزرو ردیف — هم در گزارش رزروها و هم در کسر رزرو هنگام حواله خروج */
+export function reservationQtyField(row: Partial<Record<ReservationQtyField, unknown>>): ReservationQtyField | null {
+  return RESERVATION_QTY_FIELDS.find(f => Number(row[f] || 0) > 0) ?? null;
+}
+
 interface InventoryControlData {
   isFinalized?: boolean;
   isReserved?: boolean;
@@ -230,14 +239,14 @@ export class ItemStockReservationService {
   /**
    * Fetch active project's reserved items directly from DB.
    */
-  static async getProjectReservedItems(targetProj: { id: number; inventoryControl: any }): Promise<any[]> {
+  static async getProjectReservedItems(targetProj: { id: number; inventoryControl: any }, executor: DbExecutor = orm): Promise<any[]> {
     const invControl = targetProj.inventoryControl as InventoryControlData | null;
     if (!invControl) return [];
     if (Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0) {
       return invControl.reservedItems;
     }
 
-    const allItems = await orm
+    const allItems = await executor
       .select({
         id: items.id,
         code: items.code,
@@ -281,6 +290,7 @@ export class ItemStockReservationService {
   ): Promise<{
     changed: boolean;
     releasedItemIds: number[];
+    releasedQuantity: number;
     remainingReservedCount: number;
     projectVersion: number;
   }> {
@@ -319,7 +329,7 @@ export class ItemStockReservationService {
     const invControl = (proj.inventoryControl as InventoryControlData) || {};
     let reservedList: InventoryControlItem[] = Array.isArray(invControl.reservedItems) && invControl.reservedItems.length > 0
       ? [...invControl.reservedItems]
-      : (await ItemStockReservationService.getProjectReservedItems(proj)) as InventoryControlItem[];
+      : (await ItemStockReservationService.getProjectReservedItems(proj, tx as DbExecutor)) as InventoryControlItem[];
 
     // 3. مپینگ اقلام سند
     const rawItemIds = Array.from(new Set(
@@ -334,30 +344,42 @@ export class ItemStockReservationService {
       itemDataMap = new Map(fetchedItems.map((it: typeof items.$inferSelect) => [it.id, it]));
     }
 
-    // 4. کسر رزرو هر ردیف سند (تطبیق id/code/name — منطق انتقال‌یافته از documents.routes)
+    // 4. کسر رزرو هر ردیف سند (تطبیق id/code/name). v7.0.102 (TD-233): مقدار هر ردیف سند از همه ردیف‌های رزرو
+    // هم‌کالا به ترتیب کم می‌شود (پیش‌تر فقط از اولین ردیف) و مقدار هر ردیف رزرو همان فیلدی است که گزارش رزروها می‌خواند.
     const releasedItemIds: number[] = [];
+    let releasedQuantity = fin(0);
     for (const docLine of params.docItems) {
-      const lineQty = Number(docLine.quantity || 0);
-      if (lineQty <= 0) continue;
+      let remaining = fin(docLine.quantity || 0);
+      if (!remaining.isPositive()) continue;
       const itemData = itemDataMap.get(Number(docLine.itemId));
       if (!itemData) continue;
 
-      const resIdx = reservedList.findIndex((r: { itemId?: unknown; itemCode?: unknown; itemName?: unknown }) =>
-        (r.itemId && itemData.id && Number(r.itemId) === Number(itemData.id)) ||
-        (r.itemCode && itemData.code && String(r.itemCode).trim().toLowerCase() === String(itemData.code).trim().toLowerCase()) ||
-        (r.itemName && itemData.name && String(r.itemName).trim().toLowerCase() === String(itemData.name).trim().toLowerCase())
-      );
+      let lineReleased = false;
+      for (let resIdx = 0; resIdx < reservedList.length && remaining.isPositive();) {
+        const r = reservedList[resIdx];
+        const matches = (r.itemId && itemData.id && Number(r.itemId) === Number(itemData.id)) ||
+          (r.itemCode && itemData.code && String(r.itemCode).trim().toLowerCase() === String(itemData.code).trim().toLowerCase()) ||
+          (r.itemName && itemData.name && String(r.itemName).trim().toLowerCase() === String(itemData.name).trim().toLowerCase());
+        const qtyField = matches ? reservationQtyField(r) : null;
+        if (!qtyField) {
+          resIdx++;
+          continue;
+        }
 
-      if (resIdx !== -1) {
-        const currentResQty = Number(reservedList[resIdx].reservedQty || 0);
-        const newResQty = Math.max(0, currentResQty - lineQty);
-        if (newResQty > 0) {
-          reservedList[resIdx] = { ...reservedList[resIdx], reservedQty: newResQty };
+        const currentResQty = fin(r[qtyField]);
+        const deducted = currentResQty.lessThan(remaining) ? currentResQty : remaining;
+        const newResQty = currentResQty.subtract(deducted);
+        remaining = remaining.subtract(deducted);
+        releasedQuantity = releasedQuantity.add(deducted);
+        lineReleased = true;
+        if (newResQty.isPositive()) {
+          reservedList[resIdx] = { ...r, [qtyField]: newResQty.toNumber() };
+          resIdx++;
         } else {
           reservedList.splice(resIdx, 1);
         }
-        releasedItemIds.push(itemData.id);
       }
+      if (lineReleased && !releasedItemIds.includes(itemData.id)) releasedItemIds.push(itemData.id);
     }
 
     const changed = releasedItemIds.length > 0;
@@ -407,6 +429,7 @@ export class ItemStockReservationService {
     return {
       changed,
       releasedItemIds,
+      releasedQuantity: releasedQuantity.toNumber(),
       remainingReservedCount: reservedList.length,
       projectVersion: nextVersion(proj.version)
     };
@@ -546,7 +569,8 @@ export class ItemStockReservationService {
         for (let idx = 0; idx < itemsList.length; idx++) {
           const item = itemsList[idx];
           const code = (item.itemCode || item.code || '').trim();
-          const reservedQty = Number(item.convertedReservedQty || item.convertedQty || item.reservedQty || item.warehouseStockQty || item.stockQty || 0);
+          const qtyField = reservationQtyField(item);
+          const reservedQty = qtyField ? Number(item[qtyField]) : 0;
           if (reservedQty <= 0) continue;
 
           const matchedDbItem = (code ? itemsByCodeMap.get(code.toUpperCase()) : null) 

@@ -6,14 +6,19 @@ import { User } from '../../types';
 import { extractDateString, errorMessageOf, getTodayJalaliDate } from '../../utils';
 import { exchangeRateError } from '../../components/documents/ExchangeRateField';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { deductProjectReservations } from '../../lib/documents/stockReservations';
 import type { StockDocumentForm } from './useStockDocumentForm';
 import type { StockDocumentReferenceData } from './useStockDocumentReferenceData';
 
 /**
  * TD-080 (بخش ۳): ثبت نهایی سند رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage
- * (همان اعتبارسنجی‌ها، بدنه درخواست، کسر رزرو پروژه و پیام‌ها).
+ * (همان اعتبارسنجی‌ها، بدنه درخواست و پیام‌ها). v7.0.102 (TD-233): رزرو پروژه دیگر در مرورگر کم نمی‌شود؛ سرور آن را
+ * در همان تراکنش حواله کم می‌کند و مقدار کسرشده را در پاسخ برمی‌گرداند.
  */
+
+interface CreateDocumentResponse {
+  docId?: number;
+  projectReservation?: { releasedQuantity?: number } | null;
+}
 export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDocumentReferenceData, currentUser: User) {
   const queryClient = useQueryClient();
   const { warehouses } = refData;
@@ -85,7 +90,7 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
         }
       }
 
-      await fetchJson('/documents', {
+      const created = await fetchJson<CreateDocumentResponse>('/documents', {
         method: 'POST',
         body: JSON.stringify({
           docType,
@@ -111,30 +116,9 @@ export function useStockDocumentSubmit(form: StockDocumentForm, refData: StockDo
       });
 
       if (actionType === 'out' && selectedProjectObj) {
-        const currentInvControl = selectedProjectObj.inventory_control || {};
-        const { reservedItems: reservedItemsList, totalDeducted: totalDeductedCount } =
-          deductProjectReservations(currentInvControl.reservedItems, docItems);
-
-        if (totalDeductedCount > 0) {
-          const updatedInvControl = {
-            ...currentInvControl,
-            reservedItems: reservedItemsList,
-            isReserved: reservedItemsList.length > 0,
-            lastUpdated: new Date().toISOString()
-          };
-
-          try {
-            await fetchJson(`/projects/${selectedProjectObj.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                inventory_control: updatedInvControl
-              })
-            });
-            toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${totalDeductedCount} عدد از اقلام رزرو شده پروژه «${selectedProjectObj.project_code || selectedProjectObj.title}» کسر گردید.`);
-          } catch (projErr) {
-            console.error("Error updating project reserved items:", projErr);
-          }
+        const releasedQty = Number(created?.projectReservation?.releasedQuantity || 0);
+        if (releasedQty > 0) {
+          toast.success(`سند خروج با موفقیت ثبت شد و تعداد ${releasedQty} عدد از اقلام رزرو شده پروژه «${selectedProjectObj.project_code || selectedProjectObj.title}» کسر گردید.`);
         } else {
           toast.success('سند حواله خروج با موفقیت ثبت شد و فرآیند تایید در ورکفلو آغاز گردید.');
         }

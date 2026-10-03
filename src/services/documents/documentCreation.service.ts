@@ -19,6 +19,7 @@ import { resolveDocumentVat, parseVatInput } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { assertReturnableInvoice, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
+import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money, type Money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -189,6 +190,17 @@ export class DocumentCreationService {
    * Creates a new document and applies associated inventory changes.
    */
   static async createDocument(body: CreateDocumentInput): Promise<number> {
+    return (await DocumentCreationService.createDocumentWithDetails(body)).docId;
+  }
+
+  /**
+   * همان createDocument به‌همراه نتیجه کسر رزرو پروژه. v7.0.102 (TD-233، تصمیم مالک محصول «کسر در سرور»): رزرو پروژه
+   * در همان تراکنش حواله خروج نهایی کم می‌شود و اگر کسر شکست بخورد، سند ثبت نمی‌شود.
+   */
+  static async createDocumentWithDetails(
+    body: CreateDocumentInput,
+    actor: { userId?: number } = {}
+  ): Promise<{ docId: number; projectReservation: ProjectReservationRelease | null }> {
     const { 
       docType: rawDocType, type: rawType, refNumber, date, items: docLines, user, inOut,
       buyer_name, buyerName, buyer_city, buyerCity, buyer_phone, buyerPhone, buyer_address, buyerAddress,
@@ -224,6 +236,8 @@ export class DocumentCreationService {
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
     const finalBuyerAddress = buyerAddress || buyer_address || '';
+
+    let projectReservation: ProjectReservationRelease | null = null;
 
     const execute = async (tx: DbClient): Promise<number> => {
       if (finalProjectId !== null) {
@@ -500,6 +514,7 @@ export class DocumentCreationService {
           await assertReturnableInvoice(tx, returnOfDocumentId);
         }
 
+        const stockDirection: 'in' | 'out' = docType === 'return' ? 'in' : (inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out'));
         const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;
@@ -512,7 +527,7 @@ export class DocumentCreationService {
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: Number(itemId),
               documentId: docId,
-              inOut: docType === 'return' ? 'in' : (inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out')),
+              inOut: stockDirection,
               quantity: qty,
               // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
               price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(price, currency || 'IRR', docExchangeRate),
@@ -534,6 +549,11 @@ export class DocumentCreationService {
           });
         }
         await insertDocumentLines(tx, lineRows);
+
+        // v7.0.102 (TD-233): کسر رزرو پروژه در همان تراکنش خروج قطعی؛ خطا کل سند را برمی‌گرداند
+        if (docStatus === 'final' && stockDirection === 'out' && finalProjectId !== null) {
+          projectReservation = await releaseReservationsForDocument(tx, finalProjectId, docId, docLines, user, actor.userId);
+        }
       }
 
       // Phase 12 - Transactional Outbox (Guarantees atomic event persistence with document creation)
@@ -592,9 +612,7 @@ export class DocumentCreationService {
     };
 
     // V9-P0: پشتیبانی از تراکنش خارجی (externalTx) برای اجرای اتمیک در تراکنش فراخواننده
-    if (externalTx) {
-      return await execute(externalTx);
-    }
-    return await orm.transaction(execute);
+    const docId = externalTx ? await execute(externalTx) : await orm.transaction(execute);
+    return { docId, projectReservation };
   }
 }

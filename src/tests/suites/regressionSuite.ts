@@ -7847,5 +7847,134 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
+  // ------------------------------------------------------------------
+  // v7.0.102 (TD-233، تصمیم مالک محصول «کسر در سرور»): رزرو پروژه در همان تراکنش حواله خروج کم می‌شود
+  // ------------------------------------------------------------------
+  if (shouldRun('reg_project_reservation_server_td_233', 'td233', 'reservation', 'createDocument')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.102 Regression: کسر رزرو پروژه داخل تراکنش حواله خروج، از همه ردیف‌های هم‌کالا (TD-233)';
+    const suffix = `${Date.now()}`;
+    const docIds: number[] = [];
+    const projectIds: number[] = [];
+    let itemId = 0;
+    try {
+      const { productionProjects } = await import('../../db/schema.js');
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const { ItemStockReservationService } = await import('../../services/items/itemStockReservation.service.js');
+      const today = await businessTodayIsoDate();
+      const item = await createTestItem({ name: `ERP-TEST-MARKER کالای رزرو TD-233 ${suffix}`, code: `ITEM_TD233_${suffix}`, stocks: { '': 20 } });
+      itemId = item.id;
+      const newProject = async (reservedItems: unknown[]) => {
+        const [p] = await orm.insert(productionProjects).values({
+          projectCode: `PROJ_TD233_${suffix}_${projectIds.length}`,
+          title: `ERP-TEST-MARKER پروژه رزرو TD-233 ${suffix}`,
+          status: 'in_progress',
+          version: 1,
+          inventoryControl: { isReserved: true, reservedItems },
+        }).returning();
+        projectIds.push(p.id);
+        return p.id;
+      };
+      const reservedOf = async (projectId: number) => {
+        const [p] = await orm.select().from(productionProjects).where(eq(productionProjects.id, projectId));
+        const inv = (p.inventoryControl ?? {}) as { reservedItems?: Array<Record<string, unknown>> };
+        return Array.isArray(inv.reservedItems) ? inv.reservedItems : [];
+      };
+      const remittance = (projectId: number, quantity: number, status: string, ref: string): CreateDocumentInput => ({
+        docType: 'remittance', status, refNumber: ref, date: today, user: 'test-agent', inOut: 'out', location: '',
+        projectId, skipVoucherSync: true, items: [{ itemId: item.id, quantity, unit_price: 0 }],
+      });
+      const violations: string[] = [];
+
+      // ۱. دو ردیف رزرو یک کالا (دومی با مقدار تبدیل‌شده): خروج ۴ عدد از هر دو ردیف به ترتیب کم می‌شود
+      const projA = await newProject([
+        { itemId: item.id, itemCode: item.code, itemName: item.name, reservedQty: 2, unit: 'عدد' },
+        { itemCode: item.code, itemName: item.name, convertedQty: 5, reservedQty: 50, unit: 'عدد' },
+      ]);
+      const created = await DocumentService.createDocumentWithDetails(remittance(projA, 4, 'final', `REM-TD233-A-${suffix}`));
+      docIds.push(created.docId);
+      const afterA = await reservedOf(projA);
+      if (created.projectReservation?.releasedQuantity !== 4) violations.push(`مقدار کسرشده: ${created.projectReservation?.releasedQuantity} (باید ۴)`);
+      if (afterA.length !== 1 || Number(afterA[0].convertedQty) !== 3 || Number(afterA[0].reservedQty) !== 50) {
+        violations.push(`رزرو باقی‌مانده پروژه A: ${JSON.stringify(afterA)} (باید یک ردیف با convertedQty=3)`);
+      }
+      const report = await ItemStockReservationService.getReservedStockDetails();
+      const reportedA = report.allReservationEntries
+        .filter(e => e.sourceType === 'project' && Number(e.sourceId) === projA)
+        .reduce((sum, e) => sum + Number(e.reservedQty || 0), 0);
+      if (reportedA !== 3) violations.push(`گزارش رزروها برای پروژه A: ${reportedA} (باید ۳)`);
+
+      // ۲. خطای کسر رزرو، کل حواله را برمی‌گرداند (سند و گردش انبار ثبت نمی‌شوند). شکست با تریگری موقت روی
+      // به‌روزرسانی همین پروژه ساخته می‌شود که با برگشت تراکنش بیرونی حذف می‌شود.
+      const projB = await newProject([{ itemId: item.id, reservedQty: 3, unit: 'عدد' }]);
+      const failRef = `REM-TD233-B-${suffix}`;
+      let rejected = false;
+      let leaked = false;
+      let stockAfterReject = -1;
+      try {
+        await orm.transaction(async (outer) => {
+          await outer.execute(sql.raw(`CREATE FUNCTION td233_fail_reservation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'td233 forced reservation failure'; END $$`));
+          await outer.execute(sql.raw(`CREATE TRIGGER td233_fail_reservation BEFORE UPDATE ON production_projects FOR EACH ROW WHEN (OLD.id = ${projB}) EXECUTE FUNCTION td233_fail_reservation()`));
+          try {
+            await outer.transaction(async (sp) => {
+              await DocumentService.createDocumentWithDetails({ ...remittance(projB, 1, 'final', failRef), externalTx: sp });
+            });
+          } catch {
+            rejected = true;
+          }
+          const found = await outer.select({ id: documents.id }).from(documents).where(eq(documents.refNumber, failRef));
+          leaked = found.length > 0;
+          stockAfterReject = (await ItemWarehouseStockService.getStocksForItems(outer, [item.id])).get(item.id)?.total ?? -1;
+          throw new Error('rollback');
+        });
+      } catch (err) {
+        if (!(err instanceof Error && err.message === 'rollback')) throw err;
+      }
+      if (!rejected) violations.push('حواله با خطای کسر رزرو باید رد شود');
+      if (leaked) violations.push('سند حواله ردشده نباید ثبت شده باشد');
+      if (stockAfterReject !== 16) violations.push(`موجودی پس از حواله ردشده: ${stockAfterReject} (باید ۱۶)`);
+
+      // ۳. پیش‌نویس رزرو را کم نمی‌کند؛ نهایی‌سازی آن در همان تراکنش کم می‌کند
+      const projC = await newProject([{ itemId: item.id, reservedQty: 6, unit: 'عدد' }]);
+      const draftId = await DocumentService.createDocument(remittance(projC, 2, 'draft', `REM-TD233-C-${suffix}`));
+      docIds.push(draftId);
+      const afterDraft = await reservedOf(projC);
+      if (Number(afterDraft[0]?.reservedQty) !== 6) violations.push(`پیش‌نویس رزرو را تغییر داد: ${JSON.stringify(afterDraft)}`);
+      await DocumentService.finalizeDocument(draftId, 'test-agent', undefined, { strict: false });
+      const afterFinal = await reservedOf(projC);
+      if (Number(afterFinal[0]?.reservedQty) !== 4) violations.push(`رزرو پس از نهایی‌سازی: ${JSON.stringify(afterFinal)} (باید ۴)`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_project_reservation_server_td_233',
+        scenarioId: 'inventory_rebuild',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'خروج ۴ عدد از دو ردیف رزرو کم شد (گزارش رزروها همان ۳ را نشان داد)، خطای کسر حواله را برگرداند و نهایی‌سازی پیش‌نویس رزرو را کم کرد.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_project_reservation_server_td_233',
+        scenarioId: 'inventory_rebuild',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_database',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (docIds.length > 0) {
+        await cleanTestTableData('document_items', 'document_id', docIds);
+        await cleanTestTableData('transactions', 'document_id', docIds);
+        await cleanTestTableData('documents', 'id', docIds);
+      }
+      if (projectIds.length > 0) await cleanTestTableData('production_projects', 'id', projectIds);
+      if (itemId) await cleanTestTableData('items', 'id', [itemId]);
+    }
+  }
   return results;
 }

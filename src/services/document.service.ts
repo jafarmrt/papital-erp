@@ -83,6 +83,16 @@ export class DocumentService {
   }
 
   /**
+   * Same as createDocument, plus the project reservation released in the same transaction (v7.0.102, TD-233).
+   */
+  static async createDocumentWithDetails(
+    body: CreateDocumentInput,
+    actor?: { userId?: number }
+  ): ReturnType<typeof DocumentCreationService.createDocumentWithDetails> {
+    return DocumentCreationService.createDocumentWithDetails(body, actor);
+  }
+
+  /**
    * Retrieves a list of documents, optionally filtered by type, status, date range, search query, and pagination.
    */
   static async getDocuments(

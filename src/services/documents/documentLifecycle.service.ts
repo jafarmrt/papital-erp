@@ -1,6 +1,6 @@
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
-import { documents, documentItems, items, transactions, journalVouchers } from '../../db/schema.js';
+import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
@@ -21,6 +21,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
+import { releaseReservationsForDocument } from './projectReservationRelease.js';
 
 export class DocumentLifecycleService {
   /**
@@ -48,6 +49,7 @@ export class DocumentLifecycleService {
         status: documents.status,
         type: documents.type,
         refNumber: documents.refNumber,
+        projectId: documents.projectId,
       }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
 
@@ -93,6 +95,8 @@ export class DocumentLifecycleService {
         tx,
         [
           { table: items, ids: sortedItemIds, level: LockHierarchyLevel.ITEMS_STOCK, name: 'items' },
+          // v7.0.102 (TD-233): پروژه حواله خروج پیش از سند قفل می‌شود (کسر رزرو در همین تراکنش)
+          ...(docPeek.projectId ? [{ table: productionProjects, id: Number(docPeek.projectId), level: LockHierarchyLevel.PRODUCTION, name: 'production_projects' }] : []),
           { table: documents, id, level: LockHierarchyLevel.DOCUMENTS, name: 'documents' }
         ],
         async () => {
@@ -184,6 +188,11 @@ export class DocumentLifecycleService {
               user: user || doc.user || 'system',
               targetLoc,
             });
+          }
+
+          // v7.0.102 (TD-233): کسر رزرو پروژه حواله خروج در همان تراکنش نهایی‌سازی؛ خطا نهایی‌سازی را برمی‌گرداند
+          if (inOut === 'out' && doc.projectId) {
+            await releaseReservationsForDocument(tx, Number(doc.projectId), id, docLines, user || doc.user || undefined);
           }
 
           // Step 3: Document Status Commitment & Domain Event Outbox

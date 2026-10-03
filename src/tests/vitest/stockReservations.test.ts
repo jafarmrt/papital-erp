@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildGlobalReservations,
-  deductProjectReservations,
   itemReservationSummary,
   reservationMatchesItem,
   reservationMatchesListItem,
-  storedReservationMatchesItem,
   type GlobalReservation,
 } from '../../lib/documents/stockReservations';
 
@@ -60,25 +58,17 @@ describe('item ↔ reservation matching rules', () => {
       expect(matches(reservation({ itemId: 4, itemCode: 'RM-4', itemName: 'نخ' }), stone)).toBe(false);
       expect(matches(reservation({}), stone)).toBe(false);
     }
-    expect(storedReservationMatchesItem({ itemId: '3' }, stone)).toBe(true);
-    expect(storedReservationMatchesItem({ itemCode: ' rm-3 ' }, stone)).toBe(true);
-    expect(storedReservationMatchesItem({ itemName: 'سنگ فیروزه' }, stone)).toBe(true);
-    expect(storedReservationMatchesItem({ itemId: 4, itemCode: 'RM-4' }, stone)).toBe(false);
   });
 
   it('keeps each call site\'s own edge semantics', () => {
-    // summary and deduction require a truthy item id; the list/document rule does not
+    // the summary requires a truthy item id; the list/document rule does not
     const zeroIdItem = { id: 0, code: 'X', name: 'Y' };
     expect(reservationMatchesItem(reservation({ itemId: '0' }), zeroIdItem)).toBe(false);
     expect(reservationMatchesListItem(reservation({ itemId: '0' }), zeroIdItem)).toBe(true);
-    expect(storedReservationMatchesItem({ itemId: '0' }, zeroIdItem)).toBe(false);
-    // summary / list compare codes with toUpperCase, the deduction with toLowerCase ('ß'.toUpperCase() === 'SS')
+    // summary / list compare codes with toUpperCase ('ß'.toUpperCase() === 'SS')
     const ssItem = { id: 50, code: 'ss', name: 'n' };
     expect(reservationMatchesItem(reservation({ itemCode: 'ß' }), ssItem)).toBe(true);
     expect(reservationMatchesListItem(reservation({ itemCode: 'ß' }), ssItem)).toBe(true);
-    expect(storedReservationMatchesItem({ itemCode: 'ß' }, ssItem)).toBe(false);
-    // the deduction stringifies stored values (a numeric code still matches)
-    expect(storedReservationMatchesItem({ itemCode: 123 as unknown as string }, { id: 51, code: '123', name: 'n' })).toBe(true);
   });
 });
 
@@ -118,41 +108,5 @@ describe('itemReservationSummary', () => {
     expect(s.matchingReservations).toEqual([]);
     expect(s.totalReservedQty).toBe(0);
     expect(s.maxAllowedForExit).toBe(6);
-  });
-});
-
-describe('deductProjectReservations', () => {
-  it('deducts issued quantities, removes fully consumed rows and leaves the input untouched', () => {
-    const stored = [
-      { itemId: 3, reservedQty: 4, unit: 'عدد', note: 'keep' },
-      { itemCode: 'RM-4', reservedQty: '1' },
-      { itemName: 'طلا', reservedQty: 5 },
-    ];
-    const snapshot = JSON.parse(JSON.stringify(stored));
-    const result = deductProjectReservations(stored, [
-      { item: { id: 3, code: 'RM-3', name: 'سنگ' }, quantity: 2 },
-      { item: { id: 4, code: 'rm-4', name: 'نخ' }, quantity: 3 },
-      { item: { id: 5, code: 'P-5', name: 'نقره' }, quantity: 1 },
-      { item: { id: 6, code: 'P-6', name: 'طلا' }, quantity: 0 },
-    ]);
-    expect(result.totalDeducted).toBe(3);
-    expect(result.reservedItems).toEqual([
-      { itemId: 3, reservedQty: 2, unit: 'عدد', note: 'keep' },
-      { itemName: 'طلا', reservedQty: 5 },
-    ]);
-    expect(stored).toEqual(snapshot);
-  });
-
-  it('deducts each issued line from the first matching row only', () => {
-    const result = deductProjectReservations(
-      [{ itemId: 3, reservedQty: 2 }, { itemId: 3, reservedQty: 5 }],
-      [{ item: { id: 3, code: 'RM-3', name: 'سنگ' }, quantity: 4 }],
-    );
-    expect(result.totalDeducted).toBe(2);
-    expect(result.reservedItems).toEqual([{ itemId: 3, reservedQty: 5 }]);
-  });
-
-  it('returns an empty list when the project has no stored reservations', () => {
-    expect(deductProjectReservations(undefined, [{ item: stone, quantity: 1 }])).toEqual({ reservedItems: [], totalDeducted: 0 });
   });
 });

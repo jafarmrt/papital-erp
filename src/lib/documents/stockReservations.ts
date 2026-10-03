@@ -2,7 +2,7 @@ import type { Item } from '../../types';
 
 /**
  * TD-080 (بخش ۳): منطق خالص رزرو کالا در فرم رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage.
- * هر قاعده تطبیق کالا با رزرو دقیقاً همان معنای جای اصلی خود را دارد؛ به همین دلیل سه تابع جدا وجود دارد.
+ * هر قاعده تطبیق کالا با رزرو دقیقاً همان معنای جای اصلی خود را دارد؛ به همین دلیل دو تابع جدا وجود دارد (کسر رزرو از v7.0.102 در سرور است).
  */
 
 /** یک ردیف رزرو سراسری (پروژه یا پیش‌فاکتور) — هم‌شکل GlobalReservationRow در GlobalReservationsPanel */
@@ -145,18 +145,6 @@ export function reservationMatchesListItem(rItem: GlobalReservation, i: Matchabl
   );
 }
 
-/**
- * قاعده تطبیق رزرو ذخیره‌شده پروژه با کالای حواله هنگام کسر رزرو: شناسه (هر دو طرف)، وگرنه کد با
- * String(...).toLowerCase()، وگرنه نام با String(...).toLowerCase().
- */
-export function storedReservationMatchesItem(r: StoredReservedItem, it: MatchableItem): boolean {
-  return Boolean(
-    (r.itemId && it.id && Number(r.itemId) === Number(it.id)) ||
-    (r.itemCode && it.code && String(r.itemCode).trim().toLowerCase() === String(it.code).trim().toLowerCase()) ||
-    (r.itemName && it.name && String(r.itemName).trim().toLowerCase() === String(it.name).trim().toLowerCase())
-  );
-}
-
 export interface ItemReservationSummary {
   matchingReservations: GlobalReservation[];
   totalReservedQty: number;
@@ -191,46 +179,4 @@ export function itemReservationSummary(
     reservedForOtherProjects,
     maxAllowedForExit
   };
-}
-
-export interface ReservationDeductionResult {
-  reservedItems: StoredReservedItem[];
-  totalDeducted: number;
-}
-
-/**
- * کسر مقادیر حواله خروج ثبت‌شده از رزروهای ذخیره‌شده پروژه. ردیفی که کامل مصرف شود حذف می‌شود؛
- * ورودی تغییر نمی‌کند (کپی کم‌عمق فهرست و ردیف‌های تغییرکرده).
- */
-export function deductProjectReservations(
-  reservedItems: unknown,
-  docItems: Array<{ item: MatchableItem; quantity: number }>,
-): ReservationDeductionResult {
-  const reservedItemsList: StoredReservedItem[] = Array.isArray(reservedItems) ? [...reservedItems] : [];
-
-  let totalDeductedCount = 0;
-  for (const d of docItems) {
-    const qtyIssued = Number(d.quantity || 0);
-    if (qtyIssued <= 0) continue;
-
-    const resIdx = reservedItemsList.findIndex((r: StoredReservedItem) => storedReservationMatchesItem(r, d.item));
-
-    if (resIdx !== -1) {
-      const currentResQty = Number(reservedItemsList[resIdx].reservedQty || 0);
-      const deducted = Math.min(currentResQty, qtyIssued);
-      const newResQty = Math.max(0, currentResQty - qtyIssued);
-      totalDeductedCount += deducted;
-
-      if (newResQty > 0) {
-        reservedItemsList[resIdx] = {
-          ...reservedItemsList[resIdx],
-          reservedQty: newResQty
-        };
-      } else {
-        reservedItemsList.splice(resIdx, 1);
-      }
-    }
-  }
-
-  return { reservedItems: reservedItemsList, totalDeducted: totalDeductedCount };
 }

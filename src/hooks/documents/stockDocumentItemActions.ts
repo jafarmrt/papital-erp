@@ -8,6 +8,12 @@ import type { StockDocumentForm } from './useStockDocumentForm';
  * TD-080 (بخش ۳): کنترل‌کننده‌های اقلام فرم رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage.
  * تابع ساده (بدون hook) است و در هر رندر با وضعیت تازه فرم ساخته می‌شود، مانند توابع داخلی صفحه اصلی.
  */
+/** v7.0.102 (TD-233): ردیف رزرو پیش‌فاکتور در پیام سقف خروج «پیش‌فاکتور» نامیده می‌شود، نه «پروژه» */
+export function reservationSourceLabel(r: GlobalReservation): string {
+  const kind = r.sourceType === 'proforma' ? 'پیش‌فاکتور' : 'پروژه';
+  return `${kind} «${r.projectCode || r.projectTitle}» (${r.reservedQty} ${r.unit})`;
+}
+
 export function createStockDocumentItemActions(form: StockDocumentForm, itemsList: Item[]) {
   const {
     actionType, docItems, setDocItems, selectedItem, setSelectedItem, selectedItemObj, setSelectedItemObj,
@@ -21,21 +27,34 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
       return;
     }
 
-    const itemsToAdd: DocItemRow[] = [];
+    // v7.0.102 (TD-233): چند ردیف رزرو یک کالا جمع می‌شوند (پیش‌تر آخرین ردیف جایگزین بقیه می‌شد) و مقدار هر کالا
+    // به سقف قابل خروج همان لحظه محدود می‌شود تا خطای سقف به ثبت نهایی نرسد
+    const qtyByItem = new Map<number, { item: Item; quantity: number }>();
     const missingItems: string[] = [];
 
     for (const rItem of selectedProjectReservedItems) {
       const matchedItem = itemsList.find(i => reservationMatchesListItem(rItem, i));
 
       if (matchedItem) {
-        itemsToAdd.push({
-          item: matchedItem,
-          quantity: rItem.reservedQty,
-          unitPrice: Number(matchedItem.purchase_price || matchedItem.sell_price || 0)
-        });
+        const current = qtyByItem.get(matchedItem.id);
+        qtyByItem.set(matchedItem.id, { item: matchedItem, quantity: (current?.quantity || 0) + Number(rItem.reservedQty || 0) });
       } else {
         missingItems.push(rItem.itemName || rItem.itemCode);
       }
+    }
+
+    const itemsToAdd: DocItemRow[] = [];
+    const cappedItems: string[] = [];
+    for (const { item, quantity: reservedTotal } of qtyByItem.values()) {
+      const { maxAllowedForExit } = getItemReservationSummary(item);
+      const quantity = Math.min(reservedTotal, maxAllowedForExit);
+      if (quantity < reservedTotal) cappedItems.push(`«${item.name}» (${maxAllowedForExit} ${item.unit})`);
+      if (quantity <= 0) continue;
+      itemsToAdd.push({
+        item,
+        quantity,
+        unitPrice: Number(item.purchase_price || item.sell_price || 0)
+      });
     }
 
     if (itemsToAdd.length > 0) {
@@ -50,6 +69,10 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
         return Array.from(newMap.values());
       });
       toast.success(`تعداد ${itemsToAdd.length} قلم کالای رزرو شده به حواله خروج افزوده شد.`);
+    }
+
+    if (cappedItems.length > 0) {
+      toast(`مقدار این کالاها به موجودی قابل خروج محدود شد: ${cappedItems.join('، ')}`, { icon: '⚠️' });
     }
 
     if (missingItems.length > 0) {
@@ -116,11 +139,11 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
         if (reservedForOtherProjects > 0) {
           const otherProjTitles = matchingReservations
             .filter(r => String(r.projectId) !== String(selectedProjectId))
-            .map(r => `پروژه «${r.projectCode || r.projectTitle}» (${r.reservedQty} ${r.unit})`)
+            .map(reservationSourceLabel)
             .join('، ');
 
           toast.error(
-            `خطا: امکان خروج بیش از ${maxAllowedForExit} ${it.unit} وجود ندارد!\nتعداد ${reservedForOtherProjects} ${it.unit} برای سایر پروژه‌ها (${otherProjTitles}) رزرو شده است و قابل خروج نمی‌باشد.`
+            `خطا: امکان خروج بیش از ${maxAllowedForExit} ${it.unit} وجود ندارد!\nتعداد ${reservedForOtherProjects} ${it.unit} برای سایر پروژه‌ها و پیش‌فاکتورها (${otherProjTitles}) رزرو شده است و قابل خروج نمی‌باشد.`
           );
         } else {
           toast.error(`موجودی کافی نیست! موجودی قابل خروج: ${maxAllowedForExit} ${it.unit}`);
@@ -158,7 +181,7 @@ export function createStockDocumentItemActions(form: StockDocumentForm, itemsLis
         if (reservedForOtherProjects > 0) {
           const otherProjTitles = matchingReservations
             .filter(r => String(r.projectId) !== String(selectedProjectId))
-            .map(r => `پروژه «${r.projectCode || r.projectTitle}» (${r.reservedQty} ${r.unit})`)
+            .map(reservationSourceLabel)
             .join('، ');
 
           toast.error(

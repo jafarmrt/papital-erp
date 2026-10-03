@@ -6,7 +6,6 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
-import { ItemStockReservationService } from '../services/items/itemStockReservation.service.js';
 import { logger } from '../middleware/logger.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -280,31 +279,13 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
 
   // V6 Sub-phase 2.4 (TD-139): اعتبارسنجی سقف رزرو کالا اکنون به شکل متمرکز و اتمیک با قفل سطری درون DocumentService.createDocument انجام می‌گیرد.
 
-  const newDocId = await DocumentService.createDocument(req.body);
+  // v7.0.102 (TD-233): رزرو پروژه حواله خروج داخل همان تراکنش ثبت سند کم می‌شود (پیش‌تر بعد از ثبت، بیرون از تراکنش و با بلعیدن خطا)
+  const { docId: newDocId, projectReservation } = await DocumentService.createDocumentWithDetails(req.body, { userId: req.user?.id });
   const title = docTypeTitles[req.body.docType] || 'سند انبار';
 
   // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
   if (targetLeadId) {
     await orm.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, newDocId));
-  }
-
-  // If exit remittance document for a project, release reserved items via the official service (TD-081)
-  if (req.body.inOut === 'out' && req.body.projectId) {
-    try {
-      const targetProjId = Number(req.body.projectId);
-      const rawDocItems = (req.body.items || []).filter((l: any) => Number(l.quantity || 0) > 0);
-      if (targetProjId && !isNaN(targetProjId) && rawDocItems.length > 0) {
-        await ItemStockReservationService.releaseProjectReservations(orm, {
-          projectId: targetProjId,
-          docItems: rawDocItems.map((l: any) => ({ itemId: l.itemId, quantity: Number(l.quantity || 0) })),
-          docId: newDocId,
-          userId: req.user?.id,
-          username: req.user?.username || req.user?.full_name
-        });
-      }
-    } catch (projDeductErr) {
-      logger.error({ message: 'Error deducting project reservation on document create', error: projDeductErr });
-    }
   }
 
   // If proforma issued for a lead, mark lead as having proforma and update stage
@@ -374,7 +355,7 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
     logger.warn(`[DocumentRoute] Workflow auto-start for doc ${newDocId}: ${errMsg}`);
   }
 
-  res.json({ success: true, docId: newDocId });
+  res.json({ success: true, docId: newDocId, projectReservation });
 }));
 
 router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
