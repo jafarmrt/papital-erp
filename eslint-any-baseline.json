@@ -198,7 +198,6 @@
   "src/routes/customers.routes.ts": 10,
   "src/routes/dashboard.routes.ts": 1,
   "src/routes/projects.routes.ts": 4,
-  "src/routes/system.routes.ts": 3,
   "src/routes/users.routes.ts": 3,
   "src/services/events/eventSourcingReplayService.ts": 1,
   "src/services/events/outboxService.ts": 1,

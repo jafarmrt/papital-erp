@@ -1,9 +1,10 @@
+import { eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { appSettings } from '../../db/schema.js';
 import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { userHasRoleOrPermission } from '../../middleware/authorize.js';
 import { logActivity } from '../../lib/auditLogger.js';
-import { invalidateSettingsCache } from '../../lib/memoryCache.js';
+import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 
 /**
  * v7.0.26 (TD-184 / audit P1-3) — ذخیره امن تنظیمات سیستم با مجوز سطح کلید
@@ -102,6 +103,37 @@ function redactForAudit(key: string, value: string | undefined): string | undefi
 }
 
 export class SystemSettingsService {
+  /** همه تنظیمات (کش ۶۰ ثانیه‌ای مشترک با invalidateSettingsCache)؛ مقدار غیرآرایه به فهرست خالی تبدیل می‌شود. */
+  static async getAllSettings(): Promise<Array<{ key: string; value: string }>> {
+    const settings = await appSettingsCache.getOrSet('all_settings', async () => {
+      return orm.select().from(appSettings);
+    }, 60_000);
+    return Array.isArray(settings) ? settings : [];
+  }
+
+  /** V3.0.6 (SEC): مقدار کلیدهای حساس برای غیرادمین ماسک می‌شود. */
+  static maskSensitiveSettings<T extends { key: string; value: string }>(settings: T[]): T[] {
+    return settings.map((s) =>
+      SENSITIVE_SETTING_PATTERN.test(s.key)
+        ? { ...s, value: MASKED_SETTING_VALUE }
+        : s
+    );
+  }
+
+  /** V10-5.3: نقشه دید منو per-role (کش ۶۰ ثانیه‌ای)؛ مقدار نامعتبر یا غیرشیء به {} تبدیل می‌شود. */
+  static async getMenuVisibility(): Promise<Record<string, unknown>> {
+    return appSettingsCache.getOrSet('menu_visibility', async () => {
+      const [row] = await orm.select().from(appSettings).where(eq(appSettings.key, 'menu_visibility'));
+      if (!row?.value) return {};
+      try {
+        const parsed = JSON.parse(row.value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }, 60_000);
+  }
+
   static isKnownSettingKey(key: string): boolean {
     return BUSINESS_SETTING_KEYS.has(key) || ADMIN_ONLY_SETTING_KEYS.has(key) || ROLE_CONFIG_SETTING_KEYS.has(key);
   }
