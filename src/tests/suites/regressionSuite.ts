@@ -7066,7 +7066,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const testName = 'v7.0.131: تبدیل تاریخ SQL با مبدل برنامه یکی است؛ یکسان‌سازی ستون مقدار قبلی را ثبت و تاریخ نامعتبر را رد می‌کند؛ گزارش تقویم ستون‌ها را می‌شمارد (TD-232)';
     const ROLLBACK = new Error('ROLLBACK_TD_232');
     const violations: string[] = [];
-    let reportVoucherId: number | null = null;
     try {
       const { personnel, legacyDateRepairs } = await import('../../db/schema.js');
       const { toStorageDate } = await import('../../utils/calendarDate.js');
@@ -7133,15 +7132,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         if (err !== ROLLBACK) throw err;
       }
 
-      // ۴) گزارش فقط‌خواندنی: ستون‌ها و شمار ردیف شمسی (تاریخ سند حسابداری شمسی می‌ماند و قالب any دارد)
-      const [jv] = await orm.insert(journalVouchers).values({ voucherNumber: 980000000 + Math.floor(Math.random() * 1000000), date: '1405/07/10', description: 'ERP-TEST-MARKER TD-232 گزارش' }).returning({ id: journalVouchers.id });
-      reportVoucherId = jv.id;
+      // ۴) گزارش فقط‌خواندنی: ستون‌ها و شمارش (از v7.0.137 هیچ ستونی شمسی نمی‌پذیرد؛ شمارش شمسی در گام ۱ با erp_text_date_kind سنجیده شد)
       const report = await DateCalendarReportService.buildReport();
       const col = (t: string, c: string) => report.columns.find(x => x.table === t && x.column === c);
       for (const [t, c] of [['crm_activities', 'activity_date'], ['cheques', 'due_date'], ['journal_vouchers', 'date'], ['personnel', 'birth_date']]) {
         if (!col(t, c)) violations.push(`ستون ${t}.${c} در گزارش نیست`);
       }
-      if ((col('journal_vouchers', 'date')?.jalali ?? 0) < 1) violations.push('گزارش تاریخ شمسی سند حسابداری را نشمرد');
+      if (report.columns.some(c => c.total !== c.empty + c.iso + c.gregorian + c.jalali + c.invalid)) violations.push('جمع شمارش‌های گزارش با کل ردیف‌ها نمی‌خواند');
       if (report.columns.some(x => x.table === 'legacy_date_repairs')) violations.push('جدول legacy_date_repairs نباید در گزارش باشد');
 
       if (violations.length > 0) throw new Error(violations.join(' | '));
@@ -7166,8 +7163,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         durationMs: Date.now() - tStart,
         error: err instanceof Error ? err.message : String(err)
       }));
-    } finally {
-      if (reportVoucherId !== null) await cleanTestTableData('journal_vouchers', 'id', [reportVoucherId]);
     }
   }
 
@@ -7697,7 +7692,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       expectRule('chk_treasury_transactions_reconciled_at_datefmt', 'isots');
       expectRule('chk_project_stages_completed_at_datefmt', 'isots');
       expectRule('chk_users_last_failed_login_at_datefmt', 'isots');
-      expectRule('chk_journal_vouchers_date_datefmt', 'any');
+      expectRule('chk_journal_vouchers_date_datefmt', 'iso'); // v7.0.137 (TD-248)
       const kinds = (await orm.execute(sql`SELECT erp_date_text_ok('1405/07/10', 'isots') AS j, erp_date_text_ok('2026-10-02T10:00:00.000Z', 'isots') AS g`) as unknown as { rows: Array<{ j: boolean; g: boolean }> }).rows[0];
       if (kinds.j || !kinds.g) violations.push(`قالب isots: شمسی=${kinds.j}، میلادی=${kinds.g}`);
       const report = await DateCalendarReportService.buildReport();
@@ -7753,6 +7748,121 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }));
     } finally {
       if (treasuryId !== null) await cleanTestTableData('treasury_transactions', 'id', [treasuryId]);
+    }
+  }
+
+  // Test: v7.0.137 (TD-248): تاریخ سند حسابداری میلادی ISO؛ اسناد قدیمی شمسی با ثبت مقدار قبلی تبدیل و سند سال بسته رد می‌شود
+  if (shouldRun('reg_voucher_dates_iso_td_248', 'td248', 'voucher', 'calendar')) {
+    const tStart = Date.now();
+    const testName = 'v7.0.137: تاریخ سند حسابداری میلادی ISO ذخیره می‌شود؛ تاریخ شمسی قدیمی با ثبت مقدار قبلی تبدیل و سند سال مالی بسته دست نخورده می‌ماند؛ فیلتر شمسی فهرست اسناد درست است (TD-248)';
+    const ROLLBACK = new Error('ROLLBACK_TD_248');
+    const violations: string[] = [];
+    let voucherId: number | null = null;
+    try {
+      const { legacyDateRepairs, fiscalPeriods } = await import('../../db/schema.js');
+      const { normalizeError } = await import('../../errors/customErrors.js');
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+
+      const [rule] = (await orm.execute(sql`
+        SELECT pg_get_constraintdef(pc.oid) AS def, pc.convalidated AS validated FROM pg_constraint pc JOIN pg_class rel ON rel.oid = pc.conrelid
+         WHERE rel.relnamespace = current_schema()::regnamespace AND pc.conname = 'chk_journal_vouchers_date_datefmt'`) as unknown as { rows: Array<{ def: string; validated: boolean }> }).rows;
+      if (!rule?.validated || !rule.def.includes("'iso'")) violations.push(`قید تاریخ سند: ${rule?.def} (انتظار iso معتبر)`);
+
+      // ۱) تبدیل اسناد قدیمی (مهاجرت 0044) در تراکنشی که برگردانده می‌شود
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`ALTER TABLE journal_vouchers DROP CONSTRAINT IF EXISTS chk_journal_vouchers_date_datefmt`);
+          await tx.insert(fiscalPeriods).values({ fiscalYear: 1390, status: 'closed' }).onConflictDoUpdate({ target: fiscalPeriods.fiscalYear, set: { status: 'closed' } });
+          const base = 970000000 + Math.floor(Math.random() * 1000000);
+          const legacy: Record<string, string> = { open: '1405-07-10', persian: '۱۴۰۵/۰۷/۱۱', closed: '1390/12/20', bad: 'نامعلوم', iso: '2026-10-02' };
+          const ids: Record<string, number> = {};
+          let i = 0;
+          for (const [key, date] of Object.entries(legacy)) {
+            const [row] = await tx.insert(journalVouchers).values({ voucherNumber: base + i++, date, description: `ERP-TEST-MARKER TD-248 ${key}` }).returning({ id: journalVouchers.id });
+            ids[key] = row.id;
+          }
+          await tx.execute(sql`SELECT erp_unify_journal_voucher_dates()`);
+          const dateOf = async (key: string) => (await tx.select({ d: journalVouchers.date }).from(journalVouchers).where(eq(journalVouchers.id, ids[key])))[0]?.d;
+          const expected: Record<string, string> = { open: '2026-10-02', persian: '2026-10-03', closed: '1390/12/20', bad: 'نامعلوم', iso: '2026-10-02' };
+          for (const [key, want] of Object.entries(expected)) {
+            const got = await dateOf(key);
+            if (got !== want) violations.push(`سند ${key}: ${got} (انتظار ${want})`);
+          }
+          const log = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.tableName, 'journal_vouchers'), eq(legacyDateRepairs.repairKind, 'calendar'), inArray(legacyDateRepairs.rowId, Object.values(ids))));
+          const entry = (key: string) => log.find(r => r.rowId === ids[key]);
+          if (entry('open')?.status !== 'corrected' || entry('open')?.oldValue !== '1405-07-10') violations.push(`گزارش سند باز: ${JSON.stringify(entry('open'))}`);
+          if (entry('closed')?.status !== 'refused' || !String(entry('closed')?.reason).includes('1390')) violations.push(`سند سال بسته باید refused شود: ${JSON.stringify(entry('closed'))}`);
+          if (entry('bad')?.status !== 'refused') violations.push('تاریخ غیرقابل‌تشخیص باید refused شود');
+          if (entry('iso')) violations.push('سند ISO نباید در گزارش بیاید');
+          await tx.execute(sql`SELECT erp_unify_journal_voucher_dates()`);
+          const again = await tx.select().from(legacyDateRepairs).where(and(eq(legacyDateRepairs.tableName, 'journal_vouchers'), inArray(legacyDateRepairs.rowId, Object.values(ids))));
+          if (again.length !== log.length) violations.push(`اجرای دوباره ${again.length - log.length} ردیف تازه ساخت`);
+          throw ROLLBACK;
+        });
+      } catch (err) {
+        if (err !== ROLLBACK) throw err;
+      }
+
+      // ۲) ثبت سند با تاریخ شمسی ارقام فارسی ← ISO؛ تاریخ نامعتبر 422
+      const allAccounts = await orm.select().from(accounts).where(eq(accounts.isDeleted, 0));
+      const debitAcc = allAccounts.find(a => a.code === '1101') || allAccounts.find(a => a.accountType === 'asset');
+      const creditAcc = allAccounts.find(a => a.code === '6001') || allAccounts.find(a => a.accountType === 'revenue');
+      if (!debitAcc || !creditAcc) throw new Error('سرفصل لازم برای آزمون یافت نشد');
+      const voucherInput = (date: string) => ({
+        date, voucherType: 'general' as const, description: 'ERP-TEST-MARKER سند TD-248', referenceModule: 'manual' as const,
+        items: [
+          { accountId: debitAcc.id, debit: 1000, credit: 0, description: 'آزمون' },
+          { accountId: creditAcc.id, debit: 0, credit: 1000, description: 'آزمون' },
+        ],
+      });
+      const created = await VoucherService.createJournalVoucher(voucherInput('۱۴۰۵/۰۷/۱۰'));
+      voucherId = created.id;
+      const [stored] = await orm.select({ d: journalVouchers.date }).from(journalVouchers).where(eq(journalVouchers.id, created.id));
+      if (stored.d !== '2026-10-02') violations.push(`تاریخ سند ذخیره‌شده: ${stored.d} (انتظار 2026-10-02)`);
+      try {
+        const bad = await VoucherService.createJournalVoucher(voucherInput('1405/07/31'));
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', [bad.id]);
+        await cleanTestTableData('journal_vouchers', 'id', [bad.id]);
+        violations.push('تاریخ ۳۱ مهر برای سند پذیرفته شد');
+      } catch (err) {
+        if (normalizeError(err).statusCode !== 422) violations.push(`تاریخ نامعتبر سند: ${normalizeError(err).statusCode} (انتظار 422)`);
+      }
+
+      // ۳) فهرست اسناد با بازه شمسی
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      const list = await request(app).get(`/api/accounting/vouchers?startDate=${encodeURIComponent('1405/07/10')}&endDate=${encodeURIComponent('1405/07/10')}&limit=1000`).set('Cookie', session.cookie);
+      const rows: Array<{ id: number }> = Array.isArray(list.body?.data) ? list.body.data : (Array.isArray(list.body) ? list.body : []);
+      if (list.status !== 200 || !rows.some(r => r.id === created.id)) violations.push(`فهرست اسناد با بازه شمسی: ${list.status}، ${rows.length} ردیف بدون سند آزمون`);
+
+      if (violations.length > 0) throw new Error(violations.join(' | '));
+      results.push(makeTestCase({
+        id: 'reg_voucher_dates_iso_td_248',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: true,
+        durationMs: Date.now() - tStart,
+        details: 'سند قدیمی شمسی تبدیل و ثبت شد، سند سال بسته و تاریخ نامعتبر دست نخوردند، سند تازه ISO ذخیره شد و فیلتر شمسی آن را یافت.'
+      }));
+    } catch (err) {
+      results.push(makeTestCase({
+        id: 'reg_voucher_dates_iso_td_248',
+        scenarioId: 'structured_vat',
+        name: testName,
+        layer: 'regression',
+        executionType: 'real_api',
+        passed: false,
+        durationMs: Date.now() - tStart,
+        error: err instanceof Error ? err.message : String(err)
+      }));
+    } finally {
+      if (voucherId !== null) {
+        await cleanTestTableData('journal_voucher_items', 'voucher_id', [voucherId]);
+        await cleanTestTableData('journal_vouchers', 'id', [voucherId]);
+      }
     }
   }
 
@@ -10060,7 +10170,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await orm.insert(projectReservationReleases).values({ documentId: doc.id, projectId: project.id, itemId: item.id, qtyField: 'reservedQty', quantity: 1, reservationRow: {} });
       await orm.insert(refFiscalYearCorrections).values({ documentId: doc.id, docType: 'remittance', refNumber: 'TD245-REF', documentDate: '2026-01-10 00:00:00', oldFiscalYear: 1405, newFiscalYear: 1404, status: 'corrected' });
       const voucherNumber = await VoucherService.getNextVoucherNumber();
-      const [closing] = await orm.insert(journalVouchers).values({ voucherNumber, date: '1403/12/30', description: 'سند اختتامیه TD-245', voucherType: 'closing' }).returning({ id: journalVouchers.id });
+      const [closing] = await orm.insert(journalVouchers).values({ voucherNumber, date: '2025-03-20', description: 'سند اختتامیه TD-245', voucherType: 'closing' }).returning({ id: journalVouchers.id });
       await orm.insert(fiscalPeriods).values({ fiscalYear: 1403, status: 'closed', closedAt: '2025-03-20 00:00:00', closedBy: 'td245_admin', closingVoucherId: closing.id });
       await orm.insert(legacyDateRepairs).values({ tableName: 'journal_vouchers', rowId: closing.id, columnName: 'date', oldValue: '12-30-1403', newValue: '1403/12/30', status: 'corrected' });
       await orm.insert(workflowTaskReopenLog).values({ taskId: 1, instanceId: 1, action: 'reopened', reason: 'آزمون TD-245' });

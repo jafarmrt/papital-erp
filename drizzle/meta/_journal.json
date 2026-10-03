@@ -309,6 +309,13 @@
       "when": 1792004400000,
       "tag": "0043_calendar_unification_final",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792090800000,
+      "tag": "0044_journal_voucher_dates_iso",
+      "breakpoints": true
     }
   ]
 }

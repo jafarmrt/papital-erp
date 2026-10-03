@@ -5,7 +5,8 @@ import type { JournalVoucher, JournalVoucherItem, FinancialAttachment } from '..
 import { updateRequestContext } from '../../lib/requestContext.js';
 import { fin, type DecimalValue } from '../../lib/financialDecimal.js';
 import { money, moneyOr } from '../../lib/money.js';
-import { businessTodayIsoDate, normalizeDateToIso } from '../../lib/businessClock.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { requireStorageDate } from '../../lib/storageDate.js';
 import { NotFoundError, ValidationError, UnbalancedVoucherError, BusinessLogicError, ConflictError } from '../../errors/customErrors.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
@@ -281,7 +282,8 @@ export class VoucherService {
     }
 
     const executeWork = async (tx: DbExecutor) => {
-      const voucherDate = normalizeDateToIso(data.date?.trim()) || (await businessTodayIsoDate());
+      // v7.0.137 (TD-248): تاریخ سند میلادی ISO؛ ورودی شمسی یا ارقام فارسی تبدیل و نامعتبر 422 (پیش‌تر خام ذخیره می‌شد)
+      const voucherDate = requireStorageDate(data.date, 'تاریخ سند') || (await businessTodayIsoDate());
 
       // Check if fiscal year is closed
       // v7.0.49 (audit P2-5): اسناد اختتامیه هم بررسی می‌شوند؛ در فرایند بستن سال، سال تا پایان همان تراکنش باز
@@ -366,7 +368,7 @@ export class VoucherService {
         );
       }
 
-      const updatedDate = data.date ? (normalizeDateToIso(data.date.trim()) || data.date.trim()) : undefined;
+      const updatedDate = data.date ? (requireStorageDate(data.date, 'تاریخ سند') || undefined) : undefined;
 
       if (updatedDate) {
         await this.checkFiscalPeriodOpen(updatedDate, tx);
@@ -521,7 +523,7 @@ export class VoucherService {
         throw new ValidationError('سند مبدا فاقد ردیف‌های مالی برای برگشت است');
       }
 
-      const reversalDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
+      const reversalDate = requireStorageDate(params.date, 'تاریخ سند برگشت') || (await businessTodayIsoDate());
 
       await this.checkFiscalPeriodOpen(reversalDate, tx);
 
@@ -625,7 +627,7 @@ export class VoucherService {
     }
 
     const result = await orm.transaction(async (tx) => {
-      const correctionDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
+      const correctionDate = requireStorageDate(params.date, 'تاریخ سند اصلاحی') || (await businessTodayIsoDate());
       await this.checkFiscalPeriodOpen(correctionDate, tx);
 
       // C-03 & P0-06: گارد عدم وجود سند معکوس فعال قبلی
@@ -782,7 +784,7 @@ export class VoucherService {
       throw new Error('سند جدید بازثبت‌شده باید حداقل دارای دو ردیف بدهکار و بستانکار باشد');
     }
 
-    const repostDate = normalizeDateToIso(params.date?.trim()) || (await businessTodayIsoDate());
+    const repostDate = requireStorageDate(params.date, 'تاریخ سند') || (await businessTodayIsoDate());
 
     const result = await orm.transaction(async (tx) => {
       const original = await this.getJournalVoucherById(params.voucherId, tx);
