@@ -28,7 +28,7 @@ import {
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
-import { checkAdvanceDeductionWithinBalance, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
+import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -266,6 +266,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.30: TD-284 ──
+    ['inv_td_284_fixed_salary_prorated_by_month', 'v8.0.30: حقوق ثابت برای هر ماه شمسیِ بازه فیش، ماه ناقص به نسبت روزها؛ فیش پیشین ماه شروعش را کامل حساب می‌کند (TD-284، گزینه ب)',
+      () => checkFixedSalaryProratedByMonth(), 'فیش دوماهه دو ماه و دو فیش نیم‌ماهه دقیقاً یک ماه حقوق گرفتند؛ فیش پیشین ماه شروعش را پوشاند'],
     // ── v8.0.29: TD-282 ──
     ['inv_td_282_advance_deduction_within_balance', 'v8.0.29: کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل رد می‌شود؛ کسر تا سقف مانده پذیرفته می‌شود (TD-282، گزینه الف)',
       () => checkAdvanceDeductionWithinBalance(), 'کسر بی‌مساعده و بیش از مانده رد شد و اثری نگذاشت؛ کسر تا سقف مانده حساب مساعده را صفر کرد'],

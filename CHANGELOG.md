@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.30 — Fixed Salary per Jalali Month, Partial Months Pro Rata (TD-284)
+- A payroll's fixed salary covers every Jalali month of its period, a partial month by days; two half-month payrolls add up to exactly one month.
+
 ### v8.0.29 — Advance Deduction Limited to the Outstanding Advance (TD-282)
 - A payroll whose advance deduction exceeds the employee's outstanding advance is refused; the payroll form disables issuing it.
 

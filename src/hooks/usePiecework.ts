@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
 import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate } from '../utils';
+import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -528,28 +529,24 @@ export function usePiecework() {
     selectedPayrollPerson != null &&
     ['monthly_fixed', 'mixed'].includes(String(selectedPayrollPerson.salaryType || 'none'));
 
-  // V1.3.2: سهم باقی‌مانده حقوق ثابت برای ماهِ انتخابی (حقوق ماهانه فقط یک بار در ماه)
-  const payrollFixedRemainingHint = useMemo<string | null>(() => {
+  // v8.0.30 (TD-284): سهم حقوق ثابت هر ماه شمسیِ بازه، ماه ناقص به نسبت روزها، پس از کسر فیش‌های پیشین — همان قاعده سرور
+  const payrollFixedShares = useMemo(() => {
     if (!payrollFixedIncluded || !selectedPayrollPerson) return null;
-    const monthly = Number(selectedPayrollPerson.monthlySalary || 0);
-    if (monthly <= 0) return null;
-    const monthKey = String(payrollStartDate || '').slice(0, 7);
-    if (!monthKey) return null;
-    const safePayrollsList = Array.isArray(payrollsList) ? payrollsList : [];
-    const sameMonth = safePayrollsList.filter(pr =>
-      Number(pr.personnelId) === Number(payrollPersonnelId) &&
-      String((pr as any).startDate || '').slice(0, 7) === monthKey
-    );
-    const alreadyGranted = sameMonth.reduce((s, pr) => s + Number((pr as any).totalFixedAmount || 0), 0);
-    if (alreadyGranted <= 0) {
-      return `سهم حقوق ثابت این ماه (${formatPersianPrice(monthly)}) به‌طور کامل در این فیش محاسبه می‌شود.`;
+    const startIso = toStorageDate(payrollStartDate);
+    const endIso = toStorageDate(payrollEndDate);
+    if (!startIso || !endIso || Number(selectedPayrollPerson.monthlySalary || 0) <= 0) return null;
+    const personPayrolls = (Array.isArray(payrollsList) ? payrollsList : []).filter(pr => Number(pr.personnelId) === Number(payrollPersonnelId));
+    return computeFixedSalaryShares(selectedPayrollPerson.monthlySalary, startIso, endIso, personPayrolls.flatMap(priorFixedGrantsOf));
+  }, [payrollFixedIncluded, selectedPayrollPerson, payrollsList, payrollPersonnelId, payrollStartDate, payrollEndDate]);
+
+  const payrollFixedRemainingHint = useMemo<string | null>(() => {
+    if (!payrollFixedShares || payrollFixedShares.months.length === 0) return null;
+    if (!payrollFixedShares.total.isPositive()) {
+      return 'هشدار: سهم حقوق ثابت این بازه قبلاً در فیش(های) دیگر محاسبه شده است — در این فیش مبلغ ثابتی اضافه نمی‌شود و فقط کارکرد پرکیسی پرداخت خواهد شد.';
     }
-    const remaining = Math.max(0, monthly - alreadyGranted);
-    if (remaining <= 0) {
-      return 'هشدار: سهم حقوق ثابت ماه انتخابی قبلاً در فیش(های) دیگر محاسبه شده است — در این فیش مبلغ ثابتی اضافه نمی‌شود و فقط کارکرد پرکیسی پرداخت خواهد شد.';
-    }
-    return `سهم حقوق ثابت این ماه قبلاً ${formatPersianPrice(alreadyGranted)} در فیش(های) دیگر محاسبه شده؛ فقط مبلغ باقی‌مانده (${formatPersianPrice(remaining)}) به این فیش اضافه می‌شود.`;
-  }, [payrollFixedIncluded, selectedPayrollPerson, payrollsList, payrollPersonnelId, payrollStartDate]);
+    const parts = payrollFixedShares.months.map(m => `${m.month}: ${m.days} از ${m.monthDays} روز (${formatPersianPrice(Number(m.amount))})`);
+    return `سهم حقوق ثابت این فیش ${formatPersianPrice(payrollFixedShares.total.toNumber())} است — ${parts.join('، ')}.`;
+  }, [payrollFixedShares]);
 
   const handleGeneratePayroll = async (e: FormEvent) => {
     e.preventDefault();
@@ -561,22 +558,10 @@ export function usePiecework() {
     }
 
     // V10-4.4: برای پرسنل با حقوق ثابت/ترکیبی، صدور فیش بدون ردیف کارکرد نیز مجاز است
-    // V1.3.2: سهم ثابت فقط یک بار در هر ماه جلالی — مطابق منطق سمت سرور
-    const selectedPerson = (personnelList as any[]).find((p: any) => String(p.id) === String(payrollPersonnelId));
-    const salaryType = String(selectedPerson?.salaryType || 'none');
-    const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
-    const monthly = fixedIncluded ? Number(selectedPerson?.monthlySalary || 0) : 0;
-    const monthKey = String(payrollStartDate || '').slice(0, 7);
-    const alreadyGranted = fixedIncluded && monthKey
-      ? (Array.isArray(payrollsList) ? payrollsList : [])
-          .filter(pr => Number(pr.personnelId) === Number(payrollPersonnelId) && String(pr.startDate || '').slice(0, 7) === monthKey)
-          .reduce((s, pr) => s + Number(pr.totalFixedAmount || 0), 0)
-      : 0;
-    const fixedPortion = Math.max(0, monthly - alreadyGranted);
-
-    if (payrollPreviewLogs.length === 0 && fixedPortion <= 0) {
-      hotToast.error(alreadyGranted > 0
-        ? 'سهم حقوق ثابت این ماه قبلاً در فیش دیگری محاسبه شده و کارکرد پرکیسی معوقی هم در این بازه وجود ندارد'
+    // v8.0.30 (TD-284): سهم ثابت هر ماه شمسیِ بازه به نسبت روزها — مطابق منطق سمت سرور
+    if (payrollPreviewLogs.length === 0 && !(payrollFixedShares?.total.isPositive() ?? false)) {
+      hotToast.error(payrollFixedShares && payrollFixedShares.months.length > 0
+        ? 'سهم حقوق ثابت این بازه قبلاً در فیش دیگری محاسبه شده و کارکرد پرکیسی معوقی هم در این بازه وجود ندارد'
         : 'هیچ کارکرد تسویه‌نشده‌ای در این بازه یافت نشد');
       return;
     }

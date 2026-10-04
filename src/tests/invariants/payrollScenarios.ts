@@ -170,6 +170,45 @@ export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-284 (تصمیم مالک محصول — گزینه ب): حقوق ثابت برای هر ماه شمسیِ بازه فیش، ماه ناقص به نسبت روزها — فیش دوماهه دو ماه،
+ * دو فیش نیم‌ماهه روی هم دقیقاً یک ماه؛ فیش پیش از v8.0.30 (بی‌تفکیک ماهانه) ماه شروعش را کامل حساب می‌کند.
+ */
+export async function checkFixedSalaryProratedByMonth(): Promise<string[]> {
+  const problems: string[] = [];
+  const salary = { salaryType: 'monthly_fixed', monthlySalary: 10000000 };
+  const issue = (personnelId: number, startDate: string, endDate: string) => PieceworkPayrollService.generatePayroll({ personnelId, startDate, endDate, username: 'inv' });
+  const fixedOf = (r: Awaited<ReturnType<typeof issue>>) => (r.payroll ? fin(r.payroll.totalFixedAmount).toString() : `رد: ${r.error}`);
+
+  // الف) ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ ← دو ماه
+  const w1 = await newWorker('کارمند آزمون دوماهه', salary);
+  const two = await issue(w1, '2026-03-21', '2026-05-21');
+  if (!two.payroll || !fin(two.payroll.totalFixedAmount).equals(20000000)) problems.push(`فیش دوماهه ${fixedOf(two)}، انتظار ۲۰٬۰۰۰٬۰۰۰`);
+  else if ((two.payroll.fixedSalaryMonths ?? []).length !== 2) problems.push(`تفکیک ماهانه فیش دوماهه ${JSON.stringify(two.payroll.fixedSalaryMonths)}`);
+
+  // ب) ۱۴۰۵/۰۴/۰۱ تا ۱۵ و ۱۶ تا ۳۱ ← ۴٬۸۳۸٬۷۱۰ + ۵٬۱۶۱٬۲۹۰ = یک ماه
+  const w2 = await newWorker('کارمند آزمون نیم‌ماهه', salary);
+  const firstHalf = await issue(w2, '2026-06-22', '2026-07-06');
+  if (!firstHalf.payroll || !fin(firstHalf.payroll.totalFixedAmount).equals(4838710)) problems.push(`نیمه اول ماه ${fixedOf(firstHalf)}، انتظار ۴٬۸۳۸٬۷۱۰`);
+  else if (!String(firstHalf.payroll.notes ?? '').includes('1405/04 — ۱۵ از ۳۱ روز')) problems.push(`یادداشت فیش نیم‌ماهه تفکیک ماهانه ندارد (${firstHalf.payroll.notes})`);
+  const secondHalf = await issue(w2, '2026-07-07', '2026-07-22');
+  if (!secondHalf.payroll || !fin(secondHalf.payroll.totalFixedAmount).equals(5161290)) problems.push(`نیمه دوم ماه ${fixedOf(secondHalf)}، انتظار ۵٬۱۶۱٬۲۹۰`);
+  const owed = await personNet('3201', w2);
+  if (!fin(owed).equals(-10000000)) problems.push(`حقوق پرداختنی ماه با دو فیش ${owed}، انتظار ۱۰٬۰۰۰٬۰۰۰−`);
+
+  // ج) فیش پیشین بی‌تفکیک (۱۴۰۵/۰۳) ماه کامل شمرده می‌شود؛ ماه بعد کامل داده می‌شود
+  const w3 = await newWorker('کارمند آزمون فیش پیشین', salary);
+  await orm.insert(pieceworkPayrolls).values({
+    payrollNumber: `LEG-${tag('')}`, personnelId: w3, startDate: '2026-05-22', endDate: '2026-06-21', title: 'فیش پیشین آزمون',
+    totalFixedAmount: money(10000000), netPayable: money(10000000), status: 'approved',
+  });
+  const sameMonth = await issue(w3, '2026-06-07', '2026-06-21');
+  if (sameMonth.payroll) problems.push(`ماه فیش پیشین دوباره حقوق گرفت (${fixedOf(sameMonth)})`);
+  const nextMonth = await issue(w3, '2026-06-22', '2026-07-22');
+  if (!nextMonth.payroll || !fin(nextMonth.payroll.totalFixedAmount).equals(10000000)) problems.push(`ماه پس از فیش پیشین ${fixedOf(nextMonth)}، انتظار ۱۰٬۰۰۰٬۰۰۰`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-281 (کاوش رگرسیون؛ رفع v8.0.28): برگرداندن فیش به «pending» کارکردهایش را در فیش بعدی دوباره می‌شمرد */
@@ -209,7 +248,10 @@ export async function probePayrollPaymentNotVoidable(): Promise<boolean> {
   return Boolean(voidRefused) && Boolean(deleteRefused);
 }
 
-/** TD-284: حقوق ثابت هر فیش یک ماه کامل است — فیش دوماهه یک ماه و فیش نیم‌ماهه یک ماه کامل حقوق می‌گیرد */
+/**
+ * TD-284 (کاوش رگرسیون؛ رفع v8.0.30): حقوق ثابت هر فیش یک ماه کامل بود — فیش دوماهه یک ماه و فیش نیم‌ماهه یک ماه کامل
+ * حقوق می‌گرفت.
+ */
 export async function probeFixedSalaryOneMonthPerPayroll(): Promise<boolean> {
   const worker = await newWorker('کارمند کاوش حقوق ثابت', { salaryType: 'monthly_fixed', monthlySalary: 10000000 });
   // ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ (دو ماه شمسی)

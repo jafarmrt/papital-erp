@@ -337,6 +337,13 @@
       "when": 1792350000000,
       "tag": "0047_journal_voucher_source_cheque",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792400000000,
+      "tag": "0048_payroll_fixed_salary_months",
+      "breakpoints": true
     }
   ]
 }

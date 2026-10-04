@@ -7518,7 +7518,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const ranged = await PieceworkReadService.listWorkLogs({ personnelId: String(pers.id), startDate: '1405/07/01', endDate: '1405/07/10' });
       if (ranged.length !== 1 || ranged[0].date !== toStorageDate('1405/07/05')) violations.push(`فیلتر بازه شمسی کارکرد: ${JSON.stringify(ranged.map(r => r.date))}`);
 
-      // ۳) حقوق ثابت: دو فیش در یک ماه شمسی (مهر ۱۴۰۵ = ۲۳ سپتامبر تا ۲۲ اکتبر) فقط یک بار حقوق ثابت می‌گیرند
+      // ۳) حقوق ثابت: دو فیش در یک ماه شمسی (مهر ۱۴۰۵ = ۲۳ سپتامبر تا ۲۲ اکتبر) روی هم فقط یک ماه حقوق ثابت می‌گیرند
       const audit = { username: 'ERP-TEST-MARKER' };
       const first = await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/07/01', endDate: '1405/07/15', ...audit });
       if (first.status !== 201 || !('payroll' in first) || !first.payroll) throw new Error(`فیش اول: ${JSON.stringify(first)}`);
@@ -7527,8 +7527,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (second.status !== 201 || !('payroll' in second) || !second.payroll) throw new Error(`فیش دوم: ${JSON.stringify(second)}`);
       payrollIds.push(second.payroll.id);
       if (first.payroll.startDate !== toStorageDate('1405/07/01') || first.payroll.endDate !== toStorageDate('1405/07/15')) violations.push(`بازه فیش: ${first.payroll.startDate}، ${first.payroll.endDate}`);
-      if (!first.payroll.totalFixedAmount?.equals(3000000)) violations.push(`حقوق ثابت فیش اول: ${first.payroll.totalFixedAmount?.toString()}`);
-      if (!second.payroll.totalFixedAmount?.equals(0)) violations.push(`حقوق ثابت فیش دوم همان ماه شمسی باید صفر باشد: ${second.payroll.totalFixedAmount?.toString()}`);
+      // v8.0.30 (TD-284، تصمیم مالک محصول — گزینه ب): ماه ناقص به نسبت روزها؛ دو نیمه مهر (۳۰ روزه) روی هم دقیقاً یک ماه
+      if (!first.payroll.totalFixedAmount?.equals(1500000)) violations.push(`حقوق ثابت فیش اول (۱۵ از ۳۰ روز): ${first.payroll.totalFixedAmount?.toString()}`);
+      if (!second.payroll.totalFixedAmount?.equals(1500000)) violations.push(`حقوق ثابت فیش دوم همان ماه شمسی (باقی ماه): ${second.payroll.totalFixedAmount?.toString()}`);
       if (!second.payroll.totalPieceworkAmount?.equals(3000)) violations.push(`کارکرد فیش دوم: ${second.payroll.totalPieceworkAmount?.toString()}`);
       try {
         await PieceworkPayrollService.generatePayroll({ personnelId: pers.id, startDate: '1405/08/10', endDate: '1405/08/01', ...audit });

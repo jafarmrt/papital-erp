@@ -7,6 +7,7 @@ import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
+import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf, type FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
@@ -91,19 +92,19 @@ export class PieceworkPayrollService {
       });
 
       // 2. Fixed salary deduction & dedup within transaction
+      // v8.0.30 (TD-284، تصمیم مالک محصول — گزینه ب): سهم حقوق ثابت برای هر ماه شمسیِ بازه، ماه ناقص به نسبت روزها، پس از
+      // کسر سهم فیش‌های پیشین همان ماه (computeFixedSalaryShares). پیش‌تر هر فیش یک ماه کامل به ماه شمسی تاریخ شروعش
+      // می‌گرفت: فیش دوماهه یک ماه و فیش نیم‌ماهه ماه کامل.
       const salaryType = String(pInfo.salaryType || 'none');
       const fixedIncluded = salaryType === 'monthly_fixed' || salaryType === 'mixed';
-      let fixedPortionFin = fixedIncluded ? fin(pInfo.monthlySalary || 0) : fin(0);
-
+      let fixedPortionFin = fin(0);
+      let fixedSalaryMonths: FixedSalaryMonthShare[] = [];
       let fixedDedupNote = '';
-      if (fixedIncluded && fixedPortionFin.greaterThan(0)) {
-        // ماه شمسی دوره (مثلاً '1405/06')؛ هر فیش قبلی با ماه شمسی تاریخ شروعش مقایسه می‌شود
-        const targetMonthKey = isoToJalaliDate(sDate).slice(0, 7);
+      if (fixedIncluded && fin(pInfo.monthlySalary || 0).greaterThan(0)) {
         const priorFixedPayrolls = await tx.select({
-          id: pieceworkPayrolls.id,
-          payrollNumber: pieceworkPayrolls.payrollNumber,
           startDate: pieceworkPayrolls.startDate,
-          totalFixedAmount: pieceworkPayrolls.totalFixedAmount
+          totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
+          fixedSalaryMonths: pieceworkPayrolls.fixedSalaryMonths,
         })
         .from(pieceworkPayrolls)
         .where(and(
@@ -112,18 +113,10 @@ export class PieceworkPayrollService {
         ))
         .for('update');
 
-        const sameMonthFixed = priorFixedPayrolls.filter(pr => isoToJalaliDate(pr.startDate).slice(0, 7) === targetMonthKey);
-        const alreadyGranted = sameMonthFixed.reduce((sum, pr) => sum.add(pr.totalFixedAmount || 0), fin(0));
-        if (alreadyGranted.greaterThan(0)) {
-          fixedPortionFin = fixedPortionFin.subtract(alreadyGranted);
-          if (fixedPortionFin.isNegative()) {
-            fixedPortionFin = fin(0);
-          }
-          const refs = sameMonthFixed.map(pr => pr.payrollNumber).join('، ');
-          fixedDedupNote = alreadyGranted.greaterThanOrEqual(pInfo.monthlySalary || 0)
-            ? `سهم حقوق ثابت ماه ${targetMonthKey} قبلاً به‌طور کامل در فیش(های) ${refs} محاسبه شده است؛ این فیش فقط کارکرد پرکیسی را پوشش می‌دهد.`
-            : `سهم حقوق ثابت این ماه با کسر مبلغ قبلی (فیش ${refs}) محاسبه شد.`;
-        }
+        const shares = computeFixedSalaryShares(pInfo.monthlySalary, sDate, eDate, priorFixedPayrolls.flatMap(priorFixedGrantsOf));
+        fixedPortionFin = shares.total;
+        fixedSalaryMonths = shares.months;
+        fixedDedupNote = describeFixedSalaryShares(shares.months, pInfo.monthlySalary);
       }
 
       if (eligibleLogs.length === 0 && fixedPortionFin.lessThanOrEqual(0)) {
@@ -190,6 +183,7 @@ export class PieceworkPayrollService {
         totalDeductions: totDeductions,
         advanceDeduction,
         netPayable: net,
+        fixedSalaryMonths,
         status: 'approved',
         notes: finalNotes,
         createdById: currentUserId,

@@ -30,6 +30,8 @@ const payrollAmountColumns = {
   totalPieceworkAmount: pieceworkPayrolls.totalPieceworkAmount,
   // V1.3.5: بدون این فیلد، ردیف حقوق ثابت در فیش چاپی نمایش داده نمی‌شد
   totalFixedAmount: pieceworkPayrolls.totalFixedAmount,
+  // v8.0.30 (TD-284): تفکیک ماهانه حقوق ثابت (راهنمای فرم صدور فیش بعدی همان ماه از آن می‌خواند)
+  fixedSalaryMonths: pieceworkPayrolls.fixedSalaryMonths,
   advanceDeduction: pieceworkPayrolls.advanceDeduction,
   totalBonuses: pieceworkPayrolls.totalBonuses,
   totalDeductions: pieceworkPayrolls.totalDeductions,

@@ -1,6 +1,7 @@
 import { pgTable, text, serial, numeric, integer, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
+import type { FixedSalaryMonthShare } from '../../lib/payroll/fixedSalaryProration';
 import { users } from './auth';
 import { registerColumnRef, baseRelations } from './baseRelations';
 import { moneyNumeric } from './moneyColumn';
@@ -127,6 +128,8 @@ export const pieceworkPayrolls = pgTable('piecework_payrolls', {
   paymentReference: text('payment_reference').default(''),
   notes: text('notes').default(''),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
+  // v8.0.30 (TD-284): سهم حقوق ثابت به تفکیک ماه شمسی (مهاجرت 0048)؛ فیش پیشین آرایه خالی دارد
+  fixedSalaryMonths: jsonb('fixed_salary_months').$type<FixedSalaryMonthShare[]>().notNull().default([]),
   createdById: integer('created_by_id').references(() => users.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),

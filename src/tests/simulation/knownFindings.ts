@@ -32,7 +32,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // حوزه D — حقوق و کارمزدی (v8.0.28؛ TD-281 در همان نسخه رفع شد: inv_td_281_payroll_status_keeps_lifecycle)
   // TD-282 در v8.0.29 رفع شد (inv_td_282_advance_deduction_within_balance)
   'FOCUSED:payroll-payment-not-voidable': 'TD-283',
-  'FOCUSED:fixed-salary-one-month-per-payroll': 'TD-284',
+  // TD-284 در v8.0.30 رفع شد (inv_td_284_fixed_salary_prorated_by_month)
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)
