@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.5 — Excel Import Never Revalues Stock (TD-264)
+- Product-owner decision (option A): an Excel row that changes the WAC of an item with stock is not applied and is listed in the import errors; a value within 1 rial of the current WAC is treated as unchanged; items without stock take the file's WAC.
+
 ### v8.0.4 — Stock Movement Date Rule and Kardex Replay (TD-257, TD-258)
 - Product-owner decision: a stock movement (document, finalize, transfer) may not be dated before the item's last movement, except with the new permission `warehouse.backdate` (granted to no role by default); a permitted backdated outflow must keep the warehouse balance non-negative from that date on. Voided documents do not count, so void + reissue keeps the original date.
 - The Kardex rebuild replays WAC in registration order with the live engine's formulas (`replayKardexWac`). New findings TD-265 (void of a consumed receipt) and TD-266 (running Kardex report after a void) registered; TD-264 decision (option A) recorded.

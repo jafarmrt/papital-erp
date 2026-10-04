@@ -15,7 +15,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, SimulationResult } from '../simulation/businessYearSimulator.js';
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
-import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
+import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -245,7 +245,7 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     push(results, 'inv_td_252_closing_refuses_draft_vouchers', name252, t252, false, getErrorMessage(err));
   }
 
-  // ── v8.0.3 و v8.0.4: آزمون‌های سخت‌گیرانه رفع TD-255، TD-262، TD-263، TD-257 و TD-258 ─────
+  // ── v8.0.3 تا v8.0.5: آزمون‌های سخت‌گیرانه رفع TD-255، TD-262، TD-263، TD-257، TD-258 و TD-264 ─────
   const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
     ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
       checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
@@ -253,6 +253,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.5: TD-264 ──
+    ['inv_td_264_excel_wac_change_refused', 'v8.0.5: درون‌ریزی اکسل WAC کالای دارای موجودی را تغییر نمی‌دهد و ردیف را با پیام روشن رد می‌کند (TD-264)',
+      checkExcelWacChangeRefused, 'ردیف تغییر WAC کالای دارای موجودی رد شد؛ کالای بدون موجودی و مقدار برابر WAC فعلی آزاد ماندند'],
     // ── v8.0.4: TD-257 و TD-258 ──
     ['inv_td_257_backdated_stock_movement', 'v8.0.4: گردش انبار با تاریخ پیش از آخرین گردش کالا بی‌مجوز رد و با مجوز فقط با موجودی کافی تا آن تاریخ پذیرفته می‌شود (TD-257)',
       checkBackdatedStockMovement, 'فاکتور، نهایی‌سازی و انتقال با تاریخ گذشته بی‌مجوز رد شد؛ با مجوز فقط با موجودی کافی تا آن تاریخ؛ هم‌روز و ثبت دوباره پس از ابطال آزاد'],

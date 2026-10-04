@@ -20,6 +20,9 @@ import { money } from '../../lib/money.js';
 // V10-2.1: تایپ کلاینت اتصال DB برای تراکنش‌های داخلی
 type DbLike = DbExecutor;
 
+/** v8.0.5 (TD-264): اختلاف کمتر از ۱ ریال میان WAC فایل اکسل و WAC فعلی «همان مقدار» شمرده می‌شود (WAC فعلی می‌ماند) */
+const EXCEL_WAC_TOLERANCE = 1;
+
 export interface NextItemCodeInput {
   type?: string;
   year?: string;
@@ -538,9 +541,23 @@ export class ItemCatalogService {
           // v7.0.45 (audit P2-1): موجودی فعلی از جدول موجودی انبارها، نه کش JSONB
           const existingSnapshot = await ItemWarehouseStockService.getStockSnapshot(tx, targetItemId);
           const existingStocks = existingSnapshot.byCode;
-          const itemWac = !isNaN(weightedAverageCost) && weightedAverageCost > 0
-            ? money(weightedAverageCost)
-            : money(matchedItem?.weightedAverageCost);
+          const currentWac = money(matchedItem.weightedAverageCost);
+          const fileWac = !isNaN(weightedAverageCost) && weightedAverageCost > 0 ? money(weightedAverageCost) : null;
+          // v8.0.5 (TD-264، تصمیم مالک محصول — گزینه الف): WAC کالای دارای موجودی از اکسل عوض نمی‌شود؛ WAC فقط با
+          // گردش ورود تغییر می‌کند. پیش‌تر ستون «قیمت میانگین خرید» ارزش موجودی فعلی را بی‌سند حسابداری بازنویسی می‌کرد.
+          // مقدار برابر WAC فعلی (اختلاف کمتر از EXCEL_WAC_TOLERANCE) نادیده گرفته می‌شود تا فایل خروجی بی‌خطا برگردد.
+          if (fileWac && existingSnapshot.total > 0 && !fileWac.subtract(currentWac).abs().lessThan(EXCEL_WAC_TOLERANCE)) {
+            errors.push({
+              row: rowNum,
+              name,
+              code,
+              message: `بهای میانگین (WAC) کالای «${matchedItem.name}» (${matchedItem.code}) که ${existingSnapshot.total} موجودی دارد از اکسل تغییر نمی‌کند ` +
+                `(فعلی ${currentWac.toString()}، فایل ${fileWac.toString()}). WAC فقط با ورود کالا عوض می‌شود؛ این ردیف ثبت نشد. ` +
+                'ستون «قیمت میانگین خرید» را خالی بگذارید یا همان مقدار فعلی را بنویسید.',
+            });
+            continue;
+          }
+          const itemWac = fileWac && existingSnapshot.total <= 0 ? fileWac : currentWac;
 
           await tx.update(items).set({
             name: name || matchedItem.name,

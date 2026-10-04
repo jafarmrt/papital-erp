@@ -19,7 +19,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'FOCUSED:purchase-voucher-ignores-account-mapping': 'TD-259',
   'FOCUSED:account-card-mixes-currencies': 'TD-260',
   'I3:foreign-rounding': 'TD-261',
-  'FOCUSED:excel-wac-overwrite-revalues-stock': 'TD-264',
+  // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   'I13:void-in-leaves-negative-history': 'TD-265',
   'FOCUSED:running-kardex-after-void': 'TD-266',
 };

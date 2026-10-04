@@ -131,8 +131,8 @@ export async function checkExcelAdjustmentVoucher(wh: string): Promise<string[]>
 }
 
 /**
- * TD-264 (باز، تصمیم مالک محصول لازم): درون‌ریزی اکسل WAC کالای دارای موجودی را مستقیم با ستون «قیمت میانگین خرید»
- * عوض می‌کند؛ ارزش موجودی فعلی بدون سند حسابداری تغییر می‌کند. true یعنی یافته هنوز بازتولید می‌شود.
+ * TD-264 (رفع در v8.0.5؛ نگهبان رگرسیون): درون‌ریزی اکسل WAC کالای دارای موجودی را مستقیم با ستون «قیمت میانگین خرید»
+ * عوض می‌کرد؛ ارزش موجودی فعلی بدون سند حسابداری تغییر می‌کرد. true یعنی یافته دوباره بازتولید شده است.
  */
 export async function probeExcelWacOverwrite(wh: string): Promise<boolean> {
   const stamp = Date.now().toString(36).toUpperCase();
@@ -190,5 +190,49 @@ export async function checkAuditMustBeFinal(wh: string): Promise<string[]> {
   const afterVoid = await itemState(item.id);
   if (afterVoid.stock !== 6) problems.push(`ابطال انبارگردانی پیش‌نویس قدیمی موجودی را برنگرداند: ${afterVoid.stock}`);
   problems.push(...await invariantProblems(scope, 'پس از ابطال انبارگردانی پیش‌نویس'));
+  return problems;
+}
+
+/**
+ * TD-264 (تصمیم مالک محصول — گزینه الف): ردیف اکسلی که WAC کالای دارای موجودی را تغییر می‌دهد ثبت نمی‌شود و با پیام
+ * روشن در فهرست خطاها می‌آید؛ مقدار برابر WAC فعلی (کمتر از ۱ ریال اختلاف) و کالای بدون موجودی آزادند و ردیف‌های دیگر
+ * همان فایل ثبت می‌شوند.
+ */
+export async function checkExcelWacChangeRefused(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const stamp = Date.now().toString(36).toUpperCase();
+  const mark = await watermarks();
+  const stocked = await createTestItem({
+    type: 'raw_material', stocks: {}, weightedAverageCost: 0, reorderPoint: 3, code: `V805S${stamp}-104`, name: withTestMarker(`کالای WAC دارای موجودی ${stamp}`),
+  });
+  const empty = await createTestItem({
+    type: 'raw_material', stocks: {}, weightedAverageCost: 0, reorderPoint: 3, code: `V805Z${stamp}-105`, name: withTestMarker(`کالای WAC بدون موجودی ${stamp}`),
+  });
+  await receive(stocked.id, 10, 30000, wh, '2025-10-07');
+  const reorderOf = async (id: number) => Number((await pool.query<{ r: string }>('SELECT reorder_point::text AS r FROM items WHERE id = $1', [id])).rows[0]?.r);
+
+  const refused = await ItemCatalogService.processUnifiedImport([
+    { 'کد کالا': stocked.code, 'نام کالا': stocked.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 7, 'قیمت میانگین خرید (WAC)': 45000 },
+    { 'کد کالا': empty.code, 'نام کالا': empty.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 8, 'قیمت میانگین خرید (WAC)': 25000 },
+  ], undefined, { user: { username: 'inv' } });
+  const rowError = refused.errors.find(e => e.code === stocked.code);
+  if (!rowError || !rowError.message.includes('WAC')) problems.push(`ردیف تغییر WAC کالای دارای موجودی در فهرست خطاها نیامد: ${JSON.stringify(refused.errors)}`);
+  const afterRefused = await itemState(stocked.id);
+  if (!fin(afterRefused.wac).equals(30000) || await reorderOf(stocked.id) !== 3) {
+    problems.push(`ردیف ردشده نباید ثبت شود: WAC ${afterRefused.wac}، نقطه سفارش ${await reorderOf(stocked.id)}`);
+  }
+  const emptyState = await itemState(empty.id);
+  if (!fin(emptyState.wac).equals(25000) || await reorderOf(empty.id) !== 8) {
+    problems.push(`کالای بدون موجودی باید WAC و نقطه سفارش فایل را بگیرد: WAC ${emptyState.wac}، نقطه سفارش ${await reorderOf(empty.id)}`);
+  }
+
+  const sameValue = await ItemCatalogService.processUnifiedImport([
+    { 'کد کالا': stocked.code, 'نام کالا': stocked.name, 'نوع کالا': 'ماده اولیه', 'نقطه سفارش': 9, 'قیمت میانگین خرید (WAC)': 30000.4 },
+  ], undefined, { user: { username: 'inv' } });
+  const afterSame = await itemState(stocked.id);
+  if (sameValue.errors.length > 0 || !fin(afterSame.wac).equals(30000) || await reorderOf(stocked.id) !== 9) {
+    problems.push(`WAC برابر مقدار فعلی (با کمتر از ۱ ریال اختلاف) باید بی‌خطا بماند و WAC فعلی حفظ شود: ${JSON.stringify(sameValue.errors)}، WAC ${afterSame.wac}`);
+  }
+  problems.push(...await invariantProblems({ ...mark, itemIds: [stocked.id, empty.id] }, 'پس از درون‌ریزی'));
   return problems;
 }
