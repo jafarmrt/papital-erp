@@ -6,7 +6,6 @@ import {
   Clock, 
   Building2, 
   Calendar, 
-  FileText, 
   Hash, 
   Banknote, 
   ArrowDownLeft, 
@@ -82,7 +81,8 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   const [selectedAccountId, setSelectedAccountId] = useState<number | ''>('');
   const [amountStr, setAmountStr] = useState<string>('');
   const [date, setDate] = useState<string>(getTodayJalaliDate());
-  const [method, setMethod] = useState<'pos' | 'bank_transfer' | 'cash' | 'cheque'>('pos');
+  // v8.0.26 (TD-278، تصمیم مالک محصول): تسویه با چک از «مدیریت چک‌های صیادی» ثبت می‌شود، نه از این فرم
+  const [method, setMethod] = useState<'pos' | 'bank_transfer' | 'cash'>('pos');
   const [trackingNumber, setTrackingNumber] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [createVoucher, setCreateVoucher] = useState<boolean>(true);
@@ -325,7 +325,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
           {/* Payment Method Selector */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">روش پرداخت / دریافت</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setMethod('pos')}
@@ -365,18 +365,6 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
                 <span>وجه نقد (صندوق)</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setMethod('cheque')}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                  method === 'cheque'
-                    ? 'border-emerald-500 bg-emerald-50/50 text-emerald-800 shadow-sm ring-1 ring-emerald-500'
-                    : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
-                }`}
-              >
-                <FileText size={18} className={method === 'cheque' ? 'text-emerald-600 mb-1' : 'text-slate-400 mb-1'} />
-                <span>چک صیادی</span>
-              </button>
             </div>
           </div>
 

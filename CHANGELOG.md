@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.26 — Cheque Method Removed From the Treasury Form (TD-278)
+- Cheques are registered only from the cheque book; the treasury and invoice-settlement forms no longer offer a cheque method and the server refuses it.
+
 ### v8.0.25 — Cheque Clearing Needs a Bank Ledger Account (TD-277)
 - Clearing a cheque into a bank account without a ledger account is refused, like a treasury transaction, instead of marking it cleared without a voucher.
 

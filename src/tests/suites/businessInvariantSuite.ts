@@ -24,7 +24,7 @@ import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherRepo
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import {
-  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, checkForeignChequeRefused, checkClearedChequeKeepsBankSynced, checkChequeClearingNeedsLedgerAccount, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, checkForeignChequeRefused, checkClearedChequeKeepsBankSynced, checkChequeClearingNeedsLedgerAccount, checkTreasuryChequeMethodRefused, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
@@ -265,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.26: TD-278 ──
+    ['inv_td_278_treasury_cheque_method_refused', 'v8.0.26: روش «چک» در فرم خزانه رد می‌شود (چک فقط از دفتر چک)؛ تراکنش چکی پیشین مانده خزانه حساب را تغییر نمی‌دهد و ابطال‌پذیر است (TD-278، گزینه الف)',
+      () => checkTreasuryChequeMethodRefused(), 'روش چک رد شد و اثری نگذاشت؛ تراکنش چکی پیشین حساب را مغایر نکرد و ابطال شد'],
     // ── v8.0.25: TD-277 ──
     ['inv_td_277_cheque_clearing_needs_ledger_account', 'v8.0.25: وصول چک به حساب بانکی بدون سرفصل معین رد می‌شود و اثری نمی‌گذارد؛ وصول به حساب سرفصل‌دار سند می‌گیرد (TD-277)',
       () => checkChequeClearingNeedsLedgerAccount(), 'وصول به حساب بی‌سرفصل رد شد؛ وصول به حساب سرفصل‌دار اسناد دریافتنی را بست'],

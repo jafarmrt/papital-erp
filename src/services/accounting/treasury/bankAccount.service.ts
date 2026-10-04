@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
-import { eq, asc, and, or } from 'drizzle-orm';
+import { eq, asc, and, or, ne } from 'drizzle-orm';
 import type { BankAccount } from '../../../types.js';
 import { NotFoundError, BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
 import { AccountMappingService } from '../accountMapping.service.js';
@@ -68,13 +68,15 @@ export class BankAccountService {
     ));
 
     // 2. Fetch all completed treasury transactions
+    // v8.0.26 (TD-278): تراکنش‌های پیشین با روش «چک» (و معکوس ابطال آن‌ها) پول حساب را جابه‌جا نکرده‌اند — مانده حساب
+    // تغییر نکرد و سندشان اسناد دریافتنی/پرداختنی را گرفت — پس در مانده خزانه حساب شمرده نمی‌شوند.
     const rawTxs = await orm.select({
       bankAccountId: treasuryTransactions.bankAccountId,
       type: treasuryTransactions.type,
       amount: treasuryTransactions.amount,
     })
     .from(treasuryTransactions)
-    .where(eq(treasuryTransactions.isDeleted, 0));
+    .where(and(eq(treasuryTransactions.isDeleted, 0), ne(treasuryTransactions.method, 'cheque')));
 
     // v8.0.24 (TD-276): چک وصول‌شده (passed، وضعیت پایانی و غیرقابل حذف) هم پول حساب بانکی را جابه‌جا می‌کند: چک دریافتی
     // به حساب واریز و چک پرداختی از آن برداشت شده است (سند وصول همان حساب را بدهکار/بستانکار می‌کند). پیش‌تر مانده خزانه

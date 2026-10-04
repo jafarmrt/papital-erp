@@ -4,7 +4,7 @@ import { orm } from '../../db/drizzle.js';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { categories, items, documents, documentItems, transactions, warehouses, journalVouchers, journalVoucherItems, accounts, documentRefCounters } from '../../db/schema.js';
 import { cleanTestTableData } from '../fixtures/dbTestHelper.js';
-import { normalizeDateToDbTimestamp, jalaliToIsoDate } from '../../utils.js';
+import { normalizeDateToDbTimestamp, jalaliToIsoDate, getErrorMessage } from '../../utils.js';
 import { businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
@@ -966,7 +966,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const t13Start = Date.now();
   try {
     const { TreasuryTransactionService } = await import('../../services/accounting/treasury/treasuryTransaction.service.js');
-    const { bankAccounts } = await import('../../db/schema.js');
+    const { bankAccounts, treasuryTransactions } = await import('../../db/schema.js');
     const { and } = await import('drizzle-orm');
 
     // 1. Fetch an active bank account
@@ -978,17 +978,25 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const initialBalance = Number(testBank.currentBalance) || 0;
       const testAmount = 500000;
 
-      // 2. Create a receipt transaction with method: 'cheque'
-      const chequeTx = await TreasuryTransactionService.createTreasuryTransaction({
-        type: 'receipt',
-        method: 'cheque',
-        amount: testAmount,
-        bankAccountId: testBank.id,
-        partyType: 'customer',
-        partyName: 'تست ایزولاسیون چک TD-148',
-        description: 'تست خودکار عدم کسر/واریز موجودی بانک در روش چک',
-        createVoucher: true,
-      });
+      // 2. v8.0.26 (TD-278، تصمیم مالک محصول): روش «چک» در فرم خزانه رد می‌شود و مانده بانک دست نمی‌خورد
+      let refusal = '';
+      try {
+        await TreasuryTransactionService.createTreasuryTransaction({
+          type: 'receipt',
+          method: 'cheque',
+          amount: testAmount,
+          bankAccountId: testBank.id,
+          partyType: 'customer',
+          partyName: 'تست ایزولاسیون چک TD-148',
+          description: 'تست خودکار رد روش چک در فرم خزانه',
+          createVoucher: true,
+        });
+      } catch (err) {
+        refusal = getErrorMessage(err);
+      }
+      if (!refusal.includes('دفتر چک')) {
+        throw new Error(`روش چک در فرم خزانه رد نشد (${refusal || 'پذیرفته شد'})`);
+      }
 
       // 3. Verify bank balance did NOT change
       const [bankAfterCheque] = await orm.select().from(bankAccounts).where(eq(bankAccounts.id, testBank.id));
@@ -997,7 +1005,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`مانده بانک در تراکنش چک تغییر کرد! (قبل: ${initialBalance}، بعد: ${balanceAfterCheque})`);
       }
 
-      // 4. Void the transaction and verify bank balance STILL did not change
+      // 4. تراکنش چکی پیشین (پیش از v8.0.26) ابطال می‌شود و مانده بانک باز هم تغییر نمی‌کند
+      const [chequeTx] = await orm.insert(treasuryTransactions).values({
+        transactionNumber: `TD148-LEG-${Date.now()}`,
+        type: 'receipt',
+        date: '2026-04-02',
+        method: 'cheque',
+        amount: money(testAmount),
+        bankAccountId: testBank.id,
+        partyType: 'customer',
+        partyName: 'تست ایزولاسیون چک TD-148',
+        status: 'completed',
+      }).returning();
       const voidedTx = await TreasuryTransactionService.voidTreasuryTransaction(chequeTx.id, {
         reason: 'تست ابطال تراکنش چک بدون تغییر مانده بانک',
       });
@@ -1010,12 +1029,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
 
       // Clean up test records
       await cleanTestTableData('treasury_transactions', 'id', [chequeTx.id, voidedTx.id]);
-      if (chequeTx.voucherId) {
-        await cleanTestTableData('vouchers', 'id', [chequeTx.voucherId]);
-      }
-      if (voidedTx.voucherId) {
-        await cleanTestTableData('vouchers', 'id', [voidedTx.voucherId]);
-      }
     }
 
     results.push(makeTestCase({
@@ -1026,7 +1039,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t13Start,
-      details: 'تراکنش‌های ثبت و ابطال چک بدون دستکاری مانده بانک با صدور اسناد استاندارد اسناد دریافتنی/پرداختنی تست و تأیید شد.'
+      details: 'روش چک در فرم خزانه رد شد (v8.0.26، TD-278) و ابطال تراکنش چکی پیشین مانده بانک را تغییر نداد.'
     }));
   } catch (err: any) {
     results.push(makeTestCase({

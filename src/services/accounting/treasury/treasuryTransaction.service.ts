@@ -134,13 +134,16 @@ export class TreasuryTransactionService {
   }> {
     const amount = Number(data.amount) || 0;
     const warnings: string[] = [];
-    const isCheque = data.method === 'cheque';
+    // v8.0.26 (TD-278): روش «چک» در فرم خزانه ثبت نمی‌شود؛ پیش‌نمایش سندی برای آن ساخته نمی‌شود
+    if (data.method === 'cheque') {
+      warnings.push('روش «چک» در فرم خزانه پذیرفته نمی‌شود؛ چک را از «مدیریت چک‌های صیادی» (دفتر چک) ثبت کنید.');
+    }
 
     const [bank] = await orm.select().from(bankAccounts)
       .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)));
     if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
 
-    if (!isCheque && !bank.accountId) {
+    if (!bank.accountId) {
       warnings.push('این حساب بانکی/صندوق به چارت حساب‌ها متصل نیست — سند دوبل صادر نخواهد شد. از ویرایش حساب، کدینگ معین را متصل کنید.');
     }
 
@@ -158,22 +161,10 @@ export class TreasuryTransactionService {
       warnings.push('مبلغ باید بزرگ‌تر از صفر باشد');
     }
 
-    // V6 Sub-phase 1.2 (TD-148): تفکیک پیش‌نمایش سند برای روش چک در برابر نقد/بانک
     let treasuryAccount: Account | null = null;
-    let treasuryDetailedName = bank.title;
+    const treasuryDetailedName = bank.title;
 
-    if (isCheque) {
-      if (data.type === 'receipt') {
-        treasuryAccount = await AccountMappingService.getChequeReceivableAccount();
-        treasuryDetailedName = 'اسناد دریافتنی تجاری (نزد صندوق)';
-      } else {
-        treasuryAccount = await AccountMappingService.getChequePayableAccount();
-        treasuryDetailedName = 'اسناد پرداختنی تجاری';
-      }
-      if (!treasuryAccount) {
-        warnings.push(`حساب معین «${data.type === 'receipt' ? 'اسناد دریافتنی' : 'اسناد پرداختنی'}» برای ثبت چک در چارت حساب‌ها یافت نشد`);
-      }
-    } else if (bank.accountId) {
+    if (bank.accountId && data.method !== 'cheque') {
       const [acc] = await orm.select().from(accounts).where(and(eq(accounts.id, bank.accountId), eq(accounts.isDeleted, 0)));
       treasuryAccount = (acc as unknown as Account) || null;
     }
@@ -310,6 +301,12 @@ export class TreasuryTransactionService {
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
+    // v8.0.26 (TD-278، تصمیم مالک محصول — گزینه الف): روش «چک» در فرم خزانه پذیرفته نمی‌شود؛ چک فقط از «دفتر چک» ثبت
+    // می‌شود. پیش‌تر این روش اسناد دریافتنی/پرداختنی را بدهکار/بستانکار می‌کرد ولی رکورد چکی نمی‌ساخت که روزی وصول،
+    // برگشت یا خرج شود، و ثبت همان چک در دفتر چک آن را دوبار به حساب مشتری می‌برد. تراکنش‌های چکی پیشین ابطال‌پذیرند.
+    if (data.method === 'cheque') {
+      throw new ValidationError('روش «چک» در فرم خزانه پذیرفته نمی‌شود؛ چک دریافتی یا پرداختی را از «مدیریت چک‌های صیادی» (دفتر چک) ثبت کنید.');
+    }
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
@@ -333,27 +330,20 @@ export class TreasuryTransactionService {
 
       const txNum = await this.generateTransactionNumber(data.type, txEngine);
 
-      const isCheque = data.method === 'cheque';
       const currentBal = fin(bank.currentBalance);
-
-      // V6 Sub-phase 1.2 (TD-148): منع تغییر مستقیم مانده حساب بانکی در روش پرداخت یا دریافت با چک.
-      // وجه چک تا لحظه وصول/پاس شدن در سررسید از حساب جاری بانک کسر یا واریز نمی‌شود.
-      // تغییر مستقیم مانده بانک در ثبت چک موجب ریسک Double-Spend و مغایرت خزانه‌داری با بانک می‌شود.
-      if (!isCheque) {
-        // V9-1.3: محاسبه موجودی بانک با FinancialDecimal — حذف خطای شناور float
-        const newBal = data.type === 'receipt'
-          ? currentBal.add(amount).round(4)
-          : currentBal.subtract(amount).round(4);
-        // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
-        if (newBal.isNegative()) {
-          throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBalFa(currentBal)})`);
-        }
-        await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, data.bankAccountId));
+      // V9-1.3: محاسبه موجودی بانک با FinancialDecimal — حذف خطای شناور float
+      const newBal = data.type === 'receipt'
+        ? currentBal.add(amount).round(4)
+        : currentBal.subtract(amount).round(4);
+      // V1.4.0: سیاست مانده منفی ممنوع — پرداخت بیش از مانده رد می‌شود
+      if (newBal.isNegative()) {
+        throw new ValidationError(`مانده حساب «${bank.title}» کافی نیست (مانده فعلی: ${currentBalFa(currentBal)})`);
       }
+      await txEngine.update(bankAccounts).set({ currentBalance: money(newBal) }).where(eq(bankAccounts.id, data.bankAccountId));
 
       let voucherId: number | null = null;
       if (data.createVoucher !== false) {
-        if (!isCheque && !bank.accountId) {
+        if (!bank.accountId) {
           throw new ValidationError('حساب معین مرتبط در چارت حساب‌ها برای این حساب بانکی/صندوق تعریف نشده است');
         }
 
@@ -365,39 +355,12 @@ export class TreasuryTransactionService {
           throw new NotFoundError('حساب معین طرف حساب در چارت حساب‌ها یافت نشد (آن را از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)');
         }
 
-        // V6 Sub-phase 1.2 (TD-148): تفکیک حسابداری نقد و چک:
-        // اگر تراکنش با چک باشد:
-        // - دریافت چک: اسناد دریافتنی نزد صندوق (1101) بدهکار، طرف حساب بستانکار
-        // - پرداخت چک: طرف حساب بدهکار، اسناد پرداختنی تجاری (2101) بستانکار
-        // حساب جاری بانک تنها پس از وصول یا پاس شدن فیزیکی چک در سررسید (passCheque) تحت تاثیر قرار می‌گیرد.
-        let treasuryAccountId: number | null = bank.accountId || null;
-        let treasuryDetailedType = 'bank_account';
-        let treasuryDetailedId: number | null = bank.id;
-        let treasuryDetailedName = bank.title;
+        const treasuryAccountId: number = bank.accountId;
+        const treasuryDetailedType = 'bank_account';
+        const treasuryDetailedId: number | null = bank.id;
+        const treasuryDetailedName = bank.title;
 
-        if (isCheque) {
-          if (data.type === 'receipt') {
-            const chqRecAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
-            treasuryAccountId = chqRecAcc?.id || null;
-            treasuryDetailedType = 'cheque_receivable';
-            treasuryDetailedId = null;
-            treasuryDetailedName = 'اسناد دریافتنی تجاری (نزد صندوق)';
-          } else {
-            const chqPayAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-            treasuryAccountId = chqPayAcc?.id || null;
-            treasuryDetailedType = 'cheque_payable';
-            treasuryDetailedId = null;
-            treasuryDetailedName = 'اسناد پرداختنی تجاری';
-          }
-
-          if (!treasuryAccountId) {
-            throw new ValidationError(
-              `حساب معین «${data.type === 'receipt' ? 'اسناد دریافتنی' : 'اسناد پرداختنی'}» برای ثبت چک در چارت حساب‌ها یافت نشد. لطفاً در تنظیمات حسابداری کدینگ را تکمیل کنید.`
-            );
-          }
-        }
-
-        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : data.method === 'cheque' ? 'چک' : 'حواله بانکی'} از/به ${data.partyName}`;
+        const descText = data.description || `${data.type === 'receipt' ? 'دریافت' : 'پرداخت'} ${data.method === 'cash' ? 'نقدی' : data.method === 'pos' ? 'کارتخوان' : 'حواله بانکی'} از/به ${data.partyName}`;
         
         const debitAccountId = data.type === 'receipt' ? treasuryAccountId : contraAccountId;
         const creditAccountId = data.type === 'receipt' ? contraAccountId : treasuryAccountId;

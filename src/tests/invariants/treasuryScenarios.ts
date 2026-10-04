@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { accounts, cheques } from '../../db/schema.js';
+import { accounts, bankAccounts, cheques, treasuryTransactions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { money } from '../../lib/money.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { ChequeLifecycleService } from '../../services/accounting/treasury/chequeLifecycle.service.js';
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
@@ -315,6 +316,49 @@ export async function checkChequeClearingNeedsLedgerAccount(): Promise<string[]>
   return problems;
 }
 
+/**
+ * TD-278 (تصمیم مالک محصول — گزینه الف): روش «چک» در فرم خزانه رد می‌شود (چک فقط از دفتر چک) — نه تراکنش، نه سند و نه
+ * تغییر مانده. تراکنش چکی پیشین مانده خزانه حساب بانکی را تغییر نمی‌دهد (پولی جابه‌جا نکرده) و ابطال‌پذیر است.
+ */
+export async function checkTreasuryChequeMethodRefused(): Promise<string[]> {
+  const problems: string[] = [];
+  const bank = await bankWithOwnLedgerAccount('بانک آزمون روش چک');
+  const mark = await voucherWatermark();
+  const countRows = async () => Number((await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM treasury_transactions WHERE bank_account_id = $1', [bank.id])).rows[0].n);
+  let refusal: string | null = null;
+  try {
+    await TreasuryTransactionService.createTreasuryTransaction({
+      type: 'receipt', method: 'cheque', amount: 900000, bankAccountId: bank.id, partyType: 'customer', partyName: 'مشتری آزمون روش چک', date: '2026-04-02', username: 'inv',
+    });
+  } catch (err) {
+    refusal = getErrorMessage(err);
+  }
+  if (!refusal?.includes('دفتر چک')) problems.push(`روش چک در فرم خزانه رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  if (await countRows() !== 0) problems.push('روش چک ردشده تراکنش خزانه ساخت');
+  if (!fin(await irrNet('1101', mark)).isZero()) problems.push('روش چک ردشده اسناد دریافتنی را بدهکار کرد');
+
+  // تراکنش چکی پیشین (ثبت‌شده پیش از v8.0.26): مانده حساب را تغییر نداده بود و سندش ۱۱۰۱ را گرفته بود
+  const [legacy] = await orm.insert(treasuryTransactions).values({
+    transactionNumber: tag('LEG'), type: 'receipt', date: '2026-04-02', method: 'cheque', amount: money(900000), currency: 'IRR',
+    bankAccountId: bank.id, partyType: 'customer', partyName: 'مشتری آزمون چک پیشین', status: 'completed',
+  }).returning({ id: treasuryTransactions.id });
+  const synced = async (label: string) => {
+    const row = (await BankAccountService.getBankAccounts()).find(b => b.id === bank.id);
+    if (!fin(row?.treasuryBalance ?? -1).isZero()) problems.push(`${label}: مانده خزانه ${row?.treasuryBalance}، انتظار ۰`);
+    if (row?.syncStatus !== 'synced') problems.push(`${label}: وضعیت حساب ${row?.syncStatus}، انتظار synced`);
+  };
+  await synced('تراکنش چکی پیشین');
+  try {
+    await TreasuryTransactionService.voidTreasuryTransaction(legacy.id, { reason: 'آزمون ابطال تراکنش چکی پیشین', username: 'inv' });
+  } catch (err) {
+    problems.push(`تراکنش چکی پیشین ابطال نشد (${getErrorMessage(err)})`);
+  }
+  await synced('پس از ابطال تراکنش چکی پیشین');
+  const [bankRow] = await orm.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bank.id));
+  if (!fin(bankRow?.currentBalance ?? -1).isZero()) problems.push(`مانده ذخیره‌شده حساب پس از ابطال ${bankRow?.currentBalance}، انتظار ۰`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */
@@ -387,13 +431,20 @@ export async function probeChequeClearedIntoBankWithoutLedger(): Promise<boolean
   return !fin(await irrNet('1101', mark)).isZero();
 }
 
-/** TD-278: دریافت «چک» در فرم خزانه اسناد دریافتنی (۱۱۰۱) را بدهکار می‌کند ولی رکورد چکی نمی‌سازد که روزی وصول شود */
+/**
+ * TD-278 (کاوش رگرسیون؛ رفع v8.0.26): دریافت «چک» در فرم خزانه اسناد دریافتنی (۱۱۰۱) را بدهکار می‌کرد ولی رکورد چکی
+ * نمی‌ساخت که روزی وصول شود.
+ */
 export async function probeTreasuryChequeMethodWithoutCheque(): Promise<boolean> {
   const bank = await bankWithLedgerAccount('بانک کاوش روش چک');
   const before = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM cheques');
-  await TreasuryTransactionService.createTreasuryTransaction({
-    type: 'receipt', method: 'cheque', amount: 900000, bankAccountId: bank.id, partyType: 'customer', partyName: 'مشتری کاوش روش چک', date: '2026-04-02', username: 'inv',
-  });
+  try {
+    await TreasuryTransactionService.createTreasuryTransaction({
+      type: 'receipt', method: 'cheque', amount: 900000, bankAccountId: bank.id, partyType: 'customer', partyName: 'مشتری کاوش روش چک', date: '2026-04-02', username: 'inv',
+    });
+  } catch {
+    return false;
+  }
   const after = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM cheques');
   return Number(after.rows[0].n) === Number(before.rows[0].n);
 }

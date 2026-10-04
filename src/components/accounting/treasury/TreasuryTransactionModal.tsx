@@ -40,7 +40,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     partyId: null as number | null,
     partyName: '',
     purpose: 'settlement' as 'settlement' | 'advance' | 'other',
-    method: 'bank_transfer' as 'bank_transfer' | 'pos' | 'cash' | 'cheque',
+    // v8.0.26 (TD-278، تصمیم مالک محصول): روش «چک» حذف شد؛ چک فقط از «مدیریت چک‌های صیادی» ثبت می‌شود
+    method: 'bank_transfer' as 'bank_transfer' | 'pos' | 'cash',
     amount: 0,
     // v8.0.20 (TD-274): نرخ تسعیر تراکنش حساب ارزی (ریال برای هر واحد)
     exchangeRate: 0,
@@ -246,7 +247,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   <span>روش پرداخت</span>
-                  <HelpBadge text="روش جابجایی وجه: حواله بین‌بانکی، کارتخوان فروشگاهی، نقد صندوق یا چک." />
+                  <HelpBadge text="روش جابجایی وجه: حواله بین‌بانکی، کارتخوان فروشگاهی یا نقد صندوق. چک از «مدیریت چک‌های صیادی» ثبت می‌شود." />
                 </label>
                 <select
                   value={formData.method}
@@ -256,7 +257,6 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                   <option value="bank_transfer">حواله / پایا / ساتنا</option>
                   <option value="pos">کارتخوان (POS)</option>
                   <option value="cash">نقدی / صندوق</option>
-                  <option value="cheque">چک</option>
                 </select>
               </div>
             </div>
