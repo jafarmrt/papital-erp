@@ -21,7 +21,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-261 در v8.0.18 رفع شد (inv_td_261_foreign_cost_rows_exact_in_irr)
   // حوزه C — خزانه و چک صیادی (v8.0.19؛ TD-271 در همان نسخه رفع شد: inv_td_271_cheque_delete_keeps_other_cheques)
   // TD-272 در v8.0.21 رفع شد (inv_td_272_paid_cheque_bounce_restores_supplier)
-  'FOCUSED:returned-cheque-stays-in-protest': 'TD-273',
+  // TD-273 در v8.0.22 رفع شد (inv_td_273_returned_cheque_moves_to_customer)
   // TD-274 در v8.0.20 رفع شد (inv_td_274_foreign_treasury_uses_rate)
   'FOCUSED:foreign-cheque-at-rate-one': 'TD-275',
   'FOCUSED:cleared-cheque-bank-discrepant': 'TD-276',

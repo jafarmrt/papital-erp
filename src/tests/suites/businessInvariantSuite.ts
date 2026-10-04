@@ -24,7 +24,7 @@ import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherRepo
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import {
-  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
@@ -265,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.22: TD-273 ──
+    ['inv_td_273_returned_cheque_moves_to_customer', 'v8.0.22: عودت چک برگشتی به صادرکننده مطالبه را از اسناد واخواستی به حساب مشتری برمی‌گرداند (TD-273، گزینه الف)',
+      () => checkReturnedChequeMovesToCustomer(), 'عودت چک برگشتی (مستقیم و در جریان وصول) اسناد واخواستی را بست و مطالبه را به حساب مشتری برد؛ حذف آن دفتر را صفر کرد'],
     // ── v8.0.21: TD-272 ──
     ['inv_td_272_paid_cheque_bounce_restores_supplier', 'v8.0.21: برگشت چک پرداختی سند می‌گیرد (بدهکار اسناد پرداختنی، بستانکار تأمین‌کننده)؛ عودت و حذف آن دفتر را درست نگه می‌دارند (TD-272)',
       () => checkPaidChequeBounceRestoresSupplier(), 'برگشت، عودت و حذف چک پرداختی اسناد پرداختنی و حساب تأمین‌کننده را درست گذاشتند'],

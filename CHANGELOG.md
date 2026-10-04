@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.22 — Returned Bounced Cheque Moves the Claim to the Customer (TD-273)
+- Returning a bounced cheque to its drawer posts debit customer, credit protested cheques, so the claim is back on the customer's account.
+
 ### v8.0.21 — Bounced Paid Cheque Restores the Supplier (TD-272)
 - A bounced paid cheque now posts a voucher: debit cheques payable, credit the supplier, so the debt to the supplier is open again.
 

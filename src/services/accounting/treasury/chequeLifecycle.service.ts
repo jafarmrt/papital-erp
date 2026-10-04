@@ -586,6 +586,46 @@ export class ChequeLifecycleService {
             ]
           }, txEngine);
         }
+      } else if (data.status === 'returned' && existing.type === 'received') {
+        // v8.0.22 (TD-273، تصمیم مالک محصول — گزینه الف): عودت چک برگشتی به صادرکننده، مطالبه را از اسناد واخواستی به
+        // حساب جاری مشتری برمی‌گرداند (بدهکار مشتری، بستانکار اسناد واخواستی) تا دریافت بعدی از مشتری درست تسویه شود.
+        // پیش‌تر سندی صادر نمی‌شد و مطالبه برای همیشه در اسناد واخواستی می‌ماند. اگر برگشت به خود حساب مشتری ثبت شده
+        // باشد (نبود حساب اسناد واخواستی در کدینگ) سندی لازم نیست.
+        const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
+        const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
+        if (protestAcc && customerAcc && protestAcc.id !== customerAcc.id) {
+          await VoucherService.createJournalVoucher({
+            date: voucherIsoDate,
+            voucherType: 'adjustment',
+            description: `عودت چک برگشتی شماره ${existing.chequeNumber} به ${existing.partyName} و انتقال مطالبه به حساب مشتری`,
+            referenceModule: 'cheque',
+            referenceNumber: existing.chequeNumber,
+            sourceChequeId: existing.id,
+            currency: existing.currency || 'IRR',
+            userId: data.userId,
+            username: data.username,
+            items: [
+              {
+                accountId: customerAcc.id,
+                detailedType: 'customer',
+                detailedId: existing.partyId,
+                detailedName: existing.partyName,
+                debit: amount,
+                credit: 0,
+                description: `مطالبه چک برگشتی ${existing.chequeNumber} به حساب جاری مشتری`
+              },
+              {
+                accountId: protestAcc.id,
+                detailedType: 'customer',
+                detailedId: existing.partyId,
+                detailedName: existing.partyName,
+                debit: 0,
+                credit: amount,
+                description: `بستن اسناد واخواستی بابت عودت چک ${existing.chequeNumber}`
+              }
+            ]
+          }, txEngine);
+        }
       } else if (data.status === 'spent' && existing.type === 'received') {
         const tradePayablesAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
         const inTreasuryAcc = (await AccountMappingService.getChequeReceivableAccount(txEngine))

@@ -179,6 +179,41 @@ export async function checkPaidChequeBounceRestoresSupplier(): Promise<string[]>
   return problems;
 }
 
+/**
+ * TD-273 (تصمیم مالک محصول — گزینه الف): عودت چک برگشتی به صادرکننده سند می‌گیرد — بدهکار حساب مشتری، بستانکار اسناد
+ * واخواستی؛ اسناد واخواستی بسته و مطالبه به حساب جاری مشتری برمی‌گردد. حذف چک عودت‌شده همه اسنادش را باطل می‌کند.
+ */
+export async function checkReturnedChequeMovesToCustomer(): Promise<string[]> {
+  const problems: string[] = [];
+  const expect = async (label: string, mark: number, expected: Record<string, number>) => {
+    for (const [code, amount] of Object.entries(expected)) {
+      const actual = await irrNet(code, mark);
+      if (!fin(actual).equals(amount)) problems.push(`${label}: گردش ${code} ${actual}، انتظار ${amount}`);
+    }
+  };
+  // دریافت چک ۳۰۰٬۰۰۰ (بدهکار ۱۱۰۱، بستانکار ۱۲۰۱)، برگشت (بدهکار ۱۱۰۳، بستانکار ۱۱۰۱) و عودت (بدهکار ۱۲۰۱، بستانکار ۱۱۰۳)
+  let mark = await voucherWatermark();
+  const cheque = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 300000, partyName: 'مشتری آزمون عودت' });
+  await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
+  await expect('پس از برگشت', mark, { '1101': 0, '1103': 300000, '1201': -300000 });
+  await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
+  await expect('پس از عودت', mark, { '1101': 0, '1103': 0, '1201': 0 });
+
+  // چک در جریان وصولی که برگشت خورد و عودت شد: همان نتیجه
+  mark = await voucherWatermark();
+  const viaBank = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 200000, partyName: 'مشتری آزمون عودت ب' });
+  await ChequeLifecycleService.updateChequeStatus(viaBank.id, { status: 'in_collection', actionDate: '2026-03-20', username: 'inv' });
+  await ChequeLifecycleService.updateChequeStatus(viaBank.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
+  await ChequeLifecycleService.updateChequeStatus(viaBank.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
+  await expect('پس از عودت چک در جریان وصول', mark, { '1101': 0, '1102': 0, '1103': 0, '1201': 0 });
+
+  // حذف چک عودت‌شده: همه اسنادش باطل و دفتر صفر
+  await ChequeLifecycleService.deleteCheque(viaBank.id, { username: 'inv' });
+  if (await activeVoucherCount(viaBank.id) !== 0) problems.push('حذف چک عودت‌شده سندهایش را باطل نکرد');
+  await expect('پس از حذف چک عودت‌شده', mark, { '1101': 0, '1102': 0, '1103': 0, '1201': 0 });
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */
