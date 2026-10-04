@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.28 — Payroll Status Limited to Draft/Approved; Area D Findings (TD-281)
+- Payroll status accepts only draft and approved by hand and a paid payroll keeps its status; three payroll findings await product-owner decisions.
+
 ### v8.0.27 — Cheque Reconciliation Report Matches the Ledger (TD-280)
 - The cheque reconciliation compares cheque payables by their credit balance and no longer expects bounced or returned paid cheques there.
 

@@ -1,7 +1,7 @@
-import { eq, and, or, sql, inArray, asc } from 'drizzle-orm';
+import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { pieceworkLogs, pieceworkPayrolls, personnel, journalVouchers } from '../../db/schema.js';
-import { NotFoundError, BadRequestError, ConflictError } from '../../errors/customErrors.js';
+import { NotFoundError, BadRequestError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 import { isoToJalaliDate, toStorageDate } from '../../utils.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
@@ -16,6 +16,13 @@ import { money } from '../../lib/money.js';
  */
 
 type AmountInput = number | string;
+
+/**
+ * v8.0.28 (TD-281): تنها وضعیت‌هایی که دستی روی فیش تنظیم می‌شوند. «پرداخت‌شده» و «نیمه‌پرداخت» فقط از «ثبت پرداخت» و
+ * ابطال فقط از «حذف فیش» است. پیش‌تر هر رشته‌ای پذیرفته می‌شد: «pending» کارکردهای فیش را دوباره در فیش بعدی می‌شمرد و
+ * برگرداندن فیش پرداخت‌شده به «approved» ابطال آن را با پرداخت باقی‌مانده ممکن می‌کرد.
+ */
+const MANUAL_PAYROLL_STATUSES = new Set(['draft', 'approved']);
 
 export interface GeneratePayrollInput {
   personnelId: AmountInput;
@@ -65,12 +72,15 @@ export class PieceworkPayrollService {
       }
 
       // 1. Find pending work logs in this date range WITH ROW LOCKING (.for('update'))
+      // v8.0.28 (TD-281): کارکرد فقط وقتی آزاد است که به فیش زنده‌ای پیوند نداشته باشد (بی‌فیش، یا فیشش حذف‌شده). پیش‌تر
+      // کارکرد «pending» با پیوند به فیش زنده هم شمرده می‌شد ولی دوباره پیوند نمی‌خورد و در هر فیش بعدی تکرار می‌شد.
+      const unlinkedOrOrphan = sql`(${pieceworkLogs.payrollId} IS NULL OR EXISTS (SELECT 1 FROM piecework_payrolls pp WHERE pp.id = ${pieceworkLogs.payrollId} AND pp.is_deleted = 1))`;
       const allPersonnelLogs = await tx.select()
         .from(pieceworkLogs)
         .where(and(
           eq(pieceworkLogs.personnelId, pId),
           eq(pieceworkLogs.isDeleted, 0),
-          or(eq(pieceworkLogs.status, 'pending'), sql`${pieceworkLogs.payrollId} IS NULL`)
+          unlinkedOrOrphan
         ))
         .for('update');
 
@@ -180,7 +190,7 @@ export class PieceworkPayrollService {
           .set({ payrollId: newPayroll.id, status: 'approved' })
           .where(and(
             inArray(pieceworkLogs.id, logIds),
-            sql`${pieceworkLogs.payrollId} IS NULL`
+            unlinkedOrOrphan
           ));
       }
 
@@ -214,6 +224,13 @@ export class PieceworkPayrollService {
       );
     }
 
+    const targetStatus = status ? String(status).trim().toLowerCase() : '';
+    if (targetStatus && !MANUAL_PAYROLL_STATUSES.has(targetStatus)) {
+      throw new ValidationError(
+        `وضعیت «${status}» برای فیش حقوقی مجاز نیست؛ فقط «پیش‌نویس» (draft) و «تأییدشده» (approved) دستی تنظیم می‌شوند. پرداخت از «ثبت پرداخت» و ابطال از «حذف فیش» انجام می‌شود.`
+      );
+    }
+
     const currentUserId = input.userId;
     const currentUsername = input.username;
 
@@ -222,9 +239,13 @@ export class PieceworkPayrollService {
       if (!pay) {
         return { status: 404, error: 'فیش حقوقی یافت نشد' };
       }
+      // v8.0.28 (TD-281): وضعیت فیشی که پرداخت دارد دستی عوض نمی‌شود (برگرداندنش به «approved» حذف آن را با پرداخت باقی‌مانده ممکن می‌کرد)
+      if (targetStatus && (['paid', 'partially_paid'].includes(pay.status || '') || fin(pay.paidAmount ?? 0).isPositive())) {
+        throw new ConflictError(`فیش ${pay.payrollNumber} پرداخت ثبت‌شده دارد؛ وضعیت آن فقط از مسیر پرداخت تغییر می‌کند.`);
+      }
 
       const updates: Partial<typeof pieceworkPayrolls.$inferInsert> = {};
-      if (status) updates.status = String(status);
+      if (targetStatus) updates.status = targetStatus;
       if (paymentDate !== undefined) updates.paymentDate = requireStorageDate(paymentDate, 'تاریخ پرداخت فیش');
       if (paymentMethod !== undefined) updates.paymentMethod = String(paymentMethod).trim();
       if (paymentReference !== undefined) updates.paymentReference = String(paymentReference).trim();
@@ -233,15 +254,15 @@ export class PieceworkPayrollService {
       await tx.update(pieceworkPayrolls).set(updates).where(eq(pieceworkPayrolls.id, id));
 
       // Also update attached logs status
-      if (status) {
+      if (targetStatus) {
         await tx.update(pieceworkLogs)
-          .set({ status: String(status) })
+          .set({ status: targetStatus })
           .where(eq(pieceworkLogs.payrollId, id));
       }
 
       // Trigger or verify journal voucher inside transaction
       let autoVoucher: { id: number; voucherNumber: number } | null = null;
-      if (status === 'approved' || status === 'paid') {
+      if (targetStatus === 'approved') {
         autoVoucher = await VoucherSyncService.autoCreateVoucherForPayroll(
           id,
           currentUserId,

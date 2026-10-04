@@ -1,0 +1,176 @@
+import { and, eq } from 'drizzle-orm';
+import { orm, pool } from '../../db/drizzle.js';
+import { accounts, personnel, pieceworkLogs, pieceworkPayrolls, pieceworkTasks, treasuryTransactions } from '../../db/schema.js';
+import { fin } from '../../lib/financialDecimal.js';
+import { money } from '../../lib/money.js';
+import { PayrollPaymentService } from '../../services/accounting/payrollPayment.service.js';
+import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
+import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
+import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
+import { getErrorMessage } from '../../utils/formatters.js';
+
+/**
+ * v8.0.28 — سناریوهای حوزه D (حقوق و کارمزدی) برای سوئیت business_invariants: آزمون سخت‌گیرانه رفع‌ها (فهرست مشکلات؛
+ * خالی یعنی رفتار درست) و کاوش یافته‌های باز (true یعنی یافته هنوز رخ می‌دهد).
+ */
+
+let seq = 0;
+const tag = (prefix: string) => `${prefix}${Date.now().toString().slice(-7)}${++seq}`;
+const PERIOD = { startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' };
+
+async function newWorker(name: string, salary?: { salaryType: string; monthlySalary: number }): Promise<number> {
+  const [row] = await orm.insert(personnel).values({
+    fullName: `${name} ${tag('W')}`,
+    salaryType: salary?.salaryType ?? 'piecework',
+    monthlySalary: money(salary?.monthlySalary ?? 0),
+  }).returning({ id: personnel.id });
+  return row.id;
+}
+
+async function newTask(): Promise<number> {
+  const [row] = await orm.insert(pieceworkTasks).values({ code: tag('PT'), title: `کار آزمون حقوق ${tag('')}`, defaultRate: money(1) }).returning({ id: pieceworkTasks.id });
+  return row.id;
+}
+
+async function addLog(personnelId: number, taskId: number, date: string, amount: number): Promise<void> {
+  await orm.insert(pieceworkLogs).values({
+    personnelId, taskId, date, dateIso: date, quantity: 1, unitRate: money(amount), totalAmount: money(amount), status: 'pending',
+  });
+}
+
+/** گردش حساب برای تفصیلی یک پرسنل (اسناد و ردیف‌های فعال، همه وضعیت‌ها) */
+async function personNet(code: string, personnelId: number): Promise<string> {
+  const res = await pool.query<{ n: string }>(
+    `SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS n FROM journal_voucher_items i
+       JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+      WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = $1 AND i.detailed_type = 'personnel' AND i.detailed_id = $2`, [code, personnelId]);
+  return fin(res.rows[0]?.n ?? 0).toString();
+}
+
+/** حساب بانکی با سرفصل اختصاصی زیر ۱۰۰۳ و مانده ۵٬۰۰۰٬۰۰۰ برای پرداخت حقوق */
+async function fundedBank(): Promise<number> {
+  const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
+  const [ledger] = await orm.insert(accounts).values({
+    code: `1003${tag('')}`, name: 'بانک آزمون حقوق', level: 'subsidiary', parentId: parent?.id ?? null, accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
+  }).returning({ id: accounts.id });
+  const bank = await BankAccountService.createBankAccount({ title: `بانک آزمون حقوق ${tag('B')}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR' });
+  await TreasuryTransactionService.createTreasuryTransaction({
+    type: 'receipt', method: 'bank_transfer', amount: 5000000, bankAccountId: bank.id, partyType: 'other', partyName: 'واریز آزمون حقوق', date: '2026-04-01', username: 'inv',
+  });
+  return bank.id;
+}
+
+async function generate(personnelId: number, extra: Record<string, unknown> = {}) {
+  return PieceworkPayrollService.generatePayroll({ personnelId, ...PERIOD, ...extra });
+}
+
+async function refusalOf(fn: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await fn();
+    return null;
+  } catch (err) {
+    return getErrorMessage(err);
+  }
+}
+
+/**
+ * TD-281: وضعیت فیش فقط «پیش‌نویس» یا «تأییدشده» دستی تنظیم می‌شود و فیش پرداخت‌دار وضعیت دستی نمی‌گیرد؛ کارکردی که به
+ * فیش زنده‌ای پیوند دارد (حتی با وضعیت «pending» باقی‌مانده از نسخه‌های پیشین) در فیش تازه شمرده نمی‌شود؛ کارکرد فیش
+ * حذف‌شده آزاد است و فقط یک بار دوباره پیوند می‌خورد.
+ */
+export async function checkPayrollStatusKeepsLifecycle(): Promise<string[]> {
+  const problems: string[] = [];
+  const task = await newTask();
+
+  // الف) وضعیت غیرمجاز رد می‌شود؛ پیش‌نویس ← تأییدشده مجاز است
+  const w1 = await newWorker('کارگر آزمون وضعیت');
+  await addLog(w1, task, '2026-04-05', 1000000);
+  const first = await generate(w1);
+  if (!first.payroll) return [`صدور فیش آزمون ناموفق بود (${first.error})`];
+  const refusal = await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'pending', username: 'inv' }));
+  if (!refusal?.includes('مجاز نیست')) problems.push(`وضعیت «pending» برای فیش رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  const toggle = await refusalOf(async () => {
+    await PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'draft', username: 'inv' });
+    await PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'approved', username: 'inv' });
+  });
+  if (toggle) problems.push(`گذار پیش‌نویس ← تأییدشده رد شد (${toggle})`);
+
+  // ب) کارکرد «pending» پیوندخورده به فیش زنده (داده نسخه‌های پیشین) در فیش تازه شمرده نمی‌شود
+  await orm.update(pieceworkLogs).set({ status: 'pending' }).where(eq(pieceworkLogs.payrollId, first.payroll.id));
+  const second = await generate(w1);
+  if (second.payroll) problems.push(`کارکرد فیش زنده دوباره در فیش ${second.payroll.payrollNumber} شمرده شد (${second.payroll.totalPieceworkAmount})`);
+  const owed = await personNet('3201', w1);
+  if (!fin(owed).equals(-1000000)) problems.push(`حقوق پرداختنی کارگر ${owed}، انتظار ۱٬۰۰۰٬۰۰۰− (یک بار)`);
+
+  // ج) کارکرد فیش حذف‌شده (پیوند باقی‌مانده از نسخه‌های پیشین) آزاد است و فقط یک بار دوباره پیوند می‌خورد
+  const w2 = await newWorker('کارگر آزمون فیش حذف‌شده');
+  await addLog(w2, task, '2026-04-06', 600000);
+  const orphaned = await generate(w2);
+  if (!orphaned.payroll) return [...problems, `صدور فیش آزمون ناموفق بود (${orphaned.error})`];
+  await orm.update(pieceworkPayrolls).set({ isDeleted: 1 }).where(eq(pieceworkPayrolls.id, orphaned.payroll.id));
+  const reissued = await generate(w2);
+  if (!reissued.payroll || !fin(reissued.payroll.totalPieceworkAmount).equals(600000)) {
+    problems.push(`کارکرد فیش حذف‌شده در فیش تازه شمرده نشد (${reissued.payroll?.totalPieceworkAmount ?? reissued.error})`);
+  } else {
+    const third = await generate(w2);
+    if (third.payroll) problems.push(`کارکرد دوباره‌پیوندخورده در فیش سوم هم شمرده شد (${third.payroll.totalPieceworkAmount})`);
+  }
+
+  // د) فیش پرداخت‌شده وضعیت دستی نمی‌گیرد و حذفش رد می‌شود
+  const w3 = await newWorker('کارگر آزمون فیش پرداخت‌شده');
+  await addLog(w3, task, '2026-04-07', 800000);
+  const paid = await generate(w3);
+  if (!paid.payroll) return [...problems, `صدور فیش آزمون ناموفق بود (${paid.error})`];
+  await PayrollPaymentService.registerPayrollPayment({ payrollId: paid.payroll.id, bankAccountId: await fundedBank(), paymentDate: '2026-05-01', username: 'inv' });
+  const back = await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(paid.payroll!.id, { status: 'approved', username: 'inv' }));
+  if (!back?.includes('پرداخت ثبت‌شده')) problems.push(`فیش پرداخت‌شده به «approved» برگشت (${back ?? 'پذیرفته شد'})`);
+  const removed = await refusalOf(() => PieceworkPayrollService.deletePayroll(paid.payroll!.id, { username: 'inv' }));
+  if (!removed) problems.push('فیش پرداخت‌شده حذف شد');
+  const settled = await personNet('3201', w3);
+  if (!fin(settled).isZero()) problems.push(`حقوق پرداختنی فیش پرداخت‌شده ${settled}، انتظار ۰`);
+  return problems;
+}
+
+// ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
+
+/** TD-281 (کاوش رگرسیون؛ رفع v8.0.28): برگرداندن فیش به «pending» کارکردهایش را در فیش بعدی دوباره می‌شمرد */
+export async function probePayrollStatusDoubleCountsLogs(): Promise<boolean> {
+  const worker = await newWorker('کارگر کاوش وضعیت');
+  await addLog(worker, await newTask(), '2026-04-05', 1000000);
+  const first = await generate(worker);
+  if (!first.payroll) return false;
+  if (await refusalOf(() => PieceworkPayrollService.updatePayrollStatus(first.payroll!.id, { status: 'pending', username: 'inv' }))) return false;
+  const second = await generate(worker);
+  return Boolean(second.payroll);
+}
+
+/** TD-282: کسر مساعده بیش از مانده مساعده پرسنل پذیرفته می‌شود؛ حساب مساعده او بستانکار (منفی) و خالص پرداختنی کم می‌شود */
+export async function probeAdvanceDeductionBeyondBalance(): Promise<boolean> {
+  const worker = await newWorker('کارگر کاوش مساعده');
+  await addLog(worker, await newTask(), '2026-04-05', 1000000);
+  const result = await refusalOf(() => generate(worker, { advanceDeduction: 300000 }));
+  if (result) return false;
+  return fin(await personNet('1301', worker)).isNegative();
+}
+
+/** TD-283: پرداخت فیش حقوق ابطال‌پذیر نیست — ابطال تراکنش خزانه آن رد می‌شود و فیش پرداخت‌شده هم حذف نمی‌شود */
+export async function probePayrollPaymentNotVoidable(): Promise<boolean> {
+  const worker = await newWorker('کارگر کاوش ابطال پرداخت');
+  await addLog(worker, await newTask(), '2026-04-05', 700000);
+  const payroll = await generate(worker);
+  if (!payroll.payroll) return false;
+  await PayrollPaymentService.registerPayrollPayment({ payrollId: payroll.payroll.id, bankAccountId: await fundedBank(), paymentDate: '2026-05-01', username: 'inv' });
+  const [payment] = await orm.select({ id: treasuryTransactions.id }).from(treasuryTransactions).where(eq(treasuryTransactions.payrollId, payroll.payroll.id));
+  if (!payment) return false;
+  const voidRefused = await refusalOf(() => TreasuryTransactionService.voidTreasuryTransaction(payment.id, { reason: 'کاوش ابطال پرداخت حقوق', username: 'inv' }));
+  const deleteRefused = await refusalOf(() => PieceworkPayrollService.deletePayroll(payroll.payroll!.id, { username: 'inv' }));
+  return Boolean(voidRefused) && Boolean(deleteRefused);
+}
+
+/** TD-284: حقوق ثابت هر فیش یک ماه کامل است — فیش دوماهه یک ماه و فیش نیم‌ماهه یک ماه کامل حقوق می‌گیرد */
+export async function probeFixedSalaryOneMonthPerPayroll(): Promise<boolean> {
+  const worker = await newWorker('کارمند کاوش حقوق ثابت', { salaryType: 'monthly_fixed', monthlySalary: 10000000 });
+  // ۱۴۰۵/۰۱/۰۱ تا ۱۴۰۵/۰۲/۳۱ (دو ماه شمسی)
+  const twoMonths = await PieceworkPayrollService.generatePayroll({ personnelId: worker, startDate: '2026-03-21', endDate: '2026-05-21', username: 'inv' });
+  return Boolean(twoMonths.payroll) && fin(twoMonths.payroll!.totalFixedAmount).equals(10000000);
+}

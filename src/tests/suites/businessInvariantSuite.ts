@@ -28,6 +28,7 @@ import {
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
+import { checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -265,6 +266,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.28: TD-281 ──
+    ['inv_td_281_payroll_status_keeps_lifecycle', 'v8.0.28: وضعیت فیش فقط پیش‌نویس/تأییدشده دستی تنظیم می‌شود، فیش پرداخت‌دار وضعیت دستی نمی‌گیرد و کارکرد فیش زنده دوباره شمرده نمی‌شود (TD-281)',
+      () => checkPayrollStatusKeepsLifecycle(), 'وضعیت غیرمجاز و برگرداندن فیش پرداخت‌شده رد شد؛ هر کارکرد فقط یک بار در فیش آمد'],
     // ── v8.0.27: TD-280 ──
     ['inv_td_280_cheque_reconciliation_matches_ledger', 'v8.0.27: آشتی دفتر چک با دفاتر در صدور، برگشت و عودت چک پرداختی و در دریافت، واگذاری، برگشت و عودت چک دریافتی بی‌مغایرت می‌ماند (TD-280)',
       () => checkChequeReconciliationMatchesLedger(), 'هیچ گذار چکی مغایرت آشتی دفتر چک را تغییر نداد؛ چک پرداختی برگشتی در «چک‌های پرداختی باز» شمرده نشد'],
@@ -394,6 +398,11 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeClearedChequeMakesBankDiscrepant()) observed.add('FOCUSED:cleared-cheque-bank-discrepant');
     if (await probeChequeClearedIntoBankWithoutLedger()) observed.add('FOCUSED:cheque-cleared-into-bank-without-ledger');
     if (await probeTreasuryChequeMethodWithoutCheque()) observed.add('FOCUSED:treasury-cheque-method-without-cheque');
+    // حوزه D — حقوق و کارمزدی (v8.0.28)
+    if (await probePayrollStatusDoubleCountsLogs()) observed.add('FOCUSED:payroll-status-double-counts-logs');
+    if (await probeAdvanceDeductionBeyondBalance()) observed.add('FOCUSED:advance-deduction-beyond-balance');
+    if (await probePayrollPaymentNotVoidable()) observed.add('FOCUSED:payroll-payment-not-voidable');
+    if (await probeFixedSalaryOneMonthPerPayroll()) observed.add('FOCUSED:fixed-salary-one-month-per-payroll');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));
