@@ -94,6 +94,7 @@ export class InventoryIntegrityService {
     notes?: string;
     createdBy?: string;
     user?: string;
+    allowBackdate?: boolean;
   }) {
     return InventoryStockRepairService.executeWarehouseTransfer(params);
   }

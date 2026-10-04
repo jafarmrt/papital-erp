@@ -8,6 +8,7 @@ import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { money } from '../../lib/money.js';
+import { assertStockMovementDate } from './stockMovementDate.js';
 
 export class InventoryStockRepairService {
   /**
@@ -22,6 +23,8 @@ export class InventoryStockRepairService {
     notes?: string;
     createdBy?: string;
     user?: string;
+    /** v8.0.4 (TD-257): کاربر مجوز «ثبت سند انبار با تاریخ گذشته» دارد (بررسی در مسیر) */
+    allowBackdate?: boolean;
   }): Promise<{
     success: boolean;
     transferDocId: number;
@@ -82,6 +85,18 @@ export class InventoryStockRepairService {
           `موجودی انبار مبداء (${params.fromLocation}) برای کالا کافی نیست. موجودی فعلی: ${currentFromQty}، درخواست: ${qty}`
         );
       }
+
+      // v8.0.4 (TD-257): تاریخ انتقال نه پیش از آخرین گردش کالا، مگر با مجوز و موجودی کافی انبار مبداء تا آن تاریخ و پس از آن
+      await assertStockMovementDate(txEngine, {
+        itemId: params.itemId,
+        itemLabel: `«${item.name}» (${item.code})`,
+        date: txDate,
+        inOut: 'out',
+        quantity: qty,
+        warehouseId: fromWh.id,
+        warehouseCode: fromWh.code,
+        allowBackdate: params.allowBackdate === true,
+      });
 
       await ItemWarehouseStockService.applyMovement(txEngine, { itemId: params.itemId, warehouse: fromWh, inOut: 'out', quantity: qty });
       await ItemWarehouseStockService.applyMovement(txEngine, { itemId: params.itemId, warehouse: toWh, inOut: 'in', quantity: qty });

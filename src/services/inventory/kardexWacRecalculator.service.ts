@@ -1,7 +1,7 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
-import { eq, and, asc, inArray } from 'drizzle-orm';
-import { fin, FinancialMath } from '../../lib/financialDecimal.js';
+import { eq, and, asc } from 'drizzle-orm';
+import { fin } from '../../lib/financialDecimal.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
@@ -12,6 +12,7 @@ import { logger } from '../../middleware/logger.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
+import { replayKardexWac } from './kardexReplay.js';
 import { money } from '../../lib/money.js';
 
 export interface KardexRebuildOptions {
@@ -58,42 +59,26 @@ export class KardexWacRecalculatorService {
         .from(warehouses);
       const resolveLocation = createLedgerLocationResolver(allWarehouses);
 
-      const itemTxs = await txEngine
+      // v8.0.4 (TD-258): همه ردیف‌های کاردکس کالا (حذف‌شده‌ها هم) به ترتیب ثبت؛ WAC و مانده کل با همان الگوریتم موتور
+      // زنده بازپخش می‌شوند (replayKardexWac). پیش‌تر به ترتیب تاریخ و بدون رسیدهای ابطال‌شده حساب می‌شد و ابزار تعمیر
+      // WAC سالم را تغییر می‌داد.
+      const allItemTxs = await txEngine
         .select()
         .from(transactions)
-        .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0)))
-        .orderBy(asc(transactions.date), asc(transactions.id));
+        .where(eq(transactions.itemId, itemId))
+        .orderBy(asc(transactions.id));
 
-      // P0-04 (F1 & INV-01): شناسایی تراکنش‌های معکوسی که ردیف مبدا آن‌ها حذف شده تا اثر مضاعف نگذارند
-      const reversalIds = itemTxs
-        .filter(t => t.reversalOfId !== null)
-        .map(t => t.reversalOfId as number);
+      // P0-04 (F1 & INV-01): ردیف حذف‌شده و ردیف معکوسِ ردیف حذف‌شده در مانده هیچ انباری نمی‌آیند
+      const deletedIds = new Set(allItemTxs.filter(t => t.isDeleted === 1).map(t => t.id));
+      const itemTxs = allItemTxs.filter(t => t.isDeleted === 0 && !(t.reversalOfId !== null && deletedIds.has(t.reversalOfId)));
 
-      let deletedOrigIds = new Set<number>();
-      if (reversalIds.length > 0) {
-        const deletedOrigs = await txEngine
-          .select({ id: transactions.id })
-          .from(transactions)
-          .where(and(inArray(transactions.id, reversalIds), eq(transactions.isDeleted, 1)));
-        deletedOrigIds = new Set(deletedOrigs.map(d => d.id));
-      }
-
-      let runningBal = fin(0);
-      let runningWac = fin(item.weightedAverageCost);
       const qtyByWarehouseId = new Map<number, number>();
       const unresolvedByLocation = new Map<string, number>();
 
       const policy = await NegativeStockPolicyService.getPolicy(txEngine);
 
       for (const tx of itemTxs) {
-        // اگر تراکنش، معکوس یک ردیف حذف‌شده باشد، نباید بازپخش شود
-        if (tx.reversalOfId && deletedOrigIds.has(tx.reversalOfId)) {
-          continue;
-        }
-
         const qty = fin(tx.quantity);
-        const unitPrice = fin(tx.unitPrice || 0);
-        const isReversal = tx.reversalOfId !== null || (Boolean(tx.documentRef) && tx.documentRef!.startsWith('REV-'));
         const isIn = tx.type === 'in' || tx.type === 'transfer_in';
         const isOut = tx.type === 'out' || tx.type === 'transfer_out';
         if (!isIn && !isOut) continue;
@@ -106,20 +91,13 @@ export class KardexWacRecalculatorService {
           const key = String(tx.location ?? '');
           unresolvedByLocation.set(key, fin(unresolvedByLocation.get(key) ?? 0).add(signedQty).round(4).toNumber());
         }
-
-        if (isIn) {
-          // P1-03 (H-04 & TD-135): محاسبه دقیق WAC بر مبنای متد مرکزی واحد و بدون واگرایی
-          if (!isReversal) {
-            runningWac = FinancialMath.calculateWAC(runningBal, runningWac, qty, unitPrice);
-          }
-          runningBal = runningBal.add(qty);
-        } else {
-          runningBal = runningBal.subtract(qty);
-          if (runningBal.lessThan(0) && policy === 'forbidden') {
-            throw new Error(`Negative stock detected during rebuild for item ${itemId} (${item.name}): balance=${runningBal.toNumber()}`);
-          }
-        }
       }
+
+      const replay = replayKardexWac(allItemTxs, item.weightedAverageCost);
+      if (replay.firstNegativeRowId !== null && policy === 'forbidden') {
+        throw new Error(`Negative stock detected during rebuild for item ${itemId} (${item.name}): balance=${replay.minimumBalance.toNumber()} (transaction #${replay.firstNegativeRowId})`);
+      }
+      let runningWac = replay.wac;
 
       // v7.0.45 (audit P2-1): پیش‌تر محل نامعلوم بی‌صدا از جدول موجودی انبارها کنار گذاشته می‌شد و دو محل هم‌انبار
       // (کد و نام) یکدیگر را بازنویسی می‌کردند. هم‌راستا با تصمیم TD-200، کالای دارای گردش در محل نامعلوم یا مانده

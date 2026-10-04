@@ -87,7 +87,7 @@ export class DocumentService {
    */
   static async createDocumentWithDetails(
     body: CreateDocumentInput,
-    actor?: { userId?: number }
+    actor?: { userId?: number; allowBackdate?: boolean }
   ): ReturnType<typeof DocumentCreationService.createDocumentWithDetails> {
     return DocumentCreationService.createDocumentWithDetails(body, actor);
   }
@@ -167,7 +167,7 @@ export class DocumentService {
     id: number,
     user?: string,
     externalTx?: DbExecutor,
-    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number }
+    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
   ): Promise<void> {
     return DocumentLifecycleService.finalizeDocument(id, user, externalTx, options);
   }

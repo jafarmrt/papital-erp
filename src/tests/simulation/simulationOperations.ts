@@ -76,8 +76,10 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
   const createDoc = async (input: {
     docType: string; inOut?: 'in' | 'out'; lines: DocumentLineItemInput[]; dayIndex: number;
     buyerName?: string; currency?: string; exchangeRate?: number; vatPercent?: number; returnOfDocumentId?: number;
+    /** v8.0.4 (TD-257): کاربر شبیه‌سازی‌شده مجوز «ثبت سند انبار با تاریخ گذشته» دارد */
+    allowBackdate?: boolean;
   }): Promise<number> => {
-    const id = await DocumentService.createDocument({
+    const { docId: id } = await DocumentService.createDocumentWithDetails({
       docType: input.docType,
       inOut: input.inOut,
       status: 'final',
@@ -89,12 +91,12 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
       vatPercent: input.vatPercent,
       returnOfDocumentId: input.returnOfDocumentId,
       items: input.lines,
-    });
+    }, { allowBackdate: input.allowBackdate === true });
     docs.push({ id, type: input.docType, dayIndex: input.dayIndex });
     return id;
   };
 
-  const purchase = async (dayIndex: number): Promise<OpOutcome> => {
+  const purchase = async (dayIndex: number, allowBackdate = false): Promise<OpOutcome> => {
     const lines: DocumentLineItemInput[] = [];
     const foreign = chance(0.15) && allowForeign;
     for (let n = between(1, 3); n > 0; n--) {
@@ -106,14 +108,14 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
       lines.push({ itemId: it.id, quantity, unitPrice, discount, location: pick(warehouses) });
     }
     const id = await createDoc({
-      docType: 'receipt', inOut: 'in', lines, dayIndex, buyerName: supplier.name,
+      docType: 'receipt', inOut: 'in', lines, dayIndex, buyerName: supplier.name, allowBackdate,
       currency: foreign ? 'USD' : 'IRR', exchangeRate: foreign ? USD_RATE : undefined,
     });
     const tags = [foreign ? 'usd' : '', lines.some(l => Number(l.discount) > 0) ? 'discount' : ''].filter(Boolean);
     return { detail: `receipt #${id} ${foreign ? 'USD' : 'IRR'} ${lines.map(l => `${l.itemId}x${l.quantity}@${l.unitPrice}-${l.discount}`).join(' ')}`, tags };
   };
 
-  const sale = async (dayIndex: number): Promise<OpOutcome> => {
+  const sale = async (dayIndex: number, allowBackdate = false): Promise<OpOutcome> => {
     const stock = await stockRows();
     if (stock.length === 0) return { detail: 'skip:no-stock', tags: [] };
     const lines: DocumentLineItemInput[] = [];
@@ -135,7 +137,7 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     if (lines.length === 0) return { detail: 'skip:no-line', tags: [] };
     const vat = chance(0.4);
     const id = await createDoc({
-      docType: 'invoice', inOut: 'out', lines, dayIndex, buyerName: customer.name,
+      docType: 'invoice', inOut: 'out', lines, dayIndex, buyerName: customer.name, allowBackdate,
       currency: foreign ? 'USD' : 'IRR', exchangeRate: foreign ? USD_RATE : undefined,
       vatPercent: vat ? 10 : undefined,
     });

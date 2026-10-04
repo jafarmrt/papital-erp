@@ -200,7 +200,7 @@ export class DocumentCreationService {
    */
   static async createDocumentWithDetails(
     body: CreateDocumentInput,
-    actor: { userId?: number } = {}
+    actor: { userId?: number; allowBackdate?: boolean } = {}
   ): Promise<{ docId: number; projectReservation: ProjectReservationRelease | null }> {
     const { 
       docType: rawDocType, type: rawType, refNumber, date, items: docLines, user, inOut,
@@ -433,7 +433,8 @@ export class DocumentCreationService {
               documentRef: String(finalRefNumber),
               user: user || 'system',
               notes: txNotes,
-              targetLoc
+              targetLoc,
+              allowBackdate: actor.allowBackdate === true,
             });
           }
         }
@@ -536,6 +537,8 @@ export class DocumentCreationService {
               documentRef: String(finalRefNumber || ''),
               user: user || '',
               targetLoc,
+              // v8.0.4 (TD-257): مجوز تاریخ گذشته فقط از actor (بررسی مجوز در مسیر)، هرگز از بدنه درخواست
+              allowBackdate: actor.allowBackdate === true,
             });
           }
 

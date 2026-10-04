@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorize, authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
@@ -281,7 +282,9 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
   // V6 Sub-phase 2.4 (TD-139): اعتبارسنجی سقف رزرو کالا اکنون به شکل متمرکز و اتمیک با قفل سطری درون DocumentService.createDocument انجام می‌گیرد.
 
   // v7.0.102 (TD-233): رزرو پروژه حواله خروج داخل همان تراکنش ثبت سند کم می‌شود (پیش‌تر بعد از ثبت، بیرون از تراکنش و با بلعیدن خطا)
-  const { docId: newDocId, projectReservation } = await DocumentService.createDocumentWithDetails(req.body, { userId: req.user?.id });
+  // v8.0.4 (TD-257): سند انبار با تاریخ پیش از آخرین گردش کالا فقط با مجوز «ثبت سند انبار با تاریخ گذشته»
+  const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
+  const { docId: newDocId, projectReservation } = await DocumentService.createDocumentWithDetails(req.body, { userId: req.user?.id, allowBackdate });
   const title = docTypeTitles[req.body.docType] || 'سند انبار';
 
   // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
@@ -451,6 +454,8 @@ router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_k
     vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
     vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
     exchangeRate: exchangeRate !== undefined && exchangeRate !== null ? Number(exchangeRate) : undefined,
+    // v8.0.4 (TD-257): نهایی‌سازی پیش‌نویسِ با تاریخ پیش از آخرین گردش کالا فقط با مجوز
+    allowBackdate: await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION),
   });
 
   // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود

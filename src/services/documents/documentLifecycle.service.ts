@@ -38,7 +38,7 @@ export class DocumentLifecycleService {
     id: number,
     user?: string,
     externalTx?: DbExecutor,
-    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number }
+    options?: { strict?: boolean; vatAmount?: number; vatPercent?: number; exchangeRate?: number; allowBackdate?: boolean }
   ): Promise<void> {
     const isStrict = options?.strict !== false;
 
@@ -192,6 +192,8 @@ export class DocumentLifecycleService {
               documentRef: doc.refNumber,
               user: user || doc.user || 'system',
               targetLoc,
+              // v8.0.4 (TD-257): پیش‌نویسی که تاریخش از آخرین گردش کالا عقب‌تر است فقط با مجوز نهایی می‌شود
+              allowBackdate: options?.allowBackdate === true,
             });
           }
 

@@ -15,12 +15,13 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'I3:void-out-at-current-wac': 'TD-254',
   // TD-255 در v8.0.3 رفع شد (آزمون inv_td_255_stock_count_voucher)
   'I3:zero-price-receipt-void': 'TD-256',
-  'I13:backdated-out-before-stock': 'TD-257',
-  'I13:rebuild-wac-diverges': 'TD-258',
+  // TD-257 و TD-258 در v8.0.4 رفع شدند (inv_td_257_backdated_stock_movement، inv_td_258_rebuild_matches_live_engine)
   'FOCUSED:purchase-voucher-ignores-account-mapping': 'TD-259',
   'FOCUSED:account-card-mixes-currencies': 'TD-260',
   'I3:foreign-rounding': 'TD-261',
   'FOCUSED:excel-wac-overwrite-revalues-stock': 'TD-264',
+  'I13:void-in-leaves-negative-history': 'TD-265',
+  'FOCUSED:running-kardex-after-void': 'TD-266',
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {
@@ -47,6 +48,7 @@ export function classifyFinding(f: SimulationFinding): string | null {
     case 'I6_void_trial_balance':
       return 'I6:void-draft-reversal-approved';
     case 'I13_kardex_rebuild_wac':
+      if (f.message.includes('ابطال')) return 'I13:void-in-leaves-negative-history';
       return f.message.includes('مانده منفی') ? 'I13:backdated-out-before-stock' : 'I13:rebuild-wac-diverges';
     case 'I14_return_within_sold':
       return 'I14:over-return';

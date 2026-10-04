@@ -10,6 +10,8 @@ import { ValidationError, NotFoundError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
+import { userHasRoleOrPermission } from '../middleware/authorize.js';
+import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
@@ -625,9 +627,11 @@ export class ProcurementService {
         }
       }
 
+      // v8.0.4 (TD-257): نهایی‌سازی رسید پیش‌نویس با تاریخ پیش از آخرین گردش کالا فقط با مجوز همین کاربر
+      const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
       for (const docId of docIdsToFinalize) {
         try {
-          await DocumentService.finalizeDocument(docId, user.username || 'سیستم تدارکات');
+          await DocumentService.finalizeDocument(docId, user.username || 'سیستم تدارکات', undefined, { allowBackdate });
         } catch (err) {
           logger.warn({ message: `[Procurement] Error finalizing linked document #${docId}: ${errorMessageOf(err)}` });
         }
@@ -1106,7 +1110,10 @@ export class ProcurementService {
       };
     }
 
-    await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات');
+    // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
+    await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', undefined, {
+      allowBackdate: await userHasRoleOrPermission(user, BACKDATE_PERMISSION),
+    });
 
     const matchCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
     const reqCode = matchCode ? matchCode[1].trim() : null;

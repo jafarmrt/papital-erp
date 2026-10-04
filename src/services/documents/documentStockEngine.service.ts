@@ -10,6 +10,7 @@ import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { KardexWacRecalculatorService } from '../inventory/kardexWacRecalculator.service.js';
+import { assertStockMovementDate } from '../inventory/stockMovementDate.js';
 import type { DbClient } from './types.js';
 
 export interface ApplyStockMovementParams {
@@ -25,6 +26,11 @@ export interface ApplyStockMovementParams {
   user: string;
   targetLoc: string;
   notes?: string;
+  /**
+   * v8.0.4 (TD-257): کاربر مجوز «ثبت سند انبار با تاریخ گذشته» (`warehouse.backdate`) دارد. فقط مسیرهایی که مجوز
+   * کاربر را بررسی کرده‌اند true می‌دهند؛ هرگز از بدنه درخواست خوانده نمی‌شود.
+   */
+  allowBackdate?: boolean;
 }
 
 export interface ApplyStockReversalParams {
@@ -46,7 +52,7 @@ export class DocumentStockEngine {
     tx: DbClient,
     params: ApplyStockMovementParams
   ): Promise<{ transactionId: number }> {
-    const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc, notes } = params;
+    const { itemId, documentId, inOut, quantity, price, date, documentType, documentRef, user, targetLoc, notes, allowBackdate } = params;
     const qty = Number(quantity);
     const priceNum = Number(price);
 
@@ -89,6 +95,18 @@ export class DocumentStockEngine {
     const oldTotalStock = before.total;
 
     const normalizedTxDate = normalizeDateToDbTimestamp(date);
+
+    // v8.0.4 (TD-257): تاریخ گردش نه پیش از آخرین گردش همین کالا، مگر با مجوز و موجودی کافی تا آن تاریخ و پس از آن
+    await assertStockMovementDate(tx, {
+      itemId,
+      itemLabel: `«${itemData.name}» (${itemData.code})`,
+      date: normalizedTxDate,
+      inOut,
+      quantity: qty,
+      warehouseId: whInfo.id,
+      warehouseCode: whInfo.code,
+      allowBackdate,
+    });
 
     const currentItemWac = fin(itemData.weightedAverageCost);
     // P1-02 (H-01, F2 & INV-01): ثبت بهای تمام‌شده تاریخی خروج در تراکنش انبار جهت حفظ انضباط دفاتر دوبل

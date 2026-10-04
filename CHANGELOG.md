@@ -18,6 +18,10 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.4 — Stock Movement Date Rule and Kardex Replay (TD-257, TD-258)
+- Product-owner decision: a stock movement (document, finalize, transfer) may not be dated before the item's last movement, except with the new permission `warehouse.backdate` (granted to no role by default); a permitted backdated outflow must keep the warehouse balance non-negative from that date on. Voided documents do not count, so void + reissue keeps the original date.
+- The Kardex rebuild replays WAC in registration order with the live engine's formulas (`replayKardexWac`). New findings TD-265 (void of a consumed receipt) and TD-266 (running Kardex report after a void) registered; TD-264 decision (option A) recorded.
+
 ### v8.0.3 — Stock-Count and Excel Adjustment Vouchers (TD-255, TD-262, TD-263)
 - Product-owner decision: stock-count shortages/surpluses and Excel stock adjustments post a draft voucher at Kardex cost against the new account «کسری و اضافات انبار» (7012, configurable mapping); a surplus of an item without WAC enters at cost 0; new Excel items with stock get the opening voucher; past counts get no voucher.
 - A stock count is recorded only as final (a draft count used to deduct stock twice on finalize). New finding TD-264 (Excel WAC overwrite) registered for decision.

@@ -109,7 +109,7 @@ export async function runSeed(
       description: 'دسترسی کامل و نامحدود به تمامی بخش‌ها و منوهای سامانه',
       permissions: [
         'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete',
-        'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile',
+        'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'warehouse.backdate', 'inventory.reconcile',
         'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
         'audit.view', 'audit.create', 'audit.apply',
         'customers.view', 'customers.manage',

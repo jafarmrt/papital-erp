@@ -186,15 +186,18 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
     day = Math.min(YEAR_DAYS - 1, day + (chance(0.6) ? 1 : 0) + (chance(0.1) ? 2 : 0));
     const op = pickOp();
     const backDay = Math.max(0, day - between(5, 40));
+    // v8.0.4 (TD-257): نیمی از عملیات‌های با تاریخ گذشته با مجوز «ثبت سند انبار با تاریخ گذشته» اجرا می‌شوند؛ بی‌مجوز
+    // رد می‌شوند و با مجوز فقط وقتی پذیرفته می‌شوند که موجودی تا آن تاریخ و پس از آن منفی نشود
+    const backdatePermitted = op.startsWith('backdated_') && chance(0.5);
     const before = await snapshot();
     let record: SimStepRecord;
     try {
       let outcome: OpOutcome;
       switch (op) {
         case 'purchase': outcome = await purchase(day); break;
-        case 'backdated_purchase': outcome = await purchase(backDay); break;
+        case 'backdated_purchase': outcome = await purchase(backDay, backdatePermitted); break;
         case 'sale': outcome = await sale(day); break;
-        case 'backdated_sale': outcome = await sale(backDay); break;
+        case 'backdated_sale': outcome = await sale(backDay, backdatePermitted); break;
         case 'sales_return': outcome = await salesReturn(day, false); break;
         case 'over_return': outcome = await salesReturn(day, true); break;
         case 'remittance': outcome = await issue(day, 'remittance'); break;
@@ -204,7 +207,7 @@ export async function runBusinessYearSimulation(options: SimulationOptions): Pro
         case 'void': outcome = await voidDoc(); break;
         case 'production_receipt': outcome = await productionReceipt(day); break;
       }
-      const tags = op.startsWith('backdated_') ? [...outcome.tags, 'backdated'] : outcome.tags;
+      const tags = op.startsWith('backdated_') ? [...outcome.tags, 'backdated', ...(backdatePermitted ? ['permitted'] : [])] : outcome.tags;
       record = { step, op, date: isoDay(day), outcome: outcome.detail.startsWith('skip:') ? 'skipped' : 'ok', detail: outcome.detail, tags };
       if (record.outcome === 'ok') {
         const now = await inventoryValueGap(scope);

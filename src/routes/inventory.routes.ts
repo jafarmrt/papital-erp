@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { InventoryIntegrityService } from '../services/inventory/inventoryIntegrity.service.js';
@@ -309,7 +310,9 @@ router.post(
     const userName = user?.name || user?.username || 'مدیر سیستم';
     const result = await InventoryIntegrityService.executeWarehouseTransfer({
       ...req.body,
-      user: userName
+      user: userName,
+      // v8.0.4 (TD-257): مجوز تاریخ گذشته فقط از نقش کاربر، هرگز از بدنه درخواست
+      allowBackdate: await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION),
     });
 
     await logActivity({

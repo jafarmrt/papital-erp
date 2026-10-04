@@ -9,45 +9,12 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { withTestMarker } from '../fixtures/testMarker.js';
 import { checkBusinessInvariants, type InvariantScope } from './businessInvariants.js';
+import { invariantProblems, itemState, netByAccount, receive, watermarks } from './scenarioHelpers.js';
 
 /**
  * v8.0.3 — سناریوهای سخت‌گیرانه اصلاح موجودی (TD-255، TD-262، TD-263) برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
-
-interface Watermarks { documentIdAfter: number; voucherIdAfter: number }
-
-async function watermarks(): Promise<Watermarks> {
-  const res = await pool.query<{ d: string; v: string }>(
-    `SELECT (SELECT COALESCE(MAX(id), 0) FROM documents)::text AS d, (SELECT COALESCE(MAX(id), 0) FROM journal_vouchers)::text AS v`);
-  return { documentIdAfter: Number(res.rows[0].d), voucherIdAfter: Number(res.rows[0].v) };
-}
-
-async function itemState(itemId: number): Promise<{ stock: number; wac: string }> {
-  const res = await pool.query<{ stock: string; wac: string }>(
-    `SELECT COALESCE(current_stock, 0)::text AS stock, COALESCE(weighted_average_cost, 0)::text AS wac FROM items WHERE id = $1`, [itemId]);
-  return { stock: Number(res.rows[0]?.stock ?? 0), wac: fin(res.rows[0]?.wac ?? 0).toString() };
-}
-
-/** گردش خالص (بدهکار − بستانکار) هر حساب در اسناد حسابداری داده‌شده */
-async function netByAccount(voucherIds: number[]): Promise<Map<number, string>> {
-  const res = await pool.query<{ account_id: number; net: string }>(
-    `SELECT account_id, SUM(debit - credit)::text AS net FROM journal_voucher_items
-      WHERE voucher_id = ANY($1::int[]) AND is_deleted = 0 GROUP BY account_id`, [voucherIds]);
-  return new Map(res.rows.map(r => [r.account_id, fin(r.net).toString()]));
-}
-
-async function invariantProblems(scope: InvariantScope, when: string): Promise<string[]> {
-  const violations = await checkBusinessInvariants(scope);
-  return violations.map(v => `${when}: ${v.invariant} ${v.key} — ${v.message} (انتظار ${v.expected ?? '-'}، واقعی ${v.actual ?? '-'})`);
-}
-
-async function receive(itemId: number, quantity: number, unitPrice: number, wh: string, date: string): Promise<void> {
-  await DocumentService.createDocument({
-    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون اصلاح موجودی',
-    items: [{ itemId, quantity, unitPrice, location: wh }],
-  });
-}
 
 async function mappedAccounts(): Promise<{ diff: number; raw: number; finished: number; diffCode: string }> {
   const diff = await AccountMappingService.getInventoryCountDifferenceAccount();

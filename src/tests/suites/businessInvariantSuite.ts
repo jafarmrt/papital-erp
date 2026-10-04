@@ -16,6 +16,7 @@ import { createTestItem } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, SimulationResult } from '../simulation/businessYearSimulator.js';
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
+import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
  * v8.0.1 — سوئیت ناوردایی‌های منطق کاری (V8_MASTER_ROADMAP.md؛ گزارش docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).
@@ -244,7 +245,7 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     push(results, 'inv_td_252_closing_refuses_draft_vouchers', name252, t252, false, getErrorMessage(err));
   }
 
-  // ── v8.0.3: آزمون‌های سخت‌گیرانه رفع TD-255، TD-262 و TD-263 ─────────────
+  // ── v8.0.3 و v8.0.4: آزمون‌های سخت‌گیرانه رفع TD-255، TD-262، TD-263، TD-257 و TD-258 ─────
   const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
     ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
       checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
@@ -252,6 +253,11 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.4: TD-257 و TD-258 ──
+    ['inv_td_257_backdated_stock_movement', 'v8.0.4: گردش انبار با تاریخ پیش از آخرین گردش کالا بی‌مجوز رد و با مجوز فقط با موجودی کافی تا آن تاریخ پذیرفته می‌شود (TD-257)',
+      checkBackdatedStockMovement, 'فاکتور، نهایی‌سازی و انتقال با تاریخ گذشته بی‌مجوز رد شد؛ با مجوز فقط با موجودی کافی تا آن تاریخ؛ هم‌روز و ثبت دوباره پس از ابطال آزاد'],
+    ['inv_td_258_rebuild_matches_live_engine', 'v8.0.4: بازسازی کاردکس WAC همخوان با موتور زنده را تغییر نمی‌دهد (ابطال رسید فروخته‌شده، رسید با تاریخ گذشته) (TD-258)',
+      checkRebuildMatchesLiveEngine, 'بازسازی کاردکس WAC و موجودی را دست‌نخورده گذاشت و ارزش انبار با دفتر کل یکی ماند'],
   ];
   for (const [id, name, check, okInfo] of v803) {
     const started = Date.now();
@@ -296,6 +302,8 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probePurchaseIgnoresMapping(wh)) observed.add('FOCUSED:purchase-voucher-ignores-account-mapping');
     if (await probeAccountCardMixesCurrencies(wh)) observed.add('FOCUSED:account-card-mixes-currencies');
     if (await probeExcelWacOverwrite(wh)) observed.add('FOCUSED:excel-wac-overwrite-revalues-stock');
+    if (await probeVoidConsumedReceipt(wh)) observed.add('I13:void-in-leaves-negative-history');
+    if (await probeRunningKardexAfterVoid(wh)) observed.add('FOCUSED:running-kardex-after-void');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

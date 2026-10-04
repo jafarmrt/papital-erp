@@ -1,8 +1,9 @@
-import { pool } from '../../db/drizzle.js';
-import { fin, FinancialDecimal, FinancialMath } from '../../lib/financialDecimal.js';
+import { fin, FinancialDecimal } from '../../lib/financialDecimal.js';
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
 import { AccountMappingService } from '../../services/accounting/accountMapping.service.js';
 import { createLedgerLocationResolver } from '../../services/inventory/warehouseResolver.js';
+import { activeLedgerRows, isInRow, isOutRow, QTY_TOLERANCE, rows } from './ledgerRows.js';
+import { checkKardexRebuildWac } from './kardexRebuildInvariant.js';
 
 /**
  * v8.0.1 — ناوردایی‌های قابل اجرای منطق کاری (V8_MASTER_ROADMAP.md بخش ۴).
@@ -48,12 +49,6 @@ export interface InvariantScope {
 /** انواع سندی که هنگام ثبت نهایی سند حسابداری می‌گیرند (انبارگردانی از v8.0.3، TD-255) */
 export const VOUCHER_DOCUMENT_TYPES = ['invoice', 'proforma', 'receipt', 'production_receipt', 'purchase', 'remittance', 'waste', 'return', 'audit'];
 
-const QTY_TOLERANCE = 0.0001;
-
-async function rows<T extends Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
-  const res = await pool.query<T>(text, params);
-  return res.rows;
-}
 
 /** I1: هر سند حسابداری فعال در دامنه تراز است */
 async function checkVouchersBalanced(scope: InvariantScope): Promise<InvariantViolation[]> {
@@ -75,35 +70,6 @@ async function checkVouchersBalanced(scope: InvariantScope): Promise<InvariantVi
     actual: v.credit,
   }));
 }
-
-interface KardexRow extends Record<string, unknown> {
-  id: number;
-  item_id: number;
-  type: string;
-  quantity: string;
-  unit_price: string;
-  location: string | null;
-  reversal_of_id: number | null;
-  document_ref: string | null;
-}
-
-/** ردیف‌های فعال کاردکس، بدون ردیف‌های معکوسِ ردیف‌های حذف‌شده (همان قاعده AGENTS.md §12) */
-async function activeLedgerRows(itemIds: number[], order: 'id' | 'date'): Promise<KardexRow[]> {
-  if (itemIds.length === 0) return [];
-  const orderBy = order === 'id' ? 't.id' : 't.date, t.id';
-  return rows<KardexRow>(
-    `SELECT t.id, t.item_id, t.type, t.quantity::text AS quantity, COALESCE(t.unit_price, 0)::text AS unit_price,
-            t.location, t.reversal_of_id, t.document_ref
-       FROM transactions t
-      WHERE t.item_id = ANY($1::int[]) AND t.is_deleted = 0
-        AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.id = t.reversal_of_id AND o.is_deleted = 1)
-      ORDER BY ${orderBy}`,
-    [itemIds]
-  );
-}
-
-const isInRow = (t: KardexRow) => t.type === 'in' || t.type === 'transfer_in';
-const isOutRow = (t: KardexRow) => t.type === 'out' || t.type === 'transfer_out';
 
 /** I2: موجودی انبارها = موجودی کل کالا = مانده کاردکس (کل و هر انبار) */
 async function checkThreeWayStock(scope: InvariantScope): Promise<InvariantViolation[]> {
@@ -332,63 +298,6 @@ async function checkInvoiceReceivable(scope: InvariantScope): Promise<InvariantV
         message: `بدهکاری مشتری فاکتور ${inv.ref_number} با مبلغ قابل پرداخت آن یکی نیست`,
         expected: payable.toString(),
         actual: debit.toString(),
-      });
-    }
-  }
-  return violations;
-}
-
-/**
- * I13: بازسازی کاردکس (KardexWacRecalculatorService.rebuildItemFromLedger، به ترتیب تاریخ) باید همان WAC و موجودی
- * فعلی را بدهد؛ وگرنه ابزار تعمیر، داده سالم را تغییر می‌دهد. این بررسی همان الگوریتم را بدون نوشتن اجرا می‌کند.
- */
-async function checkKardexRebuildWac(scope: InvariantScope): Promise<InvariantViolation[]> {
-  if (scope.itemIds.length === 0) return [];
-  const live = await rows<{ id: number; wac: string; current_stock: string }>(
-    `SELECT id, COALESCE(weighted_average_cost, 0)::text AS wac, COALESCE(current_stock, 0)::text AS current_stock
-       FROM items WHERE id = ANY($1::int[])`,
-    [scope.itemIds]
-  );
-  const ledger = await activeLedgerRows(scope.itemIds, 'date');
-  const byItem = new Map<number, KardexRow[]>();
-  for (const t of ledger) {
-    const list = byItem.get(t.item_id) ?? [];
-    list.push(t);
-    byItem.set(t.item_id, list);
-  }
-  const violations: InvariantViolation[] = [];
-  for (const it of live) {
-    let bal = fin(0);
-    let wac = fin(it.wac);
-    let wentNegative = false;
-    for (const t of byItem.get(it.id) ?? []) {
-      const qty = fin(t.quantity);
-      const isReversal = t.reversal_of_id !== null || String(t.document_ref ?? '').startsWith('REV-');
-      if (isInRow(t)) {
-        if (!isReversal) wac = FinancialMath.calculateWAC(bal, wac, qty, fin(t.unit_price));
-        bal = bal.add(qty);
-      } else if (isOutRow(t)) {
-        bal = bal.subtract(qty);
-        if (bal.lessThan(0)) wentNegative = true;
-      }
-    }
-    if (wac.lessThanOrEqual(0)) wac = fin(it.wac);
-    const liveWac = fin(it.wac);
-    if (wentNegative) {
-      violations.push({
-        invariant: 'I13_kardex_rebuild_wac',
-        key: `item:${it.id}`,
-        message: `کاردکس کالا ${it.id} به ترتیب تاریخ مانده منفی دارد و بازسازی آن رد می‌شود`,
-        expected: 'مانده نامنفی در ترتیب تاریخ',
-        actual: 'مانده منفی',
-      });
-    } else if (fin(it.current_stock).isPositive() && liveWac.subtract(wac).abs().greaterThan(fin(0.01))) {
-      violations.push({
-        invariant: 'I13_kardex_rebuild_wac',
-        key: `item:${it.id}`,
-        message: `بازسازی کاردکس WAC کالا ${it.id} را تغییر می‌دهد`,
-        expected: liveWac.toString(),
-        actual: wac.round(4).toString(),
       });
     }
   }
