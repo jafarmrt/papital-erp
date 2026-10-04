@@ -146,6 +146,39 @@ export async function checkForeignTreasuryUsesRate(wh: string): Promise<string[]
   return problems;
 }
 
+/**
+ * TD-272: برگشت چک پرداختی سند می‌گیرد — بدهکار اسناد پرداختنی، بستانکار تأمین‌کننده؛ پس از برگشت، اسناد پرداختنی بسته
+ * و بدهی تأمین‌کننده دوباره باز است. عودت و حذف چک برگشتی دفتر را درست نگه می‌دارند.
+ */
+export async function checkPaidChequeBounceRestoresSupplier(): Promise<string[]> {
+  const problems: string[] = [];
+  const bank = await bankWithLedgerAccount('بانک آزمون چک پرداختی');
+  const expect = async (label: string, mark: number, expected: Record<string, number>) => {
+    for (const [code, amount] of Object.entries(expected)) {
+      const actual = await irrNet(code, mark);
+      if (!fin(actual).equals(amount)) problems.push(`${label}: گردش ${code} ${actual}، انتظار ${amount}`);
+    }
+  };
+
+  // صدور چک ۵۰۰٬۰۰۰ (بدهکار تأمین‌کننده، بستانکار ۳۱۰۱) و برگشت آن ← هر دو حساب صفر
+  let mark = await voucherWatermark();
+  const bounced = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 500000, partyName: 'تامین‌کننده آزمون برگشت', bankAccountId: bank.id });
+  await expect('پس از صدور چک پرداختی', mark, { '3101': -500000, '3001': 500000 });
+  await ChequeLifecycleService.updateChequeStatus(bounced.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
+  await expect('پس از برگشت چک پرداختی', mark, { '3101': 0, '3001': 0 });
+  await ChequeLifecycleService.updateChequeStatus(bounced.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
+  await expect('پس از عودت چک پرداختی برگشتی', mark, { '3101': 0, '3001': 0 });
+
+  // حذف چک پرداختی برگشتی هر دو سند را باطل می‌کند و دفتر صفر می‌ماند
+  mark = await voucherWatermark();
+  const removed = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 200000, partyName: 'تامین‌کننده آزمون حذف', bankAccountId: bank.id });
+  await ChequeLifecycleService.updateChequeStatus(removed.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
+  await ChequeLifecycleService.deleteCheque(removed.id, { username: 'inv' });
+  await expect('پس از حذف چک پرداختی برگشتی', mark, { '3101': 0, '3001': 0 });
+  if (await activeVoucherCount(removed.id) !== 0) problems.push('حذف چک پرداختی برگشتی سندهایش را باطل نکرد');
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */

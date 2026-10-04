@@ -547,6 +547,44 @@ export class ChequeLifecycleService {
               }
             ]
           }, txEngine);
+        } else if (existing.type === 'paid') {
+          // v8.0.21 (TD-272): برگشت چک پرداختی — بدهی ما به تأمین‌کننده برمی‌گردد: بدهکار اسناد پرداختنی، بستانکار
+          // حساب تأمین‌کننده. پیش‌تر سندی صادر نمی‌شد؛ ۳۱۰۱ بستانکار می‌ماند و تأمین‌کننده پرداخت‌شده دیده می‌شد.
+          const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
+          const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
+          if (!chequePayableAcc || !supplierAcc) {
+            throw new ValidationError('کدینگ لازم برای ثبت برگشت چک پرداختی یافت نشد (اسناد پرداختنی و حساب‌های پرداختنی تجاری).');
+          }
+          await VoucherService.createJournalVoucher({
+            date: voucherIsoDate,
+            voucherType: 'adjustment',
+            description: `برگشت چک پرداختی شماره ${existing.chequeNumber} در وجه ${existing.partyName}`,
+            referenceModule: 'cheque',
+            referenceNumber: existing.chequeNumber,
+            sourceChequeId: existing.id,
+            currency: existing.currency || 'IRR',
+            userId: data.userId,
+            username: data.username,
+            items: [
+              {
+                accountId: chequePayableAcc.id,
+                detailedType: 'other',
+                detailedName: `چک ${existing.chequeNumber}`,
+                debit: amount,
+                credit: 0,
+                description: `بستن اسناد پرداختنی بابت برگشت چک ${existing.chequeNumber}`
+              },
+              {
+                accountId: supplierAcc.id,
+                detailedType: 'supplier',
+                detailedId: existing.partyId,
+                detailedName: existing.partyName,
+                debit: 0,
+                credit: amount,
+                description: `بازگشت بدهی به ${existing.partyName} بابت برگشت چک ${existing.chequeNumber}`
+              }
+            ]
+          }, txEngine);
         }
       } else if (data.status === 'spent' && existing.type === 'received') {
         const tradePayablesAcc = await AccountMappingService.getTradePayablesAccount(txEngine);

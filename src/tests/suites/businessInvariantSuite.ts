@@ -24,7 +24,7 @@ import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherRepo
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import {
-  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
@@ -265,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.21: TD-272 ──
+    ['inv_td_272_paid_cheque_bounce_restores_supplier', 'v8.0.21: برگشت چک پرداختی سند می‌گیرد (بدهکار اسناد پرداختنی، بستانکار تأمین‌کننده)؛ عودت و حذف آن دفتر را درست نگه می‌دارند (TD-272)',
+      () => checkPaidChequeBounceRestoresSupplier(), 'برگشت، عودت و حذف چک پرداختی اسناد پرداختنی و حساب تأمین‌کننده را درست گذاشتند'],
     // ── v8.0.20: TD-274 ──
     ['inv_td_274_foreign_treasury_uses_rate', 'v8.0.20: دریافت، پرداخت و انتقال ارزی خزانه با نرخ تسعیر (صریح یا نرخ فاکتور تسویه‌شده) در سند ثبت می‌شوند و بدون نرخ رد می‌شوند (TD-274)',
       checkForeignTreasuryUsesRate, 'دریافت با نرخ صریح، تسویه فاکتور با نرخ فاکتور، رد بدون نرخ و انتقال ارزی درست به ریال ثبت شدند'],

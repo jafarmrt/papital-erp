@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.21 — Bounced Paid Cheque Restores the Supplier (TD-272)
+- A bounced paid cheque now posts a voucher: debit cheques payable, credit the supplier, so the debt to the supplier is open again.
+
 ### v8.0.20 — Foreign Treasury Transactions Use Their Rate (TD-274)
 - Foreign-currency receipts, payments and transfers post at their exchange rate (explicit, the settled invoice's rate, or the setting) and are refused without one; the treasury form asks for the rate of a foreign account.
 
