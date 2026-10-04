@@ -1,6 +1,6 @@
 import { orm } from '../../../db/drizzle.js';
 import { bankAccounts, cheques, journalVouchers } from '../../../db/schema.js';
-import { eq, desc, asc, and, or, like, gte, lte, sql } from 'drizzle-orm';
+import { eq, ne, desc, asc, and, or, like, gte, lte, isNull, sql } from 'drizzle-orm';
 import { ChartOfAccountsService } from '../chartOfAccounts.service.js';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
@@ -179,26 +179,50 @@ export class ChequeLifecycleService {
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
-        let voucherId: number | null = null;
-        if (data.createVoucher !== false) {
-          // V1.7.0: کدینگ از مپینگ قابل‌تنظیم (تنظیمات حسابداری) — نه هاردکد
-          const chequeReceivableAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
-          const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
-          const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-          const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
+      // v8.0.19 (TD-271): ابتدا چک ثبت می‌شود تا سند ثبت آن با source_cheque_id به همین چک پیوند بخورد
+      const [row] = await txEngine.insert(cheques).values({
+        type: data.type,
+        chequeNumber: data.chequeNumber.trim(),
+        sayadNumber: data.sayadNumber?.trim() || '',
+        bankName: data.bankName.trim(),
+        branch: data.branch?.trim() || '',
+        issueDate,
+        dueDate,
+        amount: money(amount),
+        currency: data.currency || 'IRR',
+        partyType: data.partyType || 'customer',
+        partyId: data.partyId || null,
+        partyName: data.partyName.trim(),
+        status: (data.type === 'received' ? 'received' : 'in_treasury'),
+        drawerName: data.drawerName?.trim() || '',
+        payeeName: data.payeeName?.trim() || '',
+        bankAccountId: data.bankAccountId || null,
+        voucherId: null,
+        description: data.description?.trim() || '',
+        statusHistory: initialHistory,
+        attachments: [],
+        createdById: data.userId || null,
+      }).returning();
 
-        const voucherIssueDate = issueDate;
+      if (data.createVoucher !== false) {
+        // V1.7.0: کدینگ از مپینگ قابل‌تنظیم (تنظیمات حسابداری) — نه هاردکد
+        const chequeReceivableAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
+        const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
+        const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
+        const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
+        let voucherId: number;
 
         if (data.type === 'received') {
           if (!chequeReceivableAcc || !customerAcc) {
             throw new ValidationError('کدینگ لازم برای ثبت چک دریافتی یافت نشد (حساب‌های 1101 اسناد دریافتنی و 1201 حساب‌های دریافتنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
-            date: voucherIssueDate,
+            date: issueDate,
             voucherType: 'treasury',
             description: `دریافت چک شماره ${data.chequeNumber} از ${data.partyName} (سررسید: ${dueJalali})`,
             referenceModule: 'cheque',
             referenceNumber: data.chequeNumber,
+            sourceChequeId: row.id,
             currency: data.currency || 'IRR',
             userId: data.userId,
             username: data.username,
@@ -230,11 +254,12 @@ export class ChequeLifecycleService {
             throw new ValidationError('کدینگ لازم برای ثبت چک پرداختی یافت نشد (حساب‌های 3101 اسناد پرداختنی و 3001 حساب‌های پرداختنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
-            date: voucherIssueDate,
+            date: issueDate,
             voucherType: 'treasury',
             description: `صدور چک شماره ${data.chequeNumber} در وجه ${data.partyName} (سررسید: ${dueJalali})`,
             referenceModule: 'cheque',
             referenceNumber: data.chequeNumber,
+            sourceChequeId: row.id,
             currency: data.currency || 'IRR',
             userId: data.userId,
             username: data.username,
@@ -262,31 +287,10 @@ export class ChequeLifecycleService {
           }, txEngine);
           voucherId = v.id;
         }
+        await txEngine.update(cheques).set({ voucherId }).where(eq(cheques.id, row.id));
+        row.voucherId = voucherId;
       }
 
-      const [row] = await txEngine.insert(cheques).values({
-        type: data.type,
-        chequeNumber: data.chequeNumber.trim(),
-        sayadNumber: data.sayadNumber?.trim() || '',
-        bankName: data.bankName.trim(),
-        branch: data.branch?.trim() || '',
-        issueDate,
-        dueDate,
-        amount: money(amount),
-        currency: data.currency || 'IRR',
-        partyType: data.partyType || 'customer',
-        partyId: data.partyId || null,
-        partyName: data.partyName.trim(),
-        status: (data.type === 'received' ? 'received' : 'in_treasury'),
-        drawerName: data.drawerName?.trim() || '',
-        payeeName: data.payeeName?.trim() || '',
-        bankAccountId: data.bankAccountId || null,
-        voucherId,
-        description: data.description?.trim() || '',
-        statusHistory: initialHistory,
-        attachments: [],
-        createdById: data.userId || null,
-      }).returning();
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       row.attachments = await AttachmentStorageService.attachToNewRecord(txEngine, 'cheque', row.id, data.attachments, data.username);
       return row;
@@ -405,6 +409,7 @@ export class ChequeLifecycleService {
               description: `وصول چک شماره ${existing.chequeNumber} از ${existing.partyName} و واریز به ${bank.title}`,
               referenceModule: 'cheque',
               referenceNumber: existing.chequeNumber,
+              sourceChequeId: existing.id,
               currency: existing.currency || 'IRR',
               userId: data.userId,
               username: data.username,
@@ -440,6 +445,7 @@ export class ChequeLifecycleService {
               description: `پاس شدن چک پرداختی شماره ${existing.chequeNumber} در وجه ${existing.partyName} از حساب ${bank.title}`,
               referenceModule: 'cheque',
               referenceNumber: existing.chequeNumber,
+              sourceChequeId: existing.id,
               currency: existing.currency || 'IRR',
               userId: data.userId,
               username: data.username,
@@ -475,6 +481,7 @@ export class ChequeLifecycleService {
             description: `ارسال چک شماره ${existing.chequeNumber} به بانک جهت وصول (در جریان وصول)`,
             referenceModule: 'cheque',
             referenceNumber: existing.chequeNumber,
+            sourceChequeId: existing.id,
             currency: existing.currency || 'IRR',
             userId: data.userId,
             username: data.username,
@@ -514,6 +521,7 @@ export class ChequeLifecycleService {
             description: `واخواست و برگشت چک شماره ${existing.chequeNumber} از ${existing.partyName}`,
             referenceModule: 'cheque',
             referenceNumber: existing.chequeNumber,
+            sourceChequeId: existing.id,
             currency: existing.currency || 'IRR',
             userId: data.userId,
             username: data.username,
@@ -553,6 +561,7 @@ export class ChequeLifecycleService {
             description: `واگذاری و خرج چک شماره ${existing.chequeNumber} از ${existing.partyName} به ${transferee}`,
             referenceModule: 'cheque',
             referenceNumber: existing.chequeNumber,
+            sourceChequeId: existing.id,
             currency: existing.currency || 'IRR',
             userId: data.userId,
             username: data.username,
@@ -618,6 +627,34 @@ export class ChequeLifecycleService {
       }
 
       // P2-02 (AUD-ACC): شناسایی و ابطال اتمیک کلیه اسناد چرخه عمر چک (سند اولیه، در جریان وصول، واخواست و...)
+      // v8.0.19 (TD-271): اسناد چک با پیوند صریح source_cheque_id (مهاجرت 0047) یافته می‌شوند. پیش‌تر با شماره چک
+      // یافته می‌شدند و شماره چک یکتا نیست؛ حذف یک چک اسناد چک دیگری با همان شماره را هم باطل می‌کرد. سند قدیمی
+      // بی‌پیوند (پیش از v8.0.19) فقط وقتی سند این چک شمرده می‌شود که هیچ چک دیگری همین شماره را نداشته باشد.
+      const chequeNumber = String(existing.chequeNumber).trim();
+      const linkedToCheque = or(
+        eq(journalVouchers.sourceChequeId, id),
+        existing.voucherId ? eq(journalVouchers.id, existing.voucherId) : sql`1 = 0`,
+      );
+      const legacyByNumber = and(
+        isNull(journalVouchers.sourceChequeId),
+        eq(journalVouchers.referenceModule, 'cheque'),
+        sql`${journalVouchers.referenceNumber} = ${chequeNumber}::text`,
+      );
+      const [sameNumber] = await txEngine.select({ n: sql<number>`count(*)::int` }).from(cheques)
+        .where(and(sql`btrim(${cheques.chequeNumber}) = ${chequeNumber}::text`, ne(cheques.id, id)));
+      const numberShared = Number(sameNumber?.n ?? 0) > 0;
+      if (numberShared) {
+        const ambiguous = await txEngine.select({ voucherNumber: journalVouchers.voucherNumber }).from(journalVouchers)
+          .where(and(eq(journalVouchers.isDeleted, 0), legacyByNumber,
+            existing.voucherId ? ne(journalVouchers.id, existing.voucherId) : sql`1 = 1`));
+        if (ambiguous.length > 0) {
+          throw new BusinessLogicError(
+            `چک دیگری هم شماره «${chequeNumber}» دارد و ${ambiguous.length} سند حسابداری قدیمی این شماره ` +
+            `(${ambiguous.map(v => v.voucherNumber).join('، ')}) به چک مشخصی پیوند ندارد؛ ابطال خودکار ممکن است سند چک دیگری را ` +
+            'باطل کند. این اسناد را دستی بررسی و ابطال کنید.'
+          );
+        }
+      }
       const activeChequeVouchers = await txEngine.select({
         id: journalVouchers.id,
         voucherNumber: journalVouchers.voucherNumber,
@@ -625,13 +662,7 @@ export class ChequeLifecycleService {
       }).from(journalVouchers)
         .where(and(
           eq(journalVouchers.isDeleted, 0),
-          or(
-            existing.voucherId ? eq(journalVouchers.id, existing.voucherId) : sql`1 = 0`,
-            and(
-              eq(journalVouchers.referenceModule, 'cheque'),
-              sql`${journalVouchers.referenceNumber} = ${String(existing.chequeNumber)}::text`
-            )
-          )
+          numberShared ? linkedToCheque : or(linkedToCheque, legacyByNumber),
         ))
         .for('update');
 

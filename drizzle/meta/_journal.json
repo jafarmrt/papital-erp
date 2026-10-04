@@ -330,6 +330,13 @@
       "when": 1792263600000,
       "tag": "0046_donated_goods_income_account",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792350000000,
+      "tag": "0047_journal_voucher_source_cheque",
+      "breakpoints": true
     }
   ]
 }

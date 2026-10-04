@@ -243,6 +243,8 @@ export class VoucherService {
     sourceDocumentId?: number | null;
     /** TD-242: فقط برای سند صادرشده توسط VoucherSync برای یک فیش حقوقی */
     sourcePayrollId?: number | null;
+    /** v8.0.19 (TD-271): چکی که این سند در چرخه عمر آن صادر می‌شود */
+    sourceChequeId?: number | null;
     currency?: string;
     attachments?: unknown[];
     userId?: number;
@@ -305,6 +307,7 @@ export class VoucherService {
         referenceNumber: data.referenceNumber?.trim() || '',
         sourceDocumentId: data.sourceDocumentId ?? null,
         sourcePayrollId: data.sourcePayrollId ?? null,
+        sourceChequeId: data.sourceChequeId ?? null,
         currency: data.currency || 'IRR',
         attachments: [],
         createdById: data.userId || null,

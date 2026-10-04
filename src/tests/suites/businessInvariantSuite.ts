@@ -23,6 +23,11 @@ import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingS
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
+import {
+  checkChequeDeleteKeepsOtherCheques, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest, probeSpentChequeCannotBounce,
+  probeTreasuryChequeMethodWithoutCheque,
+} from '../invariants/treasuryScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -260,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.19: TD-271 (حوزه C) ──
+    ['inv_td_271_cheque_delete_keeps_other_cheques', 'v8.0.19: حذف چک فقط اسناد همان چک را باطل می‌کند، نه اسناد چک دیگری با همان شماره؛ سند قدیمی بی‌پیوند شماره مشترک حذف را رد می‌کند (TD-271)',
+      () => checkChequeDeleteKeepsOtherCheques(), 'اسناد چک دیگر با همان شماره ماندند؛ دفتر کل درست ماند؛ حذف با سند قدیمی مبهم رد شد'],
     // ── v8.0.18: TD-261 ──
     ['inv_td_261_foreign_cost_rows_exact_in_irr', 'v8.0.18: ردیف‌های بهای تمام‌شده و موجودی سند ارزی با نرخ همان ردیف دقیقاً برابر بهای ریالی کاردکس‌اند و سند ارزی تراز می‌ماند (TD-261)',
       checkForeignCostRowsExactInIrr, 'فروش، برگشت، کالای رایگان و خرید ترکیبی دلاری دقیقاً برابر کاردکس به ریال ثبت شدند'],
@@ -354,6 +362,15 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeVoidConsumedReceipt(wh)) observed.add('I13:void-in-leaves-negative-history');
     if (await probeRunningKardexAfterVoid(wh)) observed.add('FOCUSED:running-kardex-after-void');
     if (await probeZeroPricePurchaseWithoutVoucher(wh)) observed.add('FOCUSED:zero-price-purchase-without-voucher');
+    // حوزه C (v8.0.19): خزانه و چک صیادی
+    if (await probePaidChequeBounceWithoutVoucher()) observed.add('FOCUSED:paid-cheque-bounce-without-voucher');
+    if (await probeReturnedChequeStaysInProtest()) observed.add('FOCUSED:returned-cheque-stays-in-protest');
+    if (await probeForeignTreasuryAtRateOne()) observed.add('FOCUSED:foreign-treasury-at-rate-one');
+    if (await probeForeignChequeAtRateOne()) observed.add('FOCUSED:foreign-cheque-at-rate-one');
+    if (await probeClearedChequeMakesBankDiscrepant()) observed.add('FOCUSED:cleared-cheque-bank-discrepant');
+    if (await probeChequeClearedIntoBankWithoutLedger()) observed.add('FOCUSED:cheque-cleared-into-bank-without-ledger');
+    if (await probeTreasuryChequeMethodWithoutCheque()) observed.add('FOCUSED:treasury-cheque-method-without-cheque');
+    if (await probeSpentChequeCannotBounce()) observed.add('FOCUSED:spent-cheque-cannot-bounce');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

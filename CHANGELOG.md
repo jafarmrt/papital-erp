@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.19 — Treasury and Cheque Evaluation; Cheque Delete by Link (TD-271)
+- Second evaluation part (treasury and Sayad cheques): nine findings recorded; deleting a cheque no longer voids the vouchers of another cheque with the same number.
+
 ### v8.0.18 — Exact Rial Cost Rows in Foreign Vouchers (TD-261)
 - Cost-of-sales, inventory and donated-goods rows of a foreign-currency voucher keep the document currency with their own rate, so their rial value equals the Kardex exactly; all findings of the first v8 evaluation part are closed.
 

@@ -2,7 +2,7 @@ import { pgTable, text, serial, integer, jsonb, timestamp, index, uniqueIndex } 
 import { sql } from 'drizzle-orm';
 import type { FinancialAttachment } from '../../types';
 import { users } from './auth';
-import { baseRelations } from './baseRelations';
+import { baseRelations, registerColumnRef } from './baseRelations';
 import { moneyNumeric } from './moneyColumn';
 
 export const accounts = pgTable('accounts', {
@@ -47,6 +47,9 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // سند معکوس/اصلاحی فیش reference_id = شناسه «سند حسابداری مبدأ» دارد، پس سند یک فیش فقط از این ستون یافته شود.
   // ایندکس یکتای جزئی uq_jv_source_payroll_active (مهاجرت 0035).
   sourcePayrollId: integer('source_payroll_id').references(baseRelations.pieceworkPayrollsId, { onDelete: 'set null' }),
+  // v8.0.19 (TD-271): چکی که این سند حسابداری در چرخه عمر آن صادر شده است (ثبت، در جریان وصول، وصول، برگشت، خرج).
+  // پیش‌تر اسناد چک فقط با شماره چک (reference_number) پیدا می‌شدند و شماره چک یکتا نیست. مهاجرت 0047.
+  sourceChequeId: integer('source_cheque_id').references(baseRelations.chequesId, { onDelete: 'set null' }),
   currency: text('currency').default('IRR'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
@@ -63,6 +66,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
     .on(table.sourcePayrollId)
     .where(sql`${table.isDeleted} = 0 AND ${table.sourcePayrollId} IS NOT NULL`),
   idx_jv_reference: index('idx_jv_reference').on(table.referenceModule, table.referenceId),
+  // v8.0.19 (TD-271): مهاجرت 0047
+  idx_jv_source_cheque: index('idx_jv_source_cheque').on(table.sourceChequeId).where(sql`${table.sourceChequeId} IS NOT NULL`),
   // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
   // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),
@@ -184,6 +189,8 @@ export const cheques = pgTable('cheques', {
   idx_chq_sayad: index('idx_chq_sayad').on(table.sayadNumber),
   idx_chq_deleted: index('idx_chq_deleted').on(table.isDeleted),
 }));
+registerColumnRef('cheques.id', () => cheques.id);
+
 
 export const treasuryTransactions = pgTable('treasury_transactions', {
   id: serial('id').primaryKey(),
