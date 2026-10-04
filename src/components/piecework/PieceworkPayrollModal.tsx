@@ -65,6 +65,8 @@ export function PieceworkPayrollModal({
   const curLbl = formatCurrencyLabel(appCurrency);
 
   const [advanceBalance, setAdvanceBalance] = useState<{ outstandingAdvance: number; totalAdvances: number; totalDeducted: number } | null>(null);
+  // v8.0.29 (TD-282، تصمیم مالک محصول): کسر مساعده بیش از مانده مساعده پذیرفته نمی‌شود (سرور هم رد می‌کند)
+  const advanceExceedsBalance = advanceBalance !== null && (advanceDeduction || 0) > advanceBalance.outstandingAdvance;
 
   useEffect(() => {
     if (!payrollPersonnelId) {
@@ -226,10 +228,10 @@ export function PieceworkPayrollModal({
                 <span className="font-mono font-black">{formatPersianPrice(advanceBalance.outstandingAdvance)}</span>
               </div>
             )}
-            {advanceBalance && advanceBalance.outstandingAdvance > 0 && (advanceDeduction || 0) > advanceBalance.outstandingAdvance && (
-              <p className="text-[10px] text-amber-700 mt-1 font-bold flex items-center gap-1">
+            {advanceExceedsBalance && (
+              <p className="text-[10px] text-rose-700 mt-1 font-bold flex items-center gap-1">
                 <AlertCircle size={12} />
-                هشدار: مبلغ واردشده از کل مانده بدهی مساعده پرسنل بیشتر است.
+                کسر مساعده از مانده مساعده تسویه‌نشده پرسنل بیشتر است؛ فیش با این مبلغ صادر نمی‌شود.
               </p>
             )}
             {(advanceDeduction || 0) > 0 && (
@@ -262,7 +264,7 @@ export function PieceworkPayrollModal({
             <button
               type="submit"
               // V10-4.4: برای پرسنل حقوق ثابت/ترکیبی، خالی بودن لیست کارکرد مانع صدور نیست
-              disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || isSaving}
+              disabled={(payrollPreviewLogs.length === 0 && !allowNoLogs) || advanceExceedsBalance || isSaving}
               className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
             >
               {isSaving ? (

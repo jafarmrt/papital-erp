@@ -30,7 +30,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-279 با تصمیم مالک محصول (گزینه ب، ۱۲ مهر ۱۴۰۵) بی‌تغییر بسته شد؛ برگشت چک خرج‌شده با سند دستی
   // TD-280 در v8.0.27 یافته و رفع شد (inv_td_280_cheque_reconciliation_matches_ledger)
   // حوزه D — حقوق و کارمزدی (v8.0.28؛ TD-281 در همان نسخه رفع شد: inv_td_281_payroll_status_keeps_lifecycle)
-  'FOCUSED:advance-deduction-beyond-balance': 'TD-282',
+  // TD-282 در v8.0.29 رفع شد (inv_td_282_advance_deduction_within_balance)
   'FOCUSED:payroll-payment-not-voidable': 'TD-283',
   'FOCUSED:fixed-salary-one-month-per-payroll': 'TD-284',
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)

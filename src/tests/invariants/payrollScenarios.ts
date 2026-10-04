@@ -47,6 +47,11 @@ async function personNet(code: string, personnelId: number): Promise<string> {
   return fin(res.rows[0]?.n ?? 0).toString();
 }
 
+async function payrollCount(personnelId: number): Promise<number> {
+  const res = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM piecework_payrolls WHERE personnel_id = $1 AND is_deleted = 0', [personnelId]);
+  return Number(res.rows[0]?.n ?? 0);
+}
+
 /** حساب بانکی با سرفصل اختصاصی زیر ۱۰۰۳ و مانده ۵٬۰۰۰٬۰۰۰ برای پرداخت حقوق */
 async function fundedBank(): Promise<number> {
   const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
@@ -131,6 +136,40 @@ export async function checkPayrollStatusKeepsLifecycle(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-282 (تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل رد می‌شود — نه فیش، نه سند و نه
+ * پیوند کارکرد؛ کسر تا سقف مانده (مساعده پرداخت‌شده از خزانه) پذیرفته و حساب مساعده پرسنل صفر می‌شود.
+ */
+export async function checkAdvanceDeductionWithinBalance(): Promise<string[]> {
+  const problems: string[] = [];
+  const task = await newTask();
+  const worker = await newWorker('کارگر آزمون مساعده');
+  await addLog(worker, task, '2026-04-05', 1000000);
+
+  const refused = await generate(worker, { advanceDeduction: 300000 });
+  if (refused.status !== 400 || !refused.error?.includes('مانده مساعده')) problems.push(`کسر مساعده بی‌مساعده رد نشد (${refused.status} ${refused.error ?? ''})`);
+  if (await payrollCount(worker) !== 0) problems.push('برای کسر مساعده ردشده فیش ساخته شد');
+  if (!fin(await personNet('1301', worker)).isZero()) problems.push('کسر مساعده ردشده حساب مساعده را بستانکار کرد');
+
+  // مساعده ۲۰۰٬۰۰۰ از خزانه؛ کسر همان مبلغ پذیرفته می‌شود و حساب مساعده صفر می‌ماند
+  const workerName = (await orm.select({ fullName: personnel.fullName }).from(personnel).where(eq(personnel.id, worker)))[0]?.fullName ?? 'کارگر';
+  await TreasuryTransactionService.createTreasuryTransaction({
+    type: 'payment', method: 'bank_transfer', amount: 200000, bankAccountId: await fundedBank(), partyType: 'personnel', partyId: worker, partyName: workerName,
+    purpose: 'advance', date: '2026-04-02', username: 'inv',
+  });
+  const over = await generate(worker, { advanceDeduction: 200001 });
+  if (over.status !== 400) problems.push(`کسر مساعده یک ریال بیش از مانده رد نشد (${over.status})`);
+  const accepted = await generate(worker, { advanceDeduction: 200000 });
+  if (!accepted.payroll) {
+    problems.push(`کسر مساعده تا سقف مانده رد شد (${accepted.error})`);
+  } else if (!fin(accepted.payroll.netPayable).equals(800000)) {
+    problems.push(`خالص فیش ${accepted.payroll.netPayable}، انتظار ۸۰۰٬۰۰۰`);
+  }
+  const advance = await personNet('1301', worker);
+  if (!fin(advance).isZero()) problems.push(`مانده مساعده پرسنل پس از کسر ${advance}، انتظار ۰`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-281 (کاوش رگرسیون؛ رفع v8.0.28): برگرداندن فیش به «pending» کارکردهایش را در فیش بعدی دوباره می‌شمرد */
@@ -144,7 +183,10 @@ export async function probePayrollStatusDoubleCountsLogs(): Promise<boolean> {
   return Boolean(second.payroll);
 }
 
-/** TD-282: کسر مساعده بیش از مانده مساعده پرسنل پذیرفته می‌شود؛ حساب مساعده او بستانکار (منفی) و خالص پرداختنی کم می‌شود */
+/**
+ * TD-282 (کاوش رگرسیون؛ رفع v8.0.29): کسر مساعده بیش از مانده مساعده پرسنل پذیرفته می‌شد؛ حساب مساعده او بستانکار (منفی) و
+ * خالص پرداختنی کم می‌شد.
+ */
 export async function probeAdvanceDeductionBeyondBalance(): Promise<boolean> {
   const worker = await newWorker('کارگر کاوش مساعده');
   await addLog(worker, await newTask(), '2026-04-05', 1000000);

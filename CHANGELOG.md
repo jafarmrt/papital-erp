@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.29 — Advance Deduction Limited to the Outstanding Advance (TD-282)
+- A payroll whose advance deduction exceeds the employee's outstanding advance is refused; the payroll form disables issuing it.
+
 ### v8.0.28 — Payroll Status Limited to Draft/Approved; Area D Findings (TD-281)
 - Payroll status accepts only draft and approved by hand and a paid payroll keeps its status; three payroll findings await product-owner decisions.
 

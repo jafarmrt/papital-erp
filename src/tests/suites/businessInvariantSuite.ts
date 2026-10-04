@@ -28,7 +28,7 @@ import {
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
-import { checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
+import { checkAdvanceDeductionWithinBalance, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -266,6 +266,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.29: TD-282 ──
+    ['inv_td_282_advance_deduction_within_balance', 'v8.0.29: کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل رد می‌شود؛ کسر تا سقف مانده پذیرفته می‌شود (TD-282، گزینه الف)',
+      () => checkAdvanceDeductionWithinBalance(), 'کسر بی‌مساعده و بیش از مانده رد شد و اثری نگذاشت؛ کسر تا سقف مانده حساب مساعده را صفر کرد'],
     // ── v8.0.28: TD-281 ──
     ['inv_td_281_payroll_status_keeps_lifecycle', 'v8.0.28: وضعیت فیش فقط پیش‌نویس/تأییدشده دستی تنظیم می‌شود، فیش پرداخت‌دار وضعیت دستی نمی‌گیرد و کارکرد فیش زنده دوباره شمرده نمی‌شود (TD-281)',
       () => checkPayrollStatusKeepsLifecycle(), 'وضعیت غیرمجاز و برگرداندن فیش پرداخت‌شده رد شد؛ هر کارکرد فقط یک بار در فیش آمد'],

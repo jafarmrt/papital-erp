@@ -6,6 +6,7 @@ import { isoToJalaliDate, toStorageDate } from '../../utils.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { VoucherService } from '../accounting/voucher.service.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
+import { PayrollPaymentService } from '../accounting/payrollPayment.service.js';
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
@@ -137,6 +138,18 @@ export class PieceworkPayrollService {
       const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
       const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
       const advanceDeductionFin = fin(Math.max(0, Number(reqAdvanceDeduction) || 0));
+
+      // v8.0.29 (TD-282، تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل (از دفتر کل) رد
+      // می‌شود. پیش‌تر پذیرفته می‌شد؛ حساب مساعده پرسنل بستانکار (منفی) و خالص پرداختنی او بی‌دلیل کم می‌شد.
+      if (advanceDeductionFin.isPositive()) {
+        const { outstandingAdvance } = await PayrollPaymentService.getPersonnelAdvanceBalance(pId, tx);
+        if (advanceDeductionFin.greaterThan(outstandingAdvance)) {
+          return {
+            status: 400,
+            error: `کسر مساعده (${advanceDeductionFin.toNumber().toLocaleString('fa-IR')} ریال) از مانده مساعده تسویه‌نشده ${pInfo.fullName} (${fin(outstandingAdvance).toNumber().toLocaleString('fa-IR')} ریال) بیشتر است؛ حداکثر همان مانده کسر می‌شود.`,
+          };
+        }
+      }
 
       const netFin = pieceworkTotalFin
         .add(fixedPortionFin)
