@@ -22,6 +22,7 @@ import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financi
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
+import { foreignCostRow, irrToForeignAmount, rowExchangeRate } from './foreignCostRow.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
@@ -314,22 +315,14 @@ export class VoucherSyncService {
       }
     }
 
-    // Apply currency conversion (TD-143): Convert IRR WAC to invoice foreign currency
-    let fgCostConv = fgCost;
-    let rmCostConv = rmCost;
-    if (docCurrency !== 'IRR' && exchangeRate.isPositive()) {
-      if (exchangeRate.greaterThanOrEqual(1)) {
-        fgCostConv = fgCost.divide(exchangeRate);
-        rmCostConv = rmCost.divide(exchangeRate);
-      } else {
-        fgCostConv = fgCost.multiply(exchangeRate);
-        rmCostConv = rmCost.multiply(exchangeRate);
-      }
-    }
-
-    const fgCostNum = fgCostConv.round(4);
-    const rmCostNum = rmCostConv.round(4);
-    const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4);
+    // TD-143 / v8.0.18 (TD-261): بهای ریالی کاردکس در فاکتور ارزی به ارز سند، با نرخ همان ردیف تا معادل ریالی ردیف دقیقاً
+    // همان بهای کاردکس باشد (foreignCostRow)؛ بهای تمام‌شده جمع دو ردیف موجودی است تا سند ارزی تراز بماند
+    const fgRow = foreignCostRow(fgCost, exchangeRate);
+    const rmRow = foreignCostRow(rmCost, exchangeRate);
+    const fgCostNum = fgRow.amount;
+    const rmCostNum = rmRow.amount;
+    const totalCogsNum = fgCostNum.add(rmCostNum).round(4);
+    const cogsRate = rowExchangeRate(fgCost.add(rmCost), totalCogsNum, exchangeRate);
 
     if (totalCogsNum.isPositive()) {
       if (!cogsAcc || (fgCostNum.isPositive() && !fgAcc) || (rmCostNum.isPositive() && !rmAcc)) {
@@ -345,8 +338,8 @@ export class VoucherSyncService {
           debit: totalCogsNum,
           credit: 0,
           currency: doc.currency || 'IRR',
-          exchangeRate: exchangeRate,
-          description: `بهای تمام‌شده فاکتور فروش شماره ${doc.refNumber}${docCurrency !== 'IRR' ? ` (تسعیر با نرخ ${exchangeRate})` : ''}`
+          exchangeRate: cogsRate,
+          description: `بهای تمام‌شده فاکتور فروش شماره ${doc.refNumber}${docCurrency !== 'IRR' ? ` (بهای ریالی کاردکس با نرخ ردیف ${cogsRate})` : ''}`
         });
 
         // ۵-ب) بستانکار: کاهش موجودی کالای تولیدشده (۱۴۰۳)
@@ -358,7 +351,7 @@ export class VoucherSyncService {
             debit: 0,
             credit: fgCostNum,
             currency: doc.currency || 'IRR',
-            exchangeRate: exchangeRate,
+            exchangeRate: fgRow.exchangeRate,
             description: `کاهش موجودی کالای ساخته‌شده بابت فاکتور فروش شماره ${doc.refNumber}`
           });
         }
@@ -372,7 +365,7 @@ export class VoucherSyncService {
             debit: 0,
             credit: rmCostNum,
             currency: doc.currency || 'IRR',
-            exchangeRate: exchangeRate,
+            exchangeRate: rmRow.exchangeRate,
             description: `کاهش موجودی مواد اولیه بابت فاکتور فروش شماره ${doc.refNumber}`
           });
         }
@@ -468,22 +461,17 @@ export class VoucherSyncService {
       return null;
     }
 
-    // V9-1.3: جمع مبالغ با FinancialDecimal
-    let rawMaterialsAmount = fin(0);
-    let finishedGoodsAmount = fin(0);
+    // V9-1.3: جمع مبالغ با FinancialDecimal. هر ردیف موجودی دو بخش دارد: بخش بها‌دار به ارز سند (ردیف‌های قیمت‌دار) و
+    // بخش ریالی کاردکس (رسید تولید با قیمت صفر، کالای رایگان) — v8.0.18 (TD-261)
     const isProductionDoc = doc.type === 'production_receipt';
-    const addToInventory = (it: typeof itemsList[number], amount: FinancialDecimal) => {
-      if (it.itemType === 'product' || (it.itemType !== 'raw_material' && isProductionDoc)) {
-        finishedGoodsAmount = finishedGoodsAmount.add(amount);
-      } else {
-        rawMaterialsAmount = rawMaterialsAmount.add(amount);
-      }
-    };
+    const inventoryParts = { raw: { doc: fin(0), irr: fin(0) }, finished: { doc: fin(0), irr: fin(0) } };
+    const partOf = (it: typeof itemsList[number]) =>
+      (it.itemType === 'product' || (it.itemType !== 'raw_material' && isProductionDoc) ? inventoryParts.finished : inventoryParts.raw);
+    const addPriced = (it: typeof itemsList[number], amount: FinancialDecimal) => { const part = partOf(it); part.doc = part.doc.add(amount); };
+    const addKardexIrr = (it: typeof itemsList[number], irr: FinancialDecimal) => { const part = partOf(it); part.irr = part.irr.add(irr); };
 
-    // V6.0.4 (TD-143) / v7.0.63 (TD-198): نرخ تسعیر فاکتور خرید ارزی از ستون ساختاریافته سند (ریالی = ۱)؛ بهای کاردکس
-    // ریالی است و برای سند ارزی به ارز سند برده می‌شود
+    // V6.0.4 (TD-143) / v7.0.63 (TD-198): نرخ تسعیر فاکتور خرید ارزی از ستون ساختاریافته سند (ریالی = ۱)
     const exchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
-    const irrToDocCurrency = (amount: FinancialDecimal) => (exchangeRate.equals(1) ? amount : amount.divide(exchangeRate, 4));
     const lineNetOf = (it: typeof itemsList[number], unitPrice: DecimalValue) => {
       const net = fin(it.quantity).multiply(unitPrice).subtract(it.discount);
       return net.isNegative() ? fin(0) : net;
@@ -504,37 +492,50 @@ export class VoucherSyncService {
       if (isProductionDoc && kardexCost) {
         if (!kardexCostedItems.has(itemId)) {
           kardexCostedItems.add(itemId);
-          addToInventory(it, irrToDocCurrency(kardexCost));
+          addKardexIrr(it, kardexCost);
         }
         continue;
       }
       // P1-03 (M-06): در رسیدهای خرید قیمت واقعی فاکتور ثبت می‌شود؛ فال‌بک به WAC فقط مختص رسیدهای تولید است
       const p = isProductionDoc && !fin(it.unitPrice).isPositive() ? fin(it.weightedAverageCost) : fin(it.unitPrice);
       const lineNet = lineNetOf(it, p);
-      addToInventory(it, lineNet);
+      addPriced(it, lineNet);
       if (kardexCost) pricedNetByItem.set(itemId, (pricedNetByItem.get(itemId) ?? fin(0)).add(lineNet));
     }
 
     // v8.0.17 (TD-268، تصمیم مالک محصول — گزینه ب): کالای رایگان رسید و خرید به WAC وارد انبار شده است؛ همان ارزش
     // (بهای کاردکس کالا منهای ردیف‌های بها‌دار همان کالا) بدهکار موجودی و بستانکار «درآمد کالای اهدایی» می‌شود.
     // پیش‌تر سندی برایش صادر نمی‌شد و ارزش انبار از دفتر کل بیشتر می‌شد.
-    let freeGoodsAmount = fin(0);
+    let freeGoodsIrr = fin(0);
     if (!isProductionDoc) {
       for (const [itemId, kardexCost] of kardexCostByItem) {
-        const free = irrToDocCurrency(kardexCost).subtract(pricedNetByItem.get(itemId) ?? fin(0));
+        const free = kardexCost.subtract((pricedNetByItem.get(itemId) ?? fin(0)).multiply(exchangeRate));
         const line = itemsList.find(l => Number(l.itemId) === itemId);
         if (!line || !free.isPositive()) continue;
-        addToInventory(line, free);
-        freeGoodsAmount = freeGoodsAmount.add(free);
+        addKardexIrr(line, free);
+        freeGoodsIrr = freeGoodsIrr.add(free);
       }
     }
-    const freeGoodsAmountNum = freeGoodsAmount.round(4);
 
-    const rawMaterialsAmountNum = rawMaterialsAmount.round(4);
-    const finishedGoodsAmountNum = finishedGoodsAmount.round(4);
+    // v8.0.18 (TD-261، تصمیم مالک محصول — گزینه ب): بخش ریالی کاردکس به ارز سند (۴ رقم اعشار) و نرخ هر ردیف = ارزش
+    // ریالی کل ردیف ÷ مبلغ ارزی آن، تا معادل ریالی ردیف دقیقاً همان ارزش کاردکس باشد؛ در سند ریالی نرخ همان ۱ است
+    const kardexForeign = {
+      raw: irrToForeignAmount(inventoryParts.raw.irr, exchangeRate),
+      finished: irrToForeignAmount(inventoryParts.finished.irr, exchangeRate),
+    };
+    const rawMaterialsAmountNum = inventoryParts.raw.doc.add(kardexForeign.raw).round(4);
+    const finishedGoodsAmountNum = inventoryParts.finished.doc.add(kardexForeign.finished).round(4);
+    const rawMaterialsIrr = inventoryParts.raw.doc.multiply(exchangeRate).add(inventoryParts.raw.irr);
+    const finishedGoodsIrr = inventoryParts.finished.doc.multiply(exchangeRate).add(inventoryParts.finished.irr);
+    const rawMaterialsRate = rowExchangeRate(rawMaterialsIrr, rawMaterialsAmountNum, exchangeRate);
+    const finishedGoodsRate = rowExchangeRate(finishedGoodsIrr, finishedGoodsAmountNum, exchangeRate);
+    // کالای رایگان (رسید و خرید): مبلغ ارزی همان بخش کاردکس دو ردیف موجودی، تا سند ارزی تراز بماند
+    const freeGoodsAmountNum = isProductionDoc ? fin(0) : kardexForeign.raw.add(kardexForeign.finished).round(4);
+    const freeGoodsRate = rowExchangeRate(freeGoodsIrr, freeGoodsAmountNum, exchangeRate);
 
     const totalGross = fin(rawMaterialsAmountNum).add(finishedGoodsAmountNum).round(4);
     if (!totalGross.isPositive()) return null;
+    const totalGrossRate = rowExchangeRate(rawMaterialsIrr.add(finishedGoodsIrr), totalGross, exchangeRate);
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
     // v8.0.14 (TD-259): سرفصل‌ها از نگاشت حساب‌ها، مانند سند فروش و حواله؛ پیش‌تر کد ثابت ۱۴۰۱/۱۴۰۲/۱۴۰۳/۳۰۰۱ بود و با
@@ -593,7 +594,7 @@ export class VoucherSyncService {
         debit: rawMaterialsAmountNum,
         credit: 0,
         currency: doc.currency || 'IRR',
-        exchangeRate,
+        exchangeRate: rawMaterialsRate,
         description: `ورود مواد اولیه و ملزومات بابت ${isProductionDoc ? 'رسید تولید' : 'رسید/فاکتور خرید'} شماره ${doc.refNumber}`
       });
     }
@@ -607,7 +608,7 @@ export class VoucherSyncService {
         debit: finishedGoodsAmountNum,
         credit: 0,
         currency: doc.currency || 'IRR',
-        exchangeRate,
+        exchangeRate: finishedGoodsRate,
         description: `ورود محصولات ساخته‌شده بابت ${isProductionDoc ? 'رسید تولید' : 'رسید ورود کالا'} شماره ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
       });
     }
@@ -623,7 +624,7 @@ export class VoucherSyncService {
           debit: 0,
           credit: totalGross,
           currency: doc.currency || 'IRR',
-          exchangeRate,
+          exchangeRate: totalGrossRate,
           description: `انتقال بهای تمام شده از کالای در جریان ساخت به انبار بابت رسید تولید شماره ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
         });
       }
@@ -656,7 +657,7 @@ export class VoucherSyncService {
             debit: 0,
             credit: freeGoodsAmountNum,
             currency: doc.currency || 'IRR',
-            exchangeRate,
+            exchangeRate: freeGoodsRate,
             description: `کالای اهدایی (بدون بها) به بهای میانگین موزون بابت رسید/فاکتور خرید شماره ${doc.refNumber}`
           });
         } else if (isStrict) {
@@ -997,25 +998,16 @@ export class VoucherSyncService {
       }
 
       // TD-143, TD-145 & C-04: تسعیر ارزی بهای تمام‌شده مرجوعی در صورت ارزی بودن سند
-      let fgCostConv = fgReturnCost;
-      let rmCostConv = rmReturnCost;
-      const docCurrency = (doc.currency || 'IRR').toUpperCase();
+      // v8.0.18 (TD-261): بهای ریالی کاردکس با نرخ همان ردیف (foreignCostRow)، تا معادل ریالی ردیف دقیقاً همان بهای کاردکس باشد
       const docExchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
-
-      if (docCurrency !== 'IRR' && docExchangeRate.isPositive()) {
-        if (docExchangeRate.greaterThanOrEqual(1)) {
-          fgCostConv = fgReturnCost.divide(docExchangeRate);
-          rmCostConv = rmReturnCost.divide(docExchangeRate);
-        } else {
-          fgCostConv = fgReturnCost.multiply(docExchangeRate);
-          rmCostConv = rmReturnCost.multiply(docExchangeRate);
-        }
-      }
+      const fgReturnRow = foreignCostRow(fgReturnCost, docExchangeRate);
+      const rmReturnRow = foreignCostRow(rmReturnCost, docExchangeRate);
 
       const totalReturnAmountNum = totalReturnAmount.round(4);
-      const fgCostNum = fgCostConv.round(4);
-      const rmCostNum = rmCostConv.round(4);
-      const totalCogsNum = fin(fgCostNum).add(rmCostNum).round(4);
+      const fgCostNum = fgReturnRow.amount;
+      const rmCostNum = rmReturnRow.amount;
+      const totalCogsNum = fgCostNum.add(rmCostNum).round(4);
+      const returnCogsRate = rowExchangeRate(fgReturnCost.add(rmReturnCost), totalCogsNum, docExchangeRate);
 
       if (!salesReturnAcc || !customerAcc) {
         if (isStrict) {
@@ -1077,7 +1069,7 @@ export class VoucherSyncService {
               debit: fgCostNum,
               credit: 0,
               currency: doc.currency || 'IRR',
-              exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
+              exchangeRate: fgReturnRow.exchangeRate,
               description: `افزایش موجودی کالای ساخته‌شده بابت برگشت از فروش سند شماره ${doc.refNumber}`
             });
           }
@@ -1091,7 +1083,7 @@ export class VoucherSyncService {
               debit: rmCostNum,
               credit: 0,
               currency: doc.currency || 'IRR',
-              exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
+              exchangeRate: rmReturnRow.exchangeRate,
               description: `افزایش موجودی مواد اولیه بابت برگشت از فروش سند شماره ${doc.refNumber}`
             });
           }
@@ -1104,7 +1096,7 @@ export class VoucherSyncService {
             debit: 0,
             credit: totalCogsNum,
             currency: doc.currency || 'IRR',
-            exchangeRate: docExchangeRate.isPositive() ? docExchangeRate : undefined,
+            exchangeRate: returnCogsRate,
             description: `تعدیل بهای تمام‌شده کالای فروش‌رفته بابت مرجوعی فروش شماره ${doc.refNumber}`
           });
         }

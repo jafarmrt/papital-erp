@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.18 — Exact Rial Cost Rows in Foreign Vouchers (TD-261)
+- Cost-of-sales, inventory and donated-goods rows of a foreign-currency voucher keep the document currency with their own rate, so their rial value equals the Kardex exactly; all findings of the first v8 evaluation part are closed.
+
 ### v8.0.17 — Free Goods Post to Donated-Goods Income (TD-268)
 - A free line in a receipt or purchase (price 0 or a full discount) enters stock at the current WAC and its voucher credits the new account «درآمد کالای اهدایی» (5204); the supplier is credited only with priced lines.
 

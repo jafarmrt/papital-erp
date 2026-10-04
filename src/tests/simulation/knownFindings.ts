@@ -18,7 +18,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-257 و TD-258 در v8.0.4 رفع شدند (inv_td_257_backdated_stock_movement، inv_td_258_rebuild_matches_live_engine)
   // TD-259 در v8.0.14 رفع شد (inv_td_259_vouchers_follow_account_mapping)
   // TD-260 در v8.0.16 رفع شد (inv_td_260_reports_convert_foreign_rows)
-  'I3:foreign-rounding': 'TD-261',
+  // TD-261 در v8.0.18 رفع شد (inv_td_261_foreign_cost_rows_exact_in_irr)
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)

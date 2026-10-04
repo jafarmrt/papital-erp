@@ -22,6 +22,7 @@ import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementS
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
+import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -259,6 +260,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.18: TD-261 ──
+    ['inv_td_261_foreign_cost_rows_exact_in_irr', 'v8.0.18: ردیف‌های بهای تمام‌شده و موجودی سند ارزی با نرخ همان ردیف دقیقاً برابر بهای ریالی کاردکس‌اند و سند ارزی تراز می‌ماند (TD-261)',
+      checkForeignCostRowsExactInIrr, 'فروش، برگشت، کالای رایگان و خرید ترکیبی دلاری دقیقاً برابر کاردکس به ریال ثبت شدند'],
     // ── v8.0.17: TD-268 ──
     ['inv_td_268_free_goods_voucher_at_wac', 'v8.0.17: کالای رایگان رسید و خرید به میانگین موزون وارد انبار و بستانکار «درآمد کالای اهدایی» می‌شود؛ تأمین‌کننده فقط ردیف‌های بها‌دار را بستانکار می‌شود (TD-268)',
       checkFreeGoodsVoucherAtWac, 'رسید رایگان، خرید ترکیبی، تخفیف کامل و رسید ارزی سند ۵۲۰۴ درست گرفتند؛ ابطال و ارزش انبار با دفتر کل همخوان ماندند'],
