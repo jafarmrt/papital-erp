@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.13 — Kardex Rebuild Starts From Zero Cost (TD-269)
+- The Kardex rebuild replays WAC from zero, like an item with no movements; an item first received at price 0 keeps its live WAC after a rebuild.
+
 ### v8.0.12 — Zero-Price Receipt Kardex Cost (TD-256)
 - A zero-price stock-in records the current WAC in its Kardex row, so voiding it and the Kardex rebuild keep WAC; a production receipt voucher takes such items at their Kardex cost.
 

@@ -19,7 +19,7 @@ import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChange
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
 import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
-import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
+import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
  * v8.0.1 — سوئیت ناوردایی‌های منطق کاری (V8_MASTER_ROADMAP.md؛ گزارش docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).
@@ -256,6 +256,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.13: TD-269 ──
+    ['inv_td_269_replay_starts_at_zero_wac', 'v8.0.13: بازپخش WAC کاردکس از WAC صفر شروع می‌شود؛ کالایی که نخست با قیمت صفر وارد شده پس از بازسازی همان WAC زنده را دارد (TD-269)',
+      checkReplayStartsAtZeroWac, 'بازسازی سه کالا (ورود نخست رایگان، WAC اولیه با ورود رایگان، بی‌گردش) WAC زنده را نگه داشت'],
     // ── v8.0.12: TD-256 ──
     ['inv_td_256_zero_price_receipt_at_wac', 'v8.0.12: ورود با قیمت صفر در کاردکس به WAC جاری ثبت می‌شود؛ ابطالش WAC را تغییر نمی‌دهد و سند رسید تولید با ارزش کاردکس یکی است (TD-256)',
       checkZeroPriceReceiptAtWac, 'ردیف کاردکس به WAC ثبت شد؛ ابطال و بازسازی WAC را نگه داشتند؛ سند رسید تولید ترکیبی = ارزش کاردکس'],

@@ -235,3 +235,45 @@ export async function checkRunningKardexShowsVoided(wh: string): Promise<string[
   if (Math.abs(report.summary.valuation - stock * Number(wac)) > 0.01) problems.push(`ارزش خلاصه ${report.summary.valuation}، انتظار ${stock * Number(wac)}`);
   return problems;
 }
+
+/**
+ * TD-269: بازپخش WAC کاردکس از WAC صفر شروع می‌شود، نه از WAC کنونی کالا. کالای بدون WAC که نخست با قیمت صفر وارد شده
+ * (ارزش صفر) و سپس خریده شده، پس از بازسازی همان WAC زنده را دارد؛ کالای دارای WAC اولیه که با قیمت صفر وارد شده (ردیف
+ * کاردکس به همان WAC، TD-256) و کالای بی‌گردش WAC خود را نگه می‌دارند.
+ */
+export async function checkReplayStartsAtZeroWac(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await watermarks();
+  const freeFirst = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const opening = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 50000 });
+  const idle = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 70000 });
+  const scope: InvariantScope = { ...mark, itemIds: [freeFirst.id, opening.id, idle.id] };
+  const production = (itemId: number, quantity: number, date: string) => DocumentService.createDocument({
+    docType: 'production_receipt', inOut: 'in', status: 'final', date, user: 'inv',
+    items: [{ itemId, quantity, unitPrice: 0, location: wh }],
+  });
+
+  // رسید تولید ۱۰ × ۰ (ارزش صفر) و رسید ۹ × ۱۴۵٬۸۷۹ ← WAC ۶۹٬۱۰۰٫۵۷۸۹ (بذر ۴ شبیه‌ساز)
+  await production(freeFirst.id, 10, '2025-10-01');
+  await receive(freeFirst.id, 9, 145879, wh, '2025-10-02');
+  // WAC اولیه ۵۰٬۰۰۰، رسید تولید ۴ × ۰ (به همان WAC) و رسید ۴ × ۷۰٬۰۰۰ ← WAC ۶۰٬۰۰۰
+  await production(opening.id, 4, '2025-10-01');
+  await receive(opening.id, 4, 70000, wh, '2025-10-02');
+
+  const expected: Array<[string, number, string]> = [
+    ['ورود نخست با قیمت صفر', freeFirst.id, '69100.5789'],
+    ['WAC اولیه و ورود با قیمت صفر', opening.id, '60000'],
+    ['کالای بی‌گردش', idle.id, '70000'],
+  ];
+  for (const [label, itemId, wac] of expected) {
+    const live = await itemState(itemId);
+    if (!fin(live.wac).equals(fin(wac))) problems.push(`${label}: WAC زنده ${live.wac}، انتظار ${wac}`);
+  }
+  problems.push(...await invariantProblems(scope, 'پیش از بازسازی'));
+  for (const [label, itemId, wac] of expected) {
+    await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
+    const rebuilt = await itemState(itemId);
+    if (fin(rebuilt.wac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازسازی کاردکس WAC را ${wac} ← ${rebuilt.wac} کرد`);
+  }
+  return problems;
+}

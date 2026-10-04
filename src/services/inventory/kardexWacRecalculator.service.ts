@@ -93,6 +93,7 @@ export class KardexWacRecalculatorService {
         }
       }
 
+      // v8.0.13 (TD-269): بازپخش از WAC صفر شروع می‌شود؛ WAC کنونی فقط جایگزین نتیجه غیرمثبت است
       const replay = replayKardexWac(allItemTxs, item.weightedAverageCost);
       if (replay.firstNegativeRowId !== null && policy === 'forbidden') {
         throw new Error(`Negative stock detected during rebuild for item ${itemId} (${item.name}): balance=${replay.minimumBalance.toNumber()} (transaction #${replay.firstNegativeRowId})`);

@@ -160,7 +160,9 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
     );
     const line = res.rows[0];
     if (!line || line.is_deleted === 1) return { detail: 'skip:invoice-voided', tags: [] };
-    const remaining = Number(line.quantity) - Number(line.returned);
+    // یک کالا ممکن است از دو انبار در دو ردیف فاکتور فروخته شده باشد؛ سقف برگشت سرور (TD-253) برای کل کالاست
+    const sold = res.rows.filter(r => r.item_id === line.item_id).reduce((sum, r) => sum + Number(r.quantity), 0);
+    const remaining = sold - Number(line.returned);
     if (!over && remaining < 1) return { detail: 'skip:fully-returned', tags: [] };
     const quantity = over ? Math.max(1, remaining) + between(1, 3) : between(1, Math.floor(remaining));
     const id = await createDoc({
@@ -169,7 +171,7 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
       lines: [{ itemId: line.item_id, quantity, unitPrice: line.unit_price, location: line.location }],
     });
     return {
-      detail: `return #${id} of #${inv.id} item ${line.item_id} x${quantity} (sold ${line.quantity}, returned before ${line.returned})`,
+      detail: `return #${id} of #${inv.id} item ${line.item_id} x${quantity} (sold ${sold}, returned before ${line.returned})`,
       tags: [line.currency !== 'IRR' ? 'usd' : ''].filter(Boolean),
     };
   };

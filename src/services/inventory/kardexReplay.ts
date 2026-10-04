@@ -16,6 +16,11 @@ import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '..
  * - انتقال بین انبارها (documentType = 'transfer') و ردیف‌های معکوس قدیمی فقط مقدار را جابه‌جا می‌کنند.
  *
  * ردیف حذف‌شده بدون ردیف معکوس فعال (حذف‌های پیش از DB-009) نادیده گرفته می‌شود، مانند دفتر کاردکس (§12).
+ *
+ * v8.0.13 (TD-269): بازپخش از WAC صفر شروع می‌شود، مانند کالایی که هنوز گردشی ندارد. پیش‌تر از WAC کنونی کالا شروع
+ * می‌شد و نخستین ورودِ با قیمت صفر (ارزش صفر در موتور زنده) به WAC کنونی ارزش‌گذاری می‌شد. از v8.0.12 ورود با قیمت صفر
+ * کالای دارای WAC همان WAC را در کاردکس دارد (TD-256)، پس WAC پیش از نخستین گردش دیگر لازم نیست. WAC کنونی فقط وقتی
+ * نتیجه است که بازپخش به WAC مثبتی نرسد (کالای بی‌ردیف قیمت‌دار، TD-136).
  */
 export interface KardexReplayRow {
   id: number;
@@ -31,7 +36,7 @@ export interface KardexReplayRow {
 export interface KardexReplayResult {
   /** مانده کل پس از بازپخش */
   balance: FinancialDecimal;
-  /** WAC پس از بازپخش؛ اگر به صفر یا کمتر برسد WAC شروع حفظ می‌شود (TD-136) */
+  /** WAC پس از بازپخش؛ اگر به صفر یا کمتر برسد WAC کنونی کالا (fallbackWac) حفظ می‌شود (TD-136) */
   wac: FinancialDecimal;
   /** شناسه نخستین ردیفی که مانده کل را به ترتیب ثبت منفی کرد */
   firstNegativeRowId: number | null;
@@ -97,11 +102,11 @@ export function createKardexReplayer(allRows: KardexReplayRow[], startWac: Decim
   return { apply, counts, isVoidedOriginal: (row: KardexReplayRow) => row.isDeleted === 1 && activelyReversed.has(row.id) };
 }
 
-export function replayKardexWac(rows: KardexReplayRow[], startWac: DecimalValue): KardexReplayResult {
+export function replayKardexWac(rows: KardexReplayRow[], fallbackWac: DecimalValue): KardexReplayResult {
   const sorted = [...rows].sort((a, b) => a.id - b.id);
-  const replayer = createKardexReplayer(sorted, startWac);
+  const replayer = createKardexReplayer(sorted, 0);
   let balance = fin(0);
-  let wac = fin(startWac);
+  let wac = fin(0);
   let minimumBalance = fin(0);
   let firstNegativeRowId: number | null = null;
 
@@ -116,7 +121,7 @@ export function replayKardexWac(rows: KardexReplayRow[], startWac: DecimalValue)
 
   return {
     balance,
-    wac: wac.lessThanOrEqual(0) ? fin(startWac) : wac,
+    wac: wac.lessThanOrEqual(0) ? fin(fallbackWac) : wac,
     firstNegativeRowId,
     minimumBalance,
   };
