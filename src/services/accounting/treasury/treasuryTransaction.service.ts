@@ -488,7 +488,7 @@ export class TreasuryTransactionService {
 
       // تراکنش‌های متصل به پرداخت حقوق باید از مسیر خود حقوق مدیریت شوند (اتمیک بودن فیش)
       if (original.payrollId) {
-        throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست');
+        throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست؛ آن را از پنجره پرداخت همان فیش («ابطال پرداخت») ابطال کنید.');
       }
 
       const [bank] = await txEngine.select().from(bankAccounts)

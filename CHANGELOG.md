@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.31 — Payroll Payments Can Be Voided (TD-283)
+- A payroll payment is voided with a reason from the payroll's payment window; bank balance, voucher, paid amount and payroll status step back.
+
 ### v8.0.30 — Fixed Salary per Jalali Month, Partial Months Pro Rata (TD-284)
 - A payroll's fixed salary covers every Jalali month of its period, a partial month by days; two half-month payrolls add up to exactly one month.
 

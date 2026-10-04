@@ -5,6 +5,7 @@ import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
+import { PayrollPaymentVoidService } from '../services/accounting/payrollPaymentVoid.service.js';
 import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -134,6 +135,17 @@ const updatePieceworkPayrollStatusSchema = z.object({
 });
 
 // V10-4.4: ثبت پرداخت حقوق — فقط از مسیر خزانه‌داری
+// v8.0.31 (TD-283): ابطال یک پرداخت فیش (دلیل الزامی)
+const voidPayrollPaymentSchema = z.object({
+  body: z.object({
+    reason: z.string().trim().min(1, 'دلیل ابطال پرداخت الزامی است').max(500)
+  }),
+  params: z.object({
+    id: numericIdString,
+    transactionId: numericIdString
+  })
+});
+
 const registerPayrollPaymentSchema = z.object({
   body: z.object({
     bankAccountId: z.union([z.number(), z.string()]),
@@ -759,6 +771,34 @@ router.post('/piecework/payrolls/:id/register-payment', authorize('personnel.man
     logger.error({ message: 'Error registering payroll payment', error: err });
     throw err;
   }
+}));
+
+// POST /api/piecework/payrolls/:id/payments/:transactionId/void — v8.0.31 (TD-283، تصمیم مالک محصول): ابطال یک پرداخت فیش
+router.post('/piecework/payrolls/:id/payments/:transactionId/void', authorize('personnel.manage', 'admin'), idempotency({ scope: 'payroll' }), validate(voidPayrollPaymentSchema), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await PayrollPaymentVoidService.voidPayrollPayment({
+    payrollId: id,
+    transactionId: Number(req.params.transactionId),
+    reason: String(req.body.reason),
+    userId: req.user?.id,
+    username: req.user?.username || 'سیستم'
+  });
+
+  await logActivity({
+    userId: req.user?.id,
+    username: req.user?.username || 'سیستم',
+    action: 'DELETE',
+    entity: 'پرداخت حقوق',
+    entityId: id,
+    description: `ابطال پرداخت ${result.transactionNumber} فیش ${result.payroll.payrollNumber} (تراکنش معکوس ${result.reversalTransactionNumber})`,
+    details: { payrollId: id, transactionId: Number(req.params.transactionId), reason: req.body.reason, reversalVoucherId: result.reversalVoucherId }
+  });
+
+  res.json({
+    success: true,
+    message: `پرداخت ${result.transactionNumber} فیش ${result.payroll.payrollNumber} ابطال شد؛ مبلغ پرداخت‌شده فیش اکنون ${result.paidAmount.toLocaleString('fa-IR')} ریال است.`,
+    ...result
+  });
 }));
 
 // GET /api/piecework/payrolls/:id/payments — V4.0.33: دریافت سابقه اقساط و پرداخت‌های خزانه‌ای متصل به یک فیش

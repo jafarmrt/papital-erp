@@ -7,12 +7,15 @@ interface TreasuryVoidModalProps {
   target: TreasuryTransaction | null;
   onClose: () => void;
   onConfirm: (id: number, reason: string) => Promise<void>;
+  /** لایه نمایش؛ بالای پنجره‌ای دیگر (مثلاً پنجره پرداخت فیش، v8.0.31) بالاتر از z-50 */
+  zIndexClassName?: string;
 }
 
 export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
   target,
   onClose,
   onConfirm,
+  zIndexClassName = 'z-50',
 }) => {
   const [voidReason, setVoidReason] = useState('');
   const [isVoiding, setIsVoiding] = useState(false);
@@ -37,7 +40,7 @@ export const TreasuryVoidModal: React.FC<TreasuryVoidModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center bg-black/50 p-4`}>
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
         <h3 className="font-bold text-rose-700 dark:text-rose-300 text-base mb-1 flex items-center gap-2">
           <AlertTriangle size={18} />

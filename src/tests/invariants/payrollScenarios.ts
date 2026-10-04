@@ -1,9 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { accounts, personnel, pieceworkLogs, pieceworkPayrolls, pieceworkTasks, treasuryTransactions } from '../../db/schema.js';
+import { accounts, bankAccounts, personnel, pieceworkLogs, pieceworkPayrolls, pieceworkTasks } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { PayrollPaymentService } from '../../services/accounting/payrollPayment.service.js';
+import { PayrollPaymentVoidService } from '../../services/accounting/payrollPaymentVoid.service.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
@@ -209,6 +211,61 @@ export async function checkFixedSalaryProratedByMonth(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-283 (تصمیم مالک محصول — گزینه الف): پرداخت فیش حقوق ابطال‌پذیر است — مانده حساب بانکی، سند پرداخت (معکوس سند
+ * تأییدشده)، مبلغ پرداخت‌شده و وضعیت فیش و کارکردها برمی‌گردند؛ ابطال دوباره رد می‌شود و فیشی که همه پرداخت‌هایش باطل
+ * شده حذف می‌شود و حقوق پرداختنی پرسنل صفر می‌شود.
+ */
+export async function checkPayrollPaymentVoidable(): Promise<string[]> {
+  const problems: string[] = [];
+  const worker = await newWorker('کارگر آزمون ابطال پرداخت');
+  await addLog(worker, await newTask(), '2026-04-05', 1000000);
+  const issued = await generate(worker);
+  if (!issued.payroll) return [`صدور فیش آزمون ناموفق بود (${issued.error})`];
+  const payrollId = issued.payroll.id;
+  const bankId = await fundedBank();
+  const mark = (await pool.query<{ m: string }>('SELECT COALESCE(MAX(id), 0)::text AS m FROM journal_vouchers')).rows[0].m;
+  const first = await PayrollPaymentService.registerPayrollPayment({ payrollId, bankAccountId: bankId, amount: 600000, paymentDate: '2026-05-01', username: 'inv' });
+  const second = await PayrollPaymentService.registerPayrollPayment({ payrollId, bankAccountId: bankId, amount: 400000, paymentDate: '2026-05-02', username: 'inv' });
+  // اسناد پرداخت تأیید می‌شوند تا ابطال سند معکوس بگیرد
+  const drafts = await pool.query<{ id: number }>(`SELECT id FROM journal_vouchers WHERE id > $1 AND is_deleted = 0 AND status = 'draft'`, [mark]);
+  if (drafts.rows.length > 0) await VoucherService.approveJournalVouchers(drafts.rows.map(r => r.id), undefined, 'inv');
+
+  const state = async () => {
+    const [payroll] = await orm.select({ status: pieceworkPayrolls.status, paidAmount: pieceworkPayrolls.paidAmount }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollId));
+    const [bank] = await orm.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bankId));
+    const logs = await orm.select({ status: pieceworkLogs.status }).from(pieceworkLogs).where(eq(pieceworkLogs.personnelId, worker));
+    return { status: payroll?.status, paid: fin(payroll?.paidAmount ?? 0), bank: fin(bank?.currentBalance ?? 0), logs: logs.map(l => l.status), owed: fin(await personNet('3201', worker)) };
+  };
+  const expectState = async (label: string, expected: { status: string; paid: number; bank: number; owed: number; logs: string }) => {
+    const s = await state();
+    if (s.status !== expected.status) problems.push(`${label}: وضعیت فیش ${s.status}، انتظار ${expected.status}`);
+    if (!s.paid.equals(expected.paid)) problems.push(`${label}: پرداخت‌شده ${s.paid}، انتظار ${expected.paid}`);
+    if (!s.bank.equals(expected.bank)) problems.push(`${label}: مانده حساب بانکی ${s.bank}، انتظار ${expected.bank}`);
+    if (!s.owed.equals(expected.owed)) problems.push(`${label}: حقوق پرداختنی ${s.owed}، انتظار ${expected.owed}`);
+    if (!s.logs.every(l => l === expected.logs)) problems.push(`${label}: وضعیت کارکردها ${s.logs.join('،')}، انتظار ${expected.logs}`);
+  };
+  await expectState('پس از دو پرداخت', { status: 'paid', paid: 1000000, bank: 4000000, owed: 0, logs: 'paid' });
+
+  await PayrollPaymentVoidService.voidPayrollPayment({ payrollId, transactionId: second.transactionId, reason: 'آزمون ابطال پرداخت دوم', username: 'inv' });
+  await expectState('پس از ابطال پرداخت دوم', { status: 'partially_paid', paid: 600000, bank: 4400000, owed: -400000, logs: 'approved' });
+  const again = await refusalOf(() => PayrollPaymentVoidService.voidPayrollPayment({ payrollId, transactionId: second.transactionId, reason: 'تکرار', username: 'inv' }));
+  if (!again?.includes('قبلاً ابطال')) problems.push(`ابطال دوباره پرداخت رد نشد (${again ?? 'پذیرفته شد'})`);
+  const foreign = await refusalOf(() => PayrollPaymentVoidService.voidPayrollPayment({ payrollId: payrollId + 100000, transactionId: first.transactionId, reason: 'فیش دیگر', username: 'inv' }));
+  if (!foreign) problems.push('ابطال پرداخت با شناسه فیش دیگر پذیرفته شد');
+
+  await PayrollPaymentVoidService.voidPayrollPayment({ payrollId, transactionId: first.transactionId, reason: 'آزمون ابطال پرداخت اول', username: 'inv' });
+  await expectState('پس از ابطال هر دو پرداخت', { status: 'approved', paid: 0, bank: 5000000, owed: -1000000, logs: 'approved' });
+  const listed = (await BankAccountService.getBankAccounts()).find(b => b.id === bankId);
+  if (!fin(listed?.treasuryBalance ?? -1).equals(5000000)) problems.push(`مانده خزانه حساب بانکی ${listed?.treasuryBalance}، انتظار ۵٬۰۰۰٬۰۰۰`);
+
+  const removed = await refusalOf(() => PieceworkPayrollService.deletePayroll(payrollId, { username: 'inv' }));
+  if (removed) problems.push(`فیش بی‌پرداخت حذف نشد (${removed})`);
+  const owedAfterDelete = await personNet('3201', worker);
+  if (!fin(owedAfterDelete).isZero()) problems.push(`حقوق پرداختنی پس از حذف فیش ${owedAfterDelete}، انتظار ۰`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-281 (کاوش رگرسیون؛ رفع v8.0.28): برگرداندن فیش به «pending» کارکردهایش را در فیش بعدی دوباره می‌شمرد */
@@ -234,18 +291,18 @@ export async function probeAdvanceDeductionBeyondBalance(): Promise<boolean> {
   return fin(await personNet('1301', worker)).isNegative();
 }
 
-/** TD-283: پرداخت فیش حقوق ابطال‌پذیر نیست — ابطال تراکنش خزانه آن رد می‌شود و فیش پرداخت‌شده هم حذف نمی‌شود */
+/**
+ * TD-283 (کاوش رگرسیون؛ رفع v8.0.31): پرداخت فیش حقوق ابطال‌پذیر نبود — ابطال تراکنش خزانه آن رد می‌شد، فیش پرداخت‌شده حذف
+ * نمی‌شد و مسیر دیگری نبود. اکنون true فقط وقتی است که ابطال از مسیر فیش هم رد شود.
+ */
 export async function probePayrollPaymentNotVoidable(): Promise<boolean> {
   const worker = await newWorker('کارگر کاوش ابطال پرداخت');
   await addLog(worker, await newTask(), '2026-04-05', 700000);
   const payroll = await generate(worker);
   if (!payroll.payroll) return false;
-  await PayrollPaymentService.registerPayrollPayment({ payrollId: payroll.payroll.id, bankAccountId: await fundedBank(), paymentDate: '2026-05-01', username: 'inv' });
-  const [payment] = await orm.select({ id: treasuryTransactions.id }).from(treasuryTransactions).where(eq(treasuryTransactions.payrollId, payroll.payroll.id));
-  if (!payment) return false;
-  const voidRefused = await refusalOf(() => TreasuryTransactionService.voidTreasuryTransaction(payment.id, { reason: 'کاوش ابطال پرداخت حقوق', username: 'inv' }));
-  const deleteRefused = await refusalOf(() => PieceworkPayrollService.deletePayroll(payroll.payroll!.id, { username: 'inv' }));
-  return Boolean(voidRefused) && Boolean(deleteRefused);
+  const paid = await PayrollPaymentService.registerPayrollPayment({ payrollId: payroll.payroll.id, bankAccountId: await fundedBank(), paymentDate: '2026-05-01', username: 'inv' });
+  const refused = await refusalOf(() => PayrollPaymentVoidService.voidPayrollPayment({ payrollId: payroll.payroll!.id, transactionId: paid.transactionId, reason: 'کاوش ابطال پرداخت حقوق', username: 'inv' }));
+  return Boolean(refused);
 }
 
 /**

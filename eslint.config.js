@@ -69,4 +69,10 @@ export default tseslint.config(
     files: MONEY_STOCK_PATHS,
     rules: { '@typescript-eslint/no-explicit-any': 'error' },
   },
+  {
+    // v8.0.31: فایل‌های چنج‌لاگ داده افزایشی‌اند، نه کد (اندازه هر مدخل را compactRule.ts می‌سنجد)؛ max-lines بر آن‌ها اعمال
+    // نمی‌شود. سری بسته (7.ts) منجمد است و سری فعال (8.ts) با هر انتشار بزرگ‌تر می‌شود.
+    files: ['src/data/changelogs/*.ts'],
+    rules: { 'max-lines': 'off' },
+  },
 );

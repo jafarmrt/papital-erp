@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Landmark, BanknoteArrowUp, History, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Landmark, BanknoteArrowUp, CheckCircle2, AlertCircle } from 'lucide-react';
 import { fetchJson } from '../../api';
-import { getTodayJalaliDate, extractDateString, formatPersianPrice, formatPersianNumber, formatPersianDate } from '../../utils';
+import { getTodayJalaliDate, extractDateString, formatPersianPrice } from '../../utils';
 import { confirmAction } from '../ConfirmDialogHost';
+import { PayrollPaymentHistory } from './PayrollPaymentHistory';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -79,6 +80,8 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
     // پیش‌فرض مبلغ پرداختی برابر با کل مانده
     const rem = Math.max(0, Number(payroll.netPayable || 0) - Number(payroll.paidAmount ?? payroll.paid_amount ?? 0));
     setPayAmount(rem);
+    // فیش تسویه‌شده: سابقه پرداخت‌ها (و ابطال) باز نمایش داده می‌شود
+    setShowHistory(rem <= 0);
 
     return () => controller.abort();
   }, [payroll]);
@@ -187,42 +190,14 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
               </div>
             </div>
 
-            {/* سابقه پرداخت‌های قبلی در صورت وجود */}
-            {previousPayments.length > 0 && (
-              <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/60">
-                <button
-                  type="button"
-                  onClick={() => setShowHistory(!showHistory)}
-                  className="w-full p-2.5 flex items-center justify-between text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <History size={13} className="text-indigo-600" />
-                    سابقه واریزهای قبلی ({loadingPayments ? 'در حال استعلام...' : `${formatPersianNumber(previousPayments.length)} پرداخت`})
-                  </span>
-                  {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-                {showHistory && (
-                  <div className="p-2.5 pt-0 space-y-1.5 text-[11px]">
-                    {previousPayments.map((p: any, idx: number) => (
-                      <div key={p.id || idx} className="bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-800">
-                            {p.bankAccountTitle || 'حساب نامشخص'}
-                            {p.trackingNumber ? ` — کد: ${p.trackingNumber}` : ''}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {formatPersianDate(p.date)} • سند #{p.transactionNumber || p.id}
-                          </div>
-                        </div>
-                        <div className="font-mono font-black text-emerald-700">
-                          {formatPersianPrice(p.amount)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* سابقه پرداخت‌های قبلی و ابطال پرداخت (v8.0.31، TD-283) */}
+            <PayrollPaymentHistory
+              payrollId={payroll.id}
+              payments={previousPayments}
+              loading={loadingPayments}
+              initiallyOpen={showHistory}
+              onVoided={() => { onPaid?.(); onClose(); }}
+            />
 
             {/* فیلد مبلغ پرداختی این نوبت */}
             <div>

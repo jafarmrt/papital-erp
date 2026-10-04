@@ -103,7 +103,7 @@ export function PieceworkPayrollsTab({
                   const fixedAmount = Number((payroll as any).totalFixedAmount || 0);
                   const dedupNote = (payroll.notes || '')
                     .split(' | ')
-                    .find((seg: string) => seg.includes('سهم حقوق ثابت')) || '';
+                    .find((seg: string) => seg.includes('حقوق ثابت')) || '';
                   const hasFixedRow = fixedAmount > 0 || dedupNote !== '';
 
                   return (
@@ -128,10 +128,15 @@ export function PieceworkPayrollsTab({
                       </td>
                       <td className="p-3 text-center">
                         {isPaid ? (
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-bold">
+                          // v8.0.31 (TD-283): فیش تسویه‌شده هم پنجره پرداخت را باز می‌کند (سابقه و ابطال پرداخت)
+                          <button
+                            onClick={() => setPaymentTarget(payroll)}
+                            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] inline-flex items-center gap-1 font-bold cursor-pointer hover:bg-emerald-100"
+                            title="مشاهده پرداخت‌ها و ابطال پرداخت"
+                          >
                             <CheckCircle2 size={12} />
                             پرداخت‌شده
-                          </span>
+                          </button>
                         ) : isPartiallyPaid ? (
                           <div className="flex flex-col items-center gap-1">
                             <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[10px] inline-flex items-center gap-1 font-bold font-mono">
@@ -234,7 +239,10 @@ export function PieceworkPayrollsTab({
         payroll={paymentTarget ? {
           id: paymentTarget.id,
           payrollNumber: paymentTarget.payrollNumber,
-          netPayable: paymentTarget.netPayable
+          netPayable: paymentTarget.netPayable,
+          // v8.0.31: بدون مبلغ پرداخت‌شده، مانده فیش نیمه‌پرداخت کل خالص نمایش داده می‌شد
+          paidAmount: paymentTarget.paidAmount,
+          status: paymentTarget.status
         } : null}
         onClose={() => setPaymentTarget(null)}
         onPaid={() => onReload?.()}
