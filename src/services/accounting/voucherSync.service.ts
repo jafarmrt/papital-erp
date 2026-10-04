@@ -21,6 +21,7 @@ import { logger } from '../../middleware/logger.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
+import { productionKardexCostByItem } from './productionReceiptCost.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
@@ -471,12 +472,22 @@ export class VoucherSyncService {
     let rawMaterialsAmount = fin(0);
     let finishedGoodsAmount = fin(0);
 
+    // v8.0.12 (TD-256): کالای دارای ردیف قیمت صفر در رسید تولید به بهای ثبت‌شده در کاردکس همین سند
+    const zeroPriceItemIds = doc.type === 'production_receipt'
+      ? [...new Set(itemsList.filter(it => it.itemId !== null && !fin(it.unitPrice).isPositive()).map(it => Number(it.itemId)))]
+      : [];
+    const kardexCostByItem = await productionKardexCostByItem(executor, docId, zeroPriceItemIds);
+    const kardexCostedItems = new Set<number>();
+
     for (const it of itemsList) {
+      const kardexCost = kardexCostByItem.get(Number(it.itemId));
+      if (kardexCost && kardexCostedItems.has(Number(it.itemId))) continue;
+      if (kardexCost) kardexCostedItems.add(Number(it.itemId));
       // P1-03 (M-06): در رسیدهای خرید قیمت واقعی فاکتور ثبت می‌شود؛ فال‌بک به WAC فقط مختص رسیدهای تولید است
       const p = doc.type === 'production_receipt' && !fin(it.unitPrice).isPositive()
         ? fin(it.weightedAverageCost)
         : fin(it.unitPrice);
-      const lineNetRaw = fin(it.quantity).multiply(p).subtract(it.discount);
+      const lineNetRaw = kardexCost ?? fin(it.quantity).multiply(p).subtract(it.discount);
       const lineNet = lineNetRaw.isNegative() ? fin(0) : lineNetRaw;
 
       if (it.itemType === 'product') {

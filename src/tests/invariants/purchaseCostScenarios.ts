@@ -114,3 +114,69 @@ export async function checkVoidOutflowRestoresCost(wh: string): Promise<string[]
   return problems;
 }
 
+async function voucherInventoryDebit(documentId: number): Promise<string> {
+  const res = await pool.query<{ d: string }>(
+    `SELECT COALESCE(SUM(i.debit), 0)::text AS d FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id
+       JOIN accounts a ON a.id = i.account_id
+      WHERE v.source_document_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 AND a.code IN ('1401', '1402', '1403')`, [documentId]);
+  return fin(res.rows[0]?.d ?? 0).toString();
+}
+
+/**
+ * TD-256: ورود با قیمت صفر کالای دارای WAC به همان WAC ارزش‌گذاری می‌شود و ردیف کاردکس همان بها را دارد؛ ابطال آن WAC را
+ * تغییر نمی‌دهد، بازسازی کاردکس همان WAC را می‌دهد و سند حسابداری رسید تولید (حتی با ردیف قیمت‌دار دیگری از همان کالا
+ * که WAC را تغییر می‌دهد) با ارزش کاردکس یکی است.
+ */
+export async function checkZeroPriceReceiptAtWac(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await watermarks();
+  const single = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const mixed = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const scope: InvariantScope = { ...mark, itemIds: [single.id, mixed.id] };
+  const production = (lines: Array<[number, number, number]>, date: string) => DocumentService.createDocument({
+    docType: 'production_receipt', inOut: 'in', status: 'final', date, user: 'inv',
+    items: lines.map(([itemId, quantity, unitPrice]) => ({ itemId, quantity, unitPrice, location: wh })),
+  });
+
+  // ۱۰ × ۱۰۰٬۰۰۰ و سپس ۱۰ × ۰ ← ۲۰ عدد با WAC ۱۰۰٬۰۰۰؛ ردیف کاردکس رسید دوم ۱۰۰٬۰۰۰
+  await production([[single.id, 10, 100000]], '2026-04-01');
+  const free = await production([[single.id, 10, 0]], '2026-04-02');
+  const freePrice = await kardexInPrice(free);
+  if (!fin(freePrice).equals(100000)) problems.push(`ردیف کاردکس رسید تولید با قیمت صفر: ${freePrice}، انتظار WAC جاری ۱۰۰٬۰۰۰`);
+  problems.push(...await invariantProblems(scope, 'پس از رسید تولید با قیمت صفر'));
+
+  await DocumentService.deleteDocument(free, 'inv');
+  const afterVoid = await itemState(single.id);
+  if (afterVoid.stock !== 10 || !fin(afterVoid.wac).equals(100000)) {
+    problems.push(`ابطال رسید با قیمت صفر: موجودی ${afterVoid.stock} و WAC ${afterVoid.wac}، انتظار ۱۰ و ۱۰۰٬۰۰۰`);
+  }
+  await KardexWacRecalculatorService.rebuildItemFromLedger(single.id, { user: 'inv' });
+  const rebuilt = await itemState(single.id);
+  if (!fin(rebuilt.wac).equals(afterVoid.wac)) problems.push(`بازسازی کاردکس پس از ابطال رسید با قیمت صفر WAC را ${afterVoid.wac} ← ${rebuilt.wac} کرد`);
+
+  // یک رسید تولید با دو ردیف همان کالا: ۱۰ × ۰ (به WAC ۱۰۰٬۰۰۰) و ۵ × ۲۵۰٬۰۰۰ (WAC ← ۱۳۰٬۰۰۰) ← سند حسابداری ۲٬۲۵۰٬۰۰۰
+  await production([[mixed.id, 10, 100000]], '2026-04-01');
+  const mixedDoc = await production([[mixed.id, 10, 0], [mixed.id, 5, 250000]], '2026-04-03');
+  const debit = await voucherInventoryDebit(mixedDoc);
+  if (!fin(debit).equals(2250000)) problems.push(`سند حسابداری رسید تولید با ردیف قیمت صفر و قیمت‌دار: ${debit}، انتظار ارزش کاردکس ۲٬۲۵۰٬۰۰۰`);
+  problems.push(...await invariantProblems(scope, 'پس از ابطال و رسید تولید ترکیبی'));
+  return problems;
+}
+
+/**
+ * TD-268 (باز، نیازمند تصمیم مالک محصول): رسید خرید با قیمت صفر (کالای رایگان یا جایزه) برای کالای دارای WAC، موجودی را به
+ * WAC جاری ارزش‌گذاری می‌کند ولی سند حسابداری خرید از قیمت سند (صفر) ساخته می‌شود و صادر نمی‌شود؛ ارزش انبار به اندازه
+ * مقدار × WAC از دفتر کل بیشتر می‌شود. برمی‌گرداند آیا ناوردایی ارزش انبار = دفتر کل نقض شد.
+ */
+export async function probeZeroPricePurchaseWithoutVoucher(wh: string): Promise<boolean> {
+  const mark = await watermarks();
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const scope: InvariantScope = { ...mark, itemIds: [item.id] };
+  const receipt = (unitPrice: number, quantity: number, date: string) => DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون کالای رایگان',
+    items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
+  });
+  await receipt(100000, 10, '2026-04-01');
+  await receipt(0, 5, '2026-04-02');
+  return (await invariantProblems(scope, 'رسید خرید با قیمت صفر')).some(p => p.includes('I3_stock_value_equals_ledger'));
+}

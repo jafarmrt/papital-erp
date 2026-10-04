@@ -14,7 +14,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-253 در v8.0.8 رفع شد (inv_td_253_return_within_sold)
   // TD-254 در v8.0.11 رفع شد (inv_td_254_void_outflow_restores_cost)
   // TD-255 در v8.0.3 رفع شد (آزمون inv_td_255_stock_count_voucher)
-  'I3:zero-price-receipt-void': 'TD-256',
+  // TD-256 در v8.0.12 رفع شد (inv_td_256_zero_price_receipt_at_wac)
   // TD-257 و TD-258 در v8.0.4 رفع شدند (inv_td_257_backdated_stock_movement، inv_td_258_rebuild_matches_live_engine)
   'FOCUSED:purchase-voucher-ignores-account-mapping': 'TD-259',
   'FOCUSED:account-card-mixes-currencies': 'TD-260',
@@ -22,6 +22,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)
+  'FOCUSED:zero-price-purchase-without-voucher': 'TD-268',
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

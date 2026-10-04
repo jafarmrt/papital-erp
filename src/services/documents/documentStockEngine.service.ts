@@ -126,6 +126,11 @@ export class DocumentStockEngine {
           'ابتدا رسید یا خرید این کالا را با قیمت ثبت کنید یا بهای تمام‌شده اولیه آن را در تعریف کالا وارد کنید.'
         );
       }
+    } else if (!priceDec.isPositive() && currentItemWac.isPositive()) {
+      // v8.0.12 (TD-256): ورود با قیمت صفر WAC را تغییر نمی‌دهد (calculateWAC، TD-135)، یعنی کالا به WAC جاری ارزش‌گذاری
+      // می‌شود؛ ردیف کاردکس همان بها را ثبت می‌کند تا ابطال (applyStockReversal) و بازسازی کاردکس همان ارزش را برگردانند.
+      // پیش‌تر ردیف با قیمت صفر ثبت می‌شد و ابطال آن WAC را بالا می‌برد و ارزش انبار از دفتر کل جدا می‌شد.
+      txUnitPrice = currentItemWac;
     }
     const txTotalPrice = txUnitPrice.multiply(qty).round(4);
 

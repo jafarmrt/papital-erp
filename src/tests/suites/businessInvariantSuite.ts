@@ -17,7 +17,7 @@ import { runBusinessYearSimulation, SimulationResult } from '../simulation/busin
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
-import { checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost } from '../invariants/purchaseCostScenarios.js';
+import { checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
 import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
@@ -256,6 +256,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.12: TD-256 ──
+    ['inv_td_256_zero_price_receipt_at_wac', 'v8.0.12: ورود با قیمت صفر در کاردکس به WAC جاری ثبت می‌شود؛ ابطالش WAC را تغییر نمی‌دهد و سند رسید تولید با ارزش کاردکس یکی است (TD-256)',
+      checkZeroPriceReceiptAtWac, 'ردیف کاردکس به WAC ثبت شد؛ ابطال و بازسازی WAC را نگه داشتند؛ سند رسید تولید ترکیبی = ارزش کاردکس'],
     // ── v8.0.11: TD-254 ──
     ['inv_td_254_void_outflow_restores_cost', 'v8.0.11: ابطال خروج پس از تغییر WAC کالا را با بهای همان خروج برمی‌گرداند و WAC را بازمحاسبه می‌کند (TD-254)',
       checkVoidOutflowRestoresCost, 'ابطال فروش (پیش‌نویس و تأییدشده) و حواله WAC را درست بازمحاسبه کرد؛ بازسازی و دفتر کل همخوان ماندند'],
@@ -328,6 +331,7 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeExcelWacOverwrite(wh)) observed.add('FOCUSED:excel-wac-overwrite-revalues-stock');
     if (await probeVoidConsumedReceipt(wh)) observed.add('I13:void-in-leaves-negative-history');
     if (await probeRunningKardexAfterVoid(wh)) observed.add('FOCUSED:running-kardex-after-void');
+    if (await probeZeroPricePurchaseWithoutVoucher(wh)) observed.add('FOCUSED:zero-price-purchase-without-voucher');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

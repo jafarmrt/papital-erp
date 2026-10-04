@@ -222,8 +222,8 @@ export function createSimulationOperations(random: SimRandom, world: SimWorld) {
                        WHERE t.document_id = d.id AND t.is_deleted = 0 AND t.type = 'out'
                          AND ABS(COALESCE(i.weighted_average_cost, 0) - COALESCE(t.unit_price, 0)) > 0.01) AS wac_moved,
               EXISTS (SELECT 1 FROM document_items di WHERE di.document_id = d.id AND di.is_deleted = 0 AND di.discount > 0) AS had_discount,
-              EXISTS (SELECT 1 FROM transactions t WHERE t.document_id = d.id AND t.is_deleted = 0 AND t.type = 'in'
-                         AND COALESCE(t.unit_price, 0) = 0) AS zero_price
+              EXISTS (SELECT 1 FROM document_items di WHERE di.document_id = d.id AND di.is_deleted = 0
+                         AND d.type IN ('receipt', 'purchase', 'production_receipt') AND COALESCE(di.unit_price, 0) = 0) AS zero_price
          FROM documents d WHERE d.id = $1`,
       [target.id]
     );
