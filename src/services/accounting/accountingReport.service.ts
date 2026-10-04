@@ -1301,7 +1301,8 @@ export class AccountingReportService {
     const [chequeSums] = await orm.select({
       received: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${isReceived}), 0)::text`,
       inCollection: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${isReceived} AND ${cheques.status} IN ('in_collection', 'in_treasury', 'received')), 0)::text`,
-      paid: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${cheques.type} IS DISTINCT FROM 'received' AND ${cheques.status} IS DISTINCT FROM 'passed' AND ${cheques.status} IS DISTINCT FROM 'returned'), 0)::text`,
+      // v8.0.27 (TD-280): چک پرداختی برگشتی هم دیگر تعهد چکی نیست (بدهی به تأمین‌کننده برگشته است)
+      paid: sql<string>`COALESCE(SUM(${cheques.amount}) FILTER (WHERE ${cheques.type} IS DISTINCT FROM 'received' AND ${cheques.status} IS DISTINCT FROM 'passed' AND ${cheques.status} IS DISTINCT FROM 'bounced' AND ${cheques.status} IS DISTINCT FROM 'returned'), 0)::text`,
     }).from(cheques).where(eq(cheques.isDeleted, 0));
 
     const [vCount] = await orm.select({ count: sql<number>`count(*)` })
@@ -1566,14 +1567,16 @@ export class AccountingReportService {
       in_collection: { code: '1102', type: 'received' },
       bounced: { code: '1103', type: 'received' },
     };
-    // چک پرداختی صادره/در جریان → 3101 (تا زمان پاس شدن)
+    // چک پرداختی صادره/در جریان → 3101 (تا زمان پاس شدن). v8.0.27 (TD-280): چک پرداختی برگشتی یا عودت‌شده در 3101 نیست —
+    // سند برگشت (v8.0.21، TD-272) اسناد پرداختنی را بدهکار و بدهی را به تأمین‌کننده برمی‌گرداند.
+    const settledPaidStatuses = new Set(['passed', 'bounced', 'returned']);
     const expected: Record<string, FinancialDecimal> = { '1101': fin(0), '1102': fin(0), '1103': fin(0), '3101': fin(0) };
     const counts: Record<string, number> = { '1101': 0, '1102': 0, '1103': 0, '3101': 0 };
     for (const c of allCheques) {
       let codeKey: string | null = null;
       if (c.type === 'received') {
         codeKey = statusToCode[String(c.status)]?.code || null;
-      } else if (String(c.status) !== 'passed') {
+      } else if (!settledPaidStatuses.has(String(c.status))) {
         codeKey = '3101';
       }
       if (codeKey) {
@@ -1592,7 +1595,11 @@ export class AccountingReportService {
     const codes = ['1101', '1102', '1103', '3101'];
     return codes.map(code => {
       const lr = ledgerRows.find(l => l.code === code);
-      const ledgerBalance = fin(lr?.debit).subtract(lr?.credit ?? 0).round(4);
+      // v8.0.27 (TD-280): 3101 حساب بستانکار است؛ مانده آن بستانکار − بدهکار (مثبت) با جمع مثبت چک‌های باز مقایسه می‌شود.
+      // پیش‌تر بدهکار − بستانکار (منفی) با جمع مثبت مقایسه می‌شد و هر چک پرداختی باز دو برابر مبلغش «مغایرت» نشان می‌داد.
+      const ledgerBalance = (code === '3101'
+        ? fin(lr?.credit).subtract(lr?.debit ?? 0)
+        : fin(lr?.debit).subtract(lr?.credit ?? 0)).round(4);
       const expectedBalance = expected[code].round(4);
       return {
         code,

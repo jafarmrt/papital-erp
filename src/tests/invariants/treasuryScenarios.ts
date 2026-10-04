@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, treasuryTransactions } from '../../db/schema.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { ChequeLifecycleService } from '../../services/accounting/treasury/chequeLifecycle.service.js';
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
@@ -356,6 +357,59 @@ export async function checkTreasuryChequeMethodRefused(): Promise<string[]> {
   await synced('پس از ابطال تراکنش چکی پیشین');
   const [bankRow] = await orm.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bank.id));
   if (!fin(bankRow?.currentBalance ?? -1).isZero()) problems.push(`مانده ذخیره‌شده حساب پس از ابطال ${bankRow?.currentBalance}، انتظار ۰`);
+  return problems;
+}
+
+/**
+ * TD-280: آشتی دفتر چک با دفاتر (گزارش «آشتی‌سنجی چک‌ها») برای هر گذار چک پرداختی و دریافتی بی‌مغایرت می‌ماند — ۳۱۰۱ با
+ * مانده بستانکار مقایسه می‌شود و چک پرداختی برگشتی یا عودت‌شده در آن انتظار نمی‌رود؛ «چک‌های پرداختی باز» در خلاصه مالی
+ * چک برگشتی را نمی‌شمارد. (اسناد پیش‌نویس چک پیش از مقایسه تأیید می‌شوند؛ گزارش فقط اسناد تأییدشده را می‌خواند.)
+ */
+export async function checkChequeReconciliationMatchesLedger(): Promise<string[]> {
+  const problems: string[] = [];
+  const codes = ['1101', '1102', '1103', '3101'];
+  const snapshot = async () => {
+    const rows = await AccountingReportService.getChequeReconciliationReport();
+    const stats = await AccountingReportService.getFinancialOverviewStats();
+    const map = new Map<string, { discrepancy: FinancialDecimal; ledger: FinancialDecimal }>();
+    for (const code of codes) {
+      const row = rows.find(r => r.code === code);
+      map.set(code, { discrepancy: fin(row?.discrepancy ?? 0), ledger: fin(row?.ledgerBalance ?? 0) });
+    }
+    return { map, paidOpen: fin(stats.totalChequesPaid) };
+  };
+  const base = await snapshot();
+  const mark = await voucherWatermark();
+  const expectStep = async (label: string, ledgerDelta: Record<string, number>, paidOpenDelta: number) => {
+    await approveDraftsAfter(mark);
+    const now = await snapshot();
+    for (const code of codes) {
+      const b = base.map.get(code)!;
+      const n = now.map.get(code)!;
+      if (!n.discrepancy.equals(b.discrepancy)) problems.push(`${label}: مغایرت ${code} از ${b.discrepancy} به ${n.discrepancy} رسید`);
+      const delta = n.ledger.subtract(b.ledger);
+      if (!delta.equals(ledgerDelta[code] ?? 0)) problems.push(`${label}: تغییر مانده دفتری ${code} ${delta}، انتظار ${ledgerDelta[code] ?? 0}`);
+    }
+    const paidDelta = now.paidOpen.subtract(base.paidOpen);
+    if (!paidDelta.equals(paidOpenDelta)) problems.push(`${label}: تغییر «چک‌های پرداختی باز» ${paidDelta}، انتظار ${paidOpenDelta}`);
+  };
+
+  const bank = await bankWithOwnLedgerAccount('بانک آزمون آشتی چک');
+  const paid = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 500000, partyName: 'تامین‌کننده آزمون آشتی', bankAccountId: bank.id });
+  await expectStep('صدور چک پرداختی', { '3101': 500000 }, 500000);
+  await ChequeLifecycleService.updateChequeStatus(paid.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
+  await expectStep('برگشت چک پرداختی', {}, 0);
+  await ChequeLifecycleService.updateChequeStatus(paid.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
+  await expectStep('عودت چک پرداختی برگشتی', {}, 0);
+
+  const received = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 300000, partyName: 'مشتری آزمون آشتی' });
+  await expectStep('دریافت چک', { '1101': 300000 }, 0);
+  await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'in_collection', actionDate: '2026-03-20', username: 'inv' });
+  await expectStep('واگذاری چک به بانک', { '1102': 300000 }, 0);
+  await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'bounced', actionDate: '2026-04-02', username: 'inv' });
+  await expectStep('برگشت چک دریافتی', { '1103': 300000 }, 0);
+  await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'returned', actionDate: '2026-04-03', username: 'inv' });
+  await expectStep('عودت چک دریافتی برگشتی', {}, 0);
   return problems;
 }
 

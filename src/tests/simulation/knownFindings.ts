@@ -28,6 +28,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-277 در v8.0.25 رفع شد (inv_td_277_cheque_clearing_needs_ledger_account)
   // TD-278 در v8.0.26 رفع شد (inv_td_278_treasury_cheque_method_refused)
   // TD-279 با تصمیم مالک محصول (گزینه ب، ۱۲ مهر ۱۴۰۵) بی‌تغییر بسته شد؛ برگشت چک خرج‌شده با سند دستی
+  // TD-280 در v8.0.27 یافته و رفع شد (inv_td_280_cheque_reconciliation_matches_ledger)
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)

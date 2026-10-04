@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.27 — Cheque Reconciliation Report Matches the Ledger (TD-280)
+- The cheque reconciliation compares cheque payables by their credit balance and no longer expects bounced or returned paid cheques there.
+
 ### v8.0.26 — Cheque Method Removed From the Treasury Form (TD-278)
 - Cheques are registered only from the cheque book; the treasury and invoice-settlement forms no longer offer a cheque method and the server refuses it.
 
