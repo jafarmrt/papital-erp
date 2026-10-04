@@ -1415,7 +1415,8 @@ export class AccountingReportService {
       FROM journal_voucher_items jvi
       INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
       LEFT JOIN production_projects pp ON pp.id = jvi.detailed_id
-      WHERE jvi.detailed_type = 'project'
+      -- v8.0.15 (TD-270): ردیف حذف نرم‌شده سند (همگام‌سازی دوباره پیش‌نویس) شمرده نمی‌شود
+      WHERE jvi.detailed_type = 'project' AND jvi.is_deleted = 0
       GROUP BY jvi.detailed_id
       ORDER BY MAX(pp.created_at) DESC NULLS LAST
     `);
@@ -1461,7 +1462,7 @@ export class AccountingReportService {
       FROM journal_voucher_items jvi
       INNER JOIN journal_vouchers jv ON jv.id = jvi.voucher_id AND jv.is_deleted = 0
       LEFT JOIN accounts a ON a.id = jvi.account_id
-      WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId}
+      WHERE jvi.detailed_type = 'project' AND jvi.detailed_id = ${projectId} AND jvi.is_deleted = 0
       ORDER BY jv.date ASC, jv.id ASC, jvi.id ASC
     `);
 

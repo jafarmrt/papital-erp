@@ -102,7 +102,7 @@ export class FinancialHealthService {
       orm.execute(sql`
         SELECT 
           (SELECT COUNT(*)::int FROM journal_vouchers WHERE is_deleted = 0) AS total_vouchers,
-          (SELECT COUNT(*)::int FROM journal_voucher_items vi JOIN journal_vouchers v ON vi.voucher_id = v.id WHERE v.is_deleted = 0) AS total_voucher_items,
+          (SELECT COUNT(*)::int FROM journal_voucher_items vi JOIN journal_vouchers v ON vi.voucher_id = v.id WHERE v.is_deleted = 0 AND vi.is_deleted = 0) AS total_voucher_items,
           (SELECT COUNT(*)::int FROM accounts WHERE is_deleted = 0) AS total_accounts,
           (SELECT COUNT(*)::int FROM documents WHERE is_deleted = 0) AS total_documents,
           (SELECT COUNT(*)::int FROM cheques WHERE is_deleted = 0) AS total_cheques,
@@ -121,7 +121,8 @@ export class FinancialHealthService {
           COALESCE(SUM(vi.credit), 0)::float AS calc_credit,
           ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0))::float AS discrepancy
         FROM journal_vouchers v
-        LEFT JOIN journal_voucher_items vi ON vi.voucher_id = v.id
+        -- v8.0.15 (TD-270): ردیف‌های حذف نرم‌شده (همگام‌سازی دوباره سند پیش‌نویس) در هیچ آزمونی شمرده نمی‌شوند
+        LEFT JOIN journal_voucher_items vi ON vi.voucher_id = v.id AND vi.is_deleted = 0
         WHERE v.is_deleted = 0
         GROUP BY v.id, v.voucher_number, v.date, v.status, v.description
         HAVING ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0)) > 0.05
@@ -142,7 +143,7 @@ export class FinancialHealthService {
           COALESCE(SUM(vi.credit), 0)::float AS total_credit,
           (COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0))::float AS net_balance
         FROM accounts a
-        JOIN journal_voucher_items vi ON vi.account_id = a.id
+        JOIN journal_voucher_items vi ON vi.account_id = a.id AND vi.is_deleted = 0
         JOIN journal_vouchers v ON vi.voucher_id = v.id AND v.is_deleted = 0 AND v.status IN ('approved', 'permanent')
         WHERE a.is_deleted = 0 AND a.level IN ('subsidiary', 'general')
         GROUP BY a.id, a.code, a.name, a.level, a.nature, a.account_type
@@ -169,7 +170,7 @@ export class FinancialHealthService {
         FROM journal_voucher_items vi
         JOIN journal_vouchers v ON vi.voucher_id = v.id AND v.is_deleted = 0 AND v.status IN ('approved', 'permanent')
         JOIN accounts a ON vi.account_id = a.id AND a.is_deleted = 0
-        WHERE a.code LIKE '14%';
+        WHERE a.code LIKE '14%' AND vi.is_deleted = 0;
       `),
 
       // و: فاکتورهای نهایی بدون سند دوبل

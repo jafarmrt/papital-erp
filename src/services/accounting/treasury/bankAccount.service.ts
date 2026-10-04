@@ -62,6 +62,8 @@ export class BankAccountService {
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
     .where(and(
       eq(journalVouchers.isDeleted, 0),
+      // v8.0.15 (TD-270): ردیف حذف نرم‌شده (ویرایش سند پیش‌نویس پیش از تأیید) در مانده دفتری شمرده نمی‌شود
+      eq(journalVoucherItems.isDeleted, 0),
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ));
 

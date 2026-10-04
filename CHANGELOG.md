@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.15 — Reports Skip Deleted Voucher Rows (TD-270)
+- The financial health check, project reports, bank ledger balances and personnel advance balances no longer count the old rows of a draft voucher that was edited or re-synced before approval.
+
 ### v8.0.14 — Purchase Vouchers Follow the Account Mapping (TD-259)
 - Purchase, production receipt and sales return vouchers take inventory, payables and receivables accounts from the account mapping, like sales and remittances.
 

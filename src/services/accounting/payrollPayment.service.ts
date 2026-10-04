@@ -78,7 +78,9 @@ export class PayrollPaymentService {
           eq(journalVoucherItems.accountId, advanceAcc.id),
           eq(journalVoucherItems.detailedType, 'personnel'),
           eq(journalVoucherItems.detailedId, personnelId),
-          eq(journalVouchers.isDeleted, 0)
+          eq(journalVouchers.isDeleted, 0),
+          // v8.0.15 (TD-270): ردیف حذف نرم‌شده (ویرایش یا همگام‌سازی دوباره سند پیش‌نویس) مساعده را دو بار نمی‌شمارد
+          eq(journalVoucherItems.isDeleted, 0)
         ));
 
       if (items.length > 0) {

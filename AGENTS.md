@@ -61,7 +61,7 @@
 - **Audit Logging & Snapshots:** All state mutations (customers, items, prices, documents, stocks, permissions) MUST log via `logActivity` in `src/lib/auditLogger.ts` with before/after snapshots.
 - **Third-Party Secrets Encrypted at Rest (v7.0.139, TD-189, product-owner decision):** Passwords of third-party accounts (the personnel Nobitex password) are stored only through `encryptSecret` / read through `decryptSecret` (`src/lib/secretBox.ts`, AES-256-GCM, key `ERP_SECRETS_KEY` separate from `JWT_SECRET`, format `enc:v1:`). Without the key a new secret is refused (503), never stored in plain text; ciphertext never leaves the server; plain-text legacy values are encrypted with `npm run secrets:encrypt -- --apply`.
 - **Log Sanitization:** Sensitive fields (`password`, `token`, `secret`, `jwt`, `cookie`) MUST be sanitized to `[PROTECTED]`.
-- **Soft Deletes:** Always filter with `.where(eq(table.isDeleted, 0))` on reads.
+- **Soft Deletes:** Always filter with `.where(eq(table.isDeleted, 0))` on reads — including `journal_voucher_items.is_deleted`: editing or re-syncing a draft voucher soft-deletes its old rows, which stay under the voucher after approval (v8.0.15, TD-270).
 
 ## 6. Localization & UI Guidelines
 - **Dates & Numbers:** Server dates must use `src/lib/businessClock.ts`. UI dates are always Jalali (`formatPersianDate`, `JalaliDateInput`; storage rule in §1.10). Numbers formatted via `formatPersianPrice` or `formatPersianNumber`. Iranian identifiers (national ID, phones) preserve leading zeros via `formatPersianPhone` and `formatPersianNationalId`.
