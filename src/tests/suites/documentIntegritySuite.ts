@@ -5,6 +5,7 @@ import {
 } from '../../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { parsePagination, MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { generateToken, authenticateToken, AUTH_COOKIE_NAME } from '../../middleware/auth.js';
@@ -208,6 +209,10 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
     if (!originalVoucher) {
       throw new Error('سند حسابداری متناظر فاکتور نهایی ایجاد نشد (نگاشت حساب‌ها)');
     }
+
+    // v8.0.2 (TD-251): فقط سند تأییدشده هنگام ابطال سند معکوس می‌گیرد؛ سند پیش‌نویس حذف نرم می‌شود
+    // (آزمون inv_td_251_void_deletes_draft_voucher)، پس این آزمون سند را پیش از حذف تأیید می‌کند
+    await VoucherService.approveJournalVouchers([originalVoucher.id], undefined, 'v9_regression');
 
     // حذف سند انبار
     await DocumentService.deleteDocument(docId, 'v9_regression');

@@ -648,7 +648,8 @@ export class ChequeLifecycleService {
             ));
 
           if (!hasReversal) {
-            await VoucherService.reverseVoucher({
+            // v8.0.2 (TD-251، تصمیم مالک محصول): سند پیش‌نویس چک حذف نرم می‌شود و سند معکوس نمی‌گیرد
+            await VoucherService.voidSourceVoucher({
               voucherId: v.id,
               reason: `ابطال چک شماره ${existing.chequeNumber} (حذف رکورد و ابطال چرخه عمر)`,
               userId: user?.userId,

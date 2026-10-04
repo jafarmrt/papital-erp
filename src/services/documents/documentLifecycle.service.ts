@@ -416,8 +416,9 @@ export class DocumentLifecycleService {
           if (!alreadyReversed) linkedVouchers.push(lv);
         }
 
+        // v8.0.2 (TD-251، تصمیم مالک محصول): سند حسابداری پیش‌نویس حذف نرم می‌شود؛ تأییدشده یا دائم سند معکوس می‌گیرد
         for (const lv of linkedVouchers) {
-          await VoucherService.reverseVoucher({
+          await VoucherService.voidSourceVoucher({
             voucherId: lv.id,
             date: await businessTodayIsoDate(),
             reason: `حذف سند انبار شماره ${doc.refNumber || id} (${doc.type || ''})`,

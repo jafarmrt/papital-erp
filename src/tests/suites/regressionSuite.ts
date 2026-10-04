@@ -2781,13 +2781,17 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       check(await stockOf() === 19, `لغو سفارش A باید ۲ عدد را به انبار برگرداند (${await stockOf()})`);
       check((await logOf(ids.A))?.status === 'voided', `لاگ A باید voided باشد: ${(await logOf(ids.A))?.status}`);
       if (docA) {
+        // v8.0.2 (TD-251): سند پیش‌نویس فاکتور ابطال‌شده حذف نرم می‌شود؛ سند تأییدشده سند معکوس می‌گیرد
         const [origVoucher] = await orm.select().from(journalVouchers)
-          .where(and(eq(journalVouchers.referenceModule, 'invoice'), eq(journalVouchers.referenceId, docA), eq(journalVouchers.isDeleted, 0)))
+          .where(eq(journalVouchers.sourceDocumentId, docA))
           .orderBy(journalVouchers.id).limit(1);
         const reversal = origVoucher
           ? await orm.select({ id: journalVouchers.id }).from(journalVouchers).where(eq(journalVouchers.referenceNumber, `REV-V${origVoucher.voucherNumber}`))
           : [];
-        check(Boolean(origVoucher) && reversal.length === 1, 'ابطال فاکتور باید سند حسابداری معکوس صادر کند');
+        const neutralized = origVoucher?.status === 'draft'
+          ? origVoucher.isDeleted === 1 && reversal.length === 0
+          : origVoucher?.isDeleted === 0 && reversal.length === 1;
+        check(Boolean(origVoucher) && neutralized, 'ابطال فاکتور باید سند پیش‌نویس را حذف کند یا سند تأییدشده را معکوس کند');
       }
 
       // ۸) استرداد: B مسترد شد → فاکتور فعال می‌ماند و برای بررسی حسابدار علامت می‌خورد
@@ -2915,9 +2919,14 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         .where(eq(journalVouchers.referenceNumber, `REV-V${fakeReversal.voucherNumber}`));
       check(reversalOfFake.length === 0, 'حذف فاکتور نباید سند معکوس نامرتبط را دوباره معکوس کند');
       if (ensured) {
+        // v8.0.2 (TD-251): سند پیش‌نویس خودِ فاکتور حذف نرم می‌شود و سند تأییدشده معکوس می‌شود
         const reversalOfOwn = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
           .where(eq(journalVouchers.referenceNumber, `REV-V${ensured.voucherNumber}`));
-        check(reversalOfOwn.length === 1, 'حذف فاکتور باید سند حسابداری خودِ فاکتور را معکوس کند');
+        const [ownAfter] = await orm.select({ isDeleted: journalVouchers.isDeleted }).from(journalVouchers).where(eq(journalVouchers.id, ensured.id));
+        const ownNeutralized = ensured.status === 'draft'
+          ? ownAfter?.isDeleted === 1 && reversalOfOwn.length === 0
+          : reversalOfOwn.length === 1;
+        check(ownNeutralized, `حذف فاکتور باید سند حسابداری خودِ فاکتور را بی‌اثر کند (وضعیت ${ensured.status}، حذف نرم ${ownAfter?.isDeleted}، سند معکوس ${reversalOfOwn.length})`);
       }
 
       // ۴) همگام‌سازی دستی «فقط اسناد فاقد سند»: سند موجود بازنویسی نمی‌شود و اجرای دوباره سند تکراری نمی‌سازد

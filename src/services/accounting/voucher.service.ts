@@ -461,6 +461,48 @@ export class VoucherService {
   }
 
   /**
+   * v8.0.2 (TD-251، تصمیم مالک محصول): بی‌اثر کردن سند حسابداری یک منشأ ابطال‌شده (سند انبار/فاکتور، تراکنش خزانه،
+   * چک). سند پیش‌نویس هرگز در دفاتر تأییدشده نیامده است، پس حذف نرم می‌شود (با همان کنترل سال مالی باز)؛ سند
+   * تأییدشده یا دائم مانند قبل سند معکوس می‌گیرد. پیش‌تر سند پیش‌نویس هم سند معکوس «تأییدشده» می‌گرفت و تراز آزمایشی
+   * فقط سند معکوس را می‌دید (حساب دریافتنی و فروش منفی).
+   */
+  static async voidSourceVoucher(params: {
+    voucherId: number;
+    date?: string;
+    reason?: string;
+    userId?: number;
+    username?: string;
+    externalTx: DbExecutor;
+    allowReversalOfReversal?: boolean;
+  }): Promise<{ action: 'deleted' | 'reversed'; reversalVoucherId: number | null }> {
+    const tx = params.externalTx;
+    const [existing] = await tx.select({ id: journalVouchers.id, status: journalVouchers.status, date: journalVouchers.date })
+      .from(journalVouchers)
+      .where(and(eq(journalVouchers.id, params.voucherId), eq(journalVouchers.isDeleted, 0)))
+      .for('update');
+    if (!existing) throw new NotFoundError(`سند حسابداری با شناسه ${params.voucherId} یافت نشد.`);
+
+    if (existing.status === 'draft') {
+      await this.checkFiscalPeriodOpen(existing.date, tx);
+      await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, existing.id));
+      await tx.update(journalVoucherItems).set({ isDeleted: 1 })
+        .where(and(eq(journalVoucherItems.voucherId, existing.id), eq(journalVoucherItems.isDeleted, 0)));
+      return { action: 'deleted', reversalVoucherId: null };
+    }
+
+    const reversal = await this.reverseVoucher({
+      voucherId: existing.id,
+      date: params.date,
+      reason: params.reason,
+      userId: params.userId,
+      username: params.username,
+      externalTx: tx,
+      allowReversalOfReversal: params.allowReversalOfReversal,
+    });
+    return { action: 'reversed', reversalVoucherId: reversal?.id ?? null };
+  }
+
+  /**
    * Reverse Voucher Pattern (صدور سند عکس / عطف / برگشت)
    * Inverts all debit and credit rows to completely neutralize the financial impact of a voucher.
    */

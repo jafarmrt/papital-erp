@@ -353,22 +353,16 @@ export class PieceworkPayrollService {
         );
       }
 
+      // تأییدشده: سند معکوس؛ پیش‌نویس: حذف نرم با کنترل سال مالی باز — v8.0.2 (TD-251) همان قاعده مشترک همه ابطال‌ها
       for (const linkedVoucher of linkedVouchers) {
-        if (linkedVoucher.status === 'approved') {
-          // If approved, reverse the voucher formally
-          await VoucherService.reverseVoucher({
-            voucherId: linkedVoucher.id,
-            reason: `${reason} #${pay.payrollNumber || payrollId}`,
-            userId: operatorId ?? undefined,
-            username: operatorName,
-            externalTx: tx,
-            allowReversalOfReversal: true
-          });
-        } else {
-          // If draft, soft-delete it — v7.0.49 (audit P2-5): نه در سال مالی بسته‌شده
-          await VoucherService.checkFiscalPeriodOpen(linkedVoucher.date, tx);
-          await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, linkedVoucher.id));
-        }
+        await VoucherService.voidSourceVoucher({
+          voucherId: linkedVoucher.id,
+          reason: `${reason} #${pay.payrollNumber || payrollId}`,
+          userId: operatorId ?? undefined,
+          username: operatorName,
+          externalTx: tx,
+          allowReversalOfReversal: true
+        });
       }
 
       // Unlink logs back to pending

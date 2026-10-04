@@ -560,6 +560,21 @@ export interface FiscalYearClosingPreview {
     itemsCount: number;
     totalAmount: number;
   }[];
+  /**
+   * v8.0.2 (TD-252، تصمیم مالک محصول): اسناد حسابداری پیش‌نویسِ همین سال مالی. تا وقتی هستند بستن سال رد می‌شود؛
+   * باید تأیید یا حذف شوند (فهرست حداکثر FISCAL_CLOSING_DRAFT_LIST_LIMIT سند، تعداد کل در draftVoucherCount).
+   */
+  draftVouchers?: FiscalClosingDraftVoucher[];
+  draftVoucherCount?: number;
+}
+
+export interface FiscalClosingDraftVoucher {
+  id: number;
+  voucherNumber: number;
+  date: string;
+  totalDebit: number;
+  description: string;
+  sourceDocumentId: number | null;
 }
 
 export interface FiscalYearClosingResult {

@@ -551,7 +551,8 @@ export class TreasuryTransactionService {
       let reversalVoucherId: number | null = null;
       const isReversalOfReversal = original.reversalOfId !== null;
       if (original.voucherId) {
-        const rv = await VoucherService.reverseVoucher({
+        // v8.0.2 (TD-251، تصمیم مالک محصول): سند پیش‌نویس حذف نرم می‌شود و سند معکوس نمی‌گیرد
+        const rv = await VoucherService.voidSourceVoucher({
           voucherId: original.voucherId,
           reason: isReversalOfReversal
             ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId}) — ${reason}`
@@ -561,7 +562,7 @@ export class TreasuryTransactionService {
           externalTx: txEngine,
           allowReversalOfReversal: true,
         });
-        reversalVoucherId = rv?.id || null;
+        reversalVoucherId = rv.reversalVoucherId;
       }
 
       const [reversalTx] = await txEngine.insert(treasuryTransactions).values({

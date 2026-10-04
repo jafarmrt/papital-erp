@@ -245,7 +245,9 @@ async function checkOneVoucherPerDocument(scope: InvariantScope): Promise<Invari
   const violations: InvariantViolation[] = [];
   for (const d of docs) {
     const count = Number(d.active_vouchers);
-    if (count !== 1 && !(count === 0 && !d.has_value)) {
+    // سند ابطال‌شده: سند پیش‌نویسش حذف شده (۰) یا سند تأییدشده‌اش با سند معکوس بی‌اثر شده (۱) — v8.0.2، TD-251
+    const ok = d.is_deleted === 1 ? count <= 1 : (count === 1 || (count === 0 && !d.has_value));
+    if (!ok) {
       violations.push({
         invariant: 'I4_one_voucher_per_document',
         key: `doc:${d.id}`,

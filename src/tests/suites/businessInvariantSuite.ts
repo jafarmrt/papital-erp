@@ -1,6 +1,8 @@
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm, pool } from '../../db/drizzle.js';
-import { accounts } from '../../db/schema.js';
+import { accounts, bankAccounts } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
+import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { and, eq } from 'drizzle-orm';
 import { DocumentService } from '../../services/document.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
@@ -113,9 +115,133 @@ async function probeAccountCardMixesCurrencies(wh: string): Promise<boolean> {
   return !cardDebit.equals(1200000);
 }
 
+interface VoucherRow extends Record<string, unknown> { id: number; status: string; is_deleted: number; reference_number: string | null }
+
+async function vouchersOfSource(column: 'source_document_id' | 'id', value: number): Promise<VoucherRow[]> {
+  const own = await pool.query<VoucherRow>(
+    `SELECT id, status, is_deleted, reference_number FROM journal_vouchers WHERE ${column} = $1 ORDER BY id`, [value]);
+  const ids = own.rows.map(r => r.id);
+  const rev = ids.length === 0 ? { rows: [] as VoucherRow[] } : await pool.query<VoucherRow>(
+    `SELECT id, status, is_deleted, reference_number FROM journal_vouchers WHERE reference_id = ANY($1::int[]) AND reference_number LIKE 'REV-V%' ORDER BY id`, [ids]);
+  return [...own.rows, ...rev.rows];
+}
+
+/**
+ * v8.0.2 (TD-251، تصمیم مالک محصول): ابطال منشأ — سند حسابداری پیش‌نویس حذف نرم می‌شود و سند معکوس نمی‌گیرد؛ سند
+ * تأییدشده همچنان سند معکوس تأییدشده می‌گیرد. هر سه مسیر: سند انبار/فاکتور، تراکنش خزانه.
+ */
+async function checkVoidDraftVoucher(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2025-05-01', user: 'inv',
+    items: [{ itemId: item.id, quantity: 10, unitPrice: 100000, location: wh }],
+  });
+
+  // الف) فاکتور با سند پیش‌نویس → ابطال → سند حذف نرم، بدون سند معکوس
+  const draftInvoice = await DocumentService.createDocument({
+    docType: 'invoice', inOut: 'out', status: 'final', date: '2025-05-02', user: 'inv', buyerName: 'مشتری آزمون ابطال',
+    items: [{ itemId: item.id, quantity: 2, unitPrice: 150000, location: wh }],
+  });
+  await DocumentService.deleteDocument(draftInvoice, 'inv');
+  const a = await vouchersOfSource('source_document_id', draftInvoice);
+  if (a.length !== 1 || a[0].is_deleted !== 1) problems.push(`فاکتور با سند پیش‌نویس: سند حذف نرم نشد یا سند معکوس گرفت (${JSON.stringify(a)})`);
+
+  // ب) فاکتور با سند تأییدشده → ابطال → سند اصلی فعال + سند معکوس تأییدشده
+  const approvedInvoice = await DocumentService.createDocument({
+    docType: 'invoice', inOut: 'out', status: 'final', date: '2025-05-03', user: 'inv', buyerName: 'مشتری آزمون ابطال',
+    items: [{ itemId: item.id, quantity: 1, unitPrice: 150000, location: wh }],
+  });
+  const before = await vouchersOfSource('source_document_id', approvedInvoice);
+  await VoucherService.approveJournalVouchers(before.map(v => v.id), undefined, 'inv');
+  await DocumentService.deleteDocument(approvedInvoice, 'inv');
+  const b = await vouchersOfSource('source_document_id', approvedInvoice);
+  const bOriginal = b.find(v => v.id === before[0]?.id);
+  const bReversal = b.find(v => String(v.reference_number ?? '').startsWith('REV-V'));
+  if (!bOriginal || bOriginal.is_deleted !== 0 || bOriginal.status !== 'approved' || !bReversal || bReversal.status !== 'approved') {
+    problems.push(`فاکتور با سند تأییدشده باید سند معکوس تأییدشده بگیرد (${JSON.stringify(b)})`);
+  }
+
+  // ج) تراکنش خزانه با سند پیش‌نویس → ابطال → سند حذف نرم، بدون سند معکوس
+  const [cash] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1001'), eq(accounts.isDeleted, 0)));
+  const [bank] = await orm.insert(bankAccounts).values({
+    code: `ERP-TEST-V802-${Date.now()}`, title: 'ERP-TEST-MARKER صندوق آزمون ابطال', type: 'cash', currency: 'IRR',
+    accountId: cash?.id ?? null, initialBalance: money(0), currentBalance: money(0),
+  }).returning({ id: bankAccounts.id });
+  const receipt = await TreasuryTransactionService.createTreasuryTransaction({
+    type: 'receipt', method: 'cash', amount: 500000, bankAccountId: bank.id, date: '2025-05-04',
+    partyType: 'customer', partyName: 'ERP-TEST-MARKER مشتری خزانه', username: 'inv',
+  });
+  if (!receipt.voucherId) {
+    problems.push('تراکنش خزانه سند حسابداری نگرفت');
+  } else {
+    await TreasuryTransactionService.voidTreasuryTransaction(receipt.id, { reason: 'آزمون v8.0.2', username: 'inv' });
+    const c = await vouchersOfSource('id', receipt.voucherId);
+    if (c.length !== 1 || c[0].is_deleted !== 1) problems.push(`تراکنش خزانه با سند پیش‌نویس: سند حذف نرم نشد یا سند معکوس گرفت (${JSON.stringify(c)})`);
+  }
+  return problems;
+}
+
+/** v8.0.2 (TD-252، تصمیم مالک محصول): سال با سند پیش‌نویس بسته نمی‌شود؛ پس از تأیید آن‌ها بسته می‌شود */
+async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const year = CLOSING_PROBE_YEAR + 1; // ۱۳۹۱: جدا از سال آزمون خط پایه
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2012-05-01', user: 'inv',
+    items: [{ itemId: item.id, quantity: 5, unitPrice: 100000, location: wh }],
+  });
+  const invoiceId = await DocumentService.createDocument({
+    docType: 'invoice', inOut: 'out', status: 'final', date: '2012-06-01', user: 'inv', buyerName: 'مشتری آزمون بستن سال',
+    items: [{ itemId: item.id, quantity: 2, unitPrice: 250000, location: wh }],
+  });
+  const preview = await FiscalYearService.getFiscalYearClosingPreview({ year, closingDate: `${year}-12-29` });
+  const draftIds = (preview.draftVouchers ?? []).map(v => v.id);
+  const [invoiceVoucher] = await vouchersOfSource('source_document_id', invoiceId);
+  if ((preview.draftVoucherCount ?? 0) < 2 || !invoiceVoucher || !draftIds.includes(invoiceVoucher.id)) {
+    problems.push(`پیش‌نمایش بستن سال اسناد پیش‌نویس سال را فهرست نکرد (${preview.draftVoucherCount ?? 'بدون شمارش'})`);
+  }
+  let refused = false;
+  try {
+    await FiscalYearService.executeFiscalYearClosing({ year, closingDate: `${year}-12-29`, createOpeningVoucher: false, username: 'inv' });
+  } catch (err) {
+    refused = getErrorMessage(err).includes('پیش‌نویس');
+  }
+  if (!refused) problems.push('بستن سال با سند حسابداری پیش‌نویس رد نشد');
+
+  await VoucherService.approveJournalVouchers(draftIds, undefined, 'inv');
+  try {
+    const closed = await FiscalYearService.executeFiscalYearClosing({ year, closingDate: `${year}-12-29`, createOpeningVoucher: false, username: 'inv' });
+    if (fin(closed.netProfit).isZero()) problems.push('بستن سال پس از تأیید اسناد، سود فروش را نیاورد');
+  } catch (err) {
+    problems.push(`بستن سال پس از تأیید اسناد پیش‌نویس رد شد: ${getErrorMessage(err)}`);
+  }
+  return problems;
+}
+
 export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
   const wh = (await getDefaultWarehouseCode(orm)) ?? '';
+
+  // ── v8.0.2: آزمون‌های سخت‌گیرانه رفع TD-251 و TD-252 ─────────────────────
+  const t251 = Date.now();
+  const name251 = 'v8.0.2: ابطال سند انبار یا تراکنش خزانه سند حسابداری پیش‌نویس را حذف نرم می‌کند و سند تأییدشده را معکوس (TD-251)';
+  try {
+    const problems = await checkVoidDraftVoucher(wh);
+    push(results, 'inv_td_251_void_deletes_draft_voucher', name251, t251, problems.length === 0,
+      problems.length === 0 ? 'پیش‌نویس حذف نرم شد؛ تأییدشده سند معکوس گرفت' : problems.join(' | '));
+  } catch (err) {
+    push(results, 'inv_td_251_void_deletes_draft_voucher', name251, t251, false, getErrorMessage(err));
+  }
+  const t252 = Date.now();
+  const name252 = 'v8.0.2: بستن سال مالی با سند حسابداری پیش‌نویس رد و فهرست می‌شود و پس از تأیید آن‌ها انجام می‌شود (TD-252)';
+  try {
+    const problems = await checkClosingRefusesDrafts(wh);
+    push(results, 'inv_td_252_closing_refuses_draft_vouchers', name252, t252, problems.length === 0,
+      problems.length === 0 ? 'بستن سال رد شد و پس از تأیید اسناد انجام شد' : problems.join(' | '));
+  } catch (err) {
+    push(results, 'inv_td_252_closing_refuses_draft_vouchers', name252, t252, false, getErrorMessage(err));
+  }
 
   // ── ۱. مسیرهای پایه: هیچ نقضی ─────────────────────────────────────────────
   const t1 = Date.now();

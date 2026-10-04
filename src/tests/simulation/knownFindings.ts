@@ -10,8 +10,7 @@ import type { SimulationFinding } from './businessYearSimulator.js';
  */
 export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'I3:purchase-discount': 'TD-250',
-  'I6:void-draft-reversal-approved': 'TD-251',
-  'FOCUSED:fiscal-closing-ignores-draft-vouchers': 'TD-252',
+  // TD-251 و TD-252 در v8.0.2 رفع شدند (آزمون‌های inv_td_251_void_deletes_draft_voucher و inv_td_252_closing_refuses_draft_vouchers)
   'I14:over-return': 'TD-253',
   'I3:void-out-at-current-wac': 'TD-254',
   'I3:stock-count-without-voucher': 'TD-255',

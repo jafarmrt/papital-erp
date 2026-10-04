@@ -7,19 +7,67 @@ import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AccountingReportService } from './accountingReport.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
 import { ConflictError } from '../../errors/customErrors.js';
-import { normalizeDateToIso } from '../../lib/businessClock.js';
+import { jalaliToGregorian, normalizeDateToIso } from '../../lib/businessClock.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
-import type { 
-  FiscalYearClosingPreview, 
-  FiscalYearClosingResult, 
-  FiscalClosingAccountRow, 
-  JournalVoucher 
+import type {
+  FiscalYearClosingPreview,
+  FiscalYearClosingResult,
+  FiscalClosingAccountRow,
+  FiscalClosingDraftVoucher,
+  JournalVoucher
 } from '../../types.js';
 
 // V3.0.6 (BUG-03): کلید قفل Advisory برای سریال‌سازی همزمانی بستن سال مالی
 const FISCAL_CLOSING_LOCK_NAMESPACE = 918273;
 
+/** v8.0.2 (TD-252): بیشترین تعداد سند پیش‌نویس که پیش‌نمایش بستن سال فهرست می‌کند */
+export const FISCAL_CLOSING_DRAFT_LIST_LIMIT = 50;
+
+function jalaliYearStartIso(year: number): string {
+  const { gy, gm, gd } = jalaliToGregorian(year, 1, 1);
+  return `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
+}
+
 export class FiscalYearService {
+  /**
+   * v8.0.2 (TD-252، تصمیم مالک محصول): اسناد حسابداری پیش‌نویسِ یک سال مالی (جلالی). بستن سال روی تراز آزمایشی
+   * (فقط اسناد تأییدشده و دائم) ساخته می‌شود؛ پیش‌تر اسناد پیش‌نویس — از جمله همه اسناد خودکار فروش، خرید، انبار و
+   * حقوق — بی‌هشدار بیرون می‌ماندند و پس از بستن دیگر تأییدشدنی نبودند. اکنون تا وقتی چنین سندی هست بستن رد می‌شود.
+   */
+  static async findDraftVouchersOfYear(year: number, tx?: DbExecutor): Promise<FiscalClosingDraftVoucher[]> {
+    const executor = tx || orm;
+    const startIso = jalaliYearStartIso(year);
+    const endIso = jalaliYearStartIso(year + 1);
+    const rows = await executor.select({
+      id: journalVouchers.id,
+      voucherNumber: journalVouchers.voucherNumber,
+      date: journalVouchers.date,
+      totalDebit: journalVouchers.totalDebit,
+      description: journalVouchers.description,
+      sourceDocumentId: journalVouchers.sourceDocumentId,
+    })
+      .from(journalVouchers)
+      .where(and(
+        eq(journalVouchers.isDeleted, 0),
+        eq(journalVouchers.status, 'draft'),
+        // تاریخ ISO در بازه سال؛ تاریخ‌های قدیمی جلالی یا غیر ISO با yearOf همان سال سنجیده می‌شوند
+        sql`((${journalVouchers.date} >= ${startIso} AND ${journalVouchers.date} < ${endIso})
+             OR ${journalVouchers.date} !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+             OR ${journalVouchers.date} ~ '^1[345][0-9]{2}[-/]')`
+      ))
+      .orderBy(journalVouchers.date, journalVouchers.voucherNumber);
+    return rows
+      .filter(r => FiscalPeriodService.yearOf(r.date) === year)
+      .map(r => ({
+        id: r.id,
+        voucherNumber: r.voucherNumber,
+        date: r.date,
+        totalDebit: fin(r.totalDebit).toNumber(),
+        description: r.description,
+        sourceDocumentId: r.sourceDocumentId ?? null,
+      }));
+  }
+
   /**
    * Fiscal Year Closing Preview
    */
@@ -34,6 +82,7 @@ export class FiscalYearService {
     const openingDateNewYear = params.openingDateNewYear || `${Number(currentYear) + 1}-01-01`;
 
     const normClosingDate = normalizeDateToIso(closingDate) || closingDate;
+    const draftVouchers = await this.findDraftVouchersOfYear(Number(currentYear), params.externalTx);
 
     const trial = await AccountingReportService.getTrialBalance({
       level: 'subsidiary',
@@ -207,7 +256,9 @@ export class FiscalYearService {
         temporaryCount: temporaryAccounts.length,
         permanentCount: permanentAccounts.length
       },
-      summaryVouchersPreview
+      summaryVouchersPreview,
+      draftVouchers: draftVouchers.slice(0, FISCAL_CLOSING_DRAFT_LIST_LIMIT),
+      draftVoucherCount: draftVouchers.length,
     };
   }
 
@@ -315,6 +366,18 @@ export class FiscalYearService {
         openingDateNewYear: normOpeningDate,
         externalTx: tx
       });
+
+      // v8.0.2 (TD-252، تصمیم مالک محصول): سال با سند حسابداری پیش‌نویس بسته نمی‌شود — پس از قفل سال، پس هیچ سند
+      // تازه‌ای در این فاصله وارد سال نمی‌شود
+      const draftCount = preview.draftVoucherCount ?? 0;
+      if (draftCount > 0) {
+        const shown = (preview.draftVouchers ?? []).slice(0, 10).map(v => `#${v.voucherNumber}`).join('، ');
+        throw new ConflictError(
+          `سال مالی ${data.year} ${draftCount} سند حسابداری پیش‌نویس دارد (${shown}${draftCount > 10 ? ' و …' : ''}). ` +
+          'پیش از بستن سال، این اسناد را تأیید یا حذف کنید؛ سند پیش‌نویس در بستن حساب‌ها شمرده نمی‌شود و پس از بستن سال دیگر تأییدشدنی نیست.',
+          'FISCAL_YEAR_HAS_DRAFT_VOUCHERS'
+        );
+      }
       finalNetProfit = preview.netProfit;
 
       // VOUCHER 1: بستن حساب‌های موقت به خلاصه سود و زیان

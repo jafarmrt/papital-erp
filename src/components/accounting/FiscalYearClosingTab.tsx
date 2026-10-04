@@ -76,6 +76,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   const safeTotalExpenses = previewData?.summary?.totalExpenses ?? ((previewData?.totalExpenses ?? 0) + (previewData?.totalCostOfSales ?? 0));
   const safeNetProfit = previewData?.summary?.netProfit ?? previewData?.netProfit ?? 0;
   const isNetProfitPositive = previewData?.summary?.isProfit ?? previewData?.isProfit ?? (safeNetProfit >= 0);
+  const draftVoucherCount = previewData?.draftVoucherCount ?? 0;
 
   // Normalize temporary accounts (revenue / expense)
   const { revenuesList, expensesList } = useMemo(() => {
@@ -334,6 +335,21 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
               <Layers className="w-6 h-6" />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* v8.0.2 (TD-252): سال با سند حسابداری پیش‌نویس بسته نمی‌شود */}
+      {draftVoucherCount > 0 && (
+        <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 rounded-2xl p-5 space-y-2" role="alert">
+          <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-bold text-sm">
+            <AlertTriangle className="w-5 h-5" />
+            سال مالی {toPersianDigits(selectedYear)} {toPersianDigits(draftVoucherCount)} سند حسابداری پیش‌نویس دارد و تا تأیید یا حذف آن‌ها بسته نمی‌شود.
+          </div>
+          <p className="text-xs text-rose-700/80 dark:text-rose-300/80">
+            سند پیش‌نویس در بستن حساب‌ها شمرده نمی‌شود و پس از بستن سال دیگر تأییدشدنی نیست. شماره اسناد:{' '}
+            {(previewData?.draftVouchers ?? []).map(v => toPersianDigits(v.voucherNumber)).join('، ')}
+            {draftVoucherCount > (previewData?.draftVouchers?.length ?? 0) ? ' و …' : ''}
+          </p>
         </div>
       )}
 
@@ -641,8 +657,9 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
           <button
             type="button"
             onClick={() => setIsConfirmModalOpen(true)}
-            disabled={isExecuting}
-            className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black px-6 py-3 rounded-xl text-sm transition-all shadow-lg hover:shadow-amber-500/20 shrink-0 cursor-pointer"
+            disabled={isExecuting || draftVoucherCount > 0}
+            title={draftVoucherCount > 0 ? 'ابتدا اسناد پیش‌نویس این سال را تأیید یا حذف کنید' : undefined}
+            className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black px-6 py-3 rounded-xl text-sm transition-all shadow-lg hover:shadow-amber-500/20 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             اجرای قطعی بستن سال مالی {toPersianDigits(selectedYear)}
           </button>
