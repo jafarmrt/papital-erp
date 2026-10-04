@@ -24,8 +24,8 @@ import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherRepo
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import {
-  checkChequeDeleteKeepsOtherCheques, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
-  probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest, probeSpentChequeCannotBounce,
+  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
@@ -265,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.20: TD-274 ──
+    ['inv_td_274_foreign_treasury_uses_rate', 'v8.0.20: دریافت، پرداخت و انتقال ارزی خزانه با نرخ تسعیر (صریح یا نرخ فاکتور تسویه‌شده) در سند ثبت می‌شوند و بدون نرخ رد می‌شوند (TD-274)',
+      checkForeignTreasuryUsesRate, 'دریافت با نرخ صریح، تسویه فاکتور با نرخ فاکتور، رد بدون نرخ و انتقال ارزی درست به ریال ثبت شدند'],
     // ── v8.0.19: TD-271 (حوزه C) ──
     ['inv_td_271_cheque_delete_keeps_other_cheques', 'v8.0.19: حذف چک فقط اسناد همان چک را باطل می‌کند، نه اسناد چک دیگری با همان شماره؛ سند قدیمی بی‌پیوند شماره مشترک حذف را رد می‌کند (TD-271)',
       () => checkChequeDeleteKeepsOtherCheques(), 'اسناد چک دیگر با همان شماره ماندند؛ دفتر کل درست ماند؛ حذف با سند قدیمی مبهم رد شد'],
@@ -370,7 +373,6 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeClearedChequeMakesBankDiscrepant()) observed.add('FOCUSED:cleared-cheque-bank-discrepant');
     if (await probeChequeClearedIntoBankWithoutLedger()) observed.add('FOCUSED:cheque-cleared-into-bank-without-ledger');
     if (await probeTreasuryChequeMethodWithoutCheque()) observed.add('FOCUSED:treasury-cheque-method-without-cheque');
-    if (await probeSpentChequeCannotBounce()) observed.add('FOCUSED:spent-cheque-cannot-bounce');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

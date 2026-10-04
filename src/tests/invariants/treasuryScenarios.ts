@@ -6,6 +6,8 @@ import { BankAccountService } from '../../services/accounting/treasury/bankAccou
 import { ChequeLifecycleService } from '../../services/accounting/treasury/chequeLifecycle.service.js';
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
+import { DocumentService } from '../../services/document.service.js';
+import { createTestItem } from '../fixtures/factories.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 
 /**
@@ -89,6 +91,61 @@ export async function checkChequeDeleteKeepsOtherCheques(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-274: دریافت، پرداخت و انتقال ارزی خزانه با نرخ تسعیر در سند ثبت می‌شوند — نرخ صریح، یا نرخ فاکتوری که تسویه می‌شود؛
+ * تراکنش ارزی بدون نرخ رد می‌شود (هرگز نرخ ۱).
+ */
+export async function checkForeignTreasuryUsesRate(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await voucherWatermark();
+  const usdCash = await BankAccountService.createBankAccount({ title: `صندوق دلاری ${tag('U')}`, type: 'cash', accountId: await accountIdByCode('1002'), initialBalance: 0, currency: 'USD' });
+  const usdBank = await BankAccountService.createBankAccount({ title: `بانک دلاری ${tag('U')}`, type: 'bank', accountId: await accountIdByCode('1004'), initialBalance: 0, currency: 'USD' });
+  const receipt = (fields: Record<string, unknown>) => TreasuryTransactionService.createTreasuryTransaction({
+    type: 'receipt', method: 'cash', amount: 100, currency: 'USD', bankAccountId: usdCash.id, partyType: 'customer', partyName: 'مشتری دلاری آزمون', date: '2026-04-02', username: 'inv', ...fields,
+  });
+
+  // الف) دریافت ۱۰۰ دلار با نرخ صریح ۶۰۰٬۰۰۰ ← ۶۰٬۰۰۰٬۰۰۰ ریال
+  await receipt({ exchangeRate: 600000 });
+
+  // ب) تسویه فاکتور دلاری (نرخ فاکتور ۶۵۰٬۰۰۰) بی نرخ صریح ← همان نرخ فاکتور؛ حساب مشتری به ریال بسته می‌شود
+  const buyer = `مشتری تسویه دلاری ${tag('I')}`;
+  const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await DocumentService.createDocument({ docType: 'receipt', inOut: 'in', status: 'final', date: '2026-04-01', user: 'inv', items: [{ itemId: product.id, quantity: 1, unitPrice: 100000, location: wh }] });
+  const invoice = await DocumentService.createDocument({
+    docType: 'invoice', inOut: 'out', status: 'final', date: '2026-04-02', user: 'inv', buyerName: buyer, currency: 'USD', exchangeRate: 650000,
+    items: [{ itemId: product.id, quantity: 1, unitPrice: 2, location: wh }],
+  });
+  await receipt({ amount: 2, documentId: invoice, partyName: buyer });
+  const buyerNet = await pool.query<{ n: string }>(
+    `SELECT COALESCE(SUM(ROUND(i.debit * COALESCE(NULLIF(i.exchange_rate, 0), 1), 0) - ROUND(i.credit * COALESCE(NULLIF(i.exchange_rate, 0), 1), 0)), 0)::text AS n
+       FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+      WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = '1201' AND i.detailed_name = $1 AND v.id > $2`, [buyer, mark]);
+  if (!fin(buyerNet.rows[0]?.n ?? 0).isZero()) problems.push(`تسویه فاکتور دلاری بی نرخ صریح حساب مشتری را به ریال نبست: مانده ${buyerNet.rows[0]?.n}`);
+
+  // ج) تراکنش یورویی بدون نرخ (نه صریح، نه فاکتور، نه تنظیمات) رد می‌شود
+  const eurCash = await BankAccountService.createBankAccount({ title: `صندوق یورویی ${tag('E')}`, type: 'cash', accountId: await accountIdByCode('1002'), initialBalance: 0, currency: 'EUR' });
+  let refusal: string | null = null;
+  try {
+    await receipt({ currency: 'EUR', bankAccountId: eurCash.id });
+  } catch (err) {
+    refusal = getErrorMessage(err);
+  }
+  if (!refusal?.includes('نرخ تسعیر')) problems.push(`تراکنش ارزی بدون نرخ رد نشد (${refusal ?? 'پذیرفته شد'})`);
+
+  // د) انتقال ۵۰ دلار از صندوق به بانک دلاری با نرخ ۶۰۰٬۰۰۰
+  await TreasuryTransactionService.createTreasuryTransfer({
+    amount: 50, currency: 'USD', exchangeRate: 600000, fromBankAccountId: usdCash.id, toBankAccountId: usdBank.id, date: '2026-04-03', username: 'inv',
+  });
+
+  // صندوق دلاری: ۶۰٬۰۰۰٬۰۰۰ + ۱٬۳۰۰٬۰۰۰ − ۳۰٬۰۰۰٬۰۰۰؛ بانک دلاری: ۳۰٬۰۰۰٬۰۰۰
+  const expected: Record<string, number> = { '1002': 31300000, '1004': 30000000 };
+  for (const [code, amount] of Object.entries(expected)) {
+    const actual = await irrNet(code, mark);
+    if (!fin(actual).equals(amount)) problems.push(`گردش ریالی ${code}: ${actual}، انتظار ${amount}`);
+  }
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */
@@ -161,16 +218,4 @@ export async function probeTreasuryChequeMethodWithoutCheque(): Promise<boolean>
   });
   const after = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM cheques');
   return Number(after.rows[0].n) === Number(before.rows[0].n);
-}
-
-/** TD-279: چک خرج‌شده (واگذارشده به تأمین‌کننده) اگر برگشت بخورد قابل ثبت نیست (خرج وضعیت پایانی است) */
-export async function probeSpentChequeCannotBounce(): Promise<boolean> {
-  const cheque = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('S'), amount: 600000, partyName: 'مشتری کاوش خرج' });
-  await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'spent', transfereePartyName: 'تامین‌کننده کاوش خرج', actionDate: '2026-04-02', username: 'inv' });
-  try {
-    await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'bounced', actionDate: '2026-04-05', username: 'inv' });
-    return false;
-  } catch {
-    return true;
-  }
 }

@@ -42,6 +42,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     purpose: 'settlement' as 'settlement' | 'advance' | 'other',
     method: 'bank_transfer' as 'bank_transfer' | 'pos' | 'cash' | 'cheque',
     amount: 0,
+    // v8.0.20 (TD-274): نرخ تسعیر تراکنش حساب ارزی (ریال برای هر واحد)
+    exchangeRate: 0,
     trackingNumber: '',
     description: '',
     createVoucher: true,
@@ -151,7 +153,13 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onSave(formData);
+      // v8.0.20 (TD-274): ارز تراکنش همان ارز حساب انتخاب‌شده است و تراکنش ارزی نرخ تسعیر می‌فرستد
+      const bankCurrency = (safeBankAccounts.find(b => b.id === formData.bankAccountId)?.currency || 'IRR').toUpperCase();
+      await onSave({
+        ...formData,
+        currency: bankCurrency,
+        exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
+      });
       onClose();
     } catch {
       // Handled in parent
@@ -175,9 +183,10 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   });
   const actualSupplierList = supplierList.length > 0 ? supplierList : safeCustomers;
 
-  const curLbl = formatCurrencyLabel(appCurrency);
   const isReceipt = formData.type === 'receipt';
   const selectedBank = safeBankAccounts.find(b => b.id === formData.bankAccountId);
+  const isForeignBank = (selectedBank?.currency || 'IRR').toUpperCase() !== 'IRR';
+  const curLbl = formatCurrencyLabel(isForeignBank ? (selectedBank?.currency || appCurrency) : appCurrency);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs">
@@ -276,6 +285,24 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                 </p>
               )}
             </div>
+
+            {isForeignBank && (
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  <span>نرخ تسعیر {selectedBank?.currency} (ریال برای هر واحد) *</span>
+                  <HelpBadge text="تراکنش حساب ارزی بدون نرخ تسعیر ثبت نمی‌شود؛ سند حسابداری با همین نرخ به ریال تسعیر می‌شود." />
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  step="any"
+                  value={formData.exchangeRate || ''}
+                  onChange={e => setFormData({ ...formData, exchangeRate: Number(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>

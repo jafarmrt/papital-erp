@@ -305,6 +305,7 @@ export const transferSchema = z.object({
     date: z.string().optional(),
     amount: z.coerce.number().positive('مبلغ انتقال باید بزرگتر از صفر باشد'),
     currency: z.string().optional().default('IRR'),
+    exchangeRate: z.coerce.number().positive().optional(),
     fromBankAccountId: z.coerce.number().int().positive('حساب مبدا الزامی است'),
     toBankAccountId: z.coerce.number().int().positive('حساب مقصد الزامی است'),
     trackingNumber: z.string().optional(),

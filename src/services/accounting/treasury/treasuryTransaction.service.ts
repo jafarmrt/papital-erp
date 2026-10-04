@@ -3,6 +3,7 @@ import { bankAccounts, treasuryTransactions, users, accounts } from '../../../db
 import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
+import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
@@ -327,6 +328,8 @@ export class TreasuryTransactionService {
       if (bank.currency && txCurrency !== bank.currency) {
         throw new ValidationError(`ارز تراکنش (${txCurrency}) با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد. تراکنش هم‌ارز ثبت کنید.`);
       }
+      // v8.0.20 (TD-274): نرخ تسعیر تراکنش ارزی (صریح، فاکتور تسویه‌شده، تنظیمات)؛ بدون نرخ رد می‌شود، هرگز نرخ ۱
+      const txExchangeRate = await resolveTreasuryExchangeRate(txEngine, txCurrency, data.exchangeRate, data.documentId);
 
       const txNum = await this.generateTransactionNumber(data.type, txEngine);
 
@@ -405,7 +408,7 @@ export class TreasuryTransactionService {
           description: descText,
           referenceModule: 'treasury',
           referenceNumber: txNum,
-          currency: data.currency || bank.currency || 'IRR',
+          currency: txCurrency,
           userId: data.userId,
           username: data.username,
           items: [
@@ -416,7 +419,8 @@ export class TreasuryTransactionService {
               detailedName: data.type === 'receipt' ? treasuryDetailedName : data.partyName,
               debit: amount,
               credit: 0,
-              currency: data.currency || 'IRR',
+              currency: txCurrency,
+              exchangeRate: txExchangeRate,
               description: descText,
             },
             {
@@ -426,7 +430,8 @@ export class TreasuryTransactionService {
               detailedName: data.type === 'receipt' ? data.partyName : treasuryDetailedName,
               debit: 0,
               credit: amount,
-              currency: data.currency || 'IRR',
+              currency: txCurrency,
+              exchangeRate: txExchangeRate,
               description: descText,
             }
           ]
@@ -441,7 +446,7 @@ export class TreasuryTransactionService {
         method: data.method,
         amount: money(amount),
         currency: txCurrency,
-        exchangeRate: moneyOr(data.exchangeRate, 1),
+        exchangeRate: money(txExchangeRate),
         bankAccountId: data.bankAccountId,
         partyType: data.partyType || 'other',
         partyId: data.partyId || null,
@@ -645,6 +650,8 @@ export class TreasuryTransactionService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
+    /** v8.0.20 (TD-274): نرخ تسعیر انتقال ارزی (ریال برای هر واحد) */
+    exchangeRate?: number;
   }): Promise<{ payment: TreasuryTransaction; receipt: TreasuryTransaction; voucherId: number | null }> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ انتقال باید بزرگتر از صفر باشد');
@@ -673,6 +680,8 @@ export class TreasuryTransactionService {
       if (currency !== from.currency) {
         throw new ValidationError(`ارز انتقال (${currency}) با ارز حساب مبدأ (${from.currency}) هم‌خوانی ندارد`);
       }
+      // v8.0.20 (TD-274): انتقال ارزی با نرخ تسعیر (صریح یا تنظیمات)، هرگز نرخ ۱
+      const transferRate = await resolveTreasuryExchangeRate(txEngine, currency, data.exchangeRate);
 
       // مانده‌ها با fin()
       const fromNewBal = fin(from.currentBalance).subtract(amount).round(4);
@@ -711,6 +720,7 @@ export class TreasuryTransactionService {
               debit: amount,
               credit: 0,
               currency,
+              exchangeRate: transferRate,
               description: `واریز به مقصد بابت انتقال از ${from.title}`
             },
             {
@@ -721,6 +731,7 @@ export class TreasuryTransactionService {
               debit: 0,
               credit: amount,
               currency,
+              exchangeRate: transferRate,
               description: `برداشت از مبدأ بابت انتقال به ${to.title}`
             }
           ]
@@ -737,7 +748,7 @@ export class TreasuryTransactionService {
         method: 'bank_transfer',
         amount: money(amount),
         currency,
-        exchangeRate: money(1),
+        exchangeRate: money(transferRate),
         bankAccountId: from.id,
         partyType: 'other',
         partyId: null,
@@ -756,7 +767,7 @@ export class TreasuryTransactionService {
         method: 'bank_transfer',
         amount: money(amount),
         currency,
-        exchangeRate: money(1),
+        exchangeRate: money(transferRate),
         bankAccountId: to.id,
         partyType: 'other',
         partyId: null,

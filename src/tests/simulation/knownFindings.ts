@@ -22,12 +22,12 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // حوزه C — خزانه و چک صیادی (v8.0.19؛ TD-271 در همان نسخه رفع شد: inv_td_271_cheque_delete_keeps_other_cheques)
   'FOCUSED:paid-cheque-bounce-without-voucher': 'TD-272',
   'FOCUSED:returned-cheque-stays-in-protest': 'TD-273',
-  'FOCUSED:foreign-treasury-at-rate-one': 'TD-274',
+  // TD-274 در v8.0.20 رفع شد (inv_td_274_foreign_treasury_uses_rate)
   'FOCUSED:foreign-cheque-at-rate-one': 'TD-275',
   'FOCUSED:cleared-cheque-bank-discrepant': 'TD-276',
   'FOCUSED:cheque-cleared-into-bank-without-ledger': 'TD-277',
   'FOCUSED:treasury-cheque-method-without-cheque': 'TD-278',
-  'FOCUSED:spent-cheque-cannot-bounce': 'TD-279',
+  // TD-279 با تصمیم مالک محصول (گزینه ب، ۱۲ مهر ۱۴۰۵) بی‌تغییر بسته شد؛ برگشت چک خرج‌شده با سند دستی
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)

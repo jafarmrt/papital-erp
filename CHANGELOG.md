@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.20 — Foreign Treasury Transactions Use Their Rate (TD-274)
+- Foreign-currency receipts, payments and transfers post at their exchange rate (explicit, the settled invoice's rate, or the setting) and are refused without one; the treasury form asks for the rate of a foreign account.
+
 ### v8.0.19 — Treasury and Cheque Evaluation; Cheque Delete by Link (TD-271)
 - Second evaluation part (treasury and Sayad cheques): nine findings recorded; deleting a cheque no longer voids the vouchers of another cheque with the same number.
 
