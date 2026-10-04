@@ -4,7 +4,7 @@ import { eq, asc, and, or, sql, like, gte, lte, lt, SQL } from 'drizzle-orm';
 import { ChartOfAccountsService } from './chartOfAccounts.service.js';
 import { TreasuryService } from './treasury.service.js';
 import { normalizeDateToIso } from '../../lib/businessClock.js';
-import { fin, FinancialMath, type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { toStorageDate, isoToJalaliDate } from '../../utils/calendarDate.js';
 import type { 
@@ -15,8 +15,26 @@ import type {
   Account,
   DetailedPartyLedgerResult,
   DetailedPartyLedgerItem,
+  ForeignAmountOrigin,
   PartyOption
 } from '../../types.js';
+import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql } from './voucherItemAmount.js';
+
+/** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
+function foreignOrigin(allCurrencies: boolean, row: {
+  rowCurrency: string;
+  originalDebit: DecimalValue | null;
+  originalCredit: DecimalValue | null;
+  exchangeRate: DecimalValue | null;
+}): ForeignAmountOrigin {
+  if (!allCurrencies || row.rowCurrency === 'IRR') return {};
+  return {
+    originalCurrency: row.rowCurrency,
+    originalDebit: fin(row.originalDebit).toNumber(),
+    originalCredit: fin(row.originalCredit).toNumber(),
+    exchangeRate: fin(row.exchangeRate ?? 1).toNumber(),
+  };
+}
 
 /** ردیف گزارش خلاصه گردش پروژه (GET /accounting/reports/project-summary) */
 export interface ProjectSummaryReportRow {
@@ -65,8 +83,9 @@ export class AccountingReportService {
     // v7.0.71 (P2-6 / TD-210 بخش ۳): جمع گردش‌ها در PostgreSQL با numeric دقیق، نه جمع double در JS.
     // گروه‌بندی بر اساس حساب، تفصیلی، ارز و متن تاریخ است؛ تاریخ‌های قدیمی (شمسی یا قالب‌های دیگر) همچنان با
     // normalizeDateToIso در JS دسته‌بندی می‌شوند، پس فقط جمع‌های هر روز به Decimal منتقل می‌شوند.
-    const itemCurrencyExpr = sql<string>`UPPER(COALESCE(NULLIF(${journalVoucherItems.currency}, ''), NULLIF(${journalVouchers.currency}, ''), 'IRR'))`;
-    const rateExpr = sql`COALESCE(NULLIF(${journalVoucherItems.exchangeRate}, 0), 1)`;
+    // v8.0.16 (TD-260): ارز و نرخ ردیف از همان قاعده کارت حساب و صورت‌حساب طرف‌حساب (voucherItemAmount.ts)
+    const itemCurrencyExpr = voucherItemCurrencySql;
+    const rateExpr = voucherItemRateSql;
     const groupedItems = await executor.select({
       voucherDate: journalVouchers.date,
       itemCurrency: itemCurrencyExpr,
@@ -564,7 +583,7 @@ export class AccountingReportService {
     endDate?: string;
     currency?: string;
   }): Promise<{
-    items: {
+    items: ({
       voucherId: number;
       voucherNumber: number;
       date: string;
@@ -579,11 +598,13 @@ export class AccountingReportService {
       credit: number;
       runningBalance: number;
       isOpening?: boolean;
-    }[];
+    } & ForeignAmountOrigin)[];
     openingBalance: number;
     totalDebit: number;
     totalCredit: number;
     finalBalance: number;
+    /** v8.0.16 (TD-260): ارز مبالغ گزارش — IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
+    currency: string;
   }> {
     // V2.0.0: فیلترهای دوره — مانده ابتدای دوره جداگانه محاسبه می‌شود
     const periodConditions = [
@@ -610,18 +631,16 @@ export class AccountingReportService {
     if (params.endDate) {
       periodConditions.push(lte(journalVouchers.date, params.endDate));
     }
-    if (params.currency && params.currency !== 'all') {
-      periodConditions.push(or(
-        eq(journalVoucherItems.currency, params.currency),
-        eq(journalVouchers.currency, params.currency)
-      ));
-    }
+    // v8.0.16 (TD-260): ارز ردیف با همان قاعده تراز آزمایشی؛ در نمای همه ارزها ردیف ارزی با نرخ خودش به ریال تبدیل می‌شود
+    const allCurrencies = isAllCurrenciesView(params.currency);
+    const currencyCondition = voucherItemCurrencyCondition(params.currency);
+    if (currencyCondition) periodConditions.push(currencyCondition);
+    const debitAmount = voucherItemReportAmountSql(journalVoucherItems.debit, params.currency);
+    const creditAmount = voucherItemReportAmountSql(journalVoucherItems.credit, params.currency);
 
     const rawRows = await orm.select({
       voucherId: journalVouchers.id,
       voucherNumber: journalVouchers.voucherNumber,
-      voucherCurrency: journalVouchers.currency,
-      itemCurrency: journalVoucherItems.currency,
       date: journalVouchers.date,
       itemDescription: journalVoucherItems.description,
       voucherDescription: journalVouchers.description,
@@ -630,8 +649,12 @@ export class AccountingReportService {
       detailedName: journalVoucherItems.detailedName,
       detailedType: journalVoucherItems.detailedType,
       detailedId: journalVoucherItems.detailedId,
-      debit: journalVoucherItems.debit,
-      credit: journalVoucherItems.credit,
+      rowCurrency: voucherItemCurrencySql,
+      debit: sql<string>`${debitAmount}::text`,
+      credit: sql<string>`${creditAmount}::text`,
+      originalDebit: journalVoucherItems.debit,
+      originalCredit: journalVoucherItems.credit,
+      exchangeRate: journalVoucherItems.exchangeRate,
     })
     .from(journalVoucherItems)
     .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
@@ -653,13 +676,10 @@ export class AccountingReportService {
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
       if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
-      if (params.currency && params.currency !== 'all') priorConds.push(or(
-        eq(journalVoucherItems.currency, params.currency),
-        eq(journalVouchers.currency, params.currency)
-      ));
+      priorConds.push(currencyCondition);
       if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
 
-      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${journalVoucherItems.debit} - ${journalVoucherItems.credit}), 0)::text` })
+      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .innerJoin(accounts, eq(accounts.id, journalVoucherItems.accountId))
@@ -672,7 +692,7 @@ export class AccountingReportService {
     let totalDebitDec = fin(0);
     let totalCreditDec = fin(0);
 
-    interface LedgerOutputRow {
+    interface LedgerOutputRow extends ForeignAmountOrigin {
       voucherId: number;
       voucherNumber: number;
       date: string;
@@ -688,6 +708,7 @@ export class AccountingReportService {
       runningBalance: number;
       isOpening?: boolean;
     }
+    const reportCurrency = allCurrencies ? 'IRR' : String(params.currency).toUpperCase();
 
     const items: LedgerOutputRow[] = rawRows.map(r => {
       const d = fin(r.debit);
@@ -706,10 +727,11 @@ export class AccountingReportService {
         detailedName: r.detailedName || undefined,
         detailedType: r.detailedType || undefined,
         detailedId: r.detailedId,
-        currency: r.itemCurrency || r.voucherCurrency || 'IRR',
+        currency: reportCurrency,
         debit: d.toNumber(),
         credit: c.toNumber(),
         runningBalance: runningDec.toNumber(),
+        ...foreignOrigin(allCurrencies, r),
       };
     });
 
@@ -722,7 +744,7 @@ export class AccountingReportService {
         description: 'مانده ابتدای دوره',
         accountName: '',
         accountCode: '',
-        currency: params.currency && params.currency !== 'all' ? params.currency : 'IRR',
+        currency: reportCurrency,
         debit: openingBalance > 0 ? openingBalance : 0,
         credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
         runningBalance: openingBalance,
@@ -736,6 +758,7 @@ export class AccountingReportService {
       totalDebit: totalDebitDec.toNumber(),
       totalCredit: totalCreditDec.toNumber(),
       finalBalance: runningDec.toNumber(),
+      currency: reportCurrency,
     };
   }
 
@@ -938,14 +961,12 @@ export class AccountingReportService {
       ...partyMatchConditions
     ];
 
-    if (params.currency && params.currency !== 'all') {
-      baseConditions.push(
-        or(
-          eq(journalVoucherItems.currency, params.currency),
-          eq(journalVouchers.currency, params.currency)
-        )
-      );
-    }
+    // v8.0.16 (TD-260): ارز ردیف با همان قاعده تراز آزمایشی؛ در نمای همه ارزها ردیف ارزی با نرخ خودش به ریال تبدیل می‌شود
+    const allCurrencies = isAllCurrenciesView(params.currency);
+    baseConditions.push(voucherItemCurrencyCondition(params.currency));
+    const debitAmount = voucherItemReportAmountSql(journalVoucherItems.debit, params.currency);
+    const creditAmount = voucherItemReportAmountSql(journalVoucherItems.credit, params.currency);
+    const reportCurrency = allCurrencies ? 'IRR' : String(params.currency).toUpperCase();
 
     // 1. Calculate opening balance (prior to startDate) — v7.0.71 (P2-6 بخش ۳): جمع در SQL و مانده‌ها با Decimal
     let openingDec = fin(0);
@@ -955,7 +976,7 @@ export class AccountingReportService {
         lt(journalVouchers.date, params.startDate)
       ].filter((c): c is SQL => c !== undefined);
 
-      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${journalVoucherItems.debit} - ${journalVoucherItems.credit}), 0)::text` })
+      const [prior] = await orm.select({ balance: sql<string>`COALESCE(SUM(${debitAmount} - ${creditAmount}), 0)::text` })
       .from(journalVoucherItems)
       .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
       .where(and(...priorConditions));
@@ -977,8 +998,6 @@ export class AccountingReportService {
       voucherId: journalVouchers.id,
       voucherNumber: journalVouchers.voucherNumber,
       manualVoucherNumber: journalVouchers.manualVoucherNumber,
-      voucherCurrency: journalVouchers.currency,
-      itemCurrency: journalVoucherItems.currency,
       date: journalVouchers.date,
       itemDescription: journalVoucherItems.description,
       voucherDescription: journalVouchers.description,
@@ -986,8 +1005,12 @@ export class AccountingReportService {
       accountCode: accounts.code,
       detailedName: journalVoucherItems.detailedName,
       detailedType: journalVoucherItems.detailedType,
-      debit: journalVoucherItems.debit,
-      credit: journalVoucherItems.credit,
+      rowCurrency: voucherItemCurrencySql,
+      debit: sql<string>`${debitAmount}::text`,
+      credit: sql<string>`${creditAmount}::text`,
+      originalDebit: journalVoucherItems.debit,
+      originalCredit: journalVoucherItems.credit,
+      exchangeRate: journalVoucherItems.exchangeRate,
       rowOrder: journalVoucherItems.rowOrder,
     })
     .from(journalVoucherItems)
@@ -1012,7 +1035,7 @@ export class AccountingReportService {
         description: 'مانده ابتدای دوره (انتقال از قبل)',
         accountCode: '—',
         accountName: 'مانده دفتری',
-        currency: params.currency && params.currency !== 'all' ? params.currency : 'IRR',
+        currency: reportCurrency,
         debit: openingBalance > 0 ? openingBalance : 0,
         credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
         runningBalance: openingBalance,
@@ -1043,11 +1066,12 @@ export class AccountingReportService {
         accountName: r.accountName,
         detailedName: r.detailedName || undefined,
         detailedType: r.detailedType || undefined,
-        currency: r.itemCurrency || r.voucherCurrency || 'IRR',
+        currency: reportCurrency,
         debit: d.toNumber(),
         credit: c.toNumber(),
         runningBalance,
         balanceType,
+        ...foreignOrigin(allCurrencies, r),
       });
     });
 
@@ -1072,6 +1096,7 @@ export class AccountingReportService {
       finalBalance,
       finalBalanceType,
       netStatusText,
+      currency: reportCurrency,
       items,
     };
   }

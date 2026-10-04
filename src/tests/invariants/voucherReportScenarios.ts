@@ -18,7 +18,7 @@ import { createTestItem } from '../fixtures/factories.js';
  * تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 
-async function healthMetric(testId: string, metric: string): Promise<number> {
+export async function healthMetric(testId: string, metric: string): Promise<number> {
   const report = await FinancialHealthService.runHealthCheck();
   const test = report.tests.find(t => t.id === testId);
   const value = (test?.metrics as Record<string, unknown> | undefined)?.[metric];

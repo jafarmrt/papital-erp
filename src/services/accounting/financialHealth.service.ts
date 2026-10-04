@@ -66,6 +66,21 @@ const jalaliLabel = (v: unknown): string => {
   return isoToJalaliDate(raw) || String(v ?? '').substring(0, 10);
 };
 
+/**
+ * v8.0.16 (TD-260): ردیف‌های فعال اسناد تأییدشده و دائم با مبلغ ریالی — همان قاعده تراز آزمایشی و کارت حساب
+ * (`voucherItemAmount.ts`): ردیف ریالی با مبلغ خودش و ردیف ارزی با نرخ همان ردیف، گرد به ریال. پیش‌تر مانده‌ها مبلغ
+ * خام ردیف ارزی را با ریال جمع می‌زدند (۲ دلار = ۲ ریال).
+ */
+const IRR_VOUCHER_ITEMS = sql.raw(`
+  SELECT vi.account_id,
+         CASE WHEN UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) = 'IRR' THEN vi.debit
+              ELSE ROUND(vi.debit * COALESCE(NULLIF(vi.exchange_rate, 0), 1), 0) END AS debit_irr,
+         CASE WHEN UPPER(COALESCE(NULLIF(vi.currency, ''), NULLIF(v.currency, ''), 'IRR')) = 'IRR' THEN vi.credit
+              ELSE ROUND(vi.credit * COALESCE(NULLIF(vi.exchange_rate, 0), 1), 0) END AS credit_irr
+    FROM journal_voucher_items vi
+    JOIN journal_vouchers v ON vi.voucher_id = v.id AND v.is_deleted = 0 AND v.status IN ('approved', 'permanent')
+   WHERE vi.is_deleted = 0`);
+
 export class FinancialHealthService {
   /**
    * اجرای جامع اسکن سلامت دفاتر و آزمون‌های ممیزی خودکار
@@ -139,17 +154,16 @@ export class FinancialHealthService {
           a.level,
           a.nature,
           a.account_type,
-          COALESCE(SUM(vi.debit), 0)::float AS total_debit,
-          COALESCE(SUM(vi.credit), 0)::float AS total_credit,
-          (COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0))::float AS net_balance
+          COALESCE(SUM(vi.debit_irr), 0)::float AS total_debit,
+          COALESCE(SUM(vi.credit_irr), 0)::float AS total_credit,
+          (COALESCE(SUM(vi.debit_irr), 0) - COALESCE(SUM(vi.credit_irr), 0))::float AS net_balance
         FROM accounts a
-        JOIN journal_voucher_items vi ON vi.account_id = a.id AND vi.is_deleted = 0
-        JOIN journal_vouchers v ON vi.voucher_id = v.id AND v.is_deleted = 0 AND v.status IN ('approved', 'permanent')
+        JOIN (${IRR_VOUCHER_ITEMS}) vi ON vi.account_id = a.id
         WHERE a.is_deleted = 0 AND a.level IN ('subsidiary', 'general')
         GROUP BY a.id, a.code, a.name, a.level, a.nature, a.account_type
-        HAVING (a.nature = 'debit' AND (COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0)) < -100)
-            OR (a.nature = 'credit' AND (COALESCE(SUM(vi.credit), 0) - COALESCE(SUM(vi.debit), 0)) < -100)
-        ORDER BY ABS(COALESCE(SUM(vi.debit), 0) - COALESCE(SUM(vi.credit), 0)) DESC
+        HAVING (a.nature = 'debit' AND (COALESCE(SUM(vi.debit_irr), 0) - COALESCE(SUM(vi.credit_irr), 0)) < -100)
+            OR (a.nature = 'credit' AND (COALESCE(SUM(vi.credit_irr), 0) - COALESCE(SUM(vi.debit_irr), 0)) < -100)
+        ORDER BY ABS(COALESCE(SUM(vi.debit_irr), 0) - COALESCE(SUM(vi.credit_irr), 0)) DESC
         LIMIT 50;
       `),
 
@@ -166,11 +180,10 @@ export class FinancialHealthService {
       // هـ: مانده دفاتر حسابداری در گروه ۱۴ (موجودی مواد و کالا)
       orm.execute(sql`
         SELECT 
-          COALESCE(SUM(vi.debit - vi.credit), 0)::float AS total_ledger_valuation
-        FROM journal_voucher_items vi
-        JOIN journal_vouchers v ON vi.voucher_id = v.id AND v.is_deleted = 0 AND v.status IN ('approved', 'permanent')
+          COALESCE(SUM(vi.debit_irr - vi.credit_irr), 0)::float AS total_ledger_valuation
+        FROM (${IRR_VOUCHER_ITEMS}) vi
         JOIN accounts a ON vi.account_id = a.id AND a.is_deleted = 0
-        WHERE a.code LIKE '14%' AND vi.is_deleted = 0;
+        WHERE a.code LIKE '14%';
       `),
 
       // و: فاکتورهای نهایی بدون سند دوبل

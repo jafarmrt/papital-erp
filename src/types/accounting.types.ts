@@ -410,7 +410,15 @@ export interface AccountLedgerReport {
   closingBalanceType: 'debit' | 'credit' | 'zero';
 }
 
-export interface DetailedPartyLedgerItem {
+/** v8.0.16 (TD-260): ردیف ارزی که در نمای «همه ارزها» به ریال تبدیل شده است — ارز، مبلغ و نرخ اصلی آن */
+export interface ForeignAmountOrigin {
+  originalCurrency?: string;
+  originalDebit?: number;
+  originalCredit?: number;
+  exchangeRate?: number;
+}
+
+export interface DetailedPartyLedgerItem extends ForeignAmountOrigin {
   rowNumber: number;
   voucherId: number;
   voucherNumber: number;
@@ -445,6 +453,8 @@ export interface DetailedPartyLedgerResult {
   finalBalance: number;
   finalBalanceType: 'بدهکار' | 'بستانکار' | 'بی‌حساب';
   netStatusText: string;
+  /** ارز مبالغ گزارش: IRR در نمای همه ارزها، وگرنه همان ارز انتخاب‌شده */
+  currency?: string;
   items: DetailedPartyLedgerItem[];
 }
 

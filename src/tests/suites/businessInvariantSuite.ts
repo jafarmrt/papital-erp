@@ -21,6 +21,7 @@ import { checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPri
 import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
+import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -258,6 +259,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.16: TD-260 ──
+    ['inv_td_260_reports_convert_foreign_rows', 'v8.0.16: کارت حساب، صورت‌حساب طرف‌حساب و بررسی سلامت مالی ردیف ارزی را در نمای همه ارزها با نرخ همان ردیف به ریال تبدیل می‌کنند (TD-260)',
+      checkReportsConvertForeignRows, 'کارت حساب و صورت‌حساب طرف‌حساب (همه ارزها، دلاری، ریالی، مانده ابتدای دوره) و مانده دفتر کل موجودی درست تسعیر شدند'],
     // ── v8.0.15: TD-270 ──
     ['inv_td_270_reports_ignore_deleted_voucher_items', 'v8.0.15: بررسی سلامت مالی و گزارش پروژه ردیف‌های حذف‌شده سند حسابداری (پس از همگام‌سازی دوباره پیش‌نویس) را نمی‌شمارند (TD-270)',
       checkReportsIgnoreDeletedVoucherItems, 'مانده دفتر کل موجودی در بررسی سلامت و گزارش پروژه فقط ردیف‌های فعال را شمردند'],

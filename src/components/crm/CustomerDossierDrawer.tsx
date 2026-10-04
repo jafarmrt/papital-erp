@@ -103,7 +103,8 @@ export function CustomerDossierDrawer({
         },
       ];
 
-  const customerCurrency = (customer as any)?.currency || 'IRR';
+  // v8.0.16 (TD-260): ارز مبالغ کارت حساب از خود گزارش (در نمای همه ارزها ریال)، نه ارز تعریف‌شده مشتری
+  const ledgerCurrency = financialReport?.currency || (customer as any)?.currency || 'IRR';
   const rawBalance = financialReport?.finalBalance || 0;
   const netBalance = Math.abs(rawBalance);
   const balanceType = financialReport 
@@ -197,7 +198,7 @@ export function CustomerDossierDrawer({
               <span className={`text-base font-black font-mono ${
                 balanceType === 'debit' ? 'text-rose-700' : balanceType === 'credit' ? 'text-emerald-700' : 'text-slate-800'
               }`}>
-                {formatPersianPrice(netBalance)} {formatCurrencyLabel(customerCurrency)}
+                {formatPersianPrice(netBalance)} {formatCurrencyLabel(ledgerCurrency)}
               </span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                 balanceType === 'debit'
@@ -497,7 +498,7 @@ export function CustomerDossierDrawer({
                     <div className="flex items-center gap-1 text-rose-700 font-mono font-black text-sm">
                       <ArrowUpRight size={14} />
                       <span>{formatPersianPrice(totalDebit)}</span>
-                      <span className="text-[10px] font-normal">{formatCurrencyLabel(customerCurrency)}</span>
+                      <span className="text-[10px] font-normal">{formatCurrencyLabel(ledgerCurrency)}</span>
                     </div>
                   </div>
 
@@ -506,7 +507,7 @@ export function CustomerDossierDrawer({
                     <div className="flex items-center gap-1 text-emerald-700 font-mono font-black text-sm">
                       <ArrowDownLeft size={14} />
                       <span>{formatPersianPrice(totalCredit)}</span>
-                      <span className="text-[10px] font-normal">{formatCurrencyLabel(customerCurrency)}</span>
+                      <span className="text-[10px] font-normal">{formatCurrencyLabel(ledgerCurrency)}</span>
                     </div>
                   </div>
 
@@ -526,7 +527,7 @@ export function CustomerDossierDrawer({
                           ? 'text-emerald-700'
                           : 'text-slate-800'
                       }>
-                        {formatPersianPrice(netBalance)} {formatCurrencyLabel(customerCurrency)}
+                        {formatPersianPrice(netBalance)} {formatCurrencyLabel(ledgerCurrency)}
                       </span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                         balanceType === 'debit'
