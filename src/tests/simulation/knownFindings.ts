@@ -20,7 +20,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'FOCUSED:account-card-mixes-currencies': 'TD-260',
   'I3:foreign-rounding': 'TD-261',
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
-  'I13:void-in-leaves-negative-history': 'TD-265',
+  // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   'FOCUSED:running-kardex-after-void': 'TD-266',
 };
 

@@ -22,6 +22,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
+import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 
 export class DocumentLifecycleService {
   /**
@@ -308,6 +309,10 @@ export class DocumentLifecycleService {
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)))
         .for('update');
       if (!doc) return;
+
+      // v8.0.6 (TD-265، تصمیم مالک محصول): ابطال سند ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده رد می‌شود
+      // (پیش از هر نوشتن)؛ پیش‌تر فقط موجودی لحظه ابطال سنجیده می‌شد و کاردکس به ترتیب تاریخ منفی می‌ماند
+      await assertVoidKeepsStockHistory(tx, { id: doc.id, refNumber: doc.refNumber });
 
       const deletedByUser = user || doc.user || 'system';
       // V10-1.1: زمان حذف/برگشت‌ها از ساعت توافقی (بدون Z تا مقایسه لغوی ستون date سازگار بماند)

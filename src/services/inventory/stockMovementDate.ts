@@ -21,7 +21,7 @@ import { createLedgerLocationResolver } from './warehouseResolver.js';
 export const BACKDATE_PERMISSION = 'warehouse.backdate';
 
 /** ردیف‌های فعال کاردکس که گردش واقعی‌اند: بدون ردیف حذف‌شده و بدون ردیف معکوسِ ردیف حذف‌شده (همان دفتر §12) */
-const LEDGER_ROW_FILTER = sql`t.is_deleted = 0
+export const LEDGER_ROW_FILTER = sql`t.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.id = t.reversal_of_id AND o.is_deleted = 1)`;
 
 const QTY_TOLERANCE = 1e-9;

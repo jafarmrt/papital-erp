@@ -1,3 +1,4 @@
+import { pool } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
 import { InventoryIntegrityService } from '../../services/inventory/inventoryIntegrity.service.js';
@@ -85,9 +86,8 @@ export async function checkBackdatedStockMovement(wh: string): Promise<string[]>
 }
 
 /**
- * TD-265 (باز، تصمیم مالک محصول لازم): ابطال ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده پذیرفته می‌شود
- * (موجودی لحظه ابطال کافی است)، ولی کاردکس به ترتیب تاریخ از تاریخ آن ورودی منفی می‌شود. true یعنی یافته هنوز بازتولید
- * می‌شود.
+ * TD-265 (رفع در v8.0.6؛ نگهبان رگرسیون): ابطال ورودی‌ای که موجودی‌اش با خروجِ تاریخ‌دار بعدی مصرف شده پذیرفته می‌شد و
+ * کاردکس به ترتیب تاریخ از تاریخ آن ورودی منفی می‌شد. true یعنی یافته دوباره بازتولید شده است.
  */
 export async function probeVoidConsumedReceipt(wh: string): Promise<boolean> {
   const mark = await watermarks();
@@ -95,9 +95,56 @@ export async function probeVoidConsumedReceipt(wh: string): Promise<boolean> {
   const first = await receive(item.id, 10, 100000, wh, '2025-10-01');
   await sell(item.id, 4, wh, '2025-10-02');
   await receive(item.id, 10, 100000, wh, '2025-10-03');
-  await DocumentService.deleteDocument(first, 'inv');
+  if (await rejection(() => DocumentService.deleteDocument(first, 'inv'))) return false;
   const violations = await checkBusinessInvariants({ ...mark, itemIds: [item.id] });
   return violations.some(v => v.invariant === 'I13_kardex_rebuild_wac' && v.message.includes('ابطال'));
+}
+
+/**
+ * TD-265 (تصمیم مالک محصول — گزینه الف): ابطال سند ورودیِ مصرف‌شده با پیامی که اسناد مصرف‌کننده را نام می‌برد رد
+ * می‌شود و هیچ اثری نمی‌گذارد؛ ورودیِ مصرف‌نشده، سند خروجی و ورودی‌ای که موجودی قبلی خروج‌ها را پوشش می‌دهد آزادند.
+ */
+export async function checkVoidConsumedReceiptRefused(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await watermarks();
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const scope: InvariantScope = { ...mark, itemIds: [item.id] };
+  const consumed = await receive(item.id, 10, 100000, wh, '2025-11-01');
+  const sale = await sell(item.id, 4, wh, '2025-11-02');
+  const later = await receive(item.id, 10, 120000, wh, '2025-11-03');
+  const before = await itemState(item.id);
+
+  const refused = await rejection(() => DocumentService.deleteDocument(consumed, 'inv'));
+  const saleRef = await refOf(sale);
+  if (!refused?.includes('مصرف') || !refused.includes(saleRef)) problems.push(`ابطال رسیدِ مصرف‌شده با نام سند مصرف‌کننده (${saleRef}) رد نشد (${refused ?? 'پذیرفته شد'})`);
+  const afterRefused = await itemState(item.id);
+  if (afterRefused.stock !== before.stock || afterRefused.wac !== before.wac || await isDeleted(consumed)) {
+    problems.push(`ابطال ردشده اثر گذاشت: ${JSON.stringify({ before, afterRefused })}`);
+  }
+
+  // رسید بعدی مصرف نشده (فروش را رسید اول پوشش می‌دهد): ابطال آزاد است
+  const laterVoid = await rejection(() => DocumentService.deleteDocument(later, 'inv'));
+  if (laterVoid) problems.push(`ابطال رسیدِ مصرف‌نشده رد شد: ${laterVoid}`);
+  // سند خروجی همیشه ابطال‌پذیر است؛ پس از آن رسید اول دیگر مصرف‌شده نیست
+  const saleVoid = await rejection(() => DocumentService.deleteDocument(sale, 'inv'));
+  if (saleVoid) problems.push(`ابطال فاکتور فروش رد شد: ${saleVoid}`);
+  const consumedVoid = await rejection(() => DocumentService.deleteDocument(consumed, 'inv'));
+  if (consumedVoid) problems.push(`ابطال رسید پس از ابطال فروشِ مصرف‌کننده رد شد: ${consumedVoid}`);
+  const { stock } = await itemState(item.id);
+  if (stock !== 0) problems.push(`موجودی پس از ابطال همه اسناد ${stock} است، نه صفر`);
+
+  problems.push(...await invariantProblems(scope, 'پایان سناریوی ابطال ورودی'));
+  return problems;
+}
+
+async function refOf(documentId: number): Promise<string> {
+  const res = await pool.query<{ ref: string }>('SELECT ref_number AS ref FROM documents WHERE id = $1', [documentId]);
+  return res.rows[0]?.ref ?? '';
+}
+
+async function isDeleted(documentId: number): Promise<boolean> {
+  const res = await pool.query<{ d: number }>('SELECT is_deleted AS d FROM documents WHERE id = $1', [documentId]);
+  return res.rows[0]?.d === 1;
 }
 
 /**
