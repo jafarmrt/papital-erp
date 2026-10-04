@@ -12,6 +12,7 @@ import {
   type KardexRebuildOptions
 } from './kardexWacRecalculator.service.js';
 import { InventoryStockRepairService } from './inventoryStockRepair.service.js';
+import { buildItemRunningKardex } from './runningKardex.service.js';
 import {
   NegativeStockPolicyService,
   type NegativeStockPolicyType,
@@ -58,7 +59,7 @@ export class InventoryIntegrityService {
    * Generates sequential running Kardex for a specific item (V10-0.2 full envelope)
    */
   static async getItemRunningKardex(itemId: number): Promise<RunningKardexResponse> {
-    return StockReconciliationService.getItemRunningKardex(itemId);
+    return buildItemRunningKardex(itemId);
   }
 
   /**

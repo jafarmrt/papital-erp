@@ -148,9 +148,9 @@ async function isDeleted(documentId: number): Promise<boolean> {
 }
 
 /**
- * TD-266 (باز): گزارش کاردکس جاری کالا (getItemRunningKardex) ردیف معکوس سند ابطال‌شده را می‌آورد ولی ردیف اصلی
- * حذف‌شده را نه؛ پس از ابطال یک فاکتور، مانده پایانی گزارش با موجودی واقعی کالا نمی‌خواند. true یعنی یافته هنوز
- * بازتولید می‌شود.
+ * TD-266 (رفع در v8.0.7؛ نگهبان رگرسیون): گزارش کاردکس جاری کالا ردیف معکوس سند ابطال‌شده را می‌آورد ولی ردیف اصلی
+ * حذف‌شده را نه؛ پس از ابطال یک فاکتور، مانده پایانی گزارش با موجودی واقعی کالا نمی‌خواند. true یعنی یافته دوباره
+ * بازتولید شده است.
  */
 export async function probeRunningKardexAfterVoid(wh: string): Promise<boolean> {
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
@@ -195,5 +195,43 @@ export async function checkRebuildMatchesLiveEngine(wh: string): Promise<string[
     }
   }
   problems.push(...await invariantProblems(scope, 'پس از بازسازی'));
+  return problems;
+}
+
+/**
+ * TD-266 (تصمیم مالک محصول — نمایش با برچسب): گزارش کاردکس جاری سند ابطال‌شده را با برچسب نشان می‌دهد (ردیف اصلی
+ * isVoided در تاریخ خودش و ردیف معکوس isReversal در تاریخ ابطال)، مانده جاری در هر ردیف و پایان درست است، جمع ورود و
+ * خروج فقط گردش‌های واقعی را می‌شمارد و WAC جاری با WAC کالا یکی می‌ماند.
+ */
+export async function checkRunningKardexShowsVoided(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await receive(item.id, 10, 100000, wh, '2025-12-01');
+  const invoice = await sell(item.id, 3, wh, '2025-12-02');
+  await DocumentService.deleteDocument(invoice, 'inv');
+  const extra = await receive(item.id, 5, 160000, wh, '2025-12-03');
+  await DocumentService.deleteDocument(extra, 'inv');
+
+  const report = await InventoryIntegrityService.getItemRunningKardex(item.id);
+  const { stock, wac } = await itemState(item.id);
+  const last = report.entries[report.entries.length - 1];
+  if (!last || last.runningBalance !== stock || report.summary.netBalance !== stock) {
+    problems.push(`مانده پایانی گزارش ${last?.runningBalance}/${report.summary.netBalance} با موجودی ${stock} یکی نیست`);
+  }
+  if (last && last.runningLocationStock !== stock) problems.push(`مانده انبار در ردیف پایانی ${last.runningLocationStock}، انتظار ${stock}`);
+  const voided = report.entries.filter(e => e.isVoided);
+  const reversals = report.entries.filter(e => e.isReversal);
+  if (voided.length !== 2 || reversals.length !== 2) problems.push(`دو ردیف باطل‌شده و دو ردیف معکوس انتظار می‌رفت: ${voided.length} / ${reversals.length}`);
+  if (report.summary.totalIn !== 10 || report.summary.totalOut !== 0) {
+    problems.push(`جمع ورود/خروج باید فقط گردش واقعی باشد (۱۰ / ۰): ${report.summary.totalIn} / ${report.summary.totalOut}`);
+  }
+  if (report.entries.some(e => e.runningBalance < 0)) problems.push('مانده جاری گزارش جایی منفی شد');
+  if (!last || fin(last.runningWac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`WAC پایانی گزارش ${last?.runningWac} با WAC کالا ${wac} یکی نیست`);
+  // WAC هر ردیف = WAC موتور زنده بلافاصله پس از ثبت همان ردیف (رسید ۵ × ۱۶۰٬۰۰۰ پس از ۱۰ × ۱۰۰٬۰۰۰ ← ۱۲۰٬۰۰۰)
+  const extraRow = report.entries.find(e => e.isVoided && e.type === 'in');
+  if (!extraRow || fin(extraRow.runningWac).subtract(fin(120000)).abs().greaterThan(fin(0.01))) {
+    problems.push(`WAC ردیف رسید ابطال‌شده باید WAC پس از ثبت آن (۱۲۰٬۰۰۰) باشد: ${extraRow?.runningWac}`);
+  }
+  if (Math.abs(report.summary.valuation - stock * Number(wac)) > 0.01) problems.push(`ارزش خلاصه ${report.summary.valuation}، انتظار ${stock * Number(wac)}`);
   return problems;
 }

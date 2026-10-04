@@ -40,26 +40,28 @@ export interface KardexReplayResult {
 const isInType = (type: string) => type === 'in' || type === 'transfer_in';
 const isOutType = (type: string) => type === 'out' || type === 'transfer_out';
 
-export function replayKardexWac(rows: KardexReplayRow[], startWac: DecimalValue): KardexReplayResult {
-  const sorted = [...rows].sort((a, b) => a.id - b.id);
-  const byId = new Map(sorted.map(r => [r.id, r]));
+/**
+ * v8.0.7 (TD-266): بازپخش گام‌به‌گام با همان فرمول‌ها، برای گزارش‌هایی که ردیف‌ها را به ترتیب دیگری (مثلاً تاریخ)
+ * نشان می‌دهند. `apply` برای ردیفی که در دفتر اثری ندارد (حذف‌شده بی‌معکوس، معکوسِ حذف‌شده، نوع ناشناخته) null می‌دهد.
+ */
+export function createKardexReplayer(allRows: KardexReplayRow[], startWac: DecimalValue) {
+  const byId = new Map(allRows.map(r => [r.id, r]));
   const activelyReversed = new Set<number>();
-  for (const r of sorted) {
+  for (const r of allRows) {
     if (r.isDeleted !== 1 && r.reversalOfId !== null) activelyReversed.add(r.reversalOfId);
   }
-
   let balance = fin(0);
   let wac = fin(startWac);
-  let minimumBalance = fin(0);
-  let firstNegativeRowId: number | null = null;
 
-  for (const row of sorted) {
+  const counts = (row: KardexReplayRow): boolean => {
+    if (!isInType(row.type) && !isOutType(row.type)) return false;
+    if (row.isDeleted === 1 && !activelyReversed.has(row.id)) return false;
+    return !(row.isDeleted === 1 && row.reversalOfId !== null);
+  };
+
+  const apply = (row: KardexReplayRow): { balance: FinancialDecimal; wac: FinancialDecimal } | null => {
+    if (!counts(row)) return null;
     const isIn = isInType(row.type);
-    const isOut = isOutType(row.type);
-    if (!isIn && !isOut) continue;
-    if (row.isDeleted === 1 && !activelyReversed.has(row.id)) continue;
-    if (row.isDeleted === 1 && row.reversalOfId !== null) continue;
-
     const qty = fin(row.quantity);
     const unitPrice = fin(row.unitPrice ?? 0);
     const original = row.reversalOfId !== null ? byId.get(row.reversalOfId) : undefined;
@@ -69,7 +71,7 @@ export function replayKardexWac(rows: KardexReplayRow[], startWac: DecimalValue)
 
     if (original && original.isDeleted === 1) {
       // ابطال سند: همان فرمول DocumentStockEngine.applyStockReversal
-      if (isOut) {
+      if (!isIn) {
         const newBalance = balance.subtract(qty);
         if (newBalance.isPositive()) {
           const remainingValue = balance.multiply(wac).subtract(qty.multiply(unitPrice));
@@ -85,7 +87,25 @@ export function replayKardexWac(rows: KardexReplayRow[], startWac: DecimalValue)
     } else {
       balance = balance.subtract(qty);
     }
+    return { balance, wac };
+  };
 
+  return { apply, counts, isVoidedOriginal: (row: KardexReplayRow) => row.isDeleted === 1 && activelyReversed.has(row.id) };
+}
+
+export function replayKardexWac(rows: KardexReplayRow[], startWac: DecimalValue): KardexReplayResult {
+  const sorted = [...rows].sort((a, b) => a.id - b.id);
+  const replayer = createKardexReplayer(sorted, startWac);
+  let balance = fin(0);
+  let wac = fin(startWac);
+  let minimumBalance = fin(0);
+  let firstNegativeRowId: number | null = null;
+
+  for (const row of sorted) {
+    const step = replayer.apply(row);
+    if (!step) continue;
+    balance = step.balance;
+    wac = step.wac;
     if (balance.lessThan(minimumBalance)) minimumBalance = balance;
     if (balance.isNegative() && firstNegativeRowId === null) firstNegativeRowId = row.id;
   }

@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.7 — Running Kardex Shows Voided Documents (TD-266)
+- Product-owner decision: the item Kardex report shows a voided document's original row (label «باطل‌شده») and its reversal («معکوس ابطال»); the running balance matches stock at every row, totals count only real movements, and each row's WAC is the live engine's WAC after that row.
+
 ### v8.0.6 — Void of a Consumed Incoming Document Refused (TD-265)
 - Product-owner decision (option A): voiding a receipt, purchase, production receipt, sales return or count surplus is refused when, without it, a warehouse balance in date order would go negative; the error names the consuming documents. Voids of outflows are never refused.
 

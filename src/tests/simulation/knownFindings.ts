@@ -21,7 +21,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'I3:foreign-rounding': 'TD-261',
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
-  'FOCUSED:running-kardex-after-void': 'TD-266',
+  // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

@@ -4,7 +4,7 @@ import * as xlsx from 'xlsx';
 import { formatPersianNumber, formatPersianPrice, formatPersianDate, errorMessageOf } from '../utils';
 import { useAppCurrency } from '../hooks/useAppCurrency';
 import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
-import type { RunningKardexEntry } from '../lib/transactions/runningKardex';
+import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
 
 interface RunningKardexModalProps {
   itemId: number;
@@ -70,6 +70,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'ارزش کل مانده': e.runningTotalValue,
         'شماره سند/عطف': e.documentRef,
         'نوع سند': e.documentType,
+        'وضعیت': runningKardexEntryLabel(e),
         'توضیحات': e.notes,
         'کاربر': e.createdBy
       }));
@@ -300,8 +301,9 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                     ) : (
                       filteredEntries.map((entry, idx) => {
                         const isIn = entry.type === 'in';
+                        const label = runningKardexEntryLabel(entry);
                         return (
-                          <tr key={entry.transactionId || idx} className="hover:bg-slate-50/60 transition-colors">
+                          <tr key={entry.transactionId || idx} className={`hover:bg-slate-50/60 transition-colors ${entry.isVoided ? 'text-slate-400 bg-slate-50' : ''}`}>
                             <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
                             <td className="p-3 text-slate-700 font-mono">{formatPersianDate(entry.date)}</td>
                             <td className="p-3">
@@ -338,6 +340,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                             <td className="p-3">
                               <div className="font-mono text-slate-800 font-medium">{entry.documentRef || '-'}</div>
                               <div className="text-[10px] text-slate-400">{entry.documentType || ''}</div>
+                              {label && <span className="inline-block mt-0.5 bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold">{label}</span>}
                             </td>
                             <td className="p-3">
                               <div className="text-slate-700 max-w-[200px] truncate" title={entry.notes}>{entry.notes || '-'}</div>

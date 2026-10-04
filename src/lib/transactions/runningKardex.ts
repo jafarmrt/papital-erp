@@ -40,6 +40,18 @@ export interface RunningKardexEntry {
   runningTotalValue?: number;
   notes?: string;
   createdBy?: string;
+  reversalOfId?: number | null;
+  /** ردیف معکوسِ ابطال یک سند (در تاریخ ابطال) */
+  isReversal?: boolean;
+  /** v8.0.7 (TD-266): ردیف اصلی سند ابطال‌شده (در تاریخ خود سند) */
+  isVoided?: boolean;
+}
+
+/** v8.0.7 (TD-266): برچسب ردیف سند ابطال‌شده و ردیف معکوس آن در کاردکس تفصیلی؛ رشته خالی برای گردش عادی */
+export function runningKardexEntryLabel(entry: Pick<RunningKardexEntry, 'isVoided' | 'isReversal'>): string {
+  if (entry.isVoided) return 'باطل‌شده';
+  if (entry.isReversal) return 'معکوس ابطال';
+  return '';
 }
 
 export interface RunningKardexData {

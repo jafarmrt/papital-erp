@@ -1,5 +1,5 @@
 import { orm } from '../../db/drizzle.js';
-import { items, warehouses, transactions, users } from '../../db/schema.js';
+import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { NegativeStockPolicyService, type NegativeStockPolicyType } from './negativeStockPolicy.service.js';
@@ -64,52 +64,9 @@ export interface InventoryIntegrityReport {
   warehouses: WarehouseReconciliationSummary[];
 }
 
-export interface RunningKardexEntry {
-  transactionId: number;
-  date: string;
-  type: 'in' | 'out' | 'transfer';
-  documentType: string;
-  documentRef: string;
-  location: string;
-  quantity: number;
-  unitPrice: number;
-  totalAmount: number;
-  runningBalance: number;
-  runningLocationStock: number;
-  runningGlobalStock: number;
-  runningWac: number;
-  runningTotalValue: number;
-  notes: string;
-  createdBy: string;
-  reversalOfId?: number | null;
-  isReversal?: boolean;
-}
-
-/**
- * V10-0.2: Full kardex envelope. Previously this endpoint returned a bare
- * array while the frontend modal expected { item, summary, entries } —
- * dereferencing data.item.name on an array crashed React (white screen).
- */
-export interface RunningKardexResponse {
-  item: {
-    id: number;
-    code: string;
-    name: string;
-    unit: string;
-    category: string | null;
-    type: string | null;
-    currentStock: number;
-    weightedAverageCost: number;
-  };
-  summary: {
-    totalIn: number;
-    totalOut: number;
-    netBalance: number;
-    transactionCount: number;
-    valuation: number;
-  };
-  entries: RunningKardexEntry[];
-}
+// v8.0.7 (TD-266): کاردکس تفصیلی کالا به runningKardex.service.ts منتقل شد؛ نوع‌ها برای سازگاری بازصادر می‌شوند
+export type { RunningKardexEntry, RunningKardexResponse } from './runningKardex.service.js';
+import { buildItemRunningKardex, type RunningKardexResponse } from './runningKardex.service.js';
 
 export class StockReconciliationService {
   /**
@@ -375,114 +332,8 @@ export class StockReconciliationService {
     };
   }
 
-  /**
-   * Generates sequential running Kardex for a specific item (V10-0.2 full envelope).
-   */
+  /** کاردکس تفصیلی یک کالا؛ v8.0.7 (TD-266) به runningKardex.service.ts منتقل شد */
   static async getItemRunningKardex(itemId: number): Promise<RunningKardexResponse> {
-    const [item] = await orm
-      .select({
-        id: items.id,
-        code: items.code,
-        name: items.name,
-        unit: items.unit,
-        category: items.category,
-        type: items.type,
-        currentStock: items.currentStock,
-        weightedAverageCost: items.weightedAverageCost,
-      })
-      .from(items)
-      .where(eq(items.id, itemId));
-    const defaultWac = fin(item?.weightedAverageCost || 0).toNumber();
-
-    const itemTxs = await orm
-      .select()
-      .from(transactions)
-      .where(and(eq(transactions.itemId, itemId), eq(transactions.isDeleted, 0)))
-      .orderBy(asc(transactions.date), asc(transactions.id));
-
-    // یک موجودیت هویت کاربر: resolve نام کامل کاربر از جدول users برای نمایش یکدست
-    const allUsers = await orm.select({ username: users.username, fullName: users.fullName }).from(users);
-    const userFullNameMap = new Map(allUsers.map(u => [u.username, u.fullName]));
-
-    let runningBal = 0;
-    let runningWac = 0;
-    const locationRunning: Record<string, number> = {};
-    let totalIn = 0;
-    let totalOut = 0;
-    const entries: RunningKardexEntry[] = [];
-
-    for (const tx of itemTxs) {
-      const qty = fin(tx.quantity).toNumber();
-      const txPrice = Number(tx.unitPrice) || 0;
-      const isReversal = Boolean(tx.reversalOfId) || (Boolean(tx.documentRef) && tx.documentRef!.startsWith('REV-'));
-
-      let effectiveUnitPrice = txPrice;
-
-      if (tx.type === 'in') {
-        // P1-07 & M-08 (INV-02): محاسبه پویا و گام‌به‌گام WAC متناسب با هر تراکنش ورودی
-        if (!isReversal && txPrice > 0) {
-          runningWac = FinancialMath.calculateWAC(runningBal, runningWac, qty, txPrice).toNumber();
-        }
-        runningBal = FinancialMath.add(runningBal, qty);
-        totalIn = FinancialMath.add(totalIn, qty);
-        effectiveUnitPrice = txPrice > 0 ? txPrice : (runningWac > 0 ? runningWac : defaultWac);
-      } else if (tx.type === 'out') {
-        runningBal = FinancialMath.subtract(runningBal, qty);
-        totalOut = FinancialMath.add(totalOut, qty);
-        effectiveUnitPrice = txPrice > 0 ? txPrice : (runningWac > 0 ? runningWac : defaultWac);
-      }
-
-      const loc = tx.location || '';
-      if (!locationRunning[loc]) locationRunning[loc] = 0;
-      if (tx.type === 'in') {
-        locationRunning[loc] = FinancialMath.add(locationRunning[loc], qty);
-      } else if (tx.type === 'out') {
-        locationRunning[loc] = FinancialMath.subtract(locationRunning[loc], qty);
-      }
-
-      const rowWac = runningWac > 0 ? runningWac : defaultWac;
-
-      entries.push({
-        transactionId: tx.id,
-        date: tx.date || '',
-        type: tx.type as 'in' | 'out' | 'transfer',
-        documentType: tx.documentType || '',
-        documentRef: tx.documentRef || '',
-        location: loc,
-        quantity: qty,
-        unitPrice: effectiveUnitPrice,
-        totalAmount: FinancialMath.multiply(qty, effectiveUnitPrice),
-        runningBalance: runningBal,
-        runningLocationStock: locationRunning[loc],
-        runningGlobalStock: runningBal,
-        runningWac: rowWac,
-        runningTotalValue: FinancialMath.multiply(runningBal, rowWac),
-        notes: tx.notes || '',
-        createdBy: userFullNameMap.get(tx.createdBy || '') || tx.createdBy || 'سیستم',
-        reversalOfId: tx.reversalOfId,
-        isReversal,
-      });
-    }
-
-    return {
-      item: {
-        id: Number(item?.id || itemId),
-        code: item?.code || '-',
-        name: item?.name || `کالای ${itemId}`,
-        unit: item?.unit || 'عدد',
-        category: item?.category ?? null,
-        type: item?.type ?? null,
-        currentStock: fin(item?.currentStock || 0).toNumber(),
-        weightedAverageCost: defaultWac,
-      },
-      summary: {
-        totalIn,
-        totalOut,
-        netBalance: runningBal,
-        transactionCount: entries.length,
-        valuation: FinancialMath.multiply(runningBal, runningWac),
-      },
-      entries,
-    };
+    return buildItemRunningKardex(itemId);
   }
 }
