@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.10 — Procurement Delivery Is Stock-In Only (TD-267)
+- Procurement delivery finalizes only receipts and purchases; a purchase proforma is a receipt with status proforma (it used to finalize into a sales invoice that took the goods out of stock); finalizing a `purchase` document is stock-in.
+
 ### v8.0.9 — Purchase Line Discount in Stock Cost (TD-250)
 - Incoming lines enter stock at the net unit price after the line discount (the same net the purchase voucher posts); foreign-currency lines are converted on the net price without intermediate rounding.
 

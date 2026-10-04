@@ -123,7 +123,8 @@ export class DocumentLifecycleService {
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
-          const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
+          // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
+          const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'purchase' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
 
           // Pre-flight stock availability & reservation check for exit documents (TD-118)
           if (inOut === 'out') {

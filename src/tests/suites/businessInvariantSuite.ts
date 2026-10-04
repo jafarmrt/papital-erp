@@ -18,6 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkPurchaseDiscountInCost } from '../invariants/purchaseCostScenarios.js';
+import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -255,6 +256,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.10: TD-267 ──
+    ['inv_td_267_procurement_delivery_incoming_only', 'v8.0.10: تحویل تدارکات فقط سند ورودی خرید را نهایی می‌کند و پیش‌فاکتور خرید هنگام تحویل وارد انبار می‌شود، نه فروش (TD-267)',
+      checkProcurementDeliveryIncomingOnly, 'پیش‌فاکتور فروش رد شد؛ پیش‌فاکتور خرید رسید ماند و تحویلش کالا را وارد کرد؛ سند purchase ورود بود'],
     // ── v8.0.9: TD-250 ──
     ['inv_td_250_purchase_discount_in_cost', 'v8.0.9: کالای خرید با تخفیف ردیف با قیمت خالص پس از تخفیف وارد انبار می‌شود و WAC با دفتر کل یکی می‌ماند (TD-250)',
       checkPurchaseDiscountInCost, 'رسید ریالی، ارزی و پیش‌نویس نهایی‌شده با قیمت خالص وارد شدند؛ ارزش انبار با دفتر کل یکی ماند'],

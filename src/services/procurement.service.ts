@@ -12,6 +12,19 @@ import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
+
+/** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
+const PROCUREMENT_INCOMING_TYPES = new Set(['receipt', 'purchase']);
+
+/**
+ * v8.0.10 (TD-267): تحویل تدارکات فقط سند ورودی خرید را نهایی می‌کند. پیش‌تر هر سند غیرنهایی (از جمله پیش‌فاکتور فروش)
+ * از این مسیر نهایی می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش با خروج کالا می‌کرد.
+ */
+function assertProcurementIncomingDocument(doc: { id: number; type: string | null; refNumber: string | null }): void {
+  if (!PROCUREMENT_INCOMING_TYPES.has(String(doc.type))) {
+    throw new ValidationError(`سند «${doc.refNumber ?? doc.id}» (نوع ${doc.type ?? '-'}) سند خرید نیست و از مسیر تحویل تدارکات به انبار نهایی نمی‌شود.`);
+  }
+}
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
@@ -631,6 +644,9 @@ export class ProcurementService {
       const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
       for (const docId of docIdsToFinalize) {
         try {
+          const [linked] = await orm.select({ id: documents.id, type: documents.type, refNumber: documents.refNumber })
+            .from(documents).where(eq(documents.id, docId));
+          if (linked) assertProcurementIncomingDocument(linked);
           await DocumentService.finalizeDocument(docId, user.username || 'سیستم تدارکات', undefined, { allowBackdate });
         } catch (err) {
           logger.warn({ message: `[Procurement] Error finalizing linked document #${docId}: ${errorMessageOf(err)}` });
@@ -740,8 +756,10 @@ export class ProcurementService {
       if (!group.items || group.items.length === 0) continue;
 
       const supplierName = group.supplierName?.trim() || 'تامین‌کننده تدارکات';
-      const docType = group.docType === 'proforma' ? 'proforma' : 'receipt';
-      const docStatus = group.status || 'draft';
+      // v8.0.10 (TD-267): سفارش خرید همیشه سند ورودی (رسید) است؛ «پیش‌فاکتور خرید» رسید با وضعیت پیش‌فاکتور است. پیش‌تر
+      // نوع proforma ساخته می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش می‌کرد: کالا از انبار خارج و فروش ثبت می‌شد
+      const docType = 'receipt';
+      const docStatus = group.docType === 'proforma' ? 'proforma' : (group.status || 'draft');
       const warehouseLoc = group.targetWarehouse || '';
 
       // Format items for DocumentService
@@ -1109,6 +1127,7 @@ export class ProcurementService {
         message: `سند خرید شماره ${doc.refNumber} قبلاً به انبار تحویل و نهایی شده است.`
       };
     }
+    assertProcurementIncomingDocument(doc);
 
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
     await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', undefined, {
