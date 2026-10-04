@@ -110,6 +110,8 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '5201', name: 'سود تسعیر ارز', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
   { code: '5202', name: 'سود سپرده‌های بانکی و سرمایه‌گذاری', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
   { code: '5203', name: 'سایر درآمدهای عملیاتی', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
+  // v8.0.17 (TD-268، تصمیم مالک محصول): کالای رایگان (اهدایی تأمین‌کننده) در رسید و خرید، به میانگین موزون
+  { code: '5204', name: 'درآمد کالای اهدایی', level: 'subsidiary', parentCode: '52', accountType: 'revenue', nature: 'credit', isSystem: 1 },
 
   // ==========================================
   // گروه ۶: بهای تمام‌شده کالای فروش‌رفته (Cost of Goods Sold - COGS)

@@ -29,6 +29,7 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'inventoryRawMaterialsCode', label: 'موجودی مواد اولیه (1401)', description: 'اسناد رسید مواد اولیه و حواله تولید' },
   { key: 'inventoryFinishedGoodsCode', label: 'موجودی کالای تولیدشده (1403)', description: 'اسناد رسید تولید نهایی' },
   { key: 'inventoryCountDifferenceAccountCode', label: 'کسری و اضافات انبار (7012)', description: 'سند خودکار انبارگردانی و اصلاح موجودی از اکسل' },
+  { key: 'donatedGoodsIncomeAccountCode', label: 'درآمد کالای اهدایی (5204)', description: 'کالای رایگان رسید و فاکتور خرید که به میانگین موزون وارد انبار می‌شود' },
   { key: 'costOfGoodsSoldCode', label: 'بهای تمام‌شده کالای فروش‌رفته (6001)', description: 'سند خودکار بهای تمام‌شده در فروش' },
   { key: 'directProductionWagesAccountCode', label: 'حقوق مستقیم تولید (6002)', description: 'سند تجمیع کارکرد پرکیسی تولید' },
   { key: 'summaryProfitLossCode', label: 'خلاصه سود و زیان', description: 'بستن حساب‌های موقت در پایان سال مالی' },

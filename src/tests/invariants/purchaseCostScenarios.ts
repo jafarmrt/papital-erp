@@ -164,9 +164,9 @@ export async function checkZeroPriceReceiptAtWac(wh: string): Promise<string[]> 
 }
 
 /**
- * TD-268 (باز، نیازمند تصمیم مالک محصول): رسید خرید با قیمت صفر (کالای رایگان یا جایزه) برای کالای دارای WAC، موجودی را به
- * WAC جاری ارزش‌گذاری می‌کند ولی سند حسابداری خرید از قیمت سند (صفر) ساخته می‌شود و صادر نمی‌شود؛ ارزش انبار به اندازه
- * مقدار × WAC از دفتر کل بیشتر می‌شود. برمی‌گرداند آیا ناوردایی ارزش انبار = دفتر کل نقض شد.
+ * TD-268 (کاوش رگرسیون؛ رفع v8.0.17): رسید خرید با قیمت صفر (کالای رایگان یا جایزه) برای کالای دارای WAC، موجودی را به
+ * WAC جاری ارزش‌گذاری می‌کند؛ پیش از v8.0.17 سند حسابداری از قیمت سند (صفر) ساخته و صادر نمی‌شد و ارزش انبار به اندازه
+ * مقدار × WAC از دفتر کل بیشتر می‌شد. برمی‌گرداند آیا ناوردایی ارزش انبار = دفتر کل نقض شد.
  */
 export async function probeZeroPricePurchaseWithoutVoucher(wh: string): Promise<boolean> {
   const mark = await watermarks();
@@ -179,4 +179,79 @@ export async function probeZeroPricePurchaseWithoutVoucher(wh: string): Promise<
   await receipt(100000, 10, '2026-04-01');
   await receipt(0, 5, '2026-04-02');
   return (await invariantProblems(scope, 'رسید خرید با قیمت صفر')).some(p => p.includes('I3_stock_value_equals_ledger'));
+}
+
+interface VoucherLine { code: string; currency: string; debit: string; credit: string; rate: string }
+
+async function voucherLines(documentId: number): Promise<VoucherLine[]> {
+  const res = await pool.query<VoucherLine>(
+    `SELECT a.code, COALESCE(i.currency, 'IRR') AS currency, i.debit::text AS debit, i.credit::text AS credit,
+            COALESCE(i.exchange_rate, 1)::text AS rate
+       FROM journal_voucher_items i JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+      WHERE v.source_document_id = $1 AND v.is_deleted = 0 AND i.is_deleted = 0 ORDER BY i.id`, [documentId]);
+  return res.rows;
+}
+
+function creditOn(lines: VoucherLine[], code: string): string {
+  return lines.filter(l => l.code === code).reduce((sum, l) => sum.add(fin(l.credit)), fin(0)).toString();
+}
+
+/**
+ * TD-268 (تصمیم مالک محصول — گزینه ب): کالای رایگان رسید و خرید (قیمت صفر یا تخفیف کامل ردیف) به WAC جاری وارد انبار
+ * می‌شود و سند حسابداری همان ارزش را بدهکار موجودی و بستانکار «درآمد کالای اهدایی» (5204) می‌کند؛ تأمین‌کننده فقط
+ * بهای ردیف‌های بها‌دار را بستانکار می‌شود. سند ارزی ارزش ریالی کاردکس را به ارز سند می‌برد. ابطال سند را برمی‌گرداند
+ * و ارزش انبار در همه گام‌ها با دفتر کل یکی است.
+ */
+export async function checkFreeGoodsVoucherAtWac(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await watermarks();
+  const material = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const other = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const imported = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const scope: InvariantScope = { ...mark, itemIds: [material.id, other.id, imported.id] };
+  type Line = { itemId: number; quantity: number; unitPrice: number; discount?: number };
+  const receipt = (docType: 'receipt' | 'purchase', lines: Line[], date: string, extra: Record<string, unknown> = {}) =>
+    DocumentService.createDocument({
+      docType, inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون کالای اهدایی',
+      items: lines.map(l => ({ ...l, location: wh })), ...extra,
+    });
+
+  // رسید ۱۰ × ۱۰۰٬۰۰۰، سپس رسید ۵ عدد رایگان ← بدهکار موجودی و بستانکار ۵۲۰۴ هر دو ۵۰۰٬۰۰۰؛ بدون سطر تأمین‌کننده
+  await receipt('receipt', [{ itemId: material.id, quantity: 10, unitPrice: 100000 }], '2026-08-01');
+  const free = await receipt('receipt', [{ itemId: material.id, quantity: 5, unitPrice: 0 }], '2026-08-02');
+  const freeLines = await voucherLines(free);
+  if (!fin(creditOn(freeLines, '5204')).equals(500000) || freeLines.some(l => l.code === '3001')) {
+    problems.push(`رسید کالای رایگان: بستانکار ۵۲۰۴ ${creditOn(freeLines, '5204')} و سطرهای ${freeLines.map(l => l.code).join(',')}، انتظار ۵۰۰٬۰۰۰ بی‌سطر تأمین‌کننده`);
+  }
+  if (!fin((await itemState(material.id)).wac).equals(100000)) problems.push('کالای رایگان WAC را تغییر داد');
+  problems.push(...await invariantProblems(scope, 'پس از رسید کالای رایگان'));
+
+  // خرید با ردیف بها‌دار (۴ × ۵۰٬۰۰۰ از کالای دیگر)، ردیف رایگان (۲ عدد) و ردیف با تخفیف کامل (۱ × ۱۰۰٬۰۰۰ − ۱۰۰٬۰۰۰)
+  const mixed = await receipt('purchase', [
+    { itemId: other.id, quantity: 4, unitPrice: 50000 },
+    { itemId: material.id, quantity: 2, unitPrice: 0 },
+    { itemId: material.id, quantity: 1, unitPrice: 100000, discount: 100000 },
+  ], '2026-08-03');
+  const mixedLines = await voucherLines(mixed);
+  if (!fin(creditOn(mixedLines, '3001')).equals(200000) || !fin(creditOn(mixedLines, '5204')).equals(300000)) {
+    problems.push(`خرید ترکیبی: بستانکار ۳۰۰۱ ${creditOn(mixedLines, '3001')} و ۵۲۰۴ ${creditOn(mixedLines, '5204')}، انتظار ۲۰۰٬۰۰۰ و ۳۰۰٬۰۰۰`);
+  }
+  problems.push(...await invariantProblems(scope, 'پس از خرید ترکیبی با کالای رایگان'));
+
+  // رسید ارزی: ۲ × ۵۰۰ دلار (نرخ ۶۰۰٬۰۰۰، WAC ۳۰۰٬۰۰۰٬۰۰۰ ریال)، سپس ۱ عدد رایگان ← ۵۰۰ دلار بستانکار ۵۲۰۴
+  const usd = { currency: 'USD', exchangeRate: 600000 };
+  await receipt('receipt', [{ itemId: imported.id, quantity: 2, unitPrice: 500 }], '2026-08-04', usd);
+  const usdFree = await receipt('receipt', [{ itemId: imported.id, quantity: 1, unitPrice: 0 }], '2026-08-05', usd);
+  const usdLine = (await voucherLines(usdFree)).find(l => l.code === '5204');
+  if (!usdLine || usdLine.currency !== 'USD' || !fin(usdLine.credit).equals(500) || !fin(usdLine.rate).equals(600000)) {
+    problems.push(`رسید ارزی کالای رایگان: سطر ۵۲۰۴ ${JSON.stringify(usdLine ?? null)}، انتظار ۵۰۰ دلار با نرخ ۶۰۰٬۰۰۰`);
+  }
+  problems.push(...await invariantProblems(scope, 'پس از رسید ارزی کالای رایگان'));
+
+  // ابطال رسید کالای رایگان: سند پیش‌نویس حذف و موجودی برمی‌گردد؛ WAC و ارزش انبار با دفتر کل یکی می‌مانند
+  await DocumentService.deleteDocument(free, 'inv');
+  if ((await voucherLines(free)).length > 0) problems.push('ابطال رسید کالای رایگان سند حسابداری را حذف نکرد');
+  if (!fin((await itemState(material.id)).wac).equals(100000)) problems.push('ابطال کالای رایگان WAC را تغییر داد');
+  problems.push(...await invariantProblems(scope, 'پس از ابطال رسید کالای رایگان'));
+  return problems;
 }

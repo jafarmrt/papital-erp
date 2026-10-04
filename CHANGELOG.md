@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.17 — Free Goods Post to Donated-Goods Income (TD-268)
+- A free line in a receipt or purchase (price 0 or a full discount) enters stock at the current WAC and its voucher credits the new account «درآمد کالای اهدایی» (5204); the supplier is credited only with priced lines.
+
 ### v8.0.16 — Foreign Rows Converted in Account Cards (TD-260)
 - The account card, party ledger and financial health check convert foreign-currency rows to rials at their own rate in the all-currencies view, like the trial balance; a single-currency view shows that currency only.
 

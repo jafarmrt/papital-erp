@@ -22,7 +22,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)
-  'FOCUSED:zero-price-purchase-without-voucher': 'TD-268',
+  // TD-268 در v8.0.17 رفع شد (inv_td_268_free_goods_voucher_at_wac)
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

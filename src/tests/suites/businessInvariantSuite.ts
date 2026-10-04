@@ -17,7 +17,7 @@ import { runBusinessYearSimulation, SimulationResult } from '../simulation/busin
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
-import { checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
+import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
 import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
@@ -259,6 +259,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.17: TD-268 ──
+    ['inv_td_268_free_goods_voucher_at_wac', 'v8.0.17: کالای رایگان رسید و خرید به میانگین موزون وارد انبار و بستانکار «درآمد کالای اهدایی» می‌شود؛ تأمین‌کننده فقط ردیف‌های بها‌دار را بستانکار می‌شود (TD-268)',
+      checkFreeGoodsVoucherAtWac, 'رسید رایگان، خرید ترکیبی، تخفیف کامل و رسید ارزی سند ۵۲۰۴ درست گرفتند؛ ابطال و ارزش انبار با دفتر کل همخوان ماندند'],
     // ── v8.0.16: TD-260 ──
     ['inv_td_260_reports_convert_foreign_rows', 'v8.0.16: کارت حساب، صورت‌حساب طرف‌حساب و بررسی سلامت مالی ردیف ارزی را در نمای همه ارزها با نرخ همان ردیف به ریال تبدیل می‌کنند (TD-260)',
       checkReportsConvertForeignRows, 'کارت حساب و صورت‌حساب طرف‌حساب (همه ارزها، دلاری، ریالی، مانده ابتدای دوره) و مانده دفتر کل موجودی درست تسعیر شدند'],

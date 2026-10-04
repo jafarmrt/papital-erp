@@ -21,7 +21,7 @@ import { logger } from '../../middleware/logger.js';
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
-import { productionKardexCostByItem } from './productionReceiptCost.js';
+import { kardexInCostByItem } from './productionReceiptCost.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
@@ -471,38 +471,64 @@ export class VoucherSyncService {
     // V9-1.3: جمع مبالغ با FinancialDecimal
     let rawMaterialsAmount = fin(0);
     let finishedGoodsAmount = fin(0);
+    const isProductionDoc = doc.type === 'production_receipt';
+    const addToInventory = (it: typeof itemsList[number], amount: FinancialDecimal) => {
+      if (it.itemType === 'product' || (it.itemType !== 'raw_material' && isProductionDoc)) {
+        finishedGoodsAmount = finishedGoodsAmount.add(amount);
+      } else {
+        rawMaterialsAmount = rawMaterialsAmount.add(amount);
+      }
+    };
 
-    // v8.0.12 (TD-256): کالای دارای ردیف قیمت صفر در رسید تولید به بهای ثبت‌شده در کاردکس همین سند
-    const zeroPriceItemIds = doc.type === 'production_receipt'
-      ? [...new Set(itemsList.filter(it => it.itemId !== null && !fin(it.unitPrice).isPositive()).map(it => Number(it.itemId)))]
-      : [];
-    const kardexCostByItem = await productionKardexCostByItem(executor, docId, zeroPriceItemIds);
+    // V6.0.4 (TD-143) / v7.0.63 (TD-198): نرخ تسعیر فاکتور خرید ارزی از ستون ساختاریافته سند (ریالی = ۱)؛ بهای کاردکس
+    // ریالی است و برای سند ارزی به ارز سند برده می‌شود
+    const exchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
+    const irrToDocCurrency = (amount: FinancialDecimal) => (exchangeRate.equals(1) ? amount : amount.divide(exchangeRate, 4));
+    const lineNetOf = (it: typeof itemsList[number], unitPrice: DecimalValue) => {
+      const net = fin(it.quantity).multiply(unitPrice).subtract(it.discount);
+      return net.isNegative() ? fin(0) : net;
+    };
+
+    // v8.0.12 (TD-256) / v8.0.17 (TD-268): کالایی که ردیف بی‌بها دارد — رسید تولید با قیمت صفر، یا کالای رایگان رسید و
+    // خرید (خالص ردیف صفر) — به بهای ثبت‌شده در کاردکس همین سند (WAC لحظه ورود)
+    const isFreeLine = (it: typeof itemsList[number]) =>
+      (isProductionDoc ? !fin(it.unitPrice).isPositive() : !lineNetOf(it, it.unitPrice).isPositive());
+    const freeItemIds = [...new Set(itemsList.filter(it => it.itemId !== null && isFreeLine(it)).map(it => Number(it.itemId)))];
+    const kardexCostByItem = await kardexInCostByItem(executor, docId, freeItemIds);
     const kardexCostedItems = new Set<number>();
+    const pricedNetByItem = new Map<number, FinancialDecimal>();
 
     for (const it of itemsList) {
-      const kardexCost = kardexCostByItem.get(Number(it.itemId));
-      if (kardexCost && kardexCostedItems.has(Number(it.itemId))) continue;
-      if (kardexCost) kardexCostedItems.add(Number(it.itemId));
-      // P1-03 (M-06): در رسیدهای خرید قیمت واقعی فاکتور ثبت می‌شود؛ فال‌بک به WAC فقط مختص رسیدهای تولید است
-      const p = doc.type === 'production_receipt' && !fin(it.unitPrice).isPositive()
-        ? fin(it.weightedAverageCost)
-        : fin(it.unitPrice);
-      const lineNetRaw = kardexCost ?? fin(it.quantity).multiply(p).subtract(it.discount);
-      const lineNet = lineNetRaw.isNegative() ? fin(0) : lineNetRaw;
-
-      if (it.itemType === 'product') {
-        finishedGoodsAmount = finishedGoodsAmount.add(lineNet);
-      } else if (it.itemType === 'raw_material') {
-        rawMaterialsAmount = rawMaterialsAmount.add(lineNet);
-      } else {
-        // Fallback based on doc type
-        if (doc.type === 'production_receipt') {
-          finishedGoodsAmount = finishedGoodsAmount.add(lineNet);
-        } else {
-          rawMaterialsAmount = rawMaterialsAmount.add(lineNet);
+      const itemId = Number(it.itemId);
+      const kardexCost = kardexCostByItem.get(itemId);
+      if (isProductionDoc && kardexCost) {
+        if (!kardexCostedItems.has(itemId)) {
+          kardexCostedItems.add(itemId);
+          addToInventory(it, irrToDocCurrency(kardexCost));
         }
+        continue;
+      }
+      // P1-03 (M-06): در رسیدهای خرید قیمت واقعی فاکتور ثبت می‌شود؛ فال‌بک به WAC فقط مختص رسیدهای تولید است
+      const p = isProductionDoc && !fin(it.unitPrice).isPositive() ? fin(it.weightedAverageCost) : fin(it.unitPrice);
+      const lineNet = lineNetOf(it, p);
+      addToInventory(it, lineNet);
+      if (kardexCost) pricedNetByItem.set(itemId, (pricedNetByItem.get(itemId) ?? fin(0)).add(lineNet));
+    }
+
+    // v8.0.17 (TD-268، تصمیم مالک محصول — گزینه ب): کالای رایگان رسید و خرید به WAC وارد انبار شده است؛ همان ارزش
+    // (بهای کاردکس کالا منهای ردیف‌های بها‌دار همان کالا) بدهکار موجودی و بستانکار «درآمد کالای اهدایی» می‌شود.
+    // پیش‌تر سندی برایش صادر نمی‌شد و ارزش انبار از دفتر کل بیشتر می‌شد.
+    let freeGoodsAmount = fin(0);
+    if (!isProductionDoc) {
+      for (const [itemId, kardexCost] of kardexCostByItem) {
+        const free = irrToDocCurrency(kardexCost).subtract(pricedNetByItem.get(itemId) ?? fin(0));
+        const line = itemsList.find(l => Number(l.itemId) === itemId);
+        if (!line || !free.isPositive()) continue;
+        addToInventory(line, free);
+        freeGoodsAmount = freeGoodsAmount.add(free);
       }
     }
+    const freeGoodsAmountNum = freeGoodsAmount.round(4);
 
     const rawMaterialsAmountNum = rawMaterialsAmount.round(4);
     const finishedGoodsAmountNum = finishedGoodsAmount.round(4);
@@ -545,10 +571,6 @@ export class VoucherSyncService {
 
     // V10-1.1 & V5.0.17: fallback تاریخ ۱۰ کاراکتری ایمن
     const docDate = doc.date ? String(doc.date).slice(0, 10) : await businessTodayIsoDate();
-    const isProduction = doc.type === 'production_receipt';
-
-    // V6.0.4 (TD-143) / v7.0.63 (TD-198): نرخ تسعیر فاکتور خرید ارزی از ستون ساختاریافته سند
-    const exchangeRate = await VoucherSyncService.resolveVoucherExchangeRate(executor, doc, options?.exchangeRate);
 
     const voucherItems: {
       accountId: number;
@@ -572,7 +594,7 @@ export class VoucherSyncService {
         credit: 0,
         currency: doc.currency || 'IRR',
         exchangeRate,
-        description: `ورود مواد اولیه و ملزومات بابت ${isProduction ? 'رسید تولید' : 'رسید/فاکتور خرید'} شماره ${doc.refNumber}`
+        description: `ورود مواد اولیه و ملزومات بابت ${isProductionDoc ? 'رسید تولید' : 'رسید/فاکتور خرید'} شماره ${doc.refNumber}`
       });
     }
 
@@ -586,12 +608,12 @@ export class VoucherSyncService {
         credit: 0,
         currency: doc.currency || 'IRR',
         exchangeRate,
-        description: `ورود محصولات ساخته‌شده بابت ${isProduction ? 'رسید تولید' : 'رسید ورود کالا'} شماره ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
+        description: `ورود محصولات ساخته‌شده بابت ${isProductionDoc ? 'رسید تولید' : 'رسید ورود کالا'} شماره ${doc.refNumber}${matchedProjectName ? ` (پروژه: ${matchedProjectName})` : ''}`
       });
     }
 
     // Credit side
-    if (isProduction) {
+    if (isProductionDoc) {
       if (wipAcc) {
         voucherItems.push({
           accountId: wipAcc.id,
@@ -606,24 +628,44 @@ export class VoucherSyncService {
         });
       }
     } else {
-      if (supplierAcc) {
+      const supplierAmount = totalGross.subtract(freeGoodsAmountNum).round(4);
+      if (supplierAmount.isPositive() && supplierAcc) {
         voucherItems.push({
           accountId: supplierAcc.id,
           detailedType: 'supplier',
           detailedId: matchedSupplierId || undefined,
           detailedName: doc.buyerName || 'تامین‌کننده',
           debit: 0,
-          credit: totalGross,
+          credit: supplierAmount,
           currency: doc.currency || 'IRR',
           exchangeRate,
           description: `بستانکاری تامین‌کننده بابت فاکتور خرید / رسید ورود کالا و مواد شماره ${doc.refNumber}`
         });
-      } else if (isStrict) {
+      } else if (supplierAmount.isPositive() && isStrict) {
         throw new ValidationError('سرفصل حسابداری بستانکاران تجاری/تامین‌کنندگان (3001) برای صدور سند خرید یافت نشد.');
+      }
+      // v8.0.17 (TD-268): کالای رایگان (اهدایی تأمین‌کننده) به WAC، بستانکار «درآمد کالای اهدایی»
+      if (freeGoodsAmountNum.isPositive()) {
+        const donatedGoodsAcc = await AccountMappingService.getDonatedGoodsIncomeAccount(tx);
+        if (donatedGoodsAcc) {
+          voucherItems.push({
+            accountId: donatedGoodsAcc.id,
+            detailedType: 'supplier',
+            detailedId: matchedSupplierId || undefined,
+            detailedName: doc.buyerName || 'تامین‌کننده',
+            debit: 0,
+            credit: freeGoodsAmountNum,
+            currency: doc.currency || 'IRR',
+            exchangeRate,
+            description: `کالای اهدایی (بدون بها) به بهای میانگین موزون بابت رسید/فاکتور خرید شماره ${doc.refNumber}`
+          });
+        } else if (isStrict) {
+          throw new ValidationError('سرفصل حسابداری «درآمد کالای اهدایی» (5204) برای ثبت کالای رایگان رسید خرید یافت نشد.');
+        }
       }
     }
 
-    if (isProduction && !wipAcc && isStrict) {
+    if (isProductionDoc && !wipAcc && isStrict) {
       throw new ValidationError('سرفصل حسابداری کالای در جریان ساخت (1402) برای صدور سند رسید تولید یافت نشد.');
     }
 
@@ -634,8 +676,8 @@ export class VoucherSyncService {
       return null;
     }
 
-    const voucherType: JournalVoucher['voucherType'] = isProduction ? 'general' : 'purchase';
-    const voucherDesc = isProduction 
+    const voucherType: JournalVoucher['voucherType'] = isProductionDoc ? 'general' : 'purchase';
+    const voucherDesc = isProductionDoc 
       ? `ثبت رسید تولید و تحویل محصول نهایی شماره ${doc.refNumber}${matchedProjectName ? ` - پروژه: ${matchedProjectName}` : ''}`
       : `ثبت فاکتور خرید / رسید ورود شماره ${doc.refNumber} - تامین‌کننده: ${doc.buyerName || 'تامین‌کننده'}`;
 

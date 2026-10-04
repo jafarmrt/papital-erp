@@ -35,6 +35,8 @@ export interface ConceptualAccountMappingConfig {
   openingCapitalAccountCode: string;        // Default: '4001' (سرمایه اولیه سهامداران/موسسین)
   // v8.0.3 (TD-255): کسری و اضافی انبارگردانی و اصلاح موجودی از اکسل
   inventoryCountDifferenceAccountCode: string; // Default: '7012' (کسری و اضافات انبار)
+  // v8.0.17 (TD-268): کالای رایگان (اهدایی تأمین‌کننده) در رسید و خرید، به میانگین موزون
+  donatedGoodsIncomeAccountCode: string;    // Default: '5204' (درآمد کالای اهدایی)
 }
 
 export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
@@ -62,6 +64,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   employeeDeductionsPayableAccountCode: '3202',
   openingCapitalAccountCode: '4001',
   inventoryCountDifferenceAccountCode: '7012',
+  donatedGoodsIncomeAccountCode: '5204',
 };
 
 const SETTINGS_KEY = 'accounting_account_mappings';
@@ -326,6 +329,13 @@ export class AccountMappingService {
    */
   static async getInventoryCountDifferenceAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('inventoryCountDifferenceAccountCode', tx);
+  }
+
+  /**
+   * v8.0.17 (TD-268): درآمد کالای اهدایی (5204) — بستانکار کالای رایگان رسید و خرید که به میانگین موزون وارد انبار می‌شود
+   */
+  static async getDonatedGoodsIncomeAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('donatedGoodsIncomeAccountCode', tx);
   }
 
   /**
