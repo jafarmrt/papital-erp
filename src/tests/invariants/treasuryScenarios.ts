@@ -286,6 +286,35 @@ export async function checkClearedChequeKeepsBankSynced(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-277: وصول چک به حساب بانکی بدون سرفصل معین رد می‌شود (مانند تراکنش خزانه) — وضعیت چک، مانده حساب و اسناد دست
+ * نمی‌خورند؛ همان چک به حساب بانکی سرفصل‌دار وصول می‌شود و سند وصول اسناد دریافتنی را می‌بندد.
+ */
+export async function checkChequeClearingNeedsLedgerAccount(): Promise<string[]> {
+  const problems: string[] = [];
+  const unlinked = await BankAccountService.createBankAccount({ title: `بانک بی‌سرفصل آزمون ${tag('N')}`, type: 'bank', initialBalance: 0, currency: 'IRR' });
+  const cheque = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('N'), amount: 400000, partyName: 'مشتری آزمون بی‌سرفصل' });
+  const mark = await voucherWatermark();
+  let refusal: string | null = null;
+  try {
+    await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'passed', bankAccountId: unlinked.id, actionDate: '2026-04-02', username: 'inv' });
+  } catch (err) {
+    refusal = getErrorMessage(err);
+  }
+  if (!refusal?.includes('حساب معین') || !refusal.includes(unlinked.title)) problems.push(`وصول به حساب بانکی بی‌سرفصل با نام آن حساب رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  const [row] = await orm.select({ status: cheques.status }).from(cheques).where(eq(cheques.id, cheque.id));
+  if (row?.status !== 'received') problems.push(`وضعیت چک پس از وصول ردشده ${row?.status}، انتظار received`);
+  const bankRow = (await BankAccountService.getBankAccounts()).find(b => b.id === unlinked.id);
+  if (!fin(bankRow?.currentBalance ?? 0).isZero()) problems.push(`مانده حساب بی‌سرفصل ${bankRow?.currentBalance}، انتظار ۰`);
+  if (!fin(await irrNet('1101', mark)).isZero()) problems.push('وصول ردشده سند اسناد دریافتنی صادر کرد');
+
+  if (row?.status !== 'received') return problems;
+  const linked = await bankWithOwnLedgerAccount('بانک سرفصل‌دار آزمون');
+  await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'passed', bankAccountId: linked.id, actionDate: '2026-04-02', username: 'inv' });
+  if (!fin(await irrNet('1101', mark)).equals(-400000)) problems.push(`وصول به حساب سرفصل‌دار اسناد دریافتنی را نبست (گردش ۱۱۰۱: ${await irrNet('1101', mark)})`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */
@@ -342,7 +371,10 @@ export async function probeClearedChequeMakesBankDiscrepant(): Promise<boolean> 
   return row?.syncStatus === 'discrepant';
 }
 
-/** TD-277: وصول چک به حساب بانکی بدون سرفصل معین پذیرفته می‌شود ولی سندی ندارد؛ اسناد دریافتنی (۱۱۰۱) هرگز بسته نمی‌شود */
+/**
+ * TD-277 (کاوش رگرسیون؛ رفع v8.0.25): وصول چک به حساب بانکی بدون سرفصل معین پذیرفته می‌شد ولی سندی نداشت؛ اسناد
+ * دریافتنی (۱۱۰۱) هرگز بسته نمی‌شد.
+ */
 export async function probeChequeClearedIntoBankWithoutLedger(): Promise<boolean> {
   const mark = await voucherWatermark();
   const bank = await BankAccountService.createBankAccount({ title: `بانک بی‌سرفصل کاوش ${tag('N')}`, type: 'bank', initialBalance: 0, currency: 'IRR' });

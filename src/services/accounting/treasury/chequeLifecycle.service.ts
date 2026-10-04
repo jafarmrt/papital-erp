@@ -358,6 +358,11 @@ export class ChequeLifecycleService {
         if (bank.currency && chequeCurrency && bank.currency !== chequeCurrency) {
           throw new ValidationError(`ارز چک (${chequeCurrency}) با ارز حساب بانکی «${bank.title}» (${bank.currency}) هم‌خوانی ندارد`);
         }
+        // v8.0.25 (TD-277): وصول به حساب بانکی بدون سرفصل معین پذیرفته نمی‌شود (مانند تراکنش خزانه). پیش‌تر وضعیت چک
+        // «وصول‌شده» می‌شد ولی سندی صادر نمی‌شد و اسناد دریافتنی/پرداختنی آن چک هرگز بسته نمی‌شد.
+        if (!bank.accountId) {
+          throw new ValidationError(`حساب معین مرتبط در چارت حساب‌ها برای حساب بانکی «${bank.title}» تعریف نشده است؛ وصول چک به این حساب ممکن نیست`);
+        }
 
         // 2. Lock cheque (level 20) SECOND
         const [chq] = await txEngine.select().from(cheques).where(eq(cheques.id, id)).for('update');

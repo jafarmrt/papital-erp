@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.25 — Cheque Clearing Needs a Bank Ledger Account (TD-277)
+- Clearing a cheque into a bank account without a ledger account is refused, like a treasury transaction, instead of marking it cleared without a voucher.
+
 ### v8.0.24 — Cleared Cheques Count in the Bank's Treasury Balance (TD-276)
 - A cleared received cheque adds to, and a cleared paid cheque subtracts from, its bank account's treasury balance, so the account stays in sync with the ledger.
 
