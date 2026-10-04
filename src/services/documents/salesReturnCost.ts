@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { documents, items, transactions } from '../../db/schema.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
@@ -31,6 +31,66 @@ export async function assertReturnableInvoice(tx: DbClient, invoiceId: number): 
   }
   if (inv.type !== 'invoice' || inv.status !== 'final') {
     throw new ValidationError(`سند مرجع برگشت از فروش (شماره ${inv.refNumber}) فاکتور فروش نهایی نیست.`);
+  }
+}
+
+const RETURN_QTY_TOLERANCE = 1e-9;
+
+/**
+ * v8.0.8 (TD-253): مقدار برگشت هر کالا با فاکتور مرجع از «فروخته‌شده در آن فاکتور منهای برگشت‌های نهایی قبلی همان
+ * فاکتور» بیشتر نمی‌شود. فروخته‌شده = ردیف‌های فعال خروج کاردکس فاکتور؛ برگشت قبلی = ردیف‌های فعال ورود کاردکس
+ * برگشت‌های همان فاکتور (برگشت ابطال‌شده یا پیش‌نویس حساب نمی‌شود، چون ردیف فعال ندارد). کالاها و سپس فاکتور مرجع
+ * به ترتیب قفل می‌شوند (همان ترتیب نهایی‌سازی: کالا، سپس سند) تا دو برگشت همزمان هر دو از سقف نگذرند.
+ * پیش‌تر برگشت بیش از مقدار فروخته‌شده و برگشت چندباره یک فاکتور پذیرفته می‌شد (موجودی و بستانکاری مشتری بی‌پشتوانه).
+ */
+export async function assertReturnWithinSold(
+  tx: DbClient,
+  invoiceId: number,
+  lines: Array<{ itemId: unknown; quantity: unknown }>,
+): Promise<void> {
+  const requested = new Map<number, FinancialDecimal>();
+  for (const line of lines) {
+    const itemId = Number(line.itemId);
+    if (!Number.isInteger(itemId) || itemId <= 0) continue;
+    requested.set(itemId, (requested.get(itemId) ?? fin(0)).add(fin(Number(line.quantity) || 0)));
+  }
+  const itemIds = [...requested.keys()].sort((a, b) => a - b);
+  if (itemIds.length === 0) return;
+
+  const lockedItems = await tx.select({ id: items.id, name: items.name, code: items.code })
+    .from(items).where(inArray(items.id, itemIds)).orderBy(asc(items.id)).for('update');
+  const [invoice] = await tx.select({ id: documents.id, refNumber: documents.refNumber })
+    .from(documents).where(eq(documents.id, invoiceId)).for('update');
+
+  const sold = await tx.select({ itemId: transactions.itemId, quantity: transactions.quantity })
+    .from(transactions)
+    .where(and(eq(transactions.documentId, invoiceId), eq(transactions.type, 'out'), eq(transactions.isDeleted, 0),
+      isNull(transactions.reversalOfId), inArray(transactions.itemId, itemIds)));
+  const earlierReturns = await tx.select({ itemId: transactions.itemId, quantity: transactions.quantity })
+    .from(transactions)
+    .innerJoin(documents, eq(documents.id, transactions.documentId))
+    .where(and(eq(documents.returnOfDocumentId, invoiceId), eq(documents.isDeleted, 0), eq(documents.type, 'return'),
+      eq(transactions.type, 'in'), eq(transactions.isDeleted, 0), isNull(transactions.reversalOfId), inArray(transactions.itemId, itemIds)));
+
+  const sumBy = (rows: Array<{ itemId: number; quantity: unknown }>) => {
+    const out = new Map<number, FinancialDecimal>();
+    for (const r of rows) out.set(r.itemId, (out.get(r.itemId) ?? fin(0)).add(fin(Number(r.quantity) || 0)));
+    return out;
+  };
+  const soldBy = sumBy(sold);
+  const returnedBy = sumBy(earlierReturns);
+  for (const itemId of itemIds) {
+    const soldQty = soldBy.get(itemId) ?? fin(0);
+    const returnedQty = returnedBy.get(itemId) ?? fin(0);
+    const want = requested.get(itemId) ?? fin(0);
+    const returnable = soldQty.subtract(returnedQty);
+    if (want.subtract(returnable).greaterThan(RETURN_QTY_TOLERANCE)) {
+      const it = lockedItems.find(r => r.id === itemId);
+      throw new ValidationError(
+        `برگشت ${want.toString()} از کالای «${it?.name ?? itemId}» (${it?.code ?? '-'}) بیش از مانده قابل برگشت فاکتور «${invoice?.refNumber ?? invoiceId}» است: ` +
+        `فروخته‌شده ${soldQty.toString()}، برگشت‌شده قبلی ${returnedQty.toString()}، قابل برگشت ${returnable.toString()}.`
+      );
+    }
   }
 }
 

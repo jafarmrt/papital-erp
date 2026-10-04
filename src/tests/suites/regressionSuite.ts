@@ -6928,8 +6928,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       check(await inCost(unlinked) === Number(wacNow.wac), `بهای ورود برگشت بدون فاکتور مرجع باید WAC جاری (${Number(wacNow.wac)}) باشد: ${await inCost(unlinked)}`);
       check(await voucherCogsReversal(unlinked) === 2 * Number(wacNow.wac), `سند حسابداری برگشت بدون مرجع باید با همان بهای ورود باشد: ${await voucherCogsReversal(unlinked)}`);
 
-      // ۳) پیش‌نویس با فاکتور مرجع و نهایی‌سازی بعدی
-      const draft = await create({ status: 'draft', returnOfDocumentId: invoiceId });
+      // ۳) پیش‌نویس با فاکتور مرجع و نهایی‌سازی بعدی (v8.0.8، TD-253: ۲ از ۳ برگشت خورده، پس ۱ عدد در سقف فاکتور)
+      const draft = await create({ status: 'draft', returnOfDocumentId: invoiceId, items: [{ itemId: item.id, quantity: 1, unit_price: 100000, location: defWh.code }] });
       await DocumentService.finalizeDocument(draft, 'test-agent');
       check(await inCost(draft) === 20000, `نهایی‌سازی برگشت پیش‌نویس باید با بهای خروج فاکتور (۲۰٬۰۰۰) باشد: ${await inCost(draft)}`);
 

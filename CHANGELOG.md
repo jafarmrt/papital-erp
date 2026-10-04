@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.8 — Sales Return Capped at Quantity Sold (TD-253)
+- A sales return with an original invoice is accepted only up to the invoice's sold quantity minus its earlier final returns (on create and on finalize, with row locks); voiding a return frees its quantity again.
+
 ### v8.0.7 — Running Kardex Shows Voided Documents (TD-266)
 - Product-owner decision: the item Kardex report shows a voided document's original row (label «باطل‌شده») and its reversal («معکوس ابطال»); the running balance matches stock at every row, totals count only real movements, and each row's WAC is the live engine's WAC after that row.
 

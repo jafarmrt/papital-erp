@@ -11,7 +11,7 @@ import type { SimulationFinding } from './businessYearSimulator.js';
 export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'I3:purchase-discount': 'TD-250',
   // TD-251 و TD-252 در v8.0.2 رفع شدند (آزمون‌های inv_td_251_void_deletes_draft_voucher و inv_td_252_closing_refuses_draft_vouchers)
-  'I14:over-return': 'TD-253',
+  // TD-253 در v8.0.8 رفع شد (inv_td_253_return_within_sold)
   'I3:void-out-at-current-wac': 'TD-254',
   // TD-255 در v8.0.3 رفع شد (آزمون inv_td_255_stock_count_voucher)
   'I3:zero-price-receipt-void': 'TD-256',

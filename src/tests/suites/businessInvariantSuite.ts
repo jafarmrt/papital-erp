@@ -16,6 +16,7 @@ import { createTestItem } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, SimulationResult } from '../simulation/businessYearSimulator.js';
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
+import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -245,7 +246,7 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     push(results, 'inv_td_252_closing_refuses_draft_vouchers', name252, t252, false, getErrorMessage(err));
   }
 
-  // ── v8.0.3 تا v8.0.7: آزمون‌های سخت‌گیرانه رفع TD-255، TD-262، TD-263، TD-257، TD-258، TD-264، TD-265 و TD-266 ─────
+  // ── v8.0.3 تا v8.0.8: آزمون‌های سخت‌گیرانه رفع یافته‌های انبار و حسابداری (TD-255 تا TD-266، TD-253) ─────
   const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
     ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
       checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
@@ -253,6 +254,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.8: TD-253 ──
+    ['inv_td_253_return_within_sold', 'v8.0.8: برگشت از فروش با فاکتور مرجع از مانده قابل برگشت آن فاکتور بیشتر نمی‌شود (TD-253)',
+      checkReturnWithinSold, 'برگشت تا سقف فروخته‌شده پذیرفته و بیش از آن (یک‌جا، چندباره، نهایی‌سازی) رد شد؛ ابطال برگشت سقف را آزاد کرد'],
     // ── v8.0.7: TD-266 ──
     ['inv_td_266_running_kardex_shows_voided', 'v8.0.7: کاردکس تفصیلی کالا سند ابطال‌شده را با برچسب نشان می‌دهد و مانده جاری آن با موجودی یکی است (TD-266)',
       checkRunningKardexShowsVoided, 'ردیف باطل‌شده و معکوس با برچسب آمدند؛ مانده جاری، جمع گردش و WAC درست بود'],

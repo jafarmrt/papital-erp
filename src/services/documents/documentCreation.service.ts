@@ -18,7 +18,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
-import { assertReturnableInvoice, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
+import { assertReturnableInvoice, assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
@@ -510,6 +510,8 @@ export class DocumentCreationService {
         // مرجع) وارد انبار می‌شود، نه با قیمت فروش
         let returnUnitCosts: Map<number, FinancialDecimal> | null = null;
         if (docType === 'return' && docStatus === 'final') {
+          // v8.0.8 (TD-253): برگشت نهایی با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود
+          if (returnOfDocumentId !== null) await assertReturnWithinSold(tx, returnOfDocumentId, docLines);
           returnUnitCosts = await resolveSalesReturnUnitCosts(tx, returnOfDocumentId, docLines.map(l => Number(l.itemId)));
         } else if (returnOfDocumentId !== null) {
           await assertReturnableInvoice(tx, returnOfDocumentId);

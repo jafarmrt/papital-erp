@@ -4,7 +4,7 @@ import { documents, documentItems, items, transactions, journalVouchers, product
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
-import { resolveSalesReturnUnitCosts } from './salesReturnCost.js';
+import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError, InsufficientStockError } from '../../errors/customErrors.js';
@@ -173,6 +173,10 @@ export class DocumentLifecycleService {
 
           // Step 2: Inventory & Kardex Stock Movement (WAC preserved)
           // v7.0.81 (TD-230): برگشت از فروش با بهای خروج فاکتور اصلی (یا WAC جاری بدون فاکتور مرجع)، نه قیمت فروش
+          // v8.0.8 (TD-253): نهایی‌سازی برگشت با فاکتور مرجع از مانده قابل برگشت همان فاکتور بیشتر نمی‌شود
+          if (targetType === 'return' && doc.returnOfDocumentId) {
+            await assertReturnWithinSold(tx, Number(doc.returnOfDocumentId), docLines);
+          }
           const returnUnitCosts = targetType === 'return'
             ? await resolveSalesReturnUnitCosts(tx, doc.returnOfDocumentId ?? null, docLines.map(l => l.itemId))
             : null;
