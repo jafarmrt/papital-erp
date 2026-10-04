@@ -24,7 +24,7 @@ import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherRepo
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import {
-  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, checkForeignChequeRefused, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, checkForeignChequeRefused, checkClearedChequeKeepsBankSynced, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
@@ -265,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.24: TD-276 ──
+    ['inv_td_276_cleared_cheque_keeps_bank_synced', 'v8.0.24: چک وصول‌شده در مانده خزانه حساب بانکی شمرده می‌شود و حساب پس از وصول «هم‌خوان» می‌ماند (TD-276)',
+      () => checkClearedChequeKeepsBankSynced(), 'مانده خزانه و دفتر پس از وصول چک دریافتی و پرداختی یکی و حساب هم‌خوان ماند'],
     // ── v8.0.23: TD-275 ──
     ['inv_td_275_foreign_cheque_refused', 'v8.0.23: چک ارزی پذیرفته نمی‌شود (نه رکورد چک، نه سند حسابداری)؛ چک ریالی مثل قبل ثبت می‌شود (TD-275، گزینه ج)',
       () => checkForeignChequeRefused(), 'چک دلاری رد شد و اثری نگذاشت؛ چک ریالی سند ثبت گرفت'],

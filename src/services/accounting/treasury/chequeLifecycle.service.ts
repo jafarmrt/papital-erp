@@ -682,7 +682,11 @@ export class ChequeLifecycleService {
 
       const [updated] = await txEngine.update(cheques).set({
         status: data.status,
-        ...(data.bankAccountId !== undefined ? { bankAccountId: data.bankAccountId } : {}),
+        // v8.0.24 (TD-276): چک وصول‌شده همیشه حساب بانکی وصول را نگه می‌دارد (مانده خزانه حساب با آن شمرده می‌شود)؛
+        // پیش‌تر bankAccountId: null در درخواست، حساب پیش‌فرض چک را که وصول به آن انجام شده بود پاک می‌کرد.
+        ...(data.status === 'passed' && bankRecord
+          ? { bankAccountId: bankRecord.id }
+          : data.bankAccountId !== undefined ? { bankAccountId: data.bankAccountId } : {}),
         ...(data.transfereePartyName ? { payeeName: data.transfereePartyName } : {}),
         statusHistory: history,
       }).where(eq(cheques.id, id)).returning();

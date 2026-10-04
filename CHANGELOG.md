@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.24 — Cleared Cheques Count in the Bank's Treasury Balance (TD-276)
+- A cleared received cheque adds to, and a cleared paid cheque subtracts from, its bank account's treasury balance, so the account stays in sync with the ledger.
+
 ### v8.0.23 — Foreign-Currency Cheques Are Refused (TD-275)
 - A cheque in a currency other than IRR is refused; foreign receipts and payments are recorded from the treasury form at an exchange rate.
 

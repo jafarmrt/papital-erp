@@ -1,5 +1,5 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { accounts, bankAccounts, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
+import { accounts, bankAccounts, cheques, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
 import { eq, asc, and, or } from 'drizzle-orm';
 import type { BankAccount } from '../../../types.js';
 import { NotFoundError, BusinessLogicError, ValidationError } from '../../../errors/customErrors.js';
@@ -76,6 +76,17 @@ export class BankAccountService {
     .from(treasuryTransactions)
     .where(eq(treasuryTransactions.isDeleted, 0));
 
+    // v8.0.24 (TD-276): چک وصول‌شده (passed، وضعیت پایانی و غیرقابل حذف) هم پول حساب بانکی را جابه‌جا می‌کند: چک دریافتی
+    // به حساب واریز و چک پرداختی از آن برداشت شده است (سند وصول همان حساب را بدهکار/بستانکار می‌کند). پیش‌تر مانده خزانه
+    // فقط تراکنش‌های خزانه را می‌شمرد و حساب پس از هر وصول چک «مغایر» نشان داده می‌شد.
+    const clearedCheques = await orm.select({
+      bankAccountId: cheques.bankAccountId,
+      type: cheques.type,
+      amount: cheques.amount,
+    })
+    .from(cheques)
+    .where(and(eq(cheques.isDeleted, 0), eq(cheques.status, 'passed')));
+
     // V2.0.0: حساب‌هایی که سند افتتاحیه دارند — مانده اولیه در دفتر ثبت شده و
     // نباید در محاسبه ledgerBalance دوباره اضافه شود (جلوگیری از دوبرابرشماری)
     const openingVoucherBanks = new Set<number>();
@@ -121,6 +132,12 @@ export class BankAccountService {
           } else if (tx.type === 'payment') {
             payments = payments.add(tx.amount);
           }
+        }
+      }
+      for (const chq of clearedCheques) {
+        if (chq.bankAccountId === b.id) {
+          if (chq.type === 'received') receipts = receipts.add(chq.amount);
+          else payments = payments.add(chq.amount);
         }
       }
 

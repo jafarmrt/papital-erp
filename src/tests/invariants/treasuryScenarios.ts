@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { accounts } from '../../db/schema.js';
+import { accounts, cheques } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { ChequeLifecycleService } from '../../services/accounting/treasury/chequeLifecycle.service.js';
@@ -48,6 +48,21 @@ async function activeVoucherCount(chequeId: number): Promise<number> {
 
 async function bankWithLedgerAccount(title: string, glCode = '1003', currency = 'IRR') {
   return BankAccountService.createBankAccount({ title: `${title} ${tag('B')}`, type: 'bank', accountId: await accountIdByCode(glCode), initialBalance: 0, currency });
+}
+
+/** حساب بانکی با سرفصل معین اختصاصی زیر ۱۰۰۳ (مانده دفتری فقط از همین حساب؛ حساب‌های بانکی آزمون دیگر در ۱۰۰۳ اثری ندارند) */
+async function bankWithOwnLedgerAccount(title: string) {
+  const [parent] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, '1003'), eq(accounts.isDeleted, 0)));
+  const [ledger] = await orm.insert(accounts).values({
+    code: `1003${tag('').replace(/\D/g, '')}`, name: `${title} (سرفصل آزمون)`, level: 'subsidiary', parentId: parent?.id ?? null,
+    accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 1, isDeleted: 0,
+  }).returning({ id: accounts.id });
+  return BankAccountService.createBankAccount({ title: `${title} ${tag('B')}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR' });
+}
+
+async function approveDraftsAfter(mark: number): Promise<void> {
+  const drafts = await pool.query<{ id: number }>(`SELECT id FROM journal_vouchers WHERE id > $1 AND is_deleted = 0 AND status = 'draft'`, [mark]);
+  if (drafts.rows.length > 0) await VoucherService.approveJournalVouchers(drafts.rows.map(r => r.id), undefined, 'inv');
 }
 
 /**
@@ -238,6 +253,39 @@ export async function checkForeignChequeRefused(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-276: چک وصول‌شده در مانده خزانه حساب بانکی شمرده می‌شود — چک دریافتی به حساب واریز و چک پرداختی از آن برداشت شده
+ * است؛ مانده خزانه با مانده دفتر یکی و حساب «هم‌خوان» می‌ماند (فهرست حساب‌ها و گزارش تطبیق). چک پرداختی که با
+ * bankAccountId: null وصول شود حساب صدور خود را نگه می‌دارد.
+ */
+export async function checkClearedChequeKeepsBankSynced(): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await voucherWatermark();
+  const bank = await bankWithOwnLedgerAccount('بانک آزمون وصول چک');
+  // واریز ۲٬۰۰۰٬۰۰۰، وصول چک دریافتی ۷۰۰٬۰۰۰ به حساب، پاس شدن چک پرداختی ۳۰۰٬۰۰۰ از حساب ← ۲٬۴۰۰٬۰۰۰
+  await TreasuryTransactionService.createTreasuryTransaction({
+    type: 'receipt', method: 'bank_transfer', amount: 2000000, bankAccountId: bank.id, partyType: 'customer', partyName: 'مشتری آزمون واریز', date: '2026-04-01', username: 'inv',
+  });
+  const received = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('C'), amount: 700000, partyName: 'مشتری آزمون وصول' });
+  await ChequeLifecycleService.updateChequeStatus(received.id, { status: 'passed', bankAccountId: bank.id, actionDate: '2026-04-02', username: 'inv' });
+  const paid = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'paid', chequeNumber: tag('P'), amount: 300000, partyName: 'تامین‌کننده آزمون وصول', bankAccountId: bank.id });
+  await ChequeLifecycleService.updateChequeStatus(paid.id, { status: 'passed', bankAccountId: null, actionDate: '2026-04-03', username: 'inv' });
+  await approveDraftsAfter(mark);
+
+  const [paidRow] = await orm.select({ bankAccountId: cheques.bankAccountId }).from(cheques).where(eq(cheques.id, paid.id));
+  if (paidRow?.bankAccountId !== bank.id) problems.push(`چک پرداختی وصول‌شده حساب بانکی خود را نگه نداشت (${paidRow?.bankAccountId ?? 'null'})`);
+
+  const listed = (await BankAccountService.getBankAccounts()).find(b => b.id === bank.id);
+  const report = (await BankAccountService.getBankReconciliationReport()).accounts.find(b => b.id === bank.id);
+  for (const [label, row] of [['فهرست حساب‌ها', listed], ['گزارش تطبیق', report]] as const) {
+    if (!row) { problems.push(`${label}: حساب آزمون یافت نشد`); continue; }
+    if (!fin(row.treasuryBalance ?? 0).equals(2400000)) problems.push(`${label}: مانده خزانه ${row.treasuryBalance}، انتظار ۲٬۴۰۰٬۰۰۰`);
+    if (!fin(row.ledgerBalance ?? 0).equals(2400000)) problems.push(`${label}: مانده دفتر ${row.ledgerBalance}، انتظار ۲٬۴۰۰٬۰۰۰`);
+    if (row.syncStatus !== 'synced') problems.push(`${label}: وضعیت حساب ${row.syncStatus}، انتظار synced`);
+  }
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */
@@ -280,14 +328,16 @@ export async function probeForeignChequeAtRateOne(): Promise<boolean> {
   return fin(await irrNet('1101', mark)).equals(50);
 }
 
-/** TD-276: پس از وصول چک، حساب بانکی در تطبیق خزانه با دفتر «مغایر» نشان داده می‌شود (مانده خزانه وصول چک را نمی‌شمارد) */
+/**
+ * TD-276 (کاوش رگرسیون؛ رفع v8.0.24): پس از وصول چک، حساب بانکی در تطبیق خزانه با دفتر «مغایر» نشان داده می‌شد (مانده
+ * خزانه وصول چک را نمی‌شمرد). حساب سرفصل اختصاصی دارد تا حساب‌های بانکی آزمون دیگر در ۱۰۰۳ اثری نداشته باشند.
+ */
 export async function probeClearedChequeMakesBankDiscrepant(): Promise<boolean> {
   const mark = await voucherWatermark();
-  const bank = await bankWithLedgerAccount('بانک کاوش وصول');
+  const bank = await bankWithOwnLedgerAccount('بانک کاوش وصول');
   const cheque = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('C'), amount: 700000, partyName: 'مشتری کاوش وصول' });
   await ChequeLifecycleService.updateChequeStatus(cheque.id, { status: 'passed', bankAccountId: bank.id, actionDate: '2026-04-02', username: 'inv' });
-  const drafts = await pool.query<{ id: number }>(`SELECT id FROM journal_vouchers WHERE id > $1 AND is_deleted = 0 AND status = 'draft'`, [mark]);
-  if (drafts.rows.length > 0) await VoucherService.approveJournalVouchers(drafts.rows.map(r => r.id), undefined, 'inv');
+  await approveDraftsAfter(mark);
   const row = (await BankAccountService.getBankAccounts()).find(b => b.id === bank.id);
   return row?.syncStatus === 'discrepant';
 }
