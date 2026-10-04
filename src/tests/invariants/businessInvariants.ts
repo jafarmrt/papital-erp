@@ -45,8 +45,8 @@ export interface InvariantScope {
   voucherIdAfter: number;
 }
 
-/** انواع سندی که VoucherSync هنگام ثبت نهایی برایشان سند حسابداری صادر می‌کند */
-export const VOUCHER_DOCUMENT_TYPES = ['invoice', 'proforma', 'receipt', 'production_receipt', 'purchase', 'remittance', 'waste', 'return'];
+/** انواع سندی که هنگام ثبت نهایی سند حسابداری می‌گیرند (انبارگردانی از v8.0.3، TD-255) */
+export const VOUCHER_DOCUMENT_TYPES = ['invoice', 'proforma', 'receipt', 'production_receipt', 'purchase', 'remittance', 'waste', 'return', 'audit'];
 
 const QTY_TOLERANCE = 0.0001;
 

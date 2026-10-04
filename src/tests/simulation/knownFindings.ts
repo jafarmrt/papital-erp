@@ -13,13 +13,14 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-251 و TD-252 در v8.0.2 رفع شدند (آزمون‌های inv_td_251_void_deletes_draft_voucher و inv_td_252_closing_refuses_draft_vouchers)
   'I14:over-return': 'TD-253',
   'I3:void-out-at-current-wac': 'TD-254',
-  'I3:stock-count-without-voucher': 'TD-255',
+  // TD-255 در v8.0.3 رفع شد (آزمون inv_td_255_stock_count_voucher)
   'I3:zero-price-receipt-void': 'TD-256',
   'I13:backdated-out-before-stock': 'TD-257',
   'I13:rebuild-wac-diverges': 'TD-258',
   'FOCUSED:purchase-voucher-ignores-account-mapping': 'TD-259',
   'FOCUSED:account-card-mixes-currencies': 'TD-260',
   'I3:foreign-rounding': 'TD-261',
+  'FOCUSED:excel-wac-overwrite-revalues-stock': 'TD-264',
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

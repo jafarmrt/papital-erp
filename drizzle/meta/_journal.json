@@ -316,6 +316,13 @@
       "when": 1792090800000,
       "tag": "0044_journal_voucher_dates_iso",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792177200000,
+      "tag": "0045_inventory_count_difference_account",
+      "breakpoints": true
     }
   ]
 }

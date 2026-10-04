@@ -1,6 +1,6 @@
 import { eq, and, inArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { documents, documentItems, items, itemPrices, documentRefCounters, productionProjects } from '../../db/schema.js';
+import { documents, documentItems, items, documentRefCounters, productionProjects } from '../../db/schema.js';
 import { normalizeDateToDbTimestamp } from '../../utils.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
@@ -9,6 +9,7 @@ import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
+import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
@@ -21,7 +22,7 @@ import { assertReturnableInvoice, parseReturnOfDocumentId, resolveSalesReturnUni
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
-import { money, type Money } from '../../lib/money.js';
+import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
@@ -214,6 +215,11 @@ export class DocumentCreationService {
     if (docType === 'proforma' && docStatus === 'final') {
       throw new ValidationError('پیش‌فاکتور نمی‌تواند مستقیماً با وضعیت نهایی (final) صادر شود. لطفاً پیش‌فاکتور را صادر کرده و سپس از طریق فرآیند نهایی‌سازی اقدام فرمایید.');
     }
+    // v8.0.3 (TD-263): انبارگردانی موجودی را هنگام ثبت اصلاح می‌کند، پس فقط نهایی ثبت می‌شود. پیش‌تر انبارگردانی
+    // «پیش‌نویس» هم موجودی را عوض می‌کرد و نهایی‌سازی بعدی کل مقدار شمارش‌شده را یک بار دیگر از انبار خارج می‌کرد.
+    if (docType === 'audit' && docStatus !== 'final') {
+      throw new ValidationError('سند انبارگردانی فقط با وضعیت نهایی ثبت می‌شود؛ پیش‌نویس یا پیش‌فاکتور انبارگردانی مجاز نیست.');
+    }
     const docLocation = location ? String(location).trim() : '';
 
     // V3.1.46 (TD-070): لینک رسمی سند به پروژه — اعتبارسنجی وجود پروژه پیش از درج (FK انسانی)
@@ -381,25 +387,8 @@ export class DocumentCreationService {
         // v7.0.45 (audit P2-1): موجودی ثبت‌شده هر انبار از جدول موجودی انبارها (منبع حقیقت)
         const auditStockMap = await ItemWarehouseStockService.getStocksForItems(tx, sortedAuditItemIds);
 
-        // TD-164: حذف کوئری‌های تکراری N+1 انبار و قیمت در حلقه انبارگردانی
+        // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
-
-        // واکشی دسته‌ای قیمت‌ها برای اقلامی که میانگین موزون ندارند با یک کوئری یکتا
-        const missingPriceItemIds = lockedAuditItems
-          .filter(it => Number(it.weightedAverageCost || 0) <= 0)
-          .map(it => it.id);
-        const auditPriceMap = new Map<number, Money>();
-        if (missingPriceItemIds.length > 0) {
-          const priceRows = await tx
-            .select({ itemId: itemPrices.itemId, price: itemPrices.price })
-            .from(itemPrices)
-            .where(and(inArray(itemPrices.itemId, missingPriceItemIds), eq(itemPrices.isDeleted, 0)));
-          for (const pr of priceRows) {
-            if (!auditPriceMap.has(pr.itemId)) {
-              auditPriceMap.set(pr.itemId, pr.price);
-            }
-          }
-        }
 
         const auditLineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
@@ -429,17 +418,16 @@ export class DocumentCreationService {
             const absVariance = Math.abs(variance);
             const txNotes = variance > 0 ? 'اضافی انبارگردانی دوره‌ای' : 'کسری انبارگردانی دوره‌ای';
 
-            let auditMovementPrice = fin(targetItem?.weightedAverageCost);
-            if (!auditMovementPrice.isPositive()) {
-              auditMovementPrice = fin(auditPriceMap.get(Number(itemId)));
-            }
+            // v8.0.3 (TD-255، تصمیم مالک محصول): کسری و اضافی با WAC کالا ارزش‌گذاری می‌شود؛ کالای بدون WAC با بهای صفر.
+            // پیش‌تر اضافی کالای بدون WAC با قیمت فهرست فروش وارد انبار می‌شد و WAC را برابر قیمت فروش می‌کرد.
+            const auditMovementPrice = fin(targetItem?.weightedAverageCost);
 
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: Number(itemId),
               documentId: docId,
               inOut: txType,
               quantity: absVariance,
-              price: auditMovementPrice,
+              price: auditMovementPrice.isPositive() ? auditMovementPrice : fin(0),
               date: normalizedDocDate,
               documentType: 'audit',
               documentRef: String(finalRefNumber),
@@ -617,6 +605,16 @@ export class DocumentCreationService {
           await VoucherSyncService.syncPurchaseInvoiceVoucher(docId, { username: user, strict: isStrict }, tx);
         } else if (['remittance', 'waste', 'return'].includes(docType)) {
           await VoucherSyncService.syncWarehouseDocumentVoucher(docId, { username: user, strict: isStrict }, tx);
+        } else if (docType === 'audit') {
+          // v8.0.3 (TD-255): کسری/اضافی انبارگردانی با بهای کاردکس به «کسری و اضافات انبار» (سند پیش‌نویس)
+          await syncStockAdjustmentVoucher({
+            documentId: docId,
+            date: normalizedDocDate.slice(0, 10),
+            refNumber: String(finalRefNumber),
+            description: `انبارگردانی شماره ${finalRefNumber}`,
+            userId: actor.userId,
+            username: user,
+          }, tx);
         }
       }
 

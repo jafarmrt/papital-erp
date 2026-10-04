@@ -15,6 +15,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { runBusinessYearSimulation, SimulationResult } from '../simulation/businessYearSimulator.js';
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
+import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 
 /**
  * v8.0.1 — سوئیت ناوردایی‌های منطق کاری (V8_MASTER_ROADMAP.md؛ گزارش docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).
@@ -243,6 +244,25 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     push(results, 'inv_td_252_closing_refuses_draft_vouchers', name252, t252, false, getErrorMessage(err));
   }
 
+  // ── v8.0.3: آزمون‌های سخت‌گیرانه رفع TD-255، TD-262 و TD-263 ─────────────
+  const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
+    ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
+      checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
+    ['inv_td_262_excel_adjustment_voucher', 'v8.0.3: اصلاح موجودی از اکسل سند «کسری و اضافات انبار» و کالای تازه اکسل سند افتتاحیه می‌گیرد (TD-262)',
+      checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
+    ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
+      checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+  ];
+  for (const [id, name, check, okInfo] of v803) {
+    const started = Date.now();
+    try {
+      const problems = await check(wh);
+      push(results, id, name, started, problems.length === 0, problems.length === 0 ? okInfo : problems.join(' | '));
+    } catch (err) {
+      push(results, id, name, started, false, getErrorMessage(err));
+    }
+  }
+
   // ── ۱. مسیرهای پایه: هیچ نقضی ─────────────────────────────────────────────
   const t1 = Date.now();
   const cleanName = 'v8.0.1: خرید، فروش، برگشت از فروش، حواله، ضایعات و انتقال بدون محرک یافته‌ها هیچ ناوردایی‌ای را نقض نمی‌کنند';
@@ -275,6 +295,7 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeFiscalClosingIgnoresDrafts(wh)) observed.add('FOCUSED:fiscal-closing-ignores-draft-vouchers');
     if (await probePurchaseIgnoresMapping(wh)) observed.add('FOCUSED:purchase-voucher-ignores-account-mapping');
     if (await probeAccountCardMixesCurrencies(wh)) observed.add('FOCUSED:account-card-mixes-currencies');
+    if (await probeExcelWacOverwrite(wh)) observed.add('FOCUSED:excel-wac-overwrite-revalues-stock');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

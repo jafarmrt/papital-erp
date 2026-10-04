@@ -28,6 +28,7 @@ const MAPPING_ROWS: MappingRowMeta[] = [
   { key: 'salesVatPayableAccountCode', label: 'مالیات بر ارزش افزوده', description: 'بستانکاری VAT در سند فروش' },
   { key: 'inventoryRawMaterialsCode', label: 'موجودی مواد اولیه (1401)', description: 'اسناد رسید مواد اولیه و حواله تولید' },
   { key: 'inventoryFinishedGoodsCode', label: 'موجودی کالای تولیدشده (1403)', description: 'اسناد رسید تولید نهایی' },
+  { key: 'inventoryCountDifferenceAccountCode', label: 'کسری و اضافات انبار (7012)', description: 'سند خودکار انبارگردانی و اصلاح موجودی از اکسل' },
   { key: 'costOfGoodsSoldCode', label: 'بهای تمام‌شده کالای فروش‌رفته (6001)', description: 'سند خودکار بهای تمام‌شده در فروش' },
   { key: 'directProductionWagesAccountCode', label: 'حقوق مستقیم تولید (6002)', description: 'سند تجمیع کارکرد پرکیسی تولید' },
   { key: 'summaryProfitLossCode', label: 'خلاصه سود و زیان', description: 'بستن حساب‌های موقت در پایان سال مالی' },

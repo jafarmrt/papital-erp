@@ -60,6 +60,11 @@ export class DocumentLifecycleService {
         logger.info({ message: `[DocumentLifecycleService.finalizeDocument] Document #${id} already finalized — skipping (concurrent call prevention)`, documentId: id });
         return;
       }
+      // v8.0.3 (TD-263): انبارگردانی هنگام ثبت موجودی را اصلاح کرده است؛ نهایی‌سازی آن کل مقدار شمارش‌شده را
+      // دوباره از انبار خارج می‌کرد. انبارگردانی پیش‌نویسِ پیش از v8.0.3 نهایی نمی‌شود (ابطال و ثبت دوباره).
+      if (docPeek.type === 'audit') {
+        throw new ValidationError(`سند انبارگردانی «${docPeek.refNumber || id}» نهایی‌سازی نمی‌شود؛ انبارگردانی هنگام ثبت اعمال شده است. برای اصلاح، آن را ابطال و دوباره ثبت کنید.`);
+      }
 
       // Pre-flight: verify line items existence and validity
       const rawLines = await tx.select({
@@ -352,7 +357,9 @@ export class DocumentLifecycleService {
       }
 
       // 4. Revert stock for final documents
-      if (doc.status === 'final') {
+      // v8.0.3 (TD-263): انبارگردانی پیش‌نویسِ پیش از v8.0.3 هم موجودی را عوض کرده بود؛ ابطال آن گردش‌هایش را برمی‌گرداند
+      // (پیش‌تر فقط کاردکس معکوس می‌شد و موجودی انبار با کاردکس ناهمخوان می‌ماند)
+      if (doc.status === 'final' || (doc.type === 'audit' && originalTxs.length > 0)) {
         const defaultWh = await resolveWarehouseCode(tx, '');
 
         // C-01 & F3: موجودی انبار منحصراً بر اساس گردش واقعی تراکنش‌های ثبت‌شده (originalTxs) معکوس می‌شود؛

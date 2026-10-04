@@ -11,6 +11,7 @@ import { DocumentService } from '../document.service.js';
 import { resolveWarehouseCode, getDefaultWarehouseCode } from '../inventory/warehouseResolver.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { ItemOpeningService } from '../inventory/itemOpening.service.js';
+import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { WorkflowEngineService } from '../workflow/workflowEngineService.js';
 import { startsWithLikePattern } from '../../lib/sqlLike.js';
@@ -417,6 +418,8 @@ export class ItemCatalogService {
     let updatedCount = 0;
     let pricesCount = 0;
     const errors: Array<{ row: number; name?: string; code?: string; message: string }> = [];
+    // v8.0.3 (TD-262): ردیف‌های کاردکس اصلاح موجودی کالاهای موجود، برای یک سند حسابداری «کسری و اضافات انبار»
+    const adjustmentTransactionIds: number[] = [];
 
     await orm.transaction(async (tx) => {
       for (let i = 0; i < rows.length; i++) {
@@ -560,7 +563,7 @@ export class ItemCatalogService {
               const newQty = Number(stockValues[whCode] || 0);
               const diff = newQty - oldQty;
               if (diff > 0) {
-                await DocumentService.applyStockMovement(tx, {
+                adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
                   itemId: targetItemId,
                   inOut: 'in',
                   quantity: diff,
@@ -571,9 +574,9 @@ export class ItemCatalogService {
                   user: currentUser,
                   targetLoc: whCode,
                   notes: 'افزایش موجودی از اکسل'
-                });
+                })).transactionId);
               } else if (diff < 0) {
-                await DocumentService.applyStockMovement(tx, {
+                adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
                   itemId: targetItemId,
                   inOut: 'out',
                   quantity: Math.abs(diff),
@@ -584,7 +587,7 @@ export class ItemCatalogService {
                   user: currentUser,
                   targetLoc: whCode,
                   notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)'
-                });
+                })).transactionId);
               }
             }
           } else if (hasCustomStockInRow || currentStock !== undefined) {
@@ -592,7 +595,7 @@ export class ItemCatalogService {
             const diff = finalStock - existingSnapshot.total;
             const defaultLoc = await resolveWarehouseCode(tx, '');
             if (diff > 0) {
-              await DocumentService.applyStockMovement(tx, {
+              adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
                 itemId: targetItemId,
                 inOut: 'in',
                 quantity: diff,
@@ -603,9 +606,9 @@ export class ItemCatalogService {
                 user: currentUser,
                 targetLoc: defaultLoc,
                 notes: 'افزایش موجودی از اکسل'
-              });
+              })).transactionId);
             } else if (diff < 0) {
-              await DocumentService.applyStockMovement(tx, {
+              adjustmentTransactionIds.push((await DocumentService.applyStockMovement(tx, {
                 itemId: targetItemId,
                 inOut: 'out',
                 quantity: Math.abs(diff),
@@ -616,7 +619,7 @@ export class ItemCatalogService {
                 user: currentUser,
                 targetLoc: defaultLoc,
                 notes: 'کاهش موجودی از اکسل (شمارش فیزیکی)'
-              });
+              })).transactionId);
             }
           }
 
@@ -675,6 +678,11 @@ export class ItemCatalogService {
               targetLoc: defaultLoc,
               notes: 'موجودی اولیه از فایل اکسل'
             });
+          }
+          // v8.0.3 (TD-262): کالای تازه با موجودی، همان سند افتتاحیه فرم کالا را می‌گیرد (موجودی × WAC / سرمایه اولیه)؛
+          // همین‌جا صادر می‌شود تا ردیف بعدی همین فایل برای همین کد فقط اختلاف را به سند اصلاح موجودی ببرد
+          if (Object.values(stockValues).some(qty => Number(qty) > 0) || currentStock > 0) {
+            await ItemOpeningService.issueItemOpeningVoucher(targetItemId, { userId: req.user?.id, username: currentUser, tx });
           }
 
           createdCount++;
@@ -762,6 +770,17 @@ export class ItemCatalogService {
           pricesCount++;
         }
       }
+
+      // v8.0.3 (TD-262، تصمیم مالک محصول درباره TD-255): اصلاح موجودی کالاهای موجود با بهای کاردکس به «کسری و اضافات
+      // انبار»، در همان تراکنش؛ پیش‌تر موجودی عوض می‌شد و دفتر کل از آن خبر نداشت
+      await syncStockAdjustmentVoucher({
+        transactionIds: adjustmentTransactionIds,
+        date: await businessTodayIsoDate(),
+        refNumber: 'درون‌ریزی اکسل',
+        description: 'اصلاح موجودی کالا از درون‌ریزی اکسل',
+        userId: req.user?.id,
+        username: req.user?.username || 'مدیر سیستم',
+      }, tx);
     });
 
     await logActivity({

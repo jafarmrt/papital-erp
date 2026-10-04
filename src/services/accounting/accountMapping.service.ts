@@ -33,6 +33,8 @@ export interface ConceptualAccountMappingConfig {
   employeeDeductionsPayableAccountCode: string; // Default: '3202' (سایر کسورات پرداختنی — بیمه/مالیات سهم کارمند)
   // V2.0.0: طرف حساب اسناد افتتاحیه (موجودی اولیه خزانه/انبار)
   openingCapitalAccountCode: string;        // Default: '4001' (سرمایه اولیه سهامداران/موسسین)
+  // v8.0.3 (TD-255): کسری و اضافی انبارگردانی و اصلاح موجودی از اکسل
+  inventoryCountDifferenceAccountCode: string; // Default: '7012' (کسری و اضافات انبار)
 }
 
 export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
@@ -59,6 +61,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   fixedSalaryExpenseAccountCode: '6003',
   employeeDeductionsPayableAccountCode: '3202',
   openingCapitalAccountCode: '4001',
+  inventoryCountDifferenceAccountCode: '7012',
 };
 
 const SETTINGS_KEY = 'accounting_account_mappings';
@@ -316,6 +319,13 @@ export class AccountMappingService {
    */
   static async getCostOfGoodsSoldAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('costOfGoodsSoldCode', tx);
+  }
+
+  /**
+   * v8.0.3 (TD-255): کسری و اضافات انبار (7012) — طرف حساب اصلاح موجودی در انبارگردانی و درون‌ریزی اکسل
+   */
+  static async getInventoryCountDifferenceAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('inventoryCountDifferenceAccountCode', tx);
   }
 
   /**

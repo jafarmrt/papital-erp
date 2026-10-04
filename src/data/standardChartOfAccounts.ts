@@ -136,4 +136,6 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   { code: '7009', name: 'سایر هزینه‌های متفرقه کارگاهی', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
   { code: '7010', name: 'هزینه پذیرایی، آبدارخانه و ارزاق پرسنل', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
   { code: '7011', name: 'هزینه تعمیرات و نگهداری ابزار و تجهیزات', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'debit', isSystem: 1 },
+  // v8.0.3 (TD-255، تصمیم مالک محصول): کسری (بدهکار) و اضافی (بستانکار) انبارگردانی و اصلاح موجودی از اکسل
+  { code: '7012', name: 'کسری و اضافات انبار', level: 'subsidiary', parentCode: '70', accountType: 'expense', nature: 'both', isSystem: 1 },
 ];

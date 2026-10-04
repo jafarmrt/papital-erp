@@ -18,6 +18,10 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.3 — Stock-Count and Excel Adjustment Vouchers (TD-255, TD-262, TD-263)
+- Product-owner decision: stock-count shortages/surpluses and Excel stock adjustments post a draft voucher at Kardex cost against the new account «کسری و اضافات انبار» (7012, configurable mapping); a surplus of an item without WAC enters at cost 0; new Excel items with stock get the opening voucher; past counts get no voucher.
+- A stock count is recorded only as final (a draft count used to deduct stock twice on finalize). New finding TD-264 (Excel WAC overwrite) registered for decision.
+
 ### v8.0.2 — Draft Vouchers at Fiscal Closing and Void (TD-252, TD-251)
 - Product-owner decision: automatic vouchers stay draft; a fiscal year with draft vouchers is not closed (the preview lists them) and voiding a document, treasury transaction, cheque or payroll soft-deletes its draft voucher instead of issuing an approved reversal.
 
