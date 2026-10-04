@@ -19,6 +19,7 @@ import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChange
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
 import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
+import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -256,6 +257,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.14: TD-259 ──
+    ['inv_td_259_vouchers_follow_account_mapping', 'v8.0.14: سند رسید خرید، رسید تولید و برگشت از فروش حساب‌های موجودی، بستانکاران و بدهکاران را از نگاشت حساب‌ها می‌گیرند (TD-259)',
+      checkVouchersFollowAccountMapping, 'با نگاشت سفارشی، همه سطرها به حساب‌های نگاشت‌شده رفتند و ارزش انبار با دفتر کل یکی ماند'],
     // ── v8.0.13: TD-269 ──
     ['inv_td_269_replay_starts_at_zero_wac', 'v8.0.13: بازپخش WAC کاردکس از WAC صفر شروع می‌شود؛ کالایی که نخست با قیمت صفر وارد شده پس از بازسازی همان WAC زنده را دارد (TD-269)',
       checkReplayStartsAtZeroWac, 'بازسازی سه کالا (ورود نخست رایگان، WAC اولیه با ورود رایگان، بی‌گردش) WAC زنده را نگه داشت'],

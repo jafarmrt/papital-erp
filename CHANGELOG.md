@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.14 — Purchase Vouchers Follow the Account Mapping (TD-259)
+- Purchase, production receipt and sales return vouchers take inventory, payables and receivables accounts from the account mapping, like sales and remittances.
+
 ### v8.0.13 — Kardex Rebuild Starts From Zero Cost (TD-269)
 - The Kardex rebuild replays WAC from zero, like an item with no movements; an item first received at price 0 keeps its live WAC after a rebuild.
 

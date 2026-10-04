@@ -16,7 +16,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-255 در v8.0.3 رفع شد (آزمون inv_td_255_stock_count_voucher)
   // TD-256 در v8.0.12 رفع شد (inv_td_256_zero_price_receipt_at_wac)
   // TD-257 و TD-258 در v8.0.4 رفع شدند (inv_td_257_backdated_stock_movement، inv_td_258_rebuild_matches_live_engine)
-  'FOCUSED:purchase-voucher-ignores-account-mapping': 'TD-259',
+  // TD-259 در v8.0.14 رفع شد (inv_td_259_vouchers_follow_account_mapping)
   'FOCUSED:account-card-mixes-currencies': 'TD-260',
   'I3:foreign-rounding': 'TD-261',
   // TD-264 در v8.0.5 رفع شد (inv_td_264_excel_wac_change_refused)

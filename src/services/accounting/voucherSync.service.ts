@@ -511,10 +511,12 @@ export class VoucherSyncService {
     if (!totalGross.isPositive()) return null;
 
     const allAccs = await ChartOfAccountsService.getAllAccounts(tx);
-    const rawMaterialAcc = allAccs.find(a => a.code === '1401') || allAccs.find(a => a.code === '14');
-    const wipAcc = allAccs.find(a => a.code === '1402') || allAccs.find(a => a.code === '14');
-    const finishedGoodsAcc = allAccs.find(a => a.code === '1403') || allAccs.find(a => a.code === '14');
-    const supplierAcc = allAccs.find(a => a.code === '3001') || allAccs.find(a => a.code === '30');
+    // v8.0.14 (TD-259): سرفصل‌ها از نگاشت حساب‌ها، مانند سند فروش و حواله؛ پیش‌تر کد ثابت ۱۴۰۱/۱۴۰۲/۱۴۰۳/۳۰۰۱ بود و با
+    // نگاشت سفارشی، خرید و فروش یک کالا به دو حساب موجودی می‌رفتند. کد پیش‌فرض فقط وقتی است که حساب نگاشت‌شده نباشد.
+    const rawMaterialAcc = (await AccountMappingService.getInventoryRawMaterialsAccount(tx)) || allAccs.find(a => a.code === '1401') || allAccs.find(a => a.code === '14');
+    const wipAcc = (await AccountMappingService.getWorkInProgressAccount(tx)) || allAccs.find(a => a.code === '1402') || allAccs.find(a => a.code === '14');
+    const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403') || allAccs.find(a => a.code === '14');
+    const supplierAcc = (await AccountMappingService.getTradePayablesAccount(tx)) || allAccs.find(a => a.code === '3001') || allAccs.find(a => a.code === '30');
 
     let matchedSupplierId: number | null = null;
     if (doc.buyerName && doc.type !== 'production_receipt') {
@@ -733,7 +735,8 @@ export class VoucherSyncService {
     const wipAcc = (await AccountMappingService.getWorkInProgressAccount(tx)) || allAccs.find(a => a.code === '1402');
     const wasteExpenseAcc = allAccs.find(a => a.code === '6003') || allAccs.find(a => a.code === '7009') || allAccs.find(a => a.code === '70');
     const salesReturnAcc = allAccs.find(a => a.code === '5101') || allAccs.find(a => a.code === '51');
-    const customerAcc = allAccs.find(a => a.code === '1201') || allAccs.find(a => a.code === '12');
+    // v8.0.14 (TD-259): بدهکاران تجاری برگشت از فروش از نگاشت حساب‌ها، همان حساب سند فروش
+    const customerAcc = (await AccountMappingService.getTradeReceivablesAccount(tx)) || allAccs.find(a => a.code === '1201') || allAccs.find(a => a.code === '12');
     // V6.0.10 (TD-145): سرفصل بهای تمام‌شده کالای فروش‌رفته (۶۰۰۱) جهت صدور آرتیکل مرجوعی فروش
     const cogsAcc = (await AccountMappingService.getCostOfGoodsSoldAccount(tx)) || allAccs.find(a => a.code === '6001') || allAccs.find(a => a.code === '60');
 
