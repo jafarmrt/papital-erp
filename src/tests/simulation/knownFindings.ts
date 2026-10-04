@@ -9,7 +9,7 @@ import type { SimulationFinding } from './businessYearSimulator.js';
  * در TECH_DEBT.md می‌بندد. هرگز کلاسی به این فهرست اضافه نمی‌شود مگر یافته تازه ثبت‌شده با ردیف TD باز.
  */
 export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
-  'I3:purchase-discount': 'TD-250',
+  // TD-250 در v8.0.9 رفع شد (inv_td_250_purchase_discount_in_cost)
   // TD-251 و TD-252 در v8.0.2 رفع شدند (آزمون‌های inv_td_251_void_deletes_draft_voucher و inv_td_252_closing_refuses_draft_vouchers)
   // TD-253 در v8.0.8 رفع شد (inv_td_253_return_within_sold)
   'I3:void-out-at-current-wac': 'TD-254',

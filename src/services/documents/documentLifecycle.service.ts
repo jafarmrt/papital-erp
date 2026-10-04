@@ -4,6 +4,7 @@ import { documents, documentItems, items, transactions, journalVouchers, product
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
+import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnWithinSold, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
@@ -184,7 +185,9 @@ export class DocumentLifecycleService {
             const targetLoc = await resolveWarehouseCode(tx, item.location ? String(item.location).trim() : '');
             const qty = Number(item.quantity);
             // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
-            const price = returnUnitCosts?.get(item.itemId) ?? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, finalExchangeRate);
+            // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
+            const linePrice = inOut === 'in' ? netLineUnitPrice(item.unitPrice ?? 0, qty, item.discount) : (item.unitPrice ?? 0);
+            const price = returnUnitCosts?.get(item.itemId) ?? stockUnitPriceInIrr(linePrice, doc.currency, finalExchangeRate);
 
             await DocumentStockEngine.applyStockMovement(tx, {
               itemId: item.itemId,

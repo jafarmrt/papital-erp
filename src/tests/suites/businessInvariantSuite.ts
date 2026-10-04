@@ -17,6 +17,7 @@ import { runBusinessYearSimulation, SimulationResult } from '../simulation/busin
 import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js';
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
+import { checkPurchaseDiscountInCost } from '../invariants/purchaseCostScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -254,6 +255,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.9: TD-250 ──
+    ['inv_td_250_purchase_discount_in_cost', 'v8.0.9: کالای خرید با تخفیف ردیف با قیمت خالص پس از تخفیف وارد انبار می‌شود و WAC با دفتر کل یکی می‌ماند (TD-250)',
+      checkPurchaseDiscountInCost, 'رسید ریالی، ارزی و پیش‌نویس نهایی‌شده با قیمت خالص وارد شدند؛ ارزش انبار با دفتر کل یکی ماند'],
     // ── v8.0.8: TD-253 ──
     ['inv_td_253_return_within_sold', 'v8.0.8: برگشت از فروش با فاکتور مرجع از مانده قابل برگشت آن فاکتور بیشتر نمی‌شود (TD-253)',
       checkReturnWithinSold, 'برگشت تا سقف فروخته‌شده پذیرفته و بیش از آن (یک‌جا، چندباره، نهایی‌سازی) رد شد؛ ابطال برگشت سقف را آزاد کرد'],

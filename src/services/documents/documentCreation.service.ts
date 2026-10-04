@@ -18,6 +18,7 @@ import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.servi
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
+import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnableInvoice, assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
 import type { DbClient, CreateDocumentInput, UpdateDocumentInput } from './types.js';
 import { releaseReservationsForDocument, type ProjectReservationRelease } from './projectReservationRelease.js';
@@ -533,7 +534,9 @@ export class DocumentCreationService {
               inOut: stockDirection,
               quantity: qty,
               // v7.0.69 (TD-227): قیمت سند ارزی با نرخ تسعیر سند به ریال تبدیل می‌شود (WAC ریالی است)
-              price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(price, currency || 'IRR', docExchangeRate),
+              // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
+              price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(
+                stockDirection === 'in' ? netLineUnitPrice(price, qty, disc) : price, currency || 'IRR', docExchangeRate),
               date: date || normalizedDocDate,
               documentType: docType,
               documentRef: String(finalRefNumber || ''),
