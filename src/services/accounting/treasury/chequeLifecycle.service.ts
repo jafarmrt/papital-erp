@@ -163,6 +163,11 @@ export class ChequeLifecycleService {
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
+    // v8.0.23 (TD-275، تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود. جدول چک نرخ تسعیر ندارد و اسناد چک ارزی
+    // با نرخ ۱ ثبت می‌شدند (۵۰ دلار = ۵۰ ریال). چک‌های ارزی ثبت‌شده پیش از این نسخه چرخه عمر خود را ادامه می‌دهند.
+    if ((data.currency || 'IRR').toUpperCase() !== 'IRR') {
+      throw new ValidationError('چک ارزی پذیرفته نمی‌شود؛ چک فقط به ریال ثبت می‌شود. دریافت یا پرداخت ارزی را از فرم خزانه با نرخ تسعیر ثبت کنید.');
+    }
     // v7.0.133 (TD-232): تاریخ صدور و سررسید چک میلادی ISO ذخیره می‌شوند (ورودی شمسی تبدیل، نامعتبر 422)
     const issueDate = requireStorageDate(data.issueDate, 'تاریخ صدور چک');
     const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');

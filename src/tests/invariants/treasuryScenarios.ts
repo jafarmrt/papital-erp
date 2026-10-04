@@ -214,6 +214,30 @@ export async function checkReturnedChequeMovesToCustomer(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-275 (تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود — نه رکورد چک ساخته می‌شود نه سند حسابداری؛ چک ریالی
+ * مثل قبل ثبت می‌شود.
+ */
+export async function checkForeignChequeRefused(): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await voucherWatermark();
+  const number = tag('U');
+  let refusal: string | null = null;
+  try {
+    await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: number, amount: 50, currency: 'USD', partyName: 'مشتری دلاری آزمون' });
+  } catch (err) {
+    refusal = getErrorMessage(err);
+  }
+  if (!refusal?.includes('چک ارزی')) problems.push(`چک دلاری رد نشد (${refusal ?? 'پذیرفته شد'})`);
+  const rows = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM cheques WHERE cheque_number = $1', [number]);
+  if (Number(rows.rows[0]?.n ?? 0) !== 0) problems.push('رکورد چک دلاری ساخته شد');
+  const vouchers = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE id > $1 AND is_deleted = 0', [mark]);
+  if (Number(vouchers.rows[0]?.n ?? 0) !== 0) problems.push('برای چک دلاری سند حسابداری صادر شد');
+  const rial = await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('R'), amount: 100000, partyName: 'مشتری ریالی آزمون' });
+  if (await activeVoucherCount(rial.id) !== 1) problems.push('چک ریالی مثل قبل سند ثبت نگرفت');
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-272: برگشت چک پرداختی سند ندارد؛ اسناد پرداختنی (۳۱۰۱) می‌ماند و بدهی تأمین‌کننده برنمی‌گردد */
@@ -245,10 +269,14 @@ export async function probeForeignTreasuryAtRateOne(): Promise<boolean> {
   return !fin(await irrNet('1002', mark)).equals(60000000);
 }
 
-/** TD-275: چک ارزی نرخ تسعیر ندارد و اسناد آن با نرخ ۱ ثبت می‌شوند (۵۰ دلار = ۵۰ ریال) */
+/** TD-275 (کاوش رگرسیون؛ رفع v8.0.23): چک ارزی پذیرفته می‌شد و اسناد آن با نرخ ۱ ثبت می‌شدند (۵۰ دلار = ۵۰ ریال) */
 export async function probeForeignChequeAtRateOne(): Promise<boolean> {
   const mark = await voucherWatermark();
-  await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('U'), amount: 50, currency: 'USD', partyName: 'مشتری دلاری کاوش' });
+  try {
+    await ChequeLifecycleService.createCheque({ ...CHEQUE_BASE, type: 'received', chequeNumber: tag('U'), amount: 50, currency: 'USD', partyName: 'مشتری دلاری کاوش' });
+  } catch {
+    return false;
+  }
   return fin(await irrNet('1101', mark)).equals(50);
 }
 

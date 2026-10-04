@@ -23,7 +23,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-272 در v8.0.21 رفع شد (inv_td_272_paid_cheque_bounce_restores_supplier)
   // TD-273 در v8.0.22 رفع شد (inv_td_273_returned_cheque_moves_to_customer)
   // TD-274 در v8.0.20 رفع شد (inv_td_274_foreign_treasury_uses_rate)
-  'FOCUSED:foreign-cheque-at-rate-one': 'TD-275',
+  // TD-275 در v8.0.23 رفع شد (inv_td_275_foreign_cheque_refused)
   'FOCUSED:cleared-cheque-bank-discrepant': 'TD-276',
   'FOCUSED:cheque-cleared-into-bank-without-ledger': 'TD-277',
   'FOCUSED:treasury-cheque-method-without-cheque': 'TD-278',

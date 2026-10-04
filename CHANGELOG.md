@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.23 — Foreign-Currency Cheques Are Refused (TD-275)
+- A cheque in a currency other than IRR is refused; foreign receipts and payments are recorded from the treasury form at an exchange rate.
+
 ### v8.0.22 — Returned Bounced Cheque Moves the Claim to the Customer (TD-273)
 - Returning a bounced cheque to its drawer posts debit customer, credit protested cheques, so the claim is back on the customer's account.
 

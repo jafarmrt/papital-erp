@@ -24,7 +24,7 @@ import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherRepo
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
 import { checkForeignCostRowsExactInIrr } from '../invariants/foreignCostScenarios.js';
 import {
-  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
+  checkChequeDeleteKeepsOtherCheques, checkForeignTreasuryUsesRate, checkPaidChequeBounceRestoresSupplier, checkReturnedChequeMovesToCustomer, checkForeignChequeRefused, probeChequeClearedIntoBankWithoutLedger, probeClearedChequeMakesBankDiscrepant, probeForeignChequeAtRateOne,
   probeForeignTreasuryAtRateOne, probePaidChequeBounceWithoutVoucher, probeReturnedChequeStaysInProtest,
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
@@ -265,6 +265,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.23: TD-275 ──
+    ['inv_td_275_foreign_cheque_refused', 'v8.0.23: چک ارزی پذیرفته نمی‌شود (نه رکورد چک، نه سند حسابداری)؛ چک ریالی مثل قبل ثبت می‌شود (TD-275، گزینه ج)',
+      () => checkForeignChequeRefused(), 'چک دلاری رد شد و اثری نگذاشت؛ چک ریالی سند ثبت گرفت'],
     // ── v8.0.22: TD-273 ──
     ['inv_td_273_returned_cheque_moves_to_customer', 'v8.0.22: عودت چک برگشتی به صادرکننده مطالبه را از اسناد واخواستی به حساب مشتری برمی‌گرداند (TD-273، گزینه الف)',
       () => checkReturnedChequeMovesToCustomer(), 'عودت چک برگشتی (مستقیم و در جریان وصول) اسناد واخواستی را بست و مطالبه را به حساب مشتری برد؛ حذف آن دفتر را صفر کرد'],
