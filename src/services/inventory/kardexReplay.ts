@@ -10,7 +10,9 @@ import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '..
  * - ترتیب: شناسه ردیف (ترتیب ثبت)؛
  * - ورود: `FinancialMath.calculateWAC` (همان applyStockMovement)؛ خروج WAC را تغییر نمی‌دهد؛
  * - ردیف سند ابطال‌شده (is_deleted = 1 با ردیف معکوس فعال) در جای خود اعمال می‌شود و ردیف معکوس آن با فرمول
- *   `applyStockReversal`: برگشتِ ورود ارزش همان ردیف را از ارزش انبار کم می‌کند، برگشتِ خروج فقط مقدار را برمی‌گرداند؛
+ *   `applyStockReversal`: برگشتِ ورود ارزش همان ردیف را از ارزش انبار کم می‌کند، برگشتِ خروج (از v8.0.11، TD-254) کالا
+ *   را با بهای همان خروج برمی‌گرداند و WAC را بازمحاسبه می‌کند — بازسازی این قاعده را بر ابطال‌های قدیمی‌تر هم اعمال
+ *   می‌کند و WAC آن کالاها را با دفتر کل (که بهای اصلی را برگردانده بود) همخوان می‌کند؛
  * - انتقال بین انبارها (documentType = 'transfer') و ردیف‌های معکوس قدیمی فقط مقدار را جابه‌جا می‌کنند.
  *
  * ردیف حذف‌شده بدون ردیف معکوس فعال (حذف‌های پیش از DB-009) نادیده گرفته می‌شود، مانند دفتر کاردکس (§12).
@@ -79,6 +81,8 @@ export function createKardexReplayer(allRows: KardexReplayRow[], startWac: Decim
         }
         balance = newBalance;
       } else {
+        // v8.0.11 (TD-254): برگشتِ خروج با بهای همان خروج و بازمحاسبه WAC (applyStockReversal)
+        wac = FinancialMath.calculateWAC(balance, wac, qty, unitPrice);
         balance = balance.add(qty);
       }
     } else if (isIn) {

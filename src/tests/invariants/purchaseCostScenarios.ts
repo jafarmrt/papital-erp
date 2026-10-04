@@ -1,6 +1,8 @@
 import { pool } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../../services/document.service.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
+import { KardexWacRecalculatorService } from '../../services/inventory/kardexWacRecalculator.service.js';
 import { createTestItem } from '../fixtures/factories.js';
 import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, itemState, watermarks } from './scenarioHelpers.js';
@@ -64,3 +66,51 @@ export async function checkPurchaseDiscountInCost(wh: string): Promise<string[]>
   problems.push(...await invariantProblems(scope, 'پس از ابطال رسید با تخفیف'));
   return problems;
 }
+
+/**
+ * TD-254: ابطال خروج (فروش با سند حسابداری پیش‌نویس یا تأییدشده، و حواله) پس از تغییر WAC، کالا را با بهای همان خروج
+ * برمی‌گرداند و WAC را بازمحاسبه می‌کند؛ ارزش انبار با دفتر کل یکی می‌ماند و بازسازی کاردکس همان WAC را می‌دهد.
+ */
+export async function checkVoidOutflowRestoresCost(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await watermarks();
+  const sold = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const approved = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const issued = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const scope: InvariantScope = { ...mark, itemIds: [sold.id, approved.id, issued.id] };
+  const receipt = (itemId: number, quantity: number, unitPrice: number, date: string) => DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون ابطال خروج',
+    items: [{ itemId, quantity, unitPrice, location: wh }],
+  });
+  const outflow = (docType: 'invoice' | 'remittance', itemId: number, quantity: number, date: string) => DocumentService.createDocument({
+    docType, inOut: 'out', status: 'final', date, user: 'inv', buyerName: 'مشتری آزمون ابطال خروج',
+    items: [{ itemId, quantity, unitPrice: 250000, location: wh }],
+  });
+
+  // ۱۰ × ۱۰۰٬۰۰۰، خروج ۵ (بها ۱۰۰٬۰۰۰)، ۵ × ۳۰۰٬۰۰۰ (WAC ۲۰۰٬۰۰۰)، ابطال خروج ← ۱۵ عدد با WAC ۱۶۶٬۶۶۶٫۶۶۶۷
+  const cases: Array<[string, { id: number }, 'invoice' | 'remittance', boolean]> = [
+    ['فروش با سند پیش‌نویس', sold, 'invoice', false],
+    ['فروش با سند تأییدشده', approved, 'invoice', true],
+    ['حواله خروج', issued, 'remittance', false],
+  ];
+  for (const [label, item, docType, approve] of cases) {
+    await receipt(item.id, 10, 100000, '2026-03-01');
+    const out = await outflow(docType, item.id, 5, '2026-03-02');
+    await receipt(item.id, 5, 300000, '2026-03-03');
+    if (approve) {
+      const vouchers = await pool.query<{ id: number }>('SELECT id FROM journal_vouchers WHERE source_document_id = $1 AND is_deleted = 0', [out]);
+      await VoucherService.approveJournalVouchers(vouchers.rows.map(v => v.id), undefined, 'inv');
+    }
+    await DocumentService.deleteDocument(out, 'inv');
+    const state = await itemState(item.id);
+    if (state.stock !== 15 || fin(state.wac).subtract(fin('166666.6667')).abs().greaterThan(fin(0.01))) {
+      problems.push(`${label}: پس از ابطال خروج موجودی ${state.stock} و WAC ${state.wac}، انتظار ۱۵ و ۱۶۶٬۶۶۶٫۶۶۶۷`);
+    }
+    await KardexWacRecalculatorService.rebuildItemFromLedger(item.id, { user: 'inv' });
+    const rebuilt = await itemState(item.id);
+    if (fin(rebuilt.wac).subtract(fin(state.wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازسازی کاردکس WAC را ${state.wac} ← ${rebuilt.wac} کرد`);
+  }
+  problems.push(...await invariantProblems(scope, 'پس از ابطال خروج‌ها'));
+  return problems;
+}
+

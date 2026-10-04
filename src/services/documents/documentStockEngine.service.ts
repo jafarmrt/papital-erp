@@ -240,6 +240,11 @@ export class DocumentStockEngine {
       if (!remainingVal.isNegative()) {
         newWAC = remainingVal.divide(newTotalStock).round(4);
       }
+    } else if (originalDirection === 'out') {
+      // v8.0.11 (TD-254): کالای خروجِ ابطال‌شده با بهای کاردکس همان خروج برمی‌گردد و WAC بازمحاسبه می‌شود (همان قاعده
+      // ورود و برگشت از فروش TD-230)؛ سند معکوس هم همان بها را برمی‌گرداند. پیش‌تر WAC بی‌تغییر می‌ماند و کالا با WAC
+      // جاری برمی‌گشت، پس پس از تغییر WAC ارزش انبار از دفتر کل جدا می‌شد. بهای صفر (بی‌بها) WAC را تغییر نمی‌دهد.
+      newWAC = FinancialMath.calculateWAC(oldTotalStock, oldWAC, qty, unitPrice);
     }
 
     await tx

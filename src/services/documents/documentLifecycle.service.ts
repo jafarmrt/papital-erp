@@ -402,7 +402,10 @@ export class DocumentLifecycleService {
               quantity: item.quantity,
               originalDirection: docDirection,
               // v7.0.69 (TD-227): سند قدیمی ارزی بدون نرخ با همان قیمت ثبت‌شده برگردانده می‌شود
-              unitPrice: fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0),
+              // v8.0.11 (TD-254): خروجِ سند قدیمی بی‌ردیف کاردکس بهای ثبت‌شده ندارد (قیمت ردیف قیمت فروش است)؛ با بهای صفر
+              // برمی‌گردد تا WAC مثل قبل بی‌تغییر بماند
+              unitPrice: docDirection === 'out' ? 0
+                : (fin(doc.exchangeRate).isPositive() ? stockUnitPriceInIrr(item.unitPrice ?? 0, doc.currency, doc.exchangeRate) : (item.unitPrice ?? 0)),
               location: targetLoc
             });
           }

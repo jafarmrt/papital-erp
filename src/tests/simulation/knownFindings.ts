@@ -12,7 +12,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-250 در v8.0.9 رفع شد (inv_td_250_purchase_discount_in_cost)
   // TD-251 و TD-252 در v8.0.2 رفع شدند (آزمون‌های inv_td_251_void_deletes_draft_voucher و inv_td_252_closing_refuses_draft_vouchers)
   // TD-253 در v8.0.8 رفع شد (inv_td_253_return_within_sold)
-  'I3:void-out-at-current-wac': 'TD-254',
+  // TD-254 در v8.0.11 رفع شد (inv_td_254_void_outflow_restores_cost)
   // TD-255 در v8.0.3 رفع شد (آزمون inv_td_255_stock_count_voucher)
   'I3:zero-price-receipt-void': 'TD-256',
   // TD-257 و TD-258 در v8.0.4 رفع شدند (inv_td_257_backdated_stock_movement، inv_td_258_rebuild_matches_live_engine)

@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.11 — Void of an Outflow Restores Its Cost (TD-254)
+- Voiding a sale, remittance or waste returns the goods at that outflow's own Kardex cost and recomputes WAC (same rule as stock-in and sales returns); the Kardex replay applies the same rule, also to older voids.
+
 ### v8.0.10 — Procurement Delivery Is Stock-In Only (TD-267)
 - Procurement delivery finalizes only receipts and purchases; a purchase proforma is a receipt with status proforma (it used to finalize into a sales invoice that took the goods out of stock); finalizing a `purchase` document is stock-in.
 
