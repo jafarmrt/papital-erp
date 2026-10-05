@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.82 — Migrations Run Without the Request Timeout, One at a Time
+- Migrations run on a dedicated connection without the 60 s request statement timeout (MIGRATION_STATEMENT_TIMEOUT, default 0) under advisory lock 91008: the 0044 date migration no longer dies on large voucher tables and two concurrent runs queue instead of failing.
+
 ### v8.0.81 — Skipped Migrations and Newer Databases Stop Startup
 - Before running, the migrator compares the code journal with __drizzle_migrations: a migration whose `when` is older than the last applied one (Drizzle skipped it silently) or a database newer than the build stops startup with the migration named; a journal lint checks strictly increasing `when` values.
 
