@@ -84,6 +84,8 @@ export interface WorkflowDefinitionRow {
 export class WorkflowTransitionExecutor {
   /**
    * Helper: Find equivalent roles
+   *
+   * v8.0.85 (TD-374): هم‌ارزی فقط میان نقش‌های یک بخش است؛ نقش تولید دیگر هم‌ارز «manager» نیست.
    */
   static getEquivalentRoles(roleName: string): string[] {
     const r = (roleName || '').trim().toLowerCase();
@@ -115,10 +117,21 @@ export class WorkflowTransitionExecutor {
     } else if (r === 'production' || r === 'production_manager') {
       res.add('production');
       res.add('production_manager');
-      res.add('manager');
     }
     return Array.from(res);
   }
+
+  /**
+   * مجوزهای ثبت هر بخش که گام نقش همان بخش را مجاز می‌کنند. v8.0.85 (TD-374): مجوز مشاهده (warehouse.view،
+   * accounting.view) و مجوز خزانه دیگر گام تأیید انبار یا حسابدار را مجاز نمی‌کنند (همان قاعده TD-298: تغییر با مجوز
+   * مشاهده باز نمی‌شود) و هیچ مجوزی گام نقش «manager» را.
+   */
+  static readonly DEPARTMENT_WRITE_PERMISSIONS: ReadonlyArray<[string[], string[]]> = [
+    [['warehouse', 'warehouse_keeper'], ['warehouse.in', 'warehouse.out']],
+    [['accounting', 'accountant', 'cfo_accountant'], ['accounting.vouchers']],
+    [['sales', 'sales_manager'], ['documents.create', 'crm.manage']],
+    [['production', 'production_manager'], ['projects.edit', 'projects.create']],
+  ];
 
   /**
    * Check if a user's role or granular permissions satisfy a required transition role
@@ -148,20 +161,8 @@ export class WorkflowTransitionExecutor {
       return true;
     }
 
-    if (rRole === 'warehouse' || rRole === 'warehouse_keeper') {
-      if (userPermissions.includes('warehouse.in') || userPermissions.includes('warehouse.out') || userPermissions.includes('warehouse.view')) return true;
-    }
-    if (rRole === 'accounting' || rRole === 'accountant' || rRole === 'cfo_accountant') {
-      if (userPermissions.includes('accounting.vouchers') || userPermissions.includes('accounting.view') || userPermissions.includes('accounting.treasury')) return true;
-    }
-    if (rRole === 'sales' || rRole === 'sales_manager') {
-      if (userPermissions.includes('documents.create') || userPermissions.includes('crm.manage')) return true;
-    }
-    if (rRole === 'production' || rRole === 'production_manager' || rRole === 'manager') {
-      if (userPermissions.includes('projects.edit') || userPermissions.includes('projects.create')) return true;
-    }
-
-    return false;
+    return this.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
+      roles.includes(rRole) && permissions.some(p => userPermissions.includes(p)));
   }
 
   /**
