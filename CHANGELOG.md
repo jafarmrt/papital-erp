@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.42 — WooCommerce Negative Fees Become Line Discounts (TD-295)
+- An order discount sent as a negative fee is spread over the invoice lines as line discounts in proportion to their amounts instead of rejecting the order.
+
 ### v8.0.41 — WooCommerce Line Totals Stay Exact (TD-297)
 - A WooCommerce order line whose total is not divisible by its quantity is split into two lines with whole-rial prices, so the customer is charged exactly the order amount.
 

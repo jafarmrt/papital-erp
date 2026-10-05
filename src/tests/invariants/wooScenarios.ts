@@ -75,7 +75,7 @@ export async function probeWooStockOutsideDefaultWarehouse(): Promise<boolean> {
   return result.status === 'failed' && Number(row?.stock ?? 0) >= 2;
 }
 
-/** سفارشی با تخفیف به‌صورت کارمزد منفی (fee_lines = −۲۰۰) کلاً فاکتور نمی‌شود */
+/** TD-295 (کاوش رگرسیون؛ رفع v8.0.42): سفارشی با تخفیف به‌صورت کارمزد منفی (fee_lines = −۲۰۰) کلاً فاکتور نمی‌شود */
 export async function probeWooNegativeFeeRejected(): Promise<boolean> {
   const item = await createTestItem({ code: `WC_FEE_${wooOrderId()}`, stocks: { '': 5 } });
   const id = wooOrderId();
@@ -206,5 +206,49 @@ export async function checkWooExactLineTotals(): Promise<string[]> {
     if (debit !== c.debit) problems.push(`${c.label}: بدهکار مشتری ${debit}، انتظار ${c.debit}`);
     if (lines !== c.lines) problems.push(`${c.label}: سطرها ${lines}، انتظار ${c.lines}`);
   }
+  return problems;
+}
+
+/** تخفیف سطرهای فاکتور به ترتیب ثبت */
+async function lineDiscounts(documentId: number): Promise<number[]> {
+  const res = await pool.query<{ d: string }>('SELECT COALESCE(discount, 0)::text AS d FROM document_items WHERE document_id = $1 AND is_deleted = 0 ORDER BY id', [documentId]);
+  return res.rows.map(r => Number(r.d));
+}
+
+/**
+ * TD-295 (تصمیم مالک محصول — گزینه الف): کارمزد منفی سفارش (تخفیف) به نسبت مبلغ سطرها تخفیف سطر می‌شود — ۴۰۰ روی ۱۰۰۰ و ۳۰۰۰
+ * می‌شود ۱۰۰ و ۳۰۰ و بدهکار مشتری ۳۶۰۰؛ کنار هزینه ارسال، ارسال کامل هزینه خدمات می‌ماند؛ باقی‌مانده گرد کردن به سطر بزرگ‌تر
+ * می‌رسد؛ تخفیفِ بیش از جمع اقلام رد می‌شود.
+ */
+export async function checkWooNegativeFeeAsLineDiscount(): Promise<string[]> {
+  const problems: string[] = [];
+  const a = await createTestItem({ code: `WC_FEE_A_${wooOrderId()}`, stocks: { '': 20 } });
+  const b = await createTestItem({ code: `WC_FEE_B_${wooOrderId()}`, stocks: { '': 20 } });
+  const twoLines = (id: string, totalA: number, totalB: number, extra: Partial<WcOrderPayload>): WcOrderPayload => ({
+    ...wooOrder(id, 'processing', a.code, 1, totalA, extra),
+    line_items: [
+      { id: 1, name: 'قلم الف', sku: a.code, quantity: 1, price: totalA, total: String(totalA) },
+      { id: 2, name: 'قلم ب', sku: b.code, quantity: 1, price: totalB, total: String(totalB) },
+    ],
+  });
+  const run = async (label: string, order: WcOrderPayload, debit: number, discounts: string, serviceCharge: number) => {
+    const result = await WooOrderSyncService.handleOrder(order);
+    if (result.status !== 'processed' || !result.docId) return problems.push(`${label}: فاکتور نشد (${result.message.slice(0, 160)})`);
+    const [doc] = await orm.select({ service: documents.serviceChargeAmount }).from(documents).where(eq(documents.id, result.docId));
+    const got = (await lineDiscounts(result.docId)).join('|');
+    if (got !== discounts) problems.push(`${label}: تخفیف سطرها ${got}، انتظار ${discounts}`);
+    if (Number(doc?.service ?? 0) !== serviceCharge) problems.push(`${label}: هزینه خدمات ${doc?.service}، انتظار ${serviceCharge}`);
+    const customer = await customerDebitOf(result.docId);
+    if (customer !== debit) problems.push(`${label}: بدهکار مشتری ${customer}، انتظار ${debit}`);
+  };
+
+  await run('تخفیف ۴۰۰ روی ۱۰۰۰ و ۳۰۰۰', twoLines(wooOrderId(), 1000, 3000, { total: '3600', fee_lines: [{ name: 'تخفیف', total: '-400' }] }), 3600, '100|300', 0);
+  await run('تخفیف ۱۰۰ کنار ارسال ۲۰۰', wooOrder(wooOrderId(), 'processing', a.code, 1, 1000, { total: '1100', shipping_lines: [{ total: '200' }], fee_lines: [{ name: 'تخفیف', total: '-100' }] }), 1100, '100', 200);
+  await run('باقی‌مانده گرد کردن', twoLines(wooOrderId(), 1000, 2000, { total: '2900', fee_lines: [{ name: 'تخفیف', total: '-100' }] }), 2900, '33|67', 0);
+
+  const tooMuch = await WooOrderSyncService.handleOrder(wooOrder(wooOrderId(), 'processing', a.code, 1, 500, {
+    total: '100', shipping_lines: [{ total: '200' }], fee_lines: [{ name: 'تخفیف', total: '-600' }],
+  }));
+  if (tooMuch.status !== 'failed' || !tooMuch.message.includes('تخفیف کارمزدی')) problems.push(`تخفیف بیش از جمع اقلام رد نشد (${tooMuch.status}: ${tooMuch.message.slice(0, 120)})`);
   return problems;
 }

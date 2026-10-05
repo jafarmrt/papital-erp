@@ -47,7 +47,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'FOCUSED:woo-stock-outside-default-warehouse': 'TD-293',
   'FOCUSED:woo-edited-order-ignored': 'TD-294',
   'FOCUSED:woo-partial-refund-ignored': 'TD-294',
-  'FOCUSED:woo-negative-fee-rejected': 'TD-295',
+  // TD-295 در v8.0.42 رفع شد (inv_td_295_woo_negative_fee_as_line_discount)
   // TD-296 در v8.0.40 رفع شد (inv_td_296_woo_phone_matches_customer)
   // TD-297 در v8.0.41 رفع شد (inv_td_297_woo_exact_line_totals)
 };

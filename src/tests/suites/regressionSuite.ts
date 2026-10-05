@@ -8981,7 +8981,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`سفارش سازگار باید فاکتور شود: ${okResult.status} ${okResult.message}`);
       }
       const doc = await DocumentService.getDocumentById(okResult.docId);
-      if (doc?.serviceChargeAmount !== 330) violations.push(`هزینه ارسال و خدمات فاکتور: ${doc?.serviceChargeAmount} (باید ۳۳۰)`);
+      // v8.0.42 (TD-295، تصمیم مالک محصول — گزینه الف): کارمزد منفی ۲۰ تخفیف سطر است، نه کسر از هزینه خدمات؛ قابل وصول همان ۲۵۶۰
+      if (doc?.serviceChargeAmount !== 350) violations.push(`هزینه ارسال و خدمات فاکتور: ${doc?.serviceChargeAmount} (باید ۳۵۰ = ارسال ۳۰۰ + کارمزد ۵۰)`);
       if (doc?.vatAmount !== 230) violations.push(`مالیات فاکتور: ${doc?.vatAmount} (باید ۲۳۰)`);
       if (doc?.payableAmount !== 2560) violations.push(`مبلغ قابل وصول فاکتور: ${doc?.payableAmount} (باید ۲۵۶۰ = مبلغ پرداختی)`);
       const [voucher] = await orm.select().from(journalVouchers)
@@ -8994,7 +8995,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
           .where(eq(journalVoucherItems.voucherId, voucher.id));
         const credit = (code: string) => rows.filter(r => r.code === code).reduce((s, r) => s + Number(r.credit), 0);
         const debit = (code: string) => rows.filter(r => r.code === code).reduce((s, r) => s + Number(r.debit), 0);
-        if (credit('5004') !== 330) violations.push(`بستانکار درآمد حمل و خدمات (۵۰۰۴): ${credit('5004')} (باید ۳۳۰)`);
+        if (credit('5004') !== 350) violations.push(`بستانکار درآمد حمل و خدمات (۵۰۰۴): ${credit('5004')} (باید ۳۵۰)`);
         if (credit('3203') !== 230) violations.push(`بستانکار مالیات (۳۲۰۳): ${credit('3203')} (باید ۲۳۰)`);
         if (debit('1201') !== 2560) violations.push(`بدهکار مشتری (۱۲۰۱): ${debit('1201')} (باید ۲۵۶۰)`);
       }
@@ -9032,7 +9033,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'فاکتور سفارش ۳۳۰ هزینه ارسال و خدمات و ۲۳۰ مالیات گرفت و قابل وصولش ۲۵۶۰ (مبلغ پرداختی) شد؛ سند حسابداری ۳۳۰ را به ۵۰۰۴ برد و سفارش با جمع ناسازگار رد شد.'
+        details: 'فاکتور سفارش ۳۵۰ هزینه ارسال و خدمات، ۲۰ تخفیف سطر (کارمزد منفی، TD-295) و ۲۳۰ مالیات گرفت و قابل وصولش ۲۵۶۰ (مبلغ پرداختی) شد؛ سند حسابداری ۳۵۰ را به ۵۰۰۴ برد و سفارش با جمع ناسازگار رد شد.'
       }));
     } catch (err) {
       results.push(makeTestCase({

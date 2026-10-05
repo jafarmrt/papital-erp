@@ -10,6 +10,7 @@ import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
 import { phoneMatchKey, phoneMatchKeySql } from './phoneMatchKey.js';
 import { currencyScale, exactLineSplit } from './exactLineTotal.js';
+import { allocateFeeDiscount } from './feeDiscount.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -130,16 +131,19 @@ function wcAmount(raw: unknown): FinancialDecimal | null {
  * v7.0.103 (TD-191، تصمیم مالک محصول «ثبت کامل»): هزینه ارسال (shipping_lines، وگرنه shipping_total) و کارمزدها
  * (fee_lines) و مالیات (total_tax) سفارش، به واحد ووکامرس. null یعنی مبلغی نامعتبر است.
  */
-function orderCharges(wcOrder: WcOrderPayload): { shipping: FinancialDecimal; fees: FinancialDecimal; tax: FinancialDecimal } | null {
-  const sum = (rows: Array<{ total?: unknown }>): FinancialDecimal | null =>
+function orderCharges(wcOrder: WcOrderPayload): { shipping: FinancialDecimal; fees: FinancialDecimal; feeDiscount: FinancialDecimal; tax: FinancialDecimal } | null {
+  const sum = (rows: Array<{ total?: unknown }>, keep: (v: FinancialDecimal) => boolean = () => true): FinancialDecimal | null =>
     rows.reduce<FinancialDecimal | null>((acc, r) => {
       const v = wcAmount(r?.total);
-      return acc && v ? acc.add(v) : null;
+      return acc && v ? (keep(v) ? acc.add(v) : acc) : null;
     }, fin(0));
+  const feeRows = Array.isArray(wcOrder.fee_lines) ? wcOrder.fee_lines : [];
   const shipping = Array.isArray(wcOrder.shipping_lines) ? sum(wcOrder.shipping_lines) : wcAmount(wcOrder.shipping_total);
-  const fees = Array.isArray(wcOrder.fee_lines) ? sum(wcOrder.fee_lines) : fin(0);
+  // v8.0.42 (TD-295، تصمیم مالک محصول — گزینه الف): کارمزد مثبت هزینه خدمات است و کارمزد منفی تخفیف سفارش که روی سطرها پخش می‌شود
+  const fees = sum(feeRows, v => v.isPositive());
+  const negativeFees = sum(feeRows, v => v.isNegative());
   const tax = wcAmount(wcOrder.total_tax);
-  return shipping && fees && tax ? { shipping, fees, tax } : null;
+  return shipping && fees && negativeFees && tax ? { shipping, fees, feeDiscount: negativeFees.negate(), tax } : null;
 }
 
 /**
@@ -304,7 +308,7 @@ export class WooOrderSyncService {
           .limit(1);
         const targetLoc = defLoc?.code || 'main';
 
-        const docLines: Array<{ itemId: number; quantity: number; unit_price: number; location: string }> = [];
+        const docLines: Array<{ itemId: number; quantity: number; unit_price: number; discount?: number; location: string }> = [];
         const problems: string[] = [];
         let orderTotal = fin(0);
         for (const li of lineItems) {
@@ -351,6 +355,18 @@ export class WooOrderSyncService {
         }
         const serviceCharge = charges ? charges.shipping.add(charges.fees).multiply(multiplier).round(4) : fin(0);
         const orderVat = charges ? charges.tax.multiply(multiplier).round(4) : fin(0);
+        // v8.0.42 (TD-295، گزینه الف): تخفیف کارمزدی به نسبت مبلغ سطرها تخفیف سطر می‌شود (مانند کوپن)؛ پیش‌تر کارمزد منفی از هزینه
+        // ارسال کم می‌شد و اگر ارسالی برای جبرانش نبود، کل سفارش رد می‌شد
+        const feeDiscount = charges ? charges.feeDiscount.multiply(multiplier).round(4) : fin(0);
+        if (feeDiscount.isPositive() && problems.length === 0) {
+          const shares = allocateFeeDiscount(docLines.map(l => fin(l.quantity).multiply(l.unit_price)), feeDiscount, currencyScale(currency));
+          if (!shares) {
+            problems.push(`تخفیف کارمزدی سفارش (${feeDiscount.toString()}) از جمع اقلام بیشتر است`);
+          } else {
+            shares.forEach((share, i) => { docLines[i].discount = share.toNumber(); });
+            orderTotal = orderTotal.subtract(feeDiscount);
+          }
+        }
         if (serviceCharge.isNegative()) {
           problems.push(`جمع هزینه ارسال و کارمزدهای سفارش منفی است (${serviceCharge.toString()})`);
         }
