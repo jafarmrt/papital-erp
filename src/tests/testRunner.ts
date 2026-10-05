@@ -222,7 +222,7 @@ export class Phase21TestRunner {
         allCases = allCases.concat(await runIntegrationTests());
       }
       if (!layerFilter || layerFilter === 'security') {
-        allCases = allCases.concat(await runSecurityTests());
+        allCases = allCases.concat(await runSecurityTests(testFilter));
       }
       if (!layerFilter || layerFilter === 'api') {
         allCases = allCases.concat(await runApiTests());

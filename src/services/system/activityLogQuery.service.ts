@@ -2,6 +2,8 @@ import { desc, sql, eq, and, SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, users } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { getDisplayTimezone } from '../../lib/businessClock.js';
+import { serverTimestampToUtcIso, zonedDayRangeUtc } from '../../lib/serverTimestamp.js';
 
 /**
  * خواندن تاریخچه ممیزی (GET /activity-logs و /activity-logs/filters). پاکسازی و بررسی یکپارچگی
@@ -19,10 +21,9 @@ export interface ActivityLogFilters {
   endDate?: string;
 }
 
-function buildActivityLogConditions(filters: ActivityLogFilters): SQL[] {
+function buildActivityLogConditions(filters: ActivityLogFilters, dayRange: { from?: string; before?: string }): SQL[] {
   const {
-    user: userFilter, action: actionFilter, entity: entityFilter, category: categoryFilter,
-    search, startDate, endDate
+    user: userFilter, action: actionFilter, entity: entityFilter, category: categoryFilter, search
   } = filters;
 
   const conditions: SQL[] = [];
@@ -54,11 +55,12 @@ function buildActivityLogConditions(filters: ActivityLogFilters): SQL[] {
   if (entityFilter) {
     conditions.push(eq(activityLogs.entity, entityFilter));
   }
-  if (startDate) {
-    conditions.push(sql`${activityLogs.timestamp} >= ${startDate}`);
+  // v8.0.53 (TD-315): روزهای فیلتر روزهای منطقه زمانی توافقی‌اند و زمان ثبت UTC است؛ پیش‌تر روز UTC بریده می‌شد
+  if (dayRange.from) {
+    conditions.push(sql`${activityLogs.timestamp} >= ${dayRange.from}`);
   }
-  if (endDate) {
-    conditions.push(sql`${activityLogs.timestamp} <= ${endDate + ' 23:59:59'}`);
+  if (dayRange.before) {
+    conditions.push(sql`${activityLogs.timestamp} < ${dayRange.before}`);
   }
   if (search) {
     conditions.push(
@@ -72,7 +74,10 @@ function buildActivityLogConditions(filters: ActivityLogFilters): SQL[] {
 export class ActivityLogQueryService {
   /** یک صفحه از تاریخچه ممیزی (جدیدترین اول) به‌همراه تعداد کل ردیف‌های منطبق. */
   static async listLogs(filters: ActivityLogFilters, limit: number, offset: number) {
-    const conditions = buildActivityLogConditions(filters);
+    const dayRange = (filters.startDate || filters.endDate)
+      ? zonedDayRangeUtc(filters.startDate, filters.endDate, await getDisplayTimezone())
+      : {};
+    const conditions = buildActivityLogConditions(filters, dayRange);
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const logs = await orm.select({
@@ -87,8 +92,10 @@ export class ActivityLogQueryService {
       .offset(offset);
 
     // یک موجودیت هویت کاربر: نام کامل ثبت‌شده > نام کامل از جدول users > username
+    // v8.0.53 (TD-315): زمان ثبت UTC است و با Z برمی‌گردد تا مرورگر آن را به وقت منطقه توافقی نشان دهد
     const data = logs.map(({ log: l, resolvedFullName }) => ({
       ...l,
+      timestamp: serverTimestampToUtcIso(l.timestamp),
       userFullName: l.userFullName || resolvedFullName || l.username
     }));
 

@@ -31,8 +31,9 @@ export interface BIAlarm {
   type: string;
 }
 
+/** v8.0.54 (TD-316): گردش یک ماه شمسی (`month` = `YYYY/MM`) */
 export interface BITrend {
-  date: string;
+  month: string;
   type: 'in' | 'out';
   total: number;
 }

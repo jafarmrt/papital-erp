@@ -1072,9 +1072,20 @@ export class ItemCatalogService {
         }
       }
 
-      const effectiveWac = weighted_average_cost !== undefined && weighted_average_cost !== ''
+      const requestedWac = weighted_average_cost !== undefined && weighted_average_cost !== ''
         ? money(weighted_average_cost)
         : (body.initial_cost !== undefined && body.initial_cost !== '' ? money(body.initial_cost) : money(prevItem.weightedAverageCost));
+      // حوزه H (TD-305): WAC کالای دارای موجودی با ویرایش کالا عوض نمی‌شود (AGENTS.md §3، همان قاعده اکسل TD-264)؛
+      // پیش‌تر فرم ویرایش ارزش موجودی را بی‌کاردکس و بی‌سند حسابداری بازنویسی می‌کرد. اختلاف کمتر از یک ریال «بی‌تغییر» است.
+      const prevWac = money(prevItem.weightedAverageCost);
+      const wacChanged = !requestedWac.subtract(prevWac).abs().lessThan(EXCEL_WAC_TOLERANCE);
+      if (stockBefore.total > 0 && wacChanged) {
+        throw new ValidationError(
+          `بهای میانگین (WAC) کالای «${prevItem.name}» که ${stockBefore.total} موجودی دارد با ویرایش کالا تغییر نمی‌کند ` +
+          `(فعلی ${prevWac.toString()}، درخواستی ${requestedWac.toString()}). WAC فقط با ورود کالا عوض می‌شود.`
+        );
+      }
+      const effectiveWac = stockBefore.total > 0 ? prevWac : requestedWac;
 
       const updateData: Partial<typeof items.$inferInsert> = {
         name, code, unit, category: category || '',

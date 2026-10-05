@@ -7,7 +7,7 @@ import { SearchableSelect } from '../../SearchableSelect';
 import { FinancialAttachmentUploader } from '../FinancialAttachmentUploader';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
-import { formatPersianPrice, formatCurrencyLabel, extractDateString } from '../../../utils';
+import { formatPersianPrice, formatCurrencyLabel, extractDateString, getTodayIsoDate } from '../../../utils';
 import { fetchJson } from '../../../api';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
@@ -67,9 +67,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         }
       })
       .catch(() => {
-        // fallback: تاریخ مرورگر فقط در خطای شبکه (رفتار قدیمی)
+        // fallback در خطای شبکه: امروزِ منطقه زمانی توافقی (v8.0.49، TD-312؛ پیش‌تر روز UTC)
         if (!cancelled) {
-          setFormData(prev => (prev.date ? prev : { ...prev, date: new Date().toISOString().slice(0, 10) }));
+          setFormData(prev => (prev.date ? prev : { ...prev, date: getTodayIsoDate() }));
         }
       });
     return () => { cancelled = true; };

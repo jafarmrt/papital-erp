@@ -2,7 +2,7 @@ import { eq, and, gte, lt } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { documents, appSettings, documentRefCounters } from '../../db/schema.js';
 import { jalaliToIsoDate } from '../../utils.js';
-import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
+import { businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
 import type { DbClient } from './types.js';
 
 /** بیشینه مقدار ستون integer شمارنده `document_ref_counters.last_ref_number` */
@@ -31,7 +31,9 @@ export class DocumentRefNumberService {
   ): Promise<{ fiscalYear: number; startNumber: number }> {
     // V10-1.1: قاعده صریح و واحد — partition key شمارنده‌ها همیشه «سال جلالی» است،
     // نه پرش بین ۱۴۰۵/۲۰۲۶ بسته به فرمت رشته تاریخ.
-    const fiscalYear = resolveJalaliFiscalYear(dateOrFiscalYear ?? null);
+    // v8.0.48 (TD-311): بی‌تاریخ (پیش‌نمایش شماره بعدی فرم‌ها) سال امروزِ ساعت توافقی است
+    const hasDate = dateOrFiscalYear !== undefined && dateOrFiscalYear !== null && String(dateOrFiscalYear).trim() !== '';
+    const fiscalYear = resolveJalaliFiscalYear(hasDate ? dateOrFiscalYear : await businessTodayIsoDate());
 
     let startNumber = 1;
     if (type === 'invoice') {

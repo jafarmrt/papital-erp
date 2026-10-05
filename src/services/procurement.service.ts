@@ -1,7 +1,7 @@
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
-import { resolveJalaliFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
+import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
 import { errorMessageOf } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -119,7 +119,8 @@ export class ProcurementService {
    * V6 Sub-phase 6.4 (TD-158 / RULE 04): Standardized Read-Calculate-Update pattern with row-level lock.
    */
   static async generateRequisitionCode(tx: DbClient = orm): Promise<string> {
-    const fiscalYear = resolveJalaliFiscalYear();
+    // v8.0.48 (TD-311): سال امروزِ ساعت توافقی؛ پیش‌تر در دی تا اسفند سال بعد بود
+    const fiscalYear = await businessFiscalYear();
     const docType = 'PR';
 
     // 1. Try to fetch and lock existing counter row

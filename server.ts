@@ -1,3 +1,5 @@
+// v8.0.52 (TD-314): نخستین ایمپورت — منطقه زمانی فرایند پیش از هر ماژول دیگری UTC می‌شود
+import './src/lib/processTimezone.js';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';

@@ -5,9 +5,10 @@ import { AppError, NotFoundError, ValidationError } from '../errors/customErrors
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
-import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
+import { businessFiscalYear, businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
+import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -90,9 +91,8 @@ export class ProjectService {
     if (!projectCode) {
       const countRes = await executor.select({ count: sql<number>`count(*)` }).from(productionProjects);
       const totalNum = Number(countRes[0]?.count || 0) + 1;
-      const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-      const rawYear = new Date().toLocaleDateString('fa-IR-u-ca-persian', { year: 'numeric' });
-      const jalaliYear = rawYear.replace(/[۰-۹]/g, d => String(faDigits.indexOf(d))) || '1405';
+      // v8.0.48 (TD-311): سال امروزِ ساعت توافقی؛ پیش‌تر منطقه زمانی میزبان (UTC) شب نوروز سال قبل را می‌داد
+      const jalaliYear = await businessFiscalYear();
       projectCode = `PRJ-${jalaliYear}-${totalNum.toString().padStart(3, '0')}`;
     }
 
@@ -148,7 +148,8 @@ export class ProjectService {
       description: input.description || '',
       createdBy: input.createdBy || 'سیستم',
       products: Array.isArray(input.products) ? input.products : [],
-      inventoryControl: input.inventoryControl || {},
+      // v8.0.58 (TD-306): رزرو پروژه را فقط سرور می‌سازد
+      inventoryControl: await resolveServerInventoryControl(input.inventoryControl, {}, input.products, executor),
       stageSchedules: input.stageSchedules || {},
       customStages: input.customStages || [],
       attachments: [],
@@ -187,7 +188,16 @@ export class ProjectService {
     input: UpdateProjectInput,
     executor: DbExecutor = orm
   ): Promise<{ previous: typeof productionProjects.$inferSelect; current: typeof productionProjects.$inferSelect }> {
-    const [existing] = await executor.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0)));
+    // v8.0.58 (TD-306): قفل سطری پروژه تا رزرو فعلی (پس از کسر حواله خروج هم‌زمان) از دست نرود
+    return executor.transaction(tx => ProjectService.updateProjectLocked(id, input, tx));
+  }
+
+  private static async updateProjectLocked(
+    id: number,
+    input: UpdateProjectInput,
+    executor: DbExecutor
+  ): Promise<{ previous: typeof productionProjects.$inferSelect; current: typeof productionProjects.$inferSelect }> {
+    const [existing] = await executor.select().from(productionProjects).where(and(eq(productionProjects.id, id), eq(productionProjects.isDeleted, 0))).for('update');
     if (!existing) {
       throw new NotFoundError('پروژه یافت نشد');
     }
@@ -240,7 +250,10 @@ export class ProjectService {
     if (input.priority !== undefined) updateData.priority = input.priority;
     if (input.description !== undefined) updateData.description = input.description;
     if (input.products !== undefined) updateData.products = Array.isArray(input.products) ? input.products : [];
-    if (input.inventoryControl !== undefined) updateData.inventoryControl = input.inventoryControl;
+    if (input.inventoryControl !== undefined) {
+      const products = input.products !== undefined ? updateData.products : existing.products;
+      updateData.inventoryControl = await resolveServerInventoryControl(input.inventoryControl, existing.inventoryControl, products, executor);
+    }
     if (input.stageSchedules !== undefined) updateData.stageSchedules = input.stageSchedules;
     if (input.customStages !== undefined) updateData.customStages = input.customStages;
     if (input.attachments !== undefined) {

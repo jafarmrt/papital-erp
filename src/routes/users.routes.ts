@@ -9,7 +9,7 @@ import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { NotFoundError, ConflictError } from '../errors/customErrors.js';
+import { NotFoundError, ConflictError, ForbiddenError } from '../errors/customErrors.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
@@ -17,6 +17,18 @@ import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
+
+/**
+ * حوزه H (TD-299): نقش admin از همه گاردها می‌گذرد؛ پس دادن یا گرفتن آن، و تغییر رمز یا حذف حساب یک مدیر سیستم،
+ * فقط کار مدیر سیستم است. دارنده users.manage بدون این قاعده می‌توانست خود یا کاربر تازه‌ای را admin کند
+ * یا رمز مدیر را عوض کند و با آن وارد شود.
+ */
+const ADMIN_ROLE = 'admin';
+const ONLY_ADMIN_MANAGES_ADMINS = 'فقط مدیر سیستم می‌تواند نقش «مدیر سیستم» را بدهد یا بگیرد، یا حساب یک مدیر سیستم را تغییر دهد یا حذف کند';
+
+function touchesAdminAccount(actorRole: string | undefined, targetRoles: Array<string | null | undefined>): boolean {
+  return actorRole !== ADMIN_ROLE && targetRoles.some(r => r === ADMIN_ROLE);
+}
 
 const updateProfileSchema = z.object({
   body: z.object({
@@ -205,6 +217,18 @@ export const PERMISSION_CATALOG = [
   }
 ];
 
+const CATALOG_PERMISSION_KEYS = new Set(PERMISSION_CATALOG.flatMap(c => c.permissions.map(p => p.key)));
+
+/**
+ * حوزه H (TD-304): مجوز تازه نقش فقط از کاتالوگ است (نه «*» و نه کلید ناشناخته). کلیدی که نقش از پیش داشت
+ * با ویرایش نقش حذف نمی‌شود و ذخیره را رد نمی‌کند.
+ */
+function unknownNewPermissions(requested: string[], existing: string[] = []): string[] {
+  return requested.filter(p => !CATALOG_PERMISSION_KEYS.has(p) && !existing.includes(p));
+}
+
+const UNKNOWN_PERMISSIONS_ERROR = (keys: string[]) => `مجوز ناشناخته: ${keys.join('، ')}`;
+
 // Get current user's active permissions array
 router.get('/users/my-permissions', asyncHandler(async (req, res) => {
   try {
@@ -347,6 +371,10 @@ router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
 router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), asyncHandler(async (req, res) => {
   try {
     const { name, code, description, permissions } = req.body;
+    const unknownKeys = unknownNewPermissions(Array.isArray(permissions) ? permissions : []);
+    if (unknownKeys.length > 0) {
+      return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
+    }
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
     // v7.0.51 (audit P2-10): کد نقش نقطه ندارد تا با کلید مجوز (مثل customers.manage) اشتباه گرفته نشود
@@ -405,6 +433,10 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
 
     const prevPermissions: string[] = (targetRole.permissions as string[]) || [];
     const newPermissions: string[] = Array.isArray(permissions) ? permissions : prevPermissions;
+    const unknownKeys = unknownNewPermissions(newPermissions, prevPermissions);
+    if (unknownKeys.length > 0) {
+      return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
+    }
 
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));
@@ -564,6 +596,9 @@ router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
 router.post('/users', authorizePermission('users.manage'), validate(userCreateSchema), asyncHandler(async (req, res) => {
   try {
     const { username, password, full_name, role } = req.body;
+    if (touchesAdminAccount(req.user?.role, [role])) {
+      return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
+    }
     const tUsername = (username || '').trim();
     const tFullName = (full_name && String(full_name).trim()) ? String(full_name).trim() : tUsername;
 
@@ -572,6 +607,13 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
     if (existingUser) {
       if (existingUser.isDeleted === 1) {
         // حساب کاربری قبلاً حذف نرم شده بوده — فعال‌سازی مجدد با مشخصات جدید بدون خطای یکتایی
+        // حوزه H (TD-299): نقش همان اعتبارسنجی ساخت کاربر تازه را دارد
+        if (role !== ADMIN_ROLE) {
+          const [reactivatedRole] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
+          if (!reactivatedRole) {
+            return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
+          }
+        }
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -672,6 +714,9 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     if (!prevUser || prevUser.isDeleted === 1) {
       return res.status(404).json({ error: 'کاربر یافت نشد' });
     }
+    if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
+      return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
+    }
 
     const tFullName = (full_name !== undefined && full_name !== null && String(full_name).trim())
       ? String(full_name).trim()
@@ -758,6 +803,9 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
       const [delUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
       if (!delUser || delUser.isDeleted === 1) {
         throw new NotFoundError('کاربر یافت نشد');
+      }
+      if (touchesAdminAccount(req.user?.role, [delUser.role])) {
+        throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
 
       // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه) — با قفل سطری ردیف‌های ادمین‌ها

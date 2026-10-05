@@ -1,6 +1,6 @@
 import * as xlsx from 'xlsx';
 import type { User } from '../../types';
-import { parseCleanNumber } from '../../utils';
+import { getTodayIsoDate, parseCleanNumber } from '../../utils';
 
 /**
  * صفحه انبارگردانی: انواع داده و محاسبات خالص برگه شمارش و گزارش سلامت موجودی.
@@ -123,7 +123,7 @@ export function buildAuditPayload(
   return {
     docType: 'audit',
     refNumber: nextRef,
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayIsoDate(), // v8.0.49 (TD-312): روز تهران، نه روز UTC
     location,
     user: user?.full_name || user?.username || 'انباردار',
     notes: notes || `ثبت انبارگردانی در موقعیت ${location}`,

@@ -224,6 +224,10 @@ export class PendingMaterialsService {
     if (!existing) {
       throw new NotFoundError('ماده اولیه مورد نظر یافت نشد');
     }
+    // حوزه H (TD-302): درخواست تأییدشده یا ردشده دیگر ویرایش نمی‌شود
+    if (existing.status !== 'pending') {
+      throw new ConflictError('این درخواست ماده اولیه قبلاً بررسی شده است و قابل ویرایش نیست');
+    }
 
     const [updated] = await executor
       .update(pendingMaterials)

@@ -30,6 +30,7 @@
     "lint": "tsc --noEmit",
     "db:studio": "drizzle-kit studio",
     "check:version": "tsx scripts/check-version-sync.ts",
+    "routes:permissions": "tsx scripts/route-permissions.ts",
     "release:v8": "tsx scripts/v8-release.ts",
     "audit:gate": "npm audit --json | tsx scripts/audit-gate.ts",
     "test:coverage": "c8 --reporter=text --reporter=text-summary --reporter=json-summary --include=src --include=server.ts --exclude=src/tests/** tsx scripts/run-tests.ts",

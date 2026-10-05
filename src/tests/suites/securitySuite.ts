@@ -3,8 +3,12 @@ import { sanitizeSensitiveData } from '../../lib/auditLogger.js';
 import { AUTH_COOKIE_OPTIONS, generateCsrfToken, csrfProtection, generateToken } from '../../middleware/auth.js';
 import { validateCorsOrigin } from '../../lib/corsValidator.js';
 
-export async function runSecurityTests(): Promise<TestCaseResult[]> {
+export async function runSecurityTests(filter?: string): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
+  const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, '').trim();
+  // حوزه H: آزمون‌های جدول «مسیر ← مجوز» و یافته‌های TD-298 به بعد (src/tests/security/routeAccessPolicy.ts)
+  const shouldRunAccess = (id: string, ...extra: string[]) =>
+    !normalizedFilter || `${id} ${extra.join(' ')}`.toLowerCase().replace(/[-_]/g, '').includes(normalizedFilter);
 
   // Test 1: Log Sanitization (Removal of Password, Token, Secrets)
   const t1Start = Date.now();
@@ -1361,6 +1365,9 @@ export async function runSecurityTests(): Promise<TestCaseResult[]> {
       error: err.message
     }));
   }
+
+  const { runRouteAccessPolicyTests } = await import('../security/routeAccessPolicy.js');
+  results.push(...await runRouteAccessPolicyTests(shouldRunAccess));
 
   return results;
 }

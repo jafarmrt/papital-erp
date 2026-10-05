@@ -25,8 +25,10 @@ const idleInTxTimeoutMs = parseInt(process.env.DB_IDLE_IN_TX_TIMEOUT || '60000',
 // v7.0.39 (TD-176 / audit P2-11): زمان‌های انتظار جلسه در بسته راه‌اندازی اتصال ارسال می‌شوند، نه با یک SET
 // بدون انتظار در رویداد connect (که هشدار منسوخ‌شدن pg را می‌داد و در pg@9 خطا می‌شود).
 // اگر DATABASE_URL خودش پارامتر options داشته باشد، pg همان را جایگزین این مقدار می‌کند.
+// v8.0.52 (TD-314): منطقه زمانی جلسه UTC است، هم‌وقتِ `toISOString` کد و فرایند سرور (`processTimezone`)؛
+// پیش‌تر `defaultNow()` و مقایسه با `now()` در نصبی با پایگاه‌داده به وقت تهران ۳٫۵ ساعت جابه‌جا بودند.
 export const SESSION_STARTUP_OPTIONS =
-  `-c statement_timeout=${statementTimeoutMs} -c idle_in_transaction_session_timeout=${idleInTxTimeoutMs}`;
+  `-c statement_timeout=${statementTimeoutMs} -c idle_in_transaction_session_timeout=${idleInTxTimeoutMs} -c TimeZone=UTC`;
 
 const isSsl = rawDbUrl.includes('sslmode=require') || 
               rawDbUrl.includes('neon.tech') || 
@@ -70,7 +72,7 @@ if (!isPlaceholderDbUrl && (process.env.SQL_HOST || rawDbUrl)) {
     }
 
     if (/[?&]options=/.test(rawDbUrl)) {
-      logger.warn({ message: '[PostgreSQL Pool] DATABASE_URL has its own "options" parameter; session timeouts (DB_STATEMENT_TIMEOUT / DB_IDLE_IN_TX_TIMEOUT) must be included in it.' });
+      logger.warn({ message: '[PostgreSQL Pool] DATABASE_URL has its own "options" parameter; session timeouts (DB_STATEMENT_TIMEOUT / DB_IDLE_IN_TX_TIMEOUT) and TimeZone=UTC must be included in it.' });
     }
 
     realPool.on('connect', (client: pkg.PoolClient) => {

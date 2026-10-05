@@ -215,7 +215,8 @@ router.put('/pending-materials/:id/reject', authenticateToken, authorizePermissi
 }));
 
 // PUT /api/pending-materials/:id - Update pending material details
-router.put('/pending-materials/:id', authenticateToken, validate(updatePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
+// حوزه H (TD-302): «ذخیره ویرایش» پنجره تأیید است؛ همان مجوز تأیید را می‌خواهد (پیش‌تر هر کاربر واردشده)
+router.put('/pending-materials/:id', authenticateToken, authorizePermission('pending_materials.approve'), validate(updatePendingMaterialSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const pId = Number(req.params.id);
     await PendingMaterialsService.updatePendingMaterial(pId, req.body);

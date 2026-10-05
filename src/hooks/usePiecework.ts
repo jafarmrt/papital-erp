@@ -42,6 +42,12 @@ export function usePiecework() {
     (Array.isArray(userPermissions?.permissions) &&
       READ_PERMISSIONS.payrolls.some(p => userPermissions.permissions.includes(p)))
   );
+  // حوزه H (TD-300): نرخ دستی کارکرد فقط برای مدیر پرسنل یا مدیر تعرفه‌ها (همان قاعده سرور)
+  const canSetLogRate = Boolean(
+    userPermissions?.isAdmin || user?.role === 'admin' ||
+    (Array.isArray(userPermissions?.permissions) &&
+      ['personnel.manage', 'piecework.manage_tasks'].some(p => userPermissions.permissions.includes(p)))
+  );
 
   // Core Data Lists
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
@@ -711,6 +717,7 @@ export function usePiecework() {
 
   return {
     canViewPayrolls,
+    canSetLogRate,
     activeTab,
     setActiveTab,
     personnelList,
