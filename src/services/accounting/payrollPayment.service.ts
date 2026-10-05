@@ -144,6 +144,12 @@ export class PayrollPaymentService {
    * V4.0.33: ثبت پرداخت حقوق — پشتیبانی کامل از پرداخت‌های چندمرحله‌ای (قسطی / جزئی)
    */
   static async registerPayrollPayment(input: RegisterPayrollPaymentInput): Promise<RegisterPayrollPaymentResult> {
+    // v8.0.113 (TD-411، تصمیم مالک محصول — گزینه الف، مثل TD-278): روش «چک» در پرداخت حقوق پذیرفته نمی‌شود. پیش‌تر
+    // فقط برچسب بود: بانک همان روز بستانکار می‌شد و چکی در دفتر چک ثبت نمی‌شد که سررسید، وصول یا برگشت داشته باشد.
+    // پرداخت‌های چکی پیشین ابطال‌پذیرند.
+    if (input.method === 'cheque') {
+      throw new ValidationError('روش «چک» در پرداخت حقوق پذیرفته نمی‌شود؛ حقوق را با انتقال بانکی، نقدی یا کارتخوان پرداخت کنید.');
+    }
     return await orm.transaction(async (tx) => {
       // V1.4.0: ترتیب واقعی قفل: بانک (سطح ۱۰) اول، سپس فیش حقوقی (سطح ۳۰)
       await withOrderedLocks(tx, [
