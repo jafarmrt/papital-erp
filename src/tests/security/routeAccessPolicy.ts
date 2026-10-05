@@ -2,7 +2,7 @@ import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials } from '../../db/schema.js';
 import {  } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -33,7 +33,7 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
   'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
   'GET /api/piecework/payrolls/mine',
-  'POST /api/pending-materials', 'PUT /api/pending-materials/:id',
+  'POST /api/pending-materials',
   'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
   'GET /api/attachments/:id',
 ]);
@@ -148,6 +148,25 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         return 'دیگری 404، نویسنده 200';
       } finally {
         await orm.delete(dailyWorkLogs).where(eq(dailyWorkLogs.id, log.id));
+      }
+    }),
+    record('sec_pending_material_edit_td_302', 'حوزه H: ویرایش درخواست ماده اولیه فقط با مجوز تأیید و فقط پیش از بررسی (TD-302)', 'real_database', async () => {
+      const logger = await userWith(['daily_logs.view', 'daily_logs.create']);
+      const approver = await userWith(['pending_materials.view', 'pending_materials.approve']);
+      const [pending] = await orm.insert(pendingMaterials).values({ code: `TD302-${Date.now()}`, name: 'td302', unit: 'عدد', status: 'pending' }).returning();
+      const [reviewed] = await orm.insert(pendingMaterials).values({ code: `TD302R-${Date.now()}`, name: 'td302r', unit: 'عدد', status: 'rejected' }).returning();
+      try {
+        const byLogger = await send(logger.session, 'put', `/api/pending-materials/${pending.id}`, { weightedAverageCost: 999999 });
+        const byApprover = await send(approver.session, 'put', `/api/pending-materials/${pending.id}`, { name: 'td302 ویرایش' });
+        const reviewedEdit = await send(approver.session, 'put', `/api/pending-materials/${reviewed.id}`, { name: 'td302 پس از رد' });
+        const wrong: string[] = [];
+        if (byLogger.status !== 403) wrong.push(`کاربر بی‌مجوز: ${byLogger.status} (انتظار 403)`);
+        if (byApprover.status !== 200) wrong.push(`تأییدکننده: ${byApprover.status} (انتظار 200)`);
+        if (reviewedEdit.status !== 409) wrong.push(`درخواست ردشده: ${reviewedEdit.status} (انتظار 409)`);
+        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        return 'بی‌مجوز 403، تأییدکننده 200، بررسی‌شده 409';
+      } finally {
+        await orm.delete(pendingMaterials).where(inArray(pendingMaterials.id, [pending.id, reviewed.id]));
       }
     }),
   ];

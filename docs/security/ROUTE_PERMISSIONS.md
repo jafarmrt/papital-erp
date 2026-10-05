@@ -236,7 +236,7 @@
 | GET | `/api/pending-materials` | pending_materials.view \| products.view |
 | POST | `/api/pending-materials` | login-only |
 | DELETE | `/api/pending-materials/:id` | admin \| manager |
-| PUT | `/api/pending-materials/:id` | login-only |
+| PUT | `/api/pending-materials/:id` | pending_materials.approve |
 | PUT | `/api/pending-materials/:id/approve` | pending_materials.approve |
 | PUT | `/api/pending-materials/:id/reject` | pending_materials.approve |
 | GET | `/api/permissions` | roles.manage \| users.manage |

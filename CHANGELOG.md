@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.50 — Pending Material Edits Need the Approval Permission (TD-302)
+- Editing a pending raw-material request needs the approval permission and is refused once the request was approved or rejected.
+
 ### v8.0.49 — Private Daily Logs Stay Private by ID (TD-301)
 - Opening a daily work log by its id applies the same visibility rule as the list; private and manager-only logs of others are no longer returned.
 
