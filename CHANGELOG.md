@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.48 — Default Numbering Year Follows the Business Clock (TD-311)
+- Without a date, the numbering year is today's Jalali year in the business time zone; requisition codes and the next-number preview no longer jump to the next year between 1 January and Nowruz.
+
 ### v8.0.47 — Fiscal Year Closing Always Ends on the Year's Last Day (TD-310)
 - Closing vouchers are dated the year's last day (30 Esfand in a leap year) and the opening voucher 1 Farvardin; other dates are refused, so a leap year's 30 Esfand documents are closed too.
 

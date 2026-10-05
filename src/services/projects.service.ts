@@ -4,7 +4,7 @@ import { productionProjects, projectStages, items, customers, projectProductStag
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
-import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
+import { businessFiscalYear, businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 
@@ -85,9 +85,8 @@ export class ProjectService {
     if (!projectCode) {
       const countRes = await executor.select({ count: sql<number>`count(*)` }).from(productionProjects);
       const totalNum = Number(countRes[0]?.count || 0) + 1;
-      const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-      const rawYear = new Date().toLocaleDateString('fa-IR-u-ca-persian', { year: 'numeric' });
-      const jalaliYear = rawYear.replace(/[۰-۹]/g, d => String(faDigits.indexOf(d))) || '1405';
+      // v8.0.48 (TD-311): سال امروزِ ساعت توافقی؛ پیش‌تر منطقه زمانی میزبان (UTC) شب نوروز سال قبل را می‌داد
+      const jalaliYear = await businessFiscalYear();
       projectCode = `PRJ-${jalaliYear}-${totalNum.toString().padStart(3, '0')}`;
     }
 
