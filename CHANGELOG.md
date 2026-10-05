@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.53 — Bank Transfers Are Voided as a Whole
+- Voiding either side of a bank-to-bank transfer now voids both sides, restores both balances and voids the shared voucher once (product-owner decision); the remaining side of an old half-voided transfer can be voided.
+
 ### v8.0.52 — Project Delivery Over Plan Needs a Reason
 - Delivering a project's products to stock beyond the planned quantity now needs a recorded reason (product-owner decision), concurrent deliveries are counted under the project lock, and a cancelled project or an item outside the project is refused.
 
