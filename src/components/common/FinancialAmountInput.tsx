@@ -6,6 +6,7 @@ import {
   financialAmountToPersianWords,
   parseCleanNumber
 } from '../../utils';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export interface FinancialAmountInputProps {
   /** مقدار عددی مبلغ به واحد پولی مشخص‌شده (مثلاً ریال یا دلار) */
@@ -170,9 +171,11 @@ export const FinancialAmountInput = React.forwardRef<HTMLInputElement, Financial
     const textToCopy = isRial && showTomanEquivalent && wordsResult.tomanEquivalent
       ? wordsResult.fullDescription
       : wordsResult.words;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    void copyToClipboard(textToCopy).then(ok => {
+      if (!ok) return;
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const baseContainerStyle = isTable

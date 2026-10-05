@@ -427,8 +427,6 @@ export async function runDocumentIntegrityTests(): Promise<TestCaseResult[]> {
           if (res.settled || (req as any).__nextCalled) { clearInterval(poll); }
         }, 25);
         setTimeout(() => clearInterval(poll), 5100);
-        // اگر هیچ‌کدام نشد هم timeout رها می‌کند
-        Promise.resolve().then(() => {}).then(() => {});
         // poll دیگری برای next
         const poll2 = setInterval(() => {
           if ((req as any).__nextCalled) { clearInterval(poll2); finish(); }

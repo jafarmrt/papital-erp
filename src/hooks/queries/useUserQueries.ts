@@ -51,7 +51,7 @@ export function useDeleteUserMutation() {
       return fetchJson(`/users/${userId}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'users').then(() => {
+      void invalidateDomain(queryClient, 'users').then(() => {
         toast.success('کاربر با موفقیت حذف شد');
       });
     },
@@ -72,7 +72,7 @@ export function useSaveUserMutation(onDone?: () => void) {
       return fetchJson('/users', { method: 'POST', body: JSON.stringify(payload) });
     },
     onSuccess: (_res, vars) => {
-      invalidateDomains(queryClient, ['users', 'roles']).then(() => {
+      void invalidateDomains(queryClient, ['users', 'roles']).then(() => {
         toast.success(vars.userId ? 'اطلاعات کاربر با موفقیت ویرایش شد' : 'کاربر جدید با موفقیت ایجاد شد');
         onDone?.();
       });
@@ -91,7 +91,7 @@ export function useDeleteRoleMutation() {
       return fetchJson(`/roles/${roleId}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomains(queryClient, ['roles', 'users']).then(() => {
+      void invalidateDomains(queryClient, ['roles', 'users']).then(() => {
         toast.success('نقش با موفقیت حذف شد');
       });
     },
@@ -112,7 +112,7 @@ export function useSaveRoleMutation(onDone?: () => void) {
       return fetchJson('/roles', { method: 'POST', body: JSON.stringify(payload) });
     },
     onSuccess: (_res, vars) => {
-      invalidateDomains(queryClient, ['roles', 'users']).then(() => {
+      void invalidateDomains(queryClient, ['roles', 'users']).then(() => {
         toast.success(vars.roleId ? 'نقش با موفقیت ویرایش شد' : 'نقش جدید با موفقیت ایجاد شد');
         onDone?.();
       });

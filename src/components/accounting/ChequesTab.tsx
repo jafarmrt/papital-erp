@@ -16,6 +16,7 @@ import { FinancialAttachmentBadge } from './FinancialAttachmentBadge';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -622,8 +623,10 @@ export function ChequesTab({
                                       label: 'کپی شناسه صیاد',
                                       icon: Copy,
                                       onClick: () => {
-                                        navigator.clipboard.writeText(String(c.sayadNumber));
-                                        toast.success('شناسه صیاد کپی شد');
+                                        void copyToClipboard(String(c.sayadNumber)).then(ok => {
+                                          if (ok) toast.success('شناسه صیاد کپی شد');
+                                          else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                        });
                                       },
                                     },
                                   ]
@@ -632,8 +635,10 @@ export function ChequesTab({
                                 label: 'کپی شماره چک',
                                 icon: Copy,
                                 onClick: () => {
-                                  navigator.clipboard.writeText(c.chequeNumber);
-                                  toast.success('شماره چک کپی شد');
+                                  void copyToClipboard(c.chequeNumber).then(ok => {
+                                    if (ok) toast.success('شماره چک کپی شد');
+                                    else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                  });
                                 },
                               },
                               {

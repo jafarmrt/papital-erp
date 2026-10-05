@@ -102,7 +102,7 @@ export default function ProjectScheduleTab({
       }
     };
 
-    loadPresetsAndPersonnel();
+    void loadPresetsAndPersonnel();
     return () => controller.abort();
   }, []);
 
@@ -363,7 +363,7 @@ export default function ProjectScheduleTab({
   };
 
   useEffect(() => {
-    fetchProjectPieceworkLogs();
+    void fetchProjectPieceworkLogs();
   }, [project.id]);
 
   // Log single task to Piecework Logs
@@ -422,7 +422,7 @@ export default function ProjectScheduleTab({
           return { ...prev, tasks };
         });
 
-        fetchProjectPieceworkLogs();
+        void fetchProjectPieceworkLogs();
       }
     } catch (err: any) {
       toast.error(err.message || 'خطا در ثبت کارکرد کارمزدی');
@@ -487,7 +487,7 @@ export default function ProjectScheduleTab({
           return next;
         });
 
-        fetchProjectPieceworkLogs();
+        void fetchProjectPieceworkLogs();
       }
     } catch (err: any) {
       toast.error(err.message || 'خطا در ثبت گروهی کارکردها');

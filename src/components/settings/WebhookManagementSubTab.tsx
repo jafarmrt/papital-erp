@@ -3,6 +3,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { Globe, Plus, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Send, Key, Copy, Check, Trash2, Edit3, Shield, Activity } from 'lucide-react';
 import { formatPersianDate } from '../../utils';
 import { fetchJson } from '../../api';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface WebhookSubscription {
   id: number;
@@ -134,9 +135,9 @@ export function WebhookManagementSubTab() {
   };
 
   useEffect(() => {
-    fetchStats();
-    fetchSubscriptions();
-    fetchDeliveries();
+    void fetchStats();
+    void fetchSubscriptions();
+    void fetchDeliveries();
   }, []);
 
   const openCreateModal = () => {
@@ -211,8 +212,8 @@ export function WebhookManagementSubTab() {
       if (data?.success) {
         showToast(data.message || 'درگاه وب‌هوک با موفقیت ذخیره شد.', 'success');
         setIsModalOpen(false);
-        fetchStats();
-        fetchSubscriptions();
+        void fetchStats();
+        void fetchSubscriptions();
       } else {
         showToast(data?.message || 'خطا در ذخیره‌سازی وب‌هوک', 'error');
       }
@@ -228,8 +229,8 @@ export function WebhookManagementSubTab() {
       });
       if (data?.success) {
         showToast(data.message || 'وضعیت با موفقیت به‌روزرسانی شد.', 'success');
-        fetchSubscriptions();
-        fetchStats();
+        void fetchSubscriptions();
+        void fetchStats();
       }
     } catch (err) {
       showToast('خطا در تغییر وضعیت وب‌هوک', 'error');
@@ -244,8 +245,8 @@ export function WebhookManagementSubTab() {
       });
       if (data?.success) {
         showToast('درگاه وب‌هوک با موفقیت حذف شد.', 'success');
-        fetchSubscriptions();
-        fetchStats();
+        void fetchSubscriptions();
+        void fetchStats();
       }
     } catch (err) {
       showToast('خطا در حذف وب‌هوک', 'error');
@@ -274,10 +275,12 @@ export function WebhookManagementSubTab() {
   };
 
   const copySecretKey = (id: number, key: string) => {
-    navigator.clipboard.writeText(key);
-    setCopiedKeyId(id);
-    showToast('کلید امنیتی با موفقیت در کلیپ‌بورد کپی شد.', 'success');
-    setTimeout(() => setCopiedKeyId(null), 2500);
+    void copyToClipboard(key).then(ok => {
+      if (!ok) { showToast('کپی در کلیپ‌بورد ممکن نشد', 'error'); return; }
+      setCopiedKeyId(id);
+      showToast('کلید امنیتی با موفقیت در کلیپ‌بورد کپی شد.', 'success');
+      setTimeout(() => setCopiedKeyId(null), 2500);
+    });
   };
 
   const toggleEventPattern = (pattern: string) => {
@@ -388,9 +391,9 @@ export function WebhookManagementSubTab() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              fetchStats();
-              fetchSubscriptions();
-              fetchDeliveries();
+              void fetchStats();
+              void fetchSubscriptions();
+              void fetchDeliveries();
             }}
             className="p-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all"
             title="به‌روزرسانی داده‌ها"
@@ -460,7 +463,7 @@ export function WebhookManagementSubTab() {
                     <button
                       onClick={() => {
                         setSelectedSubForDeliveries(selectedSubForDeliveries === sub.id ? null : sub.id);
-                        fetchDeliveries(selectedSubForDeliveries === sub.id ? undefined : sub.id);
+                        void fetchDeliveries(selectedSubForDeliveries === sub.id ? undefined : sub.id);
                       }}
                       className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium rounded-xl transition-all flex items-center gap-1.5"
                     >

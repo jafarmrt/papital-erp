@@ -112,7 +112,7 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
   useEffect(() => {
     if (tab === 'coa') {
-      navigate('/settings?tab=chart_of_accounts', { replace: true });
+      void navigate('/settings?tab=chart_of_accounts', { replace: true });
     }
   }, [tab, navigate]);
 
@@ -124,10 +124,10 @@ export function AccountingPage({ userPermissions, user }: AccountingPageProps) {
 
   const handleTabChange = (newTab: string) => {
     if (newTab === 'coa') {
-      navigate('/settings?tab=chart_of_accounts');
+      void navigate('/settings?tab=chart_of_accounts');
       return;
     }
-    navigate(`/accounting/${newTab}`);
+    void navigate(`/accounting/${newTab}`);
   };
 
   return (

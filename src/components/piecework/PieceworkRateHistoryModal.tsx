@@ -45,7 +45,7 @@ export const PieceworkRateHistoryModal: React.FC<PieceworkRateHistoryModalProps>
     if (isOpen) {
       setSearchQuery('');
       setFilterType('all');
-      fetchHistory();
+      void fetchHistory();
     }
   }, [isOpen, selectedTask]);
 

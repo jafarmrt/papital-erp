@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ActionMenu } from '../ActionMenu';
 import toast from 'react-hot-toast';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface UsersTabProps {
   users: User[];
@@ -167,8 +168,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                             label: `کپی نام کاربری (${u.username})`,
                             icon: Copy,
                             onClick: () => {
-                              navigator.clipboard.writeText(u.username);
-                              toast.success('نام کاربری کپی شد');
+                              void copyToClipboard(u.username).then(ok => {
+                                if (ok) toast.success('نام کاربری کپی شد');
+                                else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                              });
                             },
                           },
                           ...(u.id !== currentUser.id

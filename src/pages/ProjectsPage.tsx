@@ -78,7 +78,7 @@ export default function ProjectsPage() {
   const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'inventory' | 'schedule' | 'gantt' | 'stock' | 'product_progress'>('overview');
 
   const loadInitialData = () => {
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
   };
 
   const handleOpenCreateModal = () => {

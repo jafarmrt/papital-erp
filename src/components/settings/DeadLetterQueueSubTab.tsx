@@ -95,13 +95,13 @@ export function DeadLetterQueueSubTab() {
   };
 
   useEffect(() => {
-    fetchStats();
-    fetchEvents();
+    void fetchStats();
+    void fetchEvents();
   }, [statusFilter, sourceFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchEvents();
+    void fetchEvents();
   };
 
   const handleReplaySingle = async (id: number) => {
@@ -113,8 +113,8 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast('رویداد با موفقیت بازپخش و در گذرگاه پردازش شد.', 'success');
-        fetchStats();
-        fetchEvents();
+        void fetchStats();
+        void fetchEvents();
       } else {
         showToast(data?.message || 'خطا در بازپخش رویداد', 'error');
       }
@@ -134,8 +134,8 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast('رویداد از صف فعال کنار گذاشته شد.', 'success');
-        fetchStats();
-        fetchEvents();
+        void fetchStats();
+        void fetchEvents();
       } else {
         showToast(data?.message || 'خطا در نادیده‌گرفتن رویداد', 'error');
       }
@@ -157,8 +157,8 @@ export function DeadLetterQueueSubTab() {
       if (data?.success) {
         showToast(`بازپخش موفق: ${data.succeeded} از ${data.total} رویداد با موفقیت بازپخش شد.`, 'success');
         setSelectedIds([]);
-        fetchStats();
-        fetchEvents();
+        void fetchStats();
+        void fetchEvents();
       } else {
         showToast(data?.message || 'خطا در بازپخش دسته‌ای', 'error');
       }
@@ -178,8 +178,8 @@ export function DeadLetterQueueSubTab() {
       });
       if (data?.success) {
         showToast(data.message || 'پاکسازی با موفقیت انجام شد.', 'success');
-        fetchStats();
-        fetchEvents();
+        void fetchStats();
+        void fetchEvents();
       } else {
         showToast(data?.message || 'خطا در پاکسازی', 'error');
       }
@@ -217,7 +217,7 @@ export function DeadLetterQueueSubTab() {
         await handleReplaySingle(editingItem.id);
       } else {
         showToast('بدنه رویداد با موفقیت به‌روزرسانی شد.', 'success');
-        fetchEvents();
+        void fetchEvents();
       }
 
       setEditingItem(null);
@@ -390,8 +390,8 @@ export function DeadLetterQueueSubTab() {
 
           <button
             onClick={() => {
-              fetchStats();
-              fetchEvents();
+              void fetchStats();
+              void fetchEvents();
             }}
             disabled={isLoading}
             className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all"

@@ -58,7 +58,7 @@ export function useSaveTransferMutation() {
       });
     },
     onSuccess: () => {
-      invalidatePreset(queryClient, 'transferChange');
+      void invalidatePreset(queryClient, 'transferChange');
       toast.success('اطلاعات ترنسفر با موفقیت ذخیره گردید');
     },
     onError: (err: any) => {
@@ -75,7 +75,7 @@ export function useDeleteTransferMutation() {
       return fetchJson(`/transfers/${code}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidatePreset(queryClient, 'transferChange');
+      void invalidatePreset(queryClient, 'transferChange');
       toast.success('طرح ترنسفر با موفقیت حذف گردید');
     },
     onError: (err: any) => {

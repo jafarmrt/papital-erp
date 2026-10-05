@@ -106,9 +106,9 @@ export default function Dashboard() {
   const handleCalendarEventClick = (event: CalendarEventItem) => {
     if (event.type === 'crm_followup' || event.type === 'crm_close') {
       const leadId = event.raw?.leadId || event.raw?.id;
-      navigate(`/crm${leadId ? `?leadId=${leadId}` : ''}`);
+      void navigate(`/crm${leadId ? `?leadId=${leadId}` : ''}`);
     } else if (event.type === 'daily_log') {
-      navigate('/daily-logs');
+      void navigate('/daily-logs');
     }
   };
 

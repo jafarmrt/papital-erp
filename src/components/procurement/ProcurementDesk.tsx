@@ -84,7 +84,7 @@ export function ProcurementDesk({ currentUser }: ProcurementDeskProps) {
   }, []);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   const handleDeliverOrder = (orderId: number, orderRef: string) => {

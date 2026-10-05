@@ -70,7 +70,7 @@ export function TaskTitlesSettingsTab() {
   };
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   // Save Task (Create or Edit)
@@ -99,7 +99,7 @@ export function TaskTitlesSettingsTab() {
       }
       setIsTaskModalOpen(false);
       setEditingTask(null);
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ذخیره عنوان کاری');
     } finally {
@@ -113,7 +113,7 @@ export function TaskTitlesSettingsTab() {
     try {
       await fetchJson(`/piecework/tasks/${task.id}`, { method: 'DELETE' });
       toast.success('عنوان کاری حذف شد');
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در حذف عنوان کاری');
     }
@@ -147,7 +147,7 @@ export function TaskTitlesSettingsTab() {
       setEditingCat(null);
       setCatName('');
       setCatDesc('');
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ذخیره دسته‌بندی');
     } finally {
@@ -161,7 +161,7 @@ export function TaskTitlesSettingsTab() {
     try {
       await fetchJson(`/piecework/categories/${cat.id}`, { method: 'DELETE' });
       toast.success('دسته‌بندی حذف شد');
-      loadData();
+      void loadData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در حذف دسته‌بندی');
     }

@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.46 — No Floating Promises
+- All 209 floating promises in the browser code are marked or handled; `no-floating-promises` is now an ESLint error, and clipboard copies report failure instead of a false «copied» message.
+
 ### v8.0.45 — Session-Start Hook and Release Tooling
 - Tooling only: a Claude Code session-start hook prepares dependencies and PostgreSQL 16, `scripts/ci-test-env.sh` holds the CI test environment, and `npm run release:v8` writes a release's paperwork.
 

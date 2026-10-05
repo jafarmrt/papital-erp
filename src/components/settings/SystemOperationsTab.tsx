@@ -33,7 +33,7 @@ export function SystemOperationsTab({ onOpenClearModal }: SystemOperationsTabPro
       if (res?.success) {
         toast.success(res.message || 'پاکسازی لاگ‌های ممیزی با موفقیت انجام شد.');
         setShowPurgeModal(false);
-        refetchIntegrity();
+        void refetchIntegrity();
         invalidateActivityLogs();
       } else {
         toast.error(res?.message || 'خطا در اجرای پاکسازی لاگ‌ها');

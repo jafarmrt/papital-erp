@@ -124,7 +124,7 @@ export function PartyLedgerReportView({
   // Auto-fetch when selectedParty changes
   useEffect(() => {
     if (selectedParty) {
-      fetchLedger();
+      void fetchLedger();
     }
   }, [selectedParty]);
 

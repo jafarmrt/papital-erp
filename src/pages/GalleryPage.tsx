@@ -46,7 +46,7 @@ export default function GalleryPage({ user }: { user: User }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadData(controller.signal);
+    void loadData(controller.signal);
     return () => controller.abort();
   }, [tab]);
 

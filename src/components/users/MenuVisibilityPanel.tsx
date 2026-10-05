@@ -58,7 +58,7 @@ export const MenuVisibilityPanel: React.FC = () => {
 
   useEffect(() => {
     const controller = new AbortController();
-    (async () => {
+    void (async () => {
       try {
         const rolesRes = await fetchJson('/roles', { signal: controller.signal });
         const rolesList: Role[] = Array.isArray(rolesRes) ? rolesRes : (Array.isArray(rolesRes?.data) ? rolesRes.data : []);

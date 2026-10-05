@@ -137,7 +137,7 @@ export function useServerDraft<T extends Record<string, any>>(
     }
 
     debounceTimerRef.current = setTimeout(() => {
-      saveDraft(currentData);
+      void saveDraft(currentData);
     }, debounceMs);
 
     return () => {

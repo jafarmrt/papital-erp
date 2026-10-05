@@ -35,6 +35,7 @@ import type {
   Account, 
   FinancialAttachment 
 } from '../../types';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export interface BankAndTreasuryTabProps {
   bankAccounts: BankAccount[];
@@ -89,9 +90,11 @@ export function BankAndTreasuryTab({
   // Clipboard feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const handleCopy = useCallback((text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    void copyToClipboard(text).then(ok => {
+      if (!ok) return;
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
   }, []);
 
   // Filter and Pagination state

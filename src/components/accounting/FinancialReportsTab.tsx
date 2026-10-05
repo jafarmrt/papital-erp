@@ -100,21 +100,21 @@ export function FinancialReportsTab({
 
   // Initial fetch of trial balance and ratios
   useEffect(() => {
-    onFetchTrialBalance(trialLevel, startDate || undefined, endDate || undefined);
+    void onFetchTrialBalance(trialLevel, startDate || undefined, endDate || undefined);
   }, []);
 
   const handleApplyTrialFilter = (newLevel?: 'all' | 'group' | 'general' | 'subsidiary' | 'detailed') => {
     const levelToFetch = newLevel || trialLevel;
     if (newLevel) setTrialLevel(newLevel);
-    onFetchTrialBalance(levelToFetch, startDate || undefined, endDate || undefined);
+    void onFetchTrialBalance(levelToFetch, startDate || undefined, endDate || undefined);
   };
 
   const handleApplyIncomeFilter = () => {
-    onFetchIncomeStatement(startDate || undefined, endDate || undefined);
+    void onFetchIncomeStatement(startDate || undefined, endDate || undefined);
   };
 
   const handleApplyBalanceSheetFilter = () => {
-    onFetchBalanceSheet(asOfDate || undefined);
+    void onFetchBalanceSheet(asOfDate || undefined);
   };
 
   const handleApplyLedgerFilter = () => {
@@ -122,7 +122,7 @@ export function FinancialReportsTab({
       toast.error('لطفاً یک حساب برای مشاهده گردش انتخاب نمایید');
       return;
     }
-    onFetchLedger(Number(selectedLedgerAccountId), startDate || undefined, endDate || undefined);
+    void onFetchLedger(Number(selectedLedgerAccountId), startDate || undefined, endDate || undefined);
   };
 
   const fetchJournalBook = () => {
@@ -210,7 +210,7 @@ export function FinancialReportsTab({
   const handleDrillDownToLedger = (accountId: number) => {
     setSelectedLedgerAccountId(accountId);
     setActiveSubTab('ledger');
-    onFetchLedger(accountId, startDate || undefined, endDate || undefined);
+    void onFetchLedger(accountId, startDate || undefined, endDate || undefined);
   };
 
   return (

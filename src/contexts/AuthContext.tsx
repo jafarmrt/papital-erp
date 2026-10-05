@@ -135,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    refreshUser(controller.signal);
+    void refreshUser(controller.signal);
     return () => controller.abort();
   }, [refreshUser]);
 

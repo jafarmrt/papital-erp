@@ -184,7 +184,7 @@ export function useCRMData(user: any) {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadAllData(controller.signal);
+    void loadAllData(controller.signal);
     return () => {
       controller.abort();
     };
@@ -282,7 +282,7 @@ export function useCRMData(user: any) {
       }
 
       setIsLeadModalOpen(false);
-      loadAllData();
+      void loadAllData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ذخیره فرصت فروش');
     } finally {
@@ -309,7 +309,7 @@ export function useCRMData(user: any) {
       } else {
         toast.success('مرحله فروش به‌روزرسانی شد');
       }
-      loadAllData();
+      void loadAllData();
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در تغییر مرحله فروش');
     }
@@ -321,7 +321,7 @@ export function useCRMData(user: any) {
       await fetchJson(`/crm/leads/${leadId}`, { method: 'DELETE' });
       toast.success('فرصت فروش حذف شد');
       if (selectedLeadDrawer?.id === leadId) setSelectedLeadDrawer(null);
-      loadAllData();
+      void loadAllData();
     } catch (err) {
       toast.error('خطا در حذف فرصت فروش');
     }
@@ -383,10 +383,10 @@ export function useCRMData(user: any) {
 
       toast.success('اقدام/تماس با موفقیت ثبت شد');
       setIsActivityModalOpen(false);
-      loadAllData();
+      void loadAllData();
 
       if (selectedLeadDrawer && selectedLeadDrawer.id === selectedLeadForActivity?.id) {
-        openLeadDrawer(selectedLeadDrawer);
+        void openLeadDrawer(selectedLeadDrawer);
       }
     } catch (err) {
       toast.error(errorMessageOf(err) || 'خطا در ثبت اقدام');
@@ -428,8 +428,8 @@ export function useCRMData(user: any) {
       try {
         await fetchJson(`/crm/activities/${act.id}/toggle-followup`, { method: 'PUT' });
         toast.success('وضعیت پیگیری به حالت معوق تغییر کرد');
-        loadAllData();
-        if (selectedLeadDrawer) openLeadDrawer(selectedLeadDrawer);
+        void loadAllData();
+        if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
       } catch (err) {
         toast.error('خطا در به‌روزرسانی پیگیری');
       }
@@ -452,8 +452,8 @@ export function useCRMData(user: any) {
       toast.success('نتیجه پیگیری ثبت و وضعیت آن تکمیل شد');
       setIsFollowupResultModalOpen(false);
       setSelectedFollowupAct(null);
-      loadAllData();
-      if (selectedLeadDrawer) openLeadDrawer(selectedLeadDrawer);
+      void loadAllData();
+      if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
     } catch (err) {
       toast.error('خطا در ثبت نتیجه پیگیری');
     } finally {

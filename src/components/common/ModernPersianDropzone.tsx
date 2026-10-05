@@ -174,7 +174,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
     if (readOnly) return;
 
     if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+      void processFiles(e.dataTransfer.files);
     }
   };
 
@@ -219,7 +219,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
 
       if (pastedFiles.length > 0) {
         e.preventDefault();
-        processFiles(pastedFiles);
+        void processFiles(pastedFiles);
       }
     };
 
@@ -276,7 +276,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
         multiple
         className="hidden"
         onChange={(e) => {
-          if (e.target.files) processFiles(e.target.files);
+          if (e.target.files) void processFiles(e.target.files);
         }}
         disabled={isProcessing || attachments.length >= maxFiles || readOnly}
       />

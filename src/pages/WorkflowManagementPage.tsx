@@ -45,7 +45,7 @@ export const WorkflowManagementPage: React.FC = () => {
       setIsSyncing(true);
       await fetchJson('/workflow/definitions/seed-default', { method: 'POST' });
       toast.success('الگوهای استاندارد ورکفلو با موفقیت همگام‌سازی شدند');
-      refetch();
+      void refetch();
     } catch (err: any) {
       toast.error(err.message || 'خطا در همگام‌سازی الگوها');
     } finally {
@@ -112,7 +112,7 @@ export const WorkflowManagementPage: React.FC = () => {
         setSelectedDefinitionId(result.data.id);
         setActiveTab('designer');
       }
-      refetch();
+      void refetch();
     } catch (err: any) {
       toast.error(err.message || 'خطا در ایجاد الگوی جدید');
     }
@@ -277,7 +277,7 @@ export const WorkflowManagementPage: React.FC = () => {
           definitionId={selectedDefinitionId}
           onBack={() => {
             setActiveTab('list');
-            refetch();
+            void refetch();
           }}
         />
       )}

@@ -97,16 +97,16 @@ export function EventSourcingReplaySubTab() {
   };
 
   useEffect(() => {
-    fetchTypes();
+    void fetchTypes();
   }, []);
 
   useEffect(() => {
-    searchAggregates(selectedType, searchKeyword);
+    void searchAggregates(selectedType, searchKeyword);
   }, [selectedType]);
 
   useEffect(() => {
     if (selectedAggregateId) {
-      fetchTimeline(selectedType, selectedAggregateId);
+      void fetchTimeline(selectedType, selectedAggregateId);
     }
   }, [selectedType, selectedAggregateId]);
 
@@ -129,7 +129,7 @@ export function EventSourcingReplaySubTab() {
         setSimulationResult(data);
         showToast(data.message || 'عملیات با موفقیت انجام شد.', 'success');
         if (!dryRun) {
-          fetchTimeline(selectedType, selectedAggregateId);
+          void fetchTimeline(selectedType, selectedAggregateId);
         }
       } else {
         showToast(data?.message || 'خطا در اجرای بازپخش', 'error');
@@ -237,7 +237,7 @@ export function EventSourcingReplaySubTab() {
                 value={searchKeyword}
                 onChange={e => {
                   setSearchKeyword(e.target.value);
-                  searchAggregates(selectedType, e.target.value);
+                  void searchAggregates(selectedType, e.target.value);
                 }}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl pr-9 pl-4 py-2.5 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
               />

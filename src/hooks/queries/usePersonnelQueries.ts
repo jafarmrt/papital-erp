@@ -59,8 +59,8 @@ export function useSavePersonnelMutation() {
       });
     },
     onSuccess: (_, variables) => {
-      invalidateDomain(queryClient, 'personnel');
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personnel.all });
+      void invalidateDomain(queryClient, 'personnel');
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personnel.all });
       toast.success(variables.id ? 'اطلاعات پرسنل با موفقیت به‌روزرسانی شد' : 'پرسنل جدید با موفقیت ثبت شد');
     },
     onError: (err: any) => {
@@ -80,8 +80,8 @@ export function useDeletePersonnelMutation() {
       return fetchJson(`/personnel/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'personnel');
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personnel.all });
+      void invalidateDomain(queryClient, 'personnel');
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personnel.all });
       toast.success('پرسنل با موفقیت حذف شد');
     },
     onError: (err: any) => {

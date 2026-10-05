@@ -53,7 +53,7 @@ export function WorkflowPresetsTab({
         if (isMounted) setLoadingTasks(false);
       }
     };
-    loadTasks();
+    void loadTasks();
     return () => {
       isMounted = false;
     };

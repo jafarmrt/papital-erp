@@ -81,11 +81,11 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
   };
 
   useEffect(() => {
-    loadAllocations();
+    void loadAllocations();
   }, [loadAllocations]);
 
   useEffect(() => {
-    loadMetadata();
+    void loadMetadata();
   }, []);
 
   const handleOpenAllocateModal = () => {
@@ -132,7 +132,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
 
       setShowAllocateModal(false);
       void invalidateAfterStockAdjustment(queryClient);
-      loadAllocations();
+      void loadAllocations();
     } catch (err) {
       setErrorMsg(errorMessageOf(err) || 'خطا در ثبت تخصیص به پروژه');
     } finally {
@@ -149,7 +149,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
         method: 'POST'
       });
       void invalidateAfterStockAdjustment(queryClient);
-      loadAllocations();
+      void loadAllocations();
     } catch (err) {
       toast.error((err as any)?.message || 'خطا در ثبت مصرف');
     }
@@ -165,7 +165,7 @@ export function ProjectBomAllocationsTab({ user }: ProjectBomAllocationsTabProps
       });
       setReleaseTarget(null);
       void invalidateAfterStockAdjustment(queryClient);
-      loadAllocations();
+      void loadAllocations();
     } catch (err) {
       toast.error((err as any)?.message || 'خطا در آزادسازی تخصیص');
     } finally {

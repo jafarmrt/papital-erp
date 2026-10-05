@@ -59,10 +59,10 @@ export default function CRMPage({ user }: { user: any }) {
       toast.success('مشتری با موفقیت در حساب‌ها ثبت گردید.');
 
       // Refresh leads list
-      crm.loadAllData();
+      void crm.loadAllData();
 
       // Navigate to create invoice page with pre-filled buyer details
-      navigate('/remittances', {
+      void navigate('/remittances', {
         state: {
           crmLeadId: lead.id,
           buyerName: res.customer?.name || lead.customerName || lead.company || lead.title,
@@ -340,7 +340,7 @@ export default function CRMPage({ user }: { user: any }) {
         allActivities={crm.activities}
         onEditCustomer={(cust) => {
           setSelectedCustomerDossier(null);
-          navigate('/customers', { state: { editCustomerId: cust.id, editCustomer: cust } });
+          void navigate('/customers', { state: { editCustomerId: cust.id, editCustomer: cust } });
         }}
       />
     </div>

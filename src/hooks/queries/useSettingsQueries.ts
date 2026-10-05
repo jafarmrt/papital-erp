@@ -82,10 +82,10 @@ export function useSaveSettingsMutation() {
       });
     },
     onSuccess: () => {
-      invalidatePreset(queryClient, 'settingsChange');
-      queryClient.invalidateQueries({ queryKey: settingsKeys.all });
+      void invalidatePreset(queryClient, 'settingsChange');
+      void queryClient.invalidateQueries({ queryKey: settingsKeys.all });
       // V10-5.3: سایدبار بلافاصله به‌روز شود
-      queryClient.invalidateQueries({ queryKey: ['menu_visibility'] });
+      void queryClient.invalidateQueries({ queryKey: ['menu_visibility'] });
       toast.success('تنظیمات با موفقیت ذخیره شدند');
     },
     onError: (err: any) => {
@@ -127,8 +127,8 @@ export function useSaveCategoryMutation() {
       return fetchJson('/categories', { method: 'POST', body: JSON.stringify(data) });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'categories');
-      invalidateDomain(queryClient, 'items');
+      void invalidateDomain(queryClient, 'categories');
+      void invalidateDomain(queryClient, 'items');
       toast.success('دسته‌بندی با موفقیت ذخیره شد');
     },
     onError: (err: any) => {
@@ -145,8 +145,8 @@ export function useDeleteCategoryMutation() {
       return fetchJson(`/categories/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'categories');
-      invalidateDomain(queryClient, 'items');
+      void invalidateDomain(queryClient, 'categories');
+      void invalidateDomain(queryClient, 'items');
       toast.success('دسته‌بندی با موفقیت حذف شد');
     },
     onError: (err: any) => {
@@ -163,8 +163,8 @@ export function useResetDefaultCategoriesMutation() {
       return fetchJson('/categories/reset-defaults', { method: 'POST' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'categories');
-      invalidateDomain(queryClient, 'items');
+      void invalidateDomain(queryClient, 'categories');
+      void invalidateDomain(queryClient, 'items');
       toast.success('دسته‌بندی‌های پیش‌فرض با موفقیت به‌روزرسانی و همگام شدند.');
     },
     onError: (err: any) => {
@@ -187,7 +187,7 @@ export function useSaveWarehouseMutation() {
       return fetchJson('/warehouses', { method: 'POST', body: JSON.stringify(data) });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'warehouses');
+      void invalidateDomain(queryClient, 'warehouses');
       toast.success('اطلاعات انبار با موفقیت ذخیره شد');
     },
     onError: (err: any) => {
@@ -204,7 +204,7 @@ export function useDeleteWarehouseMutation() {
       return fetchJson(`/warehouses/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'warehouses');
+      void invalidateDomain(queryClient, 'warehouses');
       toast.success('انبار با موفقیت غیرفعال گردید');
     },
     onError: (err: any) => {

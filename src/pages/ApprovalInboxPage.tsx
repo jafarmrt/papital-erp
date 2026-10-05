@@ -241,9 +241,9 @@ export function ApprovalInboxPage() {
   }, [selectedTask, selectedItem]);
 
   const handleRefreshAll = () => {
-    refetch();
-    refetchTasks();
-    refetchStats();
+    void refetch();
+    void refetchTasks();
+    void refetchStats();
   };
 
   const filteredItems = useMemo(() => {

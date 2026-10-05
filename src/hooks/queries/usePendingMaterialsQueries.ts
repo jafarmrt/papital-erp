@@ -32,7 +32,7 @@ export function useApprovePendingMaterialMutation() {
       });
     },
     onSuccess: () => {
-      invalidatePreset(queryClient, 'pendingMaterialChange');
+      void invalidatePreset(queryClient, 'pendingMaterialChange');
       toast.success('ماده اولیه با موفقیت تأیید شد و به انبار اضافه گردید');
     },
     onError: (err: any) => {
@@ -52,7 +52,7 @@ export function useRejectPendingMaterialMutation() {
       });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'pendingMaterials');
+      void invalidateDomain(queryClient, 'pendingMaterials');
       toast.success('ماده اولیه رد شد');
     },
     onError: (err: any) => {
@@ -72,7 +72,7 @@ export function useUpdatePendingMaterialMutation() {
       });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'pendingMaterials');
+      void invalidateDomain(queryClient, 'pendingMaterials');
       toast.success('مشخصات ماده اولیه به‌روزرسانی شد');
     },
     onError: (err: any) => {
@@ -91,7 +91,7 @@ export function useDeletePendingMaterialMutation() {
       });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'pendingMaterials');
+      void invalidateDomain(queryClient, 'pendingMaterials');
       toast.success('درخواست ماده اولیه حذف شد');
     },
     onError: (err: any) => {

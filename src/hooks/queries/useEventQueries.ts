@@ -194,7 +194,7 @@ export function useSimulateEventMutation() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       toast.success('رویداد شبیه‌سازی‌شده با موفقیت منتشر و در Outbox ذخیره شد');
     },
     onError: (err: any) => {
@@ -214,7 +214,7 @@ export function useProcessOutboxMutation() {
       });
     },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       toast.success(res?.message || 'صف رویدادها با موفقیت پردازش شد');
     },
     onError: (err: any) => {
@@ -234,7 +234,7 @@ export function useRetryFailedOutboxMutation() {
       });
     },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       toast.success(res?.message || 'رویدادهای ناموفق برای تلاش مجدد نشانه‌گذاری شدند');
     },
     onError: (err: any) => {
@@ -254,7 +254,7 @@ export function useRetrySingleOutboxEventMutation() {
       });
     },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       toast.success(res?.message || 'رویداد برای تلاش مجدد زمان‌بندی شد');
     },
     onError: (err: any) => {

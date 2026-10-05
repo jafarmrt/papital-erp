@@ -82,14 +82,14 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadProjects(controller.signal);
+    void loadProjects(controller.signal);
     return () => controller.abort();
   }, []);
 
   useEffect(() => {
     if (selectedProjectId) {
       const controller = new AbortController();
-      loadProjectDetail(selectedProjectId, controller.signal);
+      void loadProjectDetail(selectedProjectId, controller.signal);
       return () => controller.abort();
     }
   }, [selectedProjectId]);
@@ -228,7 +228,7 @@ export default function ProjectInventoryPage({ user }: { user?: User }) {
           <ProjectInventoryTab
             project={project}
             itemsList={itemsList}
-            onUpdate={() => { if (selectedProjectId) loadProjectDetail(selectedProjectId); }}
+            onUpdate={() => { if (selectedProjectId) void loadProjectDetail(selectedProjectId); }}
           />
         </div>
       )}

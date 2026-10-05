@@ -98,7 +98,7 @@ export default function ReservedItemsReportPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadReport(controller.signal);
+    void loadReport(controller.signal);
     return () => controller.abort();
   }, []);
 

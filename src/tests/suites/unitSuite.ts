@@ -1474,9 +1474,12 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (cmp.increased.length !== 1 || cmp.increased[0].rule !== 'max-lines' || cmp.decreased.length !== 1) violations.push(`مقایسه با فایل پایه نادرست است: ${JSON.stringify(cmp)}`);
     const fs = await import('fs');
     const baseline = JSON.parse(fs.readFileSync(ratchet.BASELINE_FILE, 'utf8')) as Record<string, number>;
-    for (const rule of ['@typescript-eslint/no-floating-promises', '@typescript-eslint/no-misused-promises', 'react-hooks/exhaustive-deps', 'max-lines']) {
+    for (const rule of ['@typescript-eslint/no-misused-promises', 'react-hooks/exhaustive-deps', 'max-lines']) {
       if (typeof baseline[rule] !== 'number') violations.push(`قاعده ${rule} در فایل پایه نیست`);
     }
+    // v8.0.46: Promise رهاشده صفر است و error؛ در فایل پایه ردیف ندارد و گیت آن را بدون توجه به فایل پایه رد می‌کند
+    if (baseline['@typescript-eslint/no-floating-promises'] !== undefined) violations.push('no-floating-promises باید از فایل پایه حذف شده باشد');
+    if (!tsProbe[0].messages.some(m => m.ruleId === '@typescript-eslint/no-floating-promises' && m.severity === 2)) violations.push('Promise رهاشده باید خطا (error) باشد');
     // v7.0.106 (TD-106): any به تفکیک فایل در فایل پایه جدا شمرده می‌شود
     if (!fs.existsSync(ratchet.ANY_BASELINE_FILE)) violations.push(`فایل پایه any (${ratchet.ANY_BASELINE_FILE}) نیست`);
 
