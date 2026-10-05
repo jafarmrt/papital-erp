@@ -1,7 +1,8 @@
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
-import { businessNowIsoDateTime, businessTodayIsoDate } from '../../lib/businessClock.js';
+import { businessNowIsoDateTime, businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
+import { DocumentRefNumberService } from './documentRefNumber.service.js';
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
@@ -123,6 +124,14 @@ export class DocumentLifecycleService {
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
+          // v8.0.51 (TD-317، تصمیم مالک محصول — گزینه الف): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور سال خودش را
+          // می‌گیرد و شماره پیش‌فاکتور در یادداشت می‌ماند. پیش‌تر شماره سری پیش‌فاکتور می‌ماند و اگر همان شماره در
+          // فاکتورهای آن سال بود، نهایی‌سازی با خطای یکتایی پایگاه‌داده شکست می‌خورد.
+          const isProformaToInvoice = doc.type === 'proforma';
+          const finalRefNumber = isProformaToInvoice
+            ? await DocumentRefNumberService.getNextRef('invoice', doc.date, tx)
+            : doc.refNumber;
+          const proformaNote = isProformaToInvoice && doc.refNumber ? `صادرشده از پیش‌فاکتور شماره ${doc.refNumber}` : '';
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
           const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'purchase' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
 
@@ -198,7 +207,7 @@ export class DocumentLifecycleService {
               price,
               date: doc.date,
               documentType: targetType,
-              documentRef: doc.refNumber,
+              documentRef: finalRefNumber,
               user: user || doc.user || 'system',
               targetLoc,
               // v8.0.4 (TD-257): پیش‌نویسی که تاریخش از آخرین گردش کالا عقب‌تر است فقط با مجوز نهایی می‌شود
@@ -223,6 +232,11 @@ export class DocumentLifecycleService {
           await tx.update(documents).set({ 
             status: 'final',
             type: targetType,
+            ...(isProformaToInvoice ? {
+              refNumber: finalRefNumber,
+              refFiscalYear: resolveJalaliFiscalYear(doc.date),
+              notes: [doc.notes, proformaNote].filter(Boolean).join('\n'),
+            } : {}),
             vatPercent: finalVat.vatPercent,
             vatAmount: finalVat.vatAmount,
             exchangeRate: finalExchangeRate,
@@ -240,7 +254,7 @@ export class DocumentLifecycleService {
               String(id),
               {
                 documentId: id,
-                refNumber: doc.refNumber,
+                refNumber: finalRefNumber,
                 docType: targetType,
                 buyerName: doc.buyerName || '',
                 currency: doc.currency || 'IRR',

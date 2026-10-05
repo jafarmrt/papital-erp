@@ -7,7 +7,7 @@ import { Plus, Trash2, Printer, X } from 'lucide-react';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, extractDateString, getTodayJalaliDate } from '../utils';
+import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, extractDateString, getTodayJalaliDate, getTodayIsoDate } from '../utils';
 import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
@@ -277,7 +277,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       }
     }
 
-    const formattedDate = extractDateString(date) || new Date().toISOString().split('T')[0];
+    const formattedDate = extractDateString(date) || getTodayIsoDate();
 
     const payload = {
       docType,

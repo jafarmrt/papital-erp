@@ -18,41 +18,65 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
-### v8.0.58 — Project Reservations Are Built by the Server (TD-306)
+### v8.0.66 — Project Reservations Are Built by the Server (TD-306)
 - A project's stock reservation is no longer taken from the browser: finalizing builds it on the server from the inventory control sections and item stock, and later saves keep it.
 
-### v8.0.57 — Piecework Logs Need the Piecework Permission; Rates From the Server (TD-300)
+### v8.0.65 — Piecework Logs Need the Piecework Permission; Rates From the Server (TD-300)
 - Recording piecework needs the piecework log permission instead of the daily-log one, and only personnel or rate managers enter a manual rate; others get the personnel or task rate.
 
-### v8.0.56 — CRM Won Needs a Proforma on Every Path (TD-309)
+### v8.0.64 — CRM Won Needs a Proforma on Every Path (TD-309)
 - A sales lead can be marked won only after a proforma, whether through its stage or its status; a new lead cannot start as won.
 
-### v8.0.55 — Vouchers Approved at Creation Record Their Approver (TD-308)
+### v8.0.63 — Vouchers Approved at Creation Record Their Approver (TD-308)
 - A manual journal voucher created as approved records its creator as the approver.
 
-### v8.0.54 — Document Creator Name Comes From the Session (TD-307)
+### v8.0.62 — Document Creator Name Comes From the Session (TD-307)
 - The creator name of a document, its Kardex rows and its voucher is the signed-in user, not a name sent in the request.
 
-### v8.0.53 — Editing an Item Keeps the WAC of Stocked Items (TD-305)
+### v8.0.61 — Editing an Item Keeps the WAC of Stocked Items (TD-305)
 - Editing an item that has stock no longer overwrites its weighted average cost without a Kardex row or voucher; the WAC changes only through stock in.
 
-### v8.0.52 — Roles Accept Only Catalog Permissions (TD-304)
+### v8.0.60 — Roles Accept Only Catalog Permissions (TD-304)
 - A role can be given only permission keys from the catalog; "*" and unknown keys are refused.
 
-### v8.0.51 — Payroll Payments Follow the Payroll Read Permission (TD-303)
+### v8.0.59 — Payroll Payments Follow the Payroll Read Permission (TD-303)
 - Payroll payments and personnel advance balances are read with the payroll read permissions only, like the payslips themselves.
 
-### v8.0.50 — Pending Material Edits Need the Approval Permission (TD-302)
+### v8.0.58 — Pending Material Edits Need the Approval Permission (TD-302)
 - Editing a pending raw-material request needs the approval permission and is refused once the request was approved or rejected.
 
-### v8.0.49 — Private Daily Logs Stay Private by ID (TD-301)
+### v8.0.57 — Private Daily Logs Stay Private by ID (TD-301)
 - Opening a daily work log by its id applies the same visibility rule as the list; private and manager-only logs of others are no longer returned.
 
-### v8.0.48 — Only an Admin Manages Admin Accounts (TD-299)
+### v8.0.56 — Only an Admin Manages Admin Accounts (TD-299)
 - A user manager without the admin role can no longer grant or remove the admin role, or change or delete an admin account.
 
-### v8.0.47 — Area H Audit; Route Permission Table and View-Only Mutations (TD-298)
+### v8.0.55 — Area H Audit; Route Permission Table and View-Only Mutations (TD-298)
 - Area H (security and access) was audited from a route → permission table built from the Express routers; BOM allocation and workflow start no longer open to view-only permissions, and a test keeps every route within the access policy.
+
+### v8.0.54 — Stock Movement Chart by Jalali Month (TD-316)
+- The stock movement chart now groups inflows and outflows by Jalali month over the current Jalali month and the five before it, instead of labelling Gregorian months with Jalali month names.
+
+### v8.0.53 — Activity Log Shows Tehran Time and Filters Tehran Days (TD-315)
+- The activity log API returns its UTC timestamps with a zone marker, so the page shows the time in the business time zone, and its date filter covers the business day rather than the UTC day.
+
+### v8.0.52 — Database Session and Server Process Run in UTC (TD-314)
+- The connection pool pins the PostgreSQL session time zone to UTC and the server process runs with TZ=UTC, so server timestamps written by the database and by the code agree on hosts set to Tehran time.
+
+### v8.0.51 — Invoices From Proformas Take the Invoice Series Number (TD-317)
+- Finalizing a proforma gives the invoice the next number of the invoice series for its fiscal year and keeps the proforma number in the notes; a proforma whose number already exists among that year's invoices no longer fails with a database error.
+
+### v8.0.50 — Strict Document Dates and Cross-Year Draft Numbering (TD-313)
+- A non-existent document date (30 Esfand of a common year, 30 February) or a non-date is refused with 422 instead of shifting silently or failing with 500; the numbering year comes from the stored date, and a draft moved to another fiscal year takes that year's next number.
+
+### v8.0.49 — Browser «Today» in the Business Time Zone (TD-312)
+- Stock counts and the invoice and treasury date fallbacks take today's date in the business time zone; a count saved after midnight in Tehran (on Nowruz night, in the new fiscal year) no longer gets yesterday's UTC date.
+
+### v8.0.48 — Default Numbering Year Follows the Business Clock (TD-311)
+- Without a date, the numbering year is today's Jalali year in the business time zone; requisition codes and the next-number preview no longer jump to the next year between 1 January and Nowruz.
+
+### v8.0.47 — Fiscal Year Closing Always Ends on the Year's Last Day (TD-310)
+- Closing vouchers are dated the year's last day (30 Esfand in a leap year) and the opening voucher 1 Farvardin; other dates are refused, so a leap year's 30 Esfand documents are closed too.
 
 ### v8.0.46 — No Floating Promises
 - All 209 floating promises in the browser code are marked or handled; `no-floating-promises` is now an ESLint error, and clipboard copies report failure instead of a false «copied» message.

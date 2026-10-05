@@ -3,7 +3,7 @@ import { ArrowLeftRight, X } from 'lucide-react';
 import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
-import { formatPersianPrice, extractDateString } from '../../../utils';
+import { formatPersianPrice, extractDateString, getTodayIsoDate } from '../../../utils';
 import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
 import { fetchJson } from '../../../api';
@@ -46,9 +46,9 @@ export const TreasuryTransferModal: React.FC<TreasuryTransferModalProps> = ({
         }
       })
       .catch(() => {
-        // fallback: تاریخ مرورگر فقط در خطای شبکه (رفتار قدیمی)
+        // fallback در خطای شبکه: امروزِ منطقه زمانی توافقی (v8.0.49، TD-312؛ پیش‌تر روز UTC)
         if (!cancelled) {
-          setFormData(p => (p.date ? p : { ...p, date: new Date().toISOString().slice(0, 10) }));
+          setFormData(p => (p.date ? p : { ...p, date: getTodayIsoDate() }));
         }
       });
     return () => { cancelled = true; };

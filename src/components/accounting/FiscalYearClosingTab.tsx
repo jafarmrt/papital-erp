@@ -1,13 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Lock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Scale, RefreshCw, ShieldCheck, Check, Layers, Printer, ChevronDown, ChevronUp } from 'lucide-react';
-import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { formatPersianPrice, toPersianDigits, getTodayJalaliDate, formatPersianDate, formatCurrencyLabel, errorMessageOf } from '../../utils';
+import { fiscalClosingJalaliDates, fiscalClosingYearOptions } from '../../lib/fiscalClosingDates';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { FiscalYearClosingPreview, FiscalYearClosingResult, JournalVoucher, FiscalClosingAccountRow } from '../../types';
 import toast from 'react-hot-toast';
 import { useExecuteFiscalClosing, useFiscalClosingPreview } from '../../hooks/accounting/useFiscalClosing';
-import DatePicker from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 
 interface FiscalYearClosingTabProps {
   onViewVoucher?: (voucher: JournalVoucher) => void;
@@ -22,8 +20,9 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   const currentJalaliYear = currentJalaliDate ? currentJalaliDate.split('/')[0] : '1403';
   
   const [selectedYear, setSelectedYear] = useState<string>(currentJalaliYear);
-  const [closingDate, setClosingDate] = useState<string>(`${currentJalaliYear}/12/29`);
-  const [openingDateNewYear, setOpeningDateNewYear] = useState<string>(`${Number(currentJalaliYear) + 1}/01/01`);
+  // v8.0.47 (TD-310): تاریخ اختتامیه همیشه آخرین روز سال (۲۹ یا ۳۰ اسفند) و افتتاحیه ۱ فروردین سال بعد است
+  const { closingDate, openingDateNewYear } = fiscalClosingJalaliDates(selectedYear);
+  const yearOptions = useMemo(() => fiscalClosingYearOptions(currentJalaliYear), [currentJalaliYear]);
   const [createOpeningVoucher, setCreateOpeningVoucher] = useState<boolean>(true);
 
   // پیش‌نمایش و اجرای بستن سال با React Query: پیش‌نمایش سال قبلی که دیر برسد جای پیش‌نمایش سال تازه را نمی‌گیرد
@@ -48,8 +47,6 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
 
   const handleYearChange = (newYear: string) => {
     setSelectedYear(newYear);
-    setClosingDate(`${newYear}/12/29`);
-    setOpeningDateNewYear(`${Number(newYear) + 1}/01/01`);
     preview.reset();
     setExecutionResult(null);
   };
@@ -161,45 +158,28 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
                 onChange={e => handleYearChange(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none"
               >
-                <option value="1402">سال مالی ۱۴۰۲</option>
-                <option value="1403">سال مالی ۱۴۰۳</option>
-                <option value="1404">سال مالی ۱۴۰۴</option>
-                <option value="1405">سال مالی ۱۴۰۵</option>
+                {yearOptions.map(y => (
+                  <option key={y} value={y}>سال مالی {toPersianDigits(y)}</option>
+                ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+              <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                 تاریخ سند اختتامیه:
-              </label>
-              <DatePicker
-                value={closingDate}
-                onChange={(dateObj) => {
-                  setClosingDate(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-36 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-800 dark:text-slate-200 text-center focus:ring-2 focus:ring-amber-500 outline-none"
-                containerClassName="inline-block"
-              />
+              </span>
+              <span data-testid="fiscal-closing-date" className="inline-block w-36 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-800 dark:text-slate-200 text-center">
+                {toPersianDigits(closingDate)}
+              </span>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+              <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                 تاریخ افتتاحیه سال جدید:
-              </label>
-              <DatePicker
-                value={openingDateNewYear}
-                onChange={(dateObj) => {
-                  setOpeningDateNewYear(extractDateString(dateObj));
-                }}
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                inputClass="w-36 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-800 dark:text-slate-200 text-center focus:ring-2 focus:ring-amber-500 outline-none"
-                containerClassName="inline-block"
-              />
+              </span>
+              <span data-testid="fiscal-opening-date" className="inline-block w-36 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-slate-800 dark:text-slate-200 text-center">
+                {toPersianDigits(openingDateNewYear)}
+              </span>
             </div>
 
             <div className="self-end">
