@@ -245,6 +245,7 @@ export class VoucherService {
     sourcePayrollId?: number | null;
     /** v8.0.19 (TD-271): چکی که این سند در چرخه عمر آن صادر می‌شود */
     sourceChequeId?: number | null;
+    sourceBomAllocationId?: number | null;
     currency?: string;
     attachments?: unknown[];
     userId?: number;
@@ -308,6 +309,7 @@ export class VoucherService {
         sourceDocumentId: data.sourceDocumentId ?? null,
         sourcePayrollId: data.sourcePayrollId ?? null,
         sourceChequeId: data.sourceChequeId ?? null,
+        sourceBomAllocationId: data.sourceBomAllocationId ?? null,
         currency: data.currency || 'IRR',
         attachments: [],
         createdById: data.userId || null,

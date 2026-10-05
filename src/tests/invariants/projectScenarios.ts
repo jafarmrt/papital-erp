@@ -7,6 +7,7 @@ import { DocumentService } from '../../services/document.service.js';
 import { ProjectService } from '../../services/projects.service.js';
 import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
 import { ProcurementService } from '../../services/procurement.service.js';
+import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { createTestItem } from '../fixtures/factories.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { inventoryValueGap } from './businessInvariants.js';
@@ -109,6 +110,56 @@ export async function checkBomReleaseAtOwnCost(wh: string): Promise<string[]> {
   return problems;
 }
 
+/** گردش یک حساب برای تفصیلی پروژه در اسناد و ردیف‌های فعال (همه وضعیت‌ها) */
+async function projectNet(code: string, projectId: number): Promise<string> {
+  const res = await pool.query<{ n: string }>(
+    `SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS n FROM journal_voucher_items i
+       JOIN journal_vouchers v ON v.id = i.voucher_id JOIN accounts a ON a.id = i.account_id
+      WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND a.code = $1 AND i.detailed_type = 'project' AND i.detailed_id = $2`, [code, projectId]);
+  return fin(res.rows[0]?.n ?? 0).toString();
+}
+
+/**
+ * TD-286 (تصمیم مالک محصول — گزینه الف): تخصیص مواد BOM سند می‌گیرد — بدهکار کالای در جریان ساخت (۱۴۰۲، تفصیلی پروژه) /
+ * بستانکار موجودی مواد (۱۴۰۱) یا کالای ساخته‌شده (۱۴۰۳) به بهای کاردکس؛ ارزش انبار با دفتر کل یکی می‌ماند. آزادسازی سند را
+ * باطل می‌کند: پیش‌نویس حذف نرم، تأییدشده سند معکوس؛ گردش ۱۴۰۲ پروژه صفر می‌شود.
+ */
+export async function checkBomAllocationPostsVoucher(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await voucherMark();
+  const raw = await rawWithStock(wh, 10, 100000);
+  const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId: product.id, quantity: 5, unitPrice: 300000, location: wh }],
+  });
+  const scope = { itemIds: [raw.itemId, product.id], documentIdAfter: 0, voucherIdAfter: mark };
+  const projectId = await newProject('پروژه آزمون سند تخصیص');
+  const gapIsZero = async (label: string) => {
+    const { gap } = await inventoryValueGap(scope);
+    if (!gap.isZero()) problems.push(`${label}: اختلاف ارزش انبار و دفتر کل ${gap}`);
+  };
+
+  const first = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId: raw.itemId, quantity: 4, location: wh }, { itemId: product.id, quantity: 1, location: wh }], username: 'inv' });
+  const wip = await projectNet('1402', projectId);
+  if (!fin(wip).equals(700000)) problems.push(`کالای در جریان ساخت پروژه ${wip}، انتظار ۷۰۰٬۰۰۰ (۴ × ۱۰۰٬۰۰۰ + ۳۰۰٬۰۰۰)`);
+  const linked = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE is_deleted = 0 AND source_bom_allocation_id = ANY($1::int[])', [first.allocations.map(a => a.id)]);
+  if (Number(linked.rows[0].n) !== 2) problems.push(`سند پیوندخورده به تخصیص‌ها ${linked.rows[0].n}، انتظار ۲`);
+  await gapIsZero('پس از تخصیص');
+
+  // آزادسازی تخصیص مواد با سند پیش‌نویس ← سند حذف نرم
+  await ProjectBomAllocationService.releaseAllocation(first.allocations[0].id, { username: 'inv' });
+  if (!fin(await projectNet('1402', projectId)).equals(300000)) problems.push(`۱۴۰۲ پروژه پس از آزادسازی مواد ${await projectNet('1402', projectId)}، انتظار ۳۰۰٬۰۰۰`);
+  await gapIsZero('پس از آزادسازی سند پیش‌نویس');
+
+  // آزادسازی تخصیص کالا با سند تأییدشده ← سند معکوس
+  const [productVoucher] = (await pool.query<{ id: number }>('SELECT id FROM journal_vouchers WHERE is_deleted = 0 AND source_bom_allocation_id = $1', [first.allocations[1].id])).rows;
+  if (productVoucher) await VoucherService.approveJournalVouchers([productVoucher.id], undefined, 'inv');
+  await ProjectBomAllocationService.releaseAllocation(first.allocations[1].id, { username: 'inv' });
+  if (!fin(await projectNet('1402', projectId)).isZero()) problems.push(`۱۴۰۲ پروژه پس از آزادسازی کالا ${await projectNet('1402', projectId)}، انتظار ۰`);
+  await gapIsZero('پس از آزادسازی سند تأییدشده');
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-287 (کاوش رگرسیون؛ رفع v8.0.32): «رسید مستقیم BOM» بی‌رسید موجودی را بی‌تأمین‌کننده و بی‌سند حسابداری بالا می‌برد */
@@ -131,7 +182,7 @@ export async function probeProjectDeliveryWithoutVoucher(wh: string): Promise<bo
   return !gap.isZero();
 }
 
-/** TD-286: تخصیص مواد BOM به پروژه موجودی را به بهای میانگین کم می‌کند ولی سند حسابداری ندارد (۱۴۰۱ کم نمی‌شود) */
+/** TD-286 (کاوش رگرسیون؛ رفع v8.0.34): تخصیص مواد BOM به پروژه موجودی را به بهای میانگین کم می‌کرد ولی سند حسابداری نداشت */
 export async function probeBomAllocationWithoutVoucher(wh: string): Promise<boolean> {
   const mark = await voucherMark();
   const { itemId } = await rawWithStock(wh, 10, 100000);

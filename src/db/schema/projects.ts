@@ -101,6 +101,7 @@ export const projectBomAllocations = pgTable('project_bom_allocations', {
   idx_bom_alloc_status: index('idx_bom_alloc_status').on(table.status),
   idx_bom_alloc_src_tx: index('idx_bom_alloc_src_tx').on(table.sourceTransactionId),
 }));
+registerColumnRef('projectBomAllocations.id', () => projectBomAllocations.id);
 
 // v7.0.105 (TD-237): هر کسر رزرو پروژه بابت حواله خروج نهایی با ردیف رزرو پیش از کسر ثبت می‌شود تا ابطال حواله
 // همان مقدار را به همان پروژه برگرداند (restored_at).

@@ -9,6 +9,7 @@ import {
 import { eq, and, desc, asc, type SQL } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { DocumentService } from '../document.service.js';
+import { issueBomAllocationVoucher, voidBomAllocationVouchers } from '../accounting/bomAllocationVoucher.js';
 import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
@@ -212,6 +213,27 @@ async function recordAllocation(txEngine: DbExecutor, params: {
   return toAllocationRecord(allocRecord);
 }
 
+/**
+ * v8.0.34 (TD-286، تصمیم مالک محصول — گزینه الف): سند تخصیص — بدهکار کالای در جریان ساخت / بستانکار موجودی، به بهای کاردکس
+ * حرکت خروج همان تخصیص (پیوند source_bom_allocation_id).
+ */
+async function postAllocationVoucher(txEngine: DbExecutor, record: ProjectBomAllocationRecord, project: ProjectRow, item: ItemRow, operator: AllocationOperator): Promise<void> {
+  const [out] = record.sourceTransactionId
+    ? await txEngine.select({ unitPrice: transactions.unitPrice, quantity: transactions.quantity }).from(transactions).where(eq(transactions.id, record.sourceTransactionId))
+    : [];
+  await issueBomAllocationVoucher(txEngine, {
+    allocationId: record.id,
+    projectId: project.id,
+    projectLabel: `${project.title} (${project.projectCode})`,
+    itemName: item.name,
+    itemType: item.type,
+    amount: fin(out?.unitPrice ?? 0).multiply(out?.quantity ?? 0),
+    date: await businessTodayIsoDate(),
+    userId: operator.id,
+    username: operator.name,
+  });
+}
+
 /** فهرست تخصیص‌ها با ردیف کاردکس منبع (جدیدترین اول) */
 async function listAllocations(conditions: SQL[]): Promise<ProjectBomAllocationRecord[]> {
   const rawList = await orm
@@ -288,7 +310,7 @@ export class ProjectBomAllocationService {
         });
         const resolvedTxId: number | null = stockResult.transactionId;
 
-        results.push(await recordAllocation(txEngine, {
+        const record = await recordAllocation(txEngine, {
           project,
           item,
           quantity: qty,
@@ -297,7 +319,9 @@ export class ProjectBomAllocationService {
           notes: req.notes || `تخصیص از محل رسید خرید/انبار به پروژه ${project.projectCode}`,
           action: 'RECEIPT_ALLOCATED',
           operator,
-        }));
+        });
+        await postAllocationVoucher(txEngine, record, project, item, operator);
+        results.push(record);
       }
 
       return { allocatedCount: results.length, allocations: results };
@@ -350,7 +374,7 @@ export class ProjectBomAllocationService {
           notes: req.notes || `تخصیص به پروژه تولید ${project.title} (${project.projectCode})`,
         });
 
-        results.push(await recordAllocation(txEngine, {
+        const record = await recordAllocation(txEngine, {
           project,
           item,
           quantity: qty,
@@ -359,7 +383,9 @@ export class ProjectBomAllocationService {
           notes: req.notes || '',
           action: 'ALLOCATED',
           operator,
-        }));
+        });
+        await postAllocationVoucher(txEngine, record, project, item, operator);
+        results.push(record);
       }
 
       return { allocatedCount: results.length, allocations: results };
@@ -474,6 +500,8 @@ export class ProjectBomAllocationService {
       const returnUnitCost = source?.type === 'out' ? fin(source.unitPrice ?? 0) : fin(item?.weightedAverageCost ?? 0);
 
       if (item && stockLeftWarehouse) {
+        // v8.0.34 (TD-286): سند تخصیص با قاعده مشترک ابطال باطل می‌شود (پیش‌نویس حذف نرم، تأییدشده معکوس به همان مبلغ)
+        await voidBomAllocationVouchers(txEngine, alloc.id, `${reason} (تخصیص شماره ${alloc.id})`, { username: operatorName, userId: opts?.userId });
         await DocumentService.applyStockMovement(txEngine, {
           itemId: item.id,
           inOut: 'in',

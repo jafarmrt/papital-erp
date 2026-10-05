@@ -344,6 +344,13 @@
       "when": 1792400000000,
       "tag": "0048_payroll_fixed_salary_months",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792450000000,
+      "tag": "0049_journal_voucher_source_bom_allocation",
+      "breakpoints": true
     }
   ]
 }

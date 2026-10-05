@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.34 — BOM Allocation Posts Work in Progress (TD-286)
+- Allocating materials to a project posts debit work in progress, credit inventory at the Kardex cost; releasing the allocation voids that voucher.
+
 ### v8.0.33 — BOM Release at the Allocation's Own Cost (TD-288)
 - Releasing a project material allocation returns the stock at the cost it left the warehouse, not at the current average cost.
 

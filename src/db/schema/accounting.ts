@@ -50,6 +50,8 @@ export const journalVouchers = pgTable('journal_vouchers', {
   // v8.0.19 (TD-271): چکی که این سند حسابداری در چرخه عمر آن صادر شده است (ثبت، در جریان وصول، وصول، برگشت، خرج).
   // پیش‌تر اسناد چک فقط با شماره چک (reference_number) پیدا می‌شدند و شماره چک یکتا نیست. مهاجرت 0047.
   sourceChequeId: integer('source_cheque_id').references(baseRelations.chequesId, { onDelete: 'set null' }),
+  // v8.0.34 (TD-286): سند تخصیص مواد BOM پروژه (مهاجرت 0049)
+  sourceBomAllocationId: integer('source_bom_allocation_id').references(baseRelations.projectBomAllocationsId, { onDelete: 'set null' }),
   currency: text('currency').default('IRR'),
   attachments: jsonb('attachments').$type<FinancialAttachment[]>().default([]),
   createdById: integer('created_by_id').references(() => users.id),
@@ -68,6 +70,7 @@ export const journalVouchers = pgTable('journal_vouchers', {
   idx_jv_reference: index('idx_jv_reference').on(table.referenceModule, table.referenceId),
   // v8.0.19 (TD-271): مهاجرت 0047
   idx_jv_source_cheque: index('idx_jv_source_cheque').on(table.sourceChequeId).where(sql`${table.sourceChequeId} IS NOT NULL`),
+  idx_jv_source_bom_allocation: index('idx_jv_source_bom_allocation').on(table.sourceBomAllocationId).where(sql`${table.sourceBomAllocationId} IS NOT NULL`),
   // v7.0.91 (TD-195): ایندکس یکتای uq_jv_voucher_number را مهاجرت 0031 فقط روی داده بدون شماره تکراری می‌سازد
   // (voucherNumberIntegrity.ts)؛ این ایندکس معمولی برای پایگاه‌داده‌ای است که ایندکس یکتا ساخته نشد
   idx_jv_number: index('idx_jv_number').on(table.voucherNumber),

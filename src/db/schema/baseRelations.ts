@@ -59,4 +59,6 @@ export const baseRelations = {
 
   // Accounting (v8.0.19، TD-271: پیوند سند حسابداری به چک در همان فایل اسکیما با ارجاع متقابل)
   chequesId: schemaRef('cheques.id'),
+  // v8.0.34 (TD-286): پیوند سند حسابداری به تخصیص مواد BOM پروژه
+  projectBomAllocationsId: schemaRef('projectBomAllocations.id'),
 } as const;

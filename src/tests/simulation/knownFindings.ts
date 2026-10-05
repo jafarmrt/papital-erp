@@ -39,7 +39,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-268 در v8.0.17 رفع شد (inv_td_268_free_goods_voucher_at_wac)
   // حوزه E — خرید، پروژه، BOM و تولید (v8.0.32؛ TD-287 در همان نسخه رفع شد: inv_td_287_bom_receipt_allocation_needs_receipt)
   'FOCUSED:project-delivery-without-voucher': 'TD-285',
-  'FOCUSED:bom-allocation-without-voucher': 'TD-286',
+  // TD-286 در v8.0.34 رفع شد (inv_td_286_bom_allocation_posts_voucher)
   // TD-288 در v8.0.33 رفع شد (inv_td_288_bom_release_at_own_cost)
   'FOCUSED:requisition-reconverted-over-ordered': 'TD-289',
   'FOCUSED:requisition-receipt-counts-first-line': 'TD-290',
