@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.33 — BOM Release at the Allocation's Own Cost (TD-288)
+- Releasing a project material allocation returns the stock at the cost it left the warehouse, not at the current average cost.
+
 ### v8.0.32 — Area E Findings; BOM Receipt Allocation Needs a Receipt (TD-287)
 - A direct BOM receipt allocation without a registered receipt is refused; with a receipt it moves stock out like a normal allocation. Five other procurement and project findings recorded.
 

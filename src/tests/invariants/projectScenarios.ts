@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { transactions } from '../../db/schema.js';
+import { items, projectBomAllocations, transactions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DocumentService } from '../../services/document.service.js';
@@ -77,6 +77,38 @@ export async function checkBomReceiptAllocationNeedsReceipt(wh: string): Promise
   return problems;
 }
 
+/**
+ * TD-288: آزادسازی تخصیص مواد را به بهای کاردکس خروج همان تخصیص برمی‌گرداند — پس از خرید گران‌تر ارزشی از هیچ ساخته
+ * نمی‌شود (ارزش انبار = جمع دو رسید) — و تخصیصِ رسیدِ پیش از v8.0.32 (حرکت منبع «ورود») موجودی اضافه نمی‌کند.
+ */
+export async function checkBomReleaseAtOwnCost(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const { itemId, documentId } = await rawWithStock(wh, 10, 100000);
+  const projectId = await newProject('پروژه آزمون آزادسازی');
+  const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 4, location: wh }], username: 'inv' });
+  await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId, quantity: 10, unitPrice: 200000, location: wh }],
+  });
+  await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
+  const [back] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions)
+    .where(and(eq(transactions.itemId, itemId), eq(transactions.type, 'in'), eq(transactions.documentType, 'آزادسازی تخصیص BOM')));
+  if (!back || !fin(back.unitPrice ?? 0).equals(100000)) problems.push(`بهای بازگشت آزادسازی ${back?.unitPrice ?? 'ندارد'}، انتظار ۱۰۰٬۰۰۰ (بهای خروج تخصیص)`);
+  const [item] = await orm.select({ wac: items.weightedAverageCost, stock: items.currentStock }).from(items).where(eq(items.id, itemId));
+  if (!fin(item?.wac ?? 0).equals(150000)) problems.push(`میانگین موزون پس از آزادسازی ${item?.wac}، انتظار ۱۵۰٬۰۰۰`);
+  const value = fin(item?.stock ?? 0).multiply(item?.wac ?? 0);
+  if (!value.equals(3000000)) problems.push(`ارزش انبار ${value}، انتظار ۳٬۰۰۰٬۰۰۰ (جمع دو رسید)`);
+
+  // تخصیصِ رسیدِ پیش از v8.0.32: حرکت منبع «ورود» است و موجودی از انبار خارج نشده بود
+  const [receiptIn] = await orm.select({ id: transactions.id }).from(transactions)
+    .where(and(eq(transactions.documentId, documentId), eq(transactions.itemId, itemId), eq(transactions.type, 'in')));
+  const [legacy] = await orm.insert(projectBomAllocations).values({
+    projectId, projectCode: 'LEGACY', itemId, itemCode: 'LEGACY', itemName: 'LEGACY', quantity: 2, sourceTransactionId: receiptIn.id, sourceLocation: wh, status: 'allocated',
+  }).returning({ id: projectBomAllocations.id });
+  await ProjectBomAllocationService.releaseAllocation(legacy.id, { username: 'inv' });
+  if (!fin(await stockOf(itemId)).equals(20)) problems.push(`آزادسازی تخصیصِ رسیدِ پیشین موجودی را ${await stockOf(itemId)} کرد، انتظار ۲۰`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-287 (کاوش رگرسیون؛ رفع v8.0.32): «رسید مستقیم BOM» بی‌رسید موجودی را بی‌تأمین‌کننده و بی‌سند حسابداری بالا می‌برد */
@@ -109,7 +141,7 @@ export async function probeBomAllocationWithoutVoucher(wh: string): Promise<bool
   return !gap.isZero();
 }
 
-/** TD-288: آزادسازی تخصیص مواد را به میانگین موزون روز برمی‌گرداند، نه به بهای خروج همان تخصیص */
+/** TD-288 (کاوش رگرسیون؛ رفع v8.0.33): آزادسازی تخصیص مواد را به میانگین موزون روز برمی‌گرداند، نه به بهای خروج همان تخصیص */
 export async function probeBomReleaseAtCurrentWac(wh: string): Promise<boolean> {
   const { itemId } = await rawWithStock(wh, 10, 100000);
   const projectId = await newProject('پروژه کاوش آزادسازی');

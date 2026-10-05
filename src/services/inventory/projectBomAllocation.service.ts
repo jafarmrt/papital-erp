@@ -464,12 +464,21 @@ export class ProjectBomAllocationService {
         .where(eq(items.id, alloc.itemId))
         .for('update');
 
-      if (item) {
+      // v8.0.33 (TD-288): مواد به بهای کاردکس خروج همان تخصیص برمی‌گردند (همان قاعده ابطال خروج، TD-254)، نه به میانگین موزون
+      // روز؛ پیش‌تر پس از خرید گران‌تر، آزادسازی ارزش از هیچ می‌ساخت. تخصیصِ رسیدِ پیش از v8.0.32 (حرکت منبع «ورود») موجودی را
+      // از انبار برنداشته بود و آزادسازی آن موجودی اضافه نمی‌کند.
+      const [source] = alloc.sourceTransactionId
+        ? await txEngine.select({ type: transactions.type, unitPrice: transactions.unitPrice }).from(transactions).where(eq(transactions.id, alloc.sourceTransactionId))
+        : [];
+      const stockLeftWarehouse = source?.type !== 'in';
+      const returnUnitCost = source?.type === 'out' ? fin(source.unitPrice ?? 0) : fin(item?.weightedAverageCost ?? 0);
+
+      if (item && stockLeftWarehouse) {
         await DocumentService.applyStockMovement(txEngine, {
           itemId: item.id,
           inOut: 'in',
           quantity: qty,
-          price: Number(item.weightedAverageCost || 0),
+          price: returnUnitCost.toNumber(),
           date: await businessTodayIsoDate(),
           documentType: 'آزادسازی تخصیص BOM',
           documentRef: `پروژه ${alloc.projectCode}`,

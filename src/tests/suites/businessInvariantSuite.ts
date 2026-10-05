@@ -29,7 +29,7 @@ import {
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
-import { checkBomReceiptAllocationNeedsReceipt, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
+import { checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -267,6 +267,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.33: TD-288 ──
+    ['inv_td_288_bom_release_at_own_cost', 'v8.0.33: آزادسازی تخصیص مواد به بهای کاردکس خروج همان تخصیص برمی‌گردد و ارزش از هیچ نمی‌سازد؛ تخصیصِ رسیدِ پیشین موجودی اضافه نمی‌کند (TD-288)',
+      () => checkBomReleaseAtOwnCost(wh), 'بازگشت به ۱۰۰٬۰۰۰، میانگین موزون ۱۵۰٬۰۰۰ و ارزش انبار ۳٬۰۰۰٬۰۰۰؛ آزادسازی تخصیصِ رسیدِ پیشین موجودی را ۲۰ نگه داشت'],
     // ── v8.0.32: TD-287 ──
     ['inv_td_287_bom_receipt_allocation_needs_receipt', 'v8.0.32: تخصیص «رسید مستقیم BOM» بی‌رسید ثبت‌شده رد می‌شود؛ تخصیص از رسید ثبت‌شده مواد را از انبار خارج می‌کند و آزادسازی آن موجودی را دقیقاً برمی‌گرداند (TD-287، گزینه الف)',
       () => checkBomReceiptAllocationNeedsReceipt(wh), 'بی‌رسید رد شد و موجودی ساخته نشد؛ تخصیص از رسید ۴ واحد را خارج و آزادسازی همان ۴ را برگرداند'],
