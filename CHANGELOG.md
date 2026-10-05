@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.48 — Only an Admin Manages Admin Accounts (TD-299)
+- A user manager without the admin role can no longer grant or remove the admin role, or change or delete an admin account.
+
 ### v8.0.47 — Area H Audit; Route Permission Table and View-Only Mutations (TD-298)
 - Area H (security and access) was audited from a route → permission table built from the Express routers; BOM allocation and workflow start no longer open to view-only permissions, and a test keeps every route within the access policy.
 

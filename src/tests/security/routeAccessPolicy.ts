@@ -107,6 +107,32 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (wrong.length > 0) throw new Error(`دارنده فقط مشاهده رد نشد: ${wrong.map(([st, n]) => `${n} ${st}`).join('، ')}`);
       return 'هر دو 403';
     }),
+    record('sec_user_manager_cannot_grant_admin_td_299', 'حوزه H: دارنده users.manage نقش مدیر سیستم نمی‌دهد و حساب مدیر را تغییر یا حذف نمی‌کند (TD-299)', 'real_database', async () => {
+      const manager = await userWith(['users.manage']);
+      const admin = await createTestUser({ role: 'admin' });
+      createdUserIds.push(admin.id);
+      const plainRole = await createTestRole({ permissions: ['daily_logs.view'] });
+      createdRoleIds.push(plainRole.id);
+      const suffix = Date.now();
+      const checks: Array<[string, number, number]> = [];
+      const createAdmin = await send(manager.session, 'post', '/api/users', { username: `td299_adm_${suffix}`, password: 'Passw0rd!x', full_name: 'td299', role: 'admin' });
+      checks.push(['ساخت کاربر admin', createAdmin.status, 403]);
+      const selfAdmin = await send(manager.session, 'put', `/api/users/${manager.id}`, { full_name: 'td299', role: 'admin' });
+      checks.push(['admin کردن خود', selfAdmin.status, 403]);
+      const resetAdmin = await send(manager.session, 'put', `/api/users/${admin.id}`, { password: 'Hijack123!', full_name: 'x', role: 'admin' });
+      checks.push(['تغییر رمز مدیر', resetAdmin.status, 403]);
+      const demoteAdmin = await send(manager.session, 'put', `/api/users/${admin.id}`, { full_name: 'x', role: plainRole.code });
+      checks.push(['گرفتن نقش مدیر', demoteAdmin.status, 403]);
+      const deleteAdmin = await send(manager.session, 'delete', `/api/users/${admin.id}`);
+      checks.push(['حذف مدیر', deleteAdmin.status, 403]);
+      const createPlain = await send(manager.session, 'post', '/api/users', { username: `td299_usr_${suffix}`, password: 'Passw0rd!x', full_name: 'td299', role: plainRole.code });
+      checks.push(['ساخت کاربر عادی', createPlain.status, 200]);
+      if (createPlain.body?.id) createdUserIds.push(Number(createPlain.body.id));
+      if (createAdmin.body?.id) createdUserIds.push(Number(createAdmin.body.id));
+      const wrong = checks.filter(([, got, want]) => got !== want);
+      if (wrong.length > 0) throw new Error(wrong.map(([n, got, want]) => `${n}: ${got} (انتظار ${want})`).join('، '));
+      return `${checks.length} بررسی`;
+    }),
   ];
 
   try {
