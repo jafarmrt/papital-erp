@@ -11,6 +11,7 @@ import CustomerFormModal, { FormContactPerson } from '../components/customers/Cu
 import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
+import { customerSaveBody } from '../lib/customers/customerVersion';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
@@ -28,6 +29,8 @@ export default function CustomersPage({ user }: { user: User }) {
   const [showModal, setShowModal] = useState(false);
   const [showExcelModal, setShowExcelModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  // v8.0.122 (TD-403): نسخه رکوردی که فرم ویرایش از آن ساخته شده؛ سرور ویرایش با نسخه کهنه را ۴۰۹ می‌دهد
+  const [editingVersion, setEditingVersion] = useState<number | undefined>(undefined);
   const [selectedDossierCustomer, setSelectedDossierCustomer] = useState<Customer | null>(null);
   const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<Customer | null>(null);
   const [ledgerData, setLedgerData] = useState<any | null>(null);
@@ -178,7 +181,7 @@ export default function CustomersPage({ user }: { user: User }) {
       contacts: activeContacts
     };
 
-    saveMutation.mutate({ id: editingId, payload: finalPayload }, {
+    saveMutation.mutate({ id: editingId, payload: customerSaveBody(finalPayload, editingId, editingVersion) }, {
       onSuccess: () => {
         setShowModal(false);
         setEditingId(null);
@@ -248,6 +251,7 @@ export default function CustomersPage({ user }: { user: User }) {
     }
 
     setEditingId(c.id);
+    setEditingVersion(c.version);
     setShowModal(true);
   }, []);
 

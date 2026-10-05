@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { formatPersianNumber } from '../../utils';
 import { Customer } from '../../types';
+import { excelRowVersion } from '../../lib/customers/customerVersion';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -18,6 +19,8 @@ interface CounterpartyPreviewRow {
   index: number;
   raw: Record<string, any>;
   id?: number;
+  /** نسخه رکورد در فایل خروجی؛ سرور ردیف دارای شناسه را فقط با همین نسخه به‌روز می‌کند (TD-403) */
+  version?: number;
   name: string;
   contactName: string;
   phone: string;
@@ -99,6 +102,7 @@ export function CustomerExcelModal({
       // Auto-fit column widths
       const colWidths = [
         { wch: 8 },  // شناسه
+        { wch: 7 },  // نسخه
         { wch: 28 }, // نام طرف حساب
         { wch: 20 }, // شخص رابط
         { wch: 16 }, // شماره تماس
@@ -212,6 +216,7 @@ export function CustomerExcelModal({
         const parsed: CounterpartyPreviewRow[] = rawRows.map((row, idx) => {
           const rawId = getField(row, ['شناسه', 'کد', 'id', 'شناسه شخص']);
           const id = rawId && !isNaN(Number(rawId)) ? Number(rawId) : undefined;
+          const version = excelRowVersion(getField(row, ['نسخه', 'version']));
           const name = getField(row, ['نام طرف حساب', 'نام', 'طرف حساب', 'نام مشتری', 'نام تامین کننده', 'نام شرکت', 'عنوان', 'name']);
           const contactName = getField(row, ['شخص رابط', 'مدیر', 'نام رابط', 'رابط', 'contact', 'contactname']);
           const phone = getField(row, ['شماره تماس', 'تلفن', 'موبایل', 'تلفن همراه', 'phone', 'mobile']);
@@ -266,6 +271,7 @@ export function CustomerExcelModal({
             index: idx + 1,
             raw: row,
             id,
+            version,
             name,
             contactName,
             phone,
@@ -327,6 +333,7 @@ export function CustomerExcelModal({
     try {
       const payloadRows = validRows.map((r) => ({
         id: r.id,
+        version: r.version,
         name: r.name,
         contactName: r.contactName,
         phone: r.phone,

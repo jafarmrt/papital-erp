@@ -1,7 +1,7 @@
 import { eq, and, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
-import { checkOccVersion, nextVersion } from '../lib/occHelper.js';
+import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 
 export interface ContactPerson {
@@ -34,13 +34,13 @@ export interface CreateCustomerInput {
   contacts?: ContactPerson[];
 }
 
-export interface UpdateCustomerInput extends CreateCustomerInput {
-  version?: number;
-  expectedVersion?: number;
-}
+/** v8.0.122 (TD-403): ویرایش همیشه نسخه رکوردی را که از آن ساخته شده همراه دارد (version یا expectedVersion) */
+export type UpdateCustomerInput = CreateCustomerInput & ({ version: number; expectedVersion?: number } | { version?: number; expectedVersion: number });
 
 export interface BulkImportRowInput {
   id?: number | string;
+  /** نسخه رکورد در فایل خروجی (ستون «نسخه»)؛ برای ردیف دارای شناسه الزامی است (TD-403) */
+  version?: number | string;
   name: string;
   contactName?: string;
   phone?: string;
@@ -176,13 +176,9 @@ export class CustomerService {
       throw new NotFoundError('طرف حساب مورد نظر یافت نشد.');
     }
 
-    if (data.version !== undefined || data.expectedVersion !== undefined) {
-      checkOccVersion(prevCust, {
-        entityType: 'Customer',
-        entityId: customerId,
-        expectedVersion: Number(data.expectedVersion ?? data.version)
-      });
-    }
+    // v8.0.122 (TD-403): قفل خوش‌بینانه همیشه اجرا می‌شود؛ پیش‌تر نسخه در مسیر حذف می‌شد و این بررسی هرگز اجرا نمی‌شد
+    const expectedVersion = Number(data.expectedVersion ?? data.version);
+    checkOccVersion(prevCust, { entityType: 'Customer', entityId: customerId, expectedVersion });
 
     const name = data.name.trim();
     let contactName = data.contactName?.trim() || '';
@@ -245,13 +241,17 @@ export class CustomerService {
       version: nextVersion(prevCust.version)
     };
 
+    // ویرایش هم‌زمانی که میان خواندن و نوشتن نسخه را جلو برده باشد ردیفی را تغییر نمی‌دهد و تداخل گزارش می‌شود
     const [current] = await executor
       .update(customers)
       .set(updatedData)
-      .where(sql`${customers.id} = ${customerId}`)
+      .where(and(eq(customers.id, customerId), eq(customers.version, prevCust.version), eq(customers.isDeleted, 0)))
       .returning();
+    if (!current) {
+      throw new OptimisticLockError({ entityType: 'Customer', entityId: customerId, expectedVersion });
+    }
 
-    return { previous: prevCust, current: current || { ...prevCust, ...updatedData } };
+    return { previous: prevCust, current };
   }
 
   /**
@@ -358,6 +358,19 @@ export class CustomerService {
         }
 
         if (matchedCust) {
+          // v8.0.122 (TD-403): ردیفِ دارای شناسه فقط با نسخه‌ای که از آن خروجی گرفته شده رکورد را به‌روز می‌کند؛ پیش‌تر
+          // فایل قدیمی ویرایش‌های بعدی دیگران را بی‌صدا بازنویسی می‌کرد. ردیف بی شناسه که با نام یا تلفن جور شده،
+          // اگر نسخه داشته باشد همان سنجش را دارد.
+          const fileVersion = String(item.version ?? '').trim() === '' ? undefined : Number(item.version);
+          const matchedById = id !== undefined && matchedCust.id === id;
+          if (updateIfExists && matchedById && fileVersion === undefined) {
+            errors.push({ row: rowIndex, name, message: `ردیف شناسه ${matchedCust.id} ستون «نسخه» ندارد؛ از فهرست خروجی تازه بگیرید و دوباره بارگذاری کنید.` });
+            continue;
+          }
+          if (updateIfExists && fileVersion !== undefined && fileVersion !== matchedCust.version) {
+            errors.push({ row: rowIndex, name, message: `طرف حساب "${matchedCust.name}" پس از گرفتن این فایل ویرایش شده است (نسخه فایل ${String(item.version)}، نسخه کنونی ${matchedCust.version})؛ از فهرست خروجی تازه بگیرید.` });
+            continue;
+          }
           if (updateIfExists) {
             const updatedData: Partial<typeof customers.$inferInsert> = {
               name,
@@ -380,10 +393,15 @@ export class CustomerService {
               version: nextVersion(matchedCust.version)
             };
 
-            await executor
-              .update(customers)
-              .set(updatedData)
-              .where(eq(customers.id, matchedCust.id));
+            const [saved] = await executor.update(customers).set(updatedData)
+              .where(and(eq(customers.id, matchedCust.id), eq(customers.version, matchedCust.version), eq(customers.isDeleted, 0))).returning();
+            if (!saved) {
+              errors.push({ row: rowIndex, name, message: `طرف حساب "${matchedCust.name}" هم‌زمان ویرایش شد؛ این ردیف اعمال نشد.` });
+              continue;
+            }
+            idMap.set(saved.id, saved);
+            nameMap.set(name.toLowerCase(), saved);
+            if (saved.phone) phoneMap.set(saved.phone.trim(), saved);
 
             updatedRecords.push({ id: matchedCust.id, name, partyType, updatedData });
             updatedCount++;

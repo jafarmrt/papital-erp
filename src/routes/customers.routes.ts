@@ -90,8 +90,21 @@ const createCustomerValidation = z.object({
   body: customerSchema
 });
 
+/** نسخه رکوردی که فرم ویرایش از آن ساخته شده است (عدد صحیح مثبت؛ رشته عددی هم پذیرفته است) */
+const recordVersion = z.coerce.number().int('نسخه رکورد باید عدد صحیح باشد').positive('نسخه رکورد باید مثبت باشد');
+
+/**
+ * v8.0.122 (TD-403): ویرایش طرف حساب نسخه رکوردی را که فرم از آن ساخته شده می‌فرستد و قفل خوش‌بینانه همیشه اجرا می‌شود.
+ * پیش‌تر طرح Zod فیلد version را نداشت و حذفش می‌کرد، پس ویرایش دو کاربر هم‌زمان بی‌خطا روی هم نوشته می‌شد.
+ */
 const updateCustomerValidation = z.object({
-  body: customerSchema,
+  body: customerSchema.extend({
+    version: recordVersion.optional(),
+    expectedVersion: recordVersion.optional(),
+  }).refine(b => b.version !== undefined || b.expectedVersion !== undefined, {
+    message: 'نسخه رکورد طرف حساب ارسال نشده است؛ صفحه را بازخوانی کنید و دوباره ویرایش کنید.',
+    path: ['version'],
+  }),
   params: z.object({
     id: numericIdString
   })
@@ -179,6 +192,8 @@ router.get('/customers/export-excel', authorizePermission(...READ_PERMISSIONS.cu
     const bank = (c.bankInfo as any) || {};
     return {
       'شناسه': c.id,
+      // v8.0.122 (TD-403): درون‌ریزی دوباره همین فایل فقط رکوردی را به‌روز می‌کند که از این نسخه تغییر نکرده باشد
+      'نسخه': c.version,
       'نام طرف حساب': c.name || '',
       'شخص رابط': c.contactName || '',
       'شماره تماس': c.phone || '',
