@@ -131,6 +131,7 @@ export class DocumentCreationService {
         lines: vatLines,
         existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
         linesChanged,
+        currency: currency || existingDoc.currency,
       });
 
       // v7.0.63 (TD-198): نرخ تسعیر ساختاریافته؛ برای ارز غیرریالی الزامی (ورودی یا نرخ ذخیره‌شده)
@@ -373,7 +374,7 @@ export class DocumentCreationService {
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
       const finalNotes = notes || '';
-      const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [] });
+      const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [], currency: currency || 'IRR' });
       const docExchangeRate = resolveDocumentExchangeRate({ currency: currency || 'IRR', input: body });
 
       const [insertedDoc] = await tx.insert(documents).values({

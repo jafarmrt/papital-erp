@@ -1,6 +1,7 @@
 import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money, type Money } from '../../lib/money.js';
 import { ValidationError } from '../../errors/customErrors.js';
+import { currencyScale } from '../../lib/currencyScale.js';
 
 /**
  * v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده ساختاریافته اسناد فروش.
@@ -87,12 +88,15 @@ export function resolveDocumentVat(params: {
   lines: VatLine[];
   existing?: { vatPercent: number; vatAmount: DecimalValue };
   linesChanged?: boolean;
+  /** v8.0.83 (TD-382): ارز سند؛ مالیات درصدی به کوچک‌ترین واحد همین ارز گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت) */
+  currency?: string | null;
 }): DocumentVat {
   if (!VAT_DOC_TYPES.has(params.docType)) {
     return { vatPercent: 0, vatAmount: money(0) };
   }
   const { vatPercent, vatAmount } = parseVatInput(params.input);
-  const vatOf = (pct: number): FinancialDecimal => (pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100).round(0) : fin(0));
+  const scale = currencyScale(params.currency);
+  const vatOf = (pct: number): FinancialDecimal => (pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100, 12).round(scale) : fin(0));
   if (vatAmount !== undefined) {
     // v8.0.82 (TD-381): مبلغ صریح همراه درصد مثبت باید همان مبلغ درصدی سرور باشد؛ پیش‌تر هر مبلغی (درصد ۱۰ با مالیات ۱
     // ریال) ذخیره می‌شد. مبلغ صریح بی درصد (مالیات سفارش ووکامرس) همان‌طور پذیرفته می‌شود.

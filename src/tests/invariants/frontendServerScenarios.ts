@@ -116,3 +116,20 @@ export async function checkVatAmountMatchesPercent(wh: string): Promise<string[]
   if (Number(amountOnlyVat.amount) !== 37 || Number(amountOnlyVat.percent) !== 0) problems.push(`مالیات صریح بی درصد ۳۷ ذخیره نشد (${amountOnlyVat.amount}، ${amountOnlyVat.percent}٪)`);
   return problems;
 }
+
+/**
+ * TD-382: مالیات درصدی فاکتور ارزی به سِنت گرد می‌شود. پیش‌تر ۹٪ از ۱۵٫۵۵ دلار «۱ دلار» ذخیره می‌شد (گرد به واحد کامل،
+ * قاعده ریال)؛ درست ۱٫۴۰ است. فاکتور ریالی بی‌اعشار می‌ماند.
+ */
+export async function checkForeignVatRoundedToCents(wh: string): Promise<string[]> {
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await receive(item.id, 10, 1000, wh, '2026-03-01');
+  const problems: string[] = [];
+  const usd = await salesInvoice([{ itemId: item.id, quantity: 1, unitPrice: 15.55, location: wh }], 'proforma', { currency: 'USD', exchangeRate: 600000, vatPercent: 9 });
+  if (Number((await vatOf(usd)).amount) !== 1.4) problems.push(`مالیات ۹٪ فاکتور ۱۵٫۵۵ دلاری ${(await vatOf(usd)).amount} ذخیره شد، نه ۱٫۴۰`);
+  await DocumentService.updateDocument(usd, { items: [{ itemId: item.id, quantity: 2, unitPrice: 15.55, location: wh }] });
+  if (Number((await vatOf(usd)).amount) !== 2.8) problems.push(`پس از ویرایش به ۲ عدد مالیات ${(await vatOf(usd)).amount} شد، نه ۲٫۸۰`);
+  const irr = await salesInvoice([{ itemId: item.id, quantity: 1, unitPrice: 15, location: wh }], 'proforma', { vatPercent: 10 });
+  if (Number((await vatOf(irr)).amount) !== 2) problems.push(`مالیات ۱۰٪ فاکتور ۱۵ ریالی ${(await vatOf(irr)).amount} شد، نه ۲`);
+  return problems;
+}

@@ -319,7 +319,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   };
 
   // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
-  const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0);
+  const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0, currency);
 
   if (printedDoc) {
     return (
