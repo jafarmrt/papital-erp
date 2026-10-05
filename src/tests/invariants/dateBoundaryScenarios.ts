@@ -5,6 +5,7 @@ import { ChartOfAccountsService } from '../../services/accounting/chartOfAccount
 import { FiscalYearService } from '../../services/accounting/fiscalYear.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { DocumentService } from '../../services/document.service.js';
+import { ActivityLogQueryService } from '../../services/system/activityLogQuery.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestItem } from '../fixtures/factories.js';
 
@@ -206,8 +207,30 @@ export async function checkSessionClockUtc(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-315: گزارش فعالیت‌ها زمان ثبت (UTC) را با Z برمی‌گرداند و فیلتر روز، روز تهران است: فعالیت ۰۰:۱۵ تهران
+ * ۱۳ مهر ۱۴۰۵ (۲۰:۴۵ UTC روز قبل) در آن روز می‌آید و فعالیت ۰۰:۳۰ تهران روز بعد نمی‌آید.
+ */
+export async function checkActivityLogTehranDay(): Promise<string[]> {
+  const problems: string[] = [];
+  const marker = `آزمون روز تهران ${Date.now()}`;
+  await pool.query(
+    `INSERT INTO activity_logs (username, action, entity, description, timestamp)
+     VALUES ('inv', 'UPDATE', 'آزمون', $1, '2026-10-04 20:45:00'), ('inv', 'UPDATE', 'آزمون', $2, '2026-10-05 21:00:00')`,
+    [`${marker} — ۰۰:۱۵ همان روز`, `${marker} — ۰۰:۳۰ روز بعد`]);
+  const { data } = await ActivityLogQueryService.listLogs({ search: marker, startDate: '2026-10-05', endDate: '2026-10-05' }, 10, 0);
+  const found = data.map(r => `${r.description} @ ${r.timestamp}`);
+  if (data.length !== 1 || !String(data[0]?.description).includes('همان روز')) {
+    problems.push(`فیلتر روز ۱۳ مهر ۱۴۰۵ این فعالیت‌ها را آورد: ${found.join('؛ ') || 'هیچ'}`);
+  }
+  if (data[0] && data[0].timestamp !== '2026-10-04T20:45:00Z') problems.push(`زمان ثبت بی‌نشانه UTC برگشت: ${data[0].timestamp}`);
+  return problems;
+}
+
 /** آزمون‌های سخت‌گیرانه حوزه I برای سوئیت business_invariants: [شناسه، نام، بررسی، پیام قبولی]؛ جدیدترین اول */
 export const DATE_BOUNDARY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
+  ['inv_td_315_activity_log_tehran_day', 'v8.0.53: گزارش فعالیت‌ها زمان ثبت UTC را با Z برمی‌گرداند و فیلتر روز، روز منطقه زمانی توافقی (تهران) است (TD-315)',
+    () => checkActivityLogTehranDay(), 'فعالیت ۰۰:۱۵ تهران در همان روز آمد، ۰۰:۳۰ روز بعد نیامد؛ زمان با Z'],
   ['inv_td_314_session_clock_utc', 'v8.0.52: جلسه پایگاه‌داده با پارامترهای راه‌اندازی استخر UTC است، حتی وقتی پیش‌فرض پایگاه‌داده تهران باشد؛ defaultNow() هم‌وقتِ toISOString کد است (TD-314)',
     () => checkSessionClockUtc(), 'استخر TimeZone=UTC از پارامترهای راه‌اندازی؛ جلسه با پیش‌فرض تهران now() را به UTC نوشت'],
   ['inv_td_317_proforma_takes_invoice_number', 'v8.0.51: پیش‌فاکتور نهایی‌شده شماره بعدی سری فاکتور سال خودش را می‌گیرد، حتی وقتی شماره‌اش در فاکتورها هست؛ شماره پیش‌فاکتور در یادداشت می‌ماند (TD-317، گزینه الف)',
