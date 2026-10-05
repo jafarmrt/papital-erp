@@ -7,6 +7,7 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 import { useReorderSuppliersQuery } from '../../hooks/reorderAlerts/useReorderAlertsQueries';
 import { useReorderPurchaseSubmit, type ReorderPurchaseVariables } from '../../hooks/reorderAlerts/useReorderAlertsMutations';
+import { reorderPurchaseReceiptPayload } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 
 export type { ReorderModalItem } from '../../lib/reorderAlerts/reorderItems';
 
@@ -125,25 +126,17 @@ export function ReorderPurchaseModal({
         toast.error('انتخاب تامین‌کننده برای صدور مستقیم سند الزامی است.');
         return;
       }
+      // v8.0.88 (TD-387): بدنه مطابق POST /documents (شماره از سرور، تأمین‌کننده در buyer_name، فی در unit_price)
       variables = {
         target: 'direct_document',
-        payload: {
-          docType: 'receipt',
+        payload: reorderPurchaseReceiptPayload({
           status: docStatus,
-          partyName: supplierName.trim(),
-          location: targetWarehouse.trim() || undefined,
+          supplierName,
+          warehouse: targetWarehouse,
           date: requiredDate || getTodayJalaliDate(),
           notes: notes.trim() || `تامین کسری نقطه سفارش انبار`,
-          items: items.map(it => ({
-            itemId: it.id,
-            itemCode: it.code,
-            itemName: it.name,
-            unit: it.unit || 'عدد',
-            quantity: Number(it.orderQty),
-            unitPrice: Number(it.unitPrice || 0),
-            totalPrice: Number(it.orderQty) * Number(it.unitPrice || 0)
-          }))
-        }
+          items,
+        })
       };
     }
 
