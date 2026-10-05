@@ -1,5 +1,9 @@
 export interface SignatureEntry {
+  /** امضاکننده؛ برای امضای جانشین، تفویض‌کننده (v8.0.88، TD-377) */
   userId: number;
+  /** v8.0.88 (TD-377): جانشینی که به جای userId امضا کرده */
+  signedBy?: number;
+  delegationId?: number;
   userName?: string;
   userRole?: string;
   signedAt: string;
@@ -80,6 +84,9 @@ export class WorkflowQuorumService {
      */
     memberIds?: number[];
     userId: number;
+    /** v8.0.88 (TD-377): کاربری که واقعاً امضا می‌کند وقتی جانشین userId است؛ یک نفر دو امضا نمی‌شمارد */
+    actorId?: number;
+    delegationId?: number;
     userName?: string;
     userRole?: string;
     comment?: string;
@@ -97,7 +104,9 @@ export class WorkflowQuorumService {
       : signatures.length;
 
     const existingSignatures = params.existingSignatures || [];
-    const alreadySigned = existingSignatures.some(s => Number(s.userId) === Number(params.userId));
+    const actorId = params.actorId ?? params.userId;
+    const alreadySigned = existingSignatures.some(s =>
+      Number(s.userId) === Number(params.userId) || Number(s.userId) === Number(actorId) || (s.signedBy !== undefined && Number(s.signedBy) === Number(actorId)));
 
     if (alreadySigned) {
       const quorumMet = countOf(existingSignatures) >= requiredCount;
@@ -116,7 +125,8 @@ export class WorkflowQuorumService {
       userName: params.userName || `کاربر #${params.userId}`,
       userRole: params.userRole || '',
       signedAt: new Date().toISOString(),
-      comment: params.comment || ''
+      comment: params.comment || '',
+      ...(actorId !== params.userId ? { signedBy: actorId, delegationId: params.delegationId } : {})
     };
 
     const updatedSignatures = [...existingSignatures, newSignature];

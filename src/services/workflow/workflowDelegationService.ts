@@ -1,12 +1,62 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowDelegations, 
   users 
 } from '../../db/schema.js';
-import { eq, or, and, desc, sql, type SQL } from 'drizzle-orm';
+import { eq, or, and, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 
+/** v8.0.88 (TD-377): تفویض فعالی که کاربر به‌واسطه آن به جای تفویض‌کننده کار می‌کند */
+export interface ActingDelegation {
+  id: number;
+  fromUserId: number;
+  toUserId: number;
+  fromRole: string;
+  fromName: string;
+  scope: string;
+}
+
 export class WorkflowDelegationService {
+  /** حوزه تفویض این گردش‌کار را می‌پوشاند: «ALL»، «*» یا همان کد گردش‌کار (بی‌توجه به حروف بزرگ و کوچک) */
+  static delegationCovers(scope: string | null | undefined, workflowCode: string | null | undefined): boolean {
+    const s = (scope || 'ALL').trim().toLowerCase();
+    return s === 'all' || s === '*' || (!!workflowCode && s === workflowCode.trim().toLowerCase());
+  }
+
+  /**
+   * v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض‌های فعال (لغونشده و در بازه) به کاربر یا از کاربران داده‌شده،
+   * با نقش و نام تفویض‌کننده؛ تفویض‌کننده یا جانشین حذف‌شده شمرده نمی‌شود.
+   */
+  static async activeDelegations(
+    db: DbExecutor,
+    filter: { toUserId?: number; fromUserIds?: number[] },
+    now: Date = new Date()
+  ): Promise<ActingDelegation[]> {
+    if (filter.fromUserIds && filter.fromUserIds.length === 0) return [];
+    const nowIso = now.toISOString();
+    const rows = await db.select({
+      id: workflowDelegations.id,
+      fromUserId: workflowDelegations.fromUserId,
+      toUserId: workflowDelegations.toUserId,
+      scope: workflowDelegations.scope,
+      fromRole: users.role,
+      fromName: sql<string>`COALESCE(NULLIF(${users.fullName}, ''), ${users.username})`,
+    })
+      .from(workflowDelegations)
+      .innerJoin(users, eq(users.id, workflowDelegations.fromUserId))
+      .where(and(
+        filter.toUserId !== undefined ? eq(workflowDelegations.toUserId, filter.toUserId) : undefined,
+        filter.fromUserIds ? inArray(workflowDelegations.fromUserId, filter.fromUserIds) : undefined,
+        eq(workflowDelegations.isActive, 1),
+        sql`${workflowDelegations.startDate} <= ${nowIso}`,
+        sql`${workflowDelegations.endDate} >= ${nowIso}`,
+        sql`COALESCE(${users.isDeleted}, 0) = 0`,
+        sql`EXISTS (SELECT 1 FROM users tu WHERE tu.id = ${workflowDelegations.toUserId} AND COALESCE(tu.is_deleted, 0) = 0)`
+      ))
+      .orderBy(workflowDelegations.id);
+    return rows.map(r => ({ ...r, fromRole: r.fromRole || '', scope: r.scope || 'ALL' }));
+  }
+
   /**
    * Create a new time-bounded workflow delegation
    */

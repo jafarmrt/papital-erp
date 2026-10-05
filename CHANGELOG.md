@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.88 — A Delegate Does the Delegator's Role Tasks
+- During an active delegation and within its scope, the delegate sees and runs the delegator's role tasks; the signature is recorded in the delegator's name with the delegate as signer, and neither of them can sign the same step twice.
+
 ### v8.0.87 — All-Members Approval Means Every Member of the Role
 - An AND_ALL workflow step now passes only when every active user of the step's required role has signed (a one-member role passes with that member); a step without a role asks for the K set in the designer.
 

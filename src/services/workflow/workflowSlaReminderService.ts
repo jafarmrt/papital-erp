@@ -1,16 +1,16 @@
-import { and, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { orm, DbExecutor } from '../../db/drizzle.js';
 import {
   notifications,
   users,
   workflowDefinitions,
-  workflowDelegations,
   workflowInstances,
   workflowTasks,
 } from '../../db/schema.js';
 import { ADVISORY_LOCK_KEYS, withAdvisoryLock } from '../../lib/advisoryLock.js';
 import { logger } from '../../middleware/logger.js';
 import { getEntityContext } from './workflowDslParser.js';
+import { WorkflowDelegationService } from './workflowDelegationService.js';
 
 /**
  * v7.0.101 (TD-085 بند ۴، تصمیم مالک محصول «یک بار به مسئول کار»): وقتی مهلت کار تاییدی (due_at از slaHours مرحله)
@@ -35,33 +35,28 @@ const positiveIds = (values: unknown): number[] =>
     .map(Number)
     .filter((v) => Number.isInteger(v) && v > 0);
 
-async function resolveRecipients(tx: DbExecutor, task: TaskRow, workflowCode: string, nowIso: string): Promise<number[]> {
+async function resolveRecipients(tx: DbExecutor, task: TaskRow, workflowCode: string, now: Date): Promise<number[]> {
   const assigned = [...new Set([...positiveIds([task.assignedUserId]), ...positiveIds(task.candidateUsers)])];
+  let owners: number[];
   if (assigned.length > 0) {
-    const delegates = await tx.select({ toUserId: workflowDelegations.toUserId })
-      .from(workflowDelegations)
-      .where(and(
-        inArray(workflowDelegations.fromUserId, assigned),
-        eq(workflowDelegations.isActive, 1),
-        lte(workflowDelegations.startDate, nowIso),
-        gte(workflowDelegations.endDate, nowIso),
-        or(eq(workflowDelegations.scope, 'ALL'), eq(workflowDelegations.scope, workflowCode)),
-      ));
-    const ids = [...assigned, ...delegates.map((d) => d.toUserId)];
     const active = await tx.select({ id: users.id }).from(users)
-      .where(and(inArray(users.id, ids), eq(users.isDeleted, 0)));
-    return active.map((u) => u.id);
+      .where(and(inArray(users.id, assigned), eq(users.isDeleted, 0)));
+    owners = active.map((u) => u.id);
+  } else {
+    const candidateRoles = (Array.isArray(task.candidateRoles) ? task.candidateRoles : [])
+      .map((r) => String(r).trim().toLowerCase()).filter(Boolean);
+    const roles = candidateRoles.length > 0 ? candidateRoles : [String(task.assignedRole || '').trim().toLowerCase()].filter(Boolean);
+    if (roles.length === 0) return [];
+    const byRole = roles.some((r) => ALL_ROLES.has(r))
+      ? await tx.select({ id: users.id }).from(users).where(eq(users.isDeleted, 0))
+      : await tx.select({ id: users.id }).from(users)
+        .where(and(eq(users.isDeleted, 0), inArray(sql`lower(${users.role})`, roles)));
+    owners = byRole.map((u) => u.id);
   }
-
-  const candidateRoles = (Array.isArray(task.candidateRoles) ? task.candidateRoles : [])
-    .map((r) => String(r).trim().toLowerCase()).filter(Boolean);
-  const roles = candidateRoles.length > 0 ? candidateRoles : [String(task.assignedRole || '').trim().toLowerCase()].filter(Boolean);
-  if (roles.length === 0) return [];
-  const byRole = roles.some((r) => ALL_ROLES.has(r))
-    ? await tx.select({ id: users.id }).from(users).where(eq(users.isDeleted, 0))
-    : await tx.select({ id: users.id }).from(users)
-      .where(and(eq(users.isDeleted, 0), inArray(sql`lower(${users.role})`, roles)));
-  return byRole.map((u) => u.id);
+  // v8.0.88 (TD-377): جانشین فعالِ هم‌حوزه مسئولان کار (کاربر تعیین‌شده، نامزد یا عضو نقش) هم یادآوری می‌گیرد
+  const delegates = await WorkflowDelegationService.activeDelegations(tx, { fromUserIds: owners }, now);
+  const deputies = delegates.filter((d) => WorkflowDelegationService.delegationCovers(d.scope, workflowCode)).map((d) => d.toUserId);
+  return [...new Set([...owners, ...deputies])];
 }
 
 export class WorkflowSlaReminderService {
@@ -101,7 +96,7 @@ export class WorkflowSlaReminderService {
         const instance = instanceById.get(instanceId);
         const recipients = new Set<number>();
         for (const task of tasks) {
-          for (const id of await resolveRecipients(tx, task, instance?.workflowCode ?? '', nowIso)) recipients.add(id);
+          for (const id of await resolveRecipients(tx, task, instance?.workflowCode ?? '', now)) recipients.add(id);
         }
         if (instance && recipients.size > 0) {
           const context = await getEntityContext(instance.entityType, instance.entityId, tx);

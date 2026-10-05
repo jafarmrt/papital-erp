@@ -3,13 +3,14 @@ import {
   workflowInstances, 
   workflowPendingApprovals, 
   workflowTasks, 
-  workflowDelegations,
+  workflowDefinitions,
   workflowTransitions
 } from '../../db/schema.js';
-import { eq, and, inArray, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
+import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
 export class WorkflowTaskService {
@@ -31,25 +32,17 @@ export class WorkflowTaskService {
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';
 
-    const nowIso = new Date().toISOString();
-    const activeDelegations = await orm.select()
-      .from(workflowDelegations)
-      .where(and(
-        eq(workflowDelegations.toUserId, userId),
-        eq(workflowDelegations.isActive, 1),
-        sql`${workflowDelegations.startDate} <= ${nowIso}`,
-        sql`${workflowDelegations.endDate} >= ${nowIso}`
-      ));
-
-    const delegatedFromUserIds = activeDelegations.map(d => d.fromUserId);
+    const activeDelegations = await WorkflowDelegationService.activeDelegations(orm, { toUserId: userId });
 
     const targetStatus = params.status || 'pending';
     const allTasks = await orm.select({
       task: workflowTasks,
-      instance: workflowInstances
+      instance: workflowInstances,
+      definitionCode: workflowDefinitions.code
     })
     .from(workflowTasks)
     .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
+    .leftJoin(workflowDefinitions, eq(workflowInstances.workflowDefinitionId, workflowDefinitions.id))
     .where(eq(workflowTasks.status, targetStatus))
     .orderBy(desc(workflowTasks.createdAt));
 
@@ -83,27 +76,13 @@ export class WorkflowTaskService {
       let isAssigned = false;
       let delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null = null;
 
-      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
-
-      if (isAdmin) {
+      if (isAdmin || this.assignedDirectly(task, userId, userRole)) {
         isAssigned = true;
-      } else if (task.assignedUserId === userId || candidateUserIds.includes(userId)) {
-        isAssigned = true;
-      } else if (
-        (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId)) ||
-        candidateUserIds.some(cId => delegatedFromUserIds.includes(cId))
-      ) {
-        isAssigned = true;
-        const matchingDelegatorId = (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId))
-          ? task.assignedUserId
-          : candidateUserIds.find(cId => delegatedFromUserIds.includes(cId));
-        const del = activeDelegations.find(d => d.fromUserId === matchingDelegatorId);
-        delegationInfo = { delegatedFromUserId: del?.fromUserId, delegationScope: del?.scope };
       } else {
-        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
-        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
+        const del = this.delegationForTask(task, this.workflowCodeOf(instance, item.definitionCode), activeDelegations);
+        if (del) {
           isAssigned = true;
+          delegationInfo = { delegatedFromUserId: del.fromUserId, delegationScope: del.scope };
         }
       }
 
@@ -162,17 +141,7 @@ export class WorkflowTaskService {
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';
     const nowIso = new Date().toISOString();
-
-    const activeDelegations = await orm.select({ fromUserId: workflowDelegations.fromUserId })
-      .from(workflowDelegations)
-      .where(and(
-        eq(workflowDelegations.toUserId, userId),
-        eq(workflowDelegations.isActive, 1),
-        sql`${workflowDelegations.startDate} <= ${nowIso}`,
-        sql`${workflowDelegations.endDate} >= ${nowIso}`
-      ));
-
-    const delegatedFromUserIds = activeDelegations.map(d => d.fromUserId);
+    const activeDelegations = await WorkflowDelegationService.activeDelegations(orm, { toUserId: userId });
 
     const pendingTasks = await orm.select({
       id: workflowTasks.id,
@@ -183,8 +152,12 @@ export class WorkflowTaskService {
       candidateRoles: workflowTasks.candidateRoles,
       dueAt: workflowTasks.dueAt,
       title: workflowTasks.title,
+      snapshotDsl: workflowInstances.snapshotDsl,
+      definitionCode: workflowDefinitions.code,
     })
     .from(workflowTasks)
+    .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
+    .leftJoin(workflowDefinitions, eq(workflowInstances.workflowDefinitionId, workflowDefinitions.id))
     .where(eq(workflowTasks.status, 'pending'))
     .orderBy(desc(workflowTasks.createdAt));
 
@@ -197,25 +170,8 @@ export class WorkflowTaskService {
         continue;
       }
 
-      let isAssigned = false;
-      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
-
-      if (isAdmin) {
-        isAssigned = true;
-      } else if (task.assignedUserId === userId || candidateUserIds.includes(userId)) {
-        isAssigned = true;
-      } else if (
-        (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId)) ||
-        candidateUserIds.some(cId => delegatedFromUserIds.includes(cId))
-      ) {
-        isAssigned = true;
-      } else {
-        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
-        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
-          isAssigned = true;
-        }
-      }
+      const isAssigned = isAdmin || this.assignedDirectly(task, userId, userRole)
+        || !!this.delegationForTask(task, this.workflowCodeOf(task, task.definitionCode), activeDelegations);
 
       if (isAssigned) {
         seenInstances.add(task.instanceId);
@@ -293,55 +249,22 @@ export class WorkflowTaskService {
       const userPerms = params.userPermissions || [];
       const isAdmin = userRole === 'admin' || userPerms.includes('workflow.admin') || userPerms.includes('admin');
 
-      let isAuthorized = false;
+      // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
+      // و کار نقش تفویض‌کننده را انجام می‌دهد؛ پیش‌تر فقط کار کاربر تعیین‌شده یا نامزد را، و کار نقشی هرگز
       let delegationLogDetails: Record<string, unknown> | null = null;
-
-      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
-
-      if (isAdmin) {
-        isAuthorized = true;
-      } else if (task.assignedUserId === params.userId || candidateUserIds.includes(params.userId)) {
-        isAuthorized = true;
-      } else {
-        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
-        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
+      let isAuthorized = isAdmin || this.assignedDirectly(task, params.userId, userRole);
+      if (!isAuthorized) {
+        const [definition] = await tx.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
+          .where(eq(workflowDefinitions.id, instance.workflowDefinitionId));
+        const delegations = await WorkflowDelegationService.activeDelegations(tx, { toUserId: params.userId });
+        const validDelegation = this.delegationForTask(task, this.workflowCodeOf(instance, definition?.code), delegations);
+        if (validDelegation) {
           isAuthorized = true;
-        } else {
-          const nowIso = new Date().toISOString();
-          const delegatorsToCheck: number[] = [];
-          if (task.assignedUserId) delegatorsToCheck.push(task.assignedUserId);
-          candidateUserIds.forEach(cId => {
-            if (!delegatorsToCheck.includes(cId)) delegatorsToCheck.push(cId);
-          });
-
-          if (delegatorsToCheck.length > 0) {
-            const activeDelegations = await tx.select()
-              .from(workflowDelegations)
-              .where(and(
-                eq(workflowDelegations.toUserId, params.userId),
-                inArray(workflowDelegations.fromUserId, delegatorsToCheck),
-                eq(workflowDelegations.isActive, 1),
-                sql`${workflowDelegations.startDate} <= ${nowIso}`,
-                sql`${workflowDelegations.endDate} >= ${nowIso}`
-              ));
-
-            const snapshot = instance.snapshotDsl as { code?: string } | null;
-            const workflowCode = snapshot?.code || '';
-            const validDelegation = activeDelegations.find(del => {
-              const scope = (del.scope || 'ALL').trim();
-              return scope === 'ALL' || scope === '*' || (workflowCode && scope.toLowerCase() === workflowCode.toLowerCase());
-            });
-
-            if (validDelegation) {
-              isAuthorized = true;
-              delegationLogDetails = {
-                delegationId: validDelegation.id,
-                delegatedFromUserId: validDelegation.fromUserId,
-                delegationScope: validDelegation.scope
-              };
-            }
-          }
+          delegationLogDetails = {
+            delegationId: validDelegation.id,
+            delegatedFromUserId: validDelegation.fromUserId,
+            delegationScope: validDelegation.scope
+          };
         }
       }
 
@@ -407,6 +330,46 @@ export class WorkflowTaskService {
         }
       };
     });
+  }
+
+  private static taskRolesOf(task: Pick<typeof workflowTasks.$inferSelect, 'candidateRoles' | 'assignedRole'>): string[] {
+    const candidateRoles = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).trim().toLowerCase()) : [];
+    return (candidateRoles.length > 0 ? candidateRoles : [(task.assignedRole || '').trim().toLowerCase()]).filter(Boolean);
+  }
+
+  /** کار به خود کاربر داده شده: کاربر تعیین‌شده یا نامزد، یا نقش کار (یا «همه») */
+  private static assignedDirectly(
+    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole'>,
+    userId: number,
+    userRole: string
+  ): boolean {
+    const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
+    if (task.assignedUserId === userId || candidateUserIds.includes(userId)) return true;
+    return this.taskRolesOf(task).some(r => r === '*' || r === 'all' || r === userRole);
+  }
+
+  /** کد گردش‌کار فرایند برای حوزه تفویض: از تصویر نسخه، وگرنه از تعریف */
+  private static workflowCodeOf(instance: { snapshotDsl: unknown }, definitionCode?: string | null): string {
+    const snapshot = instance.snapshotDsl as { code?: string } | null;
+    return snapshot?.code || definitionCode || '';
+  }
+
+  /**
+   * v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض فعالی که کار را به جانشین می‌دهد: حوزه‌اش گردش‌کار را
+   * می‌پوشاند و تفویض‌کننده کاربر تعیین‌شده یا نامزد کار است یا نقش کار را دارد (همان قاعده نقش اجرای انتقال).
+   */
+  private static delegationForTask(
+    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole'>,
+    workflowCode: string,
+    delegations: ActingDelegation[]
+  ): ActingDelegation | undefined {
+    const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
+    const taskRoles = this.taskRolesOf(task);
+    return delegations.find(d => WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && (
+      d.fromUserId === task.assignedUserId
+      || candidateUserIds.includes(d.fromUserId)
+      || taskRoles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, r, []))
+    ));
   }
 
   /**

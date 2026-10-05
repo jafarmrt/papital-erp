@@ -20,6 +20,7 @@ import { updateRequestContext } from '../../lib/requestContext.js';
 import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
+import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -217,6 +218,28 @@ export class WorkflowTransitionExecutor {
         eq(workflowTransitions.fromStateId, stateId)
       ));
     return transitions.filter(t => t.fromStateId === stateId).sort((a, b) => a.id - b.id);
+  }
+
+  /**
+   * v8.0.88 (TD-377): اجازه کاربر برای گام؛ تفویضی که به جای آن امضا می‌کند، یا undefined برای امضای خود کاربر.
+   */
+  static async resolveSigner(
+    transition: Pick<WorkflowTransitionSnapshot, 'requiredRole' | 'title'>,
+    workflowCode: string | undefined,
+    params: { userId?: number; userRole?: string; userPermissions?: string[] },
+    txExecutor: DbClient = orm
+  ): Promise<ActingDelegation | undefined> {
+    const requiredRole = transition.requiredRole || undefined;
+    if (this.checkUserRoleMatch(params.userRole, requiredRole, params.userPermissions || [])) return undefined;
+    const delegations = params.userId
+      ? await WorkflowDelegationService.activeDelegations(txExecutor, { toUserId: params.userId })
+      : [];
+    const acting = delegations.find(d =>
+      WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && this.checkUserRoleMatch(d.fromRole, requiredRole, []));
+    if (!acting) {
+      throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
+    }
+    return acting;
   }
 
   /**
@@ -539,10 +562,9 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
       }
 
-      const isAuthorized = this.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
-      if (!isAuthorized) {
-        throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
-      }
+      // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
+      // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
+      const actingFor = await this.resolveSigner(transition, definition?.code, params, tx);
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
       const authoritativeContext = await getEntityContext(instance.entityType, instance.entityId, tx);
@@ -571,9 +593,11 @@ export class WorkflowTransitionExecutor {
         kValue: transition.kValue ?? undefined,
         memberIds: await this.andAllMemberIds(transition, tx),
         existingSignatures,
-        userId: params.userId || 0,
-        userName: params.userName,
-        userRole: params.userRole,
+        userId: actingFor ? actingFor.fromUserId : (params.userId || 0),
+        userName: actingFor ? `${actingFor.fromName} (جانشین: ${params.userName || params.userId})` : params.userName,
+        userRole: actingFor ? actingFor.fromRole : params.userRole,
+        actorId: params.userId || 0,
+        delegationId: actingFor?.id,
         comment: params.comment
       });
 
@@ -621,7 +645,7 @@ export class WorkflowTransitionExecutor {
           performedByName: params.userName || 'کاربر',
           actionKey: `${transition.actionKey}_SIGN`,
           actionTitle: `ثبت امضا (${transition.title})`,
-          comment: `امضای کاربر (${params.userName || params.userId}) ثبت گردید. (${quorumEval.signaturesCount} از ${quorumEval.requiredCount} امضا)`,
+          comment: `امضای کاربر (${params.userName || params.userId})${actingFor ? ` به جانشینی ${actingFor.fromName}` : ''} ثبت گردید. (${quorumEval.signaturesCount} از ${quorumEval.requiredCount} امضا)`,
           snapshotData: { quorum: quorumEval }
         });
 
