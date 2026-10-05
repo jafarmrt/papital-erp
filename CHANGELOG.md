@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.49 — Deleted Cheques Stay Deleted
+- A deleted cheque can no longer be cleared, bounced or deleted again; clearing it used to add its amount to the bank balance, and a concurrent delete and clear were both accepted.
+
 ### v8.0.48 — Each Voucher Is Reversed Only Once
 - Two concurrent correction vouchers, or a correction and a reversal at the same time, no longer both reverse the same voucher; correction and repost lock the original voucher and every path refuses a voucher that already has an active reversal.
 

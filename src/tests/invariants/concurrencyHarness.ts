@@ -1,4 +1,6 @@
-import { pool } from '../../db/drizzle.js';
+import { and, eq } from 'drizzle-orm';
+import { orm, pool } from '../../db/drizzle.js';
+import { accounts } from '../../db/schema.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 
 /**
@@ -78,4 +80,10 @@ export function outcomeProblems(labels: string[], outcomes: PromiseSettledResult
     if (!allowed(labels[i], message)) problems.push(`${labels[i]} رد شد: ${message.slice(0, 160)}`);
   });
   return problems;
+}
+
+export async function accountIdByCode(code: string): Promise<number> {
+  const [row] = await orm.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.code, code), eq(accounts.isDeleted, 0)));
+  if (!row) throw new Error(`حساب ${code} در کدینگ آزمون نیست`);
+  return row.id;
 }

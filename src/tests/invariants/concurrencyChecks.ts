@@ -1,5 +1,6 @@
 import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkVoidsOfSharedItemNoDeadlock } from './concurrencyScenarios.js';
 import { checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
+import { checkDeletedChequeFrozen } from './treasuryConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -11,4 +12,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     checkVoidKardexOrderMatchesLive, 'موجودی ۱۱؛ بازسازی کاردکس با میانگین موزون زنده یکی است (I13)'],
   ['inv_td_321_voucher_reversed_once', 'v8.0.48: هر سند حسابداری فقط یک بار برگشت می‌خورد؛ دو اصلاح و یک ابطال هم‌زمان فقط یکی را می‌پذیرند و ابطال و بازثبت پس از ابطال یا پیش از اصلاح رد می‌شود (TD-321)',
     () => checkVoucherReversedOnce(), 'از سه برگشت هم‌زمان یکی پذیرفته شد و برگشت دوم پشت هم رد شد؛ هر سند یک سند برگشت فعال دارد'],
+  ['inv_td_322_deleted_cheque_frozen', 'v8.0.49: چک حذف‌شده وصول یا دوباره حذف نمی‌شود و از حذف و وصول هم‌زمان فقط یکی پذیرفته می‌شود (TD-322)',
+    () => checkDeletedChequeFrozen(), 'وصول و حذف دوباره چک حذف‌شده «یافت نشد»؛ در سه دور حذف و وصول هم‌زمان فقط یکی پذیرفته شد و مانده بانک درست ماند'],
 ];
