@@ -10,6 +10,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
+import { wcAuthQueryParams } from '../services/woocommerce/wcRequestAuth.js';
 import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.service.js';
 import { shopSellableStocks } from '../services/woocommerce/shopWarehouse.js';
 import { z } from 'zod';
@@ -75,11 +76,7 @@ async function makeWcRequest(
     'Content-Type': 'application/json'
   };
 
-  const queryParams = {
-    ...params,
-    consumer_key: key,
-    consumer_secret: secret
-  };
+  const queryParams = wcAuthQueryParams(fullUrl, params, key, secret);
 
   try {
     const response = await axios({
