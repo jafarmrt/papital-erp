@@ -7,6 +7,7 @@ import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
 import { checkWorkLogFrozenInPayroll } from './payrollConcurrencyScenarios.js';
 import { checkNoSecondConnectionInTransactions } from './poolScenarios.js';
 import { checkBankAccountMaintenanceLocked } from './bankAccountScenarios.js';
+import { checkIdempotencyKeyContract } from './idempotencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -38,4 +39,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     checkNoSecondConnectionInTransactions, 'هر چهار مسیر بی انتظار کامل شد؛ گردش‌کار و ممیزی ثبت شد؛ خطای ممیزی تراکنش را برگرداند'],
   ['inv_td_325_bank_account_maintenance_locked', 'v8.0.58: ویرایش مانده اول دوره، کد حساب و حذف حساب بانکی زیر قفل؛ ویرایش هم‌زمان مانده را دو بار نمی‌افزاید، کد تکراری ساخته نمی‌شود و حساب دارای تراکنش یا چک حذف نمی‌شود (TD-325)',
     () => checkBankAccountMaintenanceLocked(), 'موجودی ۱۵۰ و یک سند اصلاحی؛ پنج کد یکتا و کد تکراری رد شد؛ حذف حساب دارای تراکنش و چک رد شد'],
+  ['inv_td_329_idempotency_key_contract', 'v8.0.59: کلید تکرار درخواست فقط پاسخ موفق را نگه می‌دارد، با بدنه یا مسیر دیگر پاسخ کهنه نمی‌دهد و قفلش در طول درخواست طولانی تمدید می‌شود (TD-329)',
+    () => checkIdempotencyKeyContract(), 'پرداخت ردشده پس از واریز اجرا شد؛ کلید تکراری با بدنه و مسیر دیگر رد شد؛ درخواست طولانی یک بار اجرا شد'],
 ];

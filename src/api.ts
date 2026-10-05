@@ -1,3 +1,5 @@
+import { inFlightRetryDelayMs, isInFlightResponse, releaseSubmissionKey, settlesSubmissionKey, submissionKeyFor } from './lib/submissionKey';
+
 export const API_URL = '/api';
 
 export class ApiError extends Error {
@@ -130,7 +132,13 @@ export function isPublicApiEndpoint(endpoint: string): boolean {
   return PUBLIC_API_PATHS.has(path);
 }
 
-export async function fetchJson<T = any>(endpoint: string, options?: RequestInit, retries = 1): Promise<T> {
+/** بیشینه بار انتظار برای نتیجه درخواستی که سرور «در حال پردازش» گزارش می‌کند (هر بار به اندازه Retry-After) */
+const IN_FLIGHT_MAX_WAITS = 15;
+
+/**
+ * v8.0.59 (TD-329): `inFlightWaits` شمار انتظارهای انجام‌شده برای پاسخ ۴۰۹ «در حال پردازش» است (فقط فراخوانی درونی).
+ */
+export async function fetchJson<T = any>(endpoint: string, options?: RequestInit, retries = 1, inFlightWaits = 0): Promise<T> {
   const method = (options?.method || 'GET').toUpperCase();
   const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -155,18 +163,19 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
   };
 
   // Auto-attach Idempotency-Key for mutating requests if not explicitly supplied
+  // v8.0.59 (TD-329): کلید از محتوای ارسال (submissionKeyFor) و در تلاش دوباره همان کلید؛ options فراخواننده دست نمی‌خورد
+  let idempotencyKey: string | null = null;
   if (isMutation && !isPublicEndpoint) {
     const existingKey = headers['Idempotency-Key'] || headers['idempotency-key'] || headers['x-idempotency-key'];
-    const keyToUse = existingKey || (
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `fe_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-    );
-    headers['Idempotency-Key'] = keyToUse;
-    if (options && typeof options === 'object') {
-      options.headers = { ...(options.headers as Record<string, string>), 'Idempotency-Key': keyToUse };
-    }
+    idempotencyKey = existingKey || submissionKeyFor(method, cleanEndpoint, options?.body);
+    headers['Idempotency-Key'] = idempotencyKey;
   }
+  const sameKeyOptions = (): RequestInit | undefined => (idempotencyKey
+    ? { ...options, headers: { ...(options?.headers as Record<string, string>), 'Idempotency-Key': idempotencyKey } }
+    : options);
+  const settleKey = (status: number) => {
+    if (idempotencyKey && settlesSubmissionKey(status)) releaseSubmissionKey(idempotencyKey);
+  };
 
   const normalizedEndpoint = cleanEndpoint.startsWith('/api/')
     ? cleanEndpoint.substring(4)
@@ -190,7 +199,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     }
     if (retries > 0) {
       await new Promise(resolve => setTimeout(resolve, 800));
-      return fetchJson(endpoint, options, retries - 1);
+      return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
     }
     throw new ApiError(`ارتباط با سرور برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
   }
@@ -206,11 +215,19 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
         abortErr.name = 'AbortError';
         throw (parseErr?.name === 'AbortError' ? parseErr : abortErr);
       }
+      settleKey(res.status);
       throw new ProtocolError(
         `پاسخ خطای سرور با فرمت معتبر JSON دریافت نشد (وضعیت ${res.status}): ${parseErr?.message || 'خطای پروتکل'}`,
         res.status
       );
     }
+    // v8.0.59 (TD-329): درخواست اول با همین کلید هنوز در سرور اجرا می‌شود؛ پس از مکث همان کلید نتیجه‌اش را می‌گیرد
+    if (idempotencyKey && isInFlightResponse(res.status, data?.code) && inFlightWaits < IN_FLIGHT_MAX_WAITS) {
+      await new Promise(resolve => setTimeout(resolve, inFlightRetryDelayMs(res.headers.get('Retry-After'))));
+      return fetchJson(endpoint, sameKeyOptions(), retries, inFlightWaits + 1);
+    }
+    settleKey(res.status);
+
     if (res.status === 401) {
       if (typeof window !== 'undefined' && !isPublicEndpoint) {
         setCsrfToken(null);
@@ -230,7 +247,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     if (isCsrfError && retries > 0 && typeof window !== 'undefined') {
       const newCsrf = await refreshActiveCsrfToken();
       if (newCsrf) {
-        return fetchJson(endpoint, options, retries - 1);
+        return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
       }
     }
 
@@ -253,6 +270,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
     throw new ApiError(errorMessage, code, res.status, details);
   }
 
+  settleKey(res.status);
   let jsonResponse: T;
   try {
     if (res.status === 204) {
