@@ -173,6 +173,14 @@ export function getTodayJalaliDate(): string {
   return getShiftedJalaliDate(0, '1405/06/06');
 }
 
+/**
+ * v8.0.49 (TD-312): تاریخ امروز میلادی `YYYY-MM-DD` در منطقه زمانی توافقی. `new Date().toISOString()` روز UTC است و
+ * ثبت ۰۰:۰۰ تا ۰۳:۳۰ تهران را به دیروز (شب نوروز: سال مالی قبل) می‌برد.
+ */
+export function getTodayIsoDate(): string {
+  return new Intl.DateTimeFormat('en-CA', tzOptions({ year: 'numeric', month: '2-digit', day: '2-digit' })).format(new Date());
+}
+
 export function getPastJalaliDate(daysAgo: number = 30): string {
   return getShiftedJalaliDate(-daysAgo);
 }
