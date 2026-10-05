@@ -12,6 +12,7 @@ import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
 import { useServerDraft } from '../hooks/useServerDraft';
+import { isEmptyInvoiceDraft } from '../lib/invoices/invoiceForm';
 import { useInvoiceReferenceData, useItemPricesQuery } from '../hooks/invoices/useInvoiceReferenceData';
 import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
@@ -84,7 +85,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     notes,
     applyVat,
     vatRate,
-    docItems
+    docItems,
+    // v8.0.89 (TD-388): پیوند پرونده CRM با پیش‌نویس نگه داشته می‌شود
+    crmLeadId
   };
 
   const {
@@ -96,6 +99,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     entityType: 'invoice',
     draftKey: 'new_invoice',
     enabled: !editingDocId,
+    // v8.0.89 (TD-388): فرم بی ردیف و بی خریدار (مثلاً پس از ثبت) پیش‌نویس نمی‌سازد
+    isEmpty: isEmptyInvoiceDraft,
     onDraftLoaded: (loaded) => {
       if (loaded.docType) setDocType(loaded.docType);
       if (loaded.status) setStatus(loaded.status);
@@ -109,6 +114,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (loaded.notes) setNotes(loaded.notes);
       if (typeof loaded.applyVat === 'boolean') setApplyVat(loaded.applyVat);
       if (loaded.vatRate) setVatRate(loaded.vatRate);
+      if (Number(loaded.crmLeadId) > 0) setCrmLeadId(Number(loaded.crmLeadId));
       if (Array.isArray(loaded.docItems) && loaded.docItems.length > 0) {
         setDocItems(loaded.docItems);
       }
