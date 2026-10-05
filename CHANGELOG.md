@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.54 — Bank Balance Sync Uses Treasury Transactions
+- The bank balance sync now rebuilds each balance under the bank locks from the opening balance, treasury transactions and cleared cheques and only reports the difference from the general ledger (product-owner decision); draft vouchers and a concurrent payment no longer corrupt the balance.
+
 ### v8.0.53 — Bank Transfers Are Voided as a Whole
 - Voiding either side of a bank-to-bank transfer now voids both sides, restores both balances and voids the shared voucher once (product-owner decision); the remaining side of an old half-voided transfer can be voided.
 

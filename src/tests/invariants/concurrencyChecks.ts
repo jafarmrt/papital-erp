@@ -1,6 +1,6 @@
 import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkVoidsOfSharedItemNoDeadlock } from './concurrencyScenarios.js';
 import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
-import { checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
+import { checkBankSyncFromTransactions, checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
 import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
 import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 
@@ -24,4 +24,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     checkProjectDeliveryCapped, 'از دو تحویل هم‌زمان یکی پذیرفته شد؛ تحویل اضافه بی‌دلیل رد و با دلیل ثبت شد؛ پروژه لغوشده و کالای بیرونی رد شدند'],
   ['inv_td_341_transfer_voided_together', 'v8.0.53: ابطال هر طرف انتقال بین بانک‌ها هر دو ردیف، هر دو مانده و سند مشترک را با هم برمی‌گرداند؛ ابطال هم‌زمان دو طرف یکی پذیرفته می‌شود و انتقال نیمه‌باطل قدیمی ترمیم‌پذیر است (TD-341)',
     () => checkTransferVoidedTogether(), 'در هر چهار حالت هر دو مانده به ۵۰۰۰ و صفر برگشت، هر دو طرف باطل و سند مشترک بی‌اثر شد'],
+  ['inv_td_340_bank_sync_from_transactions', 'v8.0.54: «همگام‌سازی مانده بانک‌ها» مانده را زیر قفل از مانده اول دوره، تراکنش‌های خزانه و چک‌های وصول‌شده می‌سازد؛ سند پیش‌نویس و پرداخت هم‌زمان مانده را خراب نمی‌کنند (TD-340)',
+    () => checkBankSyncFromTransactions(), 'مانده‌ها ۷۰۰، ۳۰۰ و ۷۰۰۰ ماندند؛ گزارش مانده خزانه را نشان داد'],
 ];

@@ -165,3 +165,43 @@ export async function checkTransferVoidedTogether(): Promise<string[]> {
   await expectRestored('ترمیم انتقال نیمه‌باطل', a.id, b.id, legacy.voucherId);
   return problems;
 }
+
+/**
+ * TD-340 (تصمیم مالک محصول — گزینه الف «از تراکنش‌ها»): «همگام‌سازی مانده بانک‌ها» مانده جاری را زیر قفل بانک‌ها از مانده
+ * اول دوره، تراکنش‌های خزانه و چک‌های وصول‌شده می‌سازد و اختلاف با دفتر کل را فقط گزارش می‌کند. پیش‌تر مانده با دفتر کل
+ * (بی اسناد پیش‌نویس) بازنویسی می‌شد: پرداخت پیش‌نویس ۳۰۰ مانده ۷۰۰ را ۱۰۰۰ می‌کرد، سند افتتاحیه پیش‌نویس مانده اول دوره را
+ * حذف می‌کرد، و پرداخت هم‌زمان با همگام‌سازی گم می‌شد.
+ */
+export async function checkBankSyncFromTransactions(): Promise<string[]> {
+  const problems: string[] = [];
+  const ledgerAccount = await accountIdByCode('1003');
+  const newBank = (initialBalance: number) => BankAccountService.createBankAccount({
+    title: `بانک آزمون همگام‌سازی ${tag('S')}`, type: 'bank', accountId: ledgerAccount, initialBalance, currency: 'IRR',
+  });
+  const move = (bankAccountId: number, type: 'receipt' | 'payment', amount: number) => TreasuryTransactionService.createTreasuryTransaction({
+    type, method: 'bank_transfer', amount, bankAccountId, partyType: 'other', partyName: 'طرف آزمون همگام‌سازی', username: 'inv',
+  });
+  const sync = () => BankAccountService.recalculateAndSyncBankBalances();
+
+  // ۱) دریافت ۱۰۰۰ با سند تأییدشده و پرداخت ۳۰۰ با سند پیش‌نویس: مانده ۷۰۰ می‌ماند
+  const x = await newBank(0);
+  const received = await move(x.id, 'receipt', 1000);
+  if (received.voucherId) await VoucherService.setVoucherStatus(received.voucherId, 'approved');
+  await move(x.id, 'payment', 300);
+  const report = await sync();
+  if (await bankBalance(x.id) !== '700') problems.push(`مانده پس از همگام‌سازی ${await bankBalance(x.id)} است، نه ۷۰۰ (پرداخت پیش‌نویس)`);
+  const reported = report.accounts.find(a => a.id === x.id);
+  if (Number(reported?.treasuryBalance) !== 700) problems.push(`گزارش همگام‌سازی مانده خزانه را ${reported?.treasuryBalance} نشان داد، نه ۷۰۰`);
+
+  // ۲) پرداخت ۴۰۰ هم‌زمان با همگام‌سازی: پرداخت گم نمی‌شود
+  const outcomes = await raceBehindRowLock<unknown>('bank_accounts', [x.id], [() => move(x.id, 'payment', 400), () => sync()]);
+  problems.push(...outcomeProblems(['پرداخت ۴۰۰', 'همگام‌سازی'], outcomes, () => false));
+  if (await bankBalance(x.id) !== '300') problems.push(`مانده پس از پرداخت هم‌زمان با همگام‌سازی ${await bankBalance(x.id)} است، نه ۳۰۰`);
+
+  // ۳) مانده اول دوره ۶۰۰۰ با سند افتتاحیه پیش‌نویس و دریافت ۱۰۰۰: مانده ۷۰۰۰ می‌ماند
+  const w = await newBank(6000);
+  await move(w.id, 'receipt', 1000);
+  await sync();
+  if (await bankBalance(w.id) !== '7000') problems.push(`مانده حساب با افتتاحیه پیش‌نویس پس از همگام‌سازی ${await bankBalance(w.id)} است، نه ۷۰۰۰`);
+  return problems;
+}

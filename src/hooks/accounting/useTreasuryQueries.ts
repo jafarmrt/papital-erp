@@ -39,12 +39,13 @@ export interface ReconcileVariables {
   reconciled: boolean;
 }
 
+// v8.0.54 (TD-340، تصمیم مالک محصول): مانده از تراکنش‌ها ساخته می‌شود و اختلاف با دفتر کل فقط گزارش می‌شود
 function notifyBankSync(report: BankReconciliationReport): void {
   const { syncedCount, discrepantCount } = report;
   if (discrepantCount === 0) {
-    toast.success(`تمام ${syncedCount} حساب بانکی و صندوق با دفاتر اسناد دوبل همگام و تراز شدند.`);
+    toast.success(`مانده ${syncedCount} حساب بانکی و صندوق از تراکنش‌ها ساخته شد و با دفتر کل یکی است.`);
   } else {
-    toast(`همگام‌سازی انجام شد: ${syncedCount} حساب تراز، ${discrepantCount} حساب دارای مغایرت شناسایی شد.`, {
+    toast(`مانده حساب‌ها از تراکنش‌ها ساخته شد: ${syncedCount} حساب با دفتر کل یکی است و ${discrepantCount} حساب با دفتر کل اختلاف دارد (فقط گزارش شد).`, {
       icon: '⚠️',
       duration: 5000,
     });

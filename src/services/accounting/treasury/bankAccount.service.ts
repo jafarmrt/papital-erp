@@ -22,9 +22,15 @@ export interface BankReconciliationReport {
 }
 
 export class BankAccountService {
-  /** v7.0.67 (P2-6): مانده‌ها با Decimal محاسبه می‌شوند؛ خروجی API (getBankAccounts) عدد است. */
-  private static async computeBankBalances() {
-    const rawList = await orm.select({
+  /**
+   * v7.0.67 (P2-6): مانده‌ها با Decimal محاسبه می‌شوند؛ خروجی API (getBankAccounts) عدد است.
+   *
+   * v8.0.54 (TD-340، تصمیم مالک محصول — گزینه الف «از تراکنش‌ها»): مانده جاری هر حساب، مانده خزانه است (مانده اول دوره +
+   * تراکنش‌های خزانه + چک‌های وصول‌شده)؛ مانده دفتر کل فقط برای گزارش اختلاف است. پیش‌تر مانده جاری حساب سرفصل‌دار همان
+   * مانده دفتر کل بود (بی اسناد پیش‌نویس)، و ردیف سرفصل مشترک چند بانک در مانده دفتری همه آن‌ها شمرده می‌شد.
+   */
+  private static async computeBankBalances(db: DbExecutor = orm) {
+    const rawList = await db.select({
       id: bankAccounts.id,
       code: bankAccounts.code,
       title: bankAccounts.title,
@@ -50,7 +56,7 @@ export class BankAccountService {
     .orderBy(asc(bankAccounts.code));
 
     // 1. Fetch all approved/permanent journal voucher items
-    const vItems = await orm.select({
+    const vItems = await db.select({
       id: journalVoucherItems.id,
       accountId: journalVoucherItems.accountId,
       detailedType: journalVoucherItems.detailedType,
@@ -70,7 +76,7 @@ export class BankAccountService {
     // 2. Fetch all completed treasury transactions
     // v8.0.26 (TD-278): تراکنش‌های پیشین با روش «چک» (و معکوس ابطال آن‌ها) پول حساب را جابه‌جا نکرده‌اند — مانده حساب
     // تغییر نکرد و سندشان اسناد دریافتنی/پرداختنی را گرفت — پس در مانده خزانه حساب شمرده نمی‌شوند.
-    const rawTxs = await orm.select({
+    const rawTxs = await db.select({
       bankAccountId: treasuryTransactions.bankAccountId,
       type: treasuryTransactions.type,
       amount: treasuryTransactions.amount,
@@ -81,7 +87,7 @@ export class BankAccountService {
     // v8.0.24 (TD-276): چک وصول‌شده (passed، وضعیت پایانی و غیرقابل حذف) هم پول حساب بانکی را جابه‌جا می‌کند: چک دریافتی
     // به حساب واریز و چک پرداختی از آن برداشت شده است (سند وصول همان حساب را بدهکار/بستانکار می‌کند). پیش‌تر مانده خزانه
     // فقط تراکنش‌های خزانه را می‌شمرد و حساب پس از هر وصول چک «مغایر» نشان داده می‌شد.
-    const clearedCheques = await orm.select({
+    const clearedCheques = await db.select({
       bankAccountId: cheques.bankAccountId,
       type: cheques.type,
       amount: cheques.amount,
@@ -92,13 +98,15 @@ export class BankAccountService {
     // V2.0.0: حساب‌هایی که سند افتتاحیه دارند — مانده اولیه در دفتر ثبت شده و
     // نباید در محاسبه ledgerBalance دوباره اضافه شود (جلوگیری از دوبرابرشماری)
     const openingVoucherBanks = new Set<number>();
-    const openingVouchers = await orm.select({
+    const openingVouchers = await db.select({
       referenceId: journalVouchers.referenceId,
     })
     .from(journalVouchers)
     .where(and(
       eq(journalVouchers.referenceModule, 'treasury_opening'),
-      eq(journalVouchers.isDeleted, 0)
+      eq(journalVouchers.isDeleted, 0),
+      // v8.0.54 (TD-340): سند افتتاحیه پیش‌نویس در مانده دفتری نیامده است، پس مانده اول دوره هنوز باید افزوده شود
+      or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ));
     for (const ov of openingVouchers) {
       if (ov.referenceId) openingVoucherBanks.add(Number(ov.referenceId));
@@ -110,8 +118,10 @@ export class BankAccountService {
       // Match journal items for this bank account (deduplicated by item id)
       const matchingItemsMap = new Map<number, typeof vItems[0]>();
       for (const it of vItems) {
-        const matchesAccount = Boolean(b.accountId && it.accountId === b.accountId);
-        const matchesDetailed = Boolean(it.detailedType === 'bank_account' && it.detailedId === b.id);
+        // v8.0.54 (TD-340): ردیفی که تفصیلی بانک دارد فقط مال همان بانک است، حتی اگر چند بانک یک سرفصل داشته باشند
+        const taggedBank = it.detailedType === 'bank_account' && it.detailedId ? it.detailedId : null;
+        const matchesAccount = Boolean(b.accountId && it.accountId === b.accountId && taggedBank === null);
+        const matchesDetailed = taggedBank === b.id;
         if (matchesAccount || matchesDetailed) {
           matchingItemsMap.set(it.id, it);
         }
@@ -152,17 +162,14 @@ export class BankAccountService {
       const hasLedgerRows = !totalDebit.isZero() || !totalCredit.isZero();
 
       let syncStatus: 'synced' | 'discrepant' | 'unlinked' = 'synced';
-      let currentBalance = ledgerBalance;
+      const currentBalance = treasuryBalance;
 
       if (!b.accountId && !hasLedgerRows) {
         syncStatus = 'unlinked';
-        currentBalance = treasuryBalance;
       } else if (discrepancy.lessThan(0.01)) {
         syncStatus = 'synced';
-        currentBalance = ledgerBalance;
       } else {
         syncStatus = 'discrepant';
-        currentBalance = hasLedgerRows ? ledgerBalance : treasuryBalance;
       }
 
       return { row: b, initBal, currentBalance, ledgerBalance, treasuryBalance, totalDebit, totalCredit, discrepancy, syncStatus };
@@ -209,14 +216,27 @@ export class BankAccountService {
     return this.summarizeReconciliation(await this.computeBankBalances());
   }
 
+  /**
+   * v8.0.54 (TD-340، تصمیم مالک محصول — گزینه الف): «همگام‌سازی مانده بانک‌ها» مانده جاری هر حساب را زیر قفل همه بانک‌ها
+   * (به ترتیب شناسه) از مانده اول دوره، تراکنش‌های خزانه و چک‌های وصول‌شده می‌سازد؛ اختلاف با دفتر کل فقط گزارش می‌شود.
+   * پیش‌تر بیرون از تراکنش و بی‌قفل، مانده جاری با مانده دفتر کل (بی اسناد پیش‌نویس) بازنویسی می‌شد: پرداخت پیش‌نویس
+   * ۳۰۰ مانده ۷۰۰ را ۱۰۰۰ می‌کرد و پرداخت هم‌زمان گم می‌شد.
+   */
   static async recalculateAndSyncBankBalances(): Promise<BankReconciliationReport> {
-    const computed = await this.computeBankBalances();
-    for (const bank of computed) {
-      await orm.update(bankAccounts).set({
-        currentBalance: money(bank.currentBalance)
-      }).where(eq(bankAccounts.id, bank.row.id));
-    }
-    return this.summarizeReconciliation(computed);
+    return await orm.transaction(async (tx) => {
+      await tx.select({ id: bankAccounts.id }).from(bankAccounts)
+        .where(eq(bankAccounts.isDeleted, 0))
+        .orderBy(asc(bankAccounts.id))
+        .for('update');
+      const computed = await this.computeBankBalances(tx);
+      for (const bank of computed) {
+        if (fin(bank.row.currentBalance).equals(bank.treasuryBalance)) continue;
+        await tx.update(bankAccounts).set({
+          currentBalance: money(bank.treasuryBalance)
+        }).where(eq(bankAccounts.id, bank.row.id));
+      }
+      return this.summarizeReconciliation(computed);
+    });
   }
 
   private static summarizeReconciliation(computed: Awaited<ReturnType<typeof BankAccountService.computeBankBalances>>): BankReconciliationReport {
