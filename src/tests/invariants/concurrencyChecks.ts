@@ -2,6 +2,7 @@ import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkV
 import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
 import { checkDeletedChequeFrozen } from './treasuryConcurrencyScenarios.js';
 import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
+import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -19,4 +20,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     checkReversalLifecycle, 'ابطال و اصلاح پیش‌نویس رد شد؛ سند دستی و سند فاکتورِ ابطال‌شده به پیش‌نویس برنگشتند و حذف نشدند'],
   ['inv_td_326_requisition_received_once', 'v8.0.51: «دریافت کالا»ی درخواست خرید کالا را فقط یک بار وارد انبار می‌کند؛ هم‌زمان با تبدیل به سفارش، پیش از آن، دو بار هم‌زمان، و با سفارش جزئی یا سفارشی که نهایی نشد (TD-326)',
     checkRequisitionReceivedOnce, 'در هر پنج حالت موجودی برابر مقدار دریافتی درخواست است؛ دریافت و سفارش دوباره رد شد؛ یک نمونه گردش‌کار'],
+  ['inv_td_327_project_delivery_capped', 'v8.0.52: «ورود به انبار» پروژه بی‌دلیل از مقدار برنامه‌ریزی‌شده بیشتر نمی‌شود (هم‌زمان یا پشت هم)، با دلیل ثبت می‌شود، و پروژه لغوشده یا کالای بیرون از پروژه تحویل نمی‌شود (TD-327)',
+    checkProjectDeliveryCapped, 'از دو تحویل هم‌زمان یکی پذیرفته شد؛ تحویل اضافه بی‌دلیل رد و با دلیل ثبت شد؛ پروژه لغوشده و کالای بیرونی رد شدند'],
 ];

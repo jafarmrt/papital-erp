@@ -1,7 +1,8 @@
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents } from '../db/schema.js';
-import { NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { AppError, NotFoundError, ValidationError } from '../errors/customErrors.js';
+import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
 import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
@@ -65,6 +66,8 @@ export interface AddProjectToInventoryInput {
   markCompleted?: boolean;
   currentUser?: string;
   userId?: number;
+  /** v8.0.52 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده؛ بی آن تحویل اضافه رد می‌شود */
+  overDeliveryReason?: string;
 }
 
 export interface AddProjectToInventoryResult {
@@ -73,6 +76,8 @@ export interface AddProjectToInventoryResult {
   /** v8.0.35 (TD-285): سند «رسید تولید» صادرشده؛ اگر هیچ قلم معتبری نبود null */
   documentId: number | null;
   refNumber: string | null;
+  /** v8.0.52 (TD-327): کالاهایی که با دلیل بیش از برنامه تحویل شدند */
+  overDeliveries: ProjectOverDelivery[];
 }
 
 export class ProjectService {
@@ -289,6 +294,20 @@ export class ProjectService {
         throw new NotFoundError('پروژه یافت نشد');
       }
 
+      // v8.0.52 (TD-327، تصمیم مالک محصول — گزینه ب «با دلیل»): پروژه لغوشده و کالای بیرون از محصولات پروژه تحویل
+      // نمی‌شوند، و تحویلی که جمع تحویل‌های پروژه را از مقدار برنامه‌ریزی‌شده بیشتر کند فقط با دلیل ثبت می‌شود. پیش‌تر نه
+      // وضعیت پروژه، نه مقدار آن و نه تحویل‌های پیشین سنجیده می‌شد: دو تحویل (هم‌زمان یا پشت هم) پروژه ۵ عددی ۱۰ عدد وارد
+      // انبار می‌کرد و کالای در جریان ساخت منفی می‌شد. ردیف پروژه بالاتر قفل شده است، پس تحویل‌های هم‌زمان پشت هم شمرده می‌شوند.
+      if (proj.status === 'cancelled') {
+        throw new ValidationError(`پروژه «${proj.projectCode}» لغو شده است و محصولی از آن به انبار تحویل نمی‌شود.`);
+      }
+      const planned = plannedProjectProducts(proj);
+      const outside = [...new Set(targetItemIds)].filter(itemId => !planned.has(itemId));
+      if (outside.length > 0) {
+        throw new ValidationError(`کالای شناسه ${outside.join('، ')} از محصولات پروژه «${proj.projectCode}» نیست و از این پروژه به انبار تحویل نمی‌شود.`);
+      }
+      const overDeliveryReason = input.overDeliveryReason?.trim() || '';
+
       const projectLabel = proj.projectCode || `پروژه-${id}`;
       const lines: Array<{ itemId: number; quantity: number; unitPrice: string; location: string }> = [];
       const lineNotes: string[] = [];
@@ -309,6 +328,16 @@ export class ProjectService {
         lines.push({ itemId, quantity: qty, unitPrice: effectiveUnitPrice, location: entry.location || '' });
         if (entry.notes) lineNotes.push(entry.notes);
       }
+
+      const delivered = await deliveredProjectQuantities(tx, id, [...new Set(lines.map(l => l.itemId))]);
+      const overDeliveries = findOverDeliveries(planned, delivered, lines);
+      if (overDeliveries.length > 0 && !overDeliveryReason) {
+        throw new AppError(
+          `تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه «${proj.projectCode}»: ${describeOverDeliveries(overDeliveries)}. برای ثبت، دلیل تحویل بیش از برنامه را وارد کنید.`,
+          422, 'OVER_DELIVERY_REASON_REQUIRED', { overDeliveries }
+        );
+      }
+      if (overDeliveries.length > 0) lineNotes.push(`[تحویل بیش از برنامه: ${overDeliveryReason} — ${describeOverDeliveries(overDeliveries)}]`);
 
       let documentId: number | null = null;
       let refNumber: string | null = null;
@@ -339,7 +368,7 @@ export class ProjectService {
         await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
       }
 
-      return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber };
+      return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber, overDeliveries };
     });
   }
 

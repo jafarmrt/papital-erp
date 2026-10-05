@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.52 — Project Delivery Over Plan Needs a Reason
+- Delivering a project's products to stock beyond the planned quantity now needs a recorded reason (product-owner decision), concurrent deliveries are counted under the project lock, and a cancelled project or an item outside the project is refused.
+
 ### v8.0.51 — Requisition Receipt Enters Stock Once
 - Receiving a purchase requisition now runs in one transaction under the requisition lock: concurrent or later ordering no longer brings the goods in twice, a received or rejected requisition cannot be received or ordered again, a failed order finalization refuses the receipt, and the received quantity comes from the documents.
 
