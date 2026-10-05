@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.50 — Reversed Vouchers Keep Their Reversal
+- A draft voucher can no longer be reversed or corrected, and a voucher with an active reversal can no longer go back to draft or be deleted, which used to leave an orphan reversal in the ledger.
+
 ### v8.0.49 — Deleted Cheques Stay Deleted
 - A deleted cheque can no longer be cleared, bounced or deleted again; clearing it used to add its amount to the bank balance, and a concurrent delete and clear were both accepted.
 

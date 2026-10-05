@@ -447,8 +447,9 @@ export class VoucherService {
 
   static async deleteJournalVoucher(id: number): Promise<{ success: boolean }> {
     return await orm.transaction(async (tx) => {
-      const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
+      const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
+      await this.assertNoActiveReversal(tx, existing, 'حذف نمی‌شود');
       if (existing.status === 'permanent') {
         throw new BusinessLogicError('اسناد دائم و قطعی‌شده حسابداری قابل حذف مستقیم نیستند. برای بی‌اثر کردن سند، از گزینه «صدور سند برگشتی (ابطال سند)» استفاده نمایید.');
       }
@@ -524,6 +525,17 @@ export class VoucherService {
   }
 
   /**
+   * v8.0.50 (TD-323): سندی که سند برگشت فعال دارد به پیش‌نویس برنمی‌گردد و حذف نمی‌شود؛ پیش‌تر برمی‌گشت و حذف می‌شد و سند
+   * برگشت بی‌مبدأ می‌ماند (دفتر کل اثر سند را منفی نشان می‌داد).
+   */
+  private static async assertNoActiveReversal(tx: DbExecutor, voucher: { id: number; voucherNumber: string | number }, action: string): Promise<void> {
+    const reversal = await this.findActiveReversal(tx, voucher);
+    if (reversal) {
+      throw new BusinessLogicError(`سند شماره «${voucher.voucherNumber}» سند برگشت فعال به شماره «${reversal.voucherNumber}» دارد و ${action}. برای بی‌اثر کردن دوباره، سند برگشت را بررسی کنید.`);
+    }
+  }
+
+  /**
    * Reverse Voucher Pattern (صدور سند عکس / عطف / برگشت)
    * Inverts all debit and credit rows to completely neutralize the financial impact of a voucher.
    */
@@ -550,6 +562,11 @@ export class VoucherService {
       // ممانعت از ابطال اسناد اختتامیه
       if (original.voucherType === 'closing') {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال مستقیم نیست.`);
+      }
+      // v8.0.50 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
+      // سند معکوس را می‌دیدند
+      if (original.status === 'draft') {
+        throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
 
       const isReversalOfReversal = Boolean(original.referenceNumber?.startsWith('REV-V') || original.referenceNumber?.startsWith('VOID-REPOST-V'));
@@ -696,6 +713,9 @@ export class VoucherService {
 
       if (original.voucherType === 'closing') {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل اصلاح مستقیم نیست.`);
+      }
+      if (original.status === 'draft') { // v8.0.50 (TD-323)
+        throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
 
       if (original.referenceNumber?.startsWith('REV-V') || original.referenceNumber?.startsWith('VOID-REPOST-V')) {
@@ -869,6 +889,9 @@ export class VoucherService {
 
       if (original.voucherType === 'closing') {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال یا بازثبت نیست.`);
+      }
+      if (original.status === 'draft') { // v8.0.50 (TD-323)
+        throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
 
       if (original.referenceNumber?.startsWith('REV-V') || original.referenceNumber?.startsWith('VOID-REPOST-V')) {
@@ -1075,8 +1098,9 @@ export class VoucherService {
    */
   static async setVoucherStatus(id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<JournalVoucher> {
     await orm.transaction(async (tx) => {
-      const [existing] = await tx.select().from(journalVouchers).where(eq(journalVouchers.id, id)).for('update');
+      const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
+      if (status === 'draft' && existing.status !== 'draft') await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
       if (existing.status === 'permanent' && status !== 'permanent') {
         throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
       }

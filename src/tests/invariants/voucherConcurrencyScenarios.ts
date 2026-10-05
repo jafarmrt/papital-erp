@@ -1,6 +1,8 @@
 import { pool } from '../../db/drizzle.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
+import { DocumentService } from '../../services/document.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
+import { createTestItem } from '../fixtures/factories.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
 
 /**
@@ -71,5 +73,57 @@ export async function checkVoucherReversedOnce(): Promise<string[]> {
     const count = await activeReversals(voucherId);
     if (count !== 1) problems.push(`${label}: ${count} سند برگشت فعال، نه یکی`);
   }
+  return problems;
+}
+
+async function rejection(run: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await run();
+    return null;
+  } catch (err) {
+    return getErrorMessage(err);
+  }
+}
+
+/**
+ * TD-323: سند پیش‌نویس برگشت یا اصلاح نمی‌خورد (قاعده TD-251)، و سندی که سند برگشت فعال دارد به پیش‌نویس برنمی‌گردد و حذف
+ * نمی‌شود. پیش‌تر سند پیش‌نویس سند معکوس تأییدشده می‌گرفت، و سند حسابداری تأییدشده فاکتوری که ابطالش سند معکوس گرفته بود
+ * به پیش‌نویس برمی‌گشت و حذف می‌شد؛ سند معکوس بی‌مبدأ می‌ماند.
+ */
+export async function checkReversalLifecycle(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const draft = await VoucherService.createJournalVoucher({
+    date: '2026-04-01', status: 'draft', description: 'سند پیش‌نویس آزمون برگشت', items: await voucherLines(1000000),
+  });
+  const reverseDraft = await rejection(() => VoucherService.reverseVoucher({ voucherId: draft.id, date: '2026-04-02' }));
+  if (!reverseDraft?.includes('پیش‌نویس')) problems.push(`ابطال سند پیش‌نویس رد نشد (${reverseDraft ?? 'پذیرفته شد'})`);
+  const correctDraft = await rejection(async () => VoucherService.correctVoucher({
+    voucherId: draft.id, reason: 'اصلاح', date: '2026-04-02', newItems: await voucherLines(900000),
+  }));
+  if (!correctDraft?.includes('پیش‌نویس')) problems.push(`اصلاح سند پیش‌نویس رد نشد (${correctDraft ?? 'پذیرفته شد'})`);
+  if (await activeReversals(draft.id) !== 0) problems.push('سند پیش‌نویس سند برگشت گرفت');
+
+  const manual = await approvedVoucher('سند آزمون بازگشت به پیش‌نویس');
+  await VoucherService.reverseVoucher({ voucherId: manual, date: '2026-04-02' });
+  const manualToDraft = await rejection(() => VoucherService.setVoucherStatus(manual, 'draft'));
+  if (!manualToDraft?.includes('سند برگشت فعال')) problems.push(`سند ابطال‌شده به پیش‌نویس برگشت (${manualToDraft ?? 'پذیرفته شد'})`);
+
+  const item = await createTestItem({ type: 'product', stocks: { [wh]: 5 }, weightedAverageCost: 100000 });
+  const invoiceId = await DocumentService.createDocument({
+    docType: 'invoice', inOut: 'out', status: 'final', date: '2026-04-01', user: 'inv', buyerName: 'مشتری آزمون برگشت سند',
+    items: [{ itemId: item.id, quantity: 1, unitPrice: 250000, location: wh }],
+  });
+  const voucherRes = await pool.query<{ id: number }>('SELECT id FROM journal_vouchers WHERE source_document_id = $1 AND is_deleted = 0', [invoiceId]);
+  const invoiceVoucher = voucherRes.rows[0]?.id;
+  if (!invoiceVoucher) return [...problems, 'فاکتور سند حسابداری نگرفت'];
+  await VoucherService.setVoucherStatus(invoiceVoucher, 'approved');
+  await DocumentService.deleteDocument(invoiceId, 'inv');
+  const invoiceToDraft = await rejection(() => VoucherService.setVoucherStatus(invoiceVoucher, 'draft'));
+  if (!invoiceToDraft?.includes('سند برگشت فعال')) problems.push(`سند فاکتور ابطال‌شده به پیش‌نویس برگشت (${invoiceToDraft ?? 'پذیرفته شد'})`);
+  const deleteVoucher = await rejection(() => VoucherService.deleteJournalVoucher(invoiceVoucher));
+  if (!deleteVoucher) problems.push('سند فاکتور ابطال‌شده حذف شد');
+  const live = await pool.query<{ n: number }>('SELECT COUNT(*)::int AS n FROM journal_vouchers WHERE id = $1 AND is_deleted = 0 AND status = \'approved\'', [invoiceVoucher]);
+  if ((live.rows[0]?.n ?? 0) !== 1) problems.push('سند فاکتور ابطال‌شده دیگر تأییدشده و فعال نیست');
+  if (await activeReversals(invoiceVoucher) !== 1) problems.push('سند فاکتور ابطال‌شده یک سند برگشت فعال ندارد');
   return problems;
 }

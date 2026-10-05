@@ -1,5 +1,5 @@
 import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkVoidsOfSharedItemNoDeadlock } from './concurrencyScenarios.js';
-import { checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
+import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
 import { checkDeletedChequeFrozen } from './treasuryConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
@@ -14,4 +14,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkVoucherReversedOnce(), 'از سه برگشت هم‌زمان یکی پذیرفته شد و برگشت دوم پشت هم رد شد؛ هر سند یک سند برگشت فعال دارد'],
   ['inv_td_322_deleted_cheque_frozen', 'v8.0.49: چک حذف‌شده وصول یا دوباره حذف نمی‌شود و از حذف و وصول هم‌زمان فقط یکی پذیرفته می‌شود (TD-322)',
     () => checkDeletedChequeFrozen(), 'وصول و حذف دوباره چک حذف‌شده «یافت نشد»؛ در سه دور حذف و وصول هم‌زمان فقط یکی پذیرفته شد و مانده بانک درست ماند'],
+  ['inv_td_323_reversal_lifecycle', 'v8.0.50: سند پیش‌نویس برگشت یا اصلاح نمی‌خورد و سندی که سند برگشت فعال دارد به پیش‌نویس برنمی‌گردد و حذف نمی‌شود (TD-323)',
+    checkReversalLifecycle, 'ابطال و اصلاح پیش‌نویس رد شد؛ سند دستی و سند فاکتورِ ابطال‌شده به پیش‌نویس برنگشتند و حذف نشدند'],
 ];

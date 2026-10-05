@@ -308,6 +308,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     const originalVoucher = await AccountingService.createJournalVoucher({
       date: new Date().toISOString().split('T')[0],
       description: 'سند اولیه جهت تست برگشت',
+      status: 'approved', // v8.0.50 (TD-323): سند پیش‌نویس برگشت نمی‌خورد
       items: [
         { accountId: accA.id, debit: 350000, credit: 0 },
         { accountId: accB.id, debit: 0, credit: 350000 }
