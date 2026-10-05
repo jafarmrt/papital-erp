@@ -117,11 +117,12 @@ The script installs Nginx + Certbot, configures reverse proxy → localhost:3000
 
 | # | Action | Command / expected |
 |---|--------|--------------------|
-| 6.1 | Daily backup cron installed | `/etc/cron.d/papital-erp-backup` runs `scripts/backup.sh` nightly (`0 2 * * *`) |
-| 6.2 | First manual backup succeeds | `set -a; . ./.env; set +a; BACKUP_KIND=daily ./scripts/backup.sh` → dump + uploads archive created in `/var/backups/erp`, integrity verified (gzip + `pg_restore --list`) |
+| 6.1 | Daily backup cron installed | `/etc/cron.d/papital-erp-backup`: `0 2 * * * <service-user> /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1` — the script reads `.env` from its own app directory (v8.0.84); create the target once with `sudo install -d -o <service-user> /var/backups/erp` |
+| 6.2 | First manual backup succeeds | `./scripts/backup.sh` → `erp_daily_<ts>.dump.gz` + `.manifest` (rows and content hash of every table, every constraint; v8.0.85) + `_uploads.tar.gz` (attachments) in `/var/backups/erp`, integrity verified (gzip + `pg_restore --list`) |
 | 6.3 | Offsite copy strategy | `S3_BACKUP_BUCKET` in `.env`, or a manual scheduled off-server copy — **backups on the same disk are not a backup** |
-| 6.4 | **Recovery drill (mandatory)** | `RESTORE_MODE=drill ./scripts/restore.sh <latest-dump>.dump.gz` → restores into a temporary DB, validates row counts of critical tables, drops temp DB |
-| 6.5 | Drill result recorded | Log file/date + verified table counts kept with ops documentation |
+| 6.4 | **Recovery drill (mandatory)** | `sudo -v && ./scripts/restore.sh <latest-dump>.dump.gz` → restores into a temporary DB, prints `content identical to the backup manifest`, checks sequences and attachment files, drops the temp DB. Needs `sudo -u postgres` or `RESTORE_ADMIN_URL` (the app role cannot create databases; v8.0.86) |
+| 6.5 | Drill result recorded | Log file/date + the drill's output kept with ops documentation |
+| 6.6 | Upgrade rehearsal before each update | `sudo -v && ./update.sh --rehearse` (or `./scripts/upgrade-rehearsal.sh` with the new code): the new migrations run on a restored copy and the update stops before restarting when they fail or change ledger totals, stock, bank balances or financial health (v8.0.88) |
 
 > Principle: "a backup exists" ≠ "the backup is restorable". Repeat the drill after every major schema change and monthly.
 

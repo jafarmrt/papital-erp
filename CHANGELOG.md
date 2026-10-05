@@ -18,6 +18,33 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.89 — Upgrade From v7.0.137 Passes Vouchers Refused by 0044
+- Migration 0047 backfills source_cheque_id through erp_update_with_unvalidated_checks, so a voucher whose date 0044 refused to convert (closed fiscal year) no longer violates its NOT VALID date constraint and roll back the whole upgrade from v7.0.137; databases that ran the old 0047 are unaffected.
+
+### v8.0.88 — Upgrade Rehearsal on a Restored Copy
+- scripts/upgrade-rehearsal.sh (and update.sh --rehearse, before the restart) restores the latest backup into a drill database, runs the new migrations on it and compares ledger totals per account, stock per item and warehouse, bank balances and the financial health check before and after; the live database is never touched.
+
+### v8.0.87 — Restore Apply Builds a New Database and Swaps It In
+- RESTORE_MODE=apply no longer restores over the live database: it restores into a new database, verifies it like a drill, refuses while sessions are connected, swaps names and keeps the previous database and uploads directory; attachment files are restored too.
+
+### v8.0.86 — Restore Drill Works With the Installed Database Role
+- The role install.sh creates has no CREATEDB: restore.sh now creates, drops and renames databases through RESTORE_ADMIN_URL or sudo -u postgres, restores as the application role and stops with guidance before changing anything when neither is available.
+
+### v8.0.85 — Restore Drill Compares Content With the Backup Manifest
+- backup.sh writes the dump and a content manifest (rows and content hash of every table, every constraint) from one exported snapshot; the restore drill compares the restored database with it and checks sequences, attachment files and the migration level. The always-green recovery check was removed.
+
+### v8.0.84 — Backups Run From Cron and Include Attachments
+- scripts/backup.sh finds the application directory from its own location, reads DATABASE_URL and ATTACHMENTS_DIR from its .env and archives public/uploads, so a cron line backs up the database and the attachment files; attachment records without an attachment directory fail the backup.
+
+### v8.0.83 — update.sh Waits for Startup and the Built Version
+- update.sh reports success only when /health/startup answers (migrations and seed finished) and /health shows the built version (scripts/verify-startup.sh); on failure it prints the rollback steps with the previous commit and the pre-deployment backup.
+
+### v8.0.82 — Migrations Run Without the Request Timeout, One at a Time
+- Migrations run on a dedicated connection without the 60 s request statement timeout (MIGRATION_STATEMENT_TIMEOUT, default 0) under advisory lock 91008: the 0044 date migration no longer dies on large voucher tables and two concurrent runs queue instead of failing.
+
+### v8.0.81 — Skipped Migrations and Newer Databases Stop Startup
+- Before running, the migrator compares the code journal with __drizzle_migrations: a migration whose `when` is older than the last applied one (Drizzle skipped it silently) or a database newer than the build stops startup with the migration named; a journal lint checks strictly increasing `when` values.
+
 ### v8.0.80 — Atomic Project Codes
 - - Automatic project codes (PRJ-<year>-<number>) come from an atomic yearly counter in `document_ref_counters` instead of `COUNT(*) + 1`, so concurrent project creation no longer fails on a duplicate code; a custom code is checked under the same lock.
 

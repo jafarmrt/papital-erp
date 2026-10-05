@@ -117,5 +117,5 @@ systemctl restart papital-erp     # ری‌استارت
 - [ ] رمز کاربر ادمین قوی + ساخت کاربر جدا برای هر نفر (لاگ audit به نام هر کاربر می‌خورد)
 - [ ] SSH: ورود با رمز را به کلید عمومی محدود کنید (`PasswordAuthentication no`)
 - [ ] پورت 3000 روی فایروال عمومی بسته باشد: `ufw deny 3000/tcp` (فقط Nginx به آن وصل است)
-- [ ] بکاپ خودکار روزانه (cron: `0 3 * * * bash /opt/papital-erp/scripts/backup.sh`) + انتقال بکاپ به محل دوم
+- [ ] بکاپ خودکار روزانه (`/etc/cron.d/papital-erp-backup`: `0 3 * * * <کاربر سرویس> /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1`؛ اسکریپت `.env` را از پوشه خودش می‌خواند) + انتقال بکاپ به محل دوم + تمرین بازیابی ماهانه (`./scripts/restore.sh`)
 - [ ] `sudo certbot renew --dry-run` یک بار بعد از نصب

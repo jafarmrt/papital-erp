@@ -10,6 +10,9 @@
 #    ./update.sh --no-backup         # git-based update, skip backup (discouraged)
 #    ./update.sh --source <DIR>      # manual update from an extracted source directory
 #    ./update.sh --zip <FILE.zip>    # manual update from a source zip archive
+#    ./update.sh --rehearse          # also run the new migrations on a copy of the pre-deployment backup
+#                                    # before restarting (scripts/upgrade-rehearsal.sh; needs RESTORE_ADMIN_URL
+#                                    # or sudo -u postgres) — recommended
 # ============================================================
 set -euo pipefail
 
@@ -20,24 +23,28 @@ APP_DIR="${APP_DIR:-/opt/papital-erp}"
 SERVICE_NAME="papital-erp"
 APP_PORT="${APP_PORT:-3000}"
 SKIP_BACKUP=0
+REHEARSE=0
 SOURCE_DIR=""
 SOURCE_ZIP=""
+
+# v8.0.83 (TD-365): defined before argument parsing (an unknown argument used to end in "die: command not found")
+log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+success()  { log "OK: $*"; }
+warn()     { log "WARN: $*"; }
+die()      { log "ERROR: $*"; exit 1; }
 
 # ---------- Parse arguments ----------
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-backup) SKIP_BACKUP=1 ;;
+    --rehearse)  REHEARSE=1 ;;
     --source)    shift; SOURCE_DIR="${1:-}"; [ -n "$SOURCE_DIR" ] || die "--source requires a directory path"; ;;
     --zip)       shift; SOURCE_ZIP="${1:-}"; [ -n "$SOURCE_ZIP" ] || die "--zip requires an archive path"; ;;
-    *)           die "Unknown argument: $1 (supported: --no-backup, --source <DIR>, --zip <FILE.zip>)" ;;
+    *)           die "Unknown argument: $1 (supported: --no-backup, --rehearse, --source <DIR>, --zip <FILE.zip>)" ;;
   esac
   shift
 done
-
-log()      { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-success()  { log "OK: $*"; }
-warn()     { log "WARN: $*"; }
-die()      { log "ERROR: $*"; exit 1; }
+[ "$REHEARSE" -eq 0 ] || [ "$SKIP_BACKUP" -eq 0 ] || die "--rehearse runs on the pre-deployment backup; it cannot be combined with --no-backup"
 
 log "=== Papital ERP Updater — log file: $LOG_FILE ==="
 cd "$APP_DIR" || die "Application directory not found: $APP_DIR"
@@ -77,12 +84,15 @@ else
 fi
 
 # ---------- 1) Pre-update database backup ----------
+PREVIOUS_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
+PRE_DEPLOY_DUMP=""
 if [ "$SKIP_BACKUP" -eq 0 ]; then
   log "[1/6] Creating pre-deployment database backup..."
-  # scripts/backup.sh reads DATABASE_URL from .env and tags the dump as pre-deployment
+  # scripts/backup.sh reads DATABASE_URL from .env and tags the dump as pre-deployment (README: kept 90 days)
   if [ -f scripts/backup.sh ]; then
     set -a; . ./.env; set +a
-    BACKUP_KIND=pre-deployment bash scripts/backup.sh || die "Database backup failed — aborting update."
+    BACKUP_KIND=pre-deployment RETENTION_DAYS="${PRE_DEPLOY_RETENTION_DAYS:-90}" bash scripts/backup.sh || die "Database backup failed — aborting update."
+    PRE_DEPLOY_DUMP="$(ls -t "${BACKUP_DIR:-/var/backups/erp}"/erp_pre-deployment_*.dump.gz 2>/dev/null | head -1 || true)"
   else
     warn "scripts/backup.sh not found — skipping explicit backup step."
   fi
@@ -145,6 +155,24 @@ log "[4/6] Building application..."
 npm run build
 success "Build completed."
 
+# ---------- 3b) Upgrade rehearsal (v8.0.88, TD-367; --rehearse) ----------
+# The new migrations run on a restored copy of the pre-deployment backup; the live database and the running
+# service are untouched until it passes.
+if [ "$REHEARSE" -eq 1 ]; then
+  [ -n "$PRE_DEPLOY_DUMP" ] || die "--rehearse: no pre-deployment backup found in ${BACKUP_DIR:-/var/backups/erp}"
+  log "[4b/6] Rehearsing this update's migrations on a copy of $PRE_DEPLOY_DUMP ..."
+  if ! bash scripts/upgrade-rehearsal.sh "$PRE_DEPLOY_DUMP"; then
+    log "The service was NOT restarted and still runs the previous build; the database is unchanged."
+    log "Put the previous source back before anything restarts the service:"
+    if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
+      log "  git checkout ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
+    else
+      log "  restore the previous source tree and run: NODE_ENV=development npm ci --include=dev && npm run build"
+    fi
+    die "Upgrade rehearsal failed — update NOT applied."
+  fi
+fi
+
 # ---------- 4) Restart service ----------
 PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo '')"
 RESTART_OK=0
@@ -171,30 +199,36 @@ else
   warn "No systemd unit or pm2 process named '${SERVICE_NAME}' found — start the app manually."
 fi
 
-# ---------- 5) Health verification ----------
-log "[6/6] Verifying health..."
-HEALTH_OK=0
-for i in $(seq 1 30); do
-  if curl -fsS "http://localhost:${APP_PORT}/health/live" >/dev/null 2>&1; then
-    HEALTH_OK=1
-    break
+# ---------- 5) Startup verification (v8.0.83, TD-365) ----------
+# The liveness probe answers 200 while migrations are still running (or just before they fail); only
+# /health/startup proves that migrations, seed and engines finished on the NEW build.
+rollback_hint() {
+  log "Rollback:"
+  log "  1) ${SUDO:+sudo }systemctl stop ${SERVICE_NAME}"
+  if [ "$UPDATE_MODE" = "git" ] && [ -n "$PREVIOUS_COMMIT" ]; then
+    log "  2) git checkout ${PREVIOUS_COMMIT} && NODE_ENV=development npm ci --include=dev && npm run build"
+  else
+    log "  2) put the previous source back and rebuild (npm ci --include=dev && npm run build)"
   fi
-  sleep 2
-done
-[ "$HEALTH_OK" -eq 1 ] || die "Health probe failed after restart. Check: journalctl -u ${SERVICE_NAME} -n 100"
-
-# ---------- 5b) Version consistency: the RUNNING process must serve the NEW build ----------
-HEALTH_VERSION="$(curl -fsS "http://localhost:${APP_PORT}/health" | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4 || true)"
-if [ -n "$PKG_VERSION" ] && [ "$HEALTH_VERSION" != "$PKG_VERSION" ]; then
-  die "Runtime version (v${HEALTH_VERSION:-unknown}) does NOT match the freshly built package.json (v$PKG_VERSION).
-The service was NOT restarted with the new build (old process still running).
-Fix: stop the old process and start the app properly (systemd unit 'papital-erp' recommended — see install.sh), then re-verify:
-  curl -fsS http://localhost:${APP_PORT}/health | grep version"
+  if [ -n "$PRE_DEPLOY_DUMP" ]; then
+    log "  3) RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh ${PRE_DEPLOY_DUMP}"
+  else
+    log "  3) restore the last backup taken before this update with scripts/restore.sh (RESTORE_MODE=apply)"
+  fi
+  log "  4) ${SUDO:+sudo }systemctl start ${SERVICE_NAME}"
+}
+log "[6/6] Waiting for startup (migrations + seed) to complete..."
+if ! STARTUP_OUTPUT="$(bash scripts/verify-startup.sh "$APP_PORT" "${STARTUP_TIMEOUT:-600}" "$PKG_VERSION")"; then
+  log "$STARTUP_OUTPUT"
+  log "Check: journalctl -u ${SERVICE_NAME} -n 200"
+  rollback_hint
+  die "Update NOT completed."
 fi
+log "$STARTUP_OUTPUT"
 if [ "$RESTART_OK" -ne 1 ]; then
-  die "Health probe passed BUT no managed service was restarted — the running process may still be an old build. Register a systemd/pm2 service and re-run."
+  die "Startup verified BUT no managed service was restarted — the running process may still be an old build. Register a systemd/pm2 service and re-run."
 fi
-success "Update finished successfully. Runtime v$HEALTH_VERSION == build v$PKG_VERSION"
+success "Update finished successfully. Running v$PKG_VERSION; migrations and startup complete"
 
 log "NOTE: Schema migrations run automatically at startup. NEVER run 'npm run db:push'."
 exit 0

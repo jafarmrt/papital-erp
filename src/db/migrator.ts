@@ -1,14 +1,27 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import type pkg from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { pool, orm } from './drizzle.js';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
+import { pool, orm, isMockDatabase } from './drizzle.js';
 import { logger } from '../middleware/logger.js';
+import { ADVISORY_LOCK_KEYS } from '../lib/advisoryLock.js';
+import { planMigrations, type AppliedMigrationRow, type MigrationJournalEntry } from './migrationPlan.js';
+import { previousMigrationHashes } from './migrationAmendments.js';
 
 export interface MigrationResult {
   success: boolean;
   appliedCount: number;
   errors: string[];
+  /** v8.0.81 (TD-364): ناهمخوانی‌هایی که فقط گزارش می‌شوند (مثلاً فایل مهاجرتِ اجراشده‌ای که بعداً عوض شده) */
+  warnings?: string[];
+}
+
+export interface RunMigrationsOptions {
+  /** فقط برای آزمون و ابزار: پوشه مهاجرت‌ها به‌جای getMigrationsFolder() */
+  migrationsFolder?: string;
 }
 
 /**
@@ -69,58 +82,101 @@ function journalTable(): string {
   return `"${migrationsJournalSchema.replace(/"/g, '""')}".__drizzle_migrations`;
 }
 
+/** v8.0.81 (TD-364): دفتر مهاجرت کد با درهم‌سازی هر فایل، به همان ترتیب و همان روشی که Drizzle می‌خواند */
+export function readMigrationJournal(migrationsFolder: string): MigrationJournalEntry[] {
+  const journal = JSON.parse(fs.readFileSync(path.join(migrationsFolder, 'meta', '_journal.json'), 'utf8')) as {
+    entries: Array<{ idx: number; tag: string; when: number }>;
+  };
+  const files = readMigrationFiles({ migrationsFolder });
+  return journal.entries.map((e, i) => ({ idx: e.idx, tag: e.tag, when: e.when, hash: files[i]?.hash ?? '' }));
+}
+
+async function readAppliedMigrations(client: pkg.PoolClient): Promise<AppliedMigrationRow[]> {
+  const exists = await client.query<{ ok: boolean }>('SELECT to_regclass($1) IS NOT NULL AS ok', [journalTable()]);
+  if (!exists.rows[0]?.ok) return [];
+  const res = await client.query<{ hash: string; created_at: string }>(`SELECT hash, created_at FROM ${journalTable()} ORDER BY id`);
+  return res.rows.map(r => ({ hash: r.hash, createdAt: Number(r.created_at) }));
+}
+
+/**
+ * v8.0.82 (TD-366): مهلت دستور مهاجرت‌ها (میلی‌ثانیه، ۰ = بی‌مهلت). مهاجرت‌ها روی اتصال جدا و بیرون از مهلت ۶۰ ثانیه‌ای
+ * درخواست‌های برنامه (DB_STATEMENT_TIMEOUT) اجرا می‌شوند؛ مهاجرت داده روی پایگاه‌داده بزرگ واقعی در آن مهلت قطع می‌شد،
+ * هر بار از اول تکرار و سرانجام فرایند بسته می‌شد.
+ */
+function migrationStatementTimeoutMs(): number {
+  const value = Number(process.env.MIGRATION_STATEMENT_TIMEOUT ?? 0);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
 /**
  * Runs Drizzle ORM migrations using the official Drizzle Migrator pipeline.
  * Ensures the single source of truth (drizzle/*.sql) is applied cleanly and idempotently.
+ *
+ * v8.0.81 (TD-364): پیش از اجرا دفتر کد و پایگاه‌داده مقایسه می‌شوند (`planMigrations`)؛ مهاجرتی که Drizzle بی‌صدا رد
+ * می‌کرد، یا پایگاه‌داده‌ای که از این نسخه جلوتر است، اجرا را با خطای روشن متوقف می‌کند.
+ * v8.0.82 (TD-366): همه کار روی یک اتصال جدا، بی‌مهلت دستور، و زیر قفل مشورتی MIGRATIONS انجام می‌شود تا دو اجرای
+ * هم‌زمان (راه‌اندازی سرور، ابزار دستی) پشت هم بروند، نه اینکه دومی با خطای «از پیش موجود» بشکند.
  */
-export async function runMigrations(): Promise<MigrationResult> {
-  const errors: string[] = [];
-  const migrationsFolder = getMigrationsFolder();
+export async function runMigrations(options: RunMigrationsOptions = {}): Promise<MigrationResult> {
+  const migrationsFolder = options.migrationsFolder ?? getMigrationsFolder();
 
   logger.info(`[Migrator] Executing Drizzle migrations from: ${migrationsFolder}`);
 
+  let client: pkg.PoolClient | undefined;
+  let locked = false;
   try {
     if (!fs.existsSync(migrationsFolder)) {
       throw new Error(`Migrations directory not found at ${migrationsFolder}`);
     }
 
+    if (isMockDatabase()) {
+      await migrate(orm, { migrationsFolder, migrationsSchema: migrationsJournalSchema });
+      return { success: true, appliedCount: 0, errors: [] };
+    }
+
+    const entries = readMigrationJournal(migrationsFolder);
+    client = await pool.connect();
+    await client.query(`SET statement_timeout = ${migrationStatementTimeoutMs()}`);
+    await client.query('SET idle_in_transaction_session_timeout = 0');
+    await client.query('SELECT pg_advisory_lock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]);
+    locked = true;
+
     // V3.0.9 (TD-063): appliedCount واقعی از روی رکوردهای __drizzle_migrations
-    // محاسبه می‌شود (قبلاً ثابت ۱ گزارش می‌شد).
-    let before = 0;
-    try {
-      const res = await pool.query(`SELECT count(*)::int AS count FROM ${journalTable()}`);
-      before = Number(res.rows[0]?.count || 0);
-    } catch {
-      // Table may not exist on a fresh database yet — before stays 0
+    const applied = await readAppliedMigrations(client);
+    const plan = planMigrations(entries, applied, previousMigrationHashes());
+    for (const warning of plan.warnings) logger.warn(`[Migrator] ${warning}`);
+    if (plan.errors.length > 0) {
+      for (const error of plan.errors) logger.error(`[Migrator] ${error}`);
+      return { success: false, appliedCount: applied.length, errors: plan.errors, warnings: plan.warnings };
     }
 
     // Execute official Drizzle migration runner (records applied migrations in __drizzle_migrations)
-    await migrate(orm, { migrationsFolder, migrationsSchema: migrationsJournalSchema });
+    await migrate(drizzle(client), { migrationsFolder, migrationsSchema: migrationsJournalSchema });
+    const after = (await readAppliedMigrations(client)).length;
 
-    let after = before;
-    try {
-      const res = await pool.query(`SELECT count(*)::int AS count FROM ${journalTable()}`);
-      after = Number(res.rows[0]?.count || 0);
-    } catch {
-      // Keep after = before on query failure
-    }
-
-    logger.info(`[Migrator] Drizzle database migrations completed successfully. ${before} → ${after} applied.`);
+    logger.info(`[Migrator] Drizzle database migrations completed successfully. ${applied.length} → ${after} applied.`);
 
     return {
       success: true,
       appliedCount: after,
-      errors: []
+      errors: [],
+      warnings: plan.warnings,
     };
   } catch (err: any) {
     const errorMsg = `[Migrator] Migration execution error: ${err.message}`;
     logger.error(errorMsg, { stack: err.stack });
-    errors.push(err.message);
     return {
       success: false,
       appliedCount: 0,
-      errors
+      errors: [err.message]
     };
+  } finally {
+    if (client) {
+      if (locked) await client.query('SELECT pg_advisory_unlock($1::bigint)', [ADVISORY_LOCK_KEYS.MIGRATIONS]).catch(() => undefined);
+      await client.query('RESET statement_timeout').catch(() => undefined);
+      await client.query('RESET idle_in_transaction_session_timeout').catch(() => undefined);
+      client.release();
+    }
   }
 }
 
