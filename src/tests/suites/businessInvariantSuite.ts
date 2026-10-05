@@ -18,6 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
+import { checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
 import { checkProcurementDeliveryIncomingOnly, checkRequisitionOverOrderNeedsReason, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
@@ -267,6 +268,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.39: TD-292 ──
+    ['inv_td_292_woo_rial_units', 'v8.0.39: سفارش ووکامرس با واحد هزار تومان (IRHT) یا هزار ریال (IRHR) به ریال تبدیل و فاکتور ریالی می‌شود (TD-292)',
+      () => checkWooRialUnits(), 'IRHT ۱۰۰ = ۱٬۰۰۰٬۰۰۰، IRHR ۲۵۰ = ۲۵۰٬۰۰۰ و IRT ۳۰۰ = ۳٬۰۰۰ ریال بدهکار مشتری'],
     // ── v8.0.38: TD-289 ──
     ['inv_td_289_requisition_over_order_needs_reason', 'v8.0.38: سفارش بیش از درخواست خرید فقط با دلیل ثبت می‌شود و دلیل روی ردیف، یادداشت درخواست و سند سفارش می‌نشیند؛ تبدیل یک‌جاست (TD-289، گزینه ب)',
       () => checkRequisitionOverOrderNeedsReason(wh), 'بی‌دلیل رد شد (سرویس و فرم ۴۲۲)؛ با دلیل ۴ اضافه ثبت شد؛ ۷ برای ۵ فقط ۲ اضافه؛ شکست بسته دوم چیزی باقی نگذاشت'],
@@ -441,6 +445,14 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeBomReleaseAtCurrentWac(wh)) observed.add('FOCUSED:bom-release-at-current-wac');
     if (await probeRequisitionReconvertedOverOrdered(wh)) observed.add('FOCUSED:requisition-reconverted-over-ordered');
     if (await probeRequisitionReceiptCountsFirstLine(wh)) observed.add('FOCUSED:requisition-receipt-counts-first-line');
+    // حوزه F — ووکامرس (v8.0.39)
+    if (await probeWooThousandTomanCurrency()) observed.add('FOCUSED:woo-thousand-toman-currency');
+    if (await probeWooPartialRefundIgnored()) observed.add('FOCUSED:woo-partial-refund-ignored');
+    if (await probeWooEditedOrderIgnored()) observed.add('FOCUSED:woo-edited-order-ignored');
+    if (await probeWooStockOutsideDefaultWarehouse()) observed.add('FOCUSED:woo-stock-outside-default-warehouse');
+    if (await probeWooNegativeFeeRejected()) observed.add('FOCUSED:woo-negative-fee-rejected');
+    if (await probeWooPhoneFormatDuplicatesCustomer()) observed.add('FOCUSED:woo-phone-format-duplicates-customer');
+    if (await probeWooFractionalRialResidue()) observed.add('FOCUSED:woo-fractional-rial-residue');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

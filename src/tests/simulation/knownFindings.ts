@@ -43,6 +43,13 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-288 در v8.0.33 رفع شد (inv_td_288_bom_release_at_own_cost)
   // TD-289 در v8.0.38 رفع شد (inv_td_289_requisition_over_order_needs_reason)
   // TD-290 در v8.0.36 رفع شد (inv_td_290_requisition_receipt_sums_lines)
+  // حوزه F — ووکامرس (v8.0.39؛ TD-292 در همان نسخه رفع شد: inv_td_292_woo_rial_units)
+  'FOCUSED:woo-stock-outside-default-warehouse': 'TD-293',
+  'FOCUSED:woo-edited-order-ignored': 'TD-294',
+  'FOCUSED:woo-partial-refund-ignored': 'TD-294',
+  'FOCUSED:woo-negative-fee-rejected': 'TD-295',
+  'FOCUSED:woo-phone-format-duplicates-customer': 'TD-296',
+  'FOCUSED:woo-fractional-rial-residue': 'TD-297',
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

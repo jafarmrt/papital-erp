@@ -140,11 +140,22 @@ function orderCharges(wcOrder: WcOrderPayload): { shipping: FinancialDecimal; fe
   return shipping && fees && tax ? { shipping, fees, tax } : null;
 }
 
+/**
+ * واحدهای ریالی ووکامرس و ضریب تبدیلشان به ریال. V10-2.3 (TD-022): تومان (IRT / TOMAN) ضریب ۱۰.
+ * v8.0.39 (TD-292): «هزار تومان» (IRHT) و «هزار ریال» (IRHR) افزونه ووکامرس فارسی ضریب ۱۰٬۰۰۰ و ۱٬۰۰۰ دارند؛ پیش‌تر ارز
+ * ناشناخته به حساب می‌آمدند و سفارش با خطای «نرخ تسعیر الزامی است» رد می‌شد.
+ */
+const RIAL_UNIT_MULTIPLIERS: ReadonlyMap<string, number> = new Map([
+  ['IRR', 1], ['ریال', 1],
+  ['IRT', 10], ['TOMAN', 10], ['تومان', 10],
+  ['IRHR', 1_000], ['هزار ریال', 1_000],
+  ['IRHT', 10_000], ['هزار تومان', 10_000],
+]);
+
 function resolveCurrency(wcOrder: WcOrderPayload): { multiplier: number; currency: string } {
-  // V10-2.3 (TD-022): تومان (IRT / TOMAN) با ضریب ۱۰ به ریال استاندارد تبدیل می‌شود
   const raw = String(wcOrder.currency || '').trim().toUpperCase();
-  const isToman = raw === 'IRT' || raw === 'TOMAN' || raw === 'تومان';
-  return { multiplier: isToman ? 10 : 1, currency: isToman ? 'IRR' : (raw || 'IRR') };
+  const multiplier = RIAL_UNIT_MULTIPLIERS.get(raw || 'IRR');
+  return multiplier !== undefined ? { multiplier, currency: 'IRR' } : { multiplier: 1, currency: raw };
 }
 
 export class WooOrderSyncService {

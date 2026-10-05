@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.39 — WooCommerce Audit; Thousand-Toman and Thousand-Rial Units (TD-292)
+- Area F (WooCommerce) audited with six findings; orders in the Persian plugin's thousand-toman (IRHT) and thousand-rial (IRHR) units are converted to rials and invoiced.
+
 ### v8.0.38 — Over-Ordering a Requisition Needs a Recorded Reason (TD-289)
 - Ordering beyond a purchase requisition's remaining quantity is refused without a reason; the form warns, and the reason is recorded on the requisition and the order.
 
