@@ -79,3 +79,40 @@ export async function checkLineDiscountWithinAmount(wh: string): Promise<string[
   problems.push(...await invariantProblems(scope, 'پس از فاکتورهای تخفیف‌دار'));
   return problems;
 }
+
+async function vatOf(docId: number): Promise<{ percent: string; amount: string }> {
+  const r = await pool.query<{ percent: string; amount: string }>(`SELECT vat_percent::text AS percent, vat_amount::text AS amount FROM documents WHERE id = $1`, [docId]);
+  return r.rows[0];
+}
+
+/**
+ * TD-381: مبلغ مالیات ارسالی همراه درصد مثبت باید همان مبلغ درصدی سرور باشد. پیش‌تر پیش‌فاکتور ۱۰۰۰ ریالی با درصد ۱۰ و
+ * مبلغ ۱ ریال ذخیره می‌شد و سند حسابداری همان ۱ ریال را مالیات می‌برد. مبلغ صریح بی درصد (ووکامرس) پذیرفته می‌ماند.
+ */
+export async function checkVatAmountMatchesPercent(wh: string): Promise<string[]> {
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await receive(item.id, 10, 1000, wh, '2026-03-01');
+  const line = (quantity: number, unitPrice: number): Line => ({ itemId: item.id, quantity, unitPrice, location: wh });
+  const problems: string[] = [];
+  const mismatch = 'یکی نیست';
+
+  const created = await refusedWith(() => salesInvoice([line(1, 1000)], 'proforma', { vatPercent: 10, vatAmount: 1 }), mismatch);
+  if (created) problems.push(`پیش‌فاکتور با درصد ۱۰ و مالیات ۱ ریال: ${created}`);
+
+  const ok = await salesInvoice([line(1, 1000)], 'proforma', { vatPercent: 10, vatAmount: 100 });
+  const okVat = await vatOf(ok);
+  if (Number(okVat.amount) !== 100) problems.push(`مالیات درست ۱۰۰ ذخیره نشد (${okVat.amount})`);
+
+  const edited = await refusedWith(() => DocumentService.updateDocument(ok, { vatPercent: 10, vatAmount: 5 }), mismatch);
+  if (edited) problems.push(`ویرایش پیش‌فاکتور به مالیات ۵ با درصد ۱۰: ${edited}`);
+  await DocumentService.updateDocument(ok, { vatPercent: 9 });
+  if (Number((await vatOf(ok)).amount) !== 90) problems.push(`ویرایش فقط درصد به ۹، مالیات را ${(await vatOf(ok)).amount} کرد، نه ۹۰`);
+
+  const finalized = await refusedWith(() => DocumentService.finalizeDocument(ok, 'inv', undefined, { vatPercent: 9, vatAmount: 0 }), mismatch);
+  if (finalized) problems.push(`نهایی‌سازی با درصد ۹ و مالیات صفر: ${finalized}`);
+
+  const amountOnly = await salesInvoice([line(1, 1000)], 'proforma', { vatAmount: 37 });
+  const amountOnlyVat = await vatOf(amountOnly);
+  if (Number(amountOnlyVat.amount) !== 37 || Number(amountOnlyVat.percent) !== 0) problems.push(`مالیات صریح بی درصد ۳۷ ذخیره نشد (${amountOnlyVat.amount}، ${amountOnlyVat.percent}٪)`);
+  return problems;
+}

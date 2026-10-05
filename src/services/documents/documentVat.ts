@@ -92,13 +92,22 @@ export function resolveDocumentVat(params: {
     return { vatPercent: 0, vatAmount: money(0) };
   }
   const { vatPercent, vatAmount } = parseVatInput(params.input);
+  const vatOf = (pct: number): FinancialDecimal => (pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100).round(0) : fin(0));
   if (vatAmount !== undefined) {
+    // v8.0.82 (TD-381): مبلغ صریح همراه درصد مثبت باید همان مبلغ درصدی سرور باشد؛ پیش‌تر هر مبلغی (درصد ۱۰ با مالیات ۱
+    // ریال) ذخیره می‌شد. مبلغ صریح بی درصد (مالیات سفارش ووکامرس) همان‌طور پذیرفته می‌شود.
+    if (vatPercent !== undefined && vatPercent > 0) {
+      const expected = vatOf(vatPercent);
+      if (!vatAmount.round(4).equals(expected)) {
+        throw new ValidationError(
+          `مبلغ مالیات (${vatAmount.toString()}) با ${vatPercent}٪ جمع خالص اقلام (${expected.toString()}) یکی نیست؛ فرم را تازه کنید یا فقط درصد مالیات را بفرستید.`,
+          { code: 'VAT_AMOUNT_MISMATCH', expected: expected.toNumber() }
+        );
+      }
+    }
     return { vatPercent: vatPercent ?? 0, vatAmount: money(vatAmount.round(4)) };
   }
-  const percentFromPercentage = (pct: number): DocumentVat => ({
-    vatPercent: pct,
-    vatAmount: money(pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100).round(0) : 0),
-  });
+  const percentFromPercentage = (pct: number): DocumentVat => ({ vatPercent: pct, vatAmount: money(vatOf(pct)) });
   if (vatPercent !== undefined) {
     return percentFromPercentage(vatPercent);
   }

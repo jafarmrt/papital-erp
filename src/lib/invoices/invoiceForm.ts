@@ -76,7 +76,6 @@ export interface InvoiceSavePayload {
   exchangeRate: number | null;
   crmLeadId: number | undefined;
   vatPercent: number;
-  vatAmount: number;
   items: Array<{ itemId: number; quantity: number; unit_price: number; discount: number }>;
 }
 

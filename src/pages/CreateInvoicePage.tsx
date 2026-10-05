@@ -303,8 +303,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       currency,
       exchangeRate: currency !== 'IRR' ? exchangeRate : null,
       crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
+      // v8.0.82 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
-      vatAmount: vatAmount,
       items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))
     };
 

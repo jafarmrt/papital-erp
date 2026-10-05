@@ -120,7 +120,7 @@ export class DocumentCreationService {
       const vatInput = parseVatInput(body);
       const linesChanged = Array.isArray(docLines);
       let vatLines: Array<{ quantity: unknown; unitPrice?: unknown; unit_price?: unknown; price?: unknown; discount?: unknown }> = linesChanged ? docLines! : [];
-      if (!linesChanged && vatInput.vatAmount === undefined && vatInput.vatPercent !== undefined) {
+      if (!linesChanged && vatInput.vatPercent !== undefined) {
         vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
           .from(documentItems)
           .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
