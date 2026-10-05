@@ -21,6 +21,7 @@ import { resolveShopWarehouseCode } from './shopWarehouse.js';
  * - processing / completed  → صدور فاکتور قطعی و کسر موجودی
  * - cancelled / failed      → ابطال خودکار فاکتور صادرشده (حذف نرم + تراکنش معکوس کاردکس + سند حسابداری معکوس)
  * - refunded                → فقط علامت «نیازمند بررسی»؛ استرداد وجه لزوماً به معنای برگشت کالا نیست
+ * - trash / وب‌هوک order.deleted → مثل refunded فقط «نیازمند بررسی» (v8.0.114، TD-407)؛ حذف سفارش در فروشگاه فاکتور را باطل نمی‌کند
  * - سایر (pending، on-hold، ...) → ثبت در لاگ بدون فاکتور، تا وب‌هوک وضعیت پرداخت‌شده برسد
  *
  * همزمانی: ردیف woocommerce_order_logs (wc_order_id یکتا) پیش از هر کاری درج و قفل سطری می‌شود؛
@@ -29,7 +30,15 @@ import { resolveShopWarehouseCode } from './shopWarehouse.js';
 
 export const WC_INVOICEABLE_STATUSES: ReadonlySet<string> = new Set(['processing', 'completed']);
 export const WC_VOIDABLE_STATUSES: ReadonlySet<string> = new Set(['cancelled', 'failed']);
-export const WC_REVIEW_STATUSES: ReadonlySet<string> = new Set(['refunded']);
+export const WC_REVIEW_STATUSES: ReadonlySet<string> = new Set(['refunded', 'trash']);
+
+/**
+ * v8.0.114 (TD-407): وب‌هوک «حذف سفارش» ووکامرس (موضوع order.deleted، هنگام بردن به سطل زباله یا حذف دائم) فقط شناسه سفارش را
+ * می‌فرستد و وضعیتی ندارد؛ پیش‌تر به شاخه «در انتظار پرداخت» می‌رفت و فاکتور صادرشده بی‌هیچ علامتی می‌ماند.
+ */
+export function isWcOrderDeletedTopic(topic: unknown): boolean {
+  return String(topic ?? '').trim().toLowerCase() === 'order.deleted';
+}
 
 /** وضعیت‌های ردیف لاگ سفارش در ERP */
 export type WcOrderLogStatus =
@@ -166,9 +175,14 @@ function resolveCurrency(wcOrder: WcOrderPayload): { multiplier: number; currenc
   return multiplier !== undefined ? { multiplier, currency: 'IRR' } : { multiplier: 1, currency: raw };
 }
 
+/** بدنه وب‌هوک حذف فقط { id } است؛ بدنه کامل پیشین (مبنای مقایسه TD-294) با آن بازنویسی نمی‌شود */
+function keptPayload(previous: unknown, incoming: WcOrderPayload): unknown {
+  return Array.isArray(incoming.line_items) || !previous ? incoming : previous;
+}
+
 export class WooOrderSyncService {
   /** نقطه ورود واحد وب‌هوک و همگام‌سازی دستی؛ سیاست وضعیت‌ها را اعمال می‌کند. */
-  static async handleOrder(wcOrder: WcOrderPayload): Promise<WcOrderSyncResult> {
+  static async handleOrder(wcOrder: WcOrderPayload, webhookTopic?: string): Promise<WcOrderSyncResult> {
     const wcOrderId = String(wcOrder?.id || wcOrder?.number || '').trim();
     if (!wcOrderId) {
       return {
@@ -179,7 +193,7 @@ export class WooOrderSyncService {
       };
     }
 
-    const wcStatus = String(wcOrder.status || '').trim().toLowerCase();
+    const wcStatus = isWcOrderDeletedTopic(webhookTopic) ? 'trash' : String(wcOrder.status || '').trim().toLowerCase();
     if (WC_INVOICEABLE_STATUSES.has(wcStatus)) {
       return this.invoiceOrder(wcOrderId, wcOrder);
     }
@@ -634,7 +648,7 @@ export class WooOrderSyncService {
         await tx.update(woocommerceOrderLogs).set({
           status: finalStatus,
           buyerName: log.buyerName || buyer.buyerName,
-          payload: wcOrder,
+          payload: keptPayload(log.payload, wcOrder),
           updatedAt: now,
         }).where(eq(woocommerceOrderLogs.id, log.id));
         return {
@@ -643,11 +657,13 @@ export class WooOrderSyncService {
           message: `سفارش ووکامرس #${wcOrderId} در وضعیت «${wcStatus}» است و فاکتور فعالی ندارد.`,
         };
       }
-      const message = `سفارش ووکامرس #${wcOrderId} در فروشگاه مسترد شد؛ فاکتور شماره ${invoice.refNumber} نیازمند بررسی حسابدار است (ابطال یا صدور سند برگشت از فروش در صورت برگشت کالا).`;
+      const message = wcStatus === 'trash'
+        ? `سفارش ووکامرس #${wcOrderId} در فروشگاه حذف شد (سطل زباله)؛ فاکتور شماره ${invoice.refNumber} نیازمند بررسی حسابدار است (ابطال در صورت لغو فروش، یا نگه‌داشتن اگر حذف فقط پاک‌سازی فروشگاه بوده است).`
+        : `سفارش ووکامرس #${wcOrderId} در فروشگاه مسترد شد؛ فاکتور شماره ${invoice.refNumber} نیازمند بررسی حسابدار است (ابطال یا صدور سند برگشت از فروش در صورت برگشت کالا).`;
       await tx.update(woocommerceOrderLogs).set({
         status: 'needs_review',
         erpDocumentId: invoice.id,
-        payload: wcOrder,
+        payload: keptPayload(log.payload, wcOrder),
         errorMessage: message,
         updatedAt: now,
       }).where(eq(woocommerceOrderLogs.id, log.id));
