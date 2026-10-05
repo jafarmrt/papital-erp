@@ -7,9 +7,10 @@ import {
   workflowInstances, 
   workflowPendingApprovals, 
   workflowHistoryLogs,
-  workflowTasks
+  workflowTasks,
+  users
 } from '../../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { workflowEventBus } from './workflowEventBus';
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors';
 import { domainEventBus } from '../events/domainEventBus';
@@ -216,6 +217,20 @@ export class WorkflowTransitionExecutor {
         eq(workflowTransitions.fromStateId, stateId)
       ));
     return transitions.filter(t => t.fromStateId === stateId).sort((a, b) => a.id - b.id);
+  }
+
+  /**
+   * v8.0.87 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): اعضای فعال نقش لازم گام AND_ALL (کاربران حذف‌نشده با همان کد
+   * نقش). گام بی‌نقش undefined می‌گیرد و همان K طراح را می‌خواهد.
+   */
+  static async andAllMemberIds(transition: Pick<WorkflowTransitionSnapshot, 'approvalRuleType' | 'requiredRole'>, txExecutor: DbClient = orm): Promise<number[] | undefined> {
+    if (WorkflowQuorumService.normalizeRuleType(transition.approvalRuleType ?? undefined) !== 'AND_ALL') return undefined;
+    const role = (transition.requiredRole || '').trim().toLowerCase();
+    if (!role || role === '*' || role === 'all') return undefined;
+    const members = await txExecutor.select({ id: users.id }).from(users)
+      .where(and(sql`COALESCE(${users.isDeleted}, 0) = 0`, sql`lower(${users.role}) = ${role}`))
+      .orderBy(users.id);
+    return members.map(m => m.id);
   }
 
   /**
@@ -554,6 +569,7 @@ export class WorkflowTransitionExecutor {
       const quorumEval = WorkflowQuorumService.evaluateAndAddSignature({
         approvalRuleType: transition.approvalRuleType as 'SINGLE' | 'AND_ALL' | 'OR_ANY' | 'K_OF_N' | undefined,
         kValue: transition.kValue ?? undefined,
+        memberIds: await this.andAllMemberIds(transition, tx),
         existingSignatures,
         userId: params.userId || 0,
         userName: params.userName,

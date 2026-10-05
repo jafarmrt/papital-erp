@@ -59,7 +59,8 @@ export class WorkflowQuorumService {
       if (params.totalCandidatesCount && params.totalCandidatesCount > 0) {
         return params.totalCandidatesCount;
       }
-      return Math.max(2, params.kValue || 2);
+      // v8.0.87 (TD-376): گام بی‌نقش (یا نقش بی‌عضو) همان K طراح را می‌خواهد؛ پیش‌تر کمینه ۲ بود
+      return Math.max(1, params.kValue || 1);
     }
     return 1;
   }
@@ -73,29 +74,38 @@ export class WorkflowQuorumService {
     requiredSignaturesCount?: number;
     totalCandidatesCount?: number;
     existingSignatures?: SignatureEntry[];
+    /**
+     * v8.0.87 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): کاربران فعال نقش لازم گام AND_ALL. گام وقتی رد می‌شود که
+     * همه آن‌ها امضا کرده باشند؛ امضای کسی بیرون از فهرست (مثلاً ادمین) ثبت می‌شود ولی جای عضوی را پر نمی‌کند.
+     */
+    memberIds?: number[];
     userId: number;
     userName?: string;
     userRole?: string;
     comment?: string;
   }): QuorumEvaluationResult {
     const ruleType = this.normalizeRuleType(params.approvalRuleType);
+    const members = ruleType === 'AND_ALL' && params.memberIds && params.memberIds.length > 0 ? params.memberIds : null;
     const requiredCount = this.getRequiredSignaturesCount({
       approvalRuleType: ruleType,
       kValue: params.kValue,
-      requiredSignaturesCount: params.requiredSignaturesCount,
+      requiredSignaturesCount: members ? members.length : params.requiredSignaturesCount,
       totalCandidatesCount: params.totalCandidatesCount
     });
+    const countOf = (signatures: SignatureEntry[]) => members
+      ? members.filter(id => signatures.some(s => Number(s.userId) === Number(id))).length
+      : signatures.length;
 
     const existingSignatures = params.existingSignatures || [];
     const alreadySigned = existingSignatures.some(s => Number(s.userId) === Number(params.userId));
 
     if (alreadySigned) {
-      const quorumMet = existingSignatures.length >= requiredCount;
+      const quorumMet = countOf(existingSignatures) >= requiredCount;
       return {
         alreadySigned: true,
         quorumMet,
         requiredCount,
-        signaturesCount: existingSignatures.length,
+        signaturesCount: countOf(existingSignatures),
         signatures: existingSignatures,
         message: 'امضای شما قبلاً برای این مرحله ثبت گردیده است (WF_DUPLICATE_SIGNATURE)'
       };
@@ -110,17 +120,18 @@ export class WorkflowQuorumService {
     };
 
     const updatedSignatures = [...existingSignatures, newSignature];
-    const quorumMet = ruleType === 'SINGLE' || ruleType === 'OR_ANY' || updatedSignatures.length >= requiredCount;
+    const signaturesCount = countOf(updatedSignatures);
+    const quorumMet = ruleType === 'SINGLE' || ruleType === 'OR_ANY' || signaturesCount >= requiredCount;
 
     return {
       alreadySigned: false,
       quorumMet,
       requiredCount,
-      signaturesCount: updatedSignatures.length,
+      signaturesCount,
       signatures: updatedSignatures,
       message: quorumMet 
-        ? `حدنصاب امضاها (${updatedSignatures.length} از ${requiredCount}) با موفقیت تکمیل گردید.`
-        : `امضای شما با موفقیت ثبت شد (${updatedSignatures.length} از ${requiredCount} امضا دریافت شد).`
+        ? `حدنصاب امضاها (${signaturesCount} از ${requiredCount}) با موفقیت تکمیل گردید.`
+        : `امضای شما با موفقیت ثبت شد (${signaturesCount} از ${requiredCount} امضا دریافت شد).`
     };
   }
 }
