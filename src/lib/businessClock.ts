@@ -118,14 +118,11 @@ export async function businessTodayJalaliDash(): Promise<string> {
  * به عبارت دیگر partition key همیشه «سال جلالی» است.
  */
 export function resolveJalaliFiscalYear(dateLike?: string | number | null): number {
-  const now = new Date();
-  const fallback = now.getUTCFullYear() - 621;
-
   if (typeof dateLike === 'number' && dateLike > 1300 && dateLike < 1600) {
     return dateLike;
   }
   const s = String(dateLike ?? '').trim();
-  if (!s) return fallback;
+  if (!s) return currentBusinessFiscalYear();
 
   // الگوهای جلالی: 1405/05/16 یا 1405-05-16 یا شروع با 14xx/13xx
   const jalaliMatch = s.match(/^(1[345]\d{2})[-/]/);
@@ -149,9 +146,26 @@ export function resolveJalaliFiscalYear(dateLike?: string | number | null): numb
   if (fallback4) {
     const y = parseInt(fallback4[1], 10);
     if (y >= 1300 && y <= 1500) return y;
-    return y - 621 > 0 ? y - 621 : fallback;
+    return y - 621 > 0 ? y - 621 : currentBusinessFiscalYear();
   }
-  return fallback;
+  return currentBusinessFiscalYear();
+}
+
+/**
+ * v8.0.48 (TD-311): سال مالی «امروز» در منطقه زمانی توافقی (آخرین مقدار کش‌شده، وگرنه تهران). پیش‌تر سال پیش‌فرض
+ * «سال میلادی UTC − ۶۲۱» بود که از ۱ ژانویه تا نوروز یک سال جلو بود: کد درخواست خرید و پیش‌نمایش شماره بعدی در
+ * دی تا اسفند شمارنده سال بعد را می‌گرفتند.
+ */
+function currentBusinessFiscalYear(): number {
+  const tz = cachedTz?.value || FALLBACK_TIMEZONE;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date());
+  return resolveJalaliFiscalYear(today);
+}
+
+/** v8.0.48 (TD-311): سال مالی (شمسی) امروزِ ساعت توافقی، با منطقه زمانی تازه از تنظیمات */
+export async function businessFiscalYear(): Promise<number> {
+  return resolveJalaliFiscalYear(await businessTodayIsoDate());
 }
 
 /**
