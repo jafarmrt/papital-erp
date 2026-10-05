@@ -246,6 +246,10 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   })().catch(next); });
 };
 
+/** نشانه میدل‌ور احراز هویت برای جدول «مسیر ← مجوز» (`src/lib/routeGuardTable.ts`؛ کلید رشته‌ای، مانند `GUARD_ENTRIES`). */
+export const AUTHENTICATES = '__erpAuthenticates';
+Object.assign(authenticateToken, { [AUTHENTICATES]: true });
+
 export const csrfProtection = (req: Request, res: Response, next: NextFunction) => {
   // Only state-changing mutation requests require CSRF protection
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {

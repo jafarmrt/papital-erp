@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.47 — Area H Audit; Route Permission Table and View-Only Mutations (TD-298)
+- Area H (security and access) was audited from a route → permission table built from the Express routers; BOM allocation and workflow start no longer open to view-only permissions, and a test keeps every route within the access policy.
+
 ### v8.0.46 — No Floating Promises
 - All 209 floating promises in the browser code are marked or handled; `no-floating-promises` is now an ESLint error, and clipboard copies report failure instead of a false «copied» message.
 

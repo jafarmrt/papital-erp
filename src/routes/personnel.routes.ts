@@ -133,7 +133,7 @@ const updatePersonnelSchema = z.object({
 });
 
 // GET /api/personnel/export - Export all personnel for Excel
-router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage', 'payroll.view_sensitive'), asyncHandler(async (req, res) => {
+router.get('/personnel/export', authorize('admin', 'manager', 'personnel.manage'), asyncHandler(async (req, res) => {
   try {
     const list = await orm
       .select({

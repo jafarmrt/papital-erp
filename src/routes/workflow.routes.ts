@@ -184,7 +184,8 @@ router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view
  * POST /api/workflow/start
  * Start or attach a workflow instance to an entity
  */
-router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'workflow.view', 'documents.create', 'documents.edit'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+// حوزه H (TD-298): شروع فرآیند تغییر است؛ workflow.view (مشاهده) کافی نیست
+router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'documents.create', 'documents.edit'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const { workflowCode, entityType, entityId } = req.body;
 

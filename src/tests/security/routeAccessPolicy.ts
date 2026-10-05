@@ -1,0 +1,128 @@
+import request from 'supertest';
+import { inArray } from 'drizzle-orm';
+import { TestCaseResult, makeTestCase } from '../types.js';
+import { orm } from '../../db/drizzle.js';
+import { roles, users } from '../../db/schema.js';
+import {  } from '../../lib/money.js';
+import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
+
+/**
+ * حوزه H نقشه راه V8 — امنیت و دسترسی. جدول «مسیر ← مجوز» از خود روترها ساخته و با سیاست زیر سنجیده می‌شود،
+ * و هر یافته (TD-298 تا TD-309) یک آزمون دارد که روی کد پیشین قرمز است.
+ */
+
+/** مسیرهای بی‌احراز هویت (ورود، راه‌اندازی، سلامت، متریک با توکن خودش). وب‌هوک ووکامرس با router.all ثبت شده و در جدول نیست. */
+export const PUBLIC_ROUTES = new Set([
+  'POST /api/login', 'POST /api/auth/login', 'POST /api/logout', 'POST /api/auth/logout',
+  'GET /api/check-setup', 'GET /api/public-settings', 'POST /api/setup',
+  'GET /metrics', 'GET /api/metrics',
+  'GET /health', 'GET /health/live', 'GET /health/ready', 'GET /health/startup',
+  'GET /api/health', 'GET /api/health/live', 'GET /api/health/ready', 'GET /api/health/startup',
+]);
+
+/**
+ * مسیرهایی که فقط ورود می‌خواهند. هر کدام یا داده خود کاربر را می‌خواند/می‌نویسد (پروفایل، اعلان، پیش‌نویس، فیش خود)،
+ * یا فهرست انتخاب عمومی است (AGENTS.md §5)، یا مجوز را درون هندلر می‌سنجد (جست‌وجوی سراسری، پیوست، بازخورد گزارش کار).
+ */
+export const LOGIN_ONLY_ROUTES = new Set([
+  'GET /api/auth/me', 'GET /api/me', 'GET /api/auth/csrf', 'GET /api/csrf',
+  'GET /api/users/my-permissions', 'GET /api/users/profile', 'PUT /api/users/profile', 'GET /api/users/list-simple',
+  'GET /api/system/business-date', 'GET /api/settings', 'GET /api/menu-visibility', 'GET /api/global-search',
+  'GET /api/categories', 'GET /api/warehouses',
+  'PUT /api/daily-logs/:id/review',
+  'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
+  'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
+  'GET /api/piecework/payrolls/mine',
+  'POST /api/pending-materials', 'PUT /api/pending-materials/:id',
+  'POST /api/drafts', 'GET /api/drafts/:entityType', 'GET /api/drafts', 'DELETE /api/drafts/:entityType', 'DELETE /api/drafts/id/:id',
+  'GET /api/attachments/:id',
+]);
+
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const isViewPermission = (entry: string) => entry.endsWith('.view');
+
+/** تخلف‌های جدول مسیرها از سیاست دسترسی؛ آرایه خالی یعنی سالم */
+export function routeAccessPolicyViolations(rows: RouteGuardRow[], catalogKeys: Set<string>): string[] {
+  const violations: string[] = [];
+  for (const row of rows) {
+    const key = `${row.method} ${row.path}`;
+    if (!row.authenticated) {
+      if (!PUBLIC_ROUTES.has(key)) violations.push(`${key}: بدون احراز هویت`);
+      continue;
+    }
+    if (row.guards.length === 0) {
+      if (!LOGIN_ONLY_ROUTES.has(key)) violations.push(`${key}: فقط ورود، بدون مجوز`);
+      continue;
+    }
+    // هر گارد «یکی کافی است» است و گاردهای پشت هم همه لازم‌اند: اگر هر گارد یک مجوز «مشاهده» بپذیرد، دارنده فقط مشاهده می‌گذرد
+    if (MUTATION_METHODS.has(row.method) && row.guards.every(g => g.some(isViewPermission))) {
+      violations.push(`${key}: تغییر با مجوز مشاهده (${formatGuards(row)})`);
+    }
+    for (const entry of row.guards.flat()) {
+      if (entry.includes('.') && !catalogKeys.has(entry)) violations.push(`${key}: مجوز «${entry}» در کاتالوگ نیست`);
+    }
+  }
+  return violations;
+}
+
+interface Session { cookie: string; csrfToken: string }
+
+export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
+  const results: TestCaseResult[] = [];
+  const record = (id: string, name: string, executionType: 'real_code' | 'real_database', run: () => Promise<string>) => ({ id, name, executionType, run });
+  const createdRoleIds: number[] = [];
+  const createdUserIds: number[] = [];
+
+  const { getTestApp, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
+  const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
+  const { PERMISSION_CATALOG } = await import('../../routes/users.routes.js');
+  const catalogKeys = new Set(PERMISSION_CATALOG.flatMap(c => c.permissions.map(p => p.key)));
+  const app = await getTestApp();
+
+  const userWith = async (permissions: string[]): Promise<{ id: number; session: Session }> => {
+    const role = await createTestRole({ permissions });
+    createdRoleIds.push(role.id);
+    const user = await createTestUser({ role: role.code });
+    createdUserIds.push(user.id);
+    return { id: user.id, session: await loginTestUserWithSession(app, user.username) };
+  };
+  const send = (s: Session, method: 'post' | 'put' | 'delete' | 'get', url: string, body?: object) => {
+    const r = request(app)[method](url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken);
+    return body ? r.send(body) : r;
+  };
+
+  const cases = [
+    record('sec_route_access_policy_td_298', 'حوزه H: جدول «مسیر ← مجوز» — احراز هویت، فهرست مسیرهای فقط‌ورود، تغییر بی مجوز مشاهده، کلید مجوز از کاتالوگ (TD-298 / TD-304)', 'real_code', async () => {
+      const rows = buildRouteGuardTable(app);
+      if (rows.length < 300) throw new Error(`جدول مسیرها ناقص است (${rows.length} مسیر)`);
+      const violations = routeAccessPolicyViolations(rows, catalogKeys);
+      if (violations.length > 0) throw new Error(`${violations.length} تخلف: ${violations.join(' | ')}`);
+      return `${rows.length} مسیر بی‌تخلف`;
+    }),
+    record('sec_view_permission_cannot_mutate_td_298', 'حوزه H: مجوز مشاهده تخصیص مواد BOM و شروع فرآیند را باز نمی‌کند (TD-298)', 'real_database', async () => {
+      const viewer = await userWith(['warehouse.view', 'projects.view', 'workflow.view', 'products.view']);
+      const allocate = await send(viewer.session, 'post', '/api/inventory/allocations/allocate', { projectId: 999999999, allocations: [{ itemId: 999999999, quantity: 1 }] });
+      const start = await send(viewer.session, 'post', '/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: 999999999 });
+      const wrong = [[allocate.status, 'allocate'], [start.status, 'workflow/start']].filter(([st]) => st !== 403);
+      if (wrong.length > 0) throw new Error(`دارنده فقط مشاهده رد نشد: ${wrong.map(([st, n]) => `${n} ${st}`).join('، ')}`);
+      return 'هر دو 403';
+    }),
+  ];
+
+  try {
+    for (const c of cases) {
+      if (!shouldRun(c.id, 'security', 'route', 'access')) continue;
+      const tStart = Date.now();
+      try {
+        const details = await c.run();
+        results.push(makeTestCase({ id: c.id, name: c.name, layer: 'security', executionType: c.executionType, passed: true, durationMs: Date.now() - tStart, details }));
+      } catch (err) {
+        results.push(makeTestCase({ id: c.id, name: c.name, layer: 'security', executionType: c.executionType, passed: false, durationMs: Date.now() - tStart, error: err instanceof Error ? err.message : String(err) }));
+      }
+    }
+  } finally {
+    if (createdUserIds.length > 0) await orm.delete(users).where(inArray(users.id, createdUserIds)).catch(() => undefined);
+    if (createdRoleIds.length > 0) await orm.delete(roles).where(inArray(roles.id, createdRoleIds)).catch(() => undefined);
+  }
+  return results;
+}
