@@ -6,6 +6,7 @@ import {
 } from './workflowScenarios.js';
 import { checkReceiveApprovesInReceiverName, checkRequisitionActionFollowsWorkflow } from './workflowProcurementScenarios.js';
 import { checkInitiatorExcludedStep, checkTransitionRequiredPermission } from './workflowPermissionScenarios.js';
+import { checkRequisitionStepNotRewritten, checkWorkflowDocumentAmountInRials } from './workflowObservationScenarios.js';
 import { checkAndAllNeedsEveryMember, checkDelegateActsForDelegatorRole, checkDelegationRevokedByDelegatorOnly } from './workflowDelegationScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه G (گردش‌کار و تأیید) در سوئیت workflow: [شناسه، نام، بررسی، شرح موفقیت] */
@@ -36,6 +37,10 @@ export const WORKFLOW_CHECKS: Array<[string, string, () => Promise<string[]>, st
     checkTransitionRequiredPermission, 'کاربر بی مجوز ۴۰۳ گرفت و انتقال به او پیشنهاد نشد؛ نقش دارای مجوز، مجوز خود کاربر و ادمین اجرا کردند'],
   ['wf_td_392_initiator_excluded_step', 'v8.0.102: گام «آغازکننده تأیید نکند» برای آغازکننده و جانشینش بسته است و در کارتابل او نمی‌آید؛ همکار و ادمین اجرا می‌کنند (TD-392)',
     checkInitiatorExcludedStep, 'آغازکننده و جانشینش ۴۰۳ گرفتند؛ کار فقط در کارتابل همکار آمد؛ همکار و ادمین اجرا کردند؛ گام بی تیک باز ماند'],
+  ['wf_td_404_document_amount_in_rials', 'v8.0.123: قاعده مبلغ گردش‌کار سند مبلغ قابل پرداخت ریالی را می‌سنجد (با مالیات، هزینه خدمات و تسعیر) و سند ارزی بی نرخ از هیچ شرط مبلغی نمی‌گذرد (TD-404)',
+    checkWorkflowDocumentAmountInRials, 'فاکتور ۱۱۰ دلاری ۵۵ میلیون ریال سنجیده شد؛ فاکتور ریالی ۱٬۱۵۰٬۰۰۰ بی ردیف حذف‌شده؛ سند بی نرخ از هیچ شرط مبلغی نگذشت'],
+  ['wf_td_405_requisition_step_not_rewritten', 'v8.0.124: اقدام درخواست خرید گام گردش‌کار را از وضعیت درخواست بازنویسی نمی‌کند و درخواستِ دریافت‌شده اقدامی نمی‌پذیرد (TD-405)',
+    checkRequisitionStepNotRewritten, 'هر جابه‌جایی گام در تاریخچه ثبت شد و تأیید پیش از دریافت آمد؛ اقدام روی درخواستِ دریافت‌شده ۴۰۹ گرفت و گامش دست نخورد'],
 ];
 
 export async function runWorkflowChecks(shouldRun: (id: string) => boolean): Promise<TestCaseResult[]> {

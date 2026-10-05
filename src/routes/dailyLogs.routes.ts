@@ -232,11 +232,16 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
 // GET stats for daily logs
 router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
+  if (!currentUserId) throw new UnauthorizedError('احراز هویت انجام نشده است');
+  const canManageAll = await canManageAllDailyLogs(req.user?.role);
 
-  const allLogs = await orm
+  // v8.0.125 (TD-406): آمار فقط گزارش‌هایی را می‌شمارد که همین کاربر در فهرست می‌بیند (قاعده محرمانگی TD-301)؛ پیش‌تر
+  // شمار کل، حضوری/دورکاری و «اشاره به من» گزارش‌های محرمانه دیگران را هم می‌شمرد.
+  const allLogs = (await orm
     .select()
     .from(dailyWorkLogs)
-    .where(eq(dailyWorkLogs.isDeleted, 0));
+    .where(eq(dailyWorkLogs.isDeleted, 0)))
+    .filter(l => canSeeDailyLog(l, currentUserId, canManageAll));
 
   const myLogs = allLogs.filter(l => l.userId === currentUserId);
   

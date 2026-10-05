@@ -5605,7 +5605,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         phone: `0912${String(now).slice(-7)}`,
         partyType: 'both',
         city: 'اصفهان',
-        address: 'خیابان به‌روزرسانی پلاک ۲'
+        address: 'خیابان به‌روزرسانی پلاک ۲',
+        version: cust.version
       });
 
       if (updatedCust.name !== `طرف حساب تست معماری به‌روزرسانی شده ${now}` || updatedCust.partyType !== 'both') {
