@@ -8,6 +8,7 @@ import {
   useUpdateCanvasPositionsMutation 
 } from '../../hooks/queries/useWorkflowQueries';
 import { toast } from 'react-hot-toast';
+import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
 
 interface WorkflowDesignerCanvasProps {
   definitionId: number;
@@ -32,6 +33,7 @@ interface CanvasEdge {
   actionKey: string;
   title: string;
   requiredRole: string;
+  requiredPermission: string;
   approvalRuleType: string;
   kValue: number;
   ruleConditionsJson: any[];
@@ -53,7 +55,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const saveMutation = useSaveWorkflowDefinitionMutation();
   const updatePositionsMutation = useUpdateCanvasPositionsMutation();
 
-  const { data: dbRoles } = useQuery<{ id: number; name: string; code: string; isSystem?: number }[]>({
+  const { data: dbRoles } = useQuery<{ id: number; name: string; code: string; isSystem?: number; permissions?: unknown }[]>({
     queryKey: ['roles', 'list'],
     queryFn: async () => {
       const res = await fetchJson('/users/roles');
@@ -61,6 +63,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
     },
     staleTime: 5 * 60 * 1000
   });
+
+  const permissionOptions = [...new Set((dbRoles || []).flatMap(r => (Array.isArray(r.permissions) ? r.permissions : []).map(String)))]
+    .filter(p => p.includes('.')).sort();
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [edges, setEdges] = useState<CanvasEdge[]>([]);
@@ -116,6 +121,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
         actionKey: t.actionKey || 'action',
         title: t.title || 'اقدام',
         requiredRole: t.requiredRole || '',
+        requiredPermission: t.requiredPermission || '',
         approvalRuleType: t.approvalRuleType || 'SINGLE',
         kValue: Number(t.kValue) || 1,
         ruleConditionsJson: t.ruleConditionsJson || [],
@@ -194,6 +200,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       actionKey: `action_${Date.now().toString().slice(-4)}`,
       title: 'اقدام جدید',
       requiredRole: '',
+      requiredPermission: '',
       approvalRuleType: 'SINGLE',
       kValue: 1,
       ruleConditionsJson: [],
@@ -573,6 +580,12 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   )}
                 </select>
               </div>
+
+              <WorkflowEdgeGuardFields
+                value={selectedEdge}
+                permissionOptions={permissionOptions}
+                onChange={(patch) => setEdges(prev => prev.map((eg, idx) => idx === selectedEdgeIndex ? { ...eg, ...patch } : eg))}
+              />
 
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">منطق تاییدات موازی</label>

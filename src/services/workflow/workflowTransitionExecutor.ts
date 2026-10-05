@@ -8,7 +8,8 @@ import {
   workflowPendingApprovals, 
   workflowHistoryLogs,
   workflowTasks,
-  users
+  users,
+  roles
 } from '../../db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { workflowEventBus } from './workflowEventBus';
@@ -48,6 +49,7 @@ export interface WorkflowTransitionSnapshot {
   actionKey: string;
   title: string;
   requiredRole?: string | null;
+  requiredPermission?: string | null;
   ruleConditionsJson?: unknown;
   approvalRuleType?: string | null;
   kValue?: number | null;
@@ -193,6 +195,12 @@ export class WorkflowTransitionExecutor {
     let filtered = transitions.filter(t => {
       return WorkflowTransitionExecutor.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
     });
+    // v8.0.91 (TD-391): انتقالی که مجوز لازمش را کاربر ندارد پیشنهاد نمی‌شود
+    const permitted: WorkflowTransitionSnapshot[] = [];
+    for (const t of filtered) {
+      if (await WorkflowTransitionExecutor.holdsRequiredPermission(t, { role: userRole, permissions: userPermissions, ownPermissions: true }, txExecutor)) permitted.push(t);
+    }
+    filtered = permitted;
 
     if (entityContext) {
       filtered = filtered.filter(t => {
@@ -218,6 +226,28 @@ export class WorkflowTransitionExecutor {
         eq(workflowTransitions.fromStateId, stateId)
       ));
     return transitions.filter(t => t.fromStateId === stateId).sort((a, b) => a.id - b.id);
+  }
+
+  /**
+   * v8.0.91 (TD-391، تصمیم مالک محصول «بررسی شود»): مجوز لازم انتقال. انتقالی که «مجوز لازم» دارد فقط برای کسی است که
+   * علاوه بر نقش گام آن مجوز را دارد (ادمین همیشه). امضای جانشین با مجوزهای نقش تفویض‌کننده سنجیده می‌شود. مجوزهای
+   * نقش با همان اتصال تراکنش خوانده می‌شوند. پیش‌تر این ستون ذخیره می‌شد ولی هیچ‌جا سنجیده نمی‌شد.
+   */
+  static async holdsRequiredPermission(
+    transition: Pick<WorkflowTransitionSnapshot, 'requiredPermission'>,
+    signer: { role?: string; permissions?: string[]; ownPermissions: boolean },
+    txExecutor: DbClient = orm
+  ): Promise<boolean> {
+    const permission = (transition.requiredPermission || '').trim();
+    if (!permission) return true;
+    const role = (signer.role || '').trim().toLowerCase();
+    if (role === 'admin') return true;
+    const held = (list: string[]) => list.includes(permission) || list.includes('*');
+    if (signer.ownPermissions && held(signer.permissions || [])) return true;
+    if (!role) return false;
+    const [roleRow] = await txExecutor.select({ permissions: roles.permissions }).from(roles)
+      .where(sql`lower(${roles.code}) = ${role}`);
+    return held(Array.isArray(roleRow?.permissions) ? (roleRow.permissions as string[]) : []);
   }
 
   /**
@@ -567,6 +597,12 @@ export class WorkflowTransitionExecutor {
       // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
       // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
       const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, params, tx);
+      const signerHoldsPermission = await WorkflowTransitionExecutor.holdsRequiredPermission(transition, actingFor
+        ? { role: actingFor.fromRole, ownPermissions: false }
+        : { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }, tx);
+      if (!signerHoldsPermission) {
+        throw new ForbiddenError(`انتقال «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد (WF_PERMISSION_REQUIRED).`);
+      }
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
       const authoritativeContext = await getEntityContext(instance.entityType, instance.entityId, tx);
@@ -793,6 +829,9 @@ export class WorkflowTransitionExecutor {
     const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
     if (!isAuthorized) {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
+    }
+    if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }))) {
+      return { allowed: false, reason: `این انتقال مجوز «${transition.requiredPermission}» را می‌خواهد` };
     }
 
     // Authoritative Server-side Context & Rule Check (Subphase 1.3)

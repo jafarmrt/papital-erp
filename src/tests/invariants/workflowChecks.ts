@@ -5,6 +5,7 @@ import {
   checkTaskAndTransitionNoDeadlock, checkTaskRunsItsOwnTransition, checkViewPermissionCannotApprove,
 } from './workflowScenarios.js';
 import { checkRequisitionActionFollowsWorkflow } from './workflowProcurementScenarios.js';
+import { checkTransitionRequiredPermission } from './workflowPermissionScenarios.js';
 import { checkAndAllNeedsEveryMember, checkDelegateActsForDelegatorRole, checkDelegationRevokedByDelegatorOnly } from './workflowDelegationScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه G (گردش‌کار و تأیید) در سوئیت workflow: [شناسه، نام، بررسی، شرح موفقیت] */
@@ -29,6 +30,8 @@ export const WORKFLOW_CHECKS: Array<[string, string, () => Promise<string[]>, st
     checkDelegationRevokedByDelegatorOnly, 'لغو جانشین ۴۰۳؛ تفویض‌کننده و ادمین لغو کردند؛ ورودی نادرست ۴۲۲ و ناموجود ۴۰۴'],
   ['wf_td_379_requisition_action_follows_workflow', 'v8.0.90: اقدام گردش‌کار درخواست خرید فقط انتقال گام جاری را اجرا می‌کند؛ درخواست دریافت‌شده بازگشایی و دوباره دریافت نمی‌شود (TD-379)',
     checkRequisitionActionFollowsWorkflow, 'بازگشایی درخواست دریافت‌شده رد شد؛ موجودی ۱۰ ماند'],
+  ['wf_td_391_transition_required_permission', 'v8.0.91: انتقالی که «مجوز لازم» دارد فقط برای دارنده آن مجوز یا ادمین اجرا و پیشنهاد می‌شود (TD-391)',
+    checkTransitionRequiredPermission, 'کاربر بی مجوز ۴۰۳ گرفت و انتقال به او پیشنهاد نشد؛ نقش دارای مجوز، مجوز خود کاربر و ادمین اجرا کردند'],
 ];
 
 export async function runWorkflowChecks(shouldRun: (id: string) => boolean): Promise<TestCaseResult[]> {
