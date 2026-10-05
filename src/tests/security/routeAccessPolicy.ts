@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs } from '../../db/schema.js';
 import {  } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -132,6 +132,23 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const wrong = checks.filter(([, got, want]) => got !== want);
       if (wrong.length > 0) throw new Error(wrong.map(([n, got, want]) => `${n}: ${got} (انتظار ${want})`).join('، '));
       return `${checks.length} بررسی`;
+    }),
+    record('sec_daily_log_by_id_visibility_td_301', 'حوزه H: دریافت تکی گزارش کار همان قاعده محرمانگی فهرست را دارد (TD-301)', 'real_database', async () => {
+      const author = await userWith(['daily_logs.view', 'daily_logs.create']);
+      const other = await userWith(['daily_logs.view', 'daily_logs.create']);
+      const [log] = await orm.insert(dailyWorkLogs).values({
+        userId: author.id, username: 'td301', userFullName: 'td301', date: '2026-10-01', dateIso: '2026-10-01',
+        title: 'td301 محرمانه', content: 'متن محرمانه', visibility: 'private'
+      }).returning();
+      try {
+        const byOther = await send(other.session, 'get', `/api/daily-logs/${log.id}`);
+        const byAuthor = await send(author.session, 'get', `/api/daily-logs/${log.id}`);
+        if (byOther.status !== 404) throw new Error(`گزارش محرمانه به کاربر دیگر داده شد (${byOther.status})`);
+        if (byAuthor.status !== 200) throw new Error(`نویسنده گزارش خود را نگرفت (${byAuthor.status})`);
+        return 'دیگری 404، نویسنده 200';
+      } finally {
+        await orm.delete(dailyWorkLogs).where(eq(dailyWorkLogs.id, log.id));
+      }
     }),
   ];
 

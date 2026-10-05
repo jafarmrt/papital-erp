@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.49 — Private Daily Logs Stay Private by ID (TD-301)
+- Opening a daily work log by its id applies the same visibility rule as the list; private and manager-only logs of others are no longer returned.
+
 ### v8.0.48 — Only an Admin Manages Admin Accounts (TD-299)
 - A user manager without the admin role can no longer grant or remove the admin role, or change or delete an admin account.
 
