@@ -267,7 +267,7 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
   const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
     // ── v8.0.47 به بعد: حوزه I، مرز تاریخ و شماره‌گذاری (TD-310 تا TD-317) ──
     ...DATE_BOUNDARY_CHECKS,
-    ...CONCURRENCY_CHECKS, ...FRONTEND_SERVER_CHECKS, // حوزه J، همزمانی (v8.0.67 به بعد)؛ حوزه L، فرانت و سرور (v8.0.81 به بعد)
+    ...CONCURRENCY_CHECKS, ...FRONTEND_SERVER_CHECKS, // حوزه J، همزمانی (v8.0.67 به بعد)؛ حوزه L، فرانت و سرور (v8.0.103 به بعد)
     ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
       checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
     ['inv_td_262_excel_adjustment_voucher', 'v8.0.3: اصلاح موجودی از اکسل سند «کسری و اضافات انبار» و کالای تازه اکسل سند افتتاحیه می‌گیرد (TD-262)',

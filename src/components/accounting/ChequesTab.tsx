@@ -256,7 +256,7 @@ export function ChequesTab({
   };
 
   const filteredCheques = safeCheques.filter(c => {
-    // v8.0.86 (TD-385): شماره چک و صیادی با ارقام لاتین ذخیره می‌شوند؛ جست‌وجو با ارقام فارسی هم پیدا می‌کند
+    // v8.0.108 (TD-385): شماره چک و صیادی با ارقام لاتین ذخیره می‌شوند؛ جست‌وجو با ارقام فارسی هم پیدا می‌کند
     const numberQuery = toEnglishDigits(searchQuery.trim());
     const matchSearch = !searchQuery.trim() ||
       toEnglishDigits(c.chequeNumber).includes(numberQuery) ||

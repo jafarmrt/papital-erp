@@ -86,7 +86,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     applyVat,
     vatRate,
     docItems,
-    // v8.0.89 (TD-388): پیوند پرونده CRM با پیش‌نویس نگه داشته می‌شود
+    // v8.0.111 (TD-388): پیوند پرونده CRM با پیش‌نویس نگه داشته می‌شود
     crmLeadId
   };
 
@@ -99,7 +99,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     entityType: 'invoice',
     draftKey: 'new_invoice',
     enabled: !editingDocId,
-    // v8.0.89 (TD-388): فرم بی ردیف و بی خریدار (مثلاً پس از ثبت) پیش‌نویس نمی‌سازد
+    // v8.0.111 (TD-388): فرم بی ردیف و بی خریدار (مثلاً پس از ثبت) پیش‌نویس نمی‌سازد
     isEmpty: isEmptyInvoiceDraft,
     onDraftLoaded: (loaded) => {
       if (loaded.docType) setDocType(loaded.docType);
@@ -216,7 +216,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
     const it = selectedItemObj;
-    // v8.0.81 (TD-380): تخفیف ردیف حداکثر برابر مبلغ همان ردیف (همان قاعده سرور)
+    // v8.0.103 (TD-380): تخفیف ردیف حداکثر برابر مبلغ همان ردیف (همان قاعده سرور)
     const discountError = lineDiscountError(Number(quantity), Number(unitPrice || 0), Number(discount || 0));
     if (discountError) {
       toast.error(discountError);
@@ -250,7 +250,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setDiscount(0);
   };
 
-  // v8.0.85 (TD-384): ارز فاکتور دارای ردیف عوض نمی‌شود (فی ردیف‌ها به ارز فعلی است)
+  // v8.0.107 (TD-384): ارز فاکتور دارای ردیف عوض نمی‌شود (فی ردیف‌ها به ارز فعلی است)
   const handleCurrencyChange = (next: string) => {
     const error = currencyChangeError(docItems.length, currency, next);
     if (error) {
@@ -321,7 +321,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       currency,
       exchangeRate: currency !== 'IRR' ? exchangeRate : null,
       crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
-      // v8.0.82 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
+      // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
       items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))
     };
@@ -338,7 +338,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
   // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
   const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0, currency);
-  // v8.0.84 (TD-383): مبالغ فاکتور ارزی با دو رقم اعشار، همان مقدار ذخیره‌شده (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱»)
+  // v8.0.106 (TD-383): مبالغ فاکتور ارزی با دو رقم اعشار، همان مقدار ذخیره‌شده (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱»)
   const amountDecimals = amountDecimalsOf(currency);
 
   if (printedDoc) {

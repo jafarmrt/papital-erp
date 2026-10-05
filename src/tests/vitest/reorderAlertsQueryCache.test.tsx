@@ -149,7 +149,7 @@ describe('ReorderAlertsPage — React Query cache', () => {
     fireEvent.click(screen.getByRole('button', { name: /ثبت سند خرید انبار/ }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('رسید قطعی ورود کالا به انبار با موفقیت صادر و موجودی افزایش یافت.'));
     expect(bodyOf('/documents', 'POST')).toMatchObject({
-      // v8.0.88 (TD-387): قرارداد POST /documents — شماره خودکار، ورود کالا، تأمین‌کننده در buyer_name، فی در unit_price
+      // v8.0.110 (TD-387): قرارداد POST /documents — شماره خودکار، ورود کالا، تأمین‌کننده در buyer_name، فی در unit_price
       docType: 'receipt', status: 'final', refNumber: 'auto', inOut: 'in', buyer_name: 'نقره‌سازان',
       items: [{ itemId: 7, quantity: 8, unit_price: 1000 }],
     });

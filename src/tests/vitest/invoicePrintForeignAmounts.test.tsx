@@ -4,7 +4,7 @@ import InvoicePrintView from '../../components/InvoicePrintView';
 import { printLineAmounts, printTotalsOf } from '../../lib/invoices/invoicePrintTotals';
 import { formatPersianPrice } from '../../utils';
 
-// v8.0.84 (TD-383): فاکتور چاپی ارزی مبالغ را با دو رقم اعشار و مبلغ قابل پرداخت سرور نشان می‌دهد
+// v8.0.106 (TD-383): فاکتور چاپی ارزی مبالغ را با دو رقم اعشار و مبلغ قابل پرداخت سرور نشان می‌دهد
 const usdInvoice = {
   id: 31,
   type: 'invoice',

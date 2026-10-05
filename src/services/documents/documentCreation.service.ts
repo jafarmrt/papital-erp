@@ -62,7 +62,7 @@ export class DocumentCreationService {
       status, notes, location, currency, items: docLines
     } = body;
 
-    // v8.0.81 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
+    // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
     if (Array.isArray(docLines)) assertLineDiscountsWithinAmount(docLines);
 
     await orm.transaction(async (tx) => {
@@ -276,7 +276,7 @@ export class DocumentCreationService {
       }
     }
 
-    // v8.0.81 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
+    // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
     assertLineDiscountsWithinAmount(docLines);
 
     const finalBuyerName = buyerName || buyer_name || '';

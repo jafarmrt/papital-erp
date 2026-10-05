@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { refreshSuggestedRates, submittedRate, suggestedRate } from '../../lib/payroll/workLogRate';
 
-// v8.0.87 (TD-386): فرم ثبت کارکرد نرخ اختصاصی پرسنل را پیشنهاد می‌دهد و فقط نرخ دستی را می‌فرستد
+// v8.0.109 (TD-386): فرم ثبت کارکرد نرخ اختصاصی پرسنل را پیشنهاد می‌دهد و فقط نرخ دستی را می‌فرستد
 const tasks = [{ id: 1, defaultRate: 100_000 }, { id: 2, defaultRate: '50000' }];
 const custom = { 1: 120_000 };
 

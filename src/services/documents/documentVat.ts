@@ -88,7 +88,7 @@ export function resolveDocumentVat(params: {
   lines: VatLine[];
   existing?: { vatPercent: number; vatAmount: DecimalValue };
   linesChanged?: boolean;
-  /** v8.0.83 (TD-382): ارز سند؛ مالیات درصدی به کوچک‌ترین واحد همین ارز گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت) */
+  /** v8.0.105 (TD-382): ارز سند؛ مالیات درصدی به کوچک‌ترین واحد همین ارز گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت) */
   currency?: string | null;
 }): DocumentVat {
   if (!VAT_DOC_TYPES.has(params.docType)) {
@@ -98,7 +98,7 @@ export function resolveDocumentVat(params: {
   const scale = currencyScale(params.currency);
   const vatOf = (pct: number): FinancialDecimal => (pct > 0 ? computeNetAmount(params.lines).multiply(pct).divide(100, 12).round(scale) : fin(0));
   if (vatAmount !== undefined) {
-    // v8.0.82 (TD-381): مبلغ صریح همراه درصد مثبت باید همان مبلغ درصدی سرور باشد؛ پیش‌تر هر مبلغی (درصد ۱۰ با مالیات ۱
+    // v8.0.104 (TD-381): مبلغ صریح همراه درصد مثبت باید همان مبلغ درصدی سرور باشد؛ پیش‌تر هر مبلغی (درصد ۱۰ با مالیات ۱
     // ریال) ذخیره می‌شد. مبلغ صریح بی درصد (مالیات سفارش ووکامرس) همان‌طور پذیرفته می‌شود.
     if (vatPercent !== undefined && vatPercent > 0) {
       const expected = vatOf(vatPercent);

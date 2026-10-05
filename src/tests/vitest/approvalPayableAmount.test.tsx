@@ -4,7 +4,7 @@ import { DocumentDetailsPreview } from '../../components/approval/DocumentDetail
 import { serverPayableOf } from '../../lib/invoices/documentPayable';
 import { formatPersianPrice } from '../../utils';
 
-// v8.0.90 (TD-389): کارتابل تأیید و پرونده مشتری مبلغ قابل پرداخت سرور را نشان می‌دهند، نه خالص اقلام
+// v8.0.112 (TD-389): کارتابل تأیید و پرونده مشتری مبلغ قابل پرداخت سرور را نشان می‌دهند، نه خالص اقلام
 afterEach(cleanup);
 
 describe('payable amount outside the invoice list (TD-389)', () => {

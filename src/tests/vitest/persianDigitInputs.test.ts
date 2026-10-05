@@ -4,7 +4,7 @@ import { fin } from '../../lib/financialDecimal';
 import { decimalInput, latinDigitsString } from '../../middleware/validate';
 import { createChequeSchema } from '../../routes/accounting/accounting.schemas';
 
-// v8.0.86 (TD-385): مبلغ و شماره با ارقام فارسی یا عربی صفر یا رد نمی‌شود
+// v8.0.108 (TD-385): مبلغ و شماره با ارقام فارسی یا عربی صفر یا رد نمی‌شود
 describe('Persian and Arabic digits in amounts and numbers (TD-385)', () => {
   it('fin() reads Persian and Arabic digits instead of silently returning 0', () => {
     expect(fin('۵۰۰۰۰۰').toNumber()).toBe(500000);

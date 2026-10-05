@@ -61,7 +61,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
   else if (printedDoc.type === 'return') title = 'رسید برگشت از فروش';
   else if (printedDoc.type === 'waste') title = 'حواله ضایعات و افت کیفی';
 
-  // v7.0.32 (TD-197) / v7.0.103 (TD-191): مالیات و هزینه ارسال ساختاریافته سند. v8.0.84 (TD-383): جمع‌ها با Decimal،
+  // v7.0.32 (TD-197) / v7.0.103 (TD-191): مالیات و هزینه ارسال ساختاریافته سند. v8.0.106 (TD-383): جمع‌ها با Decimal،
   // مبلغ قابل پرداخت همان مقدار سرور و مبالغ ارزی با دو رقم اعشار (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱» چاپ می‌شد)
   const totals = printTotalsOf(printedDoc);
   const { decimals, vatAmount, vatPercent, serviceChargeAmount } = totals;

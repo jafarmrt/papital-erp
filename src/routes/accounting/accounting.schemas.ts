@@ -355,7 +355,7 @@ export const chequesQuerySchema = z.object({
 export const createChequeSchema = z.object({
   body: z.object({
     type: z.enum(['received', 'paid'], { message: 'نوع چک باید دریافتی یا پرداختی باشد' }),
-    // v8.0.86 (TD-385): ارقام فارسی و عربی شماره چک و شناسه صیادی لاتین می‌شوند (پیش‌تر صیادی فارسی رد و شماره فارسی ذخیره می‌شد)
+    // v8.0.108 (TD-385): ارقام فارسی و عربی شماره چک و شناسه صیادی لاتین می‌شوند (پیش‌تر صیادی فارسی رد و شماره فارسی ذخیره می‌شد)
     chequeNumber: latinDigitsString.pipe(z.string().min(1, 'شماره چک الزامی است')),
     sayadNumber: latinDigitsString.pipe(z.string().regex(/^\d{16}$/, 'شناسه صیادی چک باید دقیقاً ۱۶ رقم عددی باشد').or(z.literal(''))).optional(),
     bankName: z.string().min(1, 'نام بانک صادرکننده الزامی است'),

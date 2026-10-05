@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { currencyChangeError, pricesForCurrency } from '../../lib/invoices/invoiceLine';
 
-// v8.0.85 (TD-384): قیمت فهرست قیمتِ ارز دیگر قیمت فاکتور نمی‌شود و ارز فاکتور دارای ردیف عوض نمی‌شود
+// v8.0.107 (TD-384): قیمت فهرست قیمتِ ارز دیگر قیمت فاکتور نمی‌شود و ارز فاکتور دارای ردیف عوض نمی‌شود
 const prices = [
   { id: 1, title: 'عمده', price: 1_500_000, currency: 'IRR' },
   { id: 2, title: 'صادراتی', price: 50, currency: 'USD' },

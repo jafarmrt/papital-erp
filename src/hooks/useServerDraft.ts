@@ -10,7 +10,7 @@ export interface UseServerDraftOptions<T> {
   onDraftLoaded?: (draftPayload: T, updatedAt: string) => void;
   enabled?: boolean;
   /**
-   * v8.0.89 (TD-388): فرم خالی (مثلاً پس از ثبت و پاک شدن فرم) پیش‌نویس نمی‌سازد. پیش‌تر پاک شدن فرم پس از ثبت «تغییر»
+   * v8.0.111 (TD-388): فرم خالی (مثلاً پس از ثبت و پاک شدن فرم) پیش‌نویس نمی‌سازد. پیش‌تر پاک شدن فرم پس از ثبت «تغییر»
    * دیده و پیش‌نویس تازه‌ای با تنظیمات همان سند ذخیره می‌شد که بار بعد بنر «بازیابی» را می‌آورد.
    */
   isEmpty?: (data: T) => boolean;
@@ -104,7 +104,7 @@ export function useServerDraft<T extends Record<string, any>>(
   // Discard / Clear draft
   const discardDraft = useCallback(async () => {
     if (!entityType) return;
-    // v8.0.89 (TD-388): ذخیره زمان‌بندی‌شده‌ای که پیش از ثبت سند مانده بود، پیش‌نویس حذف‌شده را دوباره نمی‌سازد
+    // v8.0.111 (TD-388): ذخیره زمان‌بندی‌شده‌ای که پیش از ثبت سند مانده بود، پیش‌نویس حذف‌شده را دوباره نمی‌سازد
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     try {
       await fetchJson(`/drafts/${entityType}?draftKey=${draftKey}`, {
@@ -125,7 +125,7 @@ export function useServerDraft<T extends Record<string, any>>(
   const restoreDraft = useCallback(() => {
     if (serverDraftData && onDraftLoaded) {
       onDraftLoaded(serverDraftData, draftUpdatedAt || '');
-      // v8.0.89 (TD-388): همان پیش‌نویس بازیابی‌شده بی‌تغییر دوباره ذخیره نمی‌شود
+      // v8.0.111 (TD-388): همان پیش‌نویس بازیابی‌شده بی‌تغییر دوباره ذخیره نمی‌شود
       lastPayloadStringRef.current = JSON.stringify(serverDraftData);
       setHasServerDraft(false);
       toast.success('پیش‌نویس سرور با موفقیت بازیابی شد');

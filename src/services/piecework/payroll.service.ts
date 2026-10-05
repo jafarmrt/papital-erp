@@ -131,7 +131,7 @@ export class PieceworkPayrollService {
       }
       const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
       const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
-      // v8.0.86 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
+      // v8.0.108 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
       const requestedAdvance = fin(reqAdvanceDeduction ?? 0);
       const advanceDeductionFin = requestedAdvance.isNegative() ? fin(0) : requestedAdvance;
 

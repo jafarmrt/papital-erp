@@ -20,8 +20,8 @@ export interface InvoiceTotals {
 /**
  * v7.0.76 (audit P3-6): جمع‌های فرم فاکتور فروش با Decimal و همان قاعده سرور (`computeNetAmount` و مالیات درصدی
  * `resolveDocumentVat` در src/services/documents/documentVat.ts): مبلغ مالیات = گرد(خالص × درصد ÷ ۱۰۰) به ریال.
- * پیش‌تر فرم آن را با ضرب اعشاری جاوااسکریپت می‌ساخت؛ از v8.0.82 (TD-381) فرم فقط درصد را می‌فرستد و سرور مبلغ را حساب می‌کند.
- * v8.0.83 (TD-382): مالیات به کوچک‌ترین واحد ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت)، همان قاعده سرور.
+ * پیش‌تر فرم آن را با ضرب اعشاری جاوااسکریپت می‌ساخت؛ از v8.0.104 (TD-381) فرم فقط درصد را می‌فرستد و سرور مبلغ را حساب می‌کند.
+ * v8.0.105 (TD-382): مالیات به کوچک‌ترین واحد ارز سند گرد می‌شود (ریال بی‌اعشار، ارز خارجی سِنت)، همان قاعده سرور.
  */
 export function computeInvoiceTotals(lines: readonly InvoiceTotalsLine[] | null | undefined, vatPercent: number, currency = 'IRR'): InvoiceTotals {
   const safeLines = Array.isArray(lines) ? lines : [];

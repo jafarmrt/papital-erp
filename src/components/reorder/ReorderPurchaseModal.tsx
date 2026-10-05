@@ -126,7 +126,7 @@ export function ReorderPurchaseModal({
         toast.error('انتخاب تامین‌کننده برای صدور مستقیم سند الزامی است.');
         return;
       }
-      // v8.0.88 (TD-387): بدنه مطابق POST /documents (شماره از سرور، تأمین‌کننده در buyer_name، فی در unit_price)
+      // v8.0.110 (TD-387): بدنه مطابق POST /documents (شماره از سرور، تأمین‌کننده در buyer_name، فی در unit_price)
       variables = {
         target: 'direct_document',
         payload: reorderPurchaseReceiptPayload({

@@ -24,7 +24,7 @@ export interface BatchLogRow {
   projectId: number | '';
   quantity: string;
   unitRate: number;
-  /** v8.0.87 (TD-386): نرخ دستی عوض شده است؛ فقط در این حالت فرستاده می‌شود */
+  /** v8.0.109 (TD-386): نرخ دستی عوض شده است؛ فقط در این حالت فرستاده می‌شود */
   rateEdited?: boolean;
 }
 
@@ -82,7 +82,7 @@ export function usePiecework() {
     { taskId: '', projectId: '', quantity: '1', unitRate: 0 }
   ]);
   const [editingLog, setEditingLog] = useState<PieceworkLog | null>(null);
-  // v8.0.87 (TD-386): نرخ‌های اختصاصی پرسنلِ فرم ثبت کارکرد، برای پیشنهاد همان نرخی که سرور برمی‌گزیند
+  // v8.0.109 (TD-386): نرخ‌های اختصاصی پرسنلِ فرم ثبت کارکرد، برای پیشنهاد همان نرخی که سرور برمی‌گزیند
   const [logPersonnelRates, setLogPersonnelRates] = useState<Record<number, number>>({});
   const [isSavingLog, setIsSavingLog] = useState<boolean>(false);
 
@@ -217,7 +217,7 @@ export function usePiecework() {
     ];
   }, [projectsList]);
 
-  // v8.0.87 (TD-386): نرخ‌های اختصاصی پرسنل انتخاب‌شده در فرم ثبت کارکرد؛ نرخ ردیف‌های دستی‌نشده با آن‌ها تازه می‌شود
+  // v8.0.109 (TD-386): نرخ‌های اختصاصی پرسنل انتخاب‌شده در فرم ثبت کارکرد؛ نرخ ردیف‌های دستی‌نشده با آن‌ها تازه می‌شود
   useEffect(() => {
     if (!isLogModalOpen || editingLog || !selectedPersonnelForLog) {
       setLogPersonnelRates({});
@@ -239,7 +239,7 @@ export function usePiecework() {
 
   // Handle task select in batch row
   const handleTaskChangeInRow = (idx: number, taskId: number | '') => {
-    // v8.0.87 (TD-386): نرخ پیشنهادی = نرخ اختصاصی پرسنل، وگرنه نرخ پایه عنوان (همان انتخاب سرور)
+    // v8.0.109 (TD-386): نرخ پیشنهادی = نرخ اختصاصی پرسنل، وگرنه نرخ پایه عنوان (همان انتخاب سرور)
     const newRows = [...batchLogRows];
     newRows[idx] = {
       ...newRows[idx],
@@ -330,7 +330,7 @@ export function usePiecework() {
           projectId: r.projectId ? Number(r.projectId) : null,
           date: logDate,
           quantity: parseQuantityOrTime(r.quantity),
-          // v8.0.87 (TD-386): فقط نرخ دستی؛ وگرنه سرور نرخ اختصاصی پرسنل یا نرخ پایه را برمی‌گزیند
+          // v8.0.109 (TD-386): فقط نرخ دستی؛ وگرنه سرور نرخ اختصاصی پرسنل یا نرخ پایه را برمی‌گزیند
           unitRate: submittedRate(r)
         }));
 

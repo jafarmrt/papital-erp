@@ -6,7 +6,7 @@ import type { InvariantScope } from './businessInvariants.js';
 import { invariantProblems, receive, watermarks } from './scenarioHelpers.js';
 
 /**
- * v8.0.81 — سناریوهای سخت‌گیرانه حوزه L (تطابق فرانت‌اند و سرور) برای سوئیت business_invariants.
+ * v8.0.103 — سناریوهای سخت‌گیرانه حوزه L (تطابق فرانت‌اند و سرور) برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 

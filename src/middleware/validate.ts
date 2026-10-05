@@ -131,7 +131,7 @@ export const storageDateParam = z.string().max(40).optional().transform((v, ctx)
 });
 
 /**
- * v8.0.86 (TD-385): مبلغ، نرخ یا مقدار اعشاری در بدنه درخواست — عدد، یا رشته با ارقام لاتین، فارسی یا عربی و جداکننده
+ * v8.0.108 (TD-385): مبلغ، نرخ یا مقدار اعشاری در بدنه درخواست — عدد، یا رشته با ارقام لاتین، فارسی یا عربی و جداکننده
  * هزارگان. خروجی رشته اعشاری لاتین (بی‌عبور از double)؛ رشته خالی ← undefined؛ متن نامعتبر خطای اعتبارسنجی، نه صفر.
  * پیش‌تر `z.union([z.number(), z.string()])` هر رشته‌ای را می‌پذیرفت و سرویس آن را بی‌خطا صفر می‌کرد.
  */
@@ -152,7 +152,7 @@ export const decimalInput = (label: string) => z.union([z.number(), z.string()])
   return clean;
 });
 
-/** v8.0.86 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
+/** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
 export const latinDigitsString = z.string().transform(v => toLatinDigits(v).trim());
 
 export const numericIdString = z.string().min(1, 'شناسه الزامی است')

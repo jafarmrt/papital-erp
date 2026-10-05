@@ -90,7 +90,7 @@ export interface RequisitionPayload {
   }>;
 }
 
-/** v8.0.88 (TD-387): بدنه POST /documents از `reorderPurchaseReceiptPayload` */
+/** v8.0.110 (TD-387): بدنه POST /documents از `reorderPurchaseReceiptPayload` */
 export type { PurchaseReceiptPayload } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 
 export type ReorderPurchaseVariables =

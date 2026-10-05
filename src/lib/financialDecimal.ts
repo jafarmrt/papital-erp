@@ -23,7 +23,7 @@ export class FinancialDecimal {
         this.value = new Decimal(input);
       }
     } else {
-      // v8.0.86 (TD-385): ارقام فارسی و عربی و جداکننده‌های فارسی پیش از تبدیل نرمال می‌شوند (پیش‌تر بی‌خطا صفر می‌شد)
+      // v8.0.108 (TD-385): ارقام فارسی و عربی و جداکننده‌های فارسی پیش از تبدیل نرمال می‌شوند (پیش‌تر بی‌خطا صفر می‌شد)
       const clean = normalizeDecimalString(String(input));
       if (!clean || clean === 'NaN' || clean === 'null' || clean === 'undefined') {
         this.value = new Decimal(0);

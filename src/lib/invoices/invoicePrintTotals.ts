@@ -39,7 +39,7 @@ const firstNumber = (...values: Array<number | string | null | undefined>): numb
 };
 
 /**
- * v8.0.84 (TD-383): جمع‌های فاکتور چاپی با Decimal و مبلغ قابل پرداخت همان مقدار سرور؛ پیش‌تر با ضرب و جمع اعشاری
+ * v8.0.106 (TD-383): جمع‌های فاکتور چاپی با Decimal و مبلغ قابل پرداخت همان مقدار سرور؛ پیش‌تر با ضرب و جمع اعشاری
  * مرورگر از ردیف‌ها ساخته و مبالغ ارزی بی رقم اعشار (۲۰۰٫۵ دلار «۲۰۱») چاپ می‌شد.
  */
 export function printTotalsOf(doc: PrintableDocument): PrintTotals {

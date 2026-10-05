@@ -166,7 +166,7 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
 }
 
 /**
- * v8.0.89 (TD-388): پیش‌نویس فاکتور فروش فقط وقتی ذخیره می‌شود که فرم ردیف یا خریدار داشته باشد. فرمی که پس از ثبت پاک
+ * v8.0.111 (TD-388): پیش‌نویس فاکتور فروش فقط وقتی ذخیره می‌شود که فرم ردیف یا خریدار داشته باشد. فرمی که پس از ثبت پاک
  * شده (نوع، انبار، ارز و نرخ مالیات سند قبلی را نگه می‌دارد) پیش‌نویس نیست.
  */
 export function isEmptyInvoiceDraft(data: { docItems?: unknown[] | null; buyerName?: string | null }): boolean {

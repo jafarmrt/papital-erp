@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { documentCreateSchema } from '../../routes/documents.routes';
 import { reorderPurchaseReceiptPayload } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 
-// v8.0.88 (TD-387): «صدور مستقیم سند» از نقطه سفارش بدنه‌ای می‌فرستد که POST /documents می‌پذیرد
+// v8.0.110 (TD-387): «صدور مستقیم سند» از نقطه سفارش بدنه‌ای می‌فرستد که POST /documents می‌پذیرد
 describe('reorder direct purchase receipt (TD-387)', () => {
   const payload = reorderPurchaseReceiptPayload({
     status: 'draft',
