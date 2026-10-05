@@ -17,7 +17,7 @@ import { checkPayrollChequeMethodRefused } from './payrollScenarios.js';
 import { checkProjectDeleteNeedsReleasedAllocations } from './projectScenarios.js';
 
 /**
- * v8.0.113 — سناریوهای تصمیم‌های مالک محصول بر مشاهده‌های ممیزی (TD-409) برای سوئیت business_invariants. هر تابع
+ * v8.0.118 — سناریوهای تصمیم‌های مالک محصول بر مشاهده‌های ممیزی (TD-409) برای سوئیت business_invariants. هر تابع
  * فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست. TD-410 تا TD-412 کنار سناریوهای حوزه خودشان‌اند.
  */
 
@@ -112,14 +112,14 @@ export async function checkNoVoucherTreasuryNeedsPermission(): Promise<string[]>
   return problems;
 }
 
-/** آزمون‌های تصمیم‌های مالک محصول بر مشاهده‌های ممیزی (v8.0.113 به بعد) در جدول سوئیت business_invariants */
+/** آزمون‌های تصمیم‌های مالک محصول بر مشاهده‌های ممیزی (v8.0.118 به بعد) در جدول سوئیت business_invariants */
 export const DECISION_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_409_no_voucher_treasury_permission', 'v8.0.113: خزانه و چک «بدون سند حسابداری» فقط با مجوز جدا ثبت می‌شوند و در بررسی سلامت مالی فهرست می‌شوند (TD-409، گزینه الف)',
+  ['inv_td_409_no_voucher_treasury_permission', 'v8.0.118: خزانه و چک «بدون سند حسابداری» فقط با مجوز جدا ثبت می‌شوند و در بررسی سلامت مالی فهرست می‌شوند (TD-409، گزینه الف)',
     () => checkNoVoucherTreasuryNeedsPermission(), 'دریافت، انتقال و چک بی‌سند بی‌مجوز رد شدند؛ روت ۴۰۳ و با مجوز ۲۰۱؛ بی‌سندها در بررسی سلامت فهرست شدند'],
-  ['inv_td_410_proforma_invoice_finalize_date', 'v8.0.113: فاکتورِ حاصل از پیش‌فاکتور تاریخ روز نهایی‌سازی را می‌گیرد (سند، سال شماره، کاردکس و سند حسابداری) و تاریخ و شماره پیش‌فاکتور در یادداشت می‌ماند (TD-410، گزینه الف)',
+  ['inv_td_410_proforma_invoice_finalize_date', 'v8.0.119: فاکتورِ حاصل از پیش‌فاکتور تاریخ روز نهایی‌سازی را می‌گیرد (سند، سال شماره، کاردکس و سند حسابداری) و تاریخ و شماره پیش‌فاکتور در یادداشت می‌ماند (TD-410، گزینه الف)',
     checkProformaInvoiceTakesFinalizeDate, 'پیش‌فاکتور ۱۳۹۸/۰۳/۱۲ امروز نهایی شد؛ فاکتور، کاردکس و سند حسابداری تاریخ امروز؛ یادداشت با شماره و تاریخ پیش‌فاکتور'],
-  ['inv_td_411_payroll_cheque_method_refused', 'v8.0.113: روش «چک» در پرداخت حقوق رد می‌شود و اثری نمی‌گذارد؛ انتقال بانکی پذیرفته است (TD-411، گزینه الف)',
+  ['inv_td_411_payroll_cheque_method_refused', 'v8.0.120: روش «چک» در پرداخت حقوق رد می‌شود و اثری نمی‌گذارد؛ انتقال بانکی پذیرفته است (TD-411، گزینه الف)',
     () => checkPayrollChequeMethodRefused(), 'پرداخت چکی رد شد بی تراکنش و تغییر مانده؛ پرداخت با انتقال بانکی ثبت شد'],
-  ['inv_td_412_project_delete_needs_released_allocations', 'v8.0.113: پروژه با تخصیص مواد باز حذف نمی‌شود؛ پس از آزادسازی حذف می‌شود و گردش ۱۴۰۲ آن صفر است (TD-412، گزینه الف)',
+  ['inv_td_412_project_delete_needs_released_allocations', 'v8.0.121: پروژه با تخصیص مواد باز حذف نمی‌شود؛ پس از آزادسازی حذف می‌شود و گردش ۱۴۰۲ آن صفر است (TD-412، گزینه الف)',
     checkProjectDeleteNeedsReleasedAllocations, 'حذف با تخصیص باز رد شد؛ پس از آزادسازی حذف شد؛ تخصیص به پروژه حذف‌شده رد شد'],
 ];

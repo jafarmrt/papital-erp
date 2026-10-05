@@ -1033,7 +1033,7 @@ export class FinancialHealthService {
     overallScore += taskCodeTest.scoreImpact;
     tests.push(taskCodeTest);
 
-    // آزمون ۱۳: v8.0.113 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
+    // آزمون ۱۳: v8.0.118 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
     tests.push(buildNoVoucherTreasuryHealthTest(await findTreasuryEntriesWithoutVoucher()));
 
     // =========================================================================

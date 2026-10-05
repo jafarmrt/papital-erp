@@ -169,7 +169,7 @@ export function useAuth(): AuthContextValue {
 }
 
 /**
- * v8.0.113 (TD-409): آیا کاربر جاری مجوز داده‌شده را دارد (مدیر همیشه)؛ بیرون از AuthProvider (مثلاً آزمون مؤلفه) false.
+ * v8.0.118 (TD-409): آیا کاربر جاری مجوز داده‌شده را دارد (مدیر همیشه)؛ بیرون از AuthProvider (مثلاً آزمون مؤلفه) false.
  * فقط برای نمایش است؛ سرور همان مجوز را خودش می‌سنجد.
  */
 export function useHasPermission(permission: string): boolean {

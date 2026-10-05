@@ -458,7 +458,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               />
             </div>
 
-            {/* v8.0.113 (TD-409): گزینه «بدون سند» فقط برای دارنده مجوز جدا دیده می‌شود؛ سرور هم می‌سنجد */}
+            {/* v8.0.118 (TD-409): گزینه «بدون سند» فقط برای دارنده مجوز جدا دیده می‌شود؛ سرور هم می‌سنجد */}
             {canSkipVoucher && (
             <div className="flex items-center gap-2 pt-1">
               <input

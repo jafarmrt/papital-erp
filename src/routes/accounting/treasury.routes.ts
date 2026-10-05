@@ -161,7 +161,7 @@ router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSION
 router.post('/accounting/treasury', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(createTreasuryTxSchema), asyncHandler(async (req, res) => {
   const tx = await AccountingService.createTreasuryTransaction({
     ...req.body,
-    // v8.0.113 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
+    // v8.0.118 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
     allowNoVoucher: await userHasRoleOrPermission(req.user, NO_VOUCHER_TREASURY_PERMISSION),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
@@ -188,7 +188,7 @@ router.post('/accounting/treasury/preview-voucher', authorizePermission('account
 router.post('/accounting/treasury/transfer', authorizePermission('accounting.treasury'), idempotency({ scope: 'treasury' }), validate(transferSchema), asyncHandler(async (req, res) => {
   const result = await AccountingService.createTreasuryTransfer({
     ...req.body,
-    // v8.0.113 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
+    // v8.0.118 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
     allowNoVoucher: await userHasRoleOrPermission(req.user, NO_VOUCHER_TREASURY_PERMISSION),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,
@@ -271,7 +271,7 @@ router.get('/accounting/cheques', authorizePermission(...RECORD_READ_PERMISSIONS
 router.post('/accounting/cheques', authorizePermission('accounting.cheques'), idempotency({ scope: 'cheques' }), validate(createChequeSchema), asyncHandler(async (req, res) => {
   const chq = await AccountingService.createCheque({
     ...req.body,
-    // v8.0.113 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
+    // v8.0.118 (TD-409): «بدون سند حسابداری» فقط با مجوز جدا؛ از جلسه کاربر سنجیده می‌شود، نه بدنه درخواست
     allowNoVoucher: await userHasRoleOrPermission(req.user, NO_VOUCHER_TREASURY_PERMISSION),
     userId: req.user?.id,
     username: req.user?.fullName || req.user?.username,

@@ -296,7 +296,7 @@ export class TreasuryTransactionService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
-    /** v8.0.113 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
+    /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
     // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده)
@@ -310,7 +310,7 @@ export class TreasuryTransactionService {
     if (data.method === 'cheque') {
       throw new ValidationError('روش «چک» در فرم خزانه پذیرفته نمی‌شود؛ چک دریافتی یا پرداختی را از «مدیریت چک‌های صیادی» (دفتر چک) ثبت کنید.');
     }
-    // v8.0.113 (TD-409، تصمیم مالک محصول — گزینه الف): بدون سند حسابداری فقط با مجوز جدا
+    // v8.0.118 (TD-409، تصمیم مالک محصول — گزینه الف): بدون سند حسابداری فقط با مجوز جدا
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, data.type === 'receipt' ? 'دریافت' : 'پرداخت');
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
@@ -684,7 +684,7 @@ export class TreasuryTransactionService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
-    /** v8.0.113 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد */
+    /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد */
     allowNoVoucher?: boolean;
     /** v8.0.20 (TD-274): نرخ تسعیر انتقال ارزی (ریال برای هر واحد) */
     exchangeRate?: number;

@@ -160,7 +160,7 @@ export class ChequeLifecycleService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
-    /** v8.0.113 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد) */
+    /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
   }): Promise<Cheque> {

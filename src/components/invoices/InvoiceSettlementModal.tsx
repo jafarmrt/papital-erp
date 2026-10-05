@@ -88,7 +88,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   const [trackingNumber, setTrackingNumber] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [createVoucher, setCreateVoucher] = useState<boolean>(true);
-  // v8.0.113 (TD-409): تسویه بدون سند حسابداری فقط برای دارنده مجوز جدا (سرور هم می‌سنجد)
+  // v8.0.118 (TD-409): تسویه بدون سند حسابداری فقط برای دارنده مجوز جدا (سرور هم می‌سنجد)
   const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState<boolean>(false);

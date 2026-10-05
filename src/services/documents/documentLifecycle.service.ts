@@ -125,7 +125,7 @@ export class DocumentLifecycleService {
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
-          // v8.0.51 / v8.0.113 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
+          // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
           // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
           const isProformaToInvoice = doc.type === 'proforma';
           const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : null;

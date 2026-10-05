@@ -242,7 +242,7 @@ export class ProjectService {
    */
   static async deleteProject(id: number, executor: DbExecutor = orm): Promise<typeof productionProjects.$inferSelect> {
     return executor.transaction(async (tx) => {
-      // v8.0.113 (TD-412، تصمیم مالک محصول — گزینه الف): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود تا تخصیص‌ها آزاد
+      // v8.0.121 (TD-412، تصمیم مالک محصول — گزینه الف): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود تا تخصیص‌ها آزاد
       // شوند. پیش‌تر حذف پذیرفته می‌شد و بهای مواد تخصیص‌یافته در کالای در جریان ساخت (۱۴۰۲) زیر تفصیلی پروژه حذف‌شده
       // می‌ماند و دیگر از صفحه پروژه آزاد نمی‌شد. تخصیص هم ردیف پروژه را قفل می‌کند، پس حذف و تخصیص هم‌زمان پشت هم‌اند.
       const [existing] = await tx.select().from(productionProjects)

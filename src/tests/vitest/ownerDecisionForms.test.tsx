@@ -24,7 +24,7 @@ const settlementForm = () => render(
     document={{ id: 7, refNumber: 'INV-7', type: 'invoice', currency: 'IRR', payableAmount: 1000, paidAmount: 0 }} />
 );
 
-// v8.0.113 (TD-409، تصمیم مالک محصول — گزینه الف): گزینه «بدون سند حسابداری» فقط برای دارنده مجوز جدا دیده می‌شود
+// v8.0.118 (TD-409، تصمیم مالک محصول — گزینه الف): گزینه «بدون سند حسابداری» فقط برای دارنده مجوز جدا دیده می‌شود
 describe('no-voucher treasury option needs its own permission (TD-409)', () => {
   it('hides the voucher switch of the treasury form without the permission', async () => {
     const { container } = treasuryForm();
@@ -51,7 +51,7 @@ describe('no-voucher treasury option needs its own permission (TD-409)', () => {
   });
 });
 
-// v8.0.113 (TD-411، تصمیم مالک محصول — گزینه الف): پرداخت حقوق روش «چک» ندارد
+// v8.0.120 (TD-411، تصمیم مالک محصول — گزینه الف): پرداخت حقوق روش «چک» ندارد
 describe('payroll payment has no cheque method (TD-411)', () => {
   it('offers bank transfer, cash and POS only', async () => {
     const { container } = render(<PayrollPaymentModal payroll={{ id: 7, payrollNumber: 'PAY-7', netPayable: 1000000, paidAmount: 0, status: 'approved' }} onClose={() => undefined} />);

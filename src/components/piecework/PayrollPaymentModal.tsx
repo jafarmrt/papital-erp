@@ -28,7 +28,7 @@ const METHOD_OPTIONS = [
   { value: 'bank_transfer', label: 'انتقال بانکی' },
   { value: 'cash', label: 'نقدی / صندوق' },
   { value: 'pos', label: 'کارتخوان' }
-  // v8.0.113 (TD-411، تصمیم مالک محصول): روش «چک» حذف شد؛ چکی در دفتر چک ثبت نمی‌شد و بانک همان روز بستانکار می‌شد
+  // v8.0.120 (TD-411، تصمیم مالک محصول): روش «چک» حذف شد؛ چکی در دفتر چک ثبت نمی‌شد و بانک همان روز بستانکار می‌شد
 ] as const;
 
 export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPaymentModalProps) {
