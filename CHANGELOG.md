@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.54 — Stock Movement Chart by Jalali Month (TD-316)
+- The stock movement chart now groups inflows and outflows by Jalali month over the current Jalali month and the five before it, instead of labelling Gregorian months with Jalali month names.
+
 ### v8.0.53 — Activity Log Shows Tehran Time and Filters Tehran Days (TD-315)
 - The activity log API returns its UTC timestamps with a zone marker, so the page shows the time in the business time zone, and its date filter covers the business day rather than the UTC day.
 

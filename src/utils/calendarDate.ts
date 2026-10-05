@@ -1,4 +1,4 @@
-import { toEnglishDigits } from "./persianNumber.js";
+import { toEnglishDigits, toPersianDigits } from "./persianNumber.js";
 import { jalaliToGregorian } from "./dateUtils.js";
 
 /**
@@ -92,6 +92,29 @@ export function jalaliYearBounds(jy: number): { firstDay: string; lastDay: strin
   const lastDay = toStorageDate(`${jy}/12/30`) || toStorageDate(`${jy}/12/29`);
   const nextFirstDay = toStorageDate(`${jy + 1}/01/01`);
   return firstDay && lastDay && nextFirstDay ? { firstDay, lastDay, nextFirstDay } : null;
+}
+
+const JALALI_MONTH_NAMES = [
+  'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند',
+];
+
+/**
+ * v8.0.54 (TD-316): نخستین روز ماه شمسیِ `monthsBack` ماه پیش از ماه تاریخ `value`، به قالب ذخیره
+ * (مثلاً ۱۳ مهر ۱۴۰۵ و ۵ ماه پیش ← ۱ اردیبهشت ۱۴۰۵ = 2026-04-21). تاریخ نامعتبر ← null.
+ */
+export function jalaliMonthStart(value: unknown, monthsBack: number = 0): string | null {
+  const jalali = isoToJalaliDate(value);
+  if (!jalali) return null;
+  const [jy, jm] = jalali.split('/').map(Number);
+  const index = jy * 12 + (jm - 1) - monthsBack;
+  return toStorageDate(`${Math.floor(index / 12)}/${pad2((index % 12) + 1)}/01`);
+}
+
+/** نام ماه شمسی برای کلید `YYYY/MM` (مثلاً «1405/07» ← «مهر ۱۴۰۵»)؛ کلید نامعتبر همان‌طور برمی‌گردد */
+export function jalaliMonthLabel(monthKey: string): string {
+  const match = /^(\d{4})\/(\d{2})$/.exec(monthKey);
+  const name = match ? JALALI_MONTH_NAMES[Number(match[2]) - 1] : undefined;
+  return match && name ? `${name} ${toPersianDigits(match[1])}` : monthKey;
 }
 
 /** آیا مقدار دقیقاً به قالب ذخیره (`YYYY-MM-DD` میلادی معتبر) است؟ */
