@@ -6,28 +6,34 @@ import { errorMessageOf } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
-import { AppError, ValidationError, NotFoundError } from '../errors/customErrors.js';
+import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-/** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
-const PROCUREMENT_INCOMING_TYPES = new Set(['receipt', 'purchase']);
+const PROCUREMENT_INCOMING_TYPE_SET = new Set(PROCUREMENT_INCOMING_TYPES);
+/** اقدام‌های گردش‌کار «دریافت کالا»ی درخواست خرید */
+const RECEIVE_ACTION_KEYS = ['receive_items', 'mark_received', 'receive'];
+/** v8.0.51 (TD-326): درخواستی که کالایش دریافت شده دوباره دریافت یا سفارش داده نمی‌شود */
+const RECEIVED_REQUISITION_STATUSES = new Set(['received', 'completed']);
+/** v8.0.51 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
+const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 
 /**
  * v8.0.10 (TD-267): تحویل تدارکات فقط سند ورودی خرید را نهایی می‌کند. پیش‌تر هر سند غیرنهایی (از جمله پیش‌فاکتور فروش)
  * از این مسیر نهایی می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش با خروج کالا می‌کرد.
  */
 function assertProcurementIncomingDocument(doc: { id: number; type: string | null; refNumber: string | null }): void {
-  if (!PROCUREMENT_INCOMING_TYPES.has(String(doc.type))) {
+  if (!PROCUREMENT_INCOMING_TYPE_SET.has(String(doc.type))) {
     throw new ValidationError(`سند «${doc.refNumber ?? doc.id}» (نوع ${doc.type ?? '-'}) سند خرید نیست و از مسیر تحویل تدارکات به انبار نهایی نمی‌شود.`);
   }
 }
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { applyDeliveredLines, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
+import { PROCUREMENT_INCOMING_TYPES, receiveRequisitionItems } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
@@ -455,19 +461,22 @@ export class ProcurementService {
    * ساخته شده (isUsableSnapshot، AGENTS.md §14.3)، وگرنه از جدول‌های جاری تعریف؛ تصویر قدیمی بدون شناسه به کار نمی‌رود.
    */
   static async workflowGraphOf(
-    wfInst: Pick<typeof workflowInstances.$inferSelect, 'snapshotDsl' | 'workflowDefinitionId'>
+    wfInst: Pick<typeof workflowInstances.$inferSelect, 'snapshotDsl' | 'workflowDefinitionId'>,
+    db: DbExecutor = orm
   ): Promise<{ states: WorkflowStateRef[]; transitions: WorkflowTransitionRef[] }> {
     const snapshot = wfInst.snapshotDsl as WorkflowSnapshotDsl | null;
     if (isUsableSnapshot(snapshot)) return { states: snapshot.states ?? [], transitions: snapshot.transitions ?? [] };
-    const [states, transitions] = await Promise.all([
-      orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId)),
-      orm.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId)),
-    ]);
+    const states = await db.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wfInst.workflowDefinitionId));
+    const transitions = await db.select().from(workflowTransitions).where(eq(workflowTransitions.workflowDefinitionId, wfInst.workflowDefinitionId));
     return { states, transitions };
   }
 
   /**
    * Execute workflow transition on purchase requisition
+   *
+   * v8.0.51 (TD-326): کل اقدام در یک تراکنش و زیر قفل ردیف درخواست اجرا می‌شود و درخواست زیر همان قفل دوباره خوانده
+   * می‌شود. «دریافت کالا»ی درخواستِ دریافت‌شده یا ردشده رد می‌شود، و نمونه گردش‌کار تنبل در همان تراکنش ساخته می‌شود؛
+   * پیش‌تر دو «دریافت» هم‌زمان درخواست بی‌نمونه دو نمونه و دو رسید می‌ساختند. شاخه دریافت: receiveRequisitionItems.
    */
   static async executeWorkflowAction(
     requisitionId: number,
@@ -475,238 +484,182 @@ export class ProcurementService {
     user: { id?: number; username?: string; role?: string; permissions?: string[] },
     comment?: string
   ): Promise<{ success: boolean; requisition: PurchaseRequisition; message?: string }> {
-    const req = await this.getRequisitionById(requisitionId);
+    const isReceive = RECEIVE_ACTION_KEYS.includes(actionKey);
+    // v8.0.4 (TD-257): نهایی‌سازی رسید پیش‌نویس با تاریخ پیش از آخرین گردش کالا فقط با مجوز همین کاربر
+    const allowBackdate = isReceive ? await userHasRoleOrPermission(user, BACKDATE_PERMISSION) : false;
 
-    if (!req.workflowInstanceId) {
-      // Lazy start workflow instance if not present
-      const instance = await WorkflowTransitionExecutor.startInstance({
-        workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
-        entityType: 'purchase_requisition',
-        entityId: String(req.id),
-        userId: user.id,
-        userName: user.username
-      });
-      req.workflowInstanceId = instance.id;
-      await orm.update(purchaseRequisitions)
-        .set({ workflowInstanceId: instance.id })
-        .where(eq(purchaseRequisitions.id, req.id));
-    }
-
-    const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, req.workflowInstanceId));
-    if (!wfInst) {
-      throw new ValidationError('نمونه فرآیند گردش کار مرتبط یافت نشد');
-    }
-
-    const { states, transitions } = await this.workflowGraphOf(wfInst);
-
-    // Auto-heal / synchronize workflow instance state if desynchronized from requisition business status
-    const statusToStateKeyMap: Record<string, string> = {
-      pending: 'pending',
-      under_review: 'pending',
-      manager_approval: 'pending',
-      ordered: 'ordered',
-      approved: 'ordered',
-      received: 'received',
-      completed: 'received',
-      rejected: 'rejected',
-      cancelled: 'rejected'
-    };
-    const expectedStateKey = statusToStateKeyMap[req.status] || 'pending';
-    const currentStateObj = states.find(s => s.id === wfInst.currentStateId);
-
-    if (currentStateObj && currentStateObj.stateKey !== expectedStateKey) {
-      const correctState = states.find(s => s.stateKey === expectedStateKey);
-      if (correctState) {
-        await orm.update(workflowInstances).set({
-          currentStateId: correctState.id,
-          updatedAt: new Date().toISOString()
-        }).where(eq(workflowInstances.id, wfInst.id));
-        wfInst.currentStateId = correctState.id;
+    const outcome = await orm.transaction(async (tx) => {
+      const [locked] = await tx.select().from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, requisitionId), eq(purchaseRequisitions.isDeleted, 0)))
+        .for('update');
+      if (!locked) {
+        throw new NotFoundError(`درخواست خرید با شناسه #${requisitionId} یافت نشد.`);
       }
-    }
-
-    const ACTION_KEY_ALIASES: Record<string, string[]> = {
-      mark_received: ['receive_items', 'mark_received', 'receive'],
-      receive_items: ['receive_items', 'mark_received', 'receive'],
-      approve_request: ['direct_admin_order', 'approve_order', 'approve_request', 'direct_order'],
-      approve_order: ['approve_order', 'direct_admin_order', 'approve_request', 'direct_order'],
-      direct_admin_order: ['direct_admin_order', 'approve_order', 'approve_request', 'direct_order'],
-      direct_order: ['direct_admin_order', 'direct_order', 'approve_order', 'approve_request'],
-      submit_for_approval: ['send_to_manager', 'submit_to_procurement', 'submit_for_approval'],
-      send_to_manager: ['send_to_manager', 'submit_for_approval'],
-      submit_to_procurement: ['submit_to_procurement', 'submit_for_review'],
-      reject_request: ['reject_manager', 'reject_procurement', 'reject', 'cancel'],
-      reject_manager: ['reject_manager', 'reject_request', 'reject', 'reject_procurement'],
-      reject_procurement: ['reject_procurement', 'reject_manager', 'reject_request', 'reject'],
-      reopen: ['reopen']
-    };
-
-    const targetActionKeys = ACTION_KEY_ALIASES[actionKey] || [actionKey];
-
-    // Find valid transition from current state only (never pick a transition with mismatched fromStateId)
-    let matchedTransition = transitions.find(t => 
-      targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
-    );
-
-    // If receiving items while still at pending, auto-advance to ordered state first so receive_items can execute
-    if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
-      const orderedState = states.find(s => s.stateKey === 'ordered');
-      if (orderedState && wfInst.currentStateId !== orderedState.id) {
-        await orm.update(workflowInstances).set({
-          currentStateId: orderedState.id,
-          updatedAt: new Date().toISOString()
-        }).where(eq(workflowInstances.id, wfInst.id));
-        wfInst.currentStateId = orderedState.id;
-        matchedTransition = transitions.find(t => 
-          targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === orderedState.id)
-        );
+      const req = toRequisitionDto(locked);
+      if (isReceive && RECEIVED_REQUISITION_STATUSES.has(req.status)) {
+        throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و کالای آن دوباره وارد انبار نمی‌شود.`);
       }
-    }
+      if (isReceive && CLOSED_REQUISITION_STATUSES.has(req.status)) {
+        throw new ConflictError(`درخواست خرید ${req.code} رد شده است و کالای آن وارد انبار نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
+      }
 
-    let mappedStatus = req.status;
-    let transitionTitle = actionKey;
+      if (!req.workflowInstanceId) {
+        // Lazy start workflow instance if not present
+        const instance = await WorkflowTransitionExecutor.startInstance({
+          workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
+          entityType: 'purchase_requisition',
+          entityId: String(req.id),
+          userId: user.id,
+          userName: user.username,
+          tx
+        });
+        req.workflowInstanceId = instance.id;
+        await tx.update(purchaseRequisitions)
+          .set({ workflowInstanceId: instance.id })
+          .where(eq(purchaseRequisitions.id, req.id));
+      }
 
-    if (matchedTransition) {
-      transitionTitle = matchedTransition.title || actionKey;
-      const result = await WorkflowTransitionExecutor.executeTransition({
-        instanceId: req.workflowInstanceId,
-        transitionId: matchedTransition.id,
-        userId: user.id,
-        userName: user.username,
-        userRole: user.role,
-        userPermissions: user.permissions || [],
-        comment,
-        snapshotData: {
-          id: req.id,
-          code: req.code,
-          totalAmount: Number(req.totalEstimatedAmount || 0),
-          priority: req.priority,
-          status: req.status
+      const [wfInst] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, req.workflowInstanceId));
+      if (!wfInst) {
+        throw new ValidationError('نمونه فرآیند گردش کار مرتبط یافت نشد');
+      }
+
+      const { states, transitions } = await this.workflowGraphOf(wfInst, tx);
+
+      // Auto-heal / synchronize workflow instance state if desynchronized from requisition business status
+      const statusToStateKeyMap: Record<string, string> = {
+        pending: 'pending',
+        under_review: 'pending',
+        manager_approval: 'pending',
+        ordered: 'ordered',
+        approved: 'ordered',
+        received: 'received',
+        completed: 'received',
+        rejected: 'rejected',
+        cancelled: 'rejected'
+      };
+      const expectedStateKey = statusToStateKeyMap[req.status] || 'pending';
+      const currentStateObj = states.find(s => s.id === wfInst.currentStateId);
+
+      if (currentStateObj && currentStateObj.stateKey !== expectedStateKey) {
+        const correctState = states.find(s => s.stateKey === expectedStateKey);
+        if (correctState) {
+          await tx.update(workflowInstances).set({
+            currentStateId: correctState.id,
+            updatedAt: new Date().toISOString()
+          }).where(eq(workflowInstances.id, wfInst.id));
+          wfInst.currentStateId = correctState.id;
         }
-      });
-
-      const toStateKey = result.toState?.stateKey;
-      if (toStateKey) {
-        if (toStateKey === 'draft') mappedStatus = 'pending';
-        else if (toStateKey === 'procurement_review') mappedStatus = 'under_review';
-        else if (toStateKey === 'manager_approval') mappedStatus = 'manager_approval';
-        else if (toStateKey === 'ordered') mappedStatus = 'ordered';
-        else if (toStateKey === 'received') mappedStatus = 'received';
-        else if (toStateKey === 'rejected') mappedStatus = 'rejected';
       }
-    } else {
-      // Graceful direct workshop transition fallback
-      if (['approve_request', 'approve_order', 'direct_admin_order', 'direct_order'].includes(actionKey)) {
-        mappedStatus = 'ordered';
-        transitionTitle = 'تایید مستقیم و صدور سفارش خرید';
-      } else if (['receive_items', 'mark_received', 'receive'].includes(actionKey)) {
-        mappedStatus = 'received';
-        transitionTitle = 'تحویل و ورود به انبار';
-      } else if (['reject_request', 'reject_manager', 'reject_procurement', 'reject'].includes(actionKey)) {
-        mappedStatus = 'rejected';
-        transitionTitle = 'رد درخواست خرید';
-      } else if (['reopen'].includes(actionKey)) {
-        mappedStatus = 'pending';
-        transitionTitle = 'بازگشایی مجدد درخواست';
+
+      const ACTION_KEY_ALIASES: Record<string, string[]> = {
+        mark_received: ['receive_items', 'mark_received', 'receive'],
+        receive_items: ['receive_items', 'mark_received', 'receive'],
+        approve_request: ['direct_admin_order', 'approve_order', 'approve_request', 'direct_order'],
+        approve_order: ['approve_order', 'direct_admin_order', 'approve_request', 'direct_order'],
+        direct_admin_order: ['direct_admin_order', 'approve_order', 'approve_request', 'direct_order'],
+        direct_order: ['direct_admin_order', 'direct_order', 'approve_order', 'approve_request'],
+        submit_for_approval: ['send_to_manager', 'submit_to_procurement', 'submit_for_approval'],
+        send_to_manager: ['send_to_manager', 'submit_for_approval'],
+        submit_to_procurement: ['submit_to_procurement', 'submit_for_review'],
+        reject_request: ['reject_manager', 'reject_procurement', 'reject', 'cancel'],
+        reject_manager: ['reject_manager', 'reject_request', 'reject', 'reject_procurement'],
+        reject_procurement: ['reject_procurement', 'reject_manager', 'reject_request', 'reject'],
+        reopen: ['reopen']
+      };
+
+      const targetActionKeys = ACTION_KEY_ALIASES[actionKey] || [actionKey];
+
+      // Find valid transition from current state only (never pick a transition with mismatched fromStateId)
+      let matchedTransition = transitions.find(t =>
+        targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
+      );
+
+      // If receiving items while still at pending, auto-advance to ordered state first so receive_items can execute
+      if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
+        const orderedState = states.find(s => s.stateKey === 'ordered');
+        if (orderedState && wfInst.currentStateId !== orderedState.id) {
+          await tx.update(workflowInstances).set({
+            currentStateId: orderedState.id,
+            updatedAt: new Date().toISOString()
+          }).where(eq(workflowInstances.id, wfInst.id));
+          wfInst.currentStateId = orderedState.id;
+          matchedTransition = transitions.find(t =>
+            targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === orderedState.id)
+          );
+        }
+      }
+
+      let mappedStatus = req.status;
+      let transitionTitle = actionKey;
+
+      if (matchedTransition) {
+        transitionTitle = matchedTransition.title || actionKey;
+        const result = await WorkflowTransitionExecutor.executeTransition({
+          instanceId: req.workflowInstanceId,
+          transitionId: matchedTransition.id,
+          userId: user.id,
+          userName: user.username,
+          userRole: user.role,
+          userPermissions: user.permissions || [],
+          comment,
+          snapshotData: {
+            id: req.id,
+            code: req.code,
+            totalAmount: Number(req.totalEstimatedAmount || 0),
+            priority: req.priority,
+            status: req.status
+          },
+          tx
+        });
+
+        const toStateKey = result.toState?.stateKey;
+        if (toStateKey) {
+          if (toStateKey === 'draft') mappedStatus = 'pending';
+          else if (toStateKey === 'procurement_review') mappedStatus = 'under_review';
+          else if (toStateKey === 'manager_approval') mappedStatus = 'manager_approval';
+          else if (toStateKey === 'ordered') mappedStatus = 'ordered';
+          else if (toStateKey === 'received') mappedStatus = 'received';
+          else if (toStateKey === 'rejected') mappedStatus = 'rejected';
+        }
       } else {
-        throw new ValidationError(`گذار با شناسه اقدام «${actionKey}» برای وضعیت فعلی درخواست یافت نشد`);
-      }
-    }
-
-    let updatedItems = req.items;
-    if (mappedStatus === 'received') {
-      updatedItems = (req.items || []).map(i => ({
-        ...i,
-        receivedQty: i.requestedQty,
-        remainingQty: 0,
-        status: 'received'
-      }));
-
-      // 1. Finalize all linked draft/proforma purchase documents to increase warehouse stock and write Kardex
-      const docIdsToFinalize = new Set<number>();
-      for (const it of (req.items || [])) {
-        if (Array.isArray(it.linkedDocumentIds)) {
-          for (const id of it.linkedDocumentIds) {
-            const numId = Number(id);
-            if (numId > 0) docIdsToFinalize.add(numId);
-          }
+        // Graceful direct workshop transition fallback
+        if (['approve_request', 'approve_order', 'direct_admin_order', 'direct_order'].includes(actionKey)) {
+          mappedStatus = 'ordered';
+          transitionTitle = 'تایید مستقیم و صدور سفارش خرید';
+        } else if (RECEIVE_ACTION_KEYS.includes(actionKey)) {
+          mappedStatus = 'received';
+          transitionTitle = 'تحویل و ورود به انبار';
+        } else if (['reject_request', 'reject_manager', 'reject_procurement', 'reject'].includes(actionKey)) {
+          mappedStatus = 'rejected';
+          transitionTitle = 'رد درخواست خرید';
+        } else if (['reopen'].includes(actionKey)) {
+          mappedStatus = 'pending';
+          transitionTitle = 'بازگشایی مجدد درخواست';
+        } else {
+          throw new ValidationError(`گذار با شناسه اقدام «${actionKey}» برای وضعیت فعلی درخواست یافت نشد`);
         }
       }
 
-      const relatedDocs = await orm.select().from(documents).where(and(
-        ilike(documents.notes, containsLikePattern(req.code)),
-        eq(documents.isDeleted, 0)
-      ));
-      for (const rd of relatedDocs) {
-        if (rd.status !== 'final') {
-          docIdsToFinalize.add(rd.id);
-        }
-      }
+      const updatedItems = mappedStatus === 'received'
+        ? await receiveRequisitionItems(tx, { code: req.code, projectName: req.projectName, items: req.items as RequisitionItemWithReceipt[] }, {
+          username: user.username || 'کارشناس تدارکات',
+          allowBackdate,
+          assertIncoming: assertProcurementIncomingDocument,
+        })
+        : req.items;
 
-      // v8.0.4 (TD-257): نهایی‌سازی رسید پیش‌نویس با تاریخ پیش از آخرین گردش کالا فقط با مجوز همین کاربر
-      const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
-      for (const docId of docIdsToFinalize) {
-        try {
-          const [linked] = await orm.select({ id: documents.id, type: documents.type, refNumber: documents.refNumber })
-            .from(documents).where(eq(documents.id, docId));
-          if (linked) assertProcurementIncomingDocument(linked);
-          await DocumentService.finalizeDocument(docId, user.username || 'سیستم تدارکات', undefined, { allowBackdate });
-        } catch (err) {
-          logger.warn({ message: `[Procurement] Error finalizing linked document #${docId}: ${errorMessageOf(err)}` });
-        }
-      }
-
-      // 2. For any items never converted to a document, auto-generate a finalized warehouse receipt document
-      const unhandledItems = (req.items || []).filter(i => {
-        const hasDocs = Array.isArray(i.linkedDocumentIds) && i.linkedDocumentIds.length > 0;
-        return !hasDocs && i.itemId && Number(i.requestedQty || 0) > 0;
-      });
-
-      if (unhandledItems.length > 0) {
-        try {
-          const docLines = unhandledItems.map(i => ({
-            itemId: Number(i.itemId) || 0,
-            quantity: Number(i.requestedQty),
-            unit_price: Number(i.unitPriceEstimate || 0),
-            discount: 0,
-            location: ''
-          }));
-
-          const newDocId = await DocumentService.createDocument({
-            docType: 'receipt',
-            date: await businessTodayIsoDate(),
-            status: 'final',
-            buyer_name: 'تامین‌کننده تدارکات',
-            notes: `[تدارکات: تحویل مستقیم به انبار] درخواست ${req.code} ${req.projectName ? `[پروژه: ${req.projectName}]` : ''}`.trim(),
-            location: '',
-            inOut: 'in',
-            currency: 'IRR',
-            user: user.username || 'کارشناس تدارکات',
-            items: docLines
-          });
-
-          // Link newDocId to these items
-          updatedItems = updatedItems.map(it => {
-            if (unhandledItems.some(u => u.id === it.id)) {
-              const prevLinked = Array.isArray(it.linkedDocumentIds) ? it.linkedDocumentIds : [];
-              return { ...it, linkedDocumentIds: [...prevLinked, newDocId] };
-            }
-            return it;
-          });
-        } catch (err) {
-          logger.warn({ message: `[Procurement] Error auto-generating receipt document for unhandled items: ${errorMessageOf(err)}` });
-        }
-      }
-    }
-
-    const [updatedReq] = await orm.update(purchaseRequisitions)
-      .set({
-        status: mappedStatus,
-        items: updatedItems,
-        updatedAt: new Date().toISOString()
-      })
-      .where(eq(purchaseRequisitions.id, req.id))
-      .returning();
+      const [updatedReq] = await tx.update(purchaseRequisitions)
+        .set({
+          status: mappedStatus,
+          items: updatedItems,
+          updatedAt: new Date().toISOString()
+        })
+        .where(eq(purchaseRequisitions.id, req.id))
+        .returning();
+      return { req, updatedReq, mappedStatus, transitionTitle };
+    });
+    const { req, updatedReq, mappedStatus, transitionTitle } = outcome;
 
     await logActivity({
       userId: user.id,
@@ -769,6 +722,14 @@ export class ProcurementService {
         throw new NotFoundError(`درخواست خرید با شناسه #${requisitionId} یافت نشد.`);
       }
       const req = toRequisitionDto(locked);
+      // v8.0.51 (TD-326): درخواستِ دریافت‌شده یا ردشده دوباره سفارش داده نمی‌شود؛ پیش‌تر سفارش و تحویل درخواستی که «دریافت
+      // کالا» همه‌اش را وارد انبار کرده بود، کالا را دو بار وارد انبار می‌کرد
+      if (RECEIVED_REQUISITION_STATUSES.has(req.status)) {
+        throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و دوباره سفارش داده نمی‌شود.`);
+      }
+      if (CLOSED_REQUISITION_STATUSES.has(req.status)) {
+        throw new ConflictError(`درخواست خرید ${req.code} رد شده است و سفارش داده نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
+      }
       const updatedItems = (Array.isArray(req.items) ? req.items : []).map(it => ({ ...it }));
 
       const overOrders = findOverOrders(updatedItems, orderGroups.flatMap(g => g.items || []));
@@ -895,36 +856,41 @@ export class ProcurementService {
     const { req, createdDocuments, finalUpdatedReq, newStatus, overOrders } = converted;
 
     // Keep workflow instance state synchronized with new status
+    // v8.0.51 (TD-326): زیر قفل درخواست و فقط اگر وضعیت درخواست هنوز همان است؛ پیش‌تر نمونه تنبل بی‌قفل ساخته می‌شد و
+    // «دریافت کالا»ی هم‌زمان نمونه دومی می‌ساخت. خطای گردش‌کار تبدیل ثبت‌شده را برنمی‌گرداند.
     if (newStatus === 'ordered' || newStatus === 'under_review') {
-      let wfId = req.workflowInstanceId;
-      if (!wfId) {
-        try {
-          const instance = await WorkflowTransitionExecutor.startInstance({
-            workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
-            entityType: 'purchase_requisition',
-            entityId: String(req.id),
-            userId: user.id,
-            userName: user.username
-          });
-          wfId = instance.id;
-          await orm.update(purchaseRequisitions).set({ workflowInstanceId: wfId }).where(eq(purchaseRequisitions.id, req.id));
-        } catch (wfErr) {
-          logger.warn({ message: `[Procurement] Error starting workflow for req #${req.id}: ${errorMessageOf(wfErr)}` });
-        }
-      }
-      if (wfId) {
-        const [wf] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, wfId));
-        if (wf) {
-          const wStates = await orm.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wf.workflowDefinitionId));
+      try {
+        await orm.transaction(async (tx) => {
+          const [current] = await tx.select({ status: purchaseRequisitions.status, workflowInstanceId: purchaseRequisitions.workflowInstanceId })
+            .from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id)).for('update');
+          if (!current || current.status !== newStatus) return;
+          let wfId = current.workflowInstanceId;
+          if (!wfId) {
+            const instance = await WorkflowTransitionExecutor.startInstance({
+              workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
+              entityType: 'purchase_requisition',
+              entityId: String(req.id),
+              userId: user.id,
+              userName: user.username,
+              tx
+            });
+            wfId = instance.id;
+            await tx.update(purchaseRequisitions).set({ workflowInstanceId: wfId }).where(eq(purchaseRequisitions.id, req.id));
+          }
+          const [wf] = await tx.select().from(workflowInstances).where(eq(workflowInstances.id, wfId));
+          if (!wf) return;
+          const wStates = await tx.select().from(workflowStates).where(eq(workflowStates.workflowDefinitionId, wf.workflowDefinitionId));
           const targetStateKey = newStatus === 'ordered' ? 'ordered' : 'pending';
           const targetState = wStates.find(s => s.stateKey === targetStateKey);
           if (targetState && wf.currentStateId !== targetState.id) {
-            await orm.update(workflowInstances).set({
+            await tx.update(workflowInstances).set({
               currentStateId: targetState.id,
               updatedAt: new Date().toISOString()
             }).where(eq(workflowInstances.id, wf.id));
           }
-        }
+        });
+      } catch (wfErr) {
+        logger.warn({ message: `[Procurement] Error syncing workflow for req #${req.id}: ${errorMessageOf(wfErr)}` });
       }
     }
 

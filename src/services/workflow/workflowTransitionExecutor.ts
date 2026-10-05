@@ -295,8 +295,10 @@ export class WorkflowTransitionExecutor {
     entityId: string;
     userId?: number;
     userName?: string;
+    /** v8.0.51 (TD-326): تراکنش فراخواننده؛ بی آن تراکنش جدا (مانند executeTransition) */
+    tx?: DbClient;
   }) {
-    return await orm.transaction(async (tx) => {
+    const runInTx = async (tx: DbClient) => {
       let def: WorkflowDefinitionRow | undefined;
       if (params.workflowCode) {
         [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, params.workflowCode));
@@ -418,7 +420,12 @@ export class WorkflowTransitionExecutor {
       });
 
       return newInstance;
-    });
+    };
+
+    if (params.tx) {
+      return await runInTx(params.tx);
+    }
+    return await orm.transaction(async (tx) => runInTx(tx));
   }
 
   /**

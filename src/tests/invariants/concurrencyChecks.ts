@@ -1,6 +1,7 @@
 import { checkMixedStockPathsNoDeadlock, checkVoidKardexOrderMatchesLive, checkVoidsOfSharedItemNoDeadlock } from './concurrencyScenarios.js';
 import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcurrencyScenarios.js';
 import { checkDeletedChequeFrozen } from './treasuryConcurrencyScenarios.js';
+import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -16,4 +17,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkDeletedChequeFrozen(), 'وصول و حذف دوباره چک حذف‌شده «یافت نشد»؛ در سه دور حذف و وصول هم‌زمان فقط یکی پذیرفته شد و مانده بانک درست ماند'],
   ['inv_td_323_reversal_lifecycle', 'v8.0.50: سند پیش‌نویس برگشت یا اصلاح نمی‌خورد و سندی که سند برگشت فعال دارد به پیش‌نویس برنمی‌گردد و حذف نمی‌شود (TD-323)',
     checkReversalLifecycle, 'ابطال و اصلاح پیش‌نویس رد شد؛ سند دستی و سند فاکتورِ ابطال‌شده به پیش‌نویس برنگشتند و حذف نشدند'],
+  ['inv_td_326_requisition_received_once', 'v8.0.51: «دریافت کالا»ی درخواست خرید کالا را فقط یک بار وارد انبار می‌کند؛ هم‌زمان با تبدیل به سفارش، پیش از آن، دو بار هم‌زمان، و با سفارش جزئی یا سفارشی که نهایی نشد (TD-326)',
+    checkRequisitionReceivedOnce, 'در هر پنج حالت موجودی برابر مقدار دریافتی درخواست است؛ دریافت و سفارش دوباره رد شد؛ یک نمونه گردش‌کار'],
 ];

@@ -42,7 +42,7 @@ export async function untilQueued(holderPid: number, expected: number, settled: 
 }
 
 /** جدول‌هایی که سناریوها ردیفشان را نگه می‌دارند (نام ثابت، نه ورودی) */
-type LockedTable = 'items' | 'journal_vouchers' | 'cheques' | 'bank_accounts';
+type LockedTable = 'items' | 'journal_vouchers' | 'cheques' | 'bank_accounts' | 'purchase_requisitions';
 
 /**
  * ردیف‌های داده‌شده را در یک تراکنش جدا FOR UPDATE نگه می‌دارد، عملیات‌ها را شروع می‌کند، تا همه پشت قفل صف بکشند
