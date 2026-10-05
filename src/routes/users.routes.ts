@@ -217,6 +217,18 @@ export const PERMISSION_CATALOG = [
   }
 ];
 
+const CATALOG_PERMISSION_KEYS = new Set(PERMISSION_CATALOG.flatMap(c => c.permissions.map(p => p.key)));
+
+/**
+ * حوزه H (TD-304): مجوز تازه نقش فقط از کاتالوگ است (نه «*» و نه کلید ناشناخته). کلیدی که نقش از پیش داشت
+ * با ویرایش نقش حذف نمی‌شود و ذخیره را رد نمی‌کند.
+ */
+function unknownNewPermissions(requested: string[], existing: string[] = []): string[] {
+  return requested.filter(p => !CATALOG_PERMISSION_KEYS.has(p) && !existing.includes(p));
+}
+
+const UNKNOWN_PERMISSIONS_ERROR = (keys: string[]) => `مجوز ناشناخته: ${keys.join('، ')}`;
+
 // Get current user's active permissions array
 router.get('/users/my-permissions', asyncHandler(async (req, res) => {
   try {
@@ -359,6 +371,10 @@ router.get('/roles', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
 router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSchema), asyncHandler(async (req, res) => {
   try {
     const { name, code, description, permissions } = req.body;
+    const unknownKeys = unknownNewPermissions(Array.isArray(permissions) ? permissions : []);
+    if (unknownKeys.length > 0) {
+      return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
+    }
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
     // v7.0.51 (audit P2-10): کد نقش نقطه ندارد تا با کلید مجوز (مثل customers.manage) اشتباه گرفته نشود
@@ -417,6 +433,10 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
 
     const prevPermissions: string[] = (targetRole.permissions as string[]) || [];
     const newPermissions: string[] = Array.isArray(permissions) ? permissions : prevPermissions;
+    const unknownKeys = unknownNewPermissions(newPermissions, prevPermissions);
+    if (unknownKeys.length > 0) {
+      return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
+    }
 
     const addedPermissions = newPermissions.filter(p => !prevPermissions.includes(p));
     const removedPermissions = prevPermissions.filter(p => !newPermissions.includes(p));

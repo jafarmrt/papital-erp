@@ -183,6 +183,20 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (wrong.length > 0) throw new Error(wrong.join('، '));
       return 'personnel.view ← 403، piecework.payroll مجاز';
     }),
+    record('sec_role_permissions_from_catalog_td_304', 'حوزه H: نقش فقط مجوزهای کاتالوگ را می‌گیرد، نه «*» یا کلید ناشناخته (TD-304)', 'real_database', async () => {
+      const roleAdmin = await userWith(['roles.manage']);
+      const suffix = Date.now();
+      const star = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_star_${suffix}`, permissions: ['*'] });
+      const unknown = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_unk_${suffix}`, permissions: ['sales.view'] });
+      const valid = await send(roleAdmin.session, 'post', '/api/roles', { name: 'td304', code: `td304_ok_${suffix}`, permissions: ['daily_logs.view'] });
+      for (const r of [star, unknown, valid]) if (r.body?.id) createdRoleIds.push(Number(r.body.id));
+      const wrong: string[] = [];
+      if (star.status !== 400) wrong.push(`«*»: ${star.status} (انتظار 400)`);
+      if (unknown.status !== 400) wrong.push(`کلید ناشناخته: ${unknown.status} (انتظار 400)`);
+      if (valid.status !== 200) wrong.push(`کلید کاتالوگ: ${valid.status} (انتظار 200)`);
+      if (wrong.length > 0) throw new Error(wrong.join('، '));
+      return '«*» و ناشناخته 400، کاتالوگ 200';
+    }),
   ];
 
   try {

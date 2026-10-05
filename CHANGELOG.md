@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.52 — Roles Accept Only Catalog Permissions (TD-304)
+- A role can be given only permission keys from the catalog; "*" and unknown keys are refused.
+
 ### v8.0.51 — Payroll Payments Follow the Payroll Read Permission (TD-303)
 - Payroll payments and personnel advance balances are read with the payroll read permissions only, like the payslips themselves.
 
