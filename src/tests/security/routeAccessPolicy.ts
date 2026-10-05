@@ -169,6 +169,20 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         await orm.delete(pendingMaterials).where(inArray(pendingMaterials.id, [pending.id, reviewed.id]));
       }
     }),
+    record('sec_payroll_amount_read_scope_td_303', 'حوزه H: پرداخت‌های فیش و مانده مساعده فقط با مجوز خواندن فیش‌ها (TD-303)', 'real_database', async () => {
+      const production = await userWith(['personnel.view', 'projects.view', 'piecework.view']);
+      const payroll = await userWith(['piecework.payroll']);
+      const urls = ['/api/piecework/payrolls/999999999/payments', '/api/piecework/personnel/999999999/advance-balance'];
+      const wrong: string[] = [];
+      for (const url of urls) {
+        const denied = await send(production.session, 'get', url);
+        const allowed = await send(payroll.session, 'get', url);
+        if (denied.status !== 403) wrong.push(`personnel.view ${url}: ${denied.status} (انتظار 403)`);
+        if (allowed.status === 403) wrong.push(`piecework.payroll ${url}: 403`);
+      }
+      if (wrong.length > 0) throw new Error(wrong.join('، '));
+      return 'personnel.view ← 403، piecework.payroll مجاز';
+    }),
   ];
 
   try {

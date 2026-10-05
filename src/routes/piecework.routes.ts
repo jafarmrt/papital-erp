@@ -802,7 +802,8 @@ router.post('/piecework/payrolls/:id/payments/:transactionId/void', authorize('p
 }));
 
 // GET /api/piecework/payrolls/:id/payments — V4.0.33: دریافت سابقه اقساط و پرداخت‌های خزانه‌ای متصل به یک فیش
-router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+// حوزه H (TD-303): مبالغ پرداخت فیش همان محدوده خواندن فیش‌ها را دارد (AGENTS.md §5)
+router.get('/piecework/payrolls/:id/payments', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -816,7 +817,7 @@ router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'pers
 }));
 
 // GET /api/piecework/personnel/:id/advance-balance — V4.0.33: استعلام سیستمی مانده مساعده تسویه‌نشده پرسنل
-router.get('/piecework/personnel/:id/advance-balance', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/piecework/personnel/:id/advance-balance', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(id);

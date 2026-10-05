@@ -259,7 +259,7 @@
 | POST | `/api/piecework/payrolls` | personnel.manage \| admin |
 | DELETE | `/api/piecework/payrolls/:id` | personnel.manage \| admin |
 | GET | `/api/piecework/payrolls/:id` | piecework.payroll \| personnel.manage \| accounting.treasury |
-| GET | `/api/piecework/payrolls/:id/payments` | personnel.view \| personnel.manage \| accounting.view \| admin |
+| GET | `/api/piecework/payrolls/:id/payments` | piecework.payroll \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/payrolls/:id/payments/:transactionId/void` | personnel.manage \| admin |
 | POST | `/api/piecework/payrolls/:id/register-payment` | personnel.manage \| admin |
 | PUT | `/api/piecework/payrolls/:id/status` | personnel.manage \| admin |
@@ -268,7 +268,7 @@
 | GET | `/api/piecework/payrolls/mine` | login-only |
 | POST | `/api/piecework/personnel-rates` | personnel.manage \| admin |
 | GET | `/api/piecework/personnel-rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| GET | `/api/piecework/personnel/:id/advance-balance` | personnel.view \| personnel.manage \| accounting.view \| admin |
+| GET | `/api/piecework/personnel/:id/advance-balance` | piecework.payroll \| personnel.manage \| accounting.treasury |
 | POST | `/api/piecework/rates` | personnel.manage \| admin |
 | GET | `/api/piecework/rates/:personnelId` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
 | GET | `/api/piecework/tasks` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |

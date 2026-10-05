@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.51 — Payroll Payments Follow the Payroll Read Permission (TD-303)
+- Payroll payments and personnel advance balances are read with the payroll read permissions only, like the payslips themselves.
+
 ### v8.0.50 — Pending Material Edits Need the Approval Permission (TD-302)
 - Editing a pending raw-material request needs the approval permission and is refused once the request was approved or rejected.
 
