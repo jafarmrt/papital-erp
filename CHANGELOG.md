@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.55 — Vouchers Approved at Creation Record Their Approver (TD-308)
+- A manual journal voucher created as approved records its creator as the approver.
+
 ### v8.0.54 — Document Creator Name Comes From the Session (TD-307)
 - The creator name of a document, its Kardex rows and its voucher is the signed-in user, not a name sent in the request.
 

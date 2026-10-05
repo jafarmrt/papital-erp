@@ -314,6 +314,8 @@ export class VoucherService {
         attachments: [],
         createdById: data.userId || null,
         createdByUsername: data.username || '',
+        // حوزه H (TD-308): سندی که با وضعیت «تأییدشده» ساخته می‌شود تأییدکننده‌اش (ثبت‌کننده) را دارد
+        approvedById: data.status === 'approved' ? (data.userId || null) : null,
       }).returning();
       // v7.0.56 (audit P2-9): فایل پیوست‌ها روی دیسک؛ ستون attachments فقط فراداده
       voucher.attachments = await AttachmentStorageService.attachToNewRecord(tx, 'journal_voucher', voucher.id, data.attachments, data.username);

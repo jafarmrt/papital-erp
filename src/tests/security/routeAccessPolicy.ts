@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials, items, documents } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, items, documents, accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -237,6 +237,27 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       } finally {
         if (docId) await orm.update(documents).set({ isDeleted: 1 }).where(eq(documents.id, docId));
         await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
+      }
+    }),
+    record('sec_voucher_approved_on_create_td_308', 'حوزه H: سند حسابداری که تأییدشده ساخته می‌شود تأییدکننده دارد (TD-308)', 'real_database', async () => {
+      const accountant = await userWith(['accounting.view', 'accounting.vouchers']);
+      const accountRows = await orm.select({ id: accounts.id }).from(accounts).where(eq(accounts.isDeleted, 0)).orderBy(asc(accounts.id)).limit(2);
+      if (accountRows.length < 2) throw new Error('حداقل دو سرفصل لازم است');
+      const res = await send(accountant.session, 'post', '/api/accounting/vouchers', {
+        date: new Date().toISOString().split('T')[0], voucherType: 'general', status: 'approved', description: `TD308-${Date.now()}`,
+        items: [{ accountId: accountRows[0].id, debit: 1000, credit: 0 }, { accountId: accountRows[1].id, debit: 0, credit: 1000 }]
+      });
+      const voucherId = Number(res.body?.id);
+      try {
+        if (res.status !== 201) throw new Error(`ثبت سند شکست خورد (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
+        const [row] = await orm.select({ approvedById: journalVouchers.approvedById }).from(journalVouchers).where(eq(journalVouchers.id, voucherId));
+        if (row?.approvedById !== accountant.id) throw new Error(`تأییدکننده ${row?.approvedById ?? 'خالی'} شد، انتظار ${accountant.id}`);
+        return 'تأییدکننده = ثبت‌کننده';
+      } finally {
+        if (voucherId) {
+          await orm.delete(journalVoucherItems).where(eq(journalVoucherItems.voucherId, voucherId));
+          await orm.delete(journalVouchers).where(eq(journalVouchers.id, voucherId));
+        }
       }
     }),
   ];
