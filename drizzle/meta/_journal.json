@@ -351,6 +351,13 @@
       "when": 1792450000000,
       "tag": "0049_journal_voucher_source_bom_allocation",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792500000000,
+      "tag": "0050_workflow_transition_initiator_excluded",
+      "breakpoints": true
     }
   ]
 }

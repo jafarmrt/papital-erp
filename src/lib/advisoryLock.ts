@@ -12,6 +12,8 @@ export const ADVISORY_LOCK_KEYS = {
   INLINE_ATTACHMENTS_MIGRATION: 91004,
   ATTACHMENT_ORPHAN_CLEANUP: 91005,
   WORKFLOW_SLA_REMINDER: 91006,
+  /** v8.0.82 (TD-366): یک اجرای مهاجرت در هر زمان (راه‌اندازی سرور، ابزار دستی)؛ اجرای دوم منتظر می‌ماند */
+  MIGRATIONS: 91008,
 } as const;
 
 /**

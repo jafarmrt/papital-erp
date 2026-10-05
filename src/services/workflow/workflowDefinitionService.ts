@@ -71,6 +71,8 @@ export interface SaveWorkflowDefinitionPayload {
     parallelApprovalRule?: string;
     kValue?: number;
     autoActionKey?: string;
+    /** v8.0.102 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند */
+    isInitiatorExcluded?: number | boolean;
     [key: string]: unknown;
   }>;
   [key: string]: unknown;
@@ -307,7 +309,8 @@ export class WorkflowDefinitionService {
                 approvalRuleType: tr.approvalRuleType || tr.parallelApprovalRule || 'SINGLE',
                 kValue: Number(tr.kValue) || 1,
                 ruleConditionsJson: tr.ruleConditionsJson || [],
-                autoActionKey: tr.autoActionKey || ''
+                autoActionKey: tr.autoActionKey || '',
+                isInitiatorExcluded: tr.isInitiatorExcluded === true || Number(tr.isInitiatorExcluded) === 1 ? 1 : 0
               });
             }
           }

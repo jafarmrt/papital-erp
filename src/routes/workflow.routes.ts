@@ -124,7 +124,7 @@ router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approv
 router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(taskIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = Number(req.params.taskId);
-    const { comment, snapshotData, action } = req.body;
+    const { comment, snapshotData, action, transitionId } = req.body;
     const userId = req.user?.id;
     const userName = req.user?.fullName || req.user?.username || '';
     const userRole = req.user?.role || '';
@@ -141,11 +141,16 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
       userRole,
       userPermissions,
       action: action === 'reject' ? 'reject' : 'approve',
+      transitionId: Number(transitionId) > 0 ? Number(transitionId) : undefined,
       comment,
       snapshotData
     });
 
-    res.json({ success: true, message: 'وظیفه با موفقیت اجرا گردید', data: result });
+    // v8.0.91 (TD-371): امضایی که حدنصاب را کامل نکرده کار را باز می‌گذارد و پیام شمار امضاها را برمی‌گرداند
+    const pendingSignature = 'task' in result && result.task.status === 'pending';
+    const alreadyDecided = 'idempotent' in result && result.idempotent;
+    const message = (pendingSignature || alreadyDecided) && 'message' in result && result.message ? result.message : 'وظیفه با موفقیت اجرا گردید';
+    res.json({ success: true, message, data: result });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route /tasks/:taskId/execute] Error: ${errMsg}`);

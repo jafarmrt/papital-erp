@@ -48,6 +48,75 @@ going forward.
 ### v8.0.103 — تخفیف ردیف حداکثر برابر مبلغ همان ردیف
 - TD-380: تخفیف ردیف بیشتر از مقدار × قیمت واحد رد می‌شود؛ مازاد تخفیف دیگر از درآمد ردیف‌های دیگر کم نمی‌شود و بدهکاری مشتری با مبلغ فاکتور می‌خواند. ده یافته حوزه L ثبت شد.
 
+### v8.0.102 — A Workflow Step Can Exclude the Initiator
+- The workflow designer has a per-transition «آغازکننده تأیید نکند» option (off by default); when set, the user who started the process, directly or through a delegate, cannot run that step and does not see its task, while colleagues of the role and admins can.
+
+### v8.0.101 — Receiving an Unapproved Requisition Approves It in the Receiver's Name
+- Receiving goods on a purchase requisition that is not yet approved now runs the approval step in the receiver's name, with their role checked and the approval recorded in the history; a receiver without approval rights is refused and nothing enters stock.
+
+### v8.0.100 — A Transition's Required Permission Is Enforced
+- A workflow transition with a required permission now runs, and is offered, only for an admin or a user whose role or own permissions include it; the workflow designer shows and keeps the field instead of clearing it on save.
+
+### v8.0.99 — Requisition Workflow Actions Follow the Current Step
+- A purchase requisition action with no transition from its current workflow step is refused (409) instead of changing the status directly, so a received requisition can no longer be reopened, ordered and received into stock again; a rejected workflow continues only through a transition drawn out of its rejected step, such as reopen.
+
+### v8.0.98 — Only the Delegator or an Admin Revokes a Delegation
+- A delegate can no longer revoke the delegation given to them (403, and the revoke button is hidden); invalid delegation input returns 422 and a missing delegation or user 404 instead of a server error.
+
+### v8.0.97 — A Delegate Does the Delegator's Role Tasks
+- During an active delegation and within its scope, the delegate sees and runs the delegator's role tasks; the signature is recorded in the delegator's name with the delegate as signer, and neither of them can sign the same step twice.
+
+### v8.0.96 — All-Members Approval Means Every Member of the Role
+- An AND_ALL workflow step now passes only when every active user of the step's required role has signed (a one-member role passes with that member); a step without a role asks for the K set in the designer.
+
+### v8.0.95 — No Deadlock Between Inbox Tasks and Direct Transitions
+- Running an inbox task while the same step is executed from the document widget no longer deadlocks: the task locks the workflow instance before the task, in the same order as a direct transition.
+
+### v8.0.94 — View Permissions No Longer Approve Workflow Steps
+- A workflow step that requires the warehouse or accountant role can no longer be approved with a view or treasury permission alone, and production roles no longer count as managers; the role itself, a role of the same department or that department's posting permission is required.
+
+### v8.0.93 — Step Signatures Restart When a Workflow Returns
+- When a workflow comes back to a step after a rejection or return, the signatures of that step start from zero: the same user can resubmit, and an old signature no longer fills the quorum.
+
+### v8.0.92 — Running Workflows Keep Their Tasks After a Design Edit
+- After a workflow design is saved again, a running instance still gets the tasks and deadline of its next step from its own version snapshot instead of dropping out of the inbox.
+
+### v8.0.91 — Multi-Signature Tasks Stay Open Until the Quorum
+- A K-of-N or all-members approval task stays in every signer's inbox until the quorum is met; a partial or repeated signature no longer closes it, and the signer sees how many signatures are collected.
+
+### v8.0.90 — Inbox Tasks Run Their Own Transition
+- Approving a workflow task runs that task's own transition instead of the first forward transition of the step, and rejecting runs only a reject transition of the current step; a step without one refuses the rejection instead of approving it.
+
+### v8.0.89 — Upgrade From v7.0.137 Passes Vouchers Refused by 0044
+- Migration 0047 backfills source_cheque_id through erp_update_with_unvalidated_checks, so a voucher whose date 0044 refused to convert (closed fiscal year) no longer violates its NOT VALID date constraint and roll back the whole upgrade from v7.0.137; databases that ran the old 0047 are unaffected.
+
+### v8.0.88 — Upgrade Rehearsal on a Restored Copy
+- scripts/upgrade-rehearsal.sh (and update.sh --rehearse, before the restart) restores the latest backup into a drill database, runs the new migrations on it and compares ledger totals per account, stock per item and warehouse, bank balances and the financial health check before and after; the live database is never touched.
+
+### v8.0.87 — Restore Apply Builds a New Database and Swaps It In
+- RESTORE_MODE=apply no longer restores over the live database: it restores into a new database, verifies it like a drill, refuses while sessions are connected, swaps names and keeps the previous database and uploads directory; attachment files are restored too.
+
+### v8.0.86 — Restore Drill Works With the Installed Database Role
+- The role install.sh creates has no CREATEDB: restore.sh now creates, drops and renames databases through RESTORE_ADMIN_URL or sudo -u postgres, restores as the application role and stops with guidance before changing anything when neither is available.
+
+### v8.0.85 — Restore Drill Compares Content With the Backup Manifest
+- backup.sh writes the dump and a content manifest (rows and content hash of every table, every constraint) from one exported snapshot; the restore drill compares the restored database with it and checks sequences, attachment files and the migration level. The always-green recovery check was removed.
+
+### v8.0.84 — Backups Run From Cron and Include Attachments
+- scripts/backup.sh finds the application directory from its own location, reads DATABASE_URL and ATTACHMENTS_DIR from its .env and archives public/uploads, so a cron line backs up the database and the attachment files; attachment records without an attachment directory fail the backup.
+
+### v8.0.83 — update.sh Waits for Startup and the Built Version
+- update.sh reports success only when /health/startup answers (migrations and seed finished) and /health shows the built version (scripts/verify-startup.sh); on failure it prints the rollback steps with the previous commit and the pre-deployment backup.
+
+### v8.0.82 — Migrations Run Without the Request Timeout, One at a Time
+- Migrations run on a dedicated connection without the 60 s request statement timeout (MIGRATION_STATEMENT_TIMEOUT, default 0) under advisory lock 91008: the 0044 date migration no longer dies on large voucher tables and two concurrent runs queue instead of failing.
+
+### v8.0.81 — Skipped Migrations and Newer Databases Stop Startup
+- Before running, the migrator compares the code journal with __drizzle_migrations: a migration whose `when` is older than the last applied one (Drizzle skipped it silently) or a database newer than the build stops startup with the migration named; a journal lint checks strictly increasing `when` values.
+
+### v8.0.80 — Atomic Project Codes
+- - Automatic project codes (PRJ-<year>-<number>) come from an atomic yearly counter in `document_ref_counters` instead of `COUNT(*) + 1`, so concurrent project creation no longer fails on a duplicate code; a custom code is checked under the same lock.
+
 ### v8.0.79 — Idempotency Keys Keep Only Successful Responses
 - The browser derives the Idempotency-Key from the submission's content and keeps it until a definitive answer, so a resubmission after a lost response returns the first result; the server stores only successful responses, refuses a key reused for another path or body, and extends the key's lock while a long request runs.
 

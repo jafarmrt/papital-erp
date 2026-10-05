@@ -42,7 +42,7 @@ import { fin } from '../lib/financialDecimal.js';
 type DbClient = DbExecutor;
 
 /** فیلدهای وضعیت ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_states) */
-type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey'>;
+type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey' | 'title'>;
 /** فیلدهای انتقال ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_transitions) */
 type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title'>;
 
@@ -571,7 +571,7 @@ export class ProcurementService {
         submit_for_approval: ['send_to_manager', 'submit_to_procurement', 'submit_for_approval'],
         send_to_manager: ['send_to_manager', 'submit_for_approval'],
         submit_to_procurement: ['submit_to_procurement', 'submit_for_review'],
-        reject_request: ['reject_manager', 'reject_procurement', 'reject', 'cancel'],
+        reject_request: ['reject_request', 'reject_manager', 'reject_procurement', 'reject', 'cancel'],
         reject_manager: ['reject_manager', 'reject_request', 'reject', 'reject_procurement'],
         reject_procurement: ['reject_procurement', 'reject_manager', 'reject_request', 'reject'],
         reopen: ['reopen']
@@ -584,17 +584,30 @@ export class ProcurementService {
         targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
       );
 
-      // If receiving items while still at pending, auto-advance to ordered state first so receive_items can execute
+      // v8.0.101 (TD-390، تصمیم مالک محصول «تأیید با نام او»): «دریافت کالا»ی درخواستِ تأییدنشده نخست انتقال تأیید گام
+      // جاری را به نام دریافت‌کننده اجرا می‌کند (نقش و مجوز او سنجیده و در تاریخچه ثبت می‌شود) و سپس کالا را دریافت می‌کند.
+      // پیش‌تر گام فرایند بی امضا و بی ثبت مستقیم به «سفارش‌شده» برده می‌شد.
       if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
-        const orderedState = states.find(s => s.stateKey === 'ordered');
-        if (orderedState && wfInst.currentStateId !== orderedState.id) {
-          await tx.update(workflowInstances).set({
-            currentStateId: orderedState.id,
-            updatedAt: new Date().toISOString()
-          }).where(eq(workflowInstances.id, wfInst.id));
-          wfInst.currentStateId = orderedState.id;
+        const approveKeys = ACTION_KEY_ALIASES.approve_request;
+        const approveTransition = transitions.find(t => approveKeys.includes(t.actionKey) && t.fromStateId === wfInst.currentStateId);
+        if (approveTransition) {
+          const approval = await WorkflowTransitionExecutor.executeTransition({
+            instanceId: wfInst.id,
+            transitionId: approveTransition.id,
+            userId: user.id,
+            userName: user.username,
+            userRole: user.role,
+            userPermissions: user.permissions || [],
+            comment: comment || 'تأیید هنگام دریافت کالا',
+            snapshotData: { id: req.id, code: req.code, totalAmount: Number(req.totalEstimatedAmount || 0), priority: req.priority, status: req.status },
+            tx
+          });
+          if (!('toState' in approval) || !approval.toState) {
+            throw new ConflictError(`تأیید درخواست خرید ${req.code} هنوز امضاهای دیگری می‌خواهد؛ کالا پس از تکمیل تأیید دریافت می‌شود (WF_APPROVAL_PENDING).`);
+          }
+          wfInst.currentStateId = approval.toState.id;
           matchedTransition = transitions.find(t =>
-            targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === orderedState.id)
+            targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
           );
         }
       }
@@ -624,7 +637,7 @@ export class ProcurementService {
 
         const toStateKey = result.toState?.stateKey;
         if (toStateKey) {
-          if (toStateKey === 'draft') mappedStatus = 'pending';
+          if (toStateKey === 'draft' || toStateKey === 'pending') mappedStatus = 'pending';
           else if (toStateKey === 'procurement_review') mappedStatus = 'under_review';
           else if (toStateKey === 'manager_approval') mappedStatus = 'manager_approval';
           else if (toStateKey === 'ordered') mappedStatus = 'ordered';
@@ -632,22 +645,10 @@ export class ProcurementService {
           else if (toStateKey === 'rejected') mappedStatus = 'rejected';
         }
       } else {
-        // Graceful direct workshop transition fallback
-        if (['approve_request', 'approve_order', 'direct_admin_order', 'direct_order'].includes(actionKey)) {
-          mappedStatus = 'ordered';
-          transitionTitle = 'تایید مستقیم و صدور سفارش خرید';
-        } else if (RECEIVE_ACTION_KEYS.includes(actionKey)) {
-          mappedStatus = 'received';
-          transitionTitle = 'تحویل و ورود به انبار';
-        } else if (['reject_request', 'reject_manager', 'reject_procurement', 'reject'].includes(actionKey)) {
-          mappedStatus = 'rejected';
-          transitionTitle = 'رد درخواست خرید';
-        } else if (['reopen'].includes(actionKey)) {
-          mappedStatus = 'pending';
-          transitionTitle = 'بازگشایی مجدد درخواست';
-        } else {
-          throw new ValidationError(`گذار با شناسه اقدام «${actionKey}» برای وضعیت فعلی درخواست یافت نشد`);
-        }
+        // v8.0.99 (TD-379): اقدامی که انتقالی از گام جاری ندارد رد می‌شود. پیش‌تر «میان‌بر» وضعیت درخواست را مستقیم
+        // عوض می‌کرد: درخواستِ دریافت‌شده «بازگشایی» و دوباره سفارش و وارد انبار می‌شد و درخواستِ ردشده بی بازگشایی تأیید.
+        const stepTitle = states.find(s => s.id === wfInst.currentStateId)?.title || req.status;
+        throw new ConflictError(`اقدام «${actionKey}» در گام فعلی درخواست خرید ${req.code} («${stepTitle}») مجاز نیست (WF_ACTION_NOT_IN_STEP).`);
       }
 
       const updatedItems = mappedStatus === 'received'
