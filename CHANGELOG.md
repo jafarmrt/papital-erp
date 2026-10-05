@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.35 — Project Delivery Issues a Production Receipt (TD-285)
+- Delivering a project's finished goods to stock issues a final production receipt linked to the project: debit finished goods, credit work in progress.
+
 ### v8.0.34 — BOM Allocation Posts Work in Progress (TD-286)
 - Allocating materials to a project posts debit work in progress, credit inventory at the Kardex cost; releasing the allocation voids that voucher.
 

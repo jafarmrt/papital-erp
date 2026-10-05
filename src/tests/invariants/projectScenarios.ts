@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { items, projectBomAllocations, transactions } from '../../db/schema.js';
+import { documents, items, projectBomAllocations, transactions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DocumentService } from '../../services/document.service.js';
@@ -160,6 +160,44 @@ export async function checkBomAllocationPostsVoucher(wh: string): Promise<string
   return problems;
 }
 
+/**
+ * TD-285 (تصمیم مالک محصول — گزینه الف): «ورود به انبار» زبانه پروژه سند «رسید تولید» نهایی با پیوند پروژه صادر می‌کند که
+ * سند حسابداری دارد — بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت پروژه. با تخصیص ۴ × ۱۰۰٬۰۰۰ و تحویل ۲ × ۲۰۰٬۰۰۰،
+ * ۱۴۰۲ پروژه صفر می‌شود؛ تحویل بی‌بها به میانگین موزون ثبت می‌شود و ارزش انبار با دفتر کل یکی می‌ماند.
+ */
+export async function checkProjectDeliveryPostsVoucher(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const mark = await voucherMark();
+  const raw = await rawWithStock(wh, 10, 100000);
+  const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const projectId = await newProject('پروژه آزمون تحویل');
+  const scope = { itemIds: [raw.itemId, product.id], documentIdAfter: 0, voucherIdAfter: mark };
+  await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId: raw.itemId, quantity: 4, location: wh }], username: 'inv' });
+
+  const delivered = await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, unitPrice: 200000, location: wh }], currentUser: 'inv' });
+  const [doc] = delivered.documentId
+    ? await orm.select({ type: documents.type, status: documents.status, projectId: documents.projectId }).from(documents).where(eq(documents.id, delivered.documentId))
+    : [];
+  if (doc?.type !== 'production_receipt' || doc.status !== 'final' || doc.projectId !== projectId) {
+    problems.push(`تحویل سند رسید تولید نهایی با پیوند پروژه نساخت (${doc ? `${doc.type}/${doc.status}/${doc.projectId}` : 'سندی ندارد'})`);
+  }
+  const linked = await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM journal_vouchers WHERE is_deleted = 0 AND source_document_id = $1', [delivered.documentId ?? 0]);
+  if (Number(linked.rows[0].n) !== 1) problems.push(`سند حسابداری رسید تولید ${linked.rows[0].n}، انتظار ۱`);
+  if (!fin(await stockOf(product.id)).equals(2)) problems.push(`موجودی محصول پس از تحویل ${await stockOf(product.id)}، انتظار ۲`);
+  const wip = await projectNet('1402', projectId);
+  if (!fin(wip).isZero()) problems.push(`۱۴۰۲ پروژه پس از تحویل ${wip}، انتظار ۰ (۴۰۰٬۰۰۰ تخصیص − ۴۰۰٬۰۰۰ تحویل)`);
+  const afterFirst = await inventoryValueGap(scope);
+  if (!afterFirst.gap.isZero()) problems.push(`پس از تحویل: اختلاف ارزش انبار و دفتر کل ${afterFirst.gap}`);
+
+  // تحویل بی‌بها: به میانگین موزون فعلی (۲۰۰٬۰۰۰) ثبت می‌شود
+  await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 1, location: wh }], currentUser: 'inv' });
+  const wipAfter = await projectNet('1402', projectId);
+  if (!fin(wipAfter).equals(-200000)) problems.push(`۱۴۰۲ پروژه پس از تحویل بی‌بها ${wipAfter}، انتظار −۲۰۰٬۰۰۰ (به میانگین موزون)`);
+  const afterSecond = await inventoryValueGap(scope);
+  if (!afterSecond.gap.isZero()) problems.push(`پس از تحویل بی‌بها: اختلاف ارزش انبار و دفتر کل ${afterSecond.gap}`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-287 (کاوش رگرسیون؛ رفع v8.0.32): «رسید مستقیم BOM» بی‌رسید موجودی را بی‌تأمین‌کننده و بی‌سند حسابداری بالا می‌برد */
@@ -172,7 +210,7 @@ export async function probeBomReceiptAllocationFromNothing(wh: string): Promise<
   return !refused && fin(await stockOf(itemId)).greaterThan(5);
 }
 
-/** TD-285: تحویل کالای ساخته‌شده پروژه به انبار («ورود به انبار») موجودی را بی‌سند حسابداری بالا می‌برد */
+/** TD-285 (کاوش رگرسیون؛ رفع v8.0.35): تحویل کالای ساخته‌شده پروژه به انبار («ورود به انبار») موجودی را بی‌سند حسابداری بالا می‌برد */
 export async function probeProjectDeliveryWithoutVoucher(wh: string): Promise<boolean> {
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   const projectId = await newProject('پروژه کاوش تحویل');

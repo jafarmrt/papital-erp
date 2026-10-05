@@ -232,7 +232,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       });
 
       if (res && (res.success || res.addedCount !== undefined || res.message)) {
-        toast.success(`تعداد ${toPersianDigits(qty)} ${product.unit} «${product.item_name}» به انبار تحویل داده شد`);
+        toast.success(`تعداد ${toPersianDigits(qty)} ${product.unit} «${product.item_name}» به انبار تحویل داده شد${res.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
         onUpdate();
       } else {
         toast.error(res?.error || 'خطا در ثبت ورود به انبار');
@@ -291,7 +291,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       });
 
       if (res && (res.success || res.addedCount !== undefined || res.message)) {
-        toast.success(`تعداد ${toPersianDigits(res.addedCount || validItems.length)} قلم محصول با موفقیت به انبار تحویل داده شدند`);
+        toast.success(`تعداد ${toPersianDigits(res.addedCount || validItems.length)} قلم محصول با موفقیت به انبار تحویل داده شدند${res.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
         setSelectedIds(new Set());
         onUpdate();
       } else {

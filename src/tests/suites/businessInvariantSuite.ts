@@ -29,7 +29,7 @@ import {
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
-import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
+import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -267,6 +267,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.35: TD-285 ──
+    ['inv_td_285_project_delivery_posts_voucher', 'v8.0.35: «ورود به انبار» پروژه سند «رسید تولید» نهایی با پیوند پروژه صادر می‌کند که بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت پروژه است؛ تحویل بی‌بها به میانگین موزون (TD-285، گزینه الف)',
+      () => checkProjectDeliveryPostsVoucher(wh), 'رسید تولید با یک سند حسابداری صادر شد؛ ۱۴۰۲ پروژه صفر و پس از تحویل بی‌بها −۲۰۰٬۰۰۰ شد؛ اختلاف انبار و دفتر صفر ماند'],
     // ── v8.0.34: TD-286 ──
     ['inv_td_286_bom_allocation_posts_voucher', 'v8.0.34: تخصیص مواد BOM سند بدهکار کالای در جریان ساخت / بستانکار موجودی به بهای کاردکس می‌گیرد و آزادسازی آن را باطل می‌کند؛ ارزش انبار با دفتر کل یکی می‌ماند (TD-286، گزینه الف)',
       () => checkBomAllocationPostsVoucher(wh), '۱۴۰۲ پروژه ۷۰۰٬۰۰۰ شد و با دو آزادسازی (پیش‌نویس و تأییدشده) صفر شد؛ اختلاف انبار و دفتر صفر ماند'],

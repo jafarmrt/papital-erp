@@ -758,7 +758,8 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       projectId: id,
       itemsToAdd,
       markCompleted,
-      currentUser
+      currentUser,
+      userId: req.user?.id
     });
 
     await logActivity({
@@ -768,13 +769,15 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       action: 'UPDATE',
       entity: 'پروژه تولید',
       entityId: String(id),
-      description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}`
+      description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}`
     });
 
     res.json({
       success: true,
       message: 'محصولات با موفقیت به موجودی انبار افزوده شدند',
-      addedCount: result.addedCount
+      addedCount: result.addedCount,
+      documentId: result.documentId,
+      refNumber: result.refNumber
     });
   } catch (err) {
     throw err;

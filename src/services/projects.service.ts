@@ -1,10 +1,10 @@
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { productionProjects, projectStages, items, customers, projectProductStageProgress } from '../db/schema.js';
+import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents } from '../db/schema.js';
 import { NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
-import { businessNowIsoDateTime } from '../lib/businessClock.js';
+import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 
@@ -64,6 +64,15 @@ export interface AddProjectToInventoryInput {
   }>;
   markCompleted?: boolean;
   currentUser?: string;
+  userId?: number;
+}
+
+export interface AddProjectToInventoryResult {
+  addedCount: number;
+  projectCode: string;
+  /** v8.0.35 (TD-285): سند «رسید تولید» صادرشده؛ اگر هیچ قلم معتبری نبود null */
+  documentId: number | null;
+  refNumber: string | null;
 }
 
 export class ProjectService {
@@ -255,12 +264,16 @@ export class ProjectService {
   }
 
   /**
-   * Adds finished products to warehouse stock with deadlock-free lock ordering
+   * تحویل کالای ساخته‌شده پروژه به انبار («ورود به انبار» زبانه پروژه) با قفل‌گذاری مرتب (کالاها، سپس پروژه).
+   * v8.0.35 (TD-285، تصمیم مالک محصول — گزینه الف): به‌جای حرکت مستقیم انبار، یک سند «رسید تولید» نهایی با پیوند پروژه در
+   * همین تراکنش صادر می‌شود که سند حسابداری خودش را دارد (بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت با تفصیلی
+   * پروژه). پیش‌تر موجودی بی‌سند حسابداری بالا می‌رفت و ارزش انبار از دفتر کل بیشتر می‌شد. بهای هر قلم همان بهای واردشده
+   * است و اگر وارد نشده باشد میانگین موزون فعلی کالا.
    */
   static async addProjectToInventory(
     input: AddProjectToInventoryInput,
     executor: DbExecutor = orm
-  ): Promise<{ addedCount: number; projectCode: string }> {
+  ): Promise<AddProjectToInventoryResult> {
     const id = input.projectId;
     const currentUser = input.currentUser || 'سیستم';
 
@@ -276,37 +289,46 @@ export class ProjectService {
         throw new NotFoundError('پروژه یافت نشد');
       }
 
-      let addedCount = 0;
+      const projectLabel = proj.projectCode || `پروژه-${id}`;
+      const lines: Array<{ itemId: number; quantity: number; unitPrice: string; location: string }> = [];
+      const lineNotes: string[] = [];
 
       for (const entry of input.itemsToAdd) {
         const itemId = Number(entry.itemId);
         const qty = Number(entry.quantity);
         if (!itemId || !qty || qty <= 0) continue;
 
-        let effectiveUnitPrice: number | null = null;
+        let effectiveUnitPrice: string;
         if (entry.unitPrice !== undefined && entry.unitPrice !== null && !isNaN(Number(entry.unitPrice))) {
-          effectiveUnitPrice = Number(entry.unitPrice);
+          effectiveUnitPrice = String(entry.unitPrice);
         } else {
           const [itemRow] = await tx.select({ weightedAverageCost: items.weightedAverageCost }).from(items).where(eq(items.id, itemId));
-          effectiveUnitPrice = Number(itemRow?.weightedAverageCost || 0);
+          effectiveUnitPrice = itemRow?.weightedAverageCost ? itemRow.weightedAverageCost.toString() : '0';
         }
 
-        const todayDate = await businessNowIsoDateTime();
+        lines.push({ itemId, quantity: qty, unitPrice: effectiveUnitPrice, location: entry.location || '' });
+        if (entry.notes) lineNotes.push(entry.notes);
+      }
 
-        await DocumentService.applyStockMovement(tx, {
-          itemId,
+      let documentId: number | null = null;
+      let refNumber: string | null = null;
+      if (lines.length > 0) {
+        const created = await DocumentService.createDocumentWithDetails({
+          docType: 'production_receipt',
           inOut: 'in',
-          quantity: qty,
-          price: effectiveUnitPrice,
-          date: todayDate,
-          documentType: 'project',
-          documentRef: proj.projectCode || `پروژه-${id}`,
+          status: 'final',
+          date: await businessTodayIsoDate(),
           user: currentUser,
-          targetLoc: entry.location || '',
-          notes: entry.notes ? `تحویل از پروژه ${proj.projectCode}: ${entry.notes}` : `تحویل تولید پروژه ${proj.projectCode}`
-        });
-
-        addedCount++;
+          projectId: id,
+          location: lines[0].location,
+          currency: 'IRR',
+          notes: [`تحویل تولید پروژه ${projectLabel}`, ...lineNotes].join(' — '),
+          items: lines,
+          externalTx: tx,
+        }, { userId: input.userId });
+        documentId = created.docId;
+        const [doc] = await tx.select({ refNumber: documents.refNumber }).from(documents).where(eq(documents.id, documentId));
+        refNumber = doc?.refNumber ?? null;
       }
 
       if (input.markCompleted) {
@@ -317,7 +339,7 @@ export class ProjectService {
         await tx.update(productionProjects).set({ status: 'completed' }).where(eq(productionProjects.id, id));
       }
 
-      return { addedCount, projectCode: proj.projectCode };
+      return { addedCount: lines.length, projectCode: proj.projectCode, documentId, refNumber };
     });
   }
 
