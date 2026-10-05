@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.92 — Receiving an Unapproved Requisition Approves It in the Receiver's Name
+- Receiving goods on a purchase requisition that is not yet approved now runs the approval step in the receiver's name, with their role checked and the approval recorded in the history; a receiver without approval rights is refused and nothing enters stock.
+
 ### v8.0.91 — A Transition's Required Permission Is Enforced
 - A workflow transition with a required permission now runs, and is offered, only for an admin or a user whose role or own permissions include it; the workflow designer shows and keeps the field instead of clearing it on save.
 

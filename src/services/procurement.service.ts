@@ -584,17 +584,30 @@ export class ProcurementService {
         targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
       );
 
-      // If receiving items while still at pending, auto-advance to ordered state first so receive_items can execute
+      // v8.0.92 (TD-390، تصمیم مالک محصول «تأیید با نام او»): «دریافت کالا»ی درخواستِ تأییدنشده نخست انتقال تأیید گام
+      // جاری را به نام دریافت‌کننده اجرا می‌کند (نقش و مجوز او سنجیده و در تاریخچه ثبت می‌شود) و سپس کالا را دریافت می‌کند.
+      // پیش‌تر گام فرایند بی امضا و بی ثبت مستقیم به «سفارش‌شده» برده می‌شد.
       if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
-        const orderedState = states.find(s => s.stateKey === 'ordered');
-        if (orderedState && wfInst.currentStateId !== orderedState.id) {
-          await tx.update(workflowInstances).set({
-            currentStateId: orderedState.id,
-            updatedAt: new Date().toISOString()
-          }).where(eq(workflowInstances.id, wfInst.id));
-          wfInst.currentStateId = orderedState.id;
+        const approveKeys = ACTION_KEY_ALIASES.approve_request;
+        const approveTransition = transitions.find(t => approveKeys.includes(t.actionKey) && t.fromStateId === wfInst.currentStateId);
+        if (approveTransition) {
+          const approval = await WorkflowTransitionExecutor.executeTransition({
+            instanceId: wfInst.id,
+            transitionId: approveTransition.id,
+            userId: user.id,
+            userName: user.username,
+            userRole: user.role,
+            userPermissions: user.permissions || [],
+            comment: comment || 'تأیید هنگام دریافت کالا',
+            snapshotData: { id: req.id, code: req.code, totalAmount: Number(req.totalEstimatedAmount || 0), priority: req.priority, status: req.status },
+            tx
+          });
+          if (!('toState' in approval) || !approval.toState) {
+            throw new ConflictError(`تأیید درخواست خرید ${req.code} هنوز امضاهای دیگری می‌خواهد؛ کالا پس از تکمیل تأیید دریافت می‌شود (WF_APPROVAL_PENDING).`);
+          }
+          wfInst.currentStateId = approval.toState.id;
           matchedTransition = transitions.find(t =>
-            targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === orderedState.id)
+            targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
           );
         }
       }
