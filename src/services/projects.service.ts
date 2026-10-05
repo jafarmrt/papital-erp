@@ -1,14 +1,15 @@
-import { eq, and, sql, asc } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { productionProjects, projectStages, items, customers, projectProductStageProgress, documents } from '../db/schema.js';
 import { AppError, NotFoundError, ValidationError } from '../errors/customErrors.js';
 import { deliveredProjectQuantities, describeOverDeliveries, findOverDeliveries, plannedProjectProducts, type ProjectOverDelivery } from './projects/projectDeliveryCap.js';
 import { withOrderedLocks } from '../lib/lockOrder.js';
 import { DocumentService } from './document.service.js';
-import { businessFiscalYear, businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
+import { businessNowIsoDateTime, businessTodayIsoDate } from '../lib/businessClock.js';
 import { requireStorageDate, optionalStorageDate } from '../lib/storageDate.js';
 import { AttachmentStorageService } from './attachments/attachmentStorage.service.js';
 import { resolveServerInventoryControl } from './projects/serverInventoryControl.js';
+import { assignProjectCode } from './projects/projectCode.js';
 
 export interface CreateProjectInput {
   title: string;
@@ -83,40 +84,21 @@ export interface AddProjectToInventoryResult {
 
 export class ProjectService {
   /**
-   * Generates a unique project code
-   */
-  static async generateUniqueProjectCode(requestedCode?: string, executor: DbExecutor = orm): Promise<string> {
-    let projectCode = requestedCode ? String(requestedCode).trim() : '';
-
-    if (!projectCode) {
-      const countRes = await executor.select({ count: sql<number>`count(*)` }).from(productionProjects);
-      const totalNum = Number(countRes[0]?.count || 0) + 1;
-      // v8.0.48 (TD-311): سال امروزِ ساعت توافقی؛ پیش‌تر منطقه زمانی میزبان (UTC) شب نوروز سال قبل را می‌داد
-      const jalaliYear = await businessFiscalYear();
-      projectCode = `PRJ-${jalaliYear}-${totalNum.toString().padStart(3, '0')}`;
-    }
-
-    let uniqueCode = String(projectCode);
-    let codeCounter = 1;
-    while (true) {
-      const existing = await executor
-        .select({ id: productionProjects.id })
-        .from(productionProjects)
-        .where(sql`${productionProjects.projectCode} = ${String(uniqueCode)}::text`);
-      if (existing.length === 0) break;
-      uniqueCode = `${projectCode}-${codeCounter++}`;
-    }
-    return String(uniqueCode);
-  }
-
-  /**
    * Creates a production project along with its initial stages
    */
   static async createProject(
     input: CreateProjectInput,
     executor: DbExecutor = orm
   ): Promise<{ project: typeof productionProjects.$inferSelect; stages: Array<typeof projectStages.$inferSelect> }> {
-    const finalCode = await ProjectService.generateUniqueProjectCode(input.projectCode, executor);
+    // v8.0.80 (TD-350): کد و درج پروژه در یک تراکنش زیر قفل شمارنده سال
+    return executor.transaction(tx => ProjectService.createProjectLocked(input, tx));
+  }
+
+  private static async createProjectLocked(
+    input: CreateProjectInput,
+    executor: DbExecutor
+  ): Promise<{ project: typeof productionProjects.$inferSelect; stages: Array<typeof projectStages.$inferSelect> }> {
+    const finalCode = await assignProjectCode(executor, input.projectCode);
 
     let validCustomerId: number | null = null;
     if (input.customerId && !isNaN(Number(input.customerId))) {
@@ -206,18 +188,7 @@ export class ProjectService {
     if (input.title !== undefined) updateData.title = input.title.trim();
 
     if (input.projectCode !== undefined && input.projectCode !== null && String(input.projectCode).trim()) {
-      const requestedCode = String(input.projectCode).trim();
-      let uniqueCode = requestedCode;
-      let codeCounter = 1;
-      while (true) {
-        const existingCode = await executor
-          .select({ id: productionProjects.id })
-          .from(productionProjects)
-          .where(sql`${productionProjects.projectCode} = ${String(uniqueCode)}::text`);
-        if (existingCode.length === 0 || existingCode[0].id === id) break;
-        uniqueCode = `${requestedCode}-${codeCounter++}`;
-      }
-      updateData.projectCode = String(uniqueCode);
+      updateData.projectCode = await assignProjectCode(executor, String(input.projectCode), id);
     }
 
     if (input.customerId !== undefined) {
