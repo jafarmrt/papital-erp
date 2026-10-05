@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.43 — Changed Invoiced WooCommerce Orders Need Review (TD-294)
+- When an invoiced order is edited in the shop or gets a partial refund, the order is flagged for review with the difference instead of being ignored.
+
 ### v8.0.42 — WooCommerce Negative Fees Become Line Discounts (TD-295)
 - An order discount sent as a negative fee is spread over the invoice lines as line discounts in proportion to their amounts instead of rejecting the order.
 

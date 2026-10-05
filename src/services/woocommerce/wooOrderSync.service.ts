@@ -11,6 +11,7 @@ import { logger } from '../../middleware/logger.js';
 import { phoneMatchKey, phoneMatchKeySql } from './phoneMatchKey.js';
 import { currencyScale, exactLineSplit } from './exactLineTotal.js';
 import { allocateFeeDiscount } from './feeDiscount.js';
+import { describeOrderChange } from './orderChange.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -240,6 +241,20 @@ export class WooOrderSyncService {
         const log = await this.lockOrderLog(tx, wcOrderId);
 
         if (log.status === 'processed' && log.erpDocumentId) {
+          // v8.0.43 (TD-294، تصمیم مالک محصول — گزینه الف): سفارشِ فاکتورشده‌ای که اقلام یا مبلغش عوض شده یا استرداد تازه گرفته
+          // «نیازمند بررسی» می‌شود؛ پیش‌تر فقط «قبلاً ثبت شده» پاسخ می‌گرفت و فاکتور بی‌هیچ علامتی با سفارش نمی‌خواند
+          const change = describeOrderChange(log.payload as WcOrderPayload | null, wcOrder);
+          if (change) {
+            const message = `سفارش ووکامرس #${wcOrderId} پس از صدور فاکتور (شناسه ${log.erpDocumentId}) در فروشگاه تغییر کرد: ${change}. فاکتور نیازمند بررسی حسابدار است (ابطال و صدور دوباره، یا برگشت از فروش).`;
+            await tx.update(woocommerceOrderLogs).set({
+              status: 'needs_review',
+              payload: wcOrder,
+              errorMessage: message,
+              updatedAt: systemNowUtcIso(),
+            }).where(eq(woocommerceOrderLogs.id, log.id));
+            logger.warn({ message: `[WooCommerce] ${message}` });
+            return { success: true, status: 'needs_review' as const, alreadyExists: true, docId: log.erpDocumentId, message };
+          }
           return {
             success: true,
             status: 'processed' as const,

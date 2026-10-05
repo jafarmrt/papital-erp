@@ -45,8 +45,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-290 در v8.0.36 رفع شد (inv_td_290_requisition_receipt_sums_lines)
   // حوزه F — ووکامرس (v8.0.39؛ TD-292 در همان نسخه رفع شد: inv_td_292_woo_rial_units)
   'FOCUSED:woo-stock-outside-default-warehouse': 'TD-293',
-  'FOCUSED:woo-edited-order-ignored': 'TD-294',
-  'FOCUSED:woo-partial-refund-ignored': 'TD-294',
+  // TD-294 در v8.0.43 رفع شد (inv_td_294_woo_changed_order_flagged)
   // TD-295 در v8.0.42 رفع شد (inv_td_295_woo_negative_fee_as_line_discount)
   // TD-296 در v8.0.40 رفع شد (inv_td_296_woo_phone_matches_customer)
   // TD-297 در v8.0.41 رفع شد (inv_td_297_woo_exact_line_totals)

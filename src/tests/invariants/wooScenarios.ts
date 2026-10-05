@@ -41,7 +41,7 @@ export async function probeWooThousandTomanCurrency(): Promise<boolean> {
   return doc?.currency !== 'IRR' || Number(net.rows[0].n) !== 1_000_000;
 }
 
-/** استرداد جزئی سفارشِ فاکتورشده (وضعیت همان completed می‌ماند) هیچ اثری در ERP ندارد: نه علامت بررسی، نه پیام */
+/** TD-294 (کاوش رگرسیون؛ رفع v8.0.43): استرداد جزئی سفارشِ فاکتورشده (وضعیت همان completed می‌ماند) هیچ اثری در ERP ندارد */
 export async function probeWooPartialRefundIgnored(): Promise<boolean> {
   const item = await createTestItem({ code: `WC_REFUND_${wooOrderId()}`, stocks: { '': 5 } });
   const id = wooOrderId();
@@ -51,7 +51,7 @@ export async function probeWooPartialRefundIgnored(): Promise<boolean> {
   return log?.status === 'processed' && !String(log.errorMessage || '');
 }
 
-/** ویرایش سفارشِ فاکتورشده در فروشگاه (مقدار ۲ ← ۳، مبلغ ۲۰۰۰ ← ۳۰۰۰) نادیده گرفته می‌شود و فاکتور با سفارش نمی‌خواند */
+/** TD-294 (کاوش رگرسیون؛ رفع v8.0.43): ویرایش سفارشِ فاکتورشده در فروشگاه (مقدار ۲ ← ۳، مبلغ ۲۰۰۰ ← ۳۰۰۰) نادیده گرفته می‌شود */
 export async function probeWooEditedOrderIgnored(): Promise<boolean> {
   const item = await createTestItem({ code: `WC_EDIT_${wooOrderId()}`, stocks: { '': 5 } });
   const id = wooOrderId();
@@ -250,5 +250,38 @@ export async function checkWooNegativeFeeAsLineDiscount(): Promise<string[]> {
     total: '100', shipping_lines: [{ total: '200' }], fee_lines: [{ name: 'تخفیف', total: '-600' }],
   }));
   if (tooMuch.status !== 'failed' || !tooMuch.message.includes('تخفیف کارمزدی')) problems.push(`تخفیف بیش از جمع اقلام رد نشد (${tooMuch.status}: ${tooMuch.message.slice(0, 120)})`);
+  return problems;
+}
+
+/**
+ * TD-294 (تصمیم مالک محصول — گزینه الف): سفارشِ فاکتورشده‌ای که در فروشگاه ویرایش شود (مقدار ۲ ← ۳، مبلغ ۲۰۰۰ ← ۳۰۰۰) یا
+ * استرداد تازه بگیرد «نیازمند بررسی» می‌شود و پیام تفاوت را می‌گوید؛ فاکتور دست نمی‌خورد. همان سفارش بی‌تغییر (processing ←
+ * completed) علامتی نمی‌گیرد و وب‌هوک بعدیِ سفارشِ در حال بررسی فاکتور تازه نمی‌سازد.
+ */
+export async function checkWooChangedOrderFlagged(): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ code: `WC_CHANGE_${wooOrderId()}`, stocks: { '': 20 } });
+
+  const edited = wooOrderId();
+  const first = await WooOrderSyncService.handleOrder(wooOrder(edited, 'processing', item.code, 2, 2000));
+  const same = await WooOrderSyncService.handleOrder(wooOrder(edited, 'completed', item.code, 2, 2000));
+  if (same.status !== 'processed') problems.push(`همان سفارش با وضعیت completed: ${same.status}، انتظار processed`);
+  const changed = await WooOrderSyncService.handleOrder(wooOrder(edited, 'processing', item.code, 3, 3000));
+  const editedLog = await logOf(edited);
+  if (changed.status !== 'needs_review' || editedLog?.status !== 'needs_review') problems.push(`سفارش ویرایش‌شده: ${changed.status} / لاگ ${editedLog?.status}، انتظار needs_review`);
+  if (!String(editedLog?.errorMessage || '').includes('اقلام یا مبلغ سفارش عوض شده')) problems.push(`پیام تفاوت ویرایش: ${String(editedLog?.errorMessage || '').slice(0, 120)}`);
+  if (editedLog?.erpDocumentId !== first.docId) problems.push(`فاکتور لاگ ${editedLog?.erpDocumentId}، انتظار ${first.docId}`);
+  const qty = await pool.query<{ q: string }>('SELECT COALESCE(SUM(quantity), 0)::text AS q FROM document_items WHERE document_id = $1 AND is_deleted = 0', [first.docId ?? 0]);
+  if (Number(qty.rows[0].q) !== 2) problems.push(`مقدار فاکتور ${qty.rows[0].q}، انتظار ۲ (فاکتور دست نمی‌خورد)`);
+  const again = await WooOrderSyncService.handleOrder(wooOrder(edited, 'completed', item.code, 3, 3000));
+  if (again.status !== 'needs_review' || (again.docId && again.docId !== first.docId)) problems.push(`وب‌هوک بعدی سفارش در حال بررسی: ${again.status} / ${again.docId}`);
+
+  const refunded = wooOrderId();
+  await WooOrderSyncService.handleOrder(wooOrder(refunded, 'processing', item.code, 2, 2000));
+  const refund = await WooOrderSyncService.handleOrder(wooOrder(refunded, 'completed', item.code, 2, 2000, { refunds: [{ id: 1, reason: 'یک قلم آسیب دید', total: '-1000' }] }));
+  const refundLog = await logOf(refunded);
+  if (refund.status !== 'needs_review' || !String(refundLog?.errorMessage || '').includes('استرداد تازه به مبلغ 1000')) {
+    problems.push(`استرداد جزئی: ${refund.status} / ${String(refundLog?.errorMessage || '').slice(0, 120)}`);
+  }
   return problems;
 }

@@ -18,7 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
-import { checkWooExactLineTotals, checkWooNegativeFeeAsLineDiscount, checkWooPhoneMatchesCustomer, checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
+import { checkWooChangedOrderFlagged, checkWooExactLineTotals, checkWooNegativeFeeAsLineDiscount, checkWooPhoneMatchesCustomer, checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
 import { checkProcurementDeliveryIncomingOnly, checkRequisitionOverOrderNeedsReason, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
@@ -268,6 +268,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.43: TD-294 ──
+    ['inv_td_294_woo_changed_order_flagged', 'v8.0.43: سفارشِ فاکتورشده‌ای که در فروشگاه ویرایش شود یا استرداد جزئی بگیرد «نیازمند بررسی» می‌شود و پیام تفاوت را می‌گوید؛ فاکتور دست نمی‌خورد (TD-294، گزینه الف)',
+      () => checkWooChangedOrderFlagged(), 'بی‌تغییر processed ماند؛ ویرایش ۲ ← ۳ و استرداد ۱۰۰۰ هر دو needs_review با پیام تفاوت؛ فاکتور ۲ عدد ماند'],
     // ── v8.0.42: TD-295 ──
     ['inv_td_295_woo_negative_fee_as_line_discount', 'v8.0.42: کارمزد منفی (تخفیف) سفارش ووکامرس به نسبت مبلغ سطرها تخفیف سطر می‌شود و سفارش رد نمی‌شود؛ تخفیفِ بیش از جمع اقلام رد می‌شود (TD-295، گزینه الف)',
       () => checkWooNegativeFeeAsLineDiscount(), '۴۰۰ ← ۱۰۰ و ۳۰۰ (بدهکار ۳۶۰۰)؛ کنار ارسال ۲۰۰ ارسال کامل ماند؛ ۱۰۰ ← ۳۳ و ۶۷؛ تخفیف ۶۰۰ روی ۵۰۰ رد شد'],
