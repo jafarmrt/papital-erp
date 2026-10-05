@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.53 — Editing an Item Keeps the WAC of Stocked Items (TD-305)
+- Editing an item that has stock no longer overwrites its weighted average cost without a Kardex row or voucher; the WAC changes only through stock in.
+
 ### v8.0.52 — Roles Accept Only Catalog Permissions (TD-304)
 - A role can be given only permission keys from the catalog; "*" and unknown keys are refused.
 

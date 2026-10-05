@@ -2,8 +2,8 @@ import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials } from '../../db/schema.js';
-import {  } from '../../lib/money.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, items } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
 /**
@@ -196,6 +196,27 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       if (valid.status !== 200) wrong.push(`کلید کاتالوگ: ${valid.status} (انتظار 200)`);
       if (wrong.length > 0) throw new Error(wrong.join('، '));
       return '«*» و ناشناخته 400، کاتالوگ 200';
+    }),
+    record('sec_item_edit_keeps_wac_td_305', 'حوزه H: ویرایش کالای دارای موجودی WAC را بازنویسی نمی‌کند (TD-305)', 'real_database', async () => {
+      const editor = await userWith(['products.view', 'products.edit']);
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ weightedAverageCost: 50000, currentStock: 10 });
+      try {
+        const base = { name: item.name, code: item.code, unit: item.unit, category: item.category };
+        const forged = await send(editor.session, 'put', `/api/items/${item.id}`, { ...base, weighted_average_cost: 1 });
+        const [afterForged] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
+        const same = await send(editor.session, 'put', `/api/items/${item.id}`, { ...base, weighted_average_cost: 50000.4 });
+        const [afterSame] = await orm.select({ wac: items.weightedAverageCost }).from(items).where(eq(items.id, item.id));
+        const wrong: string[] = [];
+        if (forged.status !== 422) wrong.push(`WAC تازه: ${forged.status} (انتظار 422)`);
+        if (!money(afterForged.wac).equals(50000)) wrong.push(`WAC پس از ویرایش ${afterForged.wac} شد`);
+        if (same.status !== 200) wrong.push(`همان WAC: ${same.status} (انتظار 200)`);
+        if (!money(afterSame.wac).equals(50000)) wrong.push(`WAC پس از ویرایش هم‌مقدار ${afterSame.wac} شد`);
+        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        return 'WAC تازه 422، هم‌مقدار 200، WAC همان 50000';
+      } finally {
+        await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
+      }
     }),
   ];
 
