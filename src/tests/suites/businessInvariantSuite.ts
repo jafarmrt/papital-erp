@@ -32,7 +32,7 @@ import {
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
 import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, checkRequisitionReceiptSumsLines, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
-import { CONCURRENCY_CHECKS } from '../invariants/concurrencyScenarios.js';
+import { CONCURRENCY_CHECKS } from '../invariants/concurrencyChecks.js';
 
 /**
  * v8.0.1 — سوئیت ناوردایی‌های منطق کاری (V8_MASTER_ROADMAP.md؛ گزارش docs/audit/BUSINESS_LOGIC_AUDIT_V8.md).

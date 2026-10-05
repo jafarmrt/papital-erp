@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.48 — Each Voucher Is Reversed Only Once
+- Two concurrent correction vouchers, or a correction and a reversal at the same time, no longer both reverse the same voucher; correction and repost lock the original voucher and every path refuses a voucher that already has an active reversal.
+
 ### v8.0.47 — Stock Paths Without Deadlocks
 - Area J (concurrency) reviewed. Every stock path locks all its items at once, in id order and before any other lock, with FOR NO KEY UPDATE, so concurrent voids, invoices, receipts and returns sharing items no longer deadlock and a void's reversal row keeps the Kardex replay equal to the live WAC.
 
