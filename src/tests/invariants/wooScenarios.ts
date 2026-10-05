@@ -99,7 +99,7 @@ export async function probeWooPhoneFormatDuplicatesCustomer(): Promise<boolean> 
   return Boolean(existing) && doc?.buyerName !== existing.name;
 }
 
-/** ردیف ۳ عددی با جمع ۱۰۰۰ ریال: فی ۳۳۳٫۳۳۳۳ و جمع فاکتور ۹۹۹٫۹۹۹۹ — بدهکار مشتری با مبلغ پرداختی سفارش یکی نیست */
+/** TD-297 (کاوش رگرسیون؛ رفع v8.0.41): ردیف ۳ عددی با جمع ۱۰۰۰ ریال فی ۳۳۳٫۳۳۳۳ می‌گیرد — بدهکار مشتری با مبلغ پرداختی سفارش یکی نیست */
 export async function probeWooFractionalRialResidue(): Promise<boolean> {
   const item = await createTestItem({ code: `WC_ROUND_${wooOrderId()}`, stocks: { '': 5 } });
   const id = wooOrderId();
@@ -172,5 +172,39 @@ export async function checkWooPhoneMatchesCustomer(): Promise<string[]> {
   const otherResult = await WooOrderSyncService.handleOrder(other);
   const [otherDoc] = await orm.select({ buyerName: documents.buyerName }).from(documents).where(eq(documents.id, otherResult.docId ?? 0));
   if (otherDoc?.buyerName === existing.name) problems.push(`تلفن دیگر «${otherPhone}» به همان مشتری نسبت داده شد`);
+  return problems;
+}
+
+/** سطرهای فعال یک فاکتور: مقدار و فی */
+async function invoiceLines(documentId: number): Promise<Array<{ q: number; p: string }>> {
+  const res = await pool.query<{ q: string; p: string }>(
+    'SELECT quantity::text AS q, unit_price::text AS p FROM document_items WHERE document_id = $1 AND is_deleted = 0 ORDER BY id', [documentId]);
+  return res.rows.map(r => ({ q: Number(r.q), p: r.p }));
+}
+
+/**
+ * TD-297: جمع هر ردیف سفارش در فاکتور دقیق می‌ماند — ۳ عدد با جمع ۱۰۰۰ ریال دو سطر ۲ × ۳۳۳ و ۱ × ۳۳۴ می‌شود و بدهکار مشتری
+ * دقیقاً ۱۰۰۰ است؛ ۷ عدد ۱۰۰۰۰ تومانی ۱۰۰٬۰۰۰ ریال؛ با ارسال و مالیات هم جمع با مبلغ پرداختی برابر است؛ ردیف بخش‌پذیر یک سطر می‌ماند.
+ */
+export async function checkWooExactLineTotals(): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ code: `WC_EXACT_${wooOrderId()}`, stocks: { '': 30 } });
+  const cases: Array<{ label: string; order: WcOrderPayload; debit: number; lines: string }> = [
+    { label: '۳ عدد، ۱۰۰۰ ریال', order: wooOrder(wooOrderId(), 'processing', item.code, 3, 1000), debit: 1000, lines: '2×333|1×334' },
+    { label: '۷ عدد، ۱۰۰۰۰ تومان', order: wooOrder(wooOrderId(), 'processing', item.code, 7, 10000, { currency: 'IRT' }), debit: 100000, lines: '6×14285|1×14290' },
+    { label: '۳ عدد با ارسال ۱۰۰ و مالیات ۹۰', order: wooOrder(wooOrderId(), 'processing', item.code, 3, 1000, { total: '1190', shipping_lines: [{ total: '100' }], total_tax: '90' }), debit: 1190, lines: '2×333|1×334' },
+    { label: '۴ عدد، ۱۰۰۰ ریال (بخش‌پذیر)', order: wooOrder(wooOrderId(), 'processing', item.code, 4, 1000), debit: 1000, lines: '4×250' },
+  ];
+  for (const c of cases) {
+    const result = await WooOrderSyncService.handleOrder(c.order);
+    if (result.status !== 'processed' || !result.docId) {
+      problems.push(`${c.label}: فاکتور نشد (${result.message.slice(0, 160)})`);
+      continue;
+    }
+    const lines = (await invoiceLines(result.docId)).map(l => `${l.q}×${Number(l.p)}`).join('|');
+    const debit = await customerDebitOf(result.docId);
+    if (debit !== c.debit) problems.push(`${c.label}: بدهکار مشتری ${debit}، انتظار ${c.debit}`);
+    if (lines !== c.lines) problems.push(`${c.label}: سطرها ${lines}، انتظار ${c.lines}`);
+  }
   return problems;
 }

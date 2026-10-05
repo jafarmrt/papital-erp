@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.41 — WooCommerce Line Totals Stay Exact (TD-297)
+- A WooCommerce order line whose total is not divisible by its quantity is split into two lines with whole-rial prices, so the customer is charged exactly the order amount.
+
 ### v8.0.40 — WooCommerce Customer Matched by Phone in Any Format (TD-296)
 - A WooCommerce order finds an existing customer whatever the phone format (+98, 0098, spaces, Persian digits) instead of creating a duplicate.
 

@@ -49,7 +49,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'FOCUSED:woo-partial-refund-ignored': 'TD-294',
   'FOCUSED:woo-negative-fee-rejected': 'TD-295',
   // TD-296 در v8.0.40 رفع شد (inv_td_296_woo_phone_matches_customer)
-  'FOCUSED:woo-fractional-rial-residue': 'TD-297',
+  // TD-297 در v8.0.41 رفع شد (inv_td_297_woo_exact_line_totals)
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

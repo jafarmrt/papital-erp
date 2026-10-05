@@ -9,6 +9,7 @@ import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
 import { phoneMatchKey, phoneMatchKeySql } from './phoneMatchKey.js';
+import { currencyScale, exactLineSplit } from './exactLineTotal.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -332,11 +333,14 @@ export class WooOrderSyncService {
             problems.push(`${label} (SKU: ${sku})`);
             continue;
           }
-          const unitPrice = hasLineTotal
-            ? fin(String(li.total).trim()).multiply(multiplier).divide(qty).round(4)
-            : fin(rawPrice).multiply(multiplier).round(4);
-          orderTotal = orderTotal.add(fin(qty).multiply(unitPrice));
-          docLines.push({ itemId, quantity: qty, unit_price: unitPrice.toNumber(), location: targetLoc });
+          // v8.0.41 (TD-297): جمع ردیف دقیق می‌ماند؛ ردیف بخش‌ناپذیر دو سطر می‌شود (exactLineSplit)، نه فی با کسر ریال
+          const parts = hasLineTotal
+            ? exactLineSplit(fin(String(li.total).trim()).multiply(multiplier), qty, currencyScale(currency))
+            : [{ quantity: qty, unitPrice: fin(rawPrice).multiply(multiplier).round(4) }];
+          for (const part of parts) {
+            orderTotal = orderTotal.add(fin(part.quantity).multiply(part.unitPrice));
+            docLines.push({ itemId, quantity: part.quantity, unit_price: part.unitPrice.toNumber(), location: targetLoc });
+          }
         }
 
         // v7.0.103 (TD-191، «ثبت کامل»): هزینه ارسال و کارمزدها روی فاکتور (درآمد حمل و خدمات) و مالیات سفارش در
