@@ -8,7 +8,7 @@ import { PayrollPaymentService } from '../services/accounting/payrollPayment.ser
 import { PayrollPaymentVoidService } from '../services/accounting/payrollPaymentVoid.service.js';
 import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPayrollService } from '../services/piecework.service.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { canAccessSensitivePersonnelData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
@@ -68,7 +68,7 @@ const setPersonnelRateSchema = z.object({
   body: z.object({
     personnelId: z.union([z.number(), z.string()]),
     taskId: z.union([z.number(), z.string()]),
-    customRate: z.union([z.number(), z.string()]),
+    customRate: decimalInput('نرخ اختصاصی').refine(v => v !== undefined, 'نرخ اختصاصی الزامی است'),
   })
 });
 
@@ -78,7 +78,7 @@ const pieceworkLogItemSchema = z.object({
   projectId: z.union([z.number(), z.string(), z.null()]).optional(),
   date: z.string().min(1, 'تاریخ کارکرد الزامی است'),
   quantity: z.union([z.number(), z.string()]),
-  unitRate: z.union([z.number(), z.string()]).optional(),
+  unitRate: decimalInput('نرخ کارکرد').optional(),
   notes: z.string().optional(),
 });
 
@@ -97,7 +97,7 @@ const updatePieceworkLogSchema = z.object({
   body: z.object({
     date: z.string().optional(),
     quantity: z.union([z.number(), z.string()]).optional(),
-    unitRate: z.union([z.number(), z.string()]).optional(),
+    unitRate: decimalInput('نرخ کارکرد').optional(),
     notes: z.string().optional(),
     projectId: z.union([z.number(), z.string(), z.null()]).optional(),
   }),
@@ -112,11 +112,11 @@ const generatePieceworkPayrollSchema = z.object({
     startDate: z.string().min(1, 'تاریخ شروع الزامی است'),
     endDate: z.string().min(1, 'تاریخ پایان الزامی است'),
     title: z.string().optional(),
-    bonuses: z.union([z.number(), z.string()]).optional(),
-    totalBonuses: z.union([z.number(), z.string()]).optional(),
-    deductions: z.union([z.number(), z.string()]).optional(),
-    totalDeductions: z.union([z.number(), z.string()]).optional(),
-    advanceDeduction: z.union([z.number(), z.string()]).optional(),
+    bonuses: decimalInput('پاداش').optional(),
+    totalBonuses: decimalInput('پاداش').optional(),
+    deductions: decimalInput('کسور').optional(),
+    totalDeductions: decimalInput('کسور').optional(),
+    advanceDeduction: decimalInput('کسر مساعده').optional(),
     notes: z.string().optional(),
   })
 });
@@ -150,7 +150,7 @@ const registerPayrollPaymentSchema = z.object({
   body: z.object({
     bankAccountId: z.union([z.number(), z.string()]),
     method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque']).optional().default('bank_transfer'),
-    amount: z.union([z.number(), z.string()]).optional(),
+    amount: decimalInput('مبلغ پرداخت').optional(),
     paymentDate: z.string().optional(),
     paymentReference: z.string().optional(),
     notes: z.string().optional()

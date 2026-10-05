@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
@@ -256,9 +256,11 @@ export function ChequesTab({
   };
 
   const filteredCheques = safeCheques.filter(c => {
+    // v8.0.86 (TD-385): شماره چک و صیادی با ارقام لاتین ذخیره می‌شوند؛ جست‌وجو با ارقام فارسی هم پیدا می‌کند
+    const numberQuery = toEnglishDigits(searchQuery.trim());
     const matchSearch = !searchQuery.trim() ||
-      c.chequeNumber.includes(searchQuery.trim()) ||
-      (c.sayadNumber && c.sayadNumber.includes(searchQuery.trim())) ||
+      toEnglishDigits(c.chequeNumber).includes(numberQuery) ||
+      (c.sayadNumber && c.sayadNumber.includes(numberQuery)) ||
       c.partyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.bankName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchType = selectedTypeFilter === 'all' || c.type === selectedTypeFilter;

@@ -131,7 +131,9 @@ export class PieceworkPayrollService {
       }
       const totBonusesFin = fin(bonuses !== undefined ? bonuses : (totalBonuses !== undefined ? totalBonuses : 0));
       const totDeductionsFin = fin(deductions !== undefined ? deductions : (totalDeductions !== undefined ? totalDeductions : 0));
-      const advanceDeductionFin = fin(Math.max(0, Number(reqAdvanceDeduction) || 0));
+      // v8.0.86 (TD-385): با fin (ارقام فارسی نرمال می‌شوند)؛ پیش‌تر Number('۵۰۰') NaN و کسر مساعده نادیده گرفته می‌شد
+      const requestedAdvance = fin(reqAdvanceDeduction ?? 0);
+      const advanceDeductionFin = requestedAdvance.isNegative() ? fin(0) : requestedAdvance;
 
       // v8.0.29 (TD-282، تصمیم مالک محصول — گزینه الف): کسر مساعده بیش از مانده مساعده تسویه‌نشده پرسنل (از دفتر کل) رد
       // می‌شود. پیش‌تر پذیرفته می‌شد؛ حساب مساعده پرسنل بستانکار (منفی) و خالص پرداختنی او بی‌دلیل کم می‌شد.
