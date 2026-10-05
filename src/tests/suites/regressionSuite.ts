@@ -1080,8 +1080,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     // v7.0.82: سال واقعی (۱۴۲۰ تا ۱۴۷۷) — قید قالب تاریخ journal_vouchers.date (مهاجرت 0030) فقط سال شمسی ۱۳xx تا ۱۵xx
     // و میلادی ۱۹xx تا ۲۱xx را می‌پذیرد؛ سال‌های تصادفی ۱۶۰۰ تا ۹۴۹۹ تاریخ ساختگی نامعتبر می‌ساختند
     const testYear = 1420 + Math.floor(Math.random() * 58);
-    const testClosingDate = `${testYear}-12-29`;
-    const testOpeningDate = `${testYear + 1}-01-01`;
+    // v8.0.47 (TD-310): سند اختتامیه فقط به آخرین روز سال (۳۰ اسفند در سال کبیسه) پذیرفته می‌شود
+    const { jalaliYearBounds } = await import('../../utils/calendarDate.js');
+    const testYearBounds = jalaliYearBounds(testYear);
+    if (!testYearBounds) throw new Error(`سال آزمون ${testYear} بیرون از بازه تقویم است`);
+    const testClosingDate = testYearBounds.lastDay;
+    const testOpeningDate = testYearBounds.nextFirstDay;
 
     // Ensure chart of accounts seeded
     await ChartOfAccountsService.seedStandardAccounts();
@@ -4440,7 +4444,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       await new Promise(r => setTimeout(r, 300));
       let closing: any = null;
       try {
-        closing = await FiscalYearService.executeFiscalYearClosing({ year: yearB, closingDate: `${yearB}-12-29`, openingDateNewYear: `${yearB + 1}-01-01`, createOpeningVoucher: true, username: 'test-agent' });
+        closing = await FiscalYearService.executeFiscalYearClosing({ year: yearB, createOpeningVoucher: true, username: 'test-agent' });
         createdVoucherIds.push(...(closing.closingVouchers || []).map((v: any) => v.id));
       } catch (e: any) {
         problems.push(`بستن سال ${yearB} شکست خورد: ${e.message}`);

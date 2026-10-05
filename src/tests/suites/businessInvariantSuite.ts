@@ -31,6 +31,7 @@ import {
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
 import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, checkRequisitionReceiptSumsLines, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
+import { checkClosingCoversLeapLastDay } from '../invariants/dateBoundaryScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -74,7 +75,7 @@ async function probeFiscalClosingIgnoresDrafts(wh: string): Promise<boolean> {
   if (draft.rows[0]?.status !== 'draft') return false;
   try {
     await FiscalYearService.executeFiscalYearClosing({
-      year: CLOSING_PROBE_YEAR, closingDate: `${CLOSING_PROBE_YEAR}-12-29`, createOpeningVoucher: false, username: 'inv',
+      year: CLOSING_PROBE_YEAR, createOpeningVoucher: false, username: 'inv',
     });
   } catch {
     return false; // بستن سال رد شد؛ رفتار درست وقتی سند پیش‌نویس در سال هست
@@ -212,7 +213,7 @@ async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
     docType: 'invoice', inOut: 'out', status: 'final', date: '2012-06-01', user: 'inv', buyerName: 'مشتری آزمون بستن سال',
     items: [{ itemId: item.id, quantity: 2, unitPrice: 250000, location: wh }],
   });
-  const preview = await FiscalYearService.getFiscalYearClosingPreview({ year, closingDate: `${year}-12-29` });
+  const preview = await FiscalYearService.getFiscalYearClosingPreview({ year });
   const draftIds = (preview.draftVouchers ?? []).map(v => v.id);
   const [invoiceVoucher] = await vouchersOfSource('source_document_id', invoiceId);
   if ((preview.draftVoucherCount ?? 0) < 2 || !invoiceVoucher || !draftIds.includes(invoiceVoucher.id)) {
@@ -220,7 +221,7 @@ async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
   }
   let refused = false;
   try {
-    await FiscalYearService.executeFiscalYearClosing({ year, closingDate: `${year}-12-29`, createOpeningVoucher: false, username: 'inv' });
+    await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: false, username: 'inv' });
   } catch (err) {
     refused = getErrorMessage(err).includes('پیش‌نویس');
   }
@@ -228,7 +229,7 @@ async function checkClosingRefusesDrafts(wh: string): Promise<string[]> {
 
   await VoucherService.approveJournalVouchers(draftIds, undefined, 'inv');
   try {
-    const closed = await FiscalYearService.executeFiscalYearClosing({ year, closingDate: `${year}-12-29`, createOpeningVoucher: false, username: 'inv' });
+    const closed = await FiscalYearService.executeFiscalYearClosing({ year, createOpeningVoucher: false, username: 'inv' });
     if (fin(closed.netProfit).isZero()) problems.push('بستن سال پس از تأیید اسناد، سود فروش را نیاورد');
   } catch (err) {
     problems.push(`بستن سال پس از تأیید اسناد پیش‌نویس رد شد: ${getErrorMessage(err)}`);
@@ -262,6 +263,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
 
   // ── v8.0.3 تا v8.0.8: آزمون‌های سخت‌گیرانه رفع یافته‌های انبار و حسابداری (TD-255 تا TD-266، TD-253) ─────
   const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
+    // ── v8.0.47: TD-310 (حوزه I، مرز تاریخ) ──
+    ['inv_td_310_closing_covers_leap_last_day', 'v8.0.47: بستن سال مالی کبیسه سند ۳۰ اسفند را هم می‌بندد؛ اسناد اختتامیه به آخرین روز سال و افتتاحیه به ۱ فروردین صادر می‌شوند و تاریخ دیگر رد می‌شود (TD-310، گزینه الف)',
+      () => checkClosingCoversLeapLastDay(), 'سود ۱٬۵۰۰٬۰۰۰ با فروش ۳۰ اسفند؛ اسناد به 2009-03-20 و 2009-03-21؛ ۲۹ اسفند رد شد؛ مانده درآمد سال صفر'],
     ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
       checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
     ['inv_td_262_excel_adjustment_voucher', 'v8.0.3: اصلاح موجودی از اکسل سند «کسری و اضافات انبار» و کالای تازه اکسل سند افتتاحیه می‌گیرد (TD-262)',
