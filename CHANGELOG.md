@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.89 — Only the Delegator or an Admin Revokes a Delegation
+- A delegate can no longer revoke the delegation given to them (403, and the revoke button is hidden); invalid delegation input returns 422 and a missing delegation or user 404 instead of a server error.
+
 ### v8.0.88 — A Delegate Does the Delegator's Role Tasks
 - During an active delegation and within its scope, the delegate sees and runs the delegator's role tasks; the signature is recorded in the delegator's name with the delegate as signer, and neither of them can sign the same step twice.
 

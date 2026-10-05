@@ -12,6 +12,7 @@ import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar
 import { toast } from 'react-hot-toast';
 import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface UserItem {
   id: number;
@@ -25,6 +26,9 @@ export function WorkflowDelegationTab() {
   const { data: definitions = [] } = useWorkflowDefinitionsQuery();
   const createMutation = useCreateDelegationMutation();
   const revokeMutation = useRevokeDelegationMutation();
+  const { user } = useAuth();
+  // v8.0.89 (TD-378): فقط تفویض‌کننده یا ادمین تفویض را لغو می‌کند
+  const canRevoke = (fromUserId: number) => user?.role === 'admin' || user?.id === fromUserId;
 
   // Fetch users for selection
   const { data: users = [] } = useQuery<UserItem[]>({
@@ -283,7 +287,7 @@ export function WorkflowDelegationTab() {
                         {item.reason || '-'}
                       </td>
                       <td className="p-3.5 text-center">
-                        {(item.status === 'active' || item.status === 'scheduled') && (
+                        {(item.status === 'active' || item.status === 'scheduled') && canRevoke(item.fromUserId) && (
                           <button
                             onClick={() => handleRevoke(item.id)}
                             disabled={revokeMutation.isPending}
