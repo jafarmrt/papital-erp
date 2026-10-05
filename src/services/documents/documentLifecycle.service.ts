@@ -2,7 +2,6 @@ import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { documents, documentItems, items, transactions, journalVouchers, productionProjects } from '../../db/schema.js';
 import { businessNowIsoDateTime, businessTodayIsoDate, resolveJalaliFiscalYear } from '../../lib/businessClock.js';
-import { DocumentRefNumberService } from './documentRefNumber.service.js';
 import { resolveDocumentVat } from './documentVat.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
@@ -26,6 +25,7 @@ import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
+import { proformaInvoiceTarget } from './proformaInvoice.js';
 
 export class DocumentLifecycleService {
   /**
@@ -125,14 +125,12 @@ export class DocumentLifecycleService {
             .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
 
           const targetType = doc.type === 'proforma' ? 'invoice' : doc.type;
-          // v8.0.51 (TD-317، تصمیم مالک محصول — گزینه الف): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور سال خودش را
-          // می‌گیرد و شماره پیش‌فاکتور در یادداشت می‌ماند. پیش‌تر شماره سری پیش‌فاکتور می‌ماند و اگر همان شماره در
-          // فاکتورهای آن سال بود، نهایی‌سازی با خطای یکتایی پایگاه‌داده شکست می‌خورد.
+          // v8.0.51 / v8.0.119 (TD-317 / TD-410، تصمیم مالک محصول): فاکتورِ حاصل از پیش‌فاکتور شماره بعدی سری فاکتور و
+          // تاریخ روز نهایی‌سازی را می‌گیرد؛ شماره و تاریخ پیش‌فاکتور در یادداشت می‌ماند (proformaInvoice.ts)
           const isProformaToInvoice = doc.type === 'proforma';
-          const finalRefNumber = isProformaToInvoice
-            ? await DocumentRefNumberService.getNextRef('invoice', doc.date, tx)
-            : doc.refNumber;
-          const proformaNote = isProformaToInvoice && doc.refNumber ? `صادرشده از پیش‌فاکتور شماره ${doc.refNumber}` : '';
+          const proformaTarget = isProformaToInvoice ? await proformaInvoiceTarget(doc, tx) : null;
+          const finalDate = proformaTarget?.date ?? doc.date;
+          const finalRefNumber = proformaTarget?.refNumber ?? doc.refNumber;
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
           const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'purchase' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
 
@@ -206,7 +204,7 @@ export class DocumentLifecycleService {
               inOut,
               quantity: qty,
               price,
-              date: doc.date,
+              date: finalDate,
               documentType: targetType,
               documentRef: finalRefNumber,
               user: user || doc.user || 'system',
@@ -235,9 +233,10 @@ export class DocumentLifecycleService {
             status: 'final',
             type: targetType,
             ...(isProformaToInvoice ? {
+              date: finalDate,
               refNumber: finalRefNumber,
-              refFiscalYear: resolveJalaliFiscalYear(doc.date),
-              notes: [doc.notes, proformaNote].filter(Boolean).join('\n'),
+              refFiscalYear: resolveJalaliFiscalYear(finalDate),
+              notes: [doc.notes, proformaTarget?.note].filter(Boolean).join('\n'),
             } : {}),
             vatPercent: finalVat.vatPercent,
             vatAmount: finalVat.vatAmount,

@@ -9,6 +9,8 @@ import { FinancialAmountInput } from '../../common/FinancialAmountInput';
 import { HelpBadge } from '../../common/HelpBadge';
 import { formatPersianPrice, formatCurrencyLabel, extractDateString, getTodayIsoDate } from '../../../utils';
 import { fetchJson } from '../../../api';
+import { useHasPermission } from '../../../contexts/AuthContext';
+import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -32,6 +34,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
   appCurrency,
   onSave,
 }) => {
+  const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
   const [formData, setFormData] = useState({
     type,
     date: '',
@@ -160,6 +163,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
         ...formData,
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
+        createVoucher: canSkipVoucher ? formData.createVoucher : true,
       });
       onClose();
     } catch {
@@ -454,6 +458,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               />
             </div>
 
+            {/* v8.0.118 (TD-409): گزینه «بدون سند» فقط برای دارنده مجوز جدا دیده می‌شود؛ سرور هم می‌سنجد */}
+            {canSkipVoucher && (
             <div className="flex items-center gap-2 pt-1">
               <input
                 type="checkbox"
@@ -464,9 +470,10 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               />
               <label htmlFor="createVoucher" className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer flex items-center gap-1.5">
                 <span>صدور خودکار سند حسابداری دوبل برای این تراکنش</span>
-                <HelpBadge text="با فعال بودن این گزینه، یک سند دوبل حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد." />
+                <HelpBadge text="با فعال بودن این گزینه، یک سند دوبل حسابداری متوازن با سرفصل بانک/صندوق و طرف‌حساب ایجاد می‌گردد. بدون سند فقط برای مانده‌های افتتاحیه است و در بررسی سلامت مالی فهرست می‌شود." />
               </label>
             </div>
+            )}
 
             {/* Attachments */}
             <div className="pt-2 border-t border-slate-200 dark:border-slate-700">

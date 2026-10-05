@@ -5,6 +5,7 @@ import { containsLikePattern } from '../../lib/sqlLike.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
+import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import {
   findDuplicatePieceworkTaskCodes,
   hasPieceworkTaskCodeUniqueIndex,
@@ -1031,6 +1032,9 @@ export class FinancialHealthService {
     const taskCodeTest = buildPieceworkTaskCodeHealthTest(duplicateTaskCodes, taskCodeIndexPresent);
     overallScore += taskCodeTest.scoreImpact;
     tests.push(taskCodeTest);
+
+    // آزمون ۱۳: v8.0.118 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
+    tests.push(buildNoVoucherTreasuryHealthTest(await findTreasuryEntriesWithoutVoucher()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

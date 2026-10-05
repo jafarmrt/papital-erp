@@ -15,6 +15,7 @@ import { AttachmentStorageService } from '../../attachments/attachmentStorage.se
 import { containsLikePattern } from '../../../lib/sqlLike.js';
 import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
+import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 
 /**
  * V1.4.0 — ماشین وضعیت چک صیادی
@@ -159,10 +160,13 @@ export class ChequeLifecycleService {
     userId?: number;
     username?: string;
     createVoucher?: boolean;
+    /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد) */
+    allowNoVoucher?: boolean;
     attachments?: unknown[];
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
+    assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, 'چک');
     // v8.0.23 (TD-275، تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود. جدول چک نرخ تسعیر ندارد و اسناد چک ارزی
     // با نرخ ۱ ثبت می‌شدند (۵۰ دلار = ۵۰ ریال). چک‌های ارزی ثبت‌شده پیش از این نسخه چرخه عمر خود را ادامه می‌دهند.
     if ((data.currency || 'IRR').toUpperCase() !== 'IRR') {

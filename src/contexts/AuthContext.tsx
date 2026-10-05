@@ -167,3 +167,13 @@ export function useAuth(): AuthContextValue {
   }
   return ctx;
 }
+
+/**
+ * v8.0.118 (TD-409): آیا کاربر جاری مجوز داده‌شده را دارد (مدیر همیشه)؛ بیرون از AuthProvider (مثلاً آزمون مؤلفه) false.
+ * فقط برای نمایش است؛ سرور همان مجوز را خودش می‌سنجد.
+ */
+export function useHasPermission(permission: string): boolean {
+  const ctx = useContext(AuthContext);
+  if (!ctx) return false;
+  return ctx.userPermissions.isAdmin || (Array.isArray(ctx.userPermissions.permissions) && ctx.userPermissions.permissions.includes(permission));
+}
