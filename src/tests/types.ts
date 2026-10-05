@@ -7,7 +7,6 @@ export type TestLayer =
   | 'concurrency'
   | 'security'
   | 'regression'
-  | 'stress'
   | 'e2e'
   | 'recovery'
   | 'penetration'
@@ -28,7 +27,6 @@ export type CriticalScenarioId =
   | 'two_users_approve_simultaneously'
   | 'two_users_issue_same_stock'
   | 'piecework_payroll_concurrency_race_guard'
-  | 'two_webhook_deliveries'
   | 'workflow_rejected'
   | 'workflow_delegated'
   | 'parallel_approval'
@@ -40,9 +38,7 @@ export type CriticalScenarioId =
   | 'domain_event_contract'
   | 'transactional_outbox'
   | 'action_handlers'
-  | 'accounting_reversal'
   | 'inventory_rebuild'
-  | 'woocommerce_retry'
   | 'regression_sanity'
   | 'db_readiness'
   | 'workflow_approval_postgres'
@@ -71,12 +67,8 @@ export type CriticalScenarioId =
   | 'e2e_workflow_approve_reject_delegate_parallel'
   | 'e2e_woocommerce_webhook_document_stock_audit'
   | 'e2e_piecework_payroll_accounting_posting'
-  | 'recovery_database_restart'
-  | 'recovery_worker_restart'
   | 'recovery_outbox_webhook_retry'
-  | 'recovery_migration_failure_handling'
   | 'recovery_backup_restore'
-  | 'recovery_data_integrity_reconciliation'
   | 'recovery_outbox_stuck'
   | 'validate_lock_order_enforcement'
   | 'db_jsonb_and_financial_check_constraints'
@@ -107,7 +99,6 @@ export type CriticalScenarioId =
   | 'v10_payroll_paid_treasury_only'
   | 'v10_menu_visibility_deny_list'
   | 'v10_cleanup_refusal_without_flag'
-  | 'v10_date_normalization_idempotence'
   | 'v10_iso_date_standardization'
   | 'v4_strict_financial_voucher_guard'
   | 'v4_atomic_document_orchestration'
@@ -191,4 +182,3 @@ export interface TestSuiteReport {
   scenarioSummaries: CriticalScenarioSummary[];
   testCases: TestCaseResult[];
 }
-

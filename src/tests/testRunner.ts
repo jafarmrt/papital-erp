@@ -8,7 +8,6 @@ import { runIntegrationTests } from './suites/integrationSuite.js';
 import { runSecurityTests } from './suites/securitySuite.js';
 import { runApiTests } from './suites/apiSuite.js';
 import { runRegressionTests } from './suites/regressionSuite.js';
-import { runStressTests } from './suites/stressSuite.js';
 import { runE2eTests } from './suites/e2eSuite.js';
 import { runRecoveryTests } from './suites/recoverySuite.js';
 import { runPenetrationTests } from './suites/penetrationSuite.js';
@@ -26,7 +25,6 @@ const LAYER_LABELS: Record<TestLayer, string> = {
   concurrency: 'تست‌های همزمانی و قفل‌گذاری (Concurrency Tests)',
   security: 'تست‌های امنیت و مجوزها (Security Tests)',
   regression: 'تست‌های بازگشتی و پایداری (Regression Tests)',
-  stress: 'آزمون‌های بارگذاری و یکپارچگی داده (Phase 23 Stress Tests)',
   e2e: 'تست‌های سناریوهای سرتاسری (Subphase 14.1 E2E Journeys)',
   recovery: 'آزمون‌های بازیابی، خودترمیمی و تطبیق داده‌ها (Subphase 14.2 Recovery & Reconciliation)',
   penetration: 'آزمون‌های نفوذ واقعی HTTP (Phase 8 Penetration Suite — TST-004/005)',
@@ -42,7 +40,6 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   two_users_approve_simultaneously: 'Two users approve simultaneously',
   two_users_issue_same_stock: 'Two users issue same stock',
   piecework_payroll_concurrency_race_guard: 'Piecework payroll atomic race guard',
-  two_webhook_deliveries: 'Two webhook deliveries',
   workflow_rejected: 'Workflow rejected',
   workflow_delegated: 'Workflow delegated',
   parallel_approval: 'Parallel approval',
@@ -54,9 +51,7 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   domain_event_contract: 'Domain Event Contract & Schema Validation',
   transactional_outbox: 'Transactional Outbox & Atomic Claim Locking',
   action_handlers: 'Idempotent & Auditable Action Handlers',
-  accounting_reversal: 'Accounting reversal',
   inventory_rebuild: 'Inventory rebuild',
-  woocommerce_retry: 'WooCommerce retry',
   regression_sanity: 'System Regression Sanity',
   db_readiness: 'Database Readiness & Connectivity Check',
   workflow_approval_postgres: 'PostgreSQL Workflow Transition Integration',
@@ -85,12 +80,8 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   e2e_workflow_approve_reject_delegate_parallel: 'E2E Journey 3: Workflow -> Approve / Reject / Delegate / Parallel',
   e2e_woocommerce_webhook_document_stock_audit: 'E2E Journey 4: WooCommerce Webhook -> Document -> Stock -> Audit',
   e2e_piecework_payroll_accounting_posting: 'E2E Journey 5: Piecework Payroll -> Accounting Posting',
-  recovery_database_restart: 'Recovery: Database Reconnect & KeepAlive',
-  recovery_worker_restart: 'Recovery: Background Outbox Worker Restart Resilience',
   recovery_outbox_webhook_retry: 'Recovery: Webhook/Outbox Retry & DLQ Quarantine',
-  recovery_migration_failure_handling: 'Recovery: Idempotent Migration & Schema Self-Healing',
   recovery_backup_restore: 'Recovery: Data Backup Manifest & Restore Integrity',
-  recovery_data_integrity_reconciliation: 'Recovery: 12-Point Data Integrity Reconciliation Scan',
   recovery_outbox_stuck: 'Recovery: Outbox Stuck Events Auto-Recovery',
   validate_lock_order_enforcement: 'Lock Hierarchy & Lock Acquisition Order Enforcement (DB-018)',
   db_jsonb_and_financial_check_constraints: 'JSONB Type & Non-Negative Financial CHECK Constraints (DB-020)',
@@ -123,7 +114,6 @@ const CRITICAL_SCENARIO_TITLES: Record<CriticalScenarioId, string> = {
   v10_payroll_paid_treasury_only: 'Business Logic: Payroll paid-state Reachable Only Via Treasury',
   v10_menu_visibility_deny_list: 'Business Logic: menu_visibility Deny-List & Admin Bypass',
   v10_cleanup_refusal_without_flag: 'Data Safety: Test-Cleanup Refusal Without Safety Flag (Silent No-Op)',
-  v10_date_normalization_idempotence: 'Data Safety: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
   v10_iso_date_standardization: 'Data Safety: ISO Date Standardization & Dual-Write Accuracy',
   v4_strict_financial_voucher_guard: 'Data Integrity: Strict Financial Voucher Guard & Elimination of Log-and-Continue (F-3 / TD-093)',
   v4_treasury_server_authoritative_date_guard: 'Treasury: Server-Authoritative Date Default & Range Validation (TD-105)',
@@ -229,9 +219,6 @@ export class Phase21TestRunner {
       }
       if (!layerFilter || layerFilter === 'regression') {
         allCases = allCases.concat(await runRegressionTests(testFilter));
-      }
-      if (!layerFilter || layerFilter === 'stress') {
-        allCases = allCases.concat(await runStressTests());
       }
       if (!layerFilter || layerFilter === 'e2e') {
         allCases = allCases.concat(await runE2eTests());

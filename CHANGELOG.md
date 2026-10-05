@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.128 — پاکسازی تست‌ها و ابزارهای بلااستفاده
+- - سوئیت stress (دو سناریوی آن کد برنامه را اجرا نمی‌کرد)، سرویس‌های فقط‌تستی SystemRecoveryService و DataReconciliationService، شابلون ماژول v4، اسکریپت‌های قدیمی (start/stop/clean-install، db:baseline، setup:init، create-local-db)، فایل‌های AI Studio، دو سند قدیمی، سه وابستگی و خروجی‌های بی‌استفاده حذف شدند؛ رفتار برنامه تغییری نکرد.
+
 ### v8.0.127 — کلید ووکامرس روی HTTPS فقط در هدر
 - کلید و رمز API ووکامرس روی HTTPS دیگر در آدرس درخواست (و لاگ وب‌سرور فروشگاه) نمی‌آیند و فقط در هدر می‌روند (TD-408).
 

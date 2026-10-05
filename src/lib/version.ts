@@ -49,11 +49,3 @@ export const BUILD_INFO: AppBuildInfo = Object.freeze({
   environment: process.env.NODE_ENV || 'development',
   nodeVersion: process.version
 });
-
-export function getAppVersion(): string {
-  return APP_VERSION;
-}
-
-export function getBuildInfo(): AppBuildInfo {
-  return BUILD_INFO;
-}

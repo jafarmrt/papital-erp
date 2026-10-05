@@ -63,7 +63,6 @@ Available Suites:
   integration         Cross-module service integration
   api                 HTTP endpoints and response contract validation
   recovery (or rec)   Reconciliation, backup restore, failure self-healing
-  stress              Stress and load simulation
   e2e                 End-to-end user journey scenarios
 `);
       process.exit(0);
@@ -101,7 +100,6 @@ Available Suites:
       sec: 'security',
       regression: 'regression',
       reg: 'regression',
-      stress: 'stress',
       e2e: 'e2e',
       recovery: 'recovery',
       rec: 'recovery',

@@ -221,12 +221,6 @@ export const auditItemsQuerySchema = z.object({
   }).passthrough()
 }).passthrough();
 
-export const reconcileStockSchema = z.object({
-  body: z.object({
-    itemId: z.union([z.number().int().positive(), z.string().regex(/^[1-9]\d*$/), z.null()]).optional()
-  }).optional()
-});
-
 // V9-1.2: نگاه غیرمخرب (Peek) — شماره بعدی را بدون افزایش شمارنده برمی‌گرداند تا
 // بارگذاری فرم‌ها و فرم‌های رهاشده هرگز شماره سند نسوزانند.
 router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documents), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {

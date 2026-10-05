@@ -1,23 +1,5 @@
 import { toEnglishDigits, toPersianDigits } from "./persianNumber.js";
 
-export function normalizePersianDate(str: string | null | undefined): string {
-  if (!str || typeof str === 'object') return '';
-  try {
-    let s = toEnglishDigits(String(str)).trim();
-    s = s.replace(/-/g, '/');
-    const parts = s.split('/');
-    if (parts.length === 3) {
-      const y = parts[0];
-      const m = parts[1].padStart(2, '0');
-      const d = parts[2].padStart(2, '0');
-      return `${y}/${m}/${d}`;
-    }
-    return s;
-  } catch {
-    return '';
-  }
-}
-
 /**
  * تبدیل مستقیم سال، ماه و روز جلالی به میلادی با الگوریتم استاندارد و دقیق تقویم جلالی (Kazimierz M. Borkowski)
  */
@@ -229,18 +211,6 @@ export function extractDateString(val: any): string {
   } catch {
     return '';
   }
-}
-
-/**
- * دریافت تاریخ ایزو از هر ورودی تاریخ (جلالی، میلادی، Date یا شیء).
- */
-export function toIsoDateString(val: any): string {
-  if (!val) return '';
-  if (val instanceof Date && !isNaN(val.getTime())) {
-    return val.toISOString().slice(0, 10);
-  }
-  const extracted = extractDateString(val);
-  return jalaliToIsoDate(extracted) || extracted;
 }
 
 /**

@@ -67,32 +67,6 @@ export function useItemsQuery(type: 'product' | 'raw_material' = 'product', page
 }
 
 /**
- * Hook to create or update an inventory item
- */
-export function useSaveItemMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, payload }: { id?: number | null; payload: any }) => {
-      const url = id ? `/items/${id}` : '/items';
-      const method = id ? 'PUT' : 'POST';
-      return fetchJson(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-    },
-    onSuccess: (_, variables) => {
-      void invalidatePreset(queryClient, 'inventoryChange');
-      toast.success(variables.id ? 'اطلاعات کالا با موفقیت به‌روزرسانی شد' : 'کالای جدید با موفقیت ثبت شد');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'خطا در ذخیره اطلاعات کالا');
-    },
-  });
-}
-
-/**
  * Hook to archive (soft delete) an inventory item
  */
 export function useArchiveItemMutation() {

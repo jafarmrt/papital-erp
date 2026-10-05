@@ -94,8 +94,6 @@ export function useSaveSettingsMutation() {
   });
 }
 
-export const useUpdateSettings = useSaveSettingsMutation;
-
 /**
  * V10-5.3: نقشه دید منو per-role — endpoint اختصاصی، کش کوتاه و بدون refetch روی focus
  * تا ویرایش در پنل مدیریت با focus تغییر پنجره پاک نشود.

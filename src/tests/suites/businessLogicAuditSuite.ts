@@ -11,7 +11,6 @@ import { ConflictError, ValidationError, NotFoundError, InsufficientStockError }
 import { BankAccountService } from '../../services/accounting/treasury/bankAccount.service.js';
 import { VoucherSyncService } from '../../services/accounting/voucherSync.service.js';
 import { DocumentService } from '../../services/document.service.js';
-import { DataReconciliationService } from '../../services/reconciliation/dataReconciliation.service.js';
 import { getMenuGroups } from '../../components/layout/menuConfig.js';
 import { cleanupAllTestFixtures } from '../fixtures/dbTestHelper.js';
 import { jalaliToIsoDate } from '../../utils.js';
@@ -317,37 +316,6 @@ export async function runBusinessLogicAuditTests(): Promise<TestCaseResult[]> {
       try { await orm.delete(items).where(eq(items.id, canaryId)); } catch { /* non-blocking */ }
     }
     if (savedFlag !== undefined) process.env.ERP_ALLOW_TEST_CLEANUP = savedFlag;
-  }
-
-  // ── 6. Date-normalization idempotence: دوبار scanIntegrity پشت‌سرهم سالم ──
-  const t6 = Date.now();
-  try {
-    const run1 = await DataReconciliationService.scanIntegrity();
-    const run2 = await DataReconciliationService.scanIntegrity();
-    if (run1.criticalCount !== 0 || run2.criticalCount !== 0 || !run2.healthy) {
-      throw new Error(`Integrity not healthy/idempotent: run1(critical=${run1.criticalCount}), run2(healthy=${run2.healthy}, critical=${run2.criticalCount})`);
-    }
-    results.push(makeTestCase({
-      id: 'v10_date_normalization_idempotence',
-      scenarioId: 'v10_date_normalization_idempotence',
-      name: 'V10 Regression: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
-      layer: 'regression',
-      executionType: 'real_database',
-      passed: true,
-      durationMs: Date.now() - t6,
-      details: `دو اجرای متوالی پویش یکپارچگی هر دو سالم بودند (${run1.totalChecks} و ${run2.totalChecks} بررسی) — نرمال‌سازی تاریخ‌ها idempotent است.`
-    }));
-  } catch (err: any) {
-    results.push(makeTestCase({
-      id: 'v10_date_normalization_idempotence',
-      scenarioId: 'v10_date_normalization_idempotence',
-      name: 'V10 Regression: Date-Normalization Idempotence (re-run Integrity Scan healthy)',
-      layer: 'regression',
-      executionType: 'real_database',
-      passed: false,
-      durationMs: Date.now() - t6,
-      error: err.message
-    }));
   }
 
   // ── 7. ISO Date Standardization & Dual-Write Accuracy (TD-034) ────────────

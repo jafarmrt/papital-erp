@@ -91,35 +91,6 @@ export function roundFinancial(num: number | string | null | undefined, decimals
 }
 
 /**
- * High-precision financial addition
- */
-export function safeFinancialAdd(a: number | string | null | undefined, b: number | string | null | undefined, decimals: number = 4): number {
-  const valA = (a === null || a === undefined || typeof a === 'object') ? 0 : a;
-  const valB = (b === null || b === undefined || typeof b === 'object') ? 0 : b;
-  return roundFinancial(Number(valA || 0) + Number(valB || 0), decimals);
-}
-
-/**
- * High-precision financial multiplication
- */
-export function safeFinancialMultiply(a: number | string | null | undefined, b: number | string | null | undefined, decimals: number = 4): number {
-  const valA = (a === null || a === undefined || typeof a === 'object') ? 0 : a;
-  const valB = (b === null || b === undefined || typeof b === 'object') ? 0 : b;
-  return roundFinancial(Number(valA || 0) * Number(valB || 0), decimals);
-}
-
-/**
- * Formats a financial amount with standard decimal places
- */
-export function formatFinancialAmount(num: number | string | null | undefined, decimals: number = 1): string {
-  const n = roundFinancial(num, decimals);
-  return n.toLocaleString('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  });
-}
-
-/**
  * Safely extracts error message from an unknown error object
  */
 export function getErrorMessage(err: unknown): string {

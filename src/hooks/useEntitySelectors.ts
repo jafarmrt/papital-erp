@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../api';
-import { usePersonnelListQuery } from './queries/usePersonnelQueries';
 import type { Customer } from '../types';
 
 export interface EntitySelectOption<T = string | number> {
@@ -93,61 +92,6 @@ export function useSupplierSelectOptions() {
   return {
     options,
     suppliers: customers,
-    isLoading,
-    isFetching,
-    error,
-    refetch,
-  };
-}
-
-
-export interface PersonnelSelectOptionsConfig {
-  onlyActive?: boolean;
-  valueField?: 'id' | 'fullName' | 'personnelCode';
-}
-
-/**
- * Hook to fetch and format personnel for SearchableSelect and form dropdowns.
- * Uses shared React Query cache (staleTime 5m) to eliminate repetitive network roundtrips.
- */
-export function usePersonnelSelectOptions(config: PersonnelSelectOptionsConfig = {}) {
-  const { onlyActive = true, valueField = 'id' } = config;
-
-  const {
-    data: personnelList = [],
-    isLoading,
-    isFetching,
-    error,
-    refetch
-  } = usePersonnelListQuery();
-
-  const options = useMemo<EntitySelectOption[]>(() => {
-    if (!Array.isArray(personnelList)) return [];
-
-    return personnelList
-      .filter((p) => {
-        if (!p) return false;
-        if (onlyActive && p.employmentStatus && p.employmentStatus !== 'فعال') return false;
-        return true;
-      })
-      .map((p) => {
-        const name = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'بدون نام';
-        const val = valueField === 'fullName' ? name : (valueField === 'personnelCode' ? (p.personnelCode || String(p.id)) : p.id);
-        const codePart = p.personnelCode ? ` (${p.personnelCode})` : '';
-        const jobPart = p.jobTitle ? ` - ${p.jobTitle}` : '';
-
-        return {
-          value: val,
-          label: `${name}${codePart}`,
-          subLabel: jobPart,
-          data: p,
-        };
-      });
-  }, [personnelList, onlyActive, valueField]);
-
-  return {
-    options,
-    personnelList,
     isLoading,
     isFetching,
     error,

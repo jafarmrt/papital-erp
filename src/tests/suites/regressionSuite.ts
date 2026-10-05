@@ -20,7 +20,6 @@ import { ProjectService } from '../../services/projects.service.js';
 import { PieceworkService } from '../../services/piecework.service.js';
 import { TransferService } from '../../services/transfer.service.js';
 import { IdempotencyService } from '../../services/idempotency.service.js';
-import { DataReconciliationService } from '../../services/reconciliation/dataReconciliation.service.js';
 import { ProcurementService } from '../../services/procurement.service.js';
 import {
   createVoucherSchema,
@@ -2482,29 +2481,6 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`شماره پیش‌نمایش سال 1404 باید 889 باشد اما ${peek1404} برگردانده شد`);
       }
 
-      // 3. TD-153: DataReconciliation duplicate ref check
-      // Create a receipt document with the EXACT SAME refNumber '888'
-      // In ERP, an invoice and a receipt having the same number is standard and expected
-      const [docReceipt888] = await orm.insert(documents).values({
-        type: testDocTypeRec,
-        refNumber: '888',
-        date: '2025-08-01 12:00:00',
-        user: 'test-agent',
-        status: 'final'
-      }).returning({ id: documents.id });
-      createdDocIds.push(docReceipt888.id);
-
-      // Scan integrity
-      const report = await DataReconciliationService.scanIntegrity();
-      // Neither invoice #888 nor receipt #888 should be flagged as duplicates
-      const falsePositive = report.anomalies.find(a => 
-        a.category === 'duplicate_doc_refs' && 
-        (String(a.entityId).includes('888') || String(a.description).includes('888'))
-      );
-      if (falsePositive) {
-        throw new Error(`مثبت کاذب در گزارش تطبیق اسناد یافت شد (TD-153): شماره 888 برای دو نوع سند مختلف نباید تکراری گزارش شود. شرح: ${falsePositive.description}`);
-      }
-
       results.push(makeTestCase({
         id: 'reg_fiscal_year_ref_isolation_td_152_153',
         scenarioId: 'period_closing_and_conceptual_mappings',
@@ -2513,7 +2489,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_database',
         passed: true,
         durationMs: Date.now() - t26Start,
-        details: 'تفکیک سال مالی در کوئری استخراج عطف اسناد، ریست صحیح شماره سریال در سال جدید و تفکیک (type, fiscalYear, refNumber) در گزارش سلامت دیتابیس تایید شد.'
+        details: 'تفکیک سال مالی در کوئری استخراج عطف اسناد و ریست صحیح شماره سریال در سال جدید تایید شد.'
       }));
     } catch (err: any) {
       results.push(makeTestCase({

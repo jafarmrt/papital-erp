@@ -75,12 +75,6 @@ export class BusinessLogicError extends AppError {
   }
 }
 
-export class AuthenticationError extends UnauthorizedError {}
-
-export class AuthorizationError extends ForbiddenError {}
-
-export class BusinessRuleError extends BusinessLogicError {}
-
 export class InsufficientStockError extends AppError {
   constructor(message = 'موجودی کالا برای اجرای این عملیات کافی نیست', details?: unknown) {
     super(message, 400, 'INSUFFICIENT_STOCK', details);
@@ -90,30 +84,6 @@ export class InsufficientStockError extends AppError {
 export class UnbalancedVoucherError extends AppError {
   constructor(message = 'سند حسابداری موازنه نیست و مجموع بدهکار با بستانکار برابر نمی‌باشد', details?: unknown) {
     super(message, 422, 'ACCOUNTING_UNBALANCED', details);
-  }
-}
-
-export class IdempotencyError extends AppError {
-  constructor(message = 'درخواست مکرر یا شناسه یکتای تکراری تشخیص داده شد', details?: unknown) {
-    super(message, 409, 'IDEMPOTENCY_CONFLICT', details);
-  }
-}
-
-export class WorkflowError extends AppError {
-  constructor(message = 'خطا در فرآیند و چرخه کاری ورکفلو', details?: unknown) {
-    super(message, 422, 'WORKFLOW_ERROR', details);
-  }
-}
-
-export class ConcurrencyError extends AppError {
-  constructor(message = 'به دلیل عملیات همزمان چند کاربر، تغییرات ثبت نشد. لطفاً مجدداً تلاش کنید', details?: unknown) {
-    super(message, 409, 'CONCURRENCY_ERROR', details);
-  }
-}
-
-export class IntegrationError extends AppError {
-  constructor(message = 'ارتباط با سامانه خارجی با خطا مواجه شد', details?: unknown) {
-    super(message, 502, 'INTEGRATION_ERROR', details);
   }
 }
 
@@ -250,4 +220,3 @@ export function normalizeError(err: unknown): NormalizedError {
     details: isDev ? errObj?.details : undefined,
   };
 }
-

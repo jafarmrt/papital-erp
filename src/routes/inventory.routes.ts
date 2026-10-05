@@ -30,12 +30,6 @@ export const paramsItemIdSchema = z.object({
   })
 });
 
-export const paramsProjectIdSchema = z.object({
-  params: z.object({
-    projectId: numericIdString,
-  })
-});
-
 export const rebuildStockSchema = z.object({
   body: z.object({
     itemId: z.coerce.number().int().positive('شناسه کالا نامعتبر است').optional(),
@@ -110,13 +104,6 @@ export const bomReceiptAllocationItemSchema = z.object({
   documentId: z.coerce.number().int().positive().optional(),
   location: z.string().optional(),
   notes: z.string().optional()
-});
-
-export const projectReceiptAllocateSchema = z.object({
-  body: z.object({
-    projectId: z.coerce.number().int().positive('شناسه پروژه الزامی است'),
-    allocations: z.array(bomReceiptAllocationItemSchema).min(1, 'حداقل یک قلم رسید برای تخصیص الزامی است')
-  })
 });
 
 export const releaseAllocationSchema = z.object({
@@ -508,4 +495,3 @@ router.post(
 );
 
 export default router;
-
