@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.51 — Invoices From Proformas Take the Invoice Series Number (TD-317)
+- Finalizing a proforma gives the invoice the next number of the invoice series for its fiscal year and keeps the proforma number in the notes; a proforma whose number already exists among that year's invoices no longer fails with a database error.
+
 ### v8.0.50 — Strict Document Dates and Cross-Year Draft Numbering (TD-313)
 - A non-existent document date (30 Esfand of a common year, 30 February) or a non-date is refused with 422 instead of shifting silently or failing with 500; the numbering year comes from the stored date, and a draft moved to another fiscal year takes that year's next number.
 

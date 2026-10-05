@@ -31,7 +31,7 @@ import {
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
 import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, checkRequisitionReceiptSumsLines, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
-import { checkClosingCoversLeapLastDay, checkDocumentDatesStrict } from '../invariants/dateBoundaryScenarios.js';
+import { DATE_BOUNDARY_CHECKS } from '../invariants/dateBoundaryScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -263,12 +263,8 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
 
   // ── v8.0.3 تا v8.0.8: آزمون‌های سخت‌گیرانه رفع یافته‌های انبار و حسابداری (TD-255 تا TD-266، TD-253) ─────
   const v803: Array<[string, string, (w: string) => Promise<string[]>, string]> = [
-    // ── v8.0.50: TD-313 ──
-    ['inv_td_313_document_dates_strict', 'v8.0.50: تاریخ ناموجود یا غیرتاریخ سند رد می‌شود، سال شماره‌گذاری از تاریخ ذخیره‌شده است و پیش‌نویسی که به سال دیگر برود شماره همان سال را می‌گیرد (TD-313، گزینه الف)',
-      checkDocumentDatesStrict, '۳۰ اسفند ۱۳۹۶، ۳۰ فوریه و متن غیرتاریخ رد شدند؛ سند ۰۰:۱۵ نوروز در ۱۳۹۷؛ پیش‌نویس منتقل‌شده شماره یکتای ۱۳۹۷ گرفت'],
-    // ── v8.0.47: TD-310 (حوزه I، مرز تاریخ) ──
-    ['inv_td_310_closing_covers_leap_last_day', 'v8.0.47: بستن سال مالی کبیسه سند ۳۰ اسفند را هم می‌بندد؛ اسناد اختتامیه به آخرین روز سال و افتتاحیه به ۱ فروردین صادر می‌شوند و تاریخ دیگر رد می‌شود (TD-310، گزینه الف)',
-      () => checkClosingCoversLeapLastDay(), 'سود ۱٬۵۰۰٬۰۰۰ با فروش ۳۰ اسفند؛ اسناد به 2009-03-20 و 2009-03-21؛ ۲۹ اسفند رد شد؛ مانده درآمد سال صفر'],
+    // ── v8.0.47 به بعد: حوزه I، مرز تاریخ و شماره‌گذاری (TD-310 تا TD-317) ──
+    ...DATE_BOUNDARY_CHECKS,
     ['inv_td_255_stock_count_voucher', 'v8.0.3: انبارگردانی سند پیش‌نویس «کسری و اضافات انبار» با بهای کاردکس می‌گیرد، اضافی بدون WAC با بهای صفر و ابطال آن سند را حذف می‌کند (TD-255)',
       checkStockCountVoucher, 'سند ۷۰۱۲ با بهای کاردکس، اضافی بدون WAC با بهای صفر، ابطال سند پیش‌نویس را حذف کرد'],
     ['inv_td_262_excel_adjustment_voucher', 'v8.0.3: اصلاح موجودی از اکسل سند «کسری و اضافات انبار» و کالای تازه اکسل سند افتتاحیه می‌گیرد (TD-262)',
