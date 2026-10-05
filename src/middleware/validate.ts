@@ -173,11 +173,7 @@ export const createParamsIdSchema = (paramName: string = 'id', label: string = '
   }).passthrough();
 };
 
-export const paramsUserIdSchema = createParamsIdSchema('userId', 'شناسه کاربر');
-export const paramsDocIdSchema = createParamsIdSchema('id', 'شناسه سند');
 export const paramsItemIdSchema = createParamsIdSchema('id', 'شناسه کالا');
-export const paramsCategoryIdSchema = createParamsIdSchema('id', 'شناسه دسته‌بندی');
-export const paramsWarehouseIdSchema = createParamsIdSchema('id', 'شناسه انبار');
 export const paramsPersonnelIdSchema = createParamsIdSchema('id', 'شناسه پرسنل');
 
 export const validate = (schema: ZodSchema) => {

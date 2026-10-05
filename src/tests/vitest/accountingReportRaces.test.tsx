@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAccountingReports } from '../../hooks/useAccountingReports';
-import { useLatestRequest } from '../../hooks/useLatestRequest';
 
 // P3-8 (v7.0.104): پاسخ کندِ درخواست قدیمی یک گزارش نباید روی گزارش تازه بنشیند
 // (از نسخه React Query صفحه حسابداری: پارامترها بخشی از کلید کش‌اند)
@@ -86,17 +85,6 @@ describe('accounting report requests (P3-8)', () => {
     await waitFor(() => expect(result.current.reportsLoading).toBe(false));
   });
 
-  it('useLatestRequest supersedes the previous request and aborts on unmount', () => {
-    const { result, unmount } = renderHook(() => useLatestRequest());
-    const first = result.current();
-    const second = result.current();
-    expect(first.isCurrent()).toBe(false);
-    expect(first.signal.aborted).toBe(true);
-    expect(second.isCurrent()).toBe(true);
-    unmount();
-    expect(second.signal.aborted).toBe(true);
-    expect(second.isCurrent()).toBe(false);
-  });
 });
 
 describe('report views pass an abortable signal (P3-8)', () => {

@@ -1524,7 +1524,6 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
       // زیرروترهای پوشه‌ای (مثل src/routes/accounting/) هم بررسی می‌شوند
       ...fs.readdirSync('src/routes', { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.ts')).map(f => path.join('src/routes', f)),
       'src/app.ts',
-      'src/modules/_template/routes.ts',
     ];
     const ROUTE_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'use']);
     const isAsyncFn = (n: import('typescript').Node) =>
@@ -1596,5 +1595,3 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
 
   return results;
 }
-
-

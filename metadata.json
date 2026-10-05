@@ -1,8 +1,0 @@
-{
-  "name": "سامانه یکپارچه مدیریت کارگاه و ERP پاپیتال",
-  "description": "سامانه یکپارچه مدیریت کارگاه و ERP پاپیتال",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}

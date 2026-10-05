@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { orm } from '../src/db/drizzle.js';
 import { sql } from 'drizzle-orm';
-import { DataReconciliationService } from '../src/services/reconciliation/dataReconciliation.service.js';
 import { TEST_MARKER } from '../src/tests/fixtures/testMarker.js';
 
 /**
@@ -227,23 +226,6 @@ async function main() {
     console.log('  - item_code_counters initialized cleanly.');
   } catch (err: any) {
     console.error('⚠️ Sequence recalibration error:', err.message);
-  }
-
-  // 12. Run Data Integrity Reconciliation Scan
-  console.log('\n🔎 Running 12-Point Data Integrity Reconciliation Scan...');
-  try {
-    const scan = await DataReconciliationService.scanIntegrity();
-    console.log(`Integrity scan result: ${scan.healthy ? '✅ 100% HEALTHY' : '⚠️ ANOMALIES DETECTED'}`);
-    console.log(`Checked metrics: ${scan.totalChecks}, Anomalies: ${scan.anomaliesCount}, Critical: ${scan.criticalCount}`);
-    if (scan.anomalies.length > 0) {
-      for (const anom of scan.anomalies) {
-        console.log(`  - [${anom.severity.toUpperCase()}] ${anom.category} (${anom.entity}): ${anom.description}`);
-      }
-    } else {
-      console.log('  - No integrity anomalies detected across all 12 validation domains.');
-    }
-  } catch (err: any) {
-    console.error('Integrity scan error:', err.message);
   }
 
   console.log('\n🎉 Cleanup & Recalibration Completed Successfully!');
