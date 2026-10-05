@@ -14,10 +14,17 @@ import { DEFAULT_INVENTORY_CONTROL_SECTIONS } from '../constants/inventoryContro
 import { 
   buildConsolidatedPurchaseList, 
   calculateMaterialProgress, 
-  roundToOneDecimal,
-  buildReservedItemsToFreeze
+  roundToOneDecimal
 } from '../components/project/projectInventoryUtils';
 import { errorMessageOf } from '../utils';
+
+/** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
+interface SavedProjectInventory {
+  inventory_control?: { finalizedAt?: string; reservedItems?: unknown[] };
+}
+
+const savedReservedItems = (saved: SavedProjectInventory | null | undefined): unknown[] =>
+  Array.isArray(saved?.inventory_control?.reservedItems) ? saved.inventory_control.reservedItems : [];
 
 export function useProjectInventory(
   project: ProductionProject,
@@ -661,28 +668,25 @@ export function useProjectInventory(
 
     try {
       setSaving(true);
-      const reservedItemsToFreeze = buildReservedItemsToFreeze(sections, products, warehouseItems, manualPurchaseItems);
-      const nowIso = new Date().toISOString();
+      // v8.0.58 (TD-306): رزرو را سرور از بخش‌ها می‌سازد؛ مرورگر فقط نتیجه ذخیره‌شده را نمایش می‌دهد
       const payload = {
         inventory_control: {
           sections,
           manualPurchaseItems,
           isFinalized: true,
-          finalizedAt: nowIso,
-          reservedItems: reservedItemsToFreeze,
-          lastUpdated: nowIso
+          lastUpdated: new Date().toISOString()
         }
       };
 
-      await fetchJson(`/api/projects/${project.id}`, {
+      const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
       setIsFinalized(true);
-      setFinalizedAt(nowIso);
-      setReservedItems(reservedItemsToFreeze);
+      setFinalizedAt(saved?.inventory_control?.finalizedAt);
+      setReservedItems(savedReservedItems(saved));
       toast.success('کنترل موجودی ثبت نهایی شد و اقلام در انبار فریز گردیدند.');
       if (onUpdate) onUpdate();
     } catch (err) {
@@ -703,7 +707,6 @@ export function useProjectInventory(
           sections,
           manualPurchaseItems,
           isFinalized: false,
-          reservedItems: [],
           lastUpdated: new Date().toISOString()
         }
       };
@@ -738,28 +741,22 @@ export function useProjectInventory(
   const handleSaveInventoryControl = async () => {
     try {
       setSaving(true);
-      const effectiveReserved = isFinalized
-        ? buildReservedItemsToFreeze(sections, products, warehouseItems, manualPurchaseItems)
-        : (reservedItems && reservedItems.length > 0 ? reservedItems : []);
-
       const payload = {
         inventory_control: {
           sections,
           manualPurchaseItems,
           isFinalized,
-          finalizedAt,
-          reservedItems: effectiveReserved,
           lastUpdated: new Date().toISOString()
         }
       };
 
-      await fetchJson(`/api/projects/${project.id}`, {
+      const saved = await fetchJson<SavedProjectInventory>(`/api/projects/${project.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      setReservedItems(effectiveReserved);
+      setReservedItems(savedReservedItems(saved));
       toast.success('اطلاعات کنترل موجودی با موفقیت ذخیره شد.');
       if (onUpdate) onUpdate();
     } catch (err) {

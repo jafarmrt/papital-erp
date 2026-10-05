@@ -2,7 +2,7 @@ import request from 'supertest';
 import { asc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities, productionProjects } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -309,6 +309,41 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
           await orm.delete(crmActivities).where(inArray(crmActivities.leadId, createdLeadIds));
           await orm.delete(crmLeads).where(inArray(crmLeads.id, createdLeadIds));
         }
+      }
+    }),
+    record('sec_project_reservation_from_server_td_306', 'حوزه H: رزرو پروژه را سرور از بخش‌های کنترل موجودی می‌سازد نه از بدنه درخواست (TD-306)', 'real_database', async () => {
+      const planner = await userWith(['projects.view', 'projects.edit']);
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ currentStock: 10 });
+      const [project] = await orm.insert(productionProjects).values({ projectCode: `TD306-${Date.now()}`, title: 'td306 آزمون', startDate: '2026-10-05', endDate: '2026-10-05', products: [], inventoryControl: {}, isDeleted: 0 }).returning();
+      const sections = [{ id: 's1', title: 'مواد', checkType: 'global', globalItems: [{ itemCode: item.code, name: item.name, requiredQty: 3, unit: 'عدد' }] }];
+      const forged = [{ itemId: item.id, itemCode: item.code, itemName: item.name, reservedQty: 1000000000 }];
+      const reservedOf = async () => {
+        const [row] = await orm.select({ ic: productionProjects.inventoryControl }).from(productionProjects).where(eq(productionProjects.id, project.id));
+        const list = (row?.ic as { reservedItems?: Array<{ itemId?: number; reservedQty?: number }> } | null)?.reservedItems;
+        return Array.isArray(list) ? list : [];
+      };
+      const put = (inventoryControl: object) => send(planner.session, 'put', `/api/projects/${project.id}`, { inventory_control: inventoryControl });
+      try {
+        const draft = await put({ sections, isFinalized: false, reservedItems: forged });
+        const afterDraft = await reservedOf();
+        const finalize = await put({ sections, isFinalized: true, reservedItems: forged });
+        const afterFinal = await reservedOf();
+        const resave = await put({ sections, isFinalized: true, reservedItems: [] });
+        const afterResave = await reservedOf();
+        const wrong: string[] = [];
+        for (const [n, r] of [['پیش‌نویس', draft], ['ثبت نهایی', finalize], ['ذخیره دوباره', resave]] as const) {
+          if (r.status !== 200) wrong.push(`${n}: ${r.status} (انتظار 200)`);
+        }
+        const isServerReservation = (list: Array<{ itemId?: number; reservedQty?: number }>) => list.length === 1 && list[0].itemId === item.id && Number(list[0].reservedQty) === 3;
+        if (afterDraft.length !== 0) wrong.push(`رزرو پیش‌نویس از بدنه ذخیره شد: ${JSON.stringify(afterDraft)}`);
+        if (!isServerReservation(afterFinal)) wrong.push(`رزرو ثبت نهایی ${JSON.stringify(afterFinal)} شد، انتظار ۳ عدد از بخش‌ها`);
+        if (!isServerReservation(afterResave)) wrong.push(`ذخیره دوباره رزرو را به ${JSON.stringify(afterResave)} تغییر داد`);
+        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        return 'رزرو بدنه نادیده؛ ثبت نهایی ۳ عدد از بخش‌ها؛ ذخیره دوباره رزرو را نگه داشت';
+      } finally {
+        await orm.update(productionProjects).set({ isDeleted: 1 }).where(eq(productionProjects.id, project.id));
+        await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
       }
     }),
   ];

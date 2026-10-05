@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.58 — Project Reservations Are Built by the Server (TD-306)
+- A project's stock reservation is no longer taken from the browser: finalizing builds it on the server from the inventory control sections and item stock, and later saves keep it.
+
 ### v8.0.57 — Piecework Logs Need the Piecework Permission; Rates From the Server (TD-300)
 - Recording piecework needs the piecework log permission instead of the daily-log one, and only personnel or rate managers enter a manual rate; others get the personnel or task rate.
 
