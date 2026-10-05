@@ -29,7 +29,7 @@ import {
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
-import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
+import { checkBomAllocationPostsVoucher, checkBomReceiptAllocationNeedsReceipt, checkBomReleaseAtOwnCost, checkProjectDeliveryPostsVoucher, checkRequisitionReceiptSumsLines, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -267,6 +267,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.36: TD-290 ──
+    ['inv_td_290_requisition_receipt_sums_lines', 'v8.0.36: تحویل سفارش خرید مقدار دریافتی درخواست را از جمع همه سطرهای هر کالا می‌شمارد و میان ردیف‌های همان کالا پر می‌کند؛ به‌روزرسانی درخواست در تراکنش تحویل و زیر قفل است و تحویل هم‌زمان نوشته دیگری را گم نمی‌کند (TD-290)',
+      () => checkRequisitionReceiptSumsLines(wh), 'دو سطر ۲ و ۳ = ۵ و received؛ تحویل دوباره بی‌اثر؛ ۵ میان ردیف‌های ۳ و ۲ پر شد؛ نوشتن هم‌زمان ۴ + تحویل ۵ = ۹'],
     // ── v8.0.35: TD-285 ──
     ['inv_td_285_project_delivery_posts_voucher', 'v8.0.35: «ورود به انبار» پروژه سند «رسید تولید» نهایی با پیوند پروژه صادر می‌کند که بدهکار کالای ساخته‌شده / بستانکار کالای در جریان ساخت پروژه است؛ تحویل بی‌بها به میانگین موزون (TD-285، گزینه الف)',
       () => checkProjectDeliveryPostsVoucher(wh), 'رسید تولید با یک سند حسابداری صادر شد؛ ۱۴۰۲ پروژه صفر و پس از تحویل بی‌بها −۲۰۰٬۰۰۰ شد؛ اختلاف انبار و دفتر صفر ماند'],

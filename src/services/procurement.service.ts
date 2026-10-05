@@ -27,6 +27,7 @@ function assertProcurementIncomingDocument(doc: { id: number; type: string | nul
 }
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
+import { applyDeliveredLines, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
 
@@ -38,7 +39,6 @@ type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey'>;
 type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title'>;
 
 /** ردیف درخواست خرید پس از تحویل انبار (receivedQty در ردیف JSONB نوشته می‌شود) */
-type RequisitionItemWithReceipt = PurchaseRequisitionItemRow & { receivedQty?: number | string };
 
 /** سند خرید صادرشده از درخواست: ردیف documents، یا شناسه و شماره وقتی ردیف خوانده نشد */
 type CreatedProcurementDocument = typeof documents.$inferSelect | { id: number; refNumber: string };
@@ -1109,6 +1109,24 @@ export class ProcurementService {
   }
 
   /**
+   * درخواست خرید سفارش تحویل‌شده: با کد درخواست در یادداشت سند، وگرنه درخواستی که این سند را در linkedDocumentIds دارد
+   */
+  private static async findDeliveredOrderRequisitionId(tx: DbExecutor, reqCode: string | null, documentId: number): Promise<number | null> {
+    if (reqCode) {
+      const [byCode] = await tx.select({ id: purchaseRequisitions.id }).from(purchaseRequisitions).where(and(
+        eq(purchaseRequisitions.code, reqCode),
+        eq(purchaseRequisitions.isDeleted, 0)
+      ));
+      if (byCode) return byCode.id;
+    }
+    const allReqs = await tx.select({ id: purchaseRequisitions.id, items: purchaseRequisitions.items }).from(purchaseRequisitions)
+      .where(eq(purchaseRequisitions.isDeleted, 0));
+    const linked = allReqs.find(r => Array.isArray(r.items)
+      && (r.items as PurchaseRequisitionItemRow[]).some(it => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.map(Number).includes(documentId)));
+    return linked?.id ?? null;
+  }
+
+  /**
    * Deliver a specific procurement purchase order to warehouse
    * (finalizes document, increases stock, updates Kardex, and syncs requisition)
    */
@@ -1130,43 +1148,35 @@ export class ProcurementService {
     assertProcurementIncomingDocument(doc);
 
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
-    await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', undefined, {
-      allowBackdate: await userHasRoleOrPermission(user, BACKDATE_PERMISSION),
-    });
+    const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
+    const reqCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/)?.[1]?.trim() ?? null;
 
-    const matchCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
-    const reqCode = matchCode ? matchCode[1].trim() : null;
+    // v8.0.36 (TD-290): نهایی‌سازی سند و به‌روزرسانی مقدار دریافتی درخواست خرید در یک تراکنش و زیر قفل ردیف درخواست.
+    // پیش‌تر درخواست پس از نهایی‌سازی، بیرون از تراکنش و بی‌قفل خوانده و نوشته می‌شد؛ تحویلِ هم‌زمانِ سفارشی دیگر از همان
+    // درخواست مقدار دریافتیِ دیگری را بازنویسی می‌کرد. مقدار هر کالا هم جمع همه سطرهای فعال سند است، نه فقط سطر اول.
+    // قفل درخواست پیش از نهایی‌سازی گرفته و وضعیت سند زیر همان قفل دوباره خوانده می‌شود، تا تحویل دوباره همین سفارش (که
+    // نهایی‌سازی‌اش بی‌صدا رد می‌شود) مقدار دریافتی را دو بار نشمارد.
+    const delivery = await orm.transaction(async (tx) => {
+      const linkedReqId = await ProcurementService.findDeliveredOrderRequisitionId(tx, reqCode, documentId);
+      const [lockedReq] = linkedReqId === null ? [] : await tx.select().from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, linkedReqId), eq(purchaseRequisitions.isDeleted, 0)))
+        .for('update');
+      const [current] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, documentId));
+      if (current?.status === 'final') return { linkedReq: null, allDelivered: false };
 
-    let linkedReq: typeof purchaseRequisitions.$inferSelect | null | undefined = null;
-    if (reqCode) {
-      const [r] = await orm.select().from(purchaseRequisitions).where(and(
-        eq(purchaseRequisitions.code, reqCode),
-        eq(purchaseRequisitions.isDeleted, 0)
-      ));
-      linkedReq = r;
-    }
+      await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
+      if (!lockedReq) return null;
 
-    if (!linkedReq) {
-      const allReqs = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.isDeleted, 0));
-      for (const r of allReqs) {
-        if (Array.isArray(r.items) && (r.items as PurchaseRequisitionItemRow[]).some(it => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.includes(documentId))) {
-          linkedReq = r;
-          break;
-        }
-      }
-    }
-
-    if (linkedReq) {
       const allDocIds = new Set<number>();
-      for (const it of ((linkedReq.items || []) as PurchaseRequisitionItemRow[])) {
+      for (const it of ((lockedReq.items || []) as PurchaseRequisitionItemRow[])) {
         if (Array.isArray(it.linkedDocumentIds)) {
           for (const dId of it.linkedDocumentIds) {
             allDocIds.add(Number(dId));
           }
         }
       }
-      const otherDocs = await orm.select().from(documents).where(and(
-        ilike(documents.notes, containsLikePattern(linkedReq.code)),
+      const otherDocs = await tx.select({ id: documents.id }).from(documents).where(and(
+        ilike(documents.notes, containsLikePattern(lockedReq.code)),
         eq(documents.isDeleted, 0)
       ));
       for (const od of otherDocs) {
@@ -1175,82 +1185,68 @@ export class ProcurementService {
 
       let allDelivered = true;
       if (allDocIds.size > 0) {
-        const checkDocs = await orm.select().from(documents).where(and(
+        const checkDocs = await tx.select({ id: documents.id, status: documents.status }).from(documents).where(and(
           inArray(documents.id, Array.from(allDocIds)),
           eq(documents.isDeleted, 0)
         ));
-        for (const cd of checkDocs) {
-          if (cd.id !== documentId && cd.status !== 'final') {
-            allDelivered = false;
-            break;
-          }
-        }
+        allDelivered = checkDocs.every(cd => cd.id === documentId || cd.status === 'final');
       }
 
-      const docLines = await orm.select().from(documentItems).where(eq(documentItems.documentId, documentId));
-      const updatedReqItems = ((linkedReq.items || []) as RequisitionItemWithReceipt[]).map(rit => {
-        const line = docLines.find(dl => dl.itemId === rit.itemId);
-        if (line) {
-          const prevRcv = Number(rit.receivedQty || 0);
-          const newRcv = prevRcv + Number(line.quantity || 0);
-          return {
-            ...rit,
-            receivedQty: newRcv,
-            remainingQty: Math.max(0, Number(rit.requestedQty || 0) - newRcv),
-            status: newRcv >= Number(rit.requestedQty || 0) ? 'received' : rit.status
-          };
-        }
-        return rit;
-      });
+      const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
+        .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+      const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
 
-      const nextStatus = allDelivered ? 'received' : linkedReq.status;
-      await orm.update(purchaseRequisitions).set({
+      await tx.update(purchaseRequisitions).set({
         items: updatedReqItems,
-        status: nextStatus,
+        status: allDelivered ? 'received' : lockedReq.status,
         updatedAt: new Date().toISOString()
-      }).where(eq(purchaseRequisitions.id, linkedReq.id));
+      }).where(eq(purchaseRequisitions.id, lockedReq.id));
 
-      if (allDelivered && linkedReq.workflowInstanceId) {
-        const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-        if (wfInst && wfInst.status === 'IN_PROGRESS') {
-          const { states, transitions } = await this.workflowGraphOf(wfInst);
-          const receivedState = states.find(s => s.stateKey === 'received');
-          const trToReceived = transitions.find(t => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
+      return { linkedReq: lockedReq, allDelivered };
+    });
+    const linkedReq = delivery?.linkedReq ?? null;
+    const allDelivered = delivery?.allDelivered ?? false;
 
-          if (trToReceived) {
-            try {
-              await WorkflowTransitionExecutor.executeTransition({
-                instanceId: wfInst.id,
-                transitionId: trToReceived.id,
-                userId: user.id || 1,
-                userName: user.username || 'انباردار تحویل‌گیرنده',
-                comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
-              });
-            } catch (trErr) {
-              logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${errorMessageOf(trErr)}` });
-              if (receivedState) {
-                await orm.update(workflowInstances).set({
-                  currentStateId: receivedState.id,
-                  status: 'COMPLETED',
-                  updatedAt: new Date().toISOString()
-                }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-                await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
-                await orm.update(workflowTasks)
-                  .set({ status: 'completed', completedAt: new Date().toISOString() })
-                  .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
-              }
+    if (linkedReq && allDelivered && linkedReq.workflowInstanceId) {
+      const [wfInst] = await orm.select().from(workflowInstances).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+      if (wfInst && wfInst.status === 'IN_PROGRESS') {
+        const { states, transitions } = await this.workflowGraphOf(wfInst);
+        const receivedState = states.find(s => s.stateKey === 'received');
+        const trToReceived = transitions.find(t => t.fromStateId === wfInst.currentStateId && t.toStateId === receivedState?.id);
+
+        if (trToReceived) {
+          try {
+            await WorkflowTransitionExecutor.executeTransition({
+              instanceId: wfInst.id,
+              transitionId: trToReceived.id,
+              userId: user.id || 1,
+              userName: user.username || 'انباردار تحویل‌گیرنده',
+              comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
+            });
+          } catch (trErr) {
+            logger.warn({ message: `[Procurement] Error executing workflow transition on delivery: ${errorMessageOf(trErr)}` });
+            if (receivedState) {
+              await orm.update(workflowInstances).set({
+                currentStateId: receivedState.id,
+                status: 'COMPLETED',
+                updatedAt: new Date().toISOString()
+              }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+              await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
+              await orm.update(workflowTasks)
+                .set({ status: 'completed', completedAt: new Date().toISOString() })
+                .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
             }
-          } else if (receivedState) {
-            await orm.update(workflowInstances).set({
-              currentStateId: receivedState.id,
-              status: 'COMPLETED',
-              updatedAt: new Date().toISOString()
-            }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
-            await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
-            await orm.update(workflowTasks)
-              .set({ status: 'completed', completedAt: new Date().toISOString() })
-              .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
           }
+        } else if (receivedState) {
+          await orm.update(workflowInstances).set({
+            currentStateId: receivedState.id,
+            status: 'COMPLETED',
+            updatedAt: new Date().toISOString()
+          }).where(eq(workflowInstances.id, linkedReq.workflowInstanceId));
+          await orm.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, linkedReq.workflowInstanceId));
+          await orm.update(workflowTasks)
+            .set({ status: 'completed', completedAt: new Date().toISOString() })
+            .where(and(eq(workflowTasks.instanceId, linkedReq.workflowInstanceId), eq(workflowTasks.status, 'pending')));
         }
       }
     }

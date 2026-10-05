@@ -42,7 +42,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-286 در v8.0.34 رفع شد (inv_td_286_bom_allocation_posts_voucher)
   // TD-288 در v8.0.33 رفع شد (inv_td_288_bom_release_at_own_cost)
   'FOCUSED:requisition-reconverted-over-ordered': 'TD-289',
-  'FOCUSED:requisition-receipt-counts-first-line': 'TD-290',
+  // TD-290 در v8.0.36 رفع شد (inv_td_290_requisition_receipt_sums_lines)
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {

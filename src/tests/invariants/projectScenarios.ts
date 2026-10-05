@@ -198,6 +198,72 @@ export async function checkProjectDeliveryPostsVoucher(wh: string): Promise<stri
   return problems;
 }
 
+/** مقدار دریافتی و وضعیت ردیف‌های یک درخواست خرید */
+async function requisitionRows(requisitionId: number): Promise<Array<{ receivedQty: number; status: string }>> {
+  const req = await ProcurementService.getRequisitionById(requisitionId);
+  return (req.items as unknown as Array<{ receivedQty?: number; status?: string }>).map(r => ({ receivedQty: Number(r.receivedQty ?? 0), status: String(r.status ?? '') }));
+}
+
+/** سفارش خرید یک گروه از درخواست؛ شناسه سند سفارش */
+async function orderOf(requisitionId: number, wh: string, lines: Array<{ itemId: number; quantity: number }>): Promise<number> {
+  const converted = await ProcurementService.convertToPurchaseOrders({ requisitionId, orderGroups: [
+    { supplierName: 'تامین‌کننده آزمون TD-290', targetWarehouse: wh, items: lines.map(l => ({ ...l, unitPrice: 1000 })) },
+  ] as never }, USER);
+  return converted.createdDocuments[0].id;
+}
+
+/**
+ * TD-290: تحویل سفارش خرید مقدار دریافتی درخواست را از جمع همه سطرهای فعال هر کالا می‌شمارد (۲ + ۳ = ۵) و میان ردیف‌های
+ * همان کالا به ترتیب پر می‌کند (۵ ← ۳ و ۲)؛ به‌روزرسانی درخواست در تراکنش تحویل و زیر قفل ردیف درخواست است، پس تحویلی که
+ * هم‌زمان با نوشتن دیگری روی همان درخواست اجرا شود آن را بازنویسی نمی‌کند (۴ + ۵ = ۹)؛ تحویل دوباره همان سفارش چیزی اضافه نمی‌کند.
+ */
+export async function checkRequisitionReceiptSumsLines(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+
+  // دو سطر از یک کالا در یک سفارش
+  const req = await ProcurementService.createRequisition({ title: 'درخواست آزمون دو سطر', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
+  const order = await orderOf(req.id, wh, [{ itemId: item.id, quantity: 2 }, { itemId: item.id, quantity: 3 }]);
+  await ProcurementService.deliverOrderToWarehouse(order, USER);
+  const [row] = await requisitionRows(req.id);
+  if (row?.receivedQty !== 5 || row.status !== 'received') problems.push(`دو سطر ۲ و ۳: دریافتی ${row?.receivedQty} با وضعیت ${row?.status}، انتظار ۵ و received`);
+  await ProcurementService.deliverOrderToWarehouse(order, USER);
+  if ((await requisitionRows(req.id))[0]?.receivedQty !== 5) problems.push(`تحویل دوباره همان سفارش دریافتی را ${(await requisitionRows(req.id))[0]?.receivedQty} کرد، انتظار ۵`);
+
+  // دو ردیف از یک کالا در درخواست
+  const split = await ProcurementService.createRequisition({ title: 'درخواست آزمون دو ردیف', items: [
+    { itemId: item.id, requestedQty: 3, unitPriceEstimate: 1000 }, { itemId: item.id, requestedQty: 2, unitPriceEstimate: 1000 },
+  ] as never }, USER);
+  await ProcurementService.deliverOrderToWarehouse(await orderOf(split.id, wh, [{ itemId: item.id, quantity: 5 }]), USER);
+  const splitRows = (await requisitionRows(split.id)).map(r => r.receivedQty);
+  if (splitRows.join(',') !== '3,2') problems.push(`ردیف‌های ۳ و ۲ با تحویل ۵: دریافتی ${splitRows.join(' و ')}، انتظار ۳ و ۲`);
+
+  // نوشتن هم‌زمان روی همان درخواست (مانند تحویل سفارشی دیگر): تحویل منتظر قفل می‌ماند و مقدار تازه را می‌خواند
+  const racing = await ProcurementService.createRequisition({ title: 'درخواست آزمون هم‌زمانی', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);
+  const racingOrder = await orderOf(racing.id, wh, [{ itemId: item.id, quantity: 5 }]);
+  const other = await pool.connect();
+  let delivering: Promise<unknown> | null = null;
+  try {
+    await other.query('BEGIN');
+    await other.query(`UPDATE purchase_requisitions SET items = jsonb_set(items, '{0,receivedQty}', '4'::jsonb) WHERE id = $1`, [racing.id]);
+    delivering = ProcurementService.deliverOrderToWarehouse(racingOrder, USER).catch((err: unknown) => err);
+    for (let i = 0; i < 200; i++) {
+      const waiting = await pool.query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> $1`, [(other as unknown as { processID: number }).processID]);
+      if (Number(waiting.rows[0].n) > 0) break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    await other.query('COMMIT');
+  } finally {
+    other.release();
+  }
+  const outcome = await delivering;
+  if (outcome instanceof Error) problems.push(`تحویل هم‌زمان خطا داد: ${getErrorMessage(outcome)}`);
+  const raced = (await requisitionRows(racing.id))[0]?.receivedQty;
+  if (raced !== 9) problems.push(`نوشتن هم‌زمان: دریافتی ${raced}، انتظار ۹ (۴ نوشته‌شده + ۵ تحویل)`);
+  return problems;
+}
+
 // ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
 
 /** TD-287 (کاوش رگرسیون؛ رفع v8.0.32): «رسید مستقیم BOM» بی‌رسید موجودی را بی‌تأمین‌کننده و بی‌سند حسابداری بالا می‌برد */
@@ -255,7 +321,7 @@ export async function probeRequisitionReconvertedOverOrdered(wh: string): Promis
   return again === null;
 }
 
-/** TD-290: تحویل سفارشی با دو سطر از یک کالا فقط سطر اول را در مقدار دریافت‌شده درخواست می‌شمارد */
+/** TD-290 (کاوش رگرسیون؛ رفع v8.0.36): تحویل سفارشی با دو سطر از یک کالا فقط سطر اول را در مقدار دریافت‌شده درخواست می‌شمارد */
 export async function probeRequisitionReceiptCountsFirstLine(wh: string): Promise<boolean> {
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const req = await ProcurementService.createRequisition({ title: 'درخواست کاوش دو سطر', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);

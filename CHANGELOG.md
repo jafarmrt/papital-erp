@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.36 — Requisition Receipt Counts Every Line (TD-290)
+- Delivering a purchase order counts every line of an item in its requisition and updates the requisition in the delivery transaction under a row lock.
+
 ### v8.0.35 — Project Delivery Issues a Production Receipt (TD-285)
 - Delivering a project's finished goods to stock issues a final production receipt linked to the project: debit finished goods, credit work in progress.
 
