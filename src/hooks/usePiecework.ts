@@ -13,6 +13,7 @@ import {
 import { toast as hotToast } from 'react-hot-toast';
 import { parseQuantityOrTime, formatPersianPrice, errorMessageOf, toStorageDate } from '../utils';
 import { computeFixedSalaryShares, priorFixedGrantsOf } from '../lib/payroll/fixedSalaryProration';
+import { refreshSuggestedRates, submittedRate, suggestedRate } from '../lib/payroll/workLogRate';
 import {
   exportPieceworkTasksToExcel,
   downloadPieceworkTemplate
@@ -23,6 +24,8 @@ export interface BatchLogRow {
   projectId: number | '';
   quantity: string;
   unitRate: number;
+  /** v8.0.87 (TD-386): نرخ دستی عوض شده است؛ فقط در این حالت فرستاده می‌شود */
+  rateEdited?: boolean;
 }
 
 export interface TaskFormData {
@@ -79,6 +82,8 @@ export function usePiecework() {
     { taskId: '', projectId: '', quantity: '1', unitRate: 0 }
   ]);
   const [editingLog, setEditingLog] = useState<PieceworkLog | null>(null);
+  // v8.0.87 (TD-386): نرخ‌های اختصاصی پرسنلِ فرم ثبت کارکرد، برای پیشنهاد همان نرخی که سرور برمی‌گزیند
+  const [logPersonnelRates, setLogPersonnelRates] = useState<Record<number, number>>({});
   const [isSavingLog, setIsSavingLog] = useState<boolean>(false);
 
   // Modal 2: Create / Edit Task
@@ -212,15 +217,35 @@ export function usePiecework() {
     ];
   }, [projectsList]);
 
+  // v8.0.87 (TD-386): نرخ‌های اختصاصی پرسنل انتخاب‌شده در فرم ثبت کارکرد؛ نرخ ردیف‌های دستی‌نشده با آن‌ها تازه می‌شود
+  useEffect(() => {
+    if (!isLogModalOpen || editingLog || !selectedPersonnelForLog) {
+      setLogPersonnelRates({});
+      return;
+    }
+    const controller = new AbortController();
+    fetchJson<PieceworkPersonnelRate[]>(`/piecework/personnel-rates/${selectedPersonnelForLog}`, { signal: controller.signal })
+      .then(res => {
+        const map: Record<number, number> = {};
+        (Array.isArray(res) ? res : []).forEach(r => { map[r.taskId] = Number(r.customRate); });
+        setLogPersonnelRates(map);
+        setBatchLogRows(rows => refreshSuggestedRates(rows, tasksList, map));
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLogPersonnelRates({});
+      });
+    return () => controller.abort();
+  }, [isLogModalOpen, editingLog, selectedPersonnelForLog, tasksList]);
+
   // Handle task select in batch row
   const handleTaskChangeInRow = (idx: number, taskId: number | '') => {
-    const taskObj = tasksList.find(t => t.id === taskId);
-    const rate = taskObj ? Number(taskObj.defaultRate || 0) : 0;
+    // v8.0.87 (TD-386): نرخ پیشنهادی = نرخ اختصاصی پرسنل، وگرنه نرخ پایه عنوان (همان انتخاب سرور)
     const newRows = [...batchLogRows];
     newRows[idx] = {
       ...newRows[idx],
       taskId: taskId,
-      unitRate: rate
+      unitRate: suggestedRate(taskId, tasksList, logPersonnelRates),
+      rateEdited: false
     };
     setBatchLogRows(newRows);
   };
@@ -305,7 +330,8 @@ export function usePiecework() {
           projectId: r.projectId ? Number(r.projectId) : null,
           date: logDate,
           quantity: parseQuantityOrTime(r.quantity),
-          unitRate: Number(r.unitRate) || 0
+          // v8.0.87 (TD-386): فقط نرخ دستی؛ وگرنه سرور نرخ اختصاصی پرسنل یا نرخ پایه را برمی‌گزیند
+          unitRate: submittedRate(r)
         }));
 
         await fetchJson('/piecework/logs', {

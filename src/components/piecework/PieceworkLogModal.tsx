@@ -285,7 +285,7 @@ export function PieceworkLogModal({
                             value={row.unitRate}
                             onChange={(val) => {
                               const newRows = [...batchLogRows];
-                              newRows[idx].unitRate = val;
+                              newRows[idx] = { ...newRows[idx], unitRate: val, rateEdited: true };
                               setBatchLogRows(newRows);
                             }}
                             readOnly={!canSetRate}
