@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.56 — CRM Won Needs a Proforma on Every Path (TD-309)
+- A sales lead can be marked won only after a proforma, whether through its stage or its status; a new lead cannot start as won.
+
 ### v8.0.55 — Vouchers Approved at Creation Record Their Approver (TD-308)
 - A manual journal voucher created as approved records its creator as the approver.
 

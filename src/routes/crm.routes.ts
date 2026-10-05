@@ -575,6 +575,11 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     notes,
   } = req.body;
 
+  // حوزه H (TD-309): پرونده تازه هنوز پیش‌فاکتور ندارد؛ «فروش موفق» فقط پس از صدور پیش‌فاکتور (همان قاعده ویرایش)
+  if (stage === 'won') {
+    throw new BadRequestError('پرونده فروش تازه نمی‌تواند مستقیم «فروش موفق» ثبت شود. ابتدا پیش‌فاکتور صادر کنید.');
+  }
+
   const currentUser = req.user;
   const authorName = currentUser?.full_name || currentUser?.username || 'فروشنده';
 
@@ -666,7 +671,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     company,
     contacts,
     source,
-    stage,
+    stage: requestedStage,
     estimatedValue,
     currency,
     probability,
@@ -676,6 +681,8 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     notes,
     status
   } = req.body;
+  // حوزه H (TD-309): وضعیت «won» بدون مرحله همان انتقال به «فروش موفق» است و از قاعده پیش‌فاکتور نمی‌گذرد
+  const stage: string | undefined = requestedStage !== undefined ? requestedStage : (status === 'won' && existing.stage !== 'won' ? 'won' : undefined);
 
   // V10-4.1: ارجاع فروشنده — تنها وقتی مشتری جدید آمده بازresolve شود
   const assigneeProvided = assignedTo !== undefined || assignedPersonnelId !== undefined;

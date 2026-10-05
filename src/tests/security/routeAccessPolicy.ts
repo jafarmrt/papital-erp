@@ -2,7 +2,7 @@ import request from 'supertest';
 import { asc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials, items, documents, accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -257,6 +257,32 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         if (voucherId) {
           await orm.delete(journalVoucherItems).where(eq(journalVoucherItems.voucherId, voucherId));
           await orm.delete(journalVouchers).where(eq(journalVouchers.id, voucherId));
+        }
+      }
+    }),
+    record('sec_crm_won_needs_proforma_td_309', 'حوزه H: «فروش موفق» بی پیش‌فاکتور نه با ساخت پرونده و نه با وضعیت won (TD-309)', 'real_database', async () => {
+      const seller = await userWith(['crm.view', 'crm.manage', 'customers.view']);
+      const stamp = Date.now();
+      const createdLeadIds: number[] = [];
+      try {
+        const wonOnCreate = await send(seller.session, 'post', '/api/crm/leads', { title: `TD309-won-${stamp}`, customerName: `TD309 ${stamp}`, stage: 'won' });
+        if (wonOnCreate.body?.id) createdLeadIds.push(Number(wonOnCreate.body.id));
+        const lead = await send(seller.session, 'post', '/api/crm/leads', { title: `TD309-${stamp}`, customerName: `TD309 ${stamp}` });
+        const leadId = Number(lead.body?.id ?? lead.body?.data?.id);
+        if (leadId) createdLeadIds.push(leadId);
+        if (lead.status !== 200 && lead.status !== 201) throw new Error(`ساخت پرونده عادی شکست خورد (${lead.status})`);
+        const statusWon = await send(seller.session, 'put', `/api/crm/leads/${leadId}`, { status: 'won' });
+        const [row] = await orm.select({ status: crmLeads.status, stage: crmLeads.stage }).from(crmLeads).where(eq(crmLeads.id, leadId));
+        const wrong: string[] = [];
+        if (wonOnCreate.status !== 400) wrong.push(`ساخت پرونده «فروش موفق»: ${wonOnCreate.status} (انتظار 400)`);
+        if (statusWon.status !== 400) wrong.push(`وضعیت won بی پیش‌فاکتور: ${statusWon.status} (انتظار 400)`);
+        if (row?.status === 'won') wrong.push('وضعیت پرونده won شد');
+        if (wrong.length > 0) throw new Error(wrong.join('، '));
+        return 'هر دو 400';
+      } finally {
+        if (createdLeadIds.length > 0) {
+          await orm.delete(crmActivities).where(inArray(crmActivities.leadId, createdLeadIds));
+          await orm.delete(crmLeads).where(inArray(crmLeads.id, createdLeadIds));
         }
       }
     }),
