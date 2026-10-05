@@ -53,7 +53,7 @@ export class InventoryStockRepairService {
         .select()
         .from(items)
         .where(and(eq(items.id, params.itemId), eq(items.isDeleted, 0)))
-        .for('update');
+        .for('no key update'); // v8.0.47 (TD-320): هم‌حالت lockStockItems
 
       if (!item) {
         throw new Error(`کالا با شناسه ${params.itemId} یافت نشد.`);

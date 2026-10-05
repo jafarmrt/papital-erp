@@ -24,6 +24,7 @@ import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { money } from '../../lib/money.js';
 import { releaseReservationsForDocument, restoreReservationsForDocument } from './projectReservationRelease.js';
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
+import { lockStockItems } from '../inventory/stockItemLocks.js';
 
 export class DocumentLifecycleService {
   /**
@@ -139,7 +140,7 @@ export class DocumentLifecycleService {
                 name: items.name,
                 unit: items.unit,
                 currentStock: items.currentStock,
-              }).from(items).where(eq(items.id, item.itemId)).for('update');
+              }).from(items).where(eq(items.id, item.itemId)).for('no key update');
 
               if (!dbItem) {
                 throw new NotFoundError(`کالا با شناسه ${item.itemId} یافت نشد`);
@@ -303,11 +304,21 @@ export class DocumentLifecycleService {
    */
   static async deleteDocument(id: number, user?: string, externalTx?: DbExecutor): Promise<void> {
     const execute = async (tx: DbExecutor): Promise<void> => {
-      // v7.0.105 (TD-237): پروژه حواله نهایی پیش از سند قفل می‌شود (سلسله‌مراتب PRODUCTION → DOCUMENTS)، چون رزرو
-      // کسرشده آن در همین تراکنش برمی‌گردد
-      const [peek] = await tx.select({ projectId: documents.projectId, status: documents.status }).from(documents)
+      const [peek] = await tx.select({ projectId: documents.projectId }).from(documents)
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
-      if (peek?.status === 'final' && peek.projectId) {
+      if (!peek) return;
+
+      // v8.0.47 (TD-320): قفل‌ها به همان ترتیب نهایی‌سازی — کالاها (یک‌جا، به ترتیب شناسه) ← پروژه ← سند — و پیش از درج
+      // ردیف کاردکس معکوس. پیش‌تر سند اول قفل می‌شد، ردیف معکوس درج می‌شد و کالاها به ترتیب ردیف‌های کاردکس قفل می‌شدند؛
+      // دو ابطال هم‌کالا یا ابطال و فاکتوری با ترتیب دیگر کالاها به بن‌بست (40P01) می‌رسیدند.
+      const kardexItems = await tx.select({ itemId: transactions.itemId }).from(transactions)
+        .where(and(eq(transactions.documentId, id), eq(transactions.isDeleted, 0)));
+      const lineItems = await tx.select({ itemId: documentItems.itemId }).from(documentItems)
+        .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
+      await lockStockItems(tx, [...kardexItems, ...lineItems].map(r => r.itemId));
+      // v7.0.105 (TD-237): پروژه پیش از سند قفل می‌شود (سلسله‌مراتب PRODUCTION → DOCUMENTS)، چون رزرو کسرشده حواله نهایی
+      // در همین تراکنش برمی‌گردد؛ از v8.0.47 بی‌توجه به وضعیت پیش از قفل، چون نهایی‌سازی هم‌زمان می‌تواند آن را نهایی کند
+      if (peek.projectId) {
         await tx.select({ id: productionProjects.id }).from(productionProjects)
           .where(eq(productionProjects.id, Number(peek.projectId)))
           .for('update');
@@ -344,6 +355,8 @@ export class DocumentLifecycleService {
       // 3. Cascade soft-delete transactions + ثبت تراکنش‌های معکوس مطابق الگوی DB-009
       const originalTxs = await tx.select().from(transactions)
         .where(and(eq(transactions.documentId, doc.id), eq(transactions.isDeleted, 0)));
+      // ردیف کاردکسی که پس از خواندن بالا (پیش از قفل سند) ثبت شده باشد هم پیش از درج معکوس قفل می‌شود (بی‌اثر اگر قفل باشد)
+      await lockStockItems(tx, originalTxs.map(t => t.itemId));
 
       await tx.update(transactions).set({
         isDeleted: 1,

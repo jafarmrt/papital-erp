@@ -177,6 +177,7 @@
 - **Idempotency OCC Locks (DB-010):** `IdempotencyService` uses `.onConflictDoNothing()` and OCC (`status` and `locked_until` in UPDATE WHERE clause).
 - **Stock Soft Delete & Reversal (DB-009):** `is_deleted = 1` + reversal transaction + balance recalculation.
 - **Negative Stock Guard (DB-006, TD-180):** Inventory deductions below zero are rejected (policy fixed to `forbidden`, enforced in `ItemWarehouseStockService.applyMovement` and by the DB CHECK constraint).
+- **Stock Item Locks (v8.0.47, TD-320):** Every stock path (document create / finalize / void, sales return, transfer, BOM allocation, project delivery) locks ALL its items at once, in ascending id order, with `FOR NO KEY UPDATE` (`lockStockItems` in `src/services/inventory/stockItemLocks.ts`, or `withOrderedLocks`, which uses the same mode for items) BEFORE the document counter, the document row or any Kardex / line insert; a void locks items → project → document. Never lock an item row `FOR UPDATE` in these paths: inserting a Kardex row or document line takes a `FOR KEY SHARE` foreign-key lock on the item, which conflicts with `FOR UPDATE` and deadlocks concurrent voids.
 
 ## 20. Observability, Error Handling & Lifecycle Rules
 - **AppError Hierarchy (OBS-003):** Typed subclasses (`ValidationError`, `NotFoundError`, `UnauthorizedError`, `ConflictError`, `DatabaseError`).

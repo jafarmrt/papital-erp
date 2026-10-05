@@ -147,7 +147,7 @@ async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<Ite
     .select()
     .from(items)
     .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
-    .for('update');
+    .for('no key update'); // v8.0.47 (TD-320): هم‌حالت lockStockItems
   if (!item) {
     throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
   }
@@ -488,7 +488,7 @@ export class ProjectBomAllocationService {
         .select()
         .from(items)
         .where(eq(items.id, alloc.itemId))
-        .for('update');
+        .for('no key update');
 
       // v8.0.33 (TD-288): مواد به بهای کاردکس خروج همان تخصیص برمی‌گردند (همان قاعده ابطال خروج، TD-254)، نه به میانگین موزون
       // روز؛ پیش‌تر پس از خرید گران‌تر، آزادسازی ارزش از هیچ می‌ساخت. تخصیصِ رسیدِ پیش از v8.0.32 (حرکت منبع «ورود») موجودی را
