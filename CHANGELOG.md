@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.84 — Backups Run From Cron and Include Attachments
+- scripts/backup.sh finds the application directory from its own location, reads DATABASE_URL and ATTACHMENTS_DIR from its .env and archives public/uploads, so a cron line backs up the database and the attachment files; attachment records without an attachment directory fail the backup.
+
 ### v8.0.83 — update.sh Waits for Startup and the Built Version
 - update.sh reports success only when /health/startup answers (migrations and seed finished) and /health shows the built version (scripts/verify-startup.sh); on failure it prints the rollback steps with the previous commit and the pre-deployment backup.
 
