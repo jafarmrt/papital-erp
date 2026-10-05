@@ -244,8 +244,12 @@ export class WorkflowTransitionExecutor {
 
   /**
    * Refresh pending approvals & tasks when instance state advances
+   *
+   * v8.0.83 (TD-372): مهلت و کارهای گام تازه از تصویر نسخه خود فرایند ساخته می‌شوند (snapshotDsl)، نه جدول‌های جاری.
+   * ذخیره طرح در طراح وضعیت‌ها و انتقال‌ها را با شناسه تازه می‌سازد؛ پیش‌تر فرایند در جریان پس از ویرایش طرح در گام بعد
+   * هیچ کار و مهلتی نمی‌گرفت و از کارتابل بیرون می‌رفت.
    */
-  static async refreshPendingApprovals(instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm) {
+  static async refreshPendingApprovals(instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm, snapshotDsl?: unknown) {
     // 1. Delete previous pending approvals & cancel pending tasks for prior states
     await txExecutor.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instanceId));
     await txExecutor.update(workflowTasks)
@@ -256,19 +260,20 @@ export class WorkflowTransitionExecutor {
       ));
 
     // 2. Fetch state details for SLA dueAt calculation
-    const [newState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, newStateId));
+    const snapshot = snapshotDsl as WorkflowSnapshotDsl | null | undefined;
+    let newState: { slaHours?: number | null } | undefined = isUsableSnapshot(snapshot)
+      ? snapshot.states!.find(st => st.id === newStateId)
+      : undefined;
+    if (!newState) {
+      [newState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, newStateId));
+    }
     let dueAt: string | null = null;
     if (newState && newState.slaHours && newState.slaHours > 0) {
       dueAt = new Date(Date.now() + newState.slaHours * 3600 * 1000).toISOString();
     }
 
     // 3. Fetch outgoing transitions
-    const transitions = await txExecutor.select()
-      .from(workflowTransitions)
-      .where(and(
-        eq(workflowTransitions.workflowDefinitionId, workflowDefinitionId),
-        eq(workflowTransitions.fromStateId, newStateId)
-      ));
+    const transitions = await this.transitionsFromState({ workflowDefinitionId, snapshotDsl }, newStateId, txExecutor);
 
     // 3. Consolidated Pending Approvals & Task Cards:
     // Do NOT generate duplicate cards/tasks for rejection/cancellation actions.
@@ -425,7 +430,7 @@ export class WorkflowTransitionExecutor {
         updatedAt: new Date().toISOString()
       }).returning();
 
-      await this.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx);
+      await this.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl);
 
       await tx.insert(workflowHistoryLogs).values({
         instanceId: newInstance.id,
@@ -630,7 +635,7 @@ export class WorkflowTransitionExecutor {
         .where(eq(workflowInstances.id, instance.id));
 
       if (newStatus === 'IN_PROGRESS') {
-        await this.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx);
+        await this.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx, instance.snapshotDsl);
       } else {
         await tx.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instance.id));
         await tx.update(workflowTasks)
