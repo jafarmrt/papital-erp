@@ -229,6 +229,7 @@ export class DocumentLifecycleService {
             input: { vatPercent: options?.vatPercent, vatAmount: options?.vatAmount },
             lines: docLines,
             existing: { vatPercent: Number(doc.vatPercent) || 0, vatAmount: doc.vatAmount },
+            currency: doc.currency,
           });
           await tx.update(documents).set({ 
             status: 'final',

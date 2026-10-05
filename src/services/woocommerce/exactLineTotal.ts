@@ -1,9 +1,6 @@
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 
-/** کوچک‌ترین واحد مبلغ فاکتور: ریال بی‌اعشار، ارز خارجی دو رقم اعشار */
-export function currencyScale(currency: string): number {
-  return currency === 'IRR' ? 0 : 2;
-}
+export { currencyScale } from '../../lib/currencyScale.js';
 
 /**
  * v8.0.41 (TD-297): ردیف سفارش با جمع دقیق. اگر جمع ردیف بر مقدار (صحیح) در کوچک‌ترین واحد ارز بخش‌پذیر نباشد، ردیف دو

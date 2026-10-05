@@ -76,7 +76,6 @@ export interface InvoiceSavePayload {
   exchangeRate: number | null;
   crmLeadId: number | undefined;
   vatPercent: number;
-  vatAmount: number;
   items: Array<{ itemId: number; quantity: number; unit_price: number; discount: number }>;
 }
 
@@ -164,4 +163,12 @@ export function invoiceFormFromDocument(doc: InvoiceDocumentDetails, fallbackRef
       }))
       : null,
   };
+}
+
+/**
+ * v8.0.111 (TD-388): پیش‌نویس فاکتور فروش فقط وقتی ذخیره می‌شود که فرم ردیف یا خریدار داشته باشد. فرمی که پس از ثبت پاک
+ * شده (نوع، انبار، ارز و نرخ مالیات سند قبلی را نگه می‌دارد) پیش‌نویس نیست.
+ */
+export function isEmptyInvoiceDraft(data: { docItems?: unknown[] | null; buyerName?: string | null }): boolean {
+  return !(Array.isArray(data.docItems) && data.docItems.length > 0) && !(data.buyerName || '').trim();
 }

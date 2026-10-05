@@ -9,6 +9,11 @@ export interface UseServerDraftOptions<T> {
   debounceMs?: number; // default: 2000ms
   onDraftLoaded?: (draftPayload: T, updatedAt: string) => void;
   enabled?: boolean;
+  /**
+   * v8.0.111 (TD-388): فرم خالی (مثلاً پس از ثبت و پاک شدن فرم) پیش‌نویس نمی‌سازد. پیش‌تر پاک شدن فرم پس از ثبت «تغییر»
+   * دیده و پیش‌نویس تازه‌ای با تنظیمات همان سند ذخیره می‌شد که بار بعد بنر «بازیابی» را می‌آورد.
+   */
+  isEmpty?: (data: T) => boolean;
 }
 
 export function useServerDraft<T extends Record<string, any>>(
@@ -20,7 +25,8 @@ export function useServerDraft<T extends Record<string, any>>(
     draftKey = 'default',
     debounceMs = 2500,
     onDraftLoaded,
-    enabled = true
+    enabled = true,
+    isEmpty
   } = options;
 
   const [hasServerDraft, setHasServerDraft] = useState(false);
@@ -64,7 +70,7 @@ export function useServerDraft<T extends Record<string, any>>(
 
       const payloadString = JSON.stringify(dataToSave);
       // Skip if empty or identical to last saved payload
-      if (!payloadString || payloadString === lastPayloadStringRef.current) {
+      if (!payloadString || payloadString === lastPayloadStringRef.current || isEmpty?.(dataToSave)) {
         return;
       }
 
@@ -92,12 +98,14 @@ export function useServerDraft<T extends Record<string, any>>(
         setIsSavingDraft(false);
       }
     },
-    [entityType, draftKey, enabled]
+    [entityType, draftKey, enabled, isEmpty]
   );
 
   // Discard / Clear draft
   const discardDraft = useCallback(async () => {
     if (!entityType) return;
+    // v8.0.111 (TD-388): ذخیره زمان‌بندی‌شده‌ای که پیش از ثبت سند مانده بود، پیش‌نویس حذف‌شده را دوباره نمی‌سازد
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     try {
       await fetchJson(`/drafts/${entityType}?draftKey=${draftKey}`, {
         method: 'DELETE'
@@ -117,6 +125,8 @@ export function useServerDraft<T extends Record<string, any>>(
   const restoreDraft = useCallback(() => {
     if (serverDraftData && onDraftLoaded) {
       onDraftLoaded(serverDraftData, draftUpdatedAt || '');
+      // v8.0.111 (TD-388): همان پیش‌نویس بازیابی‌شده بی‌تغییر دوباره ذخیره نمی‌شود
+      lastPayloadStringRef.current = JSON.stringify(serverDraftData);
       setHasServerDraft(false);
       toast.success('پیش‌نویس سرور با موفقیت بازیابی شد');
     }

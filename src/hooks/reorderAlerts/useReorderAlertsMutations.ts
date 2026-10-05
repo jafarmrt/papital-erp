@@ -4,6 +4,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { invalidateDomain, invalidateDomains, invalidatePreset } from '../../lib/queryInvalidation';
 import { invalidateAfterStockAdjustment } from '../inventoryAudit/useInventoryAuditSave';
 import type { ReorderItem } from '../../lib/reorderAlerts/reorderItems';
+import type { PurchaseReceiptPayload } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 
 /**
  * صفحه نقطه سفارش: ذخیره‌های صفحه با useMutation (همان درخواست‌ها و بدنه‌های صفحه پیشین).
@@ -89,23 +90,8 @@ export interface RequisitionPayload {
   }>;
 }
 
-export interface PurchaseReceiptPayload {
-  docType: 'receipt';
-  status: 'draft' | 'final';
-  partyName: string;
-  location?: string;
-  date: string;
-  notes: string;
-  items: Array<{
-    itemId: number;
-    itemCode: string;
-    itemName: string;
-    unit: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
-  }>;
-}
+/** v8.0.110 (TD-387): بدنه POST /documents از `reorderPurchaseReceiptPayload` */
+export type { PurchaseReceiptPayload } from '../../lib/reorderAlerts/reorderPurchaseReceipt';
 
 export type ReorderPurchaseVariables =
   | { target: 'requisition'; payload: RequisitionPayload }

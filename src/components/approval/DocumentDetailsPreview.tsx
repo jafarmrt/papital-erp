@@ -1,5 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber } from '../../utils';
+import { fin } from '../../lib/financialDecimal';
+import { serverPayableOf, payableDecimalsOf, type PayableAmountFields } from '../../lib/invoices/documentPayable';
 
 export interface ApprovalDocumentItemRow {
   code?: string;
@@ -17,7 +19,7 @@ export interface ApprovalDocumentItemRow {
   total?: number;
 }
 
-export interface ApprovalDocumentDetails {
+export interface ApprovalDocumentDetails extends PayableAmountFields {
   id?: number | string;
   ref_number?: string;
   refNumber?: string;
@@ -60,6 +62,7 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
     );
   }
 
+  const decimals = payableDecimalsOf(docDetails);
   return (
     <div className="p-3 space-y-3">
       {/* Buyer & Doc Info Bar */}
@@ -77,9 +80,9 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
           <div className="text-gray-700 dark:text-gray-300 truncate">{docDetails.buyer_city || docDetails.buyerCity || '-'}</div>
         </div>
         <div>
-          <div className="text-gray-400 text-[10px]">مبلغ کل:</div>
+          <div className="text-gray-400 text-[10px]">مبلغ قابل پرداخت:</div>
           <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-            {formatPersianPrice(docDetails.total_amount || docDetails.totalAmount || 0, docDetails.currency)}
+            {formatPersianPrice(serverPayableOf(docDetails), docDetails.currency, decimals)}
           </div>
         </div>
       </div>
@@ -101,15 +104,14 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
               {docDetails.items.map((it: ApprovalDocumentItemRow, idx: number) => {
                 const lineQty = Number(it.quantity || 0);
                 const linePrice = Number(it.unit_price || it.unitPrice || 0);
-                const lineDiscount = Number(it.discount || 0);
-                const lineTotal = (lineQty * linePrice) - lineDiscount;
+                const lineTotal = fin(lineQty).multiply(linePrice).subtract(it.discount || 0).toNumber();
                 return (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td className="p-2 text-gray-400 font-mono">{idx + 1}</td>
                     <td className="p-2 font-medium text-gray-900 dark:text-gray-100">{it.item_name || it.itemName || it.code || 'کالا'}</td>
                     <td className="p-2 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{formatPersianNumber(lineQty)} <span className="text-[10px] text-gray-400 font-normal">{it.unit || 'عدد'}</span></td>
-                    <td className="p-2 text-left font-mono text-gray-600 dark:text-gray-300">{formatPersianPrice(linePrice)}</td>
-                    <td className="p-2 text-left font-mono font-bold text-gray-800 dark:text-gray-200">{formatPersianPrice(lineTotal)}</td>
+                    <td className="p-2 text-left font-mono text-gray-600 dark:text-gray-300">{formatPersianPrice(linePrice, undefined, decimals)}</td>
+                    <td className="p-2 text-left font-mono font-bold text-gray-800 dark:text-gray-200">{formatPersianPrice(lineTotal, undefined, decimals)}</td>
                   </tr>
                 );
               })}

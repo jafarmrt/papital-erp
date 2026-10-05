@@ -18,6 +18,7 @@ import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } fro
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
 import { resolveDocumentVat, parseVatInput, VAT_DOC_TYPES } from './documentVat.js';
+import { assertLineDiscountsWithinAmount } from './lineDiscount.js';
 import { resolveDocumentExchangeRate, stockUnitPriceInIrr } from './documentExchangeRate.js';
 import { netLineUnitPrice } from './purchaseLineCost.js';
 import { assertReturnableInvoice, assertReturnWithinSold, parseReturnOfDocumentId, resolveSalesReturnUnitCosts } from './salesReturnCost.js';
@@ -60,6 +61,9 @@ export class DocumentCreationService {
       buyer_name, buyer_city, buyer_phone, buyer_address,
       status, notes, location, currency, items: docLines
     } = body;
+
+    // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
+    if (Array.isArray(docLines)) assertLineDiscountsWithinAmount(docLines);
 
     await orm.transaction(async (tx) => {
       // V6 Sub-phase 5.2 (TD-154): Read document under row lock (.for('update')) to prevent concurrent lost updates
@@ -116,7 +120,7 @@ export class DocumentCreationService {
       const vatInput = parseVatInput(body);
       const linesChanged = Array.isArray(docLines);
       let vatLines: Array<{ quantity: unknown; unitPrice?: unknown; unit_price?: unknown; price?: unknown; discount?: unknown }> = linesChanged ? docLines! : [];
-      if (!linesChanged && vatInput.vatAmount === undefined && vatInput.vatPercent !== undefined) {
+      if (!linesChanged && vatInput.vatPercent !== undefined) {
         vatLines = await tx.select({ quantity: documentItems.quantity, unitPrice: documentItems.unitPrice, discount: documentItems.discount })
           .from(documentItems)
           .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
@@ -127,6 +131,7 @@ export class DocumentCreationService {
         lines: vatLines,
         existing: { vatPercent: Number(existingDoc.vatPercent) || 0, vatAmount: existingDoc.vatAmount },
         linesChanged,
+        currency: currency || existingDoc.currency,
       });
 
       // v7.0.63 (TD-198): نرخ تسعیر ساختاریافته؛ برای ارز غیرریالی الزامی (ورودی یا نرخ ذخیره‌شده)
@@ -271,6 +276,9 @@ export class DocumentCreationService {
       }
     }
 
+    // v8.0.103 (TD-380): تخفیف هر ردیف حداکثر برابر مبلغ همان ردیف
+    assertLineDiscountsWithinAmount(docLines);
+
     const finalBuyerName = buyerName || buyer_name || '';
     const finalBuyerCity = buyerCity || buyer_city || '';
     const finalBuyerPhone = buyerPhone || buyer_phone || '';
@@ -366,7 +374,7 @@ export class DocumentCreationService {
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
       const finalNotes = notes || '';
-      const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [] });
+      const docVat = resolveDocumentVat({ docType, input: body, lines: docLines || [], currency: currency || 'IRR' });
       const docExchangeRate = resolveDocumentExchangeRate({ currency: currency || 'IRR', input: body });
 
       const [insertedDoc] = await tx.insert(documents).values({

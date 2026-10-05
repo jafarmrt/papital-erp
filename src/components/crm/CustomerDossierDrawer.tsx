@@ -5,6 +5,7 @@ import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel, formatPer
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { STAGES } from '../../hooks/useCRMData';
 import { fetchJson } from '../../api';
+import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentPayable';
 import toast from 'react-hot-toast';
 
 interface CustomerDossierDrawerProps {
@@ -439,7 +440,7 @@ export function CustomerDossierDrawer({
                       <th className="p-2.5">شماره سند</th>
                       <th className="p-2.5">نوع سند</th>
                       <th className="p-2.5">تاریخ</th>
-                      <th className="p-2.5">مبلغ کل</th>
+                      <th className="p-2.5">مبلغ قابل پرداخت</th>
                       <th className="p-2.5">وضعیت</th>
                     </tr>
                   </thead>
@@ -455,7 +456,7 @@ export function CustomerDossierDrawer({
                           )}
                         </td>
                         <td className="p-2.5 font-mono">{formatPersianDate(doc.date)}</td>
-                        <td className="p-2.5 font-bold font-mono text-emerald-800">{formatPersianPrice(doc.totalAmount || doc.net_amount || 0)} {formatCurrencyLabel(doc.currency)}</td>
+                        <td className="p-2.5 font-bold font-mono text-emerald-800">{formatPersianPrice(serverPayableOf(doc), undefined, payableDecimalsOf(doc))} {formatCurrencyLabel(doc.currency)}</td>
                         <td className="p-2.5">
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-[10px]">{doc.status || 'نهایی'}</span>
                         </td>

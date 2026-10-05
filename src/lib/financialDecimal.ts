@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { normalizeDecimalString } from './numericInput.js';
 
 // Set global precision to 30 digits and Banker's / Half-Up rounding standard
 Decimal.set({ precision: 30, rounding: Decimal.ROUND_HALF_UP });
@@ -22,7 +23,8 @@ export class FinancialDecimal {
         this.value = new Decimal(input);
       }
     } else {
-      const clean = String(input).replace(/,/g, '').trim();
+      // v8.0.108 (TD-385): ارقام فارسی و عربی و جداکننده‌های فارسی پیش از تبدیل نرمال می‌شوند (پیش‌تر بی‌خطا صفر می‌شد)
+      const clean = normalizeDecimalString(String(input));
       if (!clean || clean === 'NaN' || clean === 'null' || clean === 'undefined') {
         this.value = new Decimal(0);
       } else {

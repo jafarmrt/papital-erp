@@ -12,11 +12,15 @@ import InvoicePrintView from '../components/InvoicePrintView';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { OpenProformasPanel } from '../components/invoices/create/OpenProformasPanel';
 import { useServerDraft } from '../hooks/useServerDraft';
+import { isEmptyInvoiceDraft } from '../lib/invoices/invoiceForm';
 import { useInvoiceReferenceData, useItemPricesQuery } from '../hooks/invoices/useInvoiceReferenceData';
 import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
+import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
+import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
+import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
 import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
@@ -81,7 +85,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     notes,
     applyVat,
     vatRate,
-    docItems
+    docItems,
+    // v8.0.111 (TD-388): پیوند پرونده CRM با پیش‌نویس نگه داشته می‌شود
+    crmLeadId
   };
 
   const {
@@ -93,6 +99,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     entityType: 'invoice',
     draftKey: 'new_invoice',
     enabled: !editingDocId,
+    // v8.0.111 (TD-388): فرم بی ردیف و بی خریدار (مثلاً پس از ثبت) پیش‌نویس نمی‌سازد
+    isEmpty: isEmptyInvoiceDraft,
     onDraftLoaded: (loaded) => {
       if (loaded.docType) setDocType(loaded.docType);
       if (loaded.status) setStatus(loaded.status);
@@ -106,6 +114,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (loaded.notes) setNotes(loaded.notes);
       if (typeof loaded.applyVat === 'boolean') setApplyVat(loaded.applyVat);
       if (loaded.vatRate) setVatRate(loaded.vatRate);
+      if (Number(loaded.crmLeadId) > 0) setCrmLeadId(Number(loaded.crmLeadId));
       if (Array.isArray(loaded.docItems) && loaded.docItems.length > 0) {
         setDocItems(loaded.docItems);
       }
@@ -207,6 +216,12 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
     const it = selectedItemObj;
+    // v8.0.103 (TD-380): تخفیف ردیف حداکثر برابر مبلغ همان ردیف (همان قاعده سرور)
+    const discountError = lineDiscountError(Number(quantity), Number(unitPrice || 0), Number(discount || 0));
+    if (discountError) {
+      toast.error(discountError);
+      return;
+    }
 
     if (status === 'final' && docType === 'invoice') {
       const { loc, reserved, sellable } = getSellableStock(it, location);
@@ -233,6 +248,16 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setQuantity('');
     setUnitPrice('');
     setDiscount(0);
+  };
+
+  // v8.0.107 (TD-384): ارز فاکتور دارای ردیف عوض نمی‌شود (فی ردیف‌ها به ارز فعلی است)
+  const handleCurrencyChange = (next: string) => {
+    const error = currencyChangeError(docItems.length, currency, next);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setCurrency(next);
   };
 
   const handleRemove = (id: number) => {
@@ -296,8 +321,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       currency,
       exchangeRate: currency !== 'IRR' ? exchangeRate : null,
       crmLeadId: crmLeadId ? Number(crmLeadId) : undefined,
+      // v8.0.104 (TD-381): فقط درصد؛ مبلغ مالیات را سرور با همان قاعده جمع‌های فرم حساب می‌کند
       vatPercent: applyVat ? vatRate : 0,
-      vatAmount: vatAmount,
       items: docItems.map(d => ({ itemId: d.item.id, quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount }))
     };
 
@@ -312,7 +337,9 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
   };
 
   // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
-  const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0);
+  const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0, currency);
+  // v8.0.106 (TD-383): مبالغ فاکتور ارزی با دو رقم اعشار، همان مقدار ذخیره‌شده (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱»)
+  const amountDecimals = amountDecimalsOf(currency);
 
   if (printedDoc) {
     return (
@@ -385,7 +412,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
-              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => setCurrency(e.target.value)}>
+              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
                 <option value="IRR">ریال</option>
                 <option value="USD">دلار (USD)</option>
                 <option value="EUR">یورو (EUR)</option>
@@ -529,11 +556,11 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <select 
                   className="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   onChange={e => e.target.value && setUnitPrice(Number(e.target.value))}
-                  disabled={!selectedItem || itemPrices.length === 0}
+                  disabled={!selectedItem || pricesForCurrency(itemPrices, currency).length === 0}
                   defaultValue=""
                 >
                   <option value="">-- ورود دستی قیمت --</option>
-                  {itemPrices.filter(p => Number(p.price) > 0).map((p, pIdx) => (
+                  {pricesForCurrency(itemPrices, currency).map((p, pIdx) => (
                     <option key={`price-opt-${p.id || pIdx}-${pIdx}`} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {p.currency}</option>
                   ))}
                 </select>
@@ -573,8 +600,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 </thead>
                 <tbody className="divide-y text-sm">
                   {docItems.map((d, i) => {
-                    const rowTotal = d.quantity * d.unitPrice;
-                    const rowFinal = rowTotal - d.discount;
+                    const { total: rowTotal, net: rowFinal } = printLineAmounts({ quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount });
                     return (
                     <tr key={i} className="hover:bg-slate-50">
                       <td className="p-3 font-mono text-slate-500" dir="ltr">{formatPersianCode(d.item.code)}</td>
@@ -582,10 +608,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                       <td className="p-3 text-center">
                         <span className="font-bold">{formatPersianNumber(d.quantity)}</span> <span className="text-slate-500 text-xs">{d.item.unit}</span>
                       </td>
-                      <td className="p-3 text-center text-slate-700">{formatPersianPrice(d.unitPrice)}</td>
-                      <td className="p-3 text-center font-bold text-slate-700">{formatPersianPrice(rowTotal)}</td>
-                      <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount) : '-'}</td>
-                      <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal)}</td>
+                      <td className="p-3 text-center text-slate-700">{formatPersianPrice(d.unitPrice, undefined, amountDecimals)}</td>
+                      <td className="p-3 text-center font-bold text-slate-700">{formatPersianPrice(rowTotal, undefined, amountDecimals)}</td>
+                      <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount, undefined, amountDecimals) : '-'}</td>
+                      <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal, undefined, amountDecimals)}</td>
                       <td className="p-3 text-center">
                         <button type="button" onClick={() => handleRemove(d.item.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
                           <Trash2 size={16} />
@@ -626,21 +652,21 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <div className="flex flex-wrap items-center justify-end gap-6">
                   <div className="text-center font-medium text-slate-500 text-xs">
                     مبلغ ناخالص: 
-                    <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(totalSum)}</span>
+                    <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(totalSum, undefined, amountDecimals)}</span>
                   </div>
                   <div className="text-center font-medium text-slate-500 text-xs">
                     تخفیفات: 
-                    <span className="text-rose-600 font-bold block mt-0.5 text-base">{formatPersianPrice(totalDiscount)}</span>
+                    <span className="text-rose-600 font-bold block mt-0.5 text-base">{formatPersianPrice(totalDiscount, undefined, amountDecimals)}</span>
                   </div>
                   {applyVat && (
                     <div className="text-center font-medium text-slate-500 text-xs">
                       ارزش افزوده ({vatRate}٪): 
-                      <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount)}</span>
+                      <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount, undefined, amountDecimals)}</span>
                     </div>
                   )}
                   <div className="text-center font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-lg text-xs">
                     مبلغ نهایی قابل پرداخت: 
-                    <span className="font-bold block mt-0.5 text-lg text-indigo-900">{formatPersianPrice(finalPrice)} {formatCurrencyLabel(currency)}</span>
+                    <span className="font-bold block mt-0.5 text-lg text-indigo-900">{formatPersianPrice(finalPrice, undefined, amountDecimals)} {formatCurrencyLabel(currency)}</span>
                   </div>
                 </div>
               </div>

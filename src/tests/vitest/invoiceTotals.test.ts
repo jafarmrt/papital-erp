@@ -43,3 +43,15 @@ describe('computeInvoiceTotals (sales invoice form)', () => {
     expect(computeInvoiceTotals([{ quantity: 2, unitPrice: 100, discount: 0 }], 0).vatAmount).toBe(0);
   });
 });
+
+describe('VAT of a foreign-currency invoice (TD-382)', () => {
+  it('rounds VAT to cents, not whole currency units, on the form and the server alike', () => {
+    const lines = [{ quantity: 1, unitPrice: 15.55, discount: 0 }];
+    expect(computeInvoiceTotals(lines, 9, 'USD').vatAmount).toBe(1.4);
+    expect(resolveDocumentVat({ docType: 'invoice', input: { vatPercent: 9 }, lines, currency: 'USD' }).vatAmount.toNumber()).toBe(1.4);
+    expect(computeInvoiceTotals(lines, 9, 'USD').payable).toBe(16.95);
+    // rials stay without decimals
+    expect(computeInvoiceTotals([{ quantity: 1, unitPrice: 15, discount: 0 }], 10, 'IRR').vatAmount).toBe(2);
+    expect(resolveDocumentVat({ docType: 'invoice', input: { vatPercent: 10 }, lines: [{ quantity: 1, unitPrice: 15 }], currency: 'IRR' }).vatAmount.toNumber()).toBe(2);
+  });
+});

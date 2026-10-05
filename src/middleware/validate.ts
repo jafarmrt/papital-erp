@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { asyncHandler } from './asyncHandler.js';
 import { toStorageDate } from '../utils/calendarDate.js';
+import { DECIMAL_PATTERN, normalizeDecimalString, toLatinDigits } from '../lib/numericInput.js';
 
 const fieldTranslations: Record<string, string> = {
   name: 'نام',
@@ -128,6 +129,31 @@ export const storageDateParam = z.string().max(40).optional().transform((v, ctx)
   }
   return iso || undefined;
 });
+
+/**
+ * v8.0.108 (TD-385): مبلغ، نرخ یا مقدار اعشاری در بدنه درخواست — عدد، یا رشته با ارقام لاتین، فارسی یا عربی و جداکننده
+ * هزارگان. خروجی رشته اعشاری لاتین (بی‌عبور از double)؛ رشته خالی ← undefined؛ متن نامعتبر خطای اعتبارسنجی، نه صفر.
+ * پیش‌تر `z.union([z.number(), z.string()])` هر رشته‌ای را می‌پذیرفت و سرویس آن را بی‌خطا صفر می‌کرد.
+ */
+export const decimalInput = (label: string) => z.union([z.number(), z.string()]).transform((v, ctx): string | undefined => {
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد` });
+      return z.NEVER;
+    }
+    return String(v);
+  }
+  const clean = normalizeDecimalString(v);
+  if (clean === '') return undefined;
+  if (!DECIMAL_PATTERN.test(clean)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} باید عدد معتبر باشد (مقدار دریافتی: ${v})` });
+    return z.NEVER;
+  }
+  return clean;
+});
+
+/** v8.0.108 (TD-385): شماره‌ها و شناسه‌های متنی (شماره چک، شناسه صیادی) با ارقام لاتین ذخیره می‌شوند */
+export const latinDigitsString = z.string().transform(v => toLatinDigits(v).trim());
 
 export const numericIdString = z.string().min(1, 'شناسه الزامی است')
   .regex(/^[1-9]\d*$/, 'شناسه باید عدد صحیح مثبت باشد');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatPersianPrice, formatPersianNumber, formatPersianCode, formatCurrencyLabel, formatPersianDate, financialAmountToPersianWords } from '../utils';
 import { fetchJson } from '../api';
+import { printLineAmounts, printTotalsOf } from '../lib/invoices/invoicePrintTotals';
 
 export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
   const [companyInfo, setCompanyInfo] = useState<{
@@ -60,15 +61,15 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
   else if (printedDoc.type === 'return') title = 'رسید برگشت از فروش';
   else if (printedDoc.type === 'waste') title = 'حواله ضایعات و افت کیفی';
 
-  const totalGrossAmount = (printedDoc.items || []).reduce((a: any, b: any) => a + (Number(b.quantity || 0) * Number(b.unit_price || 0)), 0);
-  const totalDiscountAmount = (printedDoc.items || []).reduce((a: any, b: any) => a + Number(b.discount || 0), 0);
-  // v7.0.32 (TD-197): مالیات ساختاریافته سند؛ مبلغ قابل پرداخت = خالص اقلام + مالیات (همان بدهکار مشتری در سند حسابداری)
-  const vatAmount = Number(printedDoc.vatAmount ?? printedDoc.vat_amount ?? 0) || 0;
-  const vatPercent = Number(printedDoc.vatPercent ?? printedDoc.vat_percent ?? 0) || 0;
-  // v7.0.103 (TD-191): هزینه ارسال و کارمزد ساختاریافته فاکتور (سفارش ووکامرس)
-  const serviceChargeAmount = Number(printedDoc.serviceChargeAmount ?? printedDoc.service_charge_amount ?? 0) || 0;
-  const totalNetAmount = totalGrossAmount - totalDiscountAmount + vatAmount + serviceChargeAmount;
-  const totalQuantityCount = (printedDoc.items || []).reduce((a: any, b: any) => a + Number(b.quantity || 0), 0);
+  // v7.0.32 (TD-197) / v7.0.103 (TD-191): مالیات و هزینه ارسال ساختاریافته سند. v8.0.106 (TD-383): جمع‌ها با Decimal،
+  // مبلغ قابل پرداخت همان مقدار سرور و مبالغ ارزی با دو رقم اعشار (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱» چاپ می‌شد)
+  const totals = printTotalsOf(printedDoc);
+  const { decimals, vatAmount, vatPercent, serviceChargeAmount } = totals;
+  const totalGrossAmount = totals.gross;
+  const totalDiscountAmount = totals.discount;
+  const totalNetAmount = totals.payable;
+  const totalQuantityCount = totals.quantity;
+  const price = (n: number) => formatPersianPrice(n, undefined, decimals);
 
   return (
     <div className="bg-white p-6 mx-auto w-full max-w-[210mm] shadow print:shadow-none print:w-full print:p-4 font-sans text-sm border print:border-none">
@@ -194,11 +195,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
         </thead>
         <tbody>
           {(printedDoc.items || []).map((item: any, idx: number) => {
-            const itemQty = Number(item.quantity || 0);
-            const itemUnitPrice = Number(item.unit_price || 0);
-            const itemDisc = Number(item.discount || 0);
-            const total = itemQty * itemUnitPrice;
-            const final = total - itemDisc;
+            const { quantity: itemQty, unitPrice: itemUnitPrice, discount: itemDisc, total, net: final } = printLineAmounts(item);
             return (
               <tr key={item.id || idx} className="h-7 hover:bg-slate-50 break-inside-avoid">
                 <td className="border p-1 font-medium bg-slate-50">{formatPersianNumber(idx + 1)}</td>
@@ -206,10 +203,10 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                 <td className="border p-1 font-bold text-right pr-3 text-slate-800">{item.name}</td>
                 <td className="border p-1 font-bold font-mono">{formatPersianNumber(itemQty)}</td>
                 <td className="border p-1 text-slate-600">{item.unit || 'عدد'}</td>
-                {hasMonetaryValues && <td className="border p-1 font-mono">{formatPersianPrice(itemUnitPrice)}</td>}
-                {hasMonetaryValues && <td className="border p-1 font-mono">{formatPersianPrice(total)}</td>}
-                {hasMonetaryValues && <td className="border p-1 font-mono text-rose-700">{itemDisc > 0 ? formatPersianPrice(itemDisc) : '-'}</td>}
-                {hasMonetaryValues && <td className="border p-1 font-bold font-mono bg-slate-50 text-slate-900">{formatPersianPrice(final)}</td>}
+                {hasMonetaryValues && <td className="border p-1 font-mono">{price(itemUnitPrice)}</td>}
+                {hasMonetaryValues && <td className="border p-1 font-mono">{price(total)}</td>}
+                {hasMonetaryValues && <td className="border p-1 font-mono text-rose-700">{itemDisc > 0 ? price(itemDisc) : '-'}</td>}
+                {hasMonetaryValues && <td className="border p-1 font-bold font-mono bg-slate-50 text-slate-900">{price(final)}</td>}
               </tr>
             );
           })}
@@ -230,7 +227,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                   جمع کل ناخالص ({currencyLabel}):
                 </td>
                 <td className="border p-2 w-40 text-left font-bold font-mono text-slate-800">
-                  {formatPersianPrice(totalGrossAmount)}
+                  {price(totalGrossAmount)}
                 </td>
               </>
             )}
@@ -241,7 +238,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                 مجموع تخفیف ({currencyLabel}):
               </td>
               <td className="border p-2 text-left font-bold font-mono text-rose-700">
-                {formatPersianPrice(totalDiscountAmount)}
+                {price(totalDiscountAmount)}
               </td>
             </tr>
           )}
@@ -251,7 +248,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                 هزینه ارسال و خدمات ({currencyLabel}):
               </td>
               <td className="border p-2 text-left font-bold font-mono text-sky-700">
-                {formatPersianPrice(serviceChargeAmount)}
+                {price(serviceChargeAmount)}
               </td>
             </tr>
           )}
@@ -261,7 +258,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                 مالیات بر ارزش افزوده{vatPercent > 0 ? ` (${formatPersianNumber(vatPercent)}٪)` : ''} ({currencyLabel}):
               </td>
               <td className="border p-2 text-left font-bold font-mono text-amber-700">
-                {formatPersianPrice(vatAmount)}
+                {price(vatAmount)}
               </td>
             </tr>
           )}
@@ -283,7 +280,7 @@ export default function InvoicePrintView({ printedDoc }: { printedDoc: any }) {
                   printColorAdjust: 'exact' 
                 }}
               >
-                {formatPersianPrice(totalNetAmount)} {currencyLabel}
+                {price(totalNetAmount)} {currencyLabel}
               </td>
             </tr>
           )}
