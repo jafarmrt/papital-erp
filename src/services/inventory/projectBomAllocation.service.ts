@@ -13,7 +13,7 @@ import { OutboxService } from '../events/outboxService.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType } from '../events/domainEvents.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
-import { NotFoundError, ConflictError } from '../../errors/customErrors.js';
+import { NotFoundError, ConflictError, ValidationError } from '../../errors/customErrors.js';
 
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 export interface BomAllocationItemInput {
@@ -255,45 +255,38 @@ export class ProjectBomAllocationService {
         const targetLocation = req.location || defaultWh;
         const item = await lockActiveItem(txEngine, req.itemId);
 
-        let resolvedTxId: number | null = req.receiptTransactionId || null;
-
-        // If documentId is provided without receiptTransactionId, look up matching receipt transaction
-        if (!resolvedTxId && req.documentId) {
-          const matchingTxs = await txEngine
-            .select({ id: transactions.id })
+        // v8.0.32 (TD-287، تصمیم مالک محصول — گزینه الف): مواد فقط با رسید خرید وارد انبار می‌شوند و سپس تخصیص می‌یابند.
+        // پیش‌تر بی‌رسید یک حرکت «ورود» بی‌تأمین‌کننده و بی‌سند حسابداری ساخته می‌شد (موجودی از هیچ)، و تخصیصِ رسیدِ ثبت‌شده
+        // موجودی را از انبار برنمی‌داشت در حالی که آزادسازی آن دوباره به انبار اضافه می‌کرد. اکنون رسید ثبت‌شده همین کالا الزامی
+        // است و تخصیص مانند تخصیص عادی مواد را از انبار خارج می‌کند (آزادسازی و مصرف یکسان رفتار می‌کنند).
+        const receiptConditions = req.receiptTransactionId
+          ? [eq(transactions.id, req.receiptTransactionId)]
+          : req.documentId ? [eq(transactions.documentId, req.documentId), eq(transactions.itemId, item.id)] : null;
+        const [receipt] = receiptConditions
+          ? await txEngine.select({ id: transactions.id, itemId: transactions.itemId, type: transactions.type, documentRef: transactions.documentRef })
             .from(transactions)
-            .where(
-              and(
-                eq(transactions.documentId, req.documentId),
-                eq(transactions.itemId, item.id),
-                eq(transactions.isDeleted, 0)
-              )
-            )
-            .limit(1);
-
-          if (matchingTxs.length > 0) {
-            resolvedTxId = matchingTxs[0].id;
-          }
+            .where(and(...receiptConditions, eq(transactions.type, 'in'), eq(transactions.isDeleted, 0)))
+            .limit(1)
+          : [];
+        if (!receipt || receipt.itemId !== item.id) {
+          throw new ValidationError(
+            `تخصیص از رسید برای «${item.name}» فقط با رسید ثبت‌شده همین کالا ممکن است؛ مواد را ابتدا با رسید خرید وارد انبار کنید و سپس به پروژه تخصیص دهید.`
+          );
         }
 
-        // If no existing transaction specified, create receiving-allocation transaction log
-        if (!resolvedTxId) {
-          const stockResult = await DocumentService.applyStockMovement(txEngine, {
-            itemId: item.id,
-            documentId: req.documentId || null,
-            inOut: 'in',
-            quantity: qty,
-            price: allocationUnitPrice(item),
-            date: await businessTodayIsoDate(),
-            documentType: 'رسید مستقیم BOM پروژه',
-            documentRef: `پروژه ${project.projectCode}`,
-            user: operator.name,
-            targetLoc: targetLocation,
-            notes: req.notes || `رسید و تخصیص مستقیم مواد اولیه به پروژه ${project.title} (${project.projectCode})`,
-          });
-
-          resolvedTxId = stockResult.transactionId;
-        }
+        const stockResult = await DocumentService.applyStockMovement(txEngine, {
+          itemId: item.id,
+          inOut: 'out',
+          quantity: qty,
+          price: allocationUnitPrice(item),
+          date: await businessTodayIsoDate(),
+          documentType: 'تخصیص مواد BOM',
+          documentRef: `پروژه ${project.projectCode}`,
+          user: operator.name,
+          targetLoc: targetLocation,
+          notes: req.notes || `تخصیص از رسید ${receipt.documentRef || receipt.id} به پروژه ${project.title} (${project.projectCode})`,
+        });
+        const resolvedTxId: number | null = stockResult.transactionId;
 
         results.push(await recordAllocation(txEngine, {
           project,

@@ -3411,7 +3411,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (byId.get(boundary)?.fy !== 1403 || byId.get(boundary)?.ref !== 'TD179-7') violations.push(`سند مرزی باید با همان شماره به ۱۴۰۳ برود: ${JSON.stringify(byId.get(boundary))}`);
       if (byId.get(conflicting)?.fy !== 1402) violations.push(`سند هم‌شماره نباید منتقل شود: ${JSON.stringify(byId.get(conflicting))}`);
       if (byId.get(occupant)?.fy !== 1403 || byId.get(regular)?.fy !== 1403) violations.push('اسناد غیرمرزی نباید تغییر کنند');
-      const report = await orm.execute(sql`SELECT document_id, status FROM ref_fiscal_year_corrections WHERE document_id = ANY(${sql.param(createdDocIds)}::int[]) ORDER BY id`);
+      // ترتیب درج گزارش (INSERT ... SELECT بی ORDER BY) به ترتیب فیزیکی ردیف‌های documents بستگی دارد؛ مقایسه به ترتیب شناسه سند
+      const report = await orm.execute(sql`SELECT document_id, status FROM ref_fiscal_year_corrections WHERE document_id = ANY(${sql.param(createdDocIds)}::int[]) ORDER BY document_id`);
       const statuses = (report.rows as Array<{ document_id: number; status: string }>).map(r => `${r.document_id}:${r.status}`);
       if (JSON.stringify(statuses) !== JSON.stringify([`${boundary}:corrected`, `${conflicting}:conflict`])) violations.push(`گزارش اصلاح نادرست است: ${JSON.stringify(statuses)}`);
       const [counter] = await orm.select().from(documentRefCounters).where(and(eq(documentRefCounters.docType, testDocType), eq(documentRefCounters.fiscalYear, 1403)));

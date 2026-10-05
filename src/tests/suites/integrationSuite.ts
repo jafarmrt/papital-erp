@@ -1093,21 +1093,19 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       isDeleted: 0
     }).returning();
 
-    // Create test item
-    const rawMat = await createTestItem({ currentStock: 50 });
-
-    // Simulate a receipt transaction in transactions
-    const [rcptMovement] = await orm.insert(transactions).values({
-      itemId: rawMat.id,
-      type: 'in',
-      quantity: 20,
-      date: new Date().toISOString().split('T')[0],
-      documentType: 'رسید خرید',
-      documentRef: `REC-${Date.now()}`,
-      location: 'main',
-      notes: 'رسید مستقیم فاکتور خرید فاز ۱۱',
-      isDeleted: 0
-    }).returning();
+    // v8.0.32 (TD-287، تصمیم مالک محصول): تخصیص از رسید فقط با رسید ثبت‌شده همین کالا و مانند تخصیص عادی مواد را از انبار
+    // خارج می‌کند (پیش‌تر ردیف «ورود» دستی کافی بود و موجودی برداشته نمی‌شد).
+    const { DocumentService } = await import('../../services/document.service.js');
+    const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+    const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+    const wh = (await getDefaultWarehouseCode(orm)) ?? '';
+    const rawMat = await createTestItem({ stocks: {}, weightedAverageCost: 0 });
+    const receiptDocId = await DocumentService.createDocument({
+      docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'تستر انبار و تولید',
+      items: [{ itemId: rawMat.id, quantity: 20, unitPrice: 50000, location: wh }]
+    });
+    const [rcptMovement] = await orm.select().from(transactions)
+      .where(and(eq(transactions.documentId, receiptDocId), eq(transactions.itemId, rawMat.id), eq(transactions.type, 'in')));
 
     // Direct BOM Receipt Allocation
     const receiptAllocResult = await ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
@@ -1116,7 +1114,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
         {
           itemId: rawMat.id,
           quantity: 10,
-          location: 'main',
+          location: wh,
           receiptTransactionId: rcptMovement.id,
           notes: 'تخصیص آنی از رسید خرید'
         }
@@ -1128,8 +1126,13 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       throw new Error('تخصیص مستقیم ردیف‌های رسید انبار به BOM ناموفق بود.');
     }
 
-    if (receiptAllocResult.allocations[0].sourceTransactionId !== rcptMovement.id) {
-      throw new Error('ردگیری شناسه رسید خرید در تخصیص پروژه مطابقت ندارد.');
+    const [allocMovement] = await orm.select().from(transactions).where(eq(transactions.id, receiptAllocResult.allocations[0].sourceTransactionId ?? 0));
+    if (allocMovement?.type !== 'out' || Number(allocMovement.quantity) !== 10) {
+      throw new Error('تخصیص از رسید ۱۰ واحد را از انبار خارج نکرد.');
+    }
+    const [afterItem] = await orm.select({ currentStock: items.currentStock }).from(items).where(eq(items.id, rawMat.id));
+    if (Number(afterItem?.currentStock) !== 10) {
+      throw new Error(`موجودی پس از تخصیص از رسید ${afterItem?.currentStock}، انتظار ۱۰`);
     }
 
     results.push(makeTestCase({
@@ -1140,7 +1143,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
       executionType: 'real_database',
       passed: true,
       durationMs: Date.now() - t15Start,
-      details: `تخصیص ۱۰ واحد از رسید انبار #${rcptMovement.id} با ثبت کامل شناسه ردگیری در BOM پروژه تأیید گردید.`
+      details: `تخصیص ۱۰ واحد از رسید انبار #${rcptMovement.id} مواد را از انبار خارج کرد و در BOM پروژه ثبت شد.`
     }));
   } catch (err: any) {
     results.push(makeTestCase({

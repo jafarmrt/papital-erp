@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.32 — Area E Findings; BOM Receipt Allocation Needs a Receipt (TD-287)
+- A direct BOM receipt allocation without a registered receipt is refused; with a receipt it moves stock out like a normal allocation. Five other procurement and project findings recorded.
+
 ### v8.0.31 — Payroll Payments Can Be Voided (TD-283)
 - A payroll payment is voided with a reason from the payroll's payment window; bank balance, voucher, paid amount and payroll status step back.
 

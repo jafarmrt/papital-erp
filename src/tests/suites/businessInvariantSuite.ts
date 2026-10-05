@@ -29,6 +29,7 @@ import {
   probeTreasuryChequeMethodWithoutCheque,
 } from '../invariants/treasuryScenarios.js';
 import { checkAdvanceDeductionWithinBalance, checkFixedSalaryProratedByMonth, checkPayrollPaymentVoidable, checkPayrollStatusKeepsLifecycle, probeAdvanceDeductionBeyondBalance, probeFixedSalaryOneMonthPerPayroll, probePayrollPaymentNotVoidable, probePayrollStatusDoubleCountsLogs } from '../invariants/payrollScenarios.js';
+import { checkBomReceiptAllocationNeedsReceipt, probeBomAllocationWithoutVoucher, probeBomReceiptAllocationFromNothing, probeBomReleaseAtCurrentWac, probeProjectDeliveryWithoutVoucher, probeRequisitionReceiptCountsFirstLine, probeRequisitionReconvertedOverOrdered } from '../invariants/projectScenarios.js';
 import { checkBackdatedStockMovement, checkRebuildMatchesLiveEngine, checkReplayStartsAtZeroWac, checkRunningKardexShowsVoided, checkVoidConsumedReceiptRefused, probeRunningKardexAfterVoid, probeVoidConsumedReceipt } from '../invariants/stockDateScenarios.js';
 
 /**
@@ -266,6 +267,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.32: TD-287 ──
+    ['inv_td_287_bom_receipt_allocation_needs_receipt', 'v8.0.32: تخصیص «رسید مستقیم BOM» بی‌رسید ثبت‌شده رد می‌شود؛ تخصیص از رسید ثبت‌شده مواد را از انبار خارج می‌کند و آزادسازی آن موجودی را دقیقاً برمی‌گرداند (TD-287، گزینه الف)',
+      () => checkBomReceiptAllocationNeedsReceipt(wh), 'بی‌رسید رد شد و موجودی ساخته نشد؛ تخصیص از رسید ۴ واحد را خارج و آزادسازی همان ۴ را برگرداند'],
     // ── v8.0.31: TD-283 ──
     ['inv_td_283_payroll_payment_voidable', 'v8.0.31: پرداخت فیش حقوق ابطال‌پذیر است؛ مانده بانک، سند پرداخت، مبلغ پرداخت‌شده و وضعیت فیش برمی‌گردند و فیش بی‌پرداخت حذف می‌شود (TD-283، گزینه الف)',
       () => checkPayrollPaymentVoidable(), 'دو پرداخت ابطال شد و همه چیز برگشت؛ ابطال تکراری رد شد؛ فیش حذف و حقوق پرداختنی صفر شد'],
@@ -412,6 +416,13 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
     if (await probeAdvanceDeductionBeyondBalance()) observed.add('FOCUSED:advance-deduction-beyond-balance');
     if (await probePayrollPaymentNotVoidable()) observed.add('FOCUSED:payroll-payment-not-voidable');
     if (await probeFixedSalaryOneMonthPerPayroll()) observed.add('FOCUSED:fixed-salary-one-month-per-payroll');
+    // حوزه E — خرید، پروژه، BOM و تولید (v8.0.32)
+    if (await probeBomReceiptAllocationFromNothing(wh)) observed.add('FOCUSED:bom-receipt-allocation-from-nothing');
+    if (await probeProjectDeliveryWithoutVoucher(wh)) observed.add('FOCUSED:project-delivery-without-voucher');
+    if (await probeBomAllocationWithoutVoucher(wh)) observed.add('FOCUSED:bom-allocation-without-voucher');
+    if (await probeBomReleaseAtCurrentWac(wh)) observed.add('FOCUSED:bom-release-at-current-wac');
+    if (await probeRequisitionReconvertedOverOrdered(wh)) observed.add('FOCUSED:requisition-reconverted-over-ordered');
+    if (await probeRequisitionReceiptCountsFirstLine(wh)) observed.add('FOCUSED:requisition-receipt-counts-first-line');
 
     const unknown = [...observed].filter(c => !(c in KNOWN_FINDINGS));
     const fixed = Object.keys(KNOWN_FINDINGS).filter(c => !observed.has(c));

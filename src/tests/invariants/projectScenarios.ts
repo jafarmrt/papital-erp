@@ -1,0 +1,148 @@
+import { and, eq } from 'drizzle-orm';
+import { orm, pool } from '../../db/drizzle.js';
+import { transactions } from '../../db/schema.js';
+import { fin } from '../../lib/financialDecimal.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { DocumentService } from '../../services/document.service.js';
+import { ProjectService } from '../../services/projects.service.js';
+import { ProjectBomAllocationService } from '../../services/inventory/projectBomAllocation.service.js';
+import { ProcurementService } from '../../services/procurement.service.js';
+import { createTestItem } from '../fixtures/factories.js';
+import { getErrorMessage } from '../../utils/formatters.js';
+import { inventoryValueGap } from './businessInvariants.js';
+
+/**
+ * v8.0.32 — سناریوهای حوزه E (خرید، پروژه، BOM و تولید) برای سوئیت business_invariants: آزمون سخت‌گیرانه رفع‌ها (فهرست
+ * مشکلات؛ خالی یعنی رفتار درست) و کاوش یافته‌های باز (true یعنی یافته هنوز رخ می‌دهد). همه حرکت‌ها تاریخ امروز کسب‌وکار
+ * دارند، چون تخصیص و تحویل پروژه با تاریخ امروز ثبت می‌شوند (قاعده تاریخ گردش کالا، TD-257).
+ */
+
+const USER = { username: 'inv', role: 'admin' };
+
+async function voucherMark(): Promise<number> {
+  return Number((await pool.query<{ m: string }>('SELECT COALESCE(MAX(id), 0)::text AS m FROM journal_vouchers')).rows[0].m);
+}
+
+async function stockOf(itemId: number): Promise<string> {
+  return fin((await pool.query<{ s: string }>('SELECT COALESCE(current_stock, 0)::text AS s FROM items WHERE id = $1', [itemId])).rows[0]?.s ?? 0).toString();
+}
+
+async function rawWithStock(wh: string, quantity: number, unitPrice: number): Promise<{ itemId: number; documentId: number }> {
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const documentId = await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId: item.id, quantity, unitPrice, location: wh }],
+  });
+  return { itemId: item.id, documentId };
+}
+
+async function newProject(title: string): Promise<number> {
+  const { project } = await ProjectService.createProject({ title, startDate: await businessTodayIsoDate(), quantity: 1 } as Parameters<typeof ProjectService.createProject>[0]);
+  return project.id;
+}
+
+async function refusalOf(fn: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await fn();
+    return null;
+  } catch (err) {
+    return getErrorMessage(err);
+  }
+}
+
+/**
+ * TD-287 (تصمیم مالک محصول — گزینه الف): تخصیص «رسید مستقیم BOM» بی‌رسید ثبت‌شده رد می‌شود (موجودی از هیچ ساخته نمی‌شود)؛
+ * تخصیص از رسید ثبت‌شده مانند تخصیص عادی مواد را از انبار خارج می‌کند و آزادسازی آن موجودی را دقیقاً برمی‌گرداند.
+ */
+export async function checkBomReceiptAllocationNeedsReceipt(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const { itemId, documentId } = await rawWithStock(wh, 10, 100000);
+  const projectId = await newProject('پروژه آزمون تخصیص رسید');
+
+  const refused = await refusalOf(() => ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
+    projectId, allocations: [{ itemId, quantity: 3, location: wh }], username: 'inv',
+  }));
+  if (!refused?.includes('رسید ثبت‌شده')) problems.push(`تخصیص رسید مستقیم بی‌رسید رد نشد (${refused ?? 'پذیرفته شد'})`);
+  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`موجودی پس از تخصیص ردشده ${await stockOf(itemId)}، انتظار ۱۰`);
+
+  const allocated = await ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
+    projectId, allocations: [{ itemId, quantity: 4, location: wh, documentId }], username: 'inv',
+  });
+  if (!fin(await stockOf(itemId)).equals(6)) problems.push(`تخصیص از رسید ثبت‌شده موجودی را برنداشت (${await stockOf(itemId)}، انتظار ۶)`);
+  const sourceId = allocated.allocations[0]?.sourceTransactionId ?? 0;
+  const [source] = await orm.select({ type: transactions.type }).from(transactions).where(eq(transactions.id, sourceId));
+  if (source?.type !== 'out') problems.push(`حرکت منبع تخصیص ${source?.type ?? 'ندارد'}، انتظار out`);
+
+  await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
+  if (!fin(await stockOf(itemId)).equals(10)) problems.push(`آزادسازی تخصیص رسید موجودی را ${await stockOf(itemId)} کرد، انتظار ۱۰`);
+  return problems;
+}
+
+// ── کاوش یافته‌های باز (true = یافته هنوز رخ می‌دهد) ───────────────────────────
+
+/** TD-287 (کاوش رگرسیون؛ رفع v8.0.32): «رسید مستقیم BOM» بی‌رسید موجودی را بی‌تأمین‌کننده و بی‌سند حسابداری بالا می‌برد */
+export async function probeBomReceiptAllocationFromNothing(wh: string): Promise<boolean> {
+  const { itemId } = await rawWithStock(wh, 5, 100000);
+  const projectId = await newProject('پروژه کاوش رسید مستقیم');
+  const refused = await refusalOf(() => ProjectBomAllocationService.allocateReceiptItemsForProjectBom({
+    projectId, allocations: [{ itemId, quantity: 3, location: wh }], username: 'inv',
+  }));
+  return !refused && fin(await stockOf(itemId)).greaterThan(5);
+}
+
+/** TD-285: تحویل کالای ساخته‌شده پروژه به انبار («ورود به انبار») موجودی را بی‌سند حسابداری بالا می‌برد */
+export async function probeProjectDeliveryWithoutVoucher(wh: string): Promise<boolean> {
+  const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const projectId = await newProject('پروژه کاوش تحویل');
+  const mark = await voucherMark();
+  await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, unitPrice: 300000, location: wh }], currentUser: 'inv' });
+  const { gap } = await inventoryValueGap({ itemIds: [product.id], documentIdAfter: 0, voucherIdAfter: mark });
+  return !gap.isZero();
+}
+
+/** TD-286: تخصیص مواد BOM به پروژه موجودی را به بهای میانگین کم می‌کند ولی سند حسابداری ندارد (۱۴۰۱ کم نمی‌شود) */
+export async function probeBomAllocationWithoutVoucher(wh: string): Promise<boolean> {
+  const mark = await voucherMark();
+  const { itemId } = await rawWithStock(wh, 10, 100000);
+  const projectId = await newProject('پروژه کاوش تخصیص');
+  await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 4, location: wh }], username: 'inv' });
+  const { gap } = await inventoryValueGap({ itemIds: [itemId], documentIdAfter: 0, voucherIdAfter: mark });
+  return !gap.isZero();
+}
+
+/** TD-288: آزادسازی تخصیص مواد را به میانگین موزون روز برمی‌گرداند، نه به بهای خروج همان تخصیص */
+export async function probeBomReleaseAtCurrentWac(wh: string): Promise<boolean> {
+  const { itemId } = await rawWithStock(wh, 10, 100000);
+  const projectId = await newProject('پروژه کاوش آزادسازی');
+  const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 4, location: wh }], username: 'inv' });
+  await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: await businessTodayIsoDate(), user: 'inv', items: [{ itemId, quantity: 10, unitPrice: 200000, location: wh }],
+  });
+  await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
+  const [out] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions).where(eq(transactions.id, allocated.allocations[0].sourceTransactionId ?? 0));
+  const [back] = await orm.select({ unitPrice: transactions.unitPrice }).from(transactions)
+    .where(and(eq(transactions.itemId, itemId), eq(transactions.type, 'in'), eq(transactions.documentType, 'آزادسازی تخصیص BOM')));
+  return Boolean(out && back) && !fin(back.unitPrice ?? 0).equals(out.unitPrice ?? 0);
+}
+
+/** TD-289: درخواست خریدی که کامل سفارش داده شده دوباره به سفارش خرید تبدیل می‌شود (۲۰ سفارش برای ۱۰ درخواست) */
+export async function probeRequisitionReconvertedOverOrdered(wh: string): Promise<boolean> {
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const req = await ProcurementService.createRequisition({ title: 'درخواست کاوش سفارش دوباره', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);
+  const group = (quantity: number) => ({ supplierName: 'تامین‌کننده کاوش', targetWarehouse: wh, items: [{ itemId: item.id, quantity, unitPrice: 1000 }] });
+  await ProcurementService.convertToPurchaseOrders({ requisitionId: req.id, orderGroups: [group(10)] as never }, USER);
+  const again = await refusalOf(() => ProcurementService.convertToPurchaseOrders({ requisitionId: req.id, orderGroups: [group(10)] as never }, USER));
+  return again === null;
+}
+
+/** TD-290: تحویل سفارشی با دو سطر از یک کالا فقط سطر اول را در مقدار دریافت‌شده درخواست می‌شمارد */
+export async function probeRequisitionReceiptCountsFirstLine(wh: string): Promise<boolean> {
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const req = await ProcurementService.createRequisition({ title: 'درخواست کاوش دو سطر', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
+  const converted = await ProcurementService.convertToPurchaseOrders({ requisitionId: req.id, orderGroups: [
+    { supplierName: 'تامین‌کننده کاوش', targetWarehouse: wh, items: [{ itemId: item.id, quantity: 2, unitPrice: 1000 }, { itemId: item.id, quantity: 3, unitPrice: 1000 }] },
+  ] as never }, USER);
+  await ProcurementService.deliverOrderToWarehouse(converted.createdDocuments[0].id, USER);
+  const after = await ProcurementService.getRequisitionById(req.id);
+  const received = (after.items as unknown as Array<{ receivedQty?: number }>)[0]?.receivedQty ?? 0;
+  return Number(received) !== 5;
+}

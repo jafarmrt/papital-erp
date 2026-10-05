@@ -37,6 +37,12 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   // TD-265 در v8.0.6 رفع شد (inv_td_265_void_consumed_receipt_refused)
   // TD-266 در v8.0.7 رفع شد (inv_td_266_running_kardex_shows_voided)
   // TD-268 در v8.0.17 رفع شد (inv_td_268_free_goods_voucher_at_wac)
+  // حوزه E — خرید، پروژه، BOM و تولید (v8.0.32؛ TD-287 در همان نسخه رفع شد: inv_td_287_bom_receipt_allocation_needs_receipt)
+  'FOCUSED:project-delivery-without-voucher': 'TD-285',
+  'FOCUSED:bom-allocation-without-voucher': 'TD-286',
+  'FOCUSED:bom-release-at-current-wac': 'TD-288',
+  'FOCUSED:requisition-reconverted-over-ordered': 'TD-289',
+  'FOCUSED:requisition-receipt-counts-first-line': 'TD-290',
 };
 
 function parseSignature(sig: string): { op: string; tags: string[] } {
