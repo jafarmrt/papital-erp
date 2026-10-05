@@ -23,6 +23,7 @@ export interface WorkflowTransition {
   title: string;
   requiredRole?: string;
   requiredPermission?: string;
+  isInitiatorExcluded?: number;
   approvalRuleType?: string;
   kValue?: number;
   autoActionKey?: string;
@@ -296,10 +297,11 @@ export function useExecuteTaskMutation() {
         body: JSON.stringify(payload)
       });
     },
-    onSuccess: () => {
+    onSuccess: (res: { message?: string; data?: { task?: { status?: string } } }) => {
       void invalidatePreset(queryClient, 'workflowChange');
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
-      toast.success('وظیفه با موفقیت تعیین تکلیف و اجرا گردید');
+      // v8.0.91 (TD-371): امضای ناقص حدنصاب کار را باز می‌گذارد؛ پیام سرور شمار امضاها را می‌گوید
+      toast.success(res?.data?.task?.status === 'pending' && res.message ? res.message : 'وظیفه با موفقیت تعیین تکلیف و اجرا گردید');
     },
     onError: (err: any) => {
       toast.error(err.message || 'خطا در اجرای وظیفه');

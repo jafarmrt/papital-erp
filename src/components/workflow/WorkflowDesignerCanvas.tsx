@@ -8,6 +8,7 @@ import {
   useUpdateCanvasPositionsMutation 
 } from '../../hooks/queries/useWorkflowQueries';
 import { toast } from 'react-hot-toast';
+import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
 
 interface WorkflowDesignerCanvasProps {
   definitionId: number;
@@ -32,6 +33,8 @@ interface CanvasEdge {
   actionKey: string;
   title: string;
   requiredRole: string;
+  requiredPermission: string;
+  isInitiatorExcluded: number;
   approvalRuleType: string;
   kValue: number;
   ruleConditionsJson: any[];
@@ -53,7 +56,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const saveMutation = useSaveWorkflowDefinitionMutation();
   const updatePositionsMutation = useUpdateCanvasPositionsMutation();
 
-  const { data: dbRoles } = useQuery<{ id: number; name: string; code: string; isSystem?: number }[]>({
+  const { data: dbRoles } = useQuery<{ id: number; name: string; code: string; isSystem?: number; permissions?: unknown }[]>({
     queryKey: ['roles', 'list'],
     queryFn: async () => {
       const res = await fetchJson('/users/roles');
@@ -61,6 +64,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
     },
     staleTime: 5 * 60 * 1000
   });
+
+  const permissionOptions = [...new Set((dbRoles || []).flatMap(r => (Array.isArray(r.permissions) ? r.permissions : []).map(String)))]
+    .filter(p => p.includes('.')).sort();
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [edges, setEdges] = useState<CanvasEdge[]>([]);
@@ -116,6 +122,8 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
         actionKey: t.actionKey || 'action',
         title: t.title || 'اقدام',
         requiredRole: t.requiredRole || '',
+        requiredPermission: t.requiredPermission || '',
+        isInitiatorExcluded: Number(t.isInitiatorExcluded) === 1 ? 1 : 0,
         approvalRuleType: t.approvalRuleType || 'SINGLE',
         kValue: Number(t.kValue) || 1,
         ruleConditionsJson: t.ruleConditionsJson || [],
@@ -194,6 +202,8 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       actionKey: `action_${Date.now().toString().slice(-4)}`,
       title: 'اقدام جدید',
       requiredRole: '',
+      requiredPermission: '',
+      isInitiatorExcluded: 0,
       approvalRuleType: 'SINGLE',
       kValue: 1,
       ruleConditionsJson: [],
@@ -574,6 +584,12 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 </select>
               </div>
 
+              <WorkflowEdgeGuardFields
+                value={selectedEdge}
+                permissionOptions={permissionOptions}
+                onChange={(patch) => setEdges(prev => prev.map((eg, idx) => idx === selectedEdgeIndex ? { ...eg, ...patch } : eg))}
+              />
+
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">منطق تاییدات موازی</label>
                 <select
@@ -590,7 +606,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   <option value="K_OF_N">تایید حد نصاب (K_OF_N - حداقل K نفر از N نفر)</option>
                 </select>
                 <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                  {selectedEdge.approvalRuleType === 'AND_ALL' && 'تمام اعضای گروه یا نقش موظفند امضا ثبت کنند تا انتقال نهایی شود.'}
+                  {selectedEdge.approvalRuleType === 'AND_ALL' && 'همه کاربران فعال نقش لازم این گام باید امضا کنند تا انتقال نهایی شود؛ گام بدون نقش، K امضا می‌خواهد.'}
                   {selectedEdge.approvalRuleType === 'OR_ANY' && 'به محض ثبت اولین تایید توسط هریک از اعضای مجاز، وضعیت بلافاصله تغییر می‌یابد.'}
                   {selectedEdge.approvalRuleType === 'K_OF_N' && 'تعداد حداقل K امضا برای عبور از این گام مورد نیاز است.'}
                   {selectedEdge.approvalRuleType === 'SINGLE' && 'یک تایید تکی برای تغییر وضعیت کافی است.'}
@@ -599,7 +615,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
 
               {(selectedEdge.approvalRuleType === 'AND_ALL' || selectedEdge.approvalRuleType === 'K_OF_N') && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">تعداد امضاهای مورد نیاز (K Value)</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{selectedEdge.approvalRuleType === 'AND_ALL' ? 'تعداد امضا برای گام بدون نقش (K Value)' : 'تعداد امضاهای مورد نیاز (K Value)'}</label>
                   <input
                     type="number"
                     min="1"

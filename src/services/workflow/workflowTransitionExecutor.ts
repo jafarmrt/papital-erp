@@ -7,9 +7,11 @@ import {
   workflowInstances, 
   workflowPendingApprovals, 
   workflowHistoryLogs,
-  workflowTasks
+  workflowTasks,
+  users,
+  roles
 } from '../../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { workflowEventBus } from './workflowEventBus';
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors';
 import { domainEventBus } from '../events/domainEventBus';
@@ -19,6 +21,7 @@ import { updateRequestContext } from '../../lib/requestContext.js';
 import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
+import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -46,6 +49,8 @@ export interface WorkflowTransitionSnapshot {
   actionKey: string;
   title: string;
   requiredRole?: string | null;
+  requiredPermission?: string | null;
+  isInitiatorExcluded?: number | null;
   ruleConditionsJson?: unknown;
   approvalRuleType?: string | null;
   kValue?: number | null;
@@ -84,6 +89,8 @@ export interface WorkflowDefinitionRow {
 export class WorkflowTransitionExecutor {
   /**
    * Helper: Find equivalent roles
+   *
+   * v8.0.94 (TD-374): هم‌ارزی فقط میان نقش‌های یک بخش است؛ نقش تولید دیگر هم‌ارز «manager» نیست.
    */
   static getEquivalentRoles(roleName: string): string[] {
     const r = (roleName || '').trim().toLowerCase();
@@ -115,10 +122,21 @@ export class WorkflowTransitionExecutor {
     } else if (r === 'production' || r === 'production_manager') {
       res.add('production');
       res.add('production_manager');
-      res.add('manager');
     }
     return Array.from(res);
   }
+
+  /**
+   * مجوزهای ثبت هر بخش که گام نقش همان بخش را مجاز می‌کنند. v8.0.94 (TD-374): مجوز مشاهده (warehouse.view،
+   * accounting.view) و مجوز خزانه دیگر گام تأیید انبار یا حسابدار را مجاز نمی‌کنند (همان قاعده TD-298: تغییر با مجوز
+   * مشاهده باز نمی‌شود) و هیچ مجوزی گام نقش «manager» را.
+   */
+  static readonly DEPARTMENT_WRITE_PERMISSIONS: ReadonlyArray<[string[], string[]]> = [
+    [['warehouse', 'warehouse_keeper'], ['warehouse.in', 'warehouse.out']],
+    [['accounting', 'accountant', 'cfo_accountant'], ['accounting.vouchers']],
+    [['sales', 'sales_manager'], ['documents.create', 'crm.manage']],
+    [['production', 'production_manager'], ['projects.edit', 'projects.create']],
+  ];
 
   /**
    * Check if a user's role or granular permissions satisfy a required transition role
@@ -143,25 +161,13 @@ export class WorkflowTransitionExecutor {
       return true;
     }
 
-    const equivalentRoles = this.getEquivalentRoles(uRole);
+    const equivalentRoles = WorkflowTransitionExecutor.getEquivalentRoles(uRole);
     if (equivalentRoles.some(eqR => eqR.toLowerCase() === rRole)) {
       return true;
     }
 
-    if (rRole === 'warehouse' || rRole === 'warehouse_keeper') {
-      if (userPermissions.includes('warehouse.in') || userPermissions.includes('warehouse.out') || userPermissions.includes('warehouse.view')) return true;
-    }
-    if (rRole === 'accounting' || rRole === 'accountant' || rRole === 'cfo_accountant') {
-      if (userPermissions.includes('accounting.vouchers') || userPermissions.includes('accounting.view') || userPermissions.includes('accounting.treasury')) return true;
-    }
-    if (rRole === 'sales' || rRole === 'sales_manager') {
-      if (userPermissions.includes('documents.create') || userPermissions.includes('crm.manage')) return true;
-    }
-    if (rRole === 'production' || rRole === 'production_manager' || rRole === 'manager') {
-      if (userPermissions.includes('projects.edit') || userPermissions.includes('projects.create')) return true;
-    }
-
-    return false;
+    return WorkflowTransitionExecutor.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
+      roles.includes(rRole) && permissions.some(p => userPermissions.includes(p)));
   }
 
   /**
@@ -188,8 +194,19 @@ export class WorkflowTransitionExecutor {
     }
 
     let filtered = transitions.filter(t => {
-      return this.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
+      return WorkflowTransitionExecutor.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
     });
+    // v8.0.100 (TD-391): انتقالی که مجوز لازمش را کاربر ندارد پیشنهاد نمی‌شود
+    const permitted: WorkflowTransitionSnapshot[] = [];
+    for (const t of filtered) {
+      if (await WorkflowTransitionExecutor.holdsRequiredPermission(t, { role: userRole, permissions: userPermissions, ownPermissions: true }, txExecutor)) permitted.push(t);
+    }
+    filtered = permitted;
+    // v8.0.102 (TD-392): انتقالی که آغازکننده را کنار می‌گذارد به آغازکننده پیشنهاد نمی‌شود
+    if (userId && filtered.some(t => Number(t.isInitiatorExcluded) === 1)) {
+      const [inst] = await txExecutor.select({ startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
+      filtered = filtered.filter(t => !WorkflowTransitionExecutor.initiatorExcluded(t, inst?.startedBy, { userId, actorId: userId, role: userRole }));
+    }
 
     if (entityContext) {
       filtered = filtered.filter(t => {
@@ -198,6 +215,95 @@ export class WorkflowTransitionExecutor {
     }
 
     return filtered;
+  }
+
+  /**
+   * v8.0.90 (TD-370): انتقال‌های یک گام فرایند از تصویر نسخه خود فرایند (یا جدول‌های جاری وقتی تصویر قابل استفاده نیست)
+   */
+  static async transitionsFromState(
+    instance: { workflowDefinitionId: number; snapshotDsl: unknown },
+    stateId: number,
+    txExecutor: DbClient = orm
+  ): Promise<WorkflowTransitionSnapshot[]> {
+    const snapshotTransitions = snapshotTransitionsOf(instance.snapshotDsl);
+    const transitions = snapshotTransitions
+      ?? await txExecutor.select().from(workflowTransitions).where(and(
+        eq(workflowTransitions.workflowDefinitionId, instance.workflowDefinitionId),
+        eq(workflowTransitions.fromStateId, stateId)
+      ));
+    return transitions.filter(t => t.fromStateId === stateId).sort((a, b) => a.id - b.id);
+  }
+
+  /**
+   * v8.0.100 (TD-391، تصمیم مالک محصول «بررسی شود»): مجوز لازم انتقال. انتقالی که «مجوز لازم» دارد فقط برای کسی است که
+   * علاوه بر نقش گام آن مجوز را دارد (ادمین همیشه). امضای جانشین با مجوزهای نقش تفویض‌کننده سنجیده می‌شود. مجوزهای
+   * نقش با همان اتصال تراکنش خوانده می‌شوند. پیش‌تر این ستون ذخیره می‌شد ولی هیچ‌جا سنجیده نمی‌شد.
+   */
+  static async holdsRequiredPermission(
+    transition: Pick<WorkflowTransitionSnapshot, 'requiredPermission'>,
+    signer: { role?: string; permissions?: string[]; ownPermissions: boolean },
+    txExecutor: DbClient = orm
+  ): Promise<boolean> {
+    const permission = (transition.requiredPermission || '').trim();
+    if (!permission) return true;
+    const role = (signer.role || '').trim().toLowerCase();
+    if (role === 'admin') return true;
+    const held = (list: string[]) => list.includes(permission) || list.includes('*');
+    if (signer.ownPermissions && held(signer.permissions || [])) return true;
+    if (!role) return false;
+    const [roleRow] = await txExecutor.select({ permissions: roles.permissions }).from(roles)
+      .where(sql`lower(${roles.code}) = ${role}`);
+    return held(Array.isArray(roleRow?.permissions) ? (roleRow.permissions as string[]) : []);
+  }
+
+  /**
+   * v8.0.102 (TD-392، تصمیم مالک محصول «گزینه در هر گام»): انتقالی که تیک «آغازکننده تأیید نکند» دارد برای آغازکننده
+   * فرایند بسته است: نه به نام خودش، نه به‌عنوان جانشین کسی و نه از راه جانشینش. ادمین همیشه مجاز است.
+   */
+  static initiatorExcluded(
+    transition: Pick<WorkflowTransitionSnapshot, 'isInitiatorExcluded'>,
+    startedBy: number | null | undefined,
+    signer: { userId?: number; actorId?: number; role?: string }
+  ): boolean {
+    if (Number(transition.isInitiatorExcluded) !== 1 || !startedBy) return false;
+    if ((signer.role || '').trim().toLowerCase() === 'admin') return false;
+    return signer.userId === startedBy || signer.actorId === startedBy;
+  }
+
+  /**
+   * v8.0.97 (TD-377): اجازه کاربر برای گام؛ تفویضی که به جای آن امضا می‌کند، یا undefined برای امضای خود کاربر.
+   */
+  static async resolveSigner(
+    transition: Pick<WorkflowTransitionSnapshot, 'requiredRole' | 'title'>,
+    workflowCode: string | undefined,
+    params: { userId?: number; userRole?: string; userPermissions?: string[] },
+    txExecutor: DbClient = orm
+  ): Promise<ActingDelegation | undefined> {
+    const requiredRole = transition.requiredRole || undefined;
+    if (WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, requiredRole, params.userPermissions || [])) return undefined;
+    const delegations = params.userId
+      ? await WorkflowDelegationService.activeDelegations(txExecutor, { toUserId: params.userId })
+      : [];
+    const acting = delegations.find(d =>
+      WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, []));
+    if (!acting) {
+      throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
+    }
+    return acting;
+  }
+
+  /**
+   * v8.0.96 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): اعضای فعال نقش لازم گام AND_ALL (کاربران حذف‌نشده با همان کد
+   * نقش). گام بی‌نقش undefined می‌گیرد و همان K طراح را می‌خواهد.
+   */
+  static async andAllMemberIds(transition: Pick<WorkflowTransitionSnapshot, 'approvalRuleType' | 'requiredRole'>, txExecutor: DbClient = orm): Promise<number[] | undefined> {
+    if (WorkflowQuorumService.normalizeRuleType(transition.approvalRuleType ?? undefined) !== 'AND_ALL') return undefined;
+    const role = (transition.requiredRole || '').trim().toLowerCase();
+    if (!role || role === '*' || role === 'all') return undefined;
+    const members = await txExecutor.select({ id: users.id }).from(users)
+      .where(and(sql`COALESCE(${users.isDeleted}, 0) = 0`, sql`lower(${users.role}) = ${role}`))
+      .orderBy(users.id);
+    return members.map(m => m.id);
   }
 
   /**
@@ -227,8 +333,12 @@ export class WorkflowTransitionExecutor {
 
   /**
    * Refresh pending approvals & tasks when instance state advances
+   *
+   * v8.0.92 (TD-372): مهلت و کارهای گام تازه از تصویر نسخه خود فرایند ساخته می‌شوند (snapshotDsl)، نه جدول‌های جاری.
+   * ذخیره طرح در طراح وضعیت‌ها و انتقال‌ها را با شناسه تازه می‌سازد؛ پیش‌تر فرایند در جریان پس از ویرایش طرح در گام بعد
+   * هیچ کار و مهلتی نمی‌گرفت و از کارتابل بیرون می‌رفت.
    */
-  static async refreshPendingApprovals(instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm) {
+  static async refreshPendingApprovals(instanceId: number, newStateId: number, workflowDefinitionId: number, txExecutor: DbClient = orm, snapshotDsl?: unknown) {
     // 1. Delete previous pending approvals & cancel pending tasks for prior states
     await txExecutor.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instanceId));
     await txExecutor.update(workflowTasks)
@@ -239,19 +349,20 @@ export class WorkflowTransitionExecutor {
       ));
 
     // 2. Fetch state details for SLA dueAt calculation
-    const [newState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, newStateId));
+    const snapshot = snapshotDsl as WorkflowSnapshotDsl | null | undefined;
+    let newState: { slaHours?: number | null } | undefined = isUsableSnapshot(snapshot)
+      ? snapshot.states!.find(st => st.id === newStateId)
+      : undefined;
+    if (!newState) {
+      [newState] = await txExecutor.select().from(workflowStates).where(eq(workflowStates.id, newStateId));
+    }
     let dueAt: string | null = null;
     if (newState && newState.slaHours && newState.slaHours > 0) {
       dueAt = new Date(Date.now() + newState.slaHours * 3600 * 1000).toISOString();
     }
 
     // 3. Fetch outgoing transitions
-    const transitions = await txExecutor.select()
-      .from(workflowTransitions)
-      .where(and(
-        eq(workflowTransitions.workflowDefinitionId, workflowDefinitionId),
-        eq(workflowTransitions.fromStateId, newStateId)
-      ));
+    const transitions = await WorkflowTransitionExecutor.transitionsFromState({ workflowDefinitionId, snapshotDsl }, newStateId, txExecutor);
 
     // 3. Consolidated Pending Approvals & Task Cards:
     // Do NOT generate duplicate cards/tasks for rejection/cancellation actions.
@@ -408,7 +519,7 @@ export class WorkflowTransitionExecutor {
         updatedAt: new Date().toISOString()
       }).returning();
 
-      await this.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx);
+      await WorkflowTransitionExecutor.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl);
 
       await tx.insert(workflowHistoryLogs).values({
         instanceId: newInstance.id,
@@ -453,7 +564,9 @@ export class WorkflowTransitionExecutor {
         throw new NotFoundError('نمونه ورکفلو یافت نشد');
       }
 
-      if (instance.status !== 'IN_PROGRESS') {
+      // v8.0.99 (TD-379): فرایند ردشده فقط با انتقالی ادامه می‌یابد که طراح از گام ردشده کشیده است (مثل «بازگشایی»)؛
+      // پایین‌تر انتقال باید از گام جاری باشد. فرایند تکمیل‌شده هرگز ادامه نمی‌یابد.
+      if (instance.status !== 'IN_PROGRESS' && instance.status !== 'REJECTED') {
         throw new ConflictError('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
       }
 
@@ -501,9 +614,19 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
       }
 
-      const isAuthorized = this.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
-      if (!isAuthorized) {
-        throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
+      // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
+      // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
+      const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, params, tx);
+      const signerHoldsPermission = await WorkflowTransitionExecutor.holdsRequiredPermission(transition, actingFor
+        ? { role: actingFor.fromRole, ownPermissions: false }
+        : { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }, tx);
+      if (!signerHoldsPermission) {
+        throw new ForbiddenError(`انتقال «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد (WF_PERMISSION_REQUIRED).`);
+      }
+      if (WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, {
+        userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
+      })) {
+        throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند (WF_INITIATOR_EXCLUDED).`);
       }
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
@@ -531,10 +654,13 @@ export class WorkflowTransitionExecutor {
       const quorumEval = WorkflowQuorumService.evaluateAndAddSignature({
         approvalRuleType: transition.approvalRuleType as 'SINGLE' | 'AND_ALL' | 'OR_ANY' | 'K_OF_N' | undefined,
         kValue: transition.kValue ?? undefined,
+        memberIds: await WorkflowTransitionExecutor.andAllMemberIds(transition, tx),
         existingSignatures,
-        userId: params.userId || 0,
-        userName: params.userName,
-        userRole: params.userRole,
+        userId: actingFor ? actingFor.fromUserId : (params.userId || 0),
+        userName: actingFor ? `${actingFor.fromName} (جانشین: ${params.userName || params.userId})` : params.userName,
+        userRole: actingFor ? actingFor.fromRole : params.userRole,
+        actorId: params.userId || 0,
+        delegationId: actingFor?.id,
         comment: params.comment
       });
 
@@ -582,7 +708,7 @@ export class WorkflowTransitionExecutor {
           performedByName: params.userName || 'کاربر',
           actionKey: `${transition.actionKey}_SIGN`,
           actionTitle: `ثبت امضا (${transition.title})`,
-          comment: `امضای کاربر (${params.userName || params.userId}) ثبت گردید. (${quorumEval.signaturesCount} از ${quorumEval.requiredCount} امضا)`,
+          comment: `امضای کاربر (${params.userName || params.userId})${actingFor ? ` به جانشینی ${actingFor.fromName}` : ''} ثبت گردید. (${quorumEval.signaturesCount} از ${quorumEval.requiredCount} امضا)`,
           snapshotData: { quorum: quorumEval }
         });
 
@@ -603,17 +729,26 @@ export class WorkflowTransitionExecutor {
         newStatus = toState.stateKey === 'rejected' ? 'REJECTED' : 'COMPLETED';
       }
 
+      // v8.0.93 (TD-373): امضاهای انتقال‌های گامی که فرایند واردش می‌شود از نو شمرده می‌شوند. پیش‌تر امضای دور قبل
+      // (پیش از رد یا بازگشت) می‌ماند: همان کاربر گام را دوباره اجرا نمی‌توانست و امضای کهنه حدنصاب را پر می‌کرد.
+      const enteredStepTransitionIds = new Set(
+        (await WorkflowTransitionExecutor.transitionsFromState(instance, toState.id, tx)).map(t => String(t.id))
+      );
+      const progressAfterMove = Object.fromEntries(
+        Object.entries(updatedProgressMap).filter(([id]) => !enteredStepTransitionIds.has(id))
+      );
+
       await tx.update(workflowInstances)
         .set({
           currentStateId: toState.id,
           status: newStatus,
-          approvalProgressJson: updatedProgressMap,
+          approvalProgressJson: progressAfterMove,
           updatedAt: new Date().toISOString()
         })
         .where(eq(workflowInstances.id, instance.id));
 
       if (newStatus === 'IN_PROGRESS') {
-        await this.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx);
+        await WorkflowTransitionExecutor.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx, instance.snapshotDsl);
       } else {
         await tx.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instance.id));
         await tx.update(workflowTasks)
@@ -716,9 +851,12 @@ export class WorkflowTransitionExecutor {
       return { allowed: false, reason: 'انتقال با وضعیت فعلی مطابقت ندارد' };
     }
 
-    const isAuthorized = this.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
+    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
     if (!isAuthorized) {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
+    }
+    if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }))) {
+      return { allowed: false, reason: `این انتقال مجوز «${transition.requiredPermission}» را می‌خواهد` };
     }
 
     // Authoritative Server-side Context & Rule Check (Subphase 1.3)

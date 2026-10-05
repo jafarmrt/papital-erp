@@ -3,13 +3,15 @@ import {
   workflowInstances, 
   workflowPendingApprovals, 
   workflowTasks, 
-  workflowDelegations,
+  workflowDefinitions,
   workflowTransitions
 } from '../../db/schema.js';
-import { eq, and, inArray, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
+import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
+import { snapshotTransitionsOf } from './workflowSnapshot.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
 export class WorkflowTaskService {
@@ -31,25 +33,17 @@ export class WorkflowTaskService {
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';
 
-    const nowIso = new Date().toISOString();
-    const activeDelegations = await orm.select()
-      .from(workflowDelegations)
-      .where(and(
-        eq(workflowDelegations.toUserId, userId),
-        eq(workflowDelegations.isActive, 1),
-        sql`${workflowDelegations.startDate} <= ${nowIso}`,
-        sql`${workflowDelegations.endDate} >= ${nowIso}`
-      ));
-
-    const delegatedFromUserIds = activeDelegations.map(d => d.fromUserId);
+    const activeDelegations = await WorkflowDelegationService.activeDelegations(orm, { toUserId: userId });
 
     const targetStatus = params.status || 'pending';
     const allTasks = await orm.select({
       task: workflowTasks,
-      instance: workflowInstances
+      instance: workflowInstances,
+      definitionCode: workflowDefinitions.code
     })
     .from(workflowTasks)
     .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
+    .leftJoin(workflowDefinitions, eq(workflowInstances.workflowDefinitionId, workflowDefinitions.id))
     .where(eq(workflowTasks.status, targetStatus))
     .orderBy(desc(workflowTasks.createdAt));
 
@@ -83,28 +77,18 @@ export class WorkflowTaskService {
       let isAssigned = false;
       let delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null = null;
 
-      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
-
-      if (isAdmin) {
+      if (isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole)) {
         isAssigned = true;
-      } else if (task.assignedUserId === userId || candidateUserIds.includes(userId)) {
-        isAssigned = true;
-      } else if (
-        (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId)) ||
-        candidateUserIds.some(cId => delegatedFromUserIds.includes(cId))
-      ) {
-        isAssigned = true;
-        const matchingDelegatorId = (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId))
-          ? task.assignedUserId
-          : candidateUserIds.find(cId => delegatedFromUserIds.includes(cId));
-        const del = activeDelegations.find(d => d.fromUserId === matchingDelegatorId);
-        delegationInfo = { delegatedFromUserId: del?.fromUserId, delegationScope: del?.scope };
       } else {
-        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
-        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
+        const del = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(instance, item.definitionCode), activeDelegations);
+        if (del) {
           isAssigned = true;
+          delegationInfo = { delegatedFromUserId: del.fromUserId, delegationScope: del.scope };
         }
+      }
+
+      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, instance, { userId: delegationInfo?.delegatedFromUserId ?? userId, actorId: userId, role: userRole })) {
+        isAssigned = false;
       }
 
       if (isAssigned) {
@@ -162,17 +146,7 @@ export class WorkflowTaskService {
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';
     const nowIso = new Date().toISOString();
-
-    const activeDelegations = await orm.select({ fromUserId: workflowDelegations.fromUserId })
-      .from(workflowDelegations)
-      .where(and(
-        eq(workflowDelegations.toUserId, userId),
-        eq(workflowDelegations.isActive, 1),
-        sql`${workflowDelegations.startDate} <= ${nowIso}`,
-        sql`${workflowDelegations.endDate} >= ${nowIso}`
-      ));
-
-    const delegatedFromUserIds = activeDelegations.map(d => d.fromUserId);
+    const activeDelegations = await WorkflowDelegationService.activeDelegations(orm, { toUserId: userId });
 
     const pendingTasks = await orm.select({
       id: workflowTasks.id,
@@ -183,8 +157,14 @@ export class WorkflowTaskService {
       candidateRoles: workflowTasks.candidateRoles,
       dueAt: workflowTasks.dueAt,
       title: workflowTasks.title,
+      snapshotDsl: workflowInstances.snapshotDsl,
+      startedBy: workflowInstances.startedBy,
+      transitionId: workflowTasks.transitionId,
+      definitionCode: workflowDefinitions.code,
     })
     .from(workflowTasks)
+    .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
+    .leftJoin(workflowDefinitions, eq(workflowInstances.workflowDefinitionId, workflowDefinitions.id))
     .where(eq(workflowTasks.status, 'pending'))
     .orderBy(desc(workflowTasks.createdAt));
 
@@ -197,24 +177,15 @@ export class WorkflowTaskService {
         continue;
       }
 
-      let isAssigned = false;
-      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
-
-      if (isAdmin) {
-        isAssigned = true;
-      } else if (task.assignedUserId === userId || candidateUserIds.includes(userId)) {
-        isAssigned = true;
-      } else if (
-        (task.assignedUserId && delegatedFromUserIds.includes(task.assignedUserId)) ||
-        candidateUserIds.some(cId => delegatedFromUserIds.includes(cId))
-      ) {
-        isAssigned = true;
-      } else {
-        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
-        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
-          isAssigned = true;
-        }
+      let isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole);
+      let signerId = userId;
+      if (!isAssigned) {
+        const del = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), activeDelegations);
+        isAssigned = !!del;
+        if (del) signerId = del.fromUserId;
+      }
+      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, task, { userId: signerId, actorId: userId, role: userRole })) {
+        isAssigned = false;
       }
 
       if (isAssigned) {
@@ -250,10 +221,19 @@ export class WorkflowTaskService {
     userRole: string;
     userPermissions?: string[];
     action: 'approve' | 'reject';
+    /** v8.0.90 (TD-370): انتقال «رد» انتخابی وقتی گام چند انتقال رد دارد */
+    transitionId?: number;
     comment?: string;
     snapshotData?: Record<string, unknown>;
   }) {
     return await orm.transaction(async (tx) => {
+      // v8.0.95 (TD-375): ترتیب قفل همان مسیر انتقال مستقیم است: نخست ردیف فرایند، سپس ردیف کار. پیش‌تر کار پیش از
+      // فرایند قفل می‌شد و اجرای هم‌زمان همان گام از ویجت سند (فرایند، سپس لغو کارهای گام) به بن‌بست می‌رسید.
+      const [taskRef] = await tx.select({ instanceId: workflowTasks.instanceId }).from(workflowTasks).where(eq(workflowTasks.id, params.taskId));
+      if (!taskRef) {
+        throw new NotFoundError('وظیفه مورد نظر یافت نشد');
+      }
+      await tx.select({ id: workflowInstances.id }).from(workflowInstances).where(eq(workflowInstances.id, taskRef.instanceId)).for('update');
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
       if (!task) {
         throw new NotFoundError('وظیفه مورد نظر یافت نشد');
@@ -284,55 +264,22 @@ export class WorkflowTaskService {
       const userPerms = params.userPermissions || [];
       const isAdmin = userRole === 'admin' || userPerms.includes('workflow.admin') || userPerms.includes('admin');
 
-      let isAuthorized = false;
+      // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
+      // و کار نقش تفویض‌کننده را انجام می‌دهد؛ پیش‌تر فقط کار کاربر تعیین‌شده یا نامزد را، و کار نقشی هرگز
       let delegationLogDetails: Record<string, unknown> | null = null;
-
-      const candidateUserIds: number[] = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-      const candidateRolesList: string[] = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).toLowerCase()) : [];
-
-      if (isAdmin) {
-        isAuthorized = true;
-      } else if (task.assignedUserId === params.userId || candidateUserIds.includes(params.userId)) {
-        isAuthorized = true;
-      } else {
-        const taskRoles = candidateRolesList.length > 0 ? candidateRolesList : [(task.assignedRole || '').toLowerCase()];
-        if (taskRoles.some(r => r === '*' || r === 'all' || (r && r === userRole))) {
+      let isAuthorized = isAdmin || WorkflowTaskService.assignedDirectly(task, params.userId, userRole);
+      if (!isAuthorized) {
+        const [definition] = await tx.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
+          .where(eq(workflowDefinitions.id, instance.workflowDefinitionId));
+        const delegations = await WorkflowDelegationService.activeDelegations(tx, { toUserId: params.userId });
+        const validDelegation = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(instance, definition?.code), delegations);
+        if (validDelegation) {
           isAuthorized = true;
-        } else {
-          const nowIso = new Date().toISOString();
-          const delegatorsToCheck: number[] = [];
-          if (task.assignedUserId) delegatorsToCheck.push(task.assignedUserId);
-          candidateUserIds.forEach(cId => {
-            if (!delegatorsToCheck.includes(cId)) delegatorsToCheck.push(cId);
-          });
-
-          if (delegatorsToCheck.length > 0) {
-            const activeDelegations = await tx.select()
-              .from(workflowDelegations)
-              .where(and(
-                eq(workflowDelegations.toUserId, params.userId),
-                inArray(workflowDelegations.fromUserId, delegatorsToCheck),
-                eq(workflowDelegations.isActive, 1),
-                sql`${workflowDelegations.startDate} <= ${nowIso}`,
-                sql`${workflowDelegations.endDate} >= ${nowIso}`
-              ));
-
-            const snapshot = instance.snapshotDsl as { code?: string } | null;
-            const workflowCode = snapshot?.code || '';
-            const validDelegation = activeDelegations.find(del => {
-              const scope = (del.scope || 'ALL').trim();
-              return scope === 'ALL' || scope === '*' || (workflowCode && scope.toLowerCase() === workflowCode.toLowerCase());
-            });
-
-            if (validDelegation) {
-              isAuthorized = true;
-              delegationLogDetails = {
-                delegationId: validDelegation.id,
-                delegatedFromUserId: validDelegation.fromUserId,
-                delegationScope: validDelegation.scope
-              };
-            }
-          }
+          delegationLogDetails = {
+            delegationId: validDelegation.id,
+            delegatedFromUserId: validDelegation.fromUserId,
+            delegationScope: validDelegation.scope
+          };
         }
       }
 
@@ -340,27 +287,9 @@ export class WorkflowTaskService {
         throw new ForbiddenError('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر) (WF_TASK_UNAUTHORIZED).');
       }
 
-      // Dynamically resolve target transition matching user's action ('approve' vs 'reject')
-      let effectiveTransitionId = task.transitionId;
-      const stateTransitions = await tx.select()
-        .from(workflowTransitions)
-        .where(and(
-          eq(workflowTransitions.workflowDefinitionId, instance.workflowDefinitionId),
-          eq(workflowTransitions.fromStateId, instance.currentStateId)
-        ));
-
-      if (params.action === 'reject') {
-        const rejectTr = stateTransitions.find(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
-        if (rejectTr) {
-          effectiveTransitionId = rejectTr.id;
-        }
-      } else {
-        const approveTr = stateTransitions.find(t => !WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
-        if (approveTr) {
-          effectiveTransitionId = approveTr.id;
-        }
-      }
-
+      // v8.0.90 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
+      // فرایند). پیش‌تر اولین انتقال مثبت یا منفی جدول برداشته می‌شد و «رد» در گام بی‌انتقال رد همان تأیید را اجرا می‌کرد.
+      const effectiveTransitionId = await WorkflowTaskService.resolveTaskTransition(tx, task, instance, params);
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
         instanceId: task.instanceId,
         transitionId: effectiveTransitionId,
@@ -373,28 +302,38 @@ export class WorkflowTaskService {
         tx
       });
 
-      const taskNewStatus = params.action === 'reject' ? 'rejected' : 'approved';
-      await tx.update(workflowTasks)
-        .set({
-          status: taskNewStatus,
-          completedAt: new Date().toISOString(),
-          delegatedToUserId: delegationLogDetails ? params.userId : null
-        })
-        .where(eq(workflowTasks.id, task.id));
+      // v8.0.91 (TD-371): کار فقط وقتی انتقال واقعاً انجام شد بسته می‌شود؛ امضایی که حدنصاب را کامل نکرده (یا تکراری
+      // است) کار را برای امضاکنندگان دیگر در کارتابل باز می‌گذارد. پیش‌تر امضای اول K_OF_N کار را «تأییدشده» می‌بست.
+      const advanced = 'toState' in transitionResult;
+      const taskNewStatus = advanced ? (params.action === 'reject' ? 'rejected' : 'approved') : 'pending';
+      if (advanced) {
+        await tx.update(workflowTasks)
+          .set({
+            status: taskNewStatus,
+            completedAt: new Date().toISOString(),
+            delegatedToUserId: delegationLogDetails ? params.userId : null
+          })
+          .where(eq(workflowTasks.id, task.id));
+      }
 
+      const outcomeText = advanced
+        ? `با اقدام «${params.action === 'reject' ? 'رد' : 'تایید'}» اجرا گردید`
+        : `امضای ${params.action === 'reject' ? 'رد' : 'تایید'} ثبت شد و تا تکمیل حدنصاب باز است`;
       await logActivity({
         userId: params.userId,
         username: params.userName,
         action: 'UPDATE',
         entity: 'وظیفه فرآیند کاری',
         entityId: task.id,
-        description: `وظیفه شماره #${task.id} («${task.title}») با اقدام «${params.action === 'reject' ? 'رد' : 'تایید'}» اجرا گردید.${delegationLogDetails ? ` (به‌واسطه تفویض اختیار از کاربر #${delegationLogDetails.delegatedFromUserId})` : ''}`,
+        description: `وظیفه شماره #${task.id} («${task.title}») ${outcomeText}.${delegationLogDetails ? ` (به‌واسطه تفویض اختیار از کاربر #${delegationLogDetails.delegatedFromUserId})` : ''}`,
         details: {
           taskId: task.id,
           instanceId: task.instanceId,
           action: params.action,
+          advanced,
           delegation: delegationLogDetails
-        }
+        },
+        tx
       });
 
       return {
@@ -406,6 +345,92 @@ export class WorkflowTaskService {
         }
       };
     });
+  }
+
+  private static taskRolesOf(task: Pick<typeof workflowTasks.$inferSelect, 'candidateRoles' | 'assignedRole'>): string[] {
+    const candidateRoles = Array.isArray(task.candidateRoles) ? task.candidateRoles.map(r => String(r).trim().toLowerCase()) : [];
+    return (candidateRoles.length > 0 ? candidateRoles : [(task.assignedRole || '').trim().toLowerCase()]).filter(Boolean);
+  }
+
+  /** کار به خود کاربر داده شده: کاربر تعیین‌شده یا نامزد، یا نقش کار (یا «همه») */
+  private static assignedDirectly(
+    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole'>,
+    userId: number,
+    userRole: string
+  ): boolean {
+    const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
+    if (task.assignedUserId === userId || candidateUserIds.includes(userId)) return true;
+    return WorkflowTaskService.taskRolesOf(task).some(r => r === '*' || r === 'all' || r === userRole);
+  }
+
+  /**
+   * v8.0.102 (TD-392): کار گامی که آغازکننده را کنار می‌گذارد در کارتابل آغازکننده (و جانشینش) نمی‌آید؛ تیک انتقال از
+   * تصویر نسخه فرایند خوانده می‌شود.
+   */
+  private static excludedAsInitiator(
+    task: { transitionId: number | null },
+    instance: { snapshotDsl: unknown; startedBy: number | null },
+    signer: { userId?: number; actorId?: number; role?: string }
+  ): boolean {
+    const transition = snapshotTransitionsOf(instance.snapshotDsl)?.find(t => t.id === task.transitionId);
+    return !!transition && WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, signer);
+  }
+
+  /** کد گردش‌کار فرایند برای حوزه تفویض: از تصویر نسخه، وگرنه از تعریف */
+  private static workflowCodeOf(instance: { snapshotDsl: unknown }, definitionCode?: string | null): string {
+    const snapshot = instance.snapshotDsl as { code?: string } | null;
+    return snapshot?.code || definitionCode || '';
+  }
+
+  /**
+   * v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض فعالی که کار را به جانشین می‌دهد: حوزه‌اش گردش‌کار را
+   * می‌پوشاند و تفویض‌کننده کاربر تعیین‌شده یا نامزد کار است یا نقش کار را دارد (همان قاعده نقش اجرای انتقال).
+   */
+  private static delegationForTask(
+    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole'>,
+    workflowCode: string,
+    delegations: ActingDelegation[]
+  ): ActingDelegation | undefined {
+    const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
+    const taskRoles = WorkflowTaskService.taskRolesOf(task);
+    return delegations.find(d => WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && (
+      d.fromUserId === task.assignedUserId
+      || candidateUserIds.includes(d.fromUserId)
+      || taskRoles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, r, []))
+    ));
+  }
+
+  /**
+   * v8.0.90 (TD-370): انتقالی که اجرای کار انجام می‌دهد. تأیید: انتقال خود کار، اگر از گام جاری باشد. رد: انتقال رد
+   * انتخاب‌شده (transitionId)، یا انتقال خود کار اگر رد است، یا تنها انتقال رد گامی که کاربر اجازه‌اش را دارد.
+   */
+  private static async resolveTaskTransition(
+    tx: Parameters<Parameters<typeof orm.transaction>[0]>[0],
+    task: typeof workflowTasks.$inferSelect,
+    instance: typeof workflowInstances.$inferSelect,
+    params: { action: 'approve' | 'reject'; transitionId?: number; userRole: string; userPermissions?: string[] }
+  ): Promise<number> {
+    const stateTransitions = await WorkflowTransitionExecutor.transitionsFromState(instance, instance.currentStateId, tx);
+    const own = stateTransitions.find(t => t.id === task.transitionId);
+    if (!own) {
+      throw new ConflictError('این وظیفه به گام جاری فرآیند تعلق ندارد؛ کارتابل را تازه کنید (WF_TASK_STALE)');
+    }
+    if (params.action === 'approve') return own.id;
+
+    const rejects = stateTransitions.filter(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
+    if (params.transitionId) {
+      const chosen = rejects.find(t => t.id === params.transitionId);
+      if (!chosen) throw new ValidationError('انتقال «رد» انتخاب‌شده از گام جاری این وظیفه نیست (WF_TASK_INVALID_REJECT)');
+      return chosen.id;
+    }
+    if (rejects.some(t => t.id === own.id)) return own.id;
+    if (rejects.length === 0) {
+      throw new ValidationError('این گام فرآیند انتقال «رد» ندارد؛ فقط تأیید ممکن است (WF_TASK_NO_REJECT_TRANSITION)');
+    }
+    const allowed = rejects.filter(t => WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, t.requiredRole || undefined, params.userPermissions || []));
+    if (allowed.length === 1) return allowed[0].id;
+    if (rejects.length === 1) return rejects[0].id;
+    throw new ValidationError(`این گام چند انتقال «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید (WF_TASK_REJECT_AMBIGUOUS)`);
   }
 
   /**
@@ -486,7 +511,7 @@ export class WorkflowTaskService {
   }) {
     const userId = params.userId || 0;
     const role = params.role || '';
-    const pending = await this.getPendingApprovalsForUser(userId, [role]);
+    const pending = await WorkflowTaskService.getPendingApprovalsForUser(userId, [role]);
     return {
       data: pending,
       total: pending.length,

@@ -18,6 +18,45 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.102 — A Workflow Step Can Exclude the Initiator
+- The workflow designer has a per-transition «آغازکننده تأیید نکند» option (off by default); when set, the user who started the process, directly or through a delegate, cannot run that step and does not see its task, while colleagues of the role and admins can.
+
+### v8.0.101 — Receiving an Unapproved Requisition Approves It in the Receiver's Name
+- Receiving goods on a purchase requisition that is not yet approved now runs the approval step in the receiver's name, with their role checked and the approval recorded in the history; a receiver without approval rights is refused and nothing enters stock.
+
+### v8.0.100 — A Transition's Required Permission Is Enforced
+- A workflow transition with a required permission now runs, and is offered, only for an admin or a user whose role or own permissions include it; the workflow designer shows and keeps the field instead of clearing it on save.
+
+### v8.0.99 — Requisition Workflow Actions Follow the Current Step
+- A purchase requisition action with no transition from its current workflow step is refused (409) instead of changing the status directly, so a received requisition can no longer be reopened, ordered and received into stock again; a rejected workflow continues only through a transition drawn out of its rejected step, such as reopen.
+
+### v8.0.98 — Only the Delegator or an Admin Revokes a Delegation
+- A delegate can no longer revoke the delegation given to them (403, and the revoke button is hidden); invalid delegation input returns 422 and a missing delegation or user 404 instead of a server error.
+
+### v8.0.97 — A Delegate Does the Delegator's Role Tasks
+- During an active delegation and within its scope, the delegate sees and runs the delegator's role tasks; the signature is recorded in the delegator's name with the delegate as signer, and neither of them can sign the same step twice.
+
+### v8.0.96 — All-Members Approval Means Every Member of the Role
+- An AND_ALL workflow step now passes only when every active user of the step's required role has signed (a one-member role passes with that member); a step without a role asks for the K set in the designer.
+
+### v8.0.95 — No Deadlock Between Inbox Tasks and Direct Transitions
+- Running an inbox task while the same step is executed from the document widget no longer deadlocks: the task locks the workflow instance before the task, in the same order as a direct transition.
+
+### v8.0.94 — View Permissions No Longer Approve Workflow Steps
+- A workflow step that requires the warehouse or accountant role can no longer be approved with a view or treasury permission alone, and production roles no longer count as managers; the role itself, a role of the same department or that department's posting permission is required.
+
+### v8.0.93 — Step Signatures Restart When a Workflow Returns
+- When a workflow comes back to a step after a rejection or return, the signatures of that step start from zero: the same user can resubmit, and an old signature no longer fills the quorum.
+
+### v8.0.92 — Running Workflows Keep Their Tasks After a Design Edit
+- After a workflow design is saved again, a running instance still gets the tasks and deadline of its next step from its own version snapshot instead of dropping out of the inbox.
+
+### v8.0.91 — Multi-Signature Tasks Stay Open Until the Quorum
+- A K-of-N or all-members approval task stays in every signer's inbox until the quorum is met; a partial or repeated signature no longer closes it, and the signer sees how many signatures are collected.
+
+### v8.0.90 — Inbox Tasks Run Their Own Transition
+- Approving a workflow task runs that task's own transition instead of the first forward transition of the step, and rejecting runs only a reject transition of the current step; a step without one refuses the rejection instead of approving it.
+
 ### v8.0.89 — Upgrade From v7.0.137 Passes Vouchers Refused by 0044
 - Migration 0047 backfills source_cheque_id through erp_update_with_unvalidated_checks, so a voucher whose date 0044 refused to convert (closed fiscal year) no longer violates its NOT VALID date constraint and roll back the whole upgrade from v7.0.137; databases that ran the old 0047 are unaffected.
 

@@ -1,12 +1,63 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowDelegations, 
   users 
 } from '../../db/schema.js';
-import { eq, or, and, desc, sql, type SQL } from 'drizzle-orm';
+import { eq, or, and, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+
+/** v8.0.97 (TD-377): تفویض فعالی که کاربر به‌واسطه آن به جای تفویض‌کننده کار می‌کند */
+export interface ActingDelegation {
+  id: number;
+  fromUserId: number;
+  toUserId: number;
+  fromRole: string;
+  fromName: string;
+  scope: string;
+}
 
 export class WorkflowDelegationService {
+  /** حوزه تفویض این گردش‌کار را می‌پوشاند: «ALL»، «*» یا همان کد گردش‌کار (بی‌توجه به حروف بزرگ و کوچک) */
+  static delegationCovers(scope: string | null | undefined, workflowCode: string | null | undefined): boolean {
+    const s = (scope || 'ALL').trim().toLowerCase();
+    return s === 'all' || s === '*' || (!!workflowCode && s === workflowCode.trim().toLowerCase());
+  }
+
+  /**
+   * v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض‌های فعال (لغونشده و در بازه) به کاربر یا از کاربران داده‌شده،
+   * با نقش و نام تفویض‌کننده؛ تفویض‌کننده یا جانشین حذف‌شده شمرده نمی‌شود.
+   */
+  static async activeDelegations(
+    db: DbExecutor,
+    filter: { toUserId?: number; fromUserIds?: number[] },
+    now: Date = new Date()
+  ): Promise<ActingDelegation[]> {
+    if (filter.fromUserIds && filter.fromUserIds.length === 0) return [];
+    const nowIso = now.toISOString();
+    const rows = await db.select({
+      id: workflowDelegations.id,
+      fromUserId: workflowDelegations.fromUserId,
+      toUserId: workflowDelegations.toUserId,
+      scope: workflowDelegations.scope,
+      fromRole: users.role,
+      fromName: sql<string>`COALESCE(NULLIF(${users.fullName}, ''), ${users.username})`,
+    })
+      .from(workflowDelegations)
+      .innerJoin(users, eq(users.id, workflowDelegations.fromUserId))
+      .where(and(
+        filter.toUserId !== undefined ? eq(workflowDelegations.toUserId, filter.toUserId) : undefined,
+        filter.fromUserIds ? inArray(workflowDelegations.fromUserId, filter.fromUserIds) : undefined,
+        eq(workflowDelegations.isActive, 1),
+        sql`${workflowDelegations.startDate} <= ${nowIso}`,
+        sql`${workflowDelegations.endDate} >= ${nowIso}`,
+        sql`COALESCE(${users.isDeleted}, 0) = 0`,
+        sql`EXISTS (SELECT 1 FROM users tu WHERE tu.id = ${workflowDelegations.toUserId} AND COALESCE(tu.is_deleted, 0) = 0)`
+      ))
+      .orderBy(workflowDelegations.id);
+    return rows.map(r => ({ ...r, fromRole: r.fromRole || '', scope: r.scope || 'ALL' }));
+  }
+
   /**
    * Create a new time-bounded workflow delegation
    */
@@ -20,19 +71,25 @@ export class WorkflowDelegationService {
     createdByUserId?: number;
     createdByName?: string;
   }) {
+    // v8.0.98 (TD-378): ورودی نادرست ۴۲۲ و کاربر ناموجود ۴۰۴ است، نه خطای خام ۵۰۰
     if (params.fromUserId === params.toUserId) {
-      throw new Error('کاربر تفویض‌کننده و دریافت‌کننده نمی‌تواند یکسان باشد (WF_DELEGATION_SELF_NOT_ALLOWED)');
+      throw new ValidationError('کاربر تفویض‌کننده و دریافت‌کننده نمی‌تواند یکسان باشد (WF_DELEGATION_SELF_NOT_ALLOWED)');
     }
 
-    if (new Date(params.startDate).getTime() > new Date(params.endDate).getTime()) {
-      throw new Error('تاریخ شروع تفویض نمی‌تواند بعد از تاریخ پایان باشد (WF_DELEGATION_INVALID_TIME)');
+    const start = new Date(params.startDate).getTime();
+    const end = new Date(params.endDate).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      throw new ValidationError('تاریخ شروع یا پایان تفویض معتبر نیست (WF_DELEGATION_INVALID_TIME)');
+    }
+    if (start > end) {
+      throw new ValidationError('تاریخ شروع تفویض نمی‌تواند بعد از تاریخ پایان باشد (WF_DELEGATION_INVALID_TIME)');
     }
 
     const [fromUser] = await orm.select().from(users).where(eq(users.id, params.fromUserId));
     const [toUser] = await orm.select().from(users).where(eq(users.id, params.toUserId));
 
-    if (!fromUser || !toUser) {
-      throw new Error('کاربر تفویض‌کننده یا دریافت‌کننده در سیستم یافت نشد');
+    if (!fromUser || !toUser || fromUser.isDeleted === 1 || toUser.isDeleted === 1) {
+      throw new NotFoundError('کاربر تفویض‌کننده یا دریافت‌کننده در سیستم یافت نشد');
     }
 
     const scope = (params.scope || 'ALL').trim();
@@ -120,30 +177,34 @@ export class WorkflowDelegationService {
    * Revoke an active workflow delegation
    */
   static async revokeDelegation(params: { id: number; userId: number; userRole?: string; userName?: string }) {
-    const [delegation] = await orm.select().from(workflowDelegations).where(eq(workflowDelegations.id, params.id));
-    if (!delegation) {
-      throw new Error('رکورد تفویض اختیار یافت نشد');
-    }
+    return await orm.transaction(async (tx) => {
+      const [delegation] = await tx.select().from(workflowDelegations).where(eq(workflowDelegations.id, params.id)).for('update');
+      if (!delegation) {
+        throw new NotFoundError('رکورد تفویض اختیار یافت نشد');
+      }
 
-    const isAdmin = params.userRole === 'admin';
-    if (!isAdmin && delegation.fromUserId !== params.userId && delegation.toUserId !== params.userId) {
-      throw new Error('شما دسترسی لازم برای لغو این تفویض اختیار را ندارید');
-    }
+      // v8.0.98 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
+      const isAdmin = params.userRole === 'admin';
+      if (!isAdmin && delegation.fromUserId !== params.userId) {
+        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند (WF_DELEGATION_REVOKE_FORBIDDEN)');
+      }
 
-    await orm.update(workflowDelegations)
-      .set({ isActive: 0 })
-      .where(eq(workflowDelegations.id, params.id));
+      await tx.update(workflowDelegations)
+        .set({ isActive: 0 })
+        .where(eq(workflowDelegations.id, params.id));
 
-    await logActivity({
-      userId: params.userId,
-      username: params.userName || 'کاربر',
-      action: 'UPDATE',
-      entity: 'تفویض اختیار ورکفلو',
-      entityId: params.id,
-      description: `تفویض اختیار شماره #${params.id} با موفقیت لغو گردید.`,
-      details: { delegationId: params.id, revokedBy: params.userId }
+      await logActivity({
+        userId: params.userId,
+        username: params.userName || 'کاربر',
+        action: 'UPDATE',
+        entity: 'تفویض اختیار ورکفلو',
+        entityId: params.id,
+        description: `تفویض اختیار شماره #${params.id} با موفقیت لغو گردید.`,
+        details: { delegationId: params.id, revokedBy: params.userId, before: { isActive: delegation.isActive }, after: { isActive: 0 } },
+        tx
+      });
+
+      return { success: true, id: params.id };
     });
-
-    return { success: true, id: params.id };
   }
 }

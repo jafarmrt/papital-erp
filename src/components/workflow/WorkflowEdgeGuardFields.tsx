@@ -1,0 +1,54 @@
+import React from 'react';
+
+/**
+ * فیلدهای نگهبان انتقال در طراح گردش‌کار: «مجوز لازم» (کلید مجوز، علاوه بر نقش؛ v8.0.100، TD-391) و
+ * «آغازکننده تأیید نکند» (جداسازی وظایف؛ v8.0.102، TD-392)
+ */
+export interface WorkflowEdgeGuard {
+  requiredPermission: string;
+  isInitiatorExcluded: number;
+}
+
+interface WorkflowEdgeGuardFieldsProps {
+  value: WorkflowEdgeGuard;
+  onChange: (patch: Partial<WorkflowEdgeGuard>) => void;
+  /** کلیدهای مجوزی که در نقش‌ها به کار رفته‌اند، برای پیشنهاد */
+  permissionOptions: string[];
+}
+
+export const WorkflowEdgeGuardFields: React.FC<WorkflowEdgeGuardFieldsProps> = ({ value, onChange, permissionOptions }) => (
+  <div className="space-y-3">
+  <div>
+    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">مجوز لازم (اختیاری)</label>
+    <input
+      type="text"
+      dir="ltr"
+      list="workflow-edge-permission-options"
+      value={value.requiredPermission}
+      onChange={(e) => onChange({ requiredPermission: e.target.value.trim() })}
+      placeholder="مثلاً accounting.vouchers"
+      className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
+    />
+    <datalist id="workflow-edge-permission-options">
+      {permissionOptions.map((p) => <option key={p} value={p} />)}
+    </datalist>
+    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+      اگر پر شود، علاوه بر نقش، فقط کسی که این مجوز را دارد (یا مدیر سیستم) این انتقال را اجرا می‌کند.
+    </p>
+  </div>
+  <label className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+    <input
+      type="checkbox"
+      checked={value.isInitiatorExcluded === 1}
+      onChange={(e) => onChange({ isInitiatorExcluded: e.target.checked ? 1 : 0 })}
+      className="mt-0.5"
+    />
+    <span>
+      آغازکننده تأیید نکند
+      <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+        کسی که فرایند را آغاز کرده (یا جانشینش) این گام را برای سند خودش اجرا نمی‌کند؛ مدیر سیستم مستثناست.
+      </span>
+    </span>
+  </label>
+  </div>
+);
