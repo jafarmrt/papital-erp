@@ -17,7 +17,7 @@ import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
-import { lineDiscountError } from '../lib/invoices/invoiceLine';
+import { currencyChangeError, lineDiscountError, pricesForCurrency } from '../lib/invoices/invoiceLine';
 import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
 import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
 import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
@@ -244,6 +244,16 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
     setDiscount(0);
   };
 
+  // v8.0.85 (TD-384): ارز فاکتور دارای ردیف عوض نمی‌شود (فی ردیف‌ها به ارز فعلی است)
+  const handleCurrencyChange = (next: string) => {
+    const error = currencyChangeError(docItems.length, currency, next);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setCurrency(next);
+  };
+
   const handleRemove = (id: number) => {
     setDocItems(prev => prev.filter(p => p.item.id !== id));
   };
@@ -396,7 +406,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
             </div>
             <div>
               <label className="block text-xs font-medium mb-1 text-slate-500">واحد پول (ارز)</label>
-              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => setCurrency(e.target.value)}>
+              <select className="w-full border rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700" value={currency} onChange={e => handleCurrencyChange(e.target.value)}>
                 <option value="IRR">ریال</option>
                 <option value="USD">دلار (USD)</option>
                 <option value="EUR">یورو (EUR)</option>
@@ -540,11 +550,11 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <select 
                   className="w-full border shadow-sm rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   onChange={e => e.target.value && setUnitPrice(Number(e.target.value))}
-                  disabled={!selectedItem || itemPrices.length === 0}
+                  disabled={!selectedItem || pricesForCurrency(itemPrices, currency).length === 0}
                   defaultValue=""
                 >
                   <option value="">-- ورود دستی قیمت --</option>
-                  {itemPrices.filter(p => Number(p.price) > 0).map((p, pIdx) => (
+                  {pricesForCurrency(itemPrices, currency).map((p, pIdx) => (
                     <option key={`price-opt-${p.id || pIdx}-${pIdx}`} value={p.price}>{p.title} - {formatPersianPrice(p.price)} {p.currency}</option>
                   ))}
                 </select>
