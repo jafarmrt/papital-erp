@@ -17,6 +17,7 @@ import { useInvoiceBuyer } from '../hooks/invoices/useInvoiceBuyer';
 import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
+import { lineDiscountError } from '../lib/invoices/invoiceLine';
 import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
@@ -207,6 +208,12 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       return;
     }
     const it = selectedItemObj;
+    // v8.0.81 (TD-380): تخفیف ردیف حداکثر برابر مبلغ همان ردیف (همان قاعده سرور)
+    const discountError = lineDiscountError(Number(quantity), Number(unitPrice || 0), Number(discount || 0));
+    if (discountError) {
+      toast.error(discountError);
+      return;
+    }
 
     if (status === 'final' && docType === 'invoice') {
       const { loc, reserved, sellable } = getSellableStock(it, location);

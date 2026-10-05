@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.81 — تخفیف ردیف حداکثر برابر مبلغ همان ردیف
+- TD-380: تخفیف ردیف بیشتر از مقدار × قیمت واحد رد می‌شود؛ مازاد تخفیف دیگر از درآمد ردیف‌های دیگر کم نمی‌شود و بدهکاری مشتری با مبلغ فاکتور می‌خواند. ده یافته حوزه L ثبت شد.
+
 ### v8.0.79 — Idempotency Keys Keep Only Successful Responses
 - The browser derives the Idempotency-Key from the submission's content and keeps it until a definitive answer, so a resubmission after a lost response returns the first result; the server stores only successful responses, refuses a key reused for another path or body, and extends the key's lock while a long request runs.
 
