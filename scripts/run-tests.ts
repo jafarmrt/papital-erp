@@ -1,3 +1,4 @@
+import '../src/lib/processTimezone.js';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';

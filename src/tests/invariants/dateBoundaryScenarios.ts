@@ -1,3 +1,4 @@
+import pg from 'pg';
 import { pool } from '../../db/drizzle.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { ChartOfAccountsService } from '../../services/accounting/chartOfAccounts.service.js';
@@ -179,8 +180,36 @@ export async function checkProformaTakesInvoiceNumber(wh: string): Promise<strin
   return problems;
 }
 
+/**
+ * TD-314: زمان سرور در جلسه پایگاه‌داده UTC است. استخر برنامه TimeZone=UTC را از پارامترهای راه‌اندازی دارد، و جلسه‌ای
+ * که پیش‌فرضش تهران است (نصب محلی) با همان پارامترها `now()::timestamp` (مقدار `defaultNow()`) را هم‌وقتِ
+ * `toISOString` کد می‌نویسد.
+ */
+export async function checkSessionClockUtc(): Promise<string[]> {
+  const problems: string[] = [];
+  const own = await pool.query<{ setting: string; source: string }>(`SELECT setting, source FROM pg_settings WHERE name = 'TimeZone'`);
+  if (own.rows[0]?.setting !== 'UTC' || own.rows[0]?.source !== 'client') {
+    problems.push(`منطقه زمانی جلسه استخر ${own.rows[0]?.setting} (منبع ${own.rows[0]?.source}) است، نه UTC از پارامترهای راه‌اندازی`);
+  }
+  const tehranDefault = new pg.Client({ ...pool.options, options: `-c TimeZone=Asia/Tehran ${pool.options.options ?? ''}` });
+  await tehranDefault.connect();
+  try {
+    const res = await tehranDefault.query<{ db_now: string }>(`SELECT to_char(now()::timestamp, 'YYYY-MM-DD"T"HH24:MI:SS') AS db_now`);
+    const codeNow = new Date().toISOString().slice(0, 19);
+    const gapMinutes = Math.abs(Date.parse(`${res.rows[0]?.db_now}Z`) - Date.parse(`${codeNow}Z`)) / 60000;
+    if (!(gapMinutes < 2)) {
+      problems.push(`روی پایگاه‌داده‌ای به وقت تهران، defaultNow() مقدار ${res.rows[0]?.db_now} و toISOString مقدار ${codeNow} نوشت`);
+    }
+  } finally {
+    await tehranDefault.end();
+  }
+  return problems;
+}
+
 /** آزمون‌های سخت‌گیرانه حوزه I برای سوئیت business_invariants: [شناسه، نام، بررسی، پیام قبولی]؛ جدیدترین اول */
 export const DATE_BOUNDARY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
+  ['inv_td_314_session_clock_utc', 'v8.0.52: جلسه پایگاه‌داده با پارامترهای راه‌اندازی استخر UTC است، حتی وقتی پیش‌فرض پایگاه‌داده تهران باشد؛ defaultNow() هم‌وقتِ toISOString کد است (TD-314)',
+    () => checkSessionClockUtc(), 'استخر TimeZone=UTC از پارامترهای راه‌اندازی؛ جلسه با پیش‌فرض تهران now() را به UTC نوشت'],
   ['inv_td_317_proforma_takes_invoice_number', 'v8.0.51: پیش‌فاکتور نهایی‌شده شماره بعدی سری فاکتور سال خودش را می‌گیرد، حتی وقتی شماره‌اش در فاکتورها هست؛ شماره پیش‌فاکتور در یادداشت می‌ماند (TD-317، گزینه الف)',
     checkProformaTakesInvoiceNumber, 'پیش‌فاکتور هم‌شماره فاکتور نهایی شد و شماره بعدی سری فاکتور ۱۳۹۸ را گرفت؛ کاردکس و یادداشت درست'],
   ['inv_td_313_document_dates_strict', 'v8.0.50: تاریخ ناموجود یا غیرتاریخ سند رد می‌شود، سال شماره‌گذاری از تاریخ ذخیره‌شده است و پیش‌نویسی که به سال دیگر برود شماره همان سال را می‌گیرد (TD-313، گزینه الف)',
