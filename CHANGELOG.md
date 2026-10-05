@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.52 — Database Session and Server Process Run in UTC (TD-314)
+- The connection pool pins the PostgreSQL session time zone to UTC and the server process runs with TZ=UTC, so server timestamps written by the database and by the code agree on hosts set to Tehran time.
+
 ### v8.0.51 — Invoices From Proformas Take the Invoice Series Number (TD-317)
 - Finalizing a proforma gives the invoice the next number of the invoice series for its fiscal year and keeps the proforma number in the notes; a proforma whose number already exists among that year's invoices no longer fails with a database error.
 
