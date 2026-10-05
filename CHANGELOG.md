@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.40 — WooCommerce Customer Matched by Phone in Any Format (TD-296)
+- A WooCommerce order finds an existing customer whatever the phone format (+98, 0098, spaces, Persian digits) instead of creating a duplicate.
+
 ### v8.0.39 — WooCommerce Audit; Thousand-Toman and Thousand-Rial Units (TD-292)
 - Area F (WooCommerce) audited with six findings; orders in the Persian plugin's thousand-toman (IRHT) and thousand-rial (IRHR) units are converted to rials and invoiced.
 

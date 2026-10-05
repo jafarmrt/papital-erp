@@ -48,7 +48,7 @@ export const KNOWN_FINDINGS: Readonly<Record<string, string>> = {
   'FOCUSED:woo-edited-order-ignored': 'TD-294',
   'FOCUSED:woo-partial-refund-ignored': 'TD-294',
   'FOCUSED:woo-negative-fee-rejected': 'TD-295',
-  'FOCUSED:woo-phone-format-duplicates-customer': 'TD-296',
+  // TD-296 در v8.0.40 رفع شد (inv_td_296_woo_phone_matches_customer)
   'FOCUSED:woo-fractional-rial-residue': 'TD-297',
 };
 

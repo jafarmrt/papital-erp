@@ -85,7 +85,7 @@ export async function probeWooNegativeFeeRejected(): Promise<boolean> {
   return result.status === 'failed';
 }
 
-/** مشتری موجود با تلفن ۰۹۱۲… با سفارش تلفن +۹۸۹۱۲… شناخته نمی‌شود و مشتری تکراری ساخته می‌شود */
+/** TD-296 (کاوش رگرسیون؛ رفع v8.0.40): مشتری موجود با تلفن ۰۹۱۲… با سفارش تلفن +۹۸۹۱۲… شناخته نمی‌شود و مشتری تکراری ساخته می‌شود */
 export async function probeWooPhoneFormatDuplicatesCustomer(): Promise<boolean> {
   const suffix = wooOrderId().slice(-7);
   const localPhone = `0912${suffix}`;
@@ -138,5 +138,39 @@ export async function checkWooRialUnits(): Promise<string[]> {
     const debit = await customerDebitOf(result.docId);
     if (doc?.currency !== 'IRR' || debit !== rial) problems.push(`${currency}: فاکتور ${doc?.currency} با بدهکار مشتری ${debit}، انتظار IRR و ${rial}`);
   }
+  return problems;
+}
+
+/**
+ * TD-296: سفارش با تلفن مشتری موجود در هر قالبی (‎+۹۸…، ۰۰۹۸…، بدون صفر، با فاصله، ارقام فارسی) همان مشتری را می‌یابد و
+ * مشتری تکراری نمی‌سازد؛ تلفن دیگری که فقط ارقام مشترک دارد با او یکی گرفته نمی‌شود.
+ */
+export async function checkWooPhoneMatchesCustomer(): Promise<string[]> {
+  const problems: string[] = [];
+  const suffix = wooOrderId().slice(-7);
+  const [existing] = await orm.insert(customers).values({ name: `مشتری آزمون تطبیق تلفن ${suffix}`, phone: `0912${suffix}` }).returning({ id: customers.id, name: customers.name });
+  const item = await createTestItem({ code: `WC_PHONE_OK_${wooOrderId()}`, stocks: { '': 20 } });
+  const persian = (s: string) => s.replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  const formats = [`+98912${suffix}`, `0098912${suffix}`, `912${suffix}`, `0912 ${suffix.slice(0, 3)} ${suffix.slice(3)}`, persian(`0912${suffix}`)];
+  for (const phone of formats) {
+    const id = wooOrderId();
+    const order = wooOrder(id, 'processing', item.code, 1, 1000);
+    order.billing = { ...order.billing, phone };
+    const result = await WooOrderSyncService.handleOrder(order);
+    const [doc] = await orm.select({ buyerName: documents.buyerName }).from(documents).where(eq(documents.id, result.docId ?? 0));
+    if (doc?.buyerName !== existing.name) problems.push(`تلفن «${phone}»: فاکتور به نام ${doc?.buyerName ?? result.message.slice(0, 80)}، انتظار ${existing.name}`);
+  }
+  const duplicates = await pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM customers WHERE is_deleted = 0 AND id <> $1 AND regexp_replace(translate(phone, '۰۱۲۳۴۵۶۷۸۹', '0123456789'), '[^0-9]', '', 'g') LIKE $2`,
+    [existing.id, `%912${suffix}`]);
+  if (Number(duplicates.rows[0].n) !== 0) problems.push(`${duplicates.rows[0].n} مشتری تکراری با همان تلفن ساخته شد`);
+
+  // تلفن دیگری (رقم آخر متفاوت) مشتری تازه می‌سازد
+  const other = wooOrder(wooOrderId(), 'processing', item.code, 1, 1000);
+  const otherPhone = `0912${suffix.slice(0, 6)}${(Number(suffix.slice(6)) + 1) % 10}`;
+  other.billing = { ...other.billing, phone: otherPhone };
+  const otherResult = await WooOrderSyncService.handleOrder(other);
+  const [otherDoc] = await orm.select({ buyerName: documents.buyerName }).from(documents).where(eq(documents.id, otherResult.docId ?? 0));
+  if (otherDoc?.buyerName === existing.name) problems.push(`تلفن دیگر «${otherPhone}» به همان مشتری نسبت داده شد`);
   return problems;
 }

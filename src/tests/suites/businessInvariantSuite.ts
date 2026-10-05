@@ -18,7 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
-import { checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
+import { checkWooPhoneMatchesCustomer, checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
 import { checkProcurementDeliveryIncomingOnly, checkRequisitionOverOrderNeedsReason, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
@@ -268,6 +268,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.40: TD-296 ──
+    ['inv_td_296_woo_phone_matches_customer', 'v8.0.40: سفارش ووکامرس مشتری موجود را با تلفن در هر قالبی (‎+۹۸، ۰۰۹۸، بی‌صفر، با فاصله، ارقام فارسی) می‌یابد و مشتری تکراری نمی‌سازد (TD-296)',
+      () => checkWooPhoneMatchesCustomer(), 'پنج قالب تلفن به همان مشتری رسید، مشتری تکراری ساخته نشد و تلفن دیگر مشتری تازه گرفت'],
     // ── v8.0.39: TD-292 ──
     ['inv_td_292_woo_rial_units', 'v8.0.39: سفارش ووکامرس با واحد هزار تومان (IRHT) یا هزار ریال (IRHR) به ریال تبدیل و فاکتور ریالی می‌شود (TD-292)',
       () => checkWooRialUnits(), 'IRHT ۱۰۰ = ۱٬۰۰۰٬۰۰۰، IRHR ۲۵۰ = ۲۵۰٬۰۰۰ و IRT ۳۰۰ = ۳٬۰۰۰ ریال بدهکار مشتری'],

@@ -8,6 +8,7 @@ import { businessTodayIsoDate, systemNowUtcIso } from '../../lib/businessClock.j
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { logger } from '../../middleware/logger.js';
+import { phoneMatchKey, phoneMatchKeySql } from './phoneMatchKey.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -434,11 +435,14 @@ export class WooOrderSyncService {
   }
 
   private static async matchOrCreateCustomer(tx: DbExecutor, wcOrderId: string, buyer: BuyerInfo): Promise<string> {
+    // v8.0.40 (TD-296): تلفن با کلید تطبیق (ارقام لاتین، بی‌جداکننده، ده رقم آخر) مقایسه می‌شود؛ پیش‌تر ‎+۹۸۹۱۲… مشتری
+    // ۰۹۱۲… را نمی‌یافت و مشتری تکراری ساخته می‌شد
+    const phoneKey = phoneMatchKey(buyer.buyerPhone);
     const [matched] = await tx.select({ id: customers.id, name: customers.name })
       .from(customers)
       .where(and(
         eq(customers.isDeleted, 0),
-        buyer.buyerPhone ? eq(customers.phone, buyer.buyerPhone) : eq(customers.name, buyer.buyerName)
+        phoneKey ? sql`${phoneMatchKeySql(customers.phone)} = ${phoneKey}` : eq(customers.name, buyer.buyerName)
       ))
       .orderBy(asc(customers.id))
       .limit(1);
