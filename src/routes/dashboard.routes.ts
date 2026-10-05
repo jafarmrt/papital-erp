@@ -6,6 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
+import { getMonthlyMovementTrends } from '../services/inventory/monthlyMovementTrend.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -149,14 +150,8 @@ router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), a
       }
     }
 
-    const trendsResult = await orm.execute(sql`
-      SELECT to_char(date::timestamp, 'YYYY-MM') as date, type, SUM(quantity) as total
-      FROM ${transactions}
-      WHERE is_deleted = 0 AND date::timestamp >= current_date - interval '6 months'
-      GROUP BY to_char(date::timestamp, 'YYYY-MM'), type
-      ORDER BY date ASC
-    `);
-    const trends = trendsResult.rows;
+    // v8.0.54 (TD-316): ماه‌های شمسی، نه ماه میلادی با نام شمسی
+    const trends = await getMonthlyMovementTrends();
 
     const result = {
       reorderAlarms: alarms,

@@ -7,6 +7,8 @@ import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { DocumentService } from '../../services/document.service.js';
 import { ActivityLogQueryService } from '../../services/system/activityLogQuery.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
+import { isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { createTestItem } from '../fixtures/factories.js';
 
 /**
@@ -227,8 +229,51 @@ export async function checkActivityLogTehranDay(): Promise<string[]> {
   return problems;
 }
 
+/**
+ * TD-316: نمودار «گردش کالا» (`/api/dashboard-bi-stats`، monthlyTrends) به ماه شمسی است: ورود آخرین روز ماه
+ * شمسی قبل و ورود نخستین روز ماه شمسی جاری (دو روز پشت سر هم، معمولاً در یک ماه میلادی) در دو ماه جدا می‌آیند.
+ */
+export async function checkMovementTrendJalaliMonths(wh: string): Promise<string[]> {
+  const request = (await import('supertest')).default;
+  const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+  const { invalidateDashboardBiCache } = await import('../../routes/dashboard.routes.js');
+  const app = await getTestApp();
+  const admin = await getAdminSession();
+  const [jy, jm] = isoToJalaliDate(await businessTodayIsoDate()).split('/').map(Number);
+  const currentMonth = `${jy}/${String(jm).padStart(2, '0')}`;
+  const firstDay = toStorageDate(`${currentMonth}/01`) ?? '';
+  const lastOfPrevious = new Date(Date.parse(`${firstDay}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+  const previousMonth = isoToJalaliDate(lastOfPrevious).slice(0, 7);
+
+  const inflowByMonth = async (): Promise<Record<string, number>> => {
+    invalidateDashboardBiCache();
+    const res = await request(app).get('/api/dashboard-bi-stats').set('Cookie', admin.cookie);
+    const rows: Array<{ month?: string; date?: string; type: string; total: number }> = Array.isArray(res.body?.monthlyTrends) ? res.body.monthlyTrends : [];
+    const map: Record<string, number> = {};
+    for (const r of rows) if (r.type === 'in') map[String(r.month ?? r.date)] = (map[String(r.month ?? r.date)] ?? 0) + Number(r.total);
+    return map;
+  };
+
+  const before = await inflowByMonth();
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  for (const [date, quantity] of [[lastOfPrevious, 3], [firstDay, 5]] as const) {
+    await DocumentService.createDocument({
+      docType: 'receipt', inOut: 'in', status: 'final', date, user: 'inv', buyerName: 'تامین‌کننده آزمون گردش ماهانه',
+      items: [{ itemId: item.id, quantity, unitPrice: 1000, location: wh }],
+    });
+  }
+  const after = await inflowByMonth();
+  const delta = (month: string) => (after[month] ?? 0) - (before[month] ?? 0);
+  if (delta(previousMonth) !== 3 || delta(currentMonth) !== 5) {
+    return [`ورود ۳ در ${previousMonth} و ۵ در ${currentMonth} انتظار می‌رفت؛ نمودار: ${JSON.stringify(after).slice(0, 200)}`];
+  }
+  return [];
+}
+
 /** آزمون‌های سخت‌گیرانه حوزه I برای سوئیت business_invariants: [شناسه، نام، بررسی، پیام قبولی]؛ جدیدترین اول */
 export const DATE_BOUNDARY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
+  ['inv_td_316_movement_trend_jalali_months', 'v8.0.54: نمودار گردش کالا به ماه شمسی است؛ ورود آخرین روز ماه قبل و نخستین روز ماه جاری در دو ماه جدا می‌آیند (TD-316)',
+    checkMovementTrendJalaliMonths, 'ورود ۳ در ماه شمسی قبل و ۵ در ماه شمسی جاری'],
   ['inv_td_315_activity_log_tehran_day', 'v8.0.53: گزارش فعالیت‌ها زمان ثبت UTC را با Z برمی‌گرداند و فیلتر روز، روز منطقه زمانی توافقی (تهران) است (TD-315)',
     () => checkActivityLogTehranDay(), 'فعالیت ۰۰:۱۵ تهران در همان روز آمد، ۰۰:۳۰ روز بعد نیامد؛ زمان با Z'],
   ['inv_td_314_session_clock_utc', 'v8.0.52: جلسه پایگاه‌داده با پارامترهای راه‌اندازی استخر UTC است، حتی وقتی پیش‌فرض پایگاه‌داده تهران باشد؛ defaultNow() هم‌وقتِ toISOString کد است (TD-314)',

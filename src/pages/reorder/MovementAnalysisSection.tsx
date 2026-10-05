@@ -1,7 +1,7 @@
 import {
   BarChart2, Flame, RefreshCw, AlertCircle
 } from 'lucide-react';
-import { formatPersianNumber } from '../../utils';
+import { formatPersianNumber, jalaliMonthLabel } from '../../utils';
 import { useDashboardBIStatsQuery } from '../../hooks/queries';
 
 /**
@@ -15,24 +15,15 @@ export default function MovementAnalysisSection() {
   const processTrendChart = () => {
     if (!biStats || !biStats.monthlyTrends.length) return { labels: [], ins: [], outs: [], maxVal: 10 };
 
+    // v8.0.54 (TD-316): API ماه شمسی (`YYYY/MM`) می‌دهد؛ پیش‌تر ماه میلادی بود و با نام ماه شمسی روز اولش نمایش داده می‌شد
     const monthMap: { [key: string]: { in: number; out: number } } = {};
-    const labelMap: { [key: string]: string } = {};
 
     biStats.monthlyTrends.forEach(t => {
-      const d = new Date(t.date);
-      const ymKey = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: '2-digit' }).format(d);
-
-      if (!monthMap[ymKey]) {
-        monthMap[ymKey] = { in: 0, out: 0 };
-        const monthName = new Intl.DateTimeFormat('fa-IR', { month: 'long' }).format(d);
-        const yearStr = new Intl.DateTimeFormat('fa-IR', { year: 'numeric' }).format(d);
-        labelMap[ymKey] = `${monthName} ${yearStr}`;
-      }
-
+      if (!monthMap[t.month]) monthMap[t.month] = { in: 0, out: 0 };
       if (t.type === 'in') {
-        monthMap[ymKey].in += Number(t.total) || 0;
+        monthMap[t.month].in += Number(t.total) || 0;
       } else {
-        monthMap[ymKey].out += Number(t.total) || 0;
+        monthMap[t.month].out += Number(t.total) || 0;
       }
     });
 
@@ -41,7 +32,7 @@ export default function MovementAnalysisSection() {
     const outs = sortedKeys.map(k => monthMap[k].out);
     const maxVal = Math.max(...ins, ...outs, 10) * 1.15;
 
-    const fLabels = sortedKeys.map(k => labelMap[k]);
+    const fLabels = sortedKeys.map(k => jalaliMonthLabel(k));
 
     return { labels: fLabels, ins, outs, maxVal };
   };
