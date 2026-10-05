@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.58 — Bank Account Maintenance Under Locks
+- Editing a bank account locks its row, so two concurrent opening-balance edits no longer double the difference; treasury account codes come from an atomic counter per prefix and a duplicate custom code is refused; deleting a bank account runs under its lock and is refused while it has transactions or cheques.
+
 ### v8.0.57 — No Second Pool Connection Inside Transactions
 - The first voucher of a new fiscal year, document voids, purchase requisitions and bank accounts with an opening balance now finish with a single free pool connection: the fiscal year row, audit log and workflow start run in the same transaction and a stale timezone cache no longer waits for the database.
 

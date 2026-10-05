@@ -6,6 +6,7 @@ import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
 import { checkWorkLogFrozenInPayroll } from './payrollConcurrencyScenarios.js';
 import { checkNoSecondConnectionInTransactions } from './poolScenarios.js';
+import { checkBankAccountMaintenanceLocked } from './bankAccountScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -35,4 +36,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkWorkLogFrozenInPayroll(), 'در هر چهار ترتیب فیش با کارکردهای پیوندشده خواند؛ تغییر پس از فیش رد شد؛ کارکرد فیش حذف‌شده ویرایش شد'],
   ['inv_td_324_no_second_pool_connection', 'v8.0.57: سند اول سال مالی تازه، ابطال سند، ثبت درخواست خرید و حساب بانکی با یک اتصال آزاد استخر کامل می‌شوند (بی اتصال دوم درون تراکنش) و خطای ممیزی درون تراکنش بلعیده نمی‌شود (TD-324)',
     checkNoSecondConnectionInTransactions, 'هر چهار مسیر بی انتظار کامل شد؛ گردش‌کار و ممیزی ثبت شد؛ خطای ممیزی تراکنش را برگرداند'],
+  ['inv_td_325_bank_account_maintenance_locked', 'v8.0.58: ویرایش مانده اول دوره، کد حساب و حذف حساب بانکی زیر قفل؛ ویرایش هم‌زمان مانده را دو بار نمی‌افزاید، کد تکراری ساخته نمی‌شود و حساب دارای تراکنش یا چک حذف نمی‌شود (TD-325)',
+    () => checkBankAccountMaintenanceLocked(), 'موجودی ۱۵۰ و یک سند اصلاحی؛ پنج کد یکتا و کد تکراری رد شد؛ حذف حساب دارای تراکنش و چک رد شد'],
 ];

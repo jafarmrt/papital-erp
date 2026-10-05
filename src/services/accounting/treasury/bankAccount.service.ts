@@ -9,6 +9,7 @@ import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
+import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
 export interface BankReconciliationReport {
@@ -286,29 +287,11 @@ export class BankAccountService {
   }
 
   /**
-   * V4.0.37: تولید خودکار کد یکتا و استاندارد حساب خزانه بر اساس نوع (BANK-01, CASH-01, POS-01)
+   * V4.0.37: پیش‌نمایش کد خودکار حساب خزانه بر اساس نوع (BANK-01, CASH-01, POS-01) برای فرم.
+   * v8.0.58 (TD-325): کد نهایی هنگام ثبت از شمارنده اتمی گرفته می‌شود (`assignTreasuryAccountCode`).
    */
-  static async generateNextAccountCode(type: 'bank' | 'cash' | 'pos' | 'petty_cash', tx?: DbExecutor): Promise<string> {
-    const executor = tx || orm;
-    const existing = await executor
-      .select({ code: bankAccounts.code })
-      .from(bankAccounts);
-
-    const prefix = type === 'cash' || type === 'petty_cash' ? 'CASH' : type === 'pos' ? 'POS' : 'BANK';
-    let maxNum = 0;
-    const regex = new RegExp(`^${prefix}-(\\d+)$`, 'i');
-
-    for (const row of existing) {
-      if (!row.code) continue;
-      const match = row.code.trim().match(regex);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
-      }
-    }
-
-    const nextNum = maxNum + 1;
-    return `${prefix}-${String(nextNum).padStart(2, '0')}`;
+  static async generateNextAccountCode(type: 'bank' | 'cash' | 'pos' | 'petty_cash'): Promise<string> {
+    return peekNextTreasuryAccountCode(type);
   }
 
   static async createBankAccount(data: {
@@ -337,10 +320,8 @@ export class BankAccountService {
     }
 
     const run = async (tx: DbExecutor) => {
-      let finalCode = data.code?.trim();
-      if (!finalCode) {
-        finalCode = await BankAccountService.generateNextAccountCode(data.type, tx);
-      }
+      // v8.0.58 (TD-325): کد از شمارنده اتمی پیشوند، یا کد دستی یکتا زیر قفل همان شمارنده
+      const finalCode = await assignTreasuryAccountCode(tx, data.type, data.code);
 
       const [inserted] = await tx.insert(bankAccounts).values({
         code: finalCode,
@@ -498,12 +479,20 @@ export class BankAccountService {
     const isStrict = data.strict !== false;
 
     const run = async (tx: DbExecutor) => {
-      const [existing] = await tx.select().from(bankAccounts).where(eq(bankAccounts.id, id));
+      // v8.0.58 (TD-325): ردیف بانک FOR UPDATE قفل و تفاوت مانده اول دوره زیر همین قفل حساب می‌شود (پیش‌تر دو ویرایش
+      // هم‌زمان ۱۰۰ ← ۱۵۰ هر دو تفاوت ۵۰ را از مقدار کهنه می‌گرفتند و موجودی جاری ۲۰۰ می‌شد)؛ حساب حذف‌شده ویرایش نمی‌شود
+      const [existing] = await tx.select().from(bankAccounts)
+        .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
+        .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
+      const newCode = data.code?.trim();
+      if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
+        await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);
+      }
 
-      const [updated] = await tx.update(bankAccounts).set({
+      const fields = {
         ...(data.title ? { title: data.title.trim() } : {}),
-        ...(data.code ? { code: data.code.trim() } : {}),
+        ...(newCode ? { code: newCode } : {}),
         ...(data.type ? { type: data.type } : {}),
         ...(data.bankName !== undefined ? { bankName: data.bankName.trim() } : {}),
         ...(data.accountNumber !== undefined ? { accountNumber: data.accountNumber.trim() } : {}),
@@ -513,7 +502,11 @@ export class BankAccountService {
         ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
-      }).where(eq(bankAccounts.id, id)).returning();
+      };
+      // فقط مانده اول دوره: ردیف بی‌تغییر فیلد دیگر (update خالی در drizzle خطاست)
+      const [updated] = Object.keys(fields).length > 0
+        ? await tx.update(bankAccounts).set(fields).where(eq(bankAccounts.id, id)).returning()
+        : [existing];
 
       // V2.0.0: تغییر موجودی اولیه → سند اصلاحی مابه‌التفاوت (فقط برای حساب‌های کدینگ‌شده)
       if (data.initialBalance !== undefined) {
@@ -608,16 +601,30 @@ export class BankAccountService {
     return orm.transaction(run);
   }
 
+  /**
+   * v8.0.58 (TD-325): حذف در تراکنش و زیر قفل ردیف بانک (همان قفلی که ثبت تراکنش خزانه و وصول چک می‌گیرند)؛ تراکنش‌ها و
+   * چک‌های حساب زیر همین قفل شمرده می‌شوند. پیش‌تر حذف بی‌قفل بود و حساب در میانه ثبت دریافت با تراکنش فعال حذف می‌شد،
+   * و حسابی که چک وصول‌شده یا صادرشده داشت هم حذف می‌شد.
+   */
   static async deleteBankAccount(id: number): Promise<{ success: boolean }> {
-    const [existing] = await orm.select().from(bankAccounts).where(eq(bankAccounts.id, id));
-    if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
+    return orm.transaction(async (tx) => {
+      const [existing] = await tx.select({ id: bankAccounts.id }).from(bankAccounts)
+        .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
+        .for('update');
+      if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
 
-    const hasTx = await orm.select().from(treasuryTransactions).where(eq(treasuryTransactions.bankAccountId, id)).limit(1);
-    if (hasTx.length > 0) {
-      throw new BusinessLogicError('برای این حساب بانکی/صندوق تراکنش ثبت شده است و امکان حذف آن وجود ندارد');
-    }
+      const hasTx = await tx.select({ id: treasuryTransactions.id }).from(treasuryTransactions).where(eq(treasuryTransactions.bankAccountId, id)).limit(1);
+      if (hasTx.length > 0) {
+        throw new BusinessLogicError('برای این حساب بانکی/صندوق تراکنش ثبت شده است و امکان حذف آن وجود ندارد');
+      }
+      const hasCheque = await tx.select({ id: cheques.id }).from(cheques)
+        .where(and(eq(cheques.bankAccountId, id), eq(cheques.isDeleted, 0))).limit(1);
+      if (hasCheque.length > 0) {
+        throw new BusinessLogicError('برای این حساب بانکی/صندوق چک ثبت شده است و امکان حذف آن وجود ندارد');
+      }
 
-    await orm.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
-    return { success: true };
+      await tx.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
+      return { success: true };
+    });
   }
 }
