@@ -3,7 +3,9 @@ import { fin } from '../../lib/financialDecimal.js';
 import { ChartOfAccountsService } from '../../services/accounting/chartOfAccounts.service.js';
 import { FiscalYearService } from '../../services/accounting/fiscalYear.service.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
+import { DocumentService } from '../../services/document.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
+import { createTestItem } from '../fixtures/factories.js';
 
 /**
  * v8.0.47 — سناریوهای سخت‌گیرانه مرز تاریخ (حوزه I نقشه راه V8) برای سوئیت business_invariants.
@@ -78,6 +80,61 @@ export async function checkClosingCoversLeapLastDay(): Promise<string[]> {
     if (!fin(left).isZero()) problems.push(`پس از بستن سال ${LEAP_CLOSING_YEAR} مانده درآمد ${left} باقی ماند`);
   } catch (err) {
     problems.push(`بستن سال ${LEAP_CLOSING_YEAR} رد شد: ${getErrorMessage(err)}`);
+  }
+  return problems;
+}
+
+async function documentRow(id: number): Promise<{ date: string; refNumber: string; refFiscalYear: number | null } | undefined> {
+  const res = await pool.query<{ date: string; ref_number: string; ref_fiscal_year: number | null }>(
+    `SELECT to_char(date, 'YYYY-MM-DD HH24:MI:SS') AS date, ref_number, ref_fiscal_year FROM documents WHERE id = $1`, [id]);
+  const r = res.rows[0];
+  return r ? { date: r.date, refNumber: r.ref_number, refFiscalYear: r.ref_fiscal_year } : undefined;
+}
+
+/**
+ * TD-313: تاریخ ناموجود یا غیرتاریخ سند با پیام فارسی رد می‌شود (نه جابه‌جایی بی‌صدا یا خطای ۵۰۰)، سال شماره‌گذاری از
+ * تاریخ ذخیره‌شده است، و پیش‌نویسی که تاریخش به سال مالی دیگر برود شماره بعدی همان سال را می‌گیرد (گزینه الف).
+ * سال‌های ۱۳۹۶ (عادی) و ۱۳۹۷، دور از داده آزمون‌های دیگر.
+ */
+export async function checkDocumentDatesStrict(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  const draft = (date: string, refNumber?: string) => DocumentService.createDocument({
+    docType: 'invoice', inOut: 'out', status: 'draft', date, user: 'inv', buyerName: 'مشتری آزمون مرز تاریخ',
+    ...(refNumber ? { refNumber } : {}),
+    items: [{ itemId: item.id, quantity: 1, unitPrice: 1000, location: wh }],
+  });
+
+  for (const bad of ['1396/12/30', '2018-02-30', 'نامعلوم']) {
+    let message = '';
+    try {
+      const id = await draft(bad);
+      const row = await documentRow(id);
+      message = `پذیرفته شد (تاریخ ${row?.date}، سال شماره ${row?.refFiscalYear})`;
+    } catch (err) {
+      message = getErrorMessage(err);
+    }
+    if (!message.includes('معتبر نیست')) problems.push(`تاریخ «${bad}» رد نشد: ${message.slice(0, 120)}`);
+  }
+
+  const nowruzId = await draft('1397/01/01 00:15');
+  const nowruz = await documentRow(nowruzId);
+  if (nowruz?.date !== '2018-03-21 00:15:00' || nowruz.refFiscalYear !== 1397) {
+    problems.push(`سند ۰۰:۱۵ نوروز ۱۳۹۷ با تاریخ ${nowruz?.date} و سال شماره ${nowruz?.refFiscalYear} ثبت شد`);
+  }
+
+  const movedId = await draft('1396/12/29');
+  const before = await documentRow(movedId);
+  await DocumentService.updateDocument(movedId, { date: '1397/01/05', refNumber: before?.refNumber });
+  const after = await documentRow(movedId);
+  if (after?.refFiscalYear !== 1397 || after.date !== '2018-03-25 00:00:00') {
+    problems.push(`پیش‌نویس منتقل‌شده به ۵ فروردین ۱۳۹۷ سال شماره ${after?.refFiscalYear} و تاریخ ${after?.date} دارد`);
+  }
+  const dup = await pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM documents WHERE type = 'invoice' AND ref_fiscal_year = 1397 AND ref_number = $1 AND is_deleted = 0`,
+    [after?.refNumber ?? '']);
+  if (Number(dup.rows[0]?.n ?? 0) !== 1 || after?.refNumber === nowruz?.refNumber) {
+    problems.push(`شماره پیش‌نویس منتقل‌شده (${after?.refNumber}) در سری ۱۳۹۷ یکتا نیست`);
   }
   return problems;
 }
