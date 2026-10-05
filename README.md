@@ -84,13 +84,13 @@ sudo ./update.sh
 ## به‌روزرسانی
 
 ```bash
-git pull
-npm ci
-npm run build
-# ری‌استارت سرویس (pm2 یا systemd) — مهاجرت‌های جدید در startup اعمال می‌شوند
+cd /opt/papital-erp
+sudo -v && ./update.sh --rehearse     # با کاربر سرویس، نه root؛ sudo -v برای sudo -u postgres در تمرین
 ```
 
-- قبل از آپدیت، از دیتابیس backup بگیرید (`scripts/backup.sh`).
+- `update.sh` پیش از هر کار پشتیبان می‌گیرد (`pre-deployment`)، کد را می‌گیرد و می‌سازد، و فقط وقتی «موفق» اعلام می‌کند که `/health/startup` (پایان مهاجرت‌ها) پاسخ دهد و نسخه در حال اجرا همان نسخه ساخته‌شده باشد؛ در شکست راه بازگشت را چاپ می‌کند (v8.0.83).
+- **`--rehearse` (v8.0.88، توصیه‌شده):** پیش از راه‌اندازی دوباره، پشتیبان همین لحظه در پایگاه‌داده تمرین بازیابی و مهاجرت‌های کد تازه روی آن اجرا می‌شود؛ اگر مهاجرتی شکست بخورد یا جمع بدهکار و بستانکار حساب‌ها، موجودی کالاها، مانده بانک‌ها یا سلامت مالی را عوض کند، به‌روزرسانی پیش از راه‌اندازی می‌ایستد و سرویس قبلی دست نمی‌خورد. بدون به‌روزرسانی هم می‌توان آخرین پشتیبان را با کد فعلی تمرین کرد: `./scripts/upgrade-rehearsal.sh [dump]`.
+- **ارتقا از v8.0.82 یا قدیمی‌تر:** `update.sh` نسخه قدیمی تا پایان مهاجرت‌ها صبر نمی‌کند؛ ابتدا فقط کد را بگیرید (`git pull --ff-only`) و سپس `sudo -v && ./update.sh --rehearse` را اجرا کنید تا اسکریپت تازه به کار رود.
 - دکمه «خروجی داده‌های کسب‌وکاری» در تنظیمات (`GET /api/export-backup`، فقط admin) یک فایل JSON برای گزارش و بایگانی است و **قابل بازگردانی نیست**؛ رمزهای عبور و کلیدهای محرمانه در آن نیست. پشتیبان واقعی فقط با `scripts/backup.sh` و بازگردانی با `scripts/restore.sh`.
 - **هرگز `npm run db:push` اجرا نکنید** — تغییر اسکیما فقط از مهاجرت اتمیک builtin.
 - **ارتقا به v7.0.56 و بالاتر (یک‌بار، پیوست‌ها):** از این نسخه فایل پیوست‌ها روی دیسک (`public/uploads/.attachments`، داخل همان پوشه‌ای که به‌روزرسانی و پشتیبان‌گیری نگه می‌دارند) ذخیره می‌شوند و پایگاه‌داده فقط مشخصات آن‌ها را دارد. پیوست‌های قدیمی تا انتقال، مثل قبل نمایش داده می‌شوند. پس از ارتقا و یک‌بار راه‌اندازی سرور: `npm run attachments:migrate` (اجرای آزمایشی، فقط شمارش) و سپس `npm run attachments:migrate -- --apply`. در استقرار Docker همان کار با `POST /api/attachments/migrate-inline` و بدنه `{"apply": true}` توسط مدیر سیستم انجام می‌شود.
@@ -140,36 +140,45 @@ npm run build
 ### Backup روزانه
 
 ```cron
-# /etc/cron.d/papital-erp-backup
-0 2 * * * erp cd /opt/papital-erp && DATABASE_URL=... ./scripts/backup.sh >> /var/log/papital-backup.log 2>&1
+# /etc/cron.d/papital-erp-backup — کاربر همان کاربر سرویس است؛ پوشه پشتیبان یک‌بار: sudo install -d -o <user> /var/backups/erp
+0 2 * * * <user> /opt/papital-erp/scripts/backup.sh >> /var/log/papital-backup.log 2>&1
 ```
 
-انواع backup در `scripts/backup.sh`: `daily` (نگه‌داری ۳۰ روز) • `pre-deployment` (۹۰ روز — `update.sh` خودکار می‌سازد) • `pre-migration` (۱۸۰ روز)
+- اسکریپت پوشه برنامه را از جای خودش پیدا می‌کند و `DATABASE_URL` (و `ATTACHMENTS_DIR`) را از `.env` همان پوشه می‌خواند، پس از cron و هر پوشه‌ای کار می‌کند (v8.0.84).
+- هر پشتیبان سه فایل دارد: `erp_<نوع>_<زمان>.dump.gz` (پایگاه‌داده)، `.manifest` (فهرست محتوا: شمار و درهم‌سازی سطرهای هر جدول و همه قیدها، از همان snapshot پشتیبان، v8.0.85) و `_uploads.tar.gz` (فایل‌های پیوست). اگر رکورد پیوست هست ولی پوشه پیوست نیست، پشتیبان شکست می‌خورد.
+- انواع: `daily` (نگه‌داری ۳۰ روز) • `pre-deployment` (۹۰ روز — `update.sh` خودکار می‌سازد) • `pre-migration` (۱۸۰ روز)
 
-### بازیابی از Backup
+### تمرین بازیابی و بازیابی واقعی
 
 ```bash
 ls -lt /var/backups/erp/*.dump.gz | head -3
-# V3.0.8 (TD-059): تمرین بازیابی خودکار (drill) — dump در DB موقتی ایزاده بازگردانی
-# می‌شود، شمارش ردیف‌های جدول‌های حیاتی اعتبارسنجی و سپس DB موقتی drop می‌گردد:
-RESTORE_MODE=drill ./scripts/restore.sh [dump-file.dump.gz]
-# (برای نگه‌داشتن DB تمرین جهت بررسی دستی: RESTORE_KEEP=1)
+# تمرین (بی اثر روی داده زنده): بازیابی در پایگاه‌داده موقت، مقایسه سطر به سطر با فهرست محتوای پشتیبان،
+# سنجش sequenceها و فایل‌های پیوست، سپس حذف پایگاه‌داده موقت (نگه‌داشتن: RESTORE_KEEP=1)
+sudo -v && ./scripts/restore.sh [dump-file.dump.gz]
 
-# restore واقعی روی DB هدف (مخرب — نیازمند تأیید صریح):
-RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh <dump>.dump.gz papital_erp
-systemctl restart papital-erp
-curl -fsS http://localhost:3000/health/ready
+# بازیابی واقعی: سرویس را متوقف کنید؛ نسخه بازیابی‌شده در پایگاه‌داده تازه ساخته و سنجیده می‌شود و فقط بعد
+# جایگزین می‌شود. پایگاه‌داده قبلی با نام <db>_before_restore_<زمان> و پوشه پیوست قبلی با پسوند
+# .before_restore_<زمان> نگه داشته می‌شوند (v8.0.87).
+sudo systemctl stop papital-erp
+RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh <dump>.dump.gz
+sudo systemctl start papital-erp
+bash scripts/verify-startup.sh 3000
 ```
 
-> اصل: «backup موجود است» ≠ «قابل بازیابی است». drill فوق پس از هر تغییر بزرگ schema و به‌صورت دوره‌ای (مثلاً ماهانه) باید اجرا شود.
+- ساختن و جابه‌جا کردن پایگاه‌داده دسترسی CREATEDB می‌خواهد که نقش برنامه (ساخته `install.sh`) ندارد: اسکریپت با `sudo -u postgres` کار می‌کند (با کاربر سرویس اجرا کنید و پیش از آن `sudo -v`)، یا `RESTORE_ADMIN_URL=postgresql://postgres:...@localhost:5432/postgres` را بدهید (v8.0.86). بی هیچ‌کدام پیش از هر تغییری می‌ایستد.
+- پشتیبان‌های پیش از v8.0.85 فهرست محتوا ندارند و تمرین فقط بررسی پایه را انجام می‌دهد (این را چاپ می‌کند).
+
+> اصل: «backup موجود است» ≠ «قابل بازیابی است». تمرین را پس از هر ارتقا و به‌صورت دوره‌ای (مثلاً ماهانه) اجرا کنید.
 
 ### Rollback نسخه اپلیکیشن
 
+اگر نسخه تازه مهاجرت اجرا کرده باشد، کد قبلی با پایگاه‌داده تازه‌تر راه نمی‌افتد («the database has … applied migration(s) newer than this build», v8.0.81)؛ پایگاه‌داده را هم از پشتیبان پیش از به‌روزرسانی برگردانید. `update.sh` در شکست همین گام‌ها را با نام commit و پشتیبان چاپ می‌کند:
+
 ```bash
-git log --oneline -10
-git revert <commit-hash> --no-edit
-npm run build && systemctl restart papital-erp
-curl -fsS http://localhost:3000/health/ready
+sudo systemctl stop papital-erp
+git checkout <commit قبلی> && NODE_ENV=development npm ci --include=dev && npm run build
+RESTORE_MODE=apply RESTORE_CONFIRM=yes ./scripts/restore.sh /var/backups/erp/erp_pre-deployment_<زمان>.dump.gz
+sudo systemctl start papital-erp && bash scripts/verify-startup.sh 3000
 ```
 
 ### Out-of-Memory و Connection Pool
@@ -184,10 +193,14 @@ psql -c "SELECT pid, query, state FROM pg_stat_activity WHERE state='active'"
 ### Migration شکست‌خورده
 
 ```bash
+journalctl -u papital-erp -n 200 | grep Migrator
 psql -c "SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 10"
-# مهاجرت اتمیک است: یا کامل اجرا شده یا کامل rollback — گام موفق دوباره اجرا نمی‌شود
-systemctl restart papital-erp && curl -fsS http://localhost:3000/health/startup
+# همه مهاجرت‌های یک ارتقا در یک تراکنش اجرا می‌شوند: یا همه یا هیچ
+systemctl restart papital-erp && bash scripts/verify-startup.sh 3000
 ```
+
+- مهاجرت‌ها روی اتصال جدا و بی مهلت ۶۰ ثانیه‌ای درخواست‌ها اجرا می‌شوند (`MIGRATION_STATEMENT_TIMEOUT`، پیش‌فرض ۰ = بی‌مهلت) و دو اجرای هم‌زمان پشت هم می‌روند (v8.0.82).
+- «was never applied to this database but is older than its last applied migration»: فایل مهاجرتی با `when` کوچک‌تر از آخرین مهاجرت اجراشده اضافه شده است و Drizzle آن را بی‌صدا رد می‌کرد؛ این خطای ساخت نسخه است، نه داده (v8.0.81).
 
 ### چرخش Secretها
 
