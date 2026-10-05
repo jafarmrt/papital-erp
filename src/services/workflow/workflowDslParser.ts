@@ -1,7 +1,6 @@
 import { orm, DbExecutor } from '../../db/drizzle';
 import { 
   documents, 
-  documentItems, 
   productionProjects, 
   pendingMaterials, 
   items, 
@@ -11,6 +10,7 @@ import {
 } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../../middleware/logger';
+import { workflowDocumentAmount } from './workflowDocumentAmount.js';
 import { RuleEngineService, RuleExpression, EvaluationTraceResult, EvaluationTraceItem } from '../ruleEngine.service.js';
 
 export interface WorkflowConditionRule {
@@ -114,12 +114,14 @@ export async function getEntityContext(entityType: string, entityId: string, txE
         [doc] = await txExecutor.select().from(documents).where(eq(documents.refNumber, String(entityId)));
       }
       if (doc) {
-        const itemsList = await txExecutor.select().from(documentItems).where(eq(documentItems.documentId, doc.id));
-        const totalAmount = itemsList.reduce((acc: number, item: typeof documentItems.$inferSelect) => acc + (Number(item.quantity || 0) * Number(item.unitPrice || 0) - Number(item.discount || 0)), 0);
-        context.amount = totalAmount || Number((doc as any).totalAmount) || 0;
-        context.finalAmount = totalAmount || Number((doc as any).totalAmount) || 0;
-        context.totalAmount = totalAmount || Number((doc as any).totalAmount) || 0;
-        context.itemCount = itemsList.length;
+        // v8.0.115 (TD-404): مبلغ قابل پرداخت ریالی (با مالیات، هزینه خدمات و تسعیر)؛ سند ارزی بی نرخ NaN
+        const docAmount = await workflowDocumentAmount(txExecutor, doc);
+        context.amount = docAmount.amountIrr;
+        context.finalAmount = docAmount.amountIrr;
+        context.totalAmount = docAmount.amountIrr;
+        context.amountInCurrency = docAmount.amountInCurrency;
+        context.exchangeRate = docAmount.exchangeRate;
+        context.itemCount = docAmount.lineCount;
         context.docType = doc.type;
         context.type = doc.type;
         context.status = doc.status;

@@ -35,6 +35,8 @@ export interface Customer {
   };
   contacts?: ContactPerson[];
   currency?: string;
+  /** نسخه قفل خوش‌بینانه؛ فرم ویرایش همان را برمی‌گرداند (TD-403) */
+  version?: number;
 }
 
 export interface CRMLead {

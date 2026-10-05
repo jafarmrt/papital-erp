@@ -508,6 +508,11 @@ export class ProcurementService {
       if (isReceive && RECEIVED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و کالای آن دوباره وارد انبار نمی‌شود.`);
       }
+      // v8.0.116 (TD-405): کالای درخواستِ دریافت‌شده وارد انبار شده است؛ هیچ اقدام گردش‌کاری آن را برنمی‌گرداند، هر گامی
+      // که نمونه گردش‌کار داشته باشد (پیش‌تر «خودترمیمی» گام را به «دریافت‌شده» می‌برد و همین جلوی اقدام را می‌گرفت)
+      if (RECEIVED_REQUISITION_STATUSES.has(req.status)) {
+        throw new ConflictError(`درخواست خرید ${req.code} دریافت شده است و اقدام «${actionKey}» روی آن اجرا نمی‌شود (WF_ACTION_NOT_IN_STEP).`);
+      }
       if (isReceive && CLOSED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} رد شده است و کالای آن وارد انبار نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`);
       }
@@ -535,31 +540,9 @@ export class ProcurementService {
 
       const { states, transitions } = await this.workflowGraphOf(wfInst, tx);
 
-      // Auto-heal / synchronize workflow instance state if desynchronized from requisition business status
-      const statusToStateKeyMap: Record<string, string> = {
-        pending: 'pending',
-        under_review: 'pending',
-        manager_approval: 'pending',
-        ordered: 'ordered',
-        approved: 'ordered',
-        received: 'received',
-        completed: 'received',
-        rejected: 'rejected',
-        cancelled: 'rejected'
-      };
-      const expectedStateKey = statusToStateKeyMap[req.status] || 'pending';
-      const currentStateObj = states.find(s => s.id === wfInst.currentStateId);
-
-      if (currentStateObj && currentStateObj.stateKey !== expectedStateKey) {
-        const correctState = states.find(s => s.stateKey === expectedStateKey);
-        if (correctState) {
-          await tx.update(workflowInstances).set({
-            currentStateId: correctState.id,
-            updatedAt: new Date().toISOString()
-          }).where(eq(workflowInstances.id, wfInst.id));
-          wfInst.currentStateId = correctState.id;
-        }
-      }
+      // v8.0.116 (TD-405): گام نمونه گردش‌کار مرجع است و از وضعیت درخواست بازنویسی نمی‌شود. پیش‌تر «خودترمیمی» گام را
+      // بی انتقال و بی تاریخچه به گام هم‌نام وضعیت درخواست می‌برد و امضاها و کارهای گام پیشین بی‌اثر می‌ماند؛ اکنون اقدام
+      // فقط انتقالی از همین گام را اجرا می‌کند و وضعیت درخواست از گام مقصد آن می‌آید (TD-379).
 
       const ACTION_KEY_ALIASES: Record<string, string[]> = {
         mark_received: ['receive_items', 'mark_received', 'receive'],
