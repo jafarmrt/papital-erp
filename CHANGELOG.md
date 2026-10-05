@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.87 — Restore Apply Builds a New Database and Swaps It In
+- RESTORE_MODE=apply no longer restores over the live database: it restores into a new database, verifies it like a drill, refuses while sessions are connected, swaps names and keeps the previous database and uploads directory; attachment files are restored too.
+
 ### v8.0.86 — Restore Drill Works With the Installed Database Role
 - The role install.sh creates has no CREATEDB: restore.sh now creates, drops and renames databases through RESTORE_ADMIN_URL or sudo -u postgres, restores as the application role and stops with guidance before changing anything when neither is available.
 
