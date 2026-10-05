@@ -308,7 +308,7 @@ export class DocumentLifecycleService {
         .where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
       if (!peek) return;
 
-      // v8.0.47 (TD-320): قفل‌ها به همان ترتیب نهایی‌سازی — کالاها (یک‌جا، به ترتیب شناسه) ← پروژه ← سند — و پیش از درج
+      // v8.0.67 (TD-320): قفل‌ها به همان ترتیب نهایی‌سازی — کالاها (یک‌جا، به ترتیب شناسه) ← پروژه ← سند — و پیش از درج
       // ردیف کاردکس معکوس. پیش‌تر سند اول قفل می‌شد، ردیف معکوس درج می‌شد و کالاها به ترتیب ردیف‌های کاردکس قفل می‌شدند؛
       // دو ابطال هم‌کالا یا ابطال و فاکتوری با ترتیب دیگر کالاها به بن‌بست (40P01) می‌رسیدند.
       const kardexItems = await tx.select({ itemId: transactions.itemId }).from(transactions)
@@ -317,7 +317,7 @@ export class DocumentLifecycleService {
         .where(and(eq(documentItems.documentId, id), eq(documentItems.isDeleted, 0)));
       await lockStockItems(tx, [...kardexItems, ...lineItems].map(r => r.itemId));
       // v7.0.105 (TD-237): پروژه پیش از سند قفل می‌شود (سلسله‌مراتب PRODUCTION → DOCUMENTS)، چون رزرو کسرشده حواله نهایی
-      // در همین تراکنش برمی‌گردد؛ از v8.0.47 بی‌توجه به وضعیت پیش از قفل، چون نهایی‌سازی هم‌زمان می‌تواند آن را نهایی کند
+      // در همین تراکنش برمی‌گردد؛ از v8.0.67 بی‌توجه به وضعیت پیش از قفل، چون نهایی‌سازی هم‌زمان می‌تواند آن را نهایی کند
       if (peek.projectId) {
         await tx.select({ id: productionProjects.id }).from(productionProjects)
           .where(eq(productionProjects.id, Number(peek.projectId)))
@@ -466,7 +466,7 @@ export class DocumentLifecycleService {
         }
       }
 
-      // 5. Audit log — v8.0.57 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)
+      // 5. Audit log — v8.0.77 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)
       await logActivity({
         tx,
         username: deletedByUser,

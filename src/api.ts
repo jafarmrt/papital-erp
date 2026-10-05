@@ -136,7 +136,7 @@ export function isPublicApiEndpoint(endpoint: string): boolean {
 const IN_FLIGHT_MAX_WAITS = 15;
 
 /**
- * v8.0.59 (TD-329): `inFlightWaits` شمار انتظارهای انجام‌شده برای پاسخ ۴۰۹ «در حال پردازش» است (فقط فراخوانی درونی).
+ * v8.0.79 (TD-329): `inFlightWaits` شمار انتظارهای انجام‌شده برای پاسخ ۴۰۹ «در حال پردازش» است (فقط فراخوانی درونی).
  */
 export async function fetchJson<T = any>(endpoint: string, options?: RequestInit, retries = 1, inFlightWaits = 0): Promise<T> {
   const method = (options?.method || 'GET').toUpperCase();
@@ -163,7 +163,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
   };
 
   // Auto-attach Idempotency-Key for mutating requests if not explicitly supplied
-  // v8.0.59 (TD-329): کلید از محتوای ارسال (submissionKeyFor) و در تلاش دوباره همان کلید؛ options فراخواننده دست نمی‌خورد
+  // v8.0.79 (TD-329): کلید از محتوای ارسال (submissionKeyFor) و در تلاش دوباره همان کلید؛ options فراخواننده دست نمی‌خورد
   let idempotencyKey: string | null = null;
   if (isMutation && !isPublicEndpoint) {
     const existingKey = headers['Idempotency-Key'] || headers['idempotency-key'] || headers['x-idempotency-key'];
@@ -221,7 +221,7 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
         res.status
       );
     }
-    // v8.0.59 (TD-329): درخواست اول با همین کلید هنوز در سرور اجرا می‌شود؛ پس از مکث همان کلید نتیجه‌اش را می‌گیرد
+    // v8.0.79 (TD-329): درخواست اول با همین کلید هنوز در سرور اجرا می‌شود؛ پس از مکث همان کلید نتیجه‌اش را می‌گیرد
     if (idempotencyKey && isInFlightResponse(res.status, data?.code) && inFlightWaits < IN_FLIGHT_MAX_WAITS) {
       await new Promise(resolve => setTimeout(resolve, inFlightRetryDelayMs(res.headers.get('Retry-After'))));
       return fetchJson(endpoint, sameKeyOptions(), retries, inFlightWaits + 1);

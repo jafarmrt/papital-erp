@@ -28,7 +28,7 @@ const PROJECT = {
   products: [{ id: 'prod-1', item_id: 42, item_code: 'N-1', item_name: 'گردنبند آزمون', customer_code: '', quantity: 2, unit: 'عدد', needs_assembly: false }],
 } as unknown as ProductionProject;
 
-// v8.0.52 (TD-327، تصمیم مالک محصول — گزینه ب «با دلیل»): تحویل بیش از برنامه با دلیل دوباره فرستاده می‌شود
+// v8.0.72 (TD-327، تصمیم مالک محصول — گزینه ب «با دلیل»): تحویل بیش از برنامه با دلیل دوباره فرستاده می‌شود
 describe('project over-delivery reason (TD-327)', () => {
   it('asks for a reason when the server refuses an over-delivery and resends the same delivery with it', async () => {
     const onUpdate = vi.fn();

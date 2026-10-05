@@ -7,7 +7,7 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
 
 /**
- * v8.0.49 — سناریوهای سخت‌گیرانه خزانه و چک حوزه J برای سوئیت business_invariants.
+ * v8.0.69 — سناریوهای سخت‌گیرانه خزانه و چک حوزه J برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 
@@ -149,7 +149,7 @@ export async function checkTransferVoidedTogether(): Promise<string[]> {
   if (outcomes.filter(o => o.status === 'fulfilled').length !== 1) problems.push('از ابطال هم‌زمان دو طرف انتقال یکی پذیرفته نشد');
   await expectRestored('ابطال هم‌زمان دو طرف', a.id, b.id, third.voucherId);
 
-  // ۴) انتقالی که پیش از v8.0.53 نیمه‌باطل شده (طرف پرداخت و سند مشترک باطل، بانک مقصد با مبلغ): طرف دریافت باطل‌شدنی است
+  // ۴) انتقالی که پیش از v8.0.73 نیمه‌باطل شده (طرف پرداخت و سند مشترک باطل، بانک مقصد با مبلغ): طرف دریافت باطل‌شدنی است
   const legacy = await transfer(a.id, b.id);
   await pool.query(`UPDATE treasury_transactions SET status = 'voided' WHERE id = $1`, [legacy.payId]);
   await pool.query('UPDATE bank_accounts SET current_balance = current_balance + 1000 WHERE id = $1', [a.id]);

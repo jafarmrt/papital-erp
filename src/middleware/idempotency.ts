@@ -56,7 +56,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
         lockTimeoutSeconds: options.lockTimeoutSeconds
       });
     } catch (err) {
-      // v8.0.59 (TD-329): کلیدی گرفته نشده؛ ردیف موجود (شاید درخواست در جریان دیگری) دست نمی‌خورد
+      // v8.0.79 (TD-329): کلیدی گرفته نشده؛ ردیف موجود (شاید درخواست در جریان دیگری) دست نمی‌خورد
       logger.error(`[Idempotency Middleware] Error handling key ${cleanKey}:`, err);
       return next(err);
     }
@@ -91,7 +91,7 @@ export function idempotency(options: IdempotencyMiddlewareOptions = {}) {
     const originalSend = res.send.bind(res);
 
     /**
-     * v8.0.59 (TD-329): فقط پاسخ موفق (۲xx) ذخیره می‌شود و پاسخ ناموفق کلید را آزاد می‌کند؛ هر دو پیش از فرستادن پاسخ
+     * v8.0.79 (TD-329): فقط پاسخ موفق (۲xx) ذخیره می‌شود و پاسخ ناموفق کلید را آزاد می‌کند؛ هر دو پیش از فرستادن پاسخ
      * انجام می‌شوند تا تکرار بلافاصله پس از پاسخ، پاسخ ذخیره‌شده را بگیرد نه «در حال پردازش».
      */
     const finalize = async (body: unknown): Promise<void> => {
@@ -143,7 +143,7 @@ function parseBody(body: unknown): unknown {
 /** بیشینه زمانی که کلید یک درخواست زنده نگه داشته می‌شود (پس از آن پنجره قفل عادی منقضی می‌شود) */
 const MAX_LOCK_HOLD_MS = 30 * 60 * 1000;
 
-/** v8.0.59 (TD-329): پنجره قفل کلید را در طول اجرای درخواست، هر یک‌سوم پنجره، از نو تمدید می‌کند */
+/** v8.0.79 (TD-329): پنجره قفل کلید را در طول اجرای درخواست، هر یک‌سوم پنجره، از نو تمدید می‌کند */
 function startLockHeartbeat(key: string, scope: string, userId: number | null, lockTimeoutSeconds: number): () => void {
   const startedAt = Date.now();
   const timer = setInterval(() => {

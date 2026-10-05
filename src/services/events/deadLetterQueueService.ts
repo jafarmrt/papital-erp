@@ -282,7 +282,7 @@ export class DeadLetterQueueService {
   }
 
   /**
-   * v8.0.55 (TD-342): ردیف زیر قفل و پس از گرفتن آن دوباره خوانده می‌شود؛ رویداد بازپخش‌شده دوباره بازپخش نمی‌شود (پیش‌تر
+   * v8.0.75 (TD-342): ردیف زیر قفل و پس از گرفتن آن دوباره خوانده می‌شود؛ رویداد بازپخش‌شده دوباره بازپخش نمی‌شود (پیش‌تر
    * دو بازپخش هم‌زمان یا پشت هم گرداننده‌ها را دو بار اجرا می‌کرد). رویداد صرف‌نظرشده را می‌توان بازپخش کرد.
    */
   private static async replayLocked(id: number, updatedPayload: unknown, userId: number | undefined): Promise<{ success: boolean; message: string; event: typeof deadLetterEvents.$inferSelect }> {
@@ -401,7 +401,7 @@ export class DeadLetterQueueService {
    * Dismiss a quarantined DLQ event (ignoring it from alert metrics).
    */
   static async dismissEvent(id: number, userId?: number, notes?: string) {
-    // v8.0.55 (TD-342): زیر قفل همان ردیف — صرف‌نظر هم‌زمان با بازپخش رد می‌شود و رویداد حل‌شده دوباره علامت نمی‌خورد
+    // v8.0.75 (TD-342): زیر قفل همان ردیف — صرف‌نظر هم‌زمان با بازپخش رد می‌شود و رویداد حل‌شده دوباره علامت نمی‌خورد
     return withDeadLetterRowLock(id, async () => {
       const record = await this.getById(id);
       if (!record) {
@@ -437,7 +437,7 @@ export class DeadLetterQueueService {
       .where(unresolvedDeadLetterCondition())
       .orderBy(deadLetterEvents.id)
       .for('update');
-    // v8.0.55 (TD-342): ردیفی که هم‌اکنون بازپخش می‌شود (قفل مشورتی‌اش گرفته شده) کنار می‌ماند تا Outbox آن را دوباره
+    // v8.0.75 (TD-342): ردیفی که هم‌اکنون بازپخش می‌شود (قفل مشورتی‌اش گرفته شده) کنار می‌ماند تا Outbox آن را دوباره
     // اجرا نکند؛ قفل تراکنشی همان کلید ردیف‌های برگزیده را تا پایان این تراکنش از بازپخش دستی هم دور نگه می‌دارد.
     const pending = await lockIdleDeadLetterRows(tx, unresolved);
 

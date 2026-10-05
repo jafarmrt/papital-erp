@@ -707,7 +707,7 @@ export class PieceworkService {
     executor?: DbExecutor
   ): Promise<typeof pieceworkLogs.$inferSelect> {
     return inTransaction(executor, async (tx) => {
-      // v8.0.56 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
+      // v8.0.76 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
       const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
       const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
@@ -739,7 +739,7 @@ export class PieceworkService {
     executor?: DbExecutor
   ): Promise<typeof pieceworkLogs.$inferSelect> {
     return inTransaction(executor, async (tx) => {
-      // v8.0.56 (TD-328): همان قفل و گارد ویرایش
+      // v8.0.76 (TD-328): همان قفل و گارد ویرایش
       const existing = await lockEditableWorkLog(tx, id, 'امکان حذف کارکردی که در فیش حقوقی درج شده وجود ندارد');
       const [deleted] = await tx.update(pieceworkLogs).set({ isDeleted: 1 })
         .where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0), workLogFreeOfLivePayroll()))

@@ -3,7 +3,7 @@ import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents, type productionProjects } from '../../db/schema.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
 
-/** v8.0.52 (TD-327): کالای محصول پروژه که بیش از مقدار برنامه‌ریزی‌شده به انبار تحویل می‌شود */
+/** v8.0.72 (TD-327): کالای محصول پروژه که بیش از مقدار برنامه‌ریزی‌شده به انبار تحویل می‌شود */
 export interface ProjectOverDelivery {
   itemId: number;
   itemName: string;

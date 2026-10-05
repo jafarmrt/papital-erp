@@ -106,7 +106,7 @@ const addProjectToInventorySchema = z.object({
       unitPrice: z.union([z.number(), z.string()]).optional()
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
     markCompleted: z.boolean().optional(),
-    // v8.0.52 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه
+    // v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه
     overDeliveryReason: z.string().max(500).optional()
   })),
   params: z.object({

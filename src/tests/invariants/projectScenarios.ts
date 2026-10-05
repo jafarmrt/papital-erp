@@ -36,7 +36,7 @@ async function rawWithStock(wh: string, quantity: number, unitPrice: number): Pr
   return { itemId: item.id, documentId };
 }
 
-/** products: محصولات پروژه و مقدار برنامه‌ریزی‌شده؛ «ورود به انبار» فقط همین کالاها را می‌پذیرد (v8.0.52، TD-327) */
+/** products: محصولات پروژه و مقدار برنامه‌ریزی‌شده؛ «ورود به انبار» فقط همین کالاها را می‌پذیرد (v8.0.72، TD-327) */
 async function newProject(title: string, products: Array<{ itemId: number; quantity: number }> = []): Promise<number> {
   const { project } = await ProjectService.createProject({
     title, startDate: await businessTodayIsoDate(), quantity: 1,

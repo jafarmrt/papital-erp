@@ -9,7 +9,7 @@ const DLQ_LOCK = ROW_ADVISORY_LOCK_NAMESPACES.DLQ_EVENT;
 export const RESOLVED_STATUS_LABELS: Record<string, string> = { replayed: 'بازپخش', dismissed: 'صرف‌نظر' };
 
 /**
- * v8.0.55 (TD-342): بازپخش و صرف‌نظر یک ردیف DLQ زیر قفل مشورتی همان ردیف اجرا می‌شوند؛ کار هم‌زمان روی همان ردیف
+ * v8.0.75 (TD-342): بازپخش و صرف‌نظر یک ردیف DLQ زیر قفل مشورتی همان ردیف اجرا می‌شوند؛ کار هم‌زمان روی همان ردیف
  * بی‌انتظار رد می‌شود (گرداننده‌های وب‌هوک و پیامک بیرون از تراکنش اجرا می‌شوند و نباید دو بار اجرا شوند).
  */
 export async function withDeadLetterRowLock<T>(id: number, fn: () => Promise<T>): Promise<T> {
@@ -21,7 +21,7 @@ export async function withDeadLetterRowLock<T>(id: number, fn: () => Promise<T>)
 }
 
 /**
- * v8.0.55 (TD-342): از ردیف‌های DLQ آن‌هایی را برمی‌گرداند که هم‌اکنون بازپخش نمی‌شوند، و قفل تراکنشی همان کلید را تا
+ * v8.0.75 (TD-342): از ردیف‌های DLQ آن‌هایی را برمی‌گرداند که هم‌اکنون بازپخش نمی‌شوند، و قفل تراکنشی همان کلید را تا
  * پایان تراکنش رویشان نگه می‌دارد تا بازپخش دستی هم‌زمان رد شود.
  */
 export async function lockIdleDeadLetterRows<T extends { id: number }>(tx: DbTransaction, rows: T[]): Promise<T[]> {

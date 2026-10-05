@@ -26,7 +26,7 @@ export class BankAccountService {
   /**
    * v7.0.67 (P2-6): مانده‌ها با Decimal محاسبه می‌شوند؛ خروجی API (getBankAccounts) عدد است.
    *
-   * v8.0.54 (TD-340، تصمیم مالک محصول — گزینه الف «از تراکنش‌ها»): مانده جاری هر حساب، مانده خزانه است (مانده اول دوره +
+   * v8.0.74 (TD-340، تصمیم مالک محصول — گزینه الف «از تراکنش‌ها»): مانده جاری هر حساب، مانده خزانه است (مانده اول دوره +
    * تراکنش‌های خزانه + چک‌های وصول‌شده)؛ مانده دفتر کل فقط برای گزارش اختلاف است. پیش‌تر مانده جاری حساب سرفصل‌دار همان
    * مانده دفتر کل بود (بی اسناد پیش‌نویس)، و ردیف سرفصل مشترک چند بانک در مانده دفتری همه آن‌ها شمرده می‌شد.
    */
@@ -106,7 +106,7 @@ export class BankAccountService {
     .where(and(
       eq(journalVouchers.referenceModule, 'treasury_opening'),
       eq(journalVouchers.isDeleted, 0),
-      // v8.0.54 (TD-340): سند افتتاحیه پیش‌نویس در مانده دفتری نیامده است، پس مانده اول دوره هنوز باید افزوده شود
+      // v8.0.74 (TD-340): سند افتتاحیه پیش‌نویس در مانده دفتری نیامده است، پس مانده اول دوره هنوز باید افزوده شود
       or(eq(journalVouchers.status, 'approved'), eq(journalVouchers.status, 'permanent'))
     ));
     for (const ov of openingVouchers) {
@@ -119,7 +119,7 @@ export class BankAccountService {
       // Match journal items for this bank account (deduplicated by item id)
       const matchingItemsMap = new Map<number, typeof vItems[0]>();
       for (const it of vItems) {
-        // v8.0.54 (TD-340): ردیفی که تفصیلی بانک دارد فقط مال همان بانک است، حتی اگر چند بانک یک سرفصل داشته باشند
+        // v8.0.74 (TD-340): ردیفی که تفصیلی بانک دارد فقط مال همان بانک است، حتی اگر چند بانک یک سرفصل داشته باشند
         const taggedBank = it.detailedType === 'bank_account' && it.detailedId ? it.detailedId : null;
         const matchesAccount = Boolean(b.accountId && it.accountId === b.accountId && taggedBank === null);
         const matchesDetailed = taggedBank === b.id;
@@ -218,7 +218,7 @@ export class BankAccountService {
   }
 
   /**
-   * v8.0.54 (TD-340، تصمیم مالک محصول — گزینه الف): «همگام‌سازی مانده بانک‌ها» مانده جاری هر حساب را زیر قفل همه بانک‌ها
+   * v8.0.74 (TD-340، تصمیم مالک محصول — گزینه الف): «همگام‌سازی مانده بانک‌ها» مانده جاری هر حساب را زیر قفل همه بانک‌ها
    * (به ترتیب شناسه) از مانده اول دوره، تراکنش‌های خزانه و چک‌های وصول‌شده می‌سازد؛ اختلاف با دفتر کل فقط گزارش می‌شود.
    * پیش‌تر بیرون از تراکنش و بی‌قفل، مانده جاری با مانده دفتر کل (بی اسناد پیش‌نویس) بازنویسی می‌شد: پرداخت پیش‌نویس
    * ۳۰۰ مانده ۷۰۰ را ۱۰۰۰ می‌کرد و پرداخت هم‌زمان گم می‌شد.
@@ -288,7 +288,7 @@ export class BankAccountService {
 
   /**
    * V4.0.37: پیش‌نمایش کد خودکار حساب خزانه بر اساس نوع (BANK-01, CASH-01, POS-01) برای فرم.
-   * v8.0.58 (TD-325): کد نهایی هنگام ثبت از شمارنده اتمی گرفته می‌شود (`assignTreasuryAccountCode`).
+   * v8.0.78 (TD-325): کد نهایی هنگام ثبت از شمارنده اتمی گرفته می‌شود (`assignTreasuryAccountCode`).
    */
   static async generateNextAccountCode(type: 'bank' | 'cash' | 'pos' | 'petty_cash'): Promise<string> {
     return peekNextTreasuryAccountCode(type);
@@ -320,7 +320,7 @@ export class BankAccountService {
     }
 
     const run = async (tx: DbExecutor) => {
-      // v8.0.58 (TD-325): کد از شمارنده اتمی پیشوند، یا کد دستی یکتا زیر قفل همان شمارنده
+      // v8.0.78 (TD-325): کد از شمارنده اتمی پیشوند، یا کد دستی یکتا زیر قفل همان شمارنده
       const finalCode = await assignTreasuryAccountCode(tx, data.type, data.code);
 
       const [inserted] = await tx.insert(bankAccounts).values({
@@ -349,7 +349,7 @@ export class BankAccountService {
           entityId: String(inserted.id),
           userId: data.userId,
           userName: data.username,
-          tx // v8.0.57 (TD-324)
+          tx // v8.0.77 (TD-324)
         });
         if (!wfInstance) {
           await this.issueTreasuryOpeningVoucher(inserted.id, {
@@ -479,7 +479,7 @@ export class BankAccountService {
     const isStrict = data.strict !== false;
 
     const run = async (tx: DbExecutor) => {
-      // v8.0.58 (TD-325): ردیف بانک FOR UPDATE قفل و تفاوت مانده اول دوره زیر همین قفل حساب می‌شود (پیش‌تر دو ویرایش
+      // v8.0.78 (TD-325): ردیف بانک FOR UPDATE قفل و تفاوت مانده اول دوره زیر همین قفل حساب می‌شود (پیش‌تر دو ویرایش
       // هم‌زمان ۱۰۰ ← ۱۵۰ هر دو تفاوت ۵۰ را از مقدار کهنه می‌گرفتند و موجودی جاری ۲۰۰ می‌شد)؛ حساب حذف‌شده ویرایش نمی‌شود
       const [existing] = await tx.select().from(bankAccounts)
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
@@ -602,7 +602,7 @@ export class BankAccountService {
   }
 
   /**
-   * v8.0.58 (TD-325): حذف در تراکنش و زیر قفل ردیف بانک (همان قفلی که ثبت تراکنش خزانه و وصول چک می‌گیرند)؛ تراکنش‌ها و
+   * v8.0.78 (TD-325): حذف در تراکنش و زیر قفل ردیف بانک (همان قفلی که ثبت تراکنش خزانه و وصول چک می‌گیرند)؛ تراکنش‌ها و
    * چک‌های حساب زیر همین قفل شمرده می‌شوند. پیش‌تر حذف بی‌قفل بود و حساب در میانه ثبت دریافت با تراکنش فعال حذف می‌شد،
    * و حسابی که چک وصول‌شده یا صادرشده داشت هم حذف می‌شد.
    */

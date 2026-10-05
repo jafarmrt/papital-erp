@@ -58,7 +58,7 @@ export async function assertReturnWithinSold(
   if (itemIds.length === 0) return;
 
   const lockedItems = await tx.select({ id: items.id, name: items.name, code: items.code })
-    .from(items).where(inArray(items.id, itemIds)).orderBy(asc(items.id)).for('no key update'); // v8.0.47 (TD-320)
+    .from(items).where(inArray(items.id, itemIds)).orderBy(asc(items.id)).for('no key update'); // v8.0.67 (TD-320)
   const [invoice] = await tx.select({ id: documents.id, refNumber: documents.refNumber })
     .from(documents).where(eq(documents.id, invoiceId)).for('update');
 

@@ -295,7 +295,7 @@ export class WorkflowTransitionExecutor {
     entityId: string;
     userId?: number;
     userName?: string;
-    /** v8.0.51 (TD-326): تراکنش فراخواننده؛ بی آن تراکنش جدا (مانند executeTransition) */
+    /** v8.0.71 (TD-326): تراکنش فراخواننده؛ بی آن تراکنش جدا (مانند executeTransition) */
     tx?: DbClient;
   }) {
     const runInTx = async (tx: DbClient) => {
@@ -313,7 +313,7 @@ export class WorkflowTransitionExecutor {
         ));
       }
 
-      // Fallback: auto-seed default workflows if missing — v8.0.57 (TD-324): نه درون تراکنش فراخواننده (seed روی اتصال
+      // Fallback: auto-seed default workflows if missing — v8.0.77 (TD-324): نه درون تراکنش فراخواننده (seed روی اتصال
       // جدای استخر اجرا می‌شود)؛ فراخواننده‌ای که tx می‌دهد پیش از تراکنش seed می‌کند
       if (!def && !params.tx) {
         await WorkflowDefinitionService.seedDefaultWorkflows();

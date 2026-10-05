@@ -7,7 +7,7 @@ import { outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
 import { itemState } from './scenarioHelpers.js';
 
 /**
- * v8.0.52 — سناریوهای سخت‌گیرانه «ورود به انبار» پروژه حوزه J برای سوئیت business_invariants.
+ * v8.0.72 — سناریوهای سخت‌گیرانه «ورود به انبار» پروژه حوزه J برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 

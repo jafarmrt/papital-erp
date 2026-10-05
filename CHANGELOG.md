@@ -18,43 +18,43 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
-### v8.0.59 — Idempotency Keys Keep Only Successful Responses
+### v8.0.79 — Idempotency Keys Keep Only Successful Responses
 - The browser derives the Idempotency-Key from the submission's content and keeps it until a definitive answer, so a resubmission after a lost response returns the first result; the server stores only successful responses, refuses a key reused for another path or body, and extends the key's lock while a long request runs.
 
-### v8.0.58 — Bank Account Maintenance Under Locks
+### v8.0.78 — Bank Account Maintenance Under Locks
 - Editing a bank account locks its row, so two concurrent opening-balance edits no longer double the difference; treasury account codes come from an atomic counter per prefix and a duplicate custom code is refused; deleting a bank account runs under its lock and is refused while it has transactions or cheques.
 
-### v8.0.57 — No Second Pool Connection Inside Transactions
+### v8.0.77 — No Second Pool Connection Inside Transactions
 - The first voucher of a new fiscal year, document voids, purchase requisitions and bank accounts with an opening balance now finish with a single free pool connection: the fiscal year row, audit log and workflow start run in the same transaction and a stale timezone cache no longer waits for the database.
 
-### v8.0.56 — Work Logs Stay Consistent With Their Payroll
+### v8.0.76 — Work Logs Stay Consistent With Their Payroll
 - Editing or deleting a work log now locks it and checks the payroll link under that lock, so a change racing with payroll issue either lands before the payroll or is refused after it; a work log whose payroll was deleted can be edited again.
 
-### v8.0.55 — Dead-Letter Events Are Replayed Once
+### v8.0.75 — Dead-Letter Events Are Replayed Once
 - Replaying a dead-letter event now runs under a lock on that event: a concurrent replay, dismissal or outbox requeue of the same event is refused, and an event already replayed is not replayed again, so webhooks and SMS are not sent twice.
 
-### v8.0.54 — Bank Balance Sync Uses Treasury Transactions
+### v8.0.74 — Bank Balance Sync Uses Treasury Transactions
 - The bank balance sync now rebuilds each balance under the bank locks from the opening balance, treasury transactions and cleared cheques and only reports the difference from the general ledger (product-owner decision); draft vouchers and a concurrent payment no longer corrupt the balance.
 
-### v8.0.53 — Bank Transfers Are Voided as a Whole
+### v8.0.73 — Bank Transfers Are Voided as a Whole
 - Voiding either side of a bank-to-bank transfer now voids both sides, restores both balances and voids the shared voucher once (product-owner decision); the remaining side of an old half-voided transfer can be voided.
 
-### v8.0.52 — Project Delivery Over Plan Needs a Reason
+### v8.0.72 — Project Delivery Over Plan Needs a Reason
 - Delivering a project's products to stock beyond the planned quantity now needs a recorded reason (product-owner decision), concurrent deliveries are counted under the project lock, and a cancelled project or an item outside the project is refused.
 
-### v8.0.51 — Requisition Receipt Enters Stock Once
+### v8.0.71 — Requisition Receipt Enters Stock Once
 - Receiving a purchase requisition now runs in one transaction under the requisition lock: concurrent or later ordering no longer brings the goods in twice, a received or rejected requisition cannot be received or ordered again, a failed order finalization refuses the receipt, and the received quantity comes from the documents.
 
-### v8.0.50 — Reversed Vouchers Keep Their Reversal
+### v8.0.70 — Reversed Vouchers Keep Their Reversal
 - A draft voucher can no longer be reversed or corrected, and a voucher with an active reversal can no longer go back to draft or be deleted, which used to leave an orphan reversal in the ledger.
 
-### v8.0.49 — Deleted Cheques Stay Deleted
+### v8.0.69 — Deleted Cheques Stay Deleted
 - A deleted cheque can no longer be cleared, bounced or deleted again; clearing it used to add its amount to the bank balance, and a concurrent delete and clear were both accepted.
 
-### v8.0.48 — Each Voucher Is Reversed Only Once
+### v8.0.68 — Each Voucher Is Reversed Only Once
 - Two concurrent correction vouchers, or a correction and a reversal at the same time, no longer both reverse the same voucher; correction and repost lock the original voucher and every path refuses a voucher that already has an active reversal.
 
-### v8.0.47 — Stock Paths Without Deadlocks
+### v8.0.67 — Stock Paths Without Deadlocks
 - Area J (concurrency) reviewed. Every stock path locks all its items at once, in id order and before any other lock, with FOR NO KEY UPDATE, so concurrent voids, invoices, receipts and returns sharing items no longer deadlock and a void's reversal row keeps the Kardex replay equal to the live WAC.
 
 ### v8.0.46 — No Floating Promises

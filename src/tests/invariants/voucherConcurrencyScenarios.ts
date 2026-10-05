@@ -6,7 +6,7 @@ import { createTestItem } from '../fixtures/factories.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
 
 /**
- * v8.0.48 — سناریوهای سخت‌گیرانه سند حسابداری حوزه J برای سوئیت business_invariants.
+ * v8.0.68 — سناریوهای سخت‌گیرانه سند حسابداری حوزه J برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 

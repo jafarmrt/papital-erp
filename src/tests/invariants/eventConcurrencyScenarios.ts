@@ -6,7 +6,7 @@ import { domainEventBus } from '../../services/events/domainEventBus.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 
 /**
- * v8.0.55 — سناریوهای سخت‌گیرانه صف خطای رویدادها (DLQ) حوزه J برای سوئیت business_invariants.
+ * v8.0.75 — سناریوهای سخت‌گیرانه صف خطای رویدادها (DLQ) حوزه J برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 

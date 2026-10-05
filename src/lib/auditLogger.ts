@@ -206,7 +206,7 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
       }
     });
 
-    // v8.0.57 (TD-324): خطای درج درون تراکنش، تراکنش را باطل کرده است؛ بلعیدنش COMMIT را بی‌صدا به ROLLBACK بدل می‌کند
+    // v8.0.77 (TD-324): خطای درج درون تراکنش، تراکنش را باطل کرده است؛ بلعیدنش COMMIT را بی‌صدا به ROLLBACK بدل می‌کند
     if (params.strict === true || params.throwOnError === true || params.tx) {
       throw err;
     }

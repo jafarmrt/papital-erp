@@ -6,7 +6,7 @@ import { idempotency } from '../../middleware/idempotency.js';
 import { errorHandler } from '../../middleware/logger.js';
 
 /**
- * v8.0.59 — سناریوی سخت‌گیرانه «کلید تکرار درخواست» (idempotency) حوزه J برای سوئیت business_invariants: میان‌افزار
+ * v8.0.79 — سناریوی سخت‌گیرانه «کلید تکرار درخواست» (idempotency) حوزه J برای سوئیت business_invariants: میان‌افزار
  * واقعی روی پایگاه داده واقعی، جلوی یک «دریافت/پرداخت» و «انتقال» آزمایشی که شمار اجرای هر کلید را نگه می‌دارند.
  */
 

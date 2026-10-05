@@ -259,7 +259,7 @@ export class DocumentCreationService {
     let projectReservation: ProjectReservationRelease | null = null;
 
     const execute = async (tx: DbClient): Promise<number> => {
-      // v8.0.47 (TD-320): کالاهای سند نهایی پیش از شماره سند و هر نوشتن دیگر، یک‌جا و به ترتیب صعودی شناسه قفل می‌شوند
+      // v8.0.67 (TD-320): کالاهای سند نهایی پیش از شماره سند و هر نوشتن دیگر، یک‌جا و به ترتیب صعودی شناسه قفل می‌شوند
       // (همان ترتیب نهایی‌سازی و ابطال)؛ پیش‌تر رسید کالاها را به ترتیب سطرها قفل می‌کرد و با فاکتور یا ابطالِ همان
       // کالاها به ترتیب دیگر به بن‌بست می‌رسید
       if (docStatus === 'final') await lockStockItems(tx, (docLines || []).map(l => l.itemId));

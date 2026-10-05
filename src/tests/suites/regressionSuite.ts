@@ -2070,7 +2070,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         date: '1404-10-15',
         description: 'Test Voucher with Jalali Date TD-149',
         voucherType: 'general',
-        status: 'approved', // v8.0.50 (TD-323): سند پیش‌نویس بازثبت نمی‌شود
+        status: 'approved', // v8.0.70 (TD-323): سند پیش‌نویس بازثبت نمی‌شود
         items: [
           { accountId: expenseAcc.id, debit: 500000, credit: 0, description: 'Deb row' },
           { accountId: bankAcc.id, debit: 0, credit: 500000, description: 'Cred row' },

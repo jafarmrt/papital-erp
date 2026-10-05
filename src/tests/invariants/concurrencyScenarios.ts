@@ -9,7 +9,7 @@ import { invariantProblems, itemState, receive, watermarks } from './scenarioHel
 import { outcomeProblems, raceBehindRowLock, untilQueued } from './concurrencyHarness.js';
 
 /**
- * v8.0.47 — سناریوهای سخت‌گیرانه همزمانی گردش انبار (TD-320) برای سوئیت business_invariants.
+ * v8.0.67 — سناریوهای سخت‌گیرانه همزمانی گردش انبار (TD-320) برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 

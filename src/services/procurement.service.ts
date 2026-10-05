@@ -17,9 +17,9 @@ import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 const PROCUREMENT_INCOMING_TYPE_SET = new Set(PROCUREMENT_INCOMING_TYPES);
 /** اقدام‌های گردش‌کار «دریافت کالا»ی درخواست خرید */
 const RECEIVE_ACTION_KEYS = ['receive_items', 'mark_received', 'receive'];
-/** v8.0.51 (TD-326): درخواستی که کالایش دریافت شده دوباره دریافت یا سفارش داده نمی‌شود */
+/** v8.0.71 (TD-326): درخواستی که کالایش دریافت شده دوباره دریافت یا سفارش داده نمی‌شود */
 const RECEIVED_REQUISITION_STATUSES = new Set(['received', 'completed']);
-/** v8.0.51 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
+/** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 
 /**
@@ -230,7 +230,7 @@ export class ProcurementService {
       }
     }
 
-    // v8.0.57 (TD-324): تعریف‌های پیش‌فرض گردش‌کار پیش از تراکنش (seed روی اتصال جدا) تا شروع گردش‌کار درون تراکنش
+    // v8.0.77 (TD-324): تعریف‌های پیش‌فرض گردش‌کار پیش از تراکنش (seed روی اتصال جدا) تا شروع گردش‌کار درون تراکنش
     // اتصال دومی نخواهد
     await WorkflowDefinitionService.seedDefaultWorkflows();
 
@@ -256,7 +256,7 @@ export class ProcurementService {
       }).returning();
 
       // Start workflow instance if definition exists
-      // v8.0.57 (TD-324): در همان تراکنش، درون savepoint — شکست گردش‌کار فقط همان را برمی‌گرداند، نه درخواست را
+      // v8.0.77 (TD-324): در همان تراکنش، درون savepoint — شکست گردش‌کار فقط همان را برمی‌گرداند، نه درخواست را
       try {
         const wfInstance = await tx.transaction((sp) => WorkflowTransitionExecutor.startInstance({
           workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
@@ -482,7 +482,7 @@ export class ProcurementService {
   /**
    * Execute workflow transition on purchase requisition
    *
-   * v8.0.51 (TD-326): کل اقدام در یک تراکنش و زیر قفل ردیف درخواست اجرا می‌شود و درخواست زیر همان قفل دوباره خوانده
+   * v8.0.71 (TD-326): کل اقدام در یک تراکنش و زیر قفل ردیف درخواست اجرا می‌شود و درخواست زیر همان قفل دوباره خوانده
    * می‌شود. «دریافت کالا»ی درخواستِ دریافت‌شده یا ردشده رد می‌شود، و نمونه گردش‌کار تنبل در همان تراکنش ساخته می‌شود؛
    * پیش‌تر دو «دریافت» هم‌زمان درخواست بی‌نمونه دو نمونه و دو رسید می‌ساختند. شاخه دریافت: receiveRequisitionItems.
    */
@@ -730,7 +730,7 @@ export class ProcurementService {
         throw new NotFoundError(`درخواست خرید با شناسه #${requisitionId} یافت نشد.`);
       }
       const req = toRequisitionDto(locked);
-      // v8.0.51 (TD-326): درخواستِ دریافت‌شده یا ردشده دوباره سفارش داده نمی‌شود؛ پیش‌تر سفارش و تحویل درخواستی که «دریافت
+      // v8.0.71 (TD-326): درخواستِ دریافت‌شده یا ردشده دوباره سفارش داده نمی‌شود؛ پیش‌تر سفارش و تحویل درخواستی که «دریافت
       // کالا» همه‌اش را وارد انبار کرده بود، کالا را دو بار وارد انبار می‌کرد
       if (RECEIVED_REQUISITION_STATUSES.has(req.status)) {
         throw new ConflictError(`درخواست خرید ${req.code} قبلاً دریافت شده است و دوباره سفارش داده نمی‌شود.`);
@@ -864,7 +864,7 @@ export class ProcurementService {
     const { req, createdDocuments, finalUpdatedReq, newStatus, overOrders } = converted;
 
     // Keep workflow instance state synchronized with new status
-    // v8.0.51 (TD-326): زیر قفل درخواست و فقط اگر وضعیت درخواست هنوز همان است؛ پیش‌تر نمونه تنبل بی‌قفل ساخته می‌شد و
+    // v8.0.71 (TD-326): زیر قفل درخواست و فقط اگر وضعیت درخواست هنوز همان است؛ پیش‌تر نمونه تنبل بی‌قفل ساخته می‌شد و
     // «دریافت کالا»ی هم‌زمان نمونه دومی می‌ساخت. خطای گردش‌کار تبدیل ثبت‌شده را برنمی‌گرداند.
     if (newStatus === 'ordered' || newStatus === 'under_review') {
       try {

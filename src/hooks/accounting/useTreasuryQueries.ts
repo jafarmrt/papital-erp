@@ -39,7 +39,7 @@ export interface ReconcileVariables {
   reconciled: boolean;
 }
 
-// v8.0.54 (TD-340، تصمیم مالک محصول): مانده از تراکنش‌ها ساخته می‌شود و اختلاف با دفتر کل فقط گزارش می‌شود
+// v8.0.74 (TD-340، تصمیم مالک محصول): مانده از تراکنش‌ها ساخته می‌شود و اختلاف با دفتر کل فقط گزارش می‌شود
 function notifyBankSync(report: BankReconciliationReport): void {
   const { syncedCount, discrepantCount } = report;
   if (discrepantCount === 0) {

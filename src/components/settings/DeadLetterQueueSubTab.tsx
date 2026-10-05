@@ -119,7 +119,7 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'خطا در بازپخش رویداد', 'error');
       }
     } catch (err) {
-      // v8.0.55 (TD-342): پیام سرور (در حال بازپخش، پیش‌تر بازپخش‌شده) نشان داده می‌شود، نه «خطای شبکه»
+      // v8.0.75 (TD-342): پیام سرور (در حال بازپخش، پیش‌تر بازپخش‌شده) نشان داده می‌شود، نه «خطای شبکه»
       showToast(errorMessageOf(err) || 'خطای شبکه در بازپخش رویداد', 'error');
     } finally {
       setActionLoadingId(null);

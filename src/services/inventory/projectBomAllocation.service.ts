@@ -147,7 +147,7 @@ async function lockActiveItem(txEngine: DbExecutor, itemId: number): Promise<Ite
     .select()
     .from(items)
     .where(and(eq(items.id, itemId), eq(items.isDeleted, 0)))
-    .for('no key update'); // v8.0.47 (TD-320): هم‌حالت lockStockItems
+    .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems
   if (!item) {
     throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
   }

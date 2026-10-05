@@ -89,7 +89,7 @@ export async function assertVoidKeepsStockHistory(tx: DbExecutor, doc: { id: num
     .from(items)
     .where(inArray(items.id, incomingItemIds))
     .orderBy(asc(items.id))
-    .for('no key update'); // v8.0.47 (TD-320): هم‌حالت lockStockItems
+    .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems
   const allWarehouses = await tx.select({ id: warehouses.id, code: warehouses.code, name: warehouses.name, isActive: warehouses.isActive })
     .from(warehouses);
   const resolve = createLedgerLocationResolver(allWarehouses);

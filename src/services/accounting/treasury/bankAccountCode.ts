@@ -4,7 +4,7 @@ import { bankAccounts, documentRefCounters } from '../../../db/schema.js';
 import { AppError } from '../../../errors/customErrors.js';
 
 /**
- * v8.0.58 (TD-325): کد حساب خزانه (BANK-01، CASH-01، POS-01) از شمارنده اتمی هر پیشوند در `document_ref_counters`
+ * v8.0.78 (TD-325): کد حساب خزانه (BANK-01، CASH-01، POS-01) از شمارنده اتمی هر پیشوند در `document_ref_counters`
  * (ردیف `treasury:<پیشوند>`، سال ۰) ساخته می‌شود (AGENTS.md §1.6). پیش‌تر بیشینه + ۱ بی‌قفل بود: پنج حساب کارت‌خوان
  * هم‌زمان چهار بار POS-01 گرفتند. کد دستی هم زیر قفل همان شمارنده با کدهای حساب‌های فعال سنجیده می‌شود، پس دو ثبت
  * هم‌زمان یک کد هرگز هر دو پذیرفته نمی‌شوند.

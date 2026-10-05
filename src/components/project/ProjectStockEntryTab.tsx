@@ -16,7 +16,7 @@ interface ProjectStockEntryTabProps {
 export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate }: ProjectStockEntryTabProps) {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
-  // v8.0.52 (TD-327): تحویلی که سرور به‌خاطر بیش از برنامه بودن رد کرده و دلیلش
+  // v8.0.72 (TD-327): تحویلی که سرور به‌خاطر بیش از برنامه بودن رد کرده و دلیلش
   const [overDelivery, setOverDelivery] = useState<{ body: Record<string, unknown>; items: ProjectOverDeliveryView[] } | null>(null);
   const [overDeliveryReason, setOverDeliveryReason] = useState<string>('');
   const [markCompleted, setMarkCompleted] = useState<boolean>(false);
@@ -310,7 +310,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
     }
   };
 
-  // v8.0.52 (TD-327): تحویل بیش از برنامه را سرور بی‌دلیل رد می‌کند؛ کادر دلیل باز می‌شود و همان تحویل با دلیل دوباره فرستاده می‌شود
+  // v8.0.72 (TD-327): تحویل بیش از برنامه را سرور بی‌دلیل رد می‌کند؛ کادر دلیل باز می‌شود و همان تحویل با دلیل دوباره فرستاده می‌شود
   function askOverDeliveryReason(err: unknown, body: Record<string, unknown>): boolean {
     const items = overDeliveriesOf(err);
     if (!items) return false;

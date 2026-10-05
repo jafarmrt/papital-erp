@@ -6,7 +6,7 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { accountIdByCode, outcomeProblems, raceBehindRowLock } from './concurrencyHarness.js';
 
 /**
- * v8.0.58 — سناریوهای سخت‌گیرانه نگهداری حساب بانکی حوزه J برای سوئیت business_invariants.
+ * v8.0.78 — سناریوهای سخت‌گیرانه نگهداری حساب بانکی حوزه J برای سوئیت business_invariants.
  * هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 

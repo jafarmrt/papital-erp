@@ -509,7 +509,7 @@ export class VoucherService {
   }
 
   /**
-   * v8.0.48 (TD-321): سند برگشتِ فعالِ یک سند — ابطال (REV-V) یا ابطال برای بازثبت (VOID-REPOST-V). هر سند فقط یک بار
+   * v8.0.68 (TD-321): سند برگشتِ فعالِ یک سند — ابطال (REV-V) یا ابطال برای بازثبت (VOID-REPOST-V). هر سند فقط یک بار
    * برگشت می‌خورد؛ پیش‌تر هر مسیر فقط پیشوند خودش را می‌سنجید و «ابطال و بازثبت» پس از ابطال یا اصلاح (و برعکس) سند را دو
    * بار برمی‌گرداند. فراخواننده سند مبدأ را پیش‌تر در همان تراکنش FOR UPDATE قفل کرده است.
    */
@@ -525,7 +525,7 @@ export class VoucherService {
   }
 
   /**
-   * v8.0.50 (TD-323): سندی که سند برگشت فعال دارد به پیش‌نویس برنمی‌گردد و حذف نمی‌شود؛ پیش‌تر برمی‌گشت و حذف می‌شد و سند
+   * v8.0.70 (TD-323): سندی که سند برگشت فعال دارد به پیش‌نویس برنمی‌گردد و حذف نمی‌شود؛ پیش‌تر برمی‌گشت و حذف می‌شد و سند
    * برگشت بی‌مبدأ می‌ماند (دفتر کل اثر سند را منفی نشان می‌داد).
    */
   private static async assertNoActiveReversal(tx: DbExecutor, voucher: { id: number; voucherNumber: string | number }, action: string): Promise<void> {
@@ -563,7 +563,7 @@ export class VoucherService {
       if (original.voucherType === 'closing') {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال مستقیم نیست.`);
       }
-      // v8.0.50 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
+      // v8.0.70 (TD-323، قاعده TD-251): سند پیش‌نویس سند معکوس تأییدشده نمی‌گیرد؛ پیش‌تر می‌گرفت و دفاتر تأییدشده فقط
       // سند معکوس را می‌دیدند
       if (original.status === 'draft') {
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
@@ -697,7 +697,7 @@ export class VoucherService {
     }
 
     const result = await orm.transaction(async (tx) => {
-      // v8.0.48 (TD-321): سند مبدأ درون همین تراکنش قفل و زیر قفل خوانده و سنجیده می‌شود، مانند reverseVoucher. پیش‌تر
+      // v8.0.68 (TD-321): سند مبدأ درون همین تراکنش قفل و زیر قفل خوانده و سنجیده می‌شود، مانند reverseVoucher. پیش‌تر
       // بیرون از تراکنش و بی‌قفل خوانده می‌شد و گارد «سند معکوس فعال قبلی» ردیفی برای قفل نداشت؛ دو اصلاح هم‌زمان (یا
       // اصلاح و ابطال هم‌زمان) هر دو پذیرفته می‌شدند و اثر سند دو بار برمی‌گشت.
       const [lockedOriginal] = await tx.select({ id: journalVouchers.id }).from(journalVouchers)
@@ -714,7 +714,7 @@ export class VoucherService {
       if (original.voucherType === 'closing') {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل اصلاح مستقیم نیست.`);
       }
-      if (original.status === 'draft') { // v8.0.50 (TD-323)
+      if (original.status === 'draft') { // v8.0.70 (TD-323)
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
 
@@ -725,7 +725,7 @@ export class VoucherService {
       const correctionDate = requireStorageDate(params.date, 'تاریخ سند اصلاحی') || (await businessTodayIsoDate());
       await this.checkFiscalPeriodOpen(correctionDate, tx);
 
-      // C-03 & P0-06: گارد عدم وجود سند معکوس فعال قبلی (از v8.0.48 هر نوع برگشت، زیر قفل سند مبدأ)
+      // C-03 & P0-06: گارد عدم وجود سند معکوس فعال قبلی (از v8.0.68 هر نوع برگشت، زیر قفل سند مبدأ)
       const existingReversal = await this.findActiveReversal(tx, original);
       if (existingReversal) {
         throw new ConflictError(
@@ -874,7 +874,7 @@ export class VoucherService {
     const repostDate = requireStorageDate(params.date, 'تاریخ سند') || (await businessTodayIsoDate());
 
     const result = await orm.transaction(async (tx) => {
-      // v8.0.48 (TD-321): سند مبدأ زیر قفل، مانند reverseVoucher و correctVoucher
+      // v8.0.68 (TD-321): سند مبدأ زیر قفل، مانند reverseVoucher و correctVoucher
       await tx.select({ id: journalVouchers.id }).from(journalVouchers)
         .where(and(eq(journalVouchers.id, params.voucherId), eq(journalVouchers.isDeleted, 0)))
         .for('update');
@@ -890,7 +890,7 @@ export class VoucherService {
       if (original.voucherType === 'closing') {
         throw new BusinessLogicError(`سند اختتامیه شماره «${original.voucherNumber}» قابل ابطال یا بازثبت نیست.`);
       }
-      if (original.status === 'draft') { // v8.0.50 (TD-323)
+      if (original.status === 'draft') { // v8.0.70 (TD-323)
         throw new BusinessLogicError(`سند پیش‌نویس شماره «${original.voucherNumber}» در دفاتر نیامده است و برگشت نمی‌خورد؛ آن را ویرایش یا حذف کنید.`);
       }
 
@@ -898,7 +898,7 @@ export class VoucherService {
         throw new ConflictError(`امکان بازثبت مجدد سند معکوس یا ابطال‌شده «${original.voucherNumber}» وجود ندارد.`);
       }
 
-      // C-03 & P0-06: گارد عدم وجود سند ابطال/بازثبت قبلی (از v8.0.48 هر نوع برگشت)
+      // C-03 & P0-06: گارد عدم وجود سند ابطال/بازثبت قبلی (از v8.0.68 هر نوع برگشت)
       const expectedVoidRef = `VOID-REPOST-V${original.voucherNumber}`;
       const existingReversal = await this.findActiveReversal(tx, original);
       if (existingReversal) {

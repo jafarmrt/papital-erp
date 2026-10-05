@@ -64,7 +64,7 @@ async function startServer() {
         await WorkflowEngineService.seedDefaultWorkflows();
         await EventActionEngineService.seedDefaultRules();
         await WebhookSubscriptionService.seedDefaultSubscriptions();
-        // v8.0.57 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
+        // v8.0.77 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
         await warmDisplayTimezone();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
         // v7.0.31 (TD-193 / audit P1-8): همگام‌سازی کامل اسناد حسابداری و پرکردن موجودی اولیه کاردکس از مسیر

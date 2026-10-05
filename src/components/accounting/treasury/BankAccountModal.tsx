@@ -38,7 +38,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingCode, setIsLoadingCode] = useState(false);
   const [autoCodeGenerated, setAutoCodeGenerated] = useState(false);
-  /** آخرین کد پیشنهادی سرور؛ اگر کاربر تغییرش ندهد کد نهایی هنگام ثبت از شمارنده سرور گرفته می‌شود (v8.0.58، TD-325) */
+  /** آخرین کد پیشنهادی سرور؛ اگر کاربر تغییرش ندهد کد نهایی هنگام ثبت از شمارنده سرور گرفته می‌شود (v8.0.78، TD-325) */
   const [suggestedCode, setSuggestedCode] = useState('');
   const [showAllAccounts, setShowAllAccounts] = useState(false);
 

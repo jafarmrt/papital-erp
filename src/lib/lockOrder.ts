@@ -229,7 +229,7 @@ export function resolveLockHierarchyLevel(
 /**
  * Helper wrapper for ordering and acquiring row-level locks across multiple resources in tx.
  * Automatically resolves lock hierarchy, sorts IDs in ascending order, validates sequence,
- * and acquires row-level locks (items FOR NO KEY UPDATE since v8.0.47 / TD-320, others FOR UPDATE) to prevent database deadlocks.
+ * and acquires row-level locks (items FOR NO KEY UPDATE since v8.0.67 / TD-320, others FOR UPDATE) to prevent database deadlocks.
  */
 export async function withOrderedLocks<T>(
   tx: DbTransaction | any,
@@ -266,7 +266,7 @@ export async function withOrderedLocks<T>(
     const idCol = resource.table.id;
     for (const targetId of resource.ids) {
       if (idCol) {
-        // v8.0.47 (TD-320): ردیف کالا FOR NO KEY UPDATE، هم‌حالت lockStockItems (درج کاردکس در تراکنش دیگر، که قفل
+        // v8.0.67 (TD-320): ردیف کالا FOR NO KEY UPDATE، هم‌حالت lockStockItems (درج کاردکس در تراکنش دیگر، که قفل
         // FOR KEY SHARE کلید خارجی می‌گیرد، با آن تداخل نمی‌کند)؛ بقیه منابع مثل قبل FOR UPDATE تا قفل دوباره‌شان ارتقا نخواهد
         await tx.select().from(resource.table).where(eq(idCol, targetId))
           .for(resource.level === LockHierarchyLevel.ITEMS_STOCK ? 'no key update' : 'update');
