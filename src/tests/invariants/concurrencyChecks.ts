@@ -3,6 +3,7 @@ import { checkReversalLifecycle, checkVoucherReversedOnce } from './voucherConcu
 import { checkBankSyncFromTransactions, checkDeletedChequeFrozen, checkTransferVoidedTogether } from './treasuryConcurrencyScenarios.js';
 import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
 import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
+import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -26,4 +27,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkTransferVoidedTogether(), 'در هر چهار حالت هر دو مانده به ۵۰۰۰ و صفر برگشت، هر دو طرف باطل و سند مشترک بی‌اثر شد'],
   ['inv_td_340_bank_sync_from_transactions', 'v8.0.54: «همگام‌سازی مانده بانک‌ها» مانده را زیر قفل از مانده اول دوره، تراکنش‌های خزانه و چک‌های وصول‌شده می‌سازد؛ سند پیش‌نویس و پرداخت هم‌زمان مانده را خراب نمی‌کنند (TD-340)',
     () => checkBankSyncFromTransactions(), 'مانده‌ها ۷۰۰، ۳۰۰ و ۷۰۰۰ ماندند؛ گزارش مانده خزانه را نشان داد'],
+  ['inv_td_342_dlq_replayed_once', 'v8.0.55: رویداد صف خطا (DLQ) یک بار بازپخش می‌شود؛ بازپخش، صرف‌نظر و بازگردانی گروهی هم‌زمان با بازپخش کنار می‌مانند و رویداد بازپخش‌شده دوباره بازپخش نمی‌شود (TD-342)',
+    () => checkDlqReplayedOnce(), 'گرداننده یک بار اجرا شد؛ کار هم‌زمان و بازپخش دوباره رد شد؛ رویداد صرف‌نظرشده یک بار بازپخش شد'],
 ];

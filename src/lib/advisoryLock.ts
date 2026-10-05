@@ -14,6 +14,14 @@ export const ADVISORY_LOCK_KEYS = {
   WORKFLOW_SLA_REMINDER: 91006,
 } as const;
 
+/**
+ * v8.0.55 (TD-342): فضای نام قفل‌های مشورتی یک‌ردیفی (شکل دوکلیدی: فضای نام و شناسه ردیف؛ با فضای تک‌کلیدی بالا هم‌پوشانی
+ * ندارد).
+ */
+export const ROW_ADVISORY_LOCK_NAMESPACES = {
+  DLQ_EVENT: 91007,
+} as const;
+
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };
 
 /**
@@ -23,16 +31,30 @@ export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired:
  * اگر نمونه دیگری قفل را در اختیار داشته باشد، بدون انتظار `{ acquired: false }` برمی‌گردد.
  */
 export async function withAdvisoryLock<T>(key: number, fn: () => Promise<T>): Promise<AdvisoryLockOutcome<T>> {
+  return withSessionAdvisoryLock('$1::bigint', [key], fn);
+}
+
+/**
+ * v8.0.55 (TD-342): همان قفل سطح جلسه برای یک ردیف (فضای نام + شناسه) — برای کاری که بیرون از تراکنش طول می‌کشد
+ * (مثل اجرای گرداننده‌های وب‌هوک و پیامک یک رویداد) و نباید هم‌زمان دو بار روی یک ردیف اجرا شود. با افتادن اتصال
+ * قفل خودبه‌خود آزاد می‌شود. تراکنشی که باید ردیف در حال کار را کنار بگذارد همان کلید را با
+ * `pg_try_advisory_xact_lock(namespace, id)` می‌آزماید.
+ */
+export async function withRowAdvisoryLock<T>(namespace: number, rowId: number, fn: () => Promise<T>): Promise<AdvisoryLockOutcome<T>> {
+  return withSessionAdvisoryLock('$1::int, $2::int', [namespace, rowId], fn);
+}
+
+async function withSessionAdvisoryLock<T>(keyArgs: string, keys: number[], fn: () => Promise<T>): Promise<AdvisoryLockOutcome<T>> {
   const client = await pool.connect();
   try {
-    const res = await client.query('SELECT pg_try_advisory_lock($1::bigint) AS acquired', [key]);
+    const res = await client.query(`SELECT pg_try_advisory_lock(${keyArgs}) AS acquired`, keys);
     if (!res.rows?.[0]?.acquired) {
       return { acquired: false };
     }
     try {
       return { acquired: true, result: await fn() };
     } finally {
-      await client.query('SELECT pg_advisory_unlock($1::bigint)', [key]).catch(() => undefined);
+      await client.query(`SELECT pg_advisory_unlock(${keyArgs})`, keys).catch(() => undefined);
     }
   } finally {
     client.release();

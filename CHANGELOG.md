@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.55 — Dead-Letter Events Are Replayed Once
+- Replaying a dead-letter event now runs under a lock on that event: a concurrent replay, dismissal or outbox requeue of the same event is refused, and an event already replayed is not replayed again, so webhooks and SMS are not sent twice.
+
 ### v8.0.54 — Bank Balance Sync Uses Treasury Transactions
 - The bank balance sync now rebuilds each balance under the bank locks from the opening balance, treasury transactions and cleared cheques and only reports the difference from the general ledger (product-owner decision); draft vouchers and a concurrent payment no longer corrupt the balance.
 

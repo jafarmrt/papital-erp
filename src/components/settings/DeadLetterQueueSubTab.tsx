@@ -119,7 +119,8 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'خطا در بازپخش رویداد', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در بازپخش رویداد', 'error');
+      // v8.0.55 (TD-342): پیام سرور (در حال بازپخش، پیش‌تر بازپخش‌شده) نشان داده می‌شود، نه «خطای شبکه»
+      showToast(errorMessageOf(err) || 'خطای شبکه در بازپخش رویداد', 'error');
     } finally {
       setActionLoadingId(null);
     }
@@ -140,7 +141,7 @@ export function DeadLetterQueueSubTab() {
         showToast(data?.message || 'خطا در نادیده‌گرفتن رویداد', 'error');
       }
     } catch (err) {
-      showToast('خطای شبکه در نادیده‌گرفتن رویداد', 'error');
+      showToast(errorMessageOf(err) || 'خطای شبکه در نادیده‌گرفتن رویداد', 'error');
     } finally {
       setActionLoadingId(null);
     }
@@ -522,14 +523,16 @@ export function DeadLetterQueueSubTab() {
 
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => handleReplaySingle(item.id)}
-                              disabled={isActing}
-                              className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 rounded-lg transition-all"
-                              title="بازپخش فوری رویداد"
-                            >
-                              <RotateCcw className={`w-3.5 h-3.5 ${isActing ? 'animate-spin' : ''}`} />
-                            </button>
+                            {item.status !== 'replayed' && (
+                              <button
+                                onClick={() => handleReplaySingle(item.id)}
+                                disabled={isActing}
+                                className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 rounded-lg transition-all"
+                                title="بازپخش فوری رویداد"
+                              >
+                                <RotateCcw className={`w-3.5 h-3.5 ${isActing ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
 
                             <button
                               onClick={() => openEditModal(item)}
