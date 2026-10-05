@@ -37,6 +37,8 @@ export interface ConceptualAccountMappingConfig {
   inventoryCountDifferenceAccountCode: string; // Default: '7012' (کسری و اضافات انبار)
   // v8.0.17 (TD-268): کالای رایگان (اهدایی تأمین‌کننده) در رسید و خرید، به میانگین موزون
   donatedGoodsIncomeAccountCode: string;    // Default: '5204' (درآمد کالای اهدایی)
+  // v8.0.114 (TD-413): هزینه سند ضایعات، جدا از سربار ۶۰۰۳
+  wasteExpenseAccountCode: string;          // Default: '6004' (ضایعات و افت کیفی)
 }
 
 export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
@@ -65,6 +67,7 @@ export const DEFAULT_ACCOUNT_MAPPINGS: ConceptualAccountMappingConfig = {
   openingCapitalAccountCode: '4001',
   inventoryCountDifferenceAccountCode: '7012',
   donatedGoodsIncomeAccountCode: '5204',
+  wasteExpenseAccountCode: '6004',
 };
 
 const SETTINGS_KEY = 'accounting_account_mappings';
@@ -336,6 +339,13 @@ export class AccountMappingService {
    */
   static async getDonatedGoodsIncomeAccount(tx?: DbExecutor): Promise<Account | null> {
     return this.resolveAccount('donatedGoodsIncomeAccountCode', tx);
+  }
+
+  /**
+   * v8.0.114 (TD-413): ضایعات و افت کیفی (6004) — بدهکار سند ضایعات؛ پیش‌تر کد ثابت ۶۰۰۳ (سربار ساخت)
+   */
+  static async getWasteExpenseAccount(tx?: DbExecutor): Promise<Account | null> {
+    return this.resolveAccount('wasteExpenseAccountCode', tx);
   }
 
   /**
