@@ -42,7 +42,7 @@ import { fin } from '../lib/financialDecimal.js';
 type DbClient = DbExecutor;
 
 /** فیلدهای وضعیت ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_states) */
-type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey'>;
+type WorkflowStateRef = Pick<WorkflowStateSnapshot, 'id' | 'stateKey' | 'title'>;
 /** فیلدهای انتقال ورکفلو که این سرویس می‌خواند (از تصویر فرایند یا جدول workflow_transitions) */
 type WorkflowTransitionRef = Pick<WorkflowTransitionSnapshot, 'id' | 'fromStateId' | 'toStateId' | 'actionKey' | 'title'>;
 
@@ -571,7 +571,7 @@ export class ProcurementService {
         submit_for_approval: ['send_to_manager', 'submit_to_procurement', 'submit_for_approval'],
         send_to_manager: ['send_to_manager', 'submit_for_approval'],
         submit_to_procurement: ['submit_to_procurement', 'submit_for_review'],
-        reject_request: ['reject_manager', 'reject_procurement', 'reject', 'cancel'],
+        reject_request: ['reject_request', 'reject_manager', 'reject_procurement', 'reject', 'cancel'],
         reject_manager: ['reject_manager', 'reject_request', 'reject', 'reject_procurement'],
         reject_procurement: ['reject_procurement', 'reject_manager', 'reject_request', 'reject'],
         reopen: ['reopen']
@@ -624,7 +624,7 @@ export class ProcurementService {
 
         const toStateKey = result.toState?.stateKey;
         if (toStateKey) {
-          if (toStateKey === 'draft') mappedStatus = 'pending';
+          if (toStateKey === 'draft' || toStateKey === 'pending') mappedStatus = 'pending';
           else if (toStateKey === 'procurement_review') mappedStatus = 'under_review';
           else if (toStateKey === 'manager_approval') mappedStatus = 'manager_approval';
           else if (toStateKey === 'ordered') mappedStatus = 'ordered';
@@ -632,22 +632,10 @@ export class ProcurementService {
           else if (toStateKey === 'rejected') mappedStatus = 'rejected';
         }
       } else {
-        // Graceful direct workshop transition fallback
-        if (['approve_request', 'approve_order', 'direct_admin_order', 'direct_order'].includes(actionKey)) {
-          mappedStatus = 'ordered';
-          transitionTitle = 'تایید مستقیم و صدور سفارش خرید';
-        } else if (RECEIVE_ACTION_KEYS.includes(actionKey)) {
-          mappedStatus = 'received';
-          transitionTitle = 'تحویل و ورود به انبار';
-        } else if (['reject_request', 'reject_manager', 'reject_procurement', 'reject'].includes(actionKey)) {
-          mappedStatus = 'rejected';
-          transitionTitle = 'رد درخواست خرید';
-        } else if (['reopen'].includes(actionKey)) {
-          mappedStatus = 'pending';
-          transitionTitle = 'بازگشایی مجدد درخواست';
-        } else {
-          throw new ValidationError(`گذار با شناسه اقدام «${actionKey}» برای وضعیت فعلی درخواست یافت نشد`);
-        }
+        // v8.0.90 (TD-379): اقدامی که انتقالی از گام جاری ندارد رد می‌شود. پیش‌تر «میان‌بر» وضعیت درخواست را مستقیم
+        // عوض می‌کرد: درخواستِ دریافت‌شده «بازگشایی» و دوباره سفارش و وارد انبار می‌شد و درخواستِ ردشده بی بازگشایی تأیید.
+        const stepTitle = states.find(s => s.id === wfInst.currentStateId)?.title || req.status;
+        throw new ConflictError(`اقدام «${actionKey}» در گام فعلی درخواست خرید ${req.code} («${stepTitle}») مجاز نیست (WF_ACTION_NOT_IN_STEP).`);
       }
 
       const updatedItems = mappedStatus === 'received'

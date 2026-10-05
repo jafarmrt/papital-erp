@@ -61,7 +61,8 @@ export async function checkRequisitionActionFollowsWorkflow(): Promise<string[]>
   const rejected = await requisition(item.id, 5);
   await ProcurementService.executeWorkflowAction(rejected, 'reject_request', ADMIN);
   if (!(await refusal(() => ProcurementService.executeWorkflowAction(rejected, 'approve_request', ADMIN)))) problems.push('«تأیید» درخواستِ ردشده بی بازگشایی پذیرفته شد');
-  if (await refusal(() => ProcurementService.executeWorkflowAction(rejected, 'reopen', ADMIN))) problems.push('«بازگشایی» درخواستِ ردشده رد شد');
+  const reopenError = await refusal(() => ProcurementService.executeWorkflowAction(rejected, 'reopen', ADMIN));
+  if (reopenError) problems.push(`«بازگشایی» درخواستِ ردشده رد شد: ${reopenError}`);
   const reopened = await requisitionState(rejected);
   if (reopened.status !== 'pending' || reopened.stateKey !== 'pending') problems.push(`درخواستِ بازگشایی‌شده «${reopened.status}» و گام «${reopened.stateKey}» است`);
   return problems;

@@ -514,7 +514,9 @@ export class WorkflowTransitionExecutor {
         throw new NotFoundError('نمونه ورکفلو یافت نشد');
       }
 
-      if (instance.status !== 'IN_PROGRESS') {
+      // v8.0.90 (TD-379): فرایند ردشده فقط با انتقالی ادامه می‌یابد که طراح از گام ردشده کشیده است (مثل «بازگشایی»)؛
+      // پایین‌تر انتقال باید از گام جاری باشد. فرایند تکمیل‌شده هرگز ادامه نمی‌یابد.
+      if (instance.status !== 'IN_PROGRESS' && instance.status !== 'REJECTED') {
         throw new ConflictError('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
       }
 
