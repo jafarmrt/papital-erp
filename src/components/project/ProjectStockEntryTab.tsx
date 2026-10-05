@@ -4,7 +4,8 @@ import { ProductionProject, ProjectProductItem, Item } from '../../types';
 import { fetchJson } from '../../api';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import toast from 'react-hot-toast';
-import { toPersianDigits } from '../../utils';
+import { toPersianDigits, errorMessageOf } from '../../utils';
+import { ProjectOverDeliveryPrompt, overDeliveriesOf, type ProjectOverDeliveryView } from './ProjectOverDeliveryPrompt';
 
 interface ProjectStockEntryTabProps {
   project: ProductionProject;
@@ -15,6 +16,9 @@ interface ProjectStockEntryTabProps {
 export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate }: ProjectStockEntryTabProps) {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
+  // v8.0.72 (TD-327): تحویلی که سرور به‌خاطر بیش از برنامه بودن رد کرده و دلیلش
+  const [overDelivery, setOverDelivery] = useState<{ body: Record<string, unknown>; items: ProjectOverDeliveryView[] } | null>(null);
+  const [overDeliveryReason, setOverDeliveryReason] = useState<string>('');
   const [markCompleted, setMarkCompleted] = useState<boolean>(false);
   const { data: warehouses = [] } = useWarehousesQuery();
   const [targetLocation, setTargetLocation] = useState<string>('');
@@ -212,23 +216,24 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       return;
     }
 
+    const body = {
+      itemsToAdd: [
+        {
+          itemId: Number(itemId),
+          quantity: Number(qty),
+          location: targetLocation,
+          unitPrice: cost && cost > 0 ? Number(cost) : undefined,
+          notes: `ورود مستقیم از پروژه کنترل تولید ${project.project_code || project.id} - محصول ${product.item_name}`
+        }
+      ],
+      markCompleted
+    };
     setSubmitting(true);
     try {
       const res = await fetchJson(`/projects/${project.id}/add-to-inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemsToAdd: [
-            {
-              itemId: Number(itemId),
-              quantity: Number(qty),
-              location: targetLocation,
-              unitPrice: cost && cost > 0 ? Number(cost) : undefined,
-              notes: `ورود مستقیم از پروژه کنترل تولید ${project.project_code || project.id} - محصول ${product.item_name}`
-            }
-          ],
-          markCompleted
-        })
+        body: JSON.stringify(body)
       });
 
       if (res && (res.success || res.addedCount !== undefined || res.message)) {
@@ -238,7 +243,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         toast.error(res?.error || 'خطا در ثبت ورود به انبار');
       }
     } catch (err: any) {
-      toast.error(err.message || 'خطا در ارتباط با سرور');
+      if (!askOverDeliveryReason(err, body)) toast.error(err.message || 'خطا در ارتباط با سرور');
     } finally {
       setSubmitting(false);
     }
@@ -273,21 +278,22 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
       return;
     }
 
+    const body = {
+      itemsToAdd: validItems.map(({ itemId, quantity, location, notes, unitPrice }) => ({
+        itemId,
+        quantity,
+        location,
+        notes,
+        unitPrice
+      })),
+      markCompleted
+    };
     setBatchSubmitting(true);
     try {
       const res = await fetchJson(`/projects/${project.id}/add-to-inventory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemsToAdd: validItems.map(({ itemId, quantity, location, notes, unitPrice }) => ({
-            itemId,
-            quantity,
-            location,
-            notes,
-            unitPrice
-          })),
-          markCompleted
-        })
+        body: JSON.stringify(body)
       });
 
       if (res && (res.success || res.addedCount !== undefined || res.message)) {
@@ -298,9 +304,39 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
         toast.error(res?.error || 'خطا در ثبت دسته‌ای محصولات به انبار');
       }
     } catch (err: any) {
-      toast.error(err.message || 'خطا در ارتباط با سرور');
+      if (!askOverDeliveryReason(err, body)) toast.error(err.message || 'خطا در ارتباط با سرور');
     } finally {
       setBatchSubmitting(false);
+    }
+  };
+
+  // v8.0.72 (TD-327): تحویل بیش از برنامه را سرور بی‌دلیل رد می‌کند؛ کادر دلیل باز می‌شود و همان تحویل با دلیل دوباره فرستاده می‌شود
+  function askOverDeliveryReason(err: unknown, body: Record<string, unknown>): boolean {
+    const items = overDeliveriesOf(err);
+    if (!items) return false;
+    setOverDeliveryReason('');
+    setOverDelivery({ body, items });
+    return true;
+  }
+
+  const confirmOverDelivery = async () => {
+    const reason = overDeliveryReason.trim();
+    if (!overDelivery || !reason) return;
+    setSubmitting(true);
+    try {
+      const res = await fetchJson(`/projects/${project.id}/add-to-inventory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...overDelivery.body, overDeliveryReason: reason })
+      });
+      toast.success(`تحویل بیش از برنامه با دلیل ثبت شد${res?.refNumber ? ` (رسید تولید ${toPersianDigits(res.refNumber)})` : ''}`);
+      setOverDelivery(null);
+      setSelectedIds(new Set());
+      onUpdate();
+    } catch (err) {
+      toast.error(errorMessageOf(err) || 'خطا در ارتباط با سرور');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -316,6 +352,16 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
 
   return (
     <div className="space-y-4 text-xs animate-fadeIn">
+      {overDelivery && (
+        <ProjectOverDeliveryPrompt
+          items={overDelivery.items}
+          reason={overDeliveryReason}
+          onReasonChange={setOverDeliveryReason}
+          onConfirm={() => void confirmOverDelivery()}
+          onCancel={() => setOverDelivery(null)}
+          submitting={submitting}
+        />
+      )}
       {/* Top Banner & Settings */}
       <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

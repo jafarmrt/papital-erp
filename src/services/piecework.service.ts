@@ -6,6 +6,7 @@ import { parseQuantityOrTime } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
+import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
 import {
   allocatePieceworkTaskCode,
   assertPieceworkTaskCodeAvailable,
@@ -58,6 +59,10 @@ export interface CreatePieceworkLogInput {
   notes?: string;
   createdById?: number;
   createdByUsername?: string;
+}
+
+async function inTransaction<T>(externalTx: DbExecutor | undefined, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
+  return externalTx ? fn(externalTx) : orm.transaction(fn);
 }
 
 export class PieceworkService {
@@ -699,33 +704,31 @@ export class PieceworkService {
       notes?: string;
       projectId?: number | string | null;
     },
-    executor: DbExecutor = orm
+    executor?: DbExecutor
   ): Promise<typeof pieceworkLogs.$inferSelect> {
-    const [existing] = await executor.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0)));
-    if (!existing) {
-      throw new NotFoundError('ردیف کارکرد یافت نشد');
-    }
+    return inTransaction(executor, async (tx) => {
+      // v8.0.76 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
+      const existing = await lockEditableWorkLog(tx, id, 'کارکردی که در فیش حقوقی درج شده قابل تغییر نیست');
 
-    if (existing.status === 'paid' || existing.payrollId) {
-      throw new BadRequestError('کارکردی که در فیش تسویه‌شده درج شده قابل تغییر نیست');
-    }
+      const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
+      const newQty = data.quantity !== undefined ? parseQuantityOrTime(data.quantity) : existing.quantity;
+      const newRate: FinancialDecimal = data.unitRate !== undefined ? fin(data.unitRate) : existing.unitRate;
+      const newTotal = fin(newQty).multiply(newRate);
 
-    const isoDate = data.date !== undefined ? requireStorageDate(data.date, 'تاریخ کارکرد') || existing.date : existing.date;
-    const newQty = data.quantity !== undefined ? parseQuantityOrTime(data.quantity) : existing.quantity;
-    const newRate: FinancialDecimal = data.unitRate !== undefined ? fin(data.unitRate) : existing.unitRate;
-    const newTotal = fin(newQty).multiply(newRate);
-
-    const [updated] = await executor.update(pieceworkLogs).set({
-      date: isoDate,
-      dateIso: isoDate,
-      quantity: newQty,
-      unitRate: money(newRate),
-      totalAmount: money(newTotal),
-      projectId: data.projectId !== undefined ? (data.projectId ? Number(data.projectId) : null) : existing.projectId,
-      notes: data.notes !== undefined ? String(data.notes).trim() : existing.notes
-    }).where(eq(pieceworkLogs.id, id)).returning();
-
-    return updated;
+      const [updated] = await tx.update(pieceworkLogs).set({
+        date: isoDate,
+        dateIso: isoDate,
+        quantity: newQty,
+        unitRate: money(newRate),
+        totalAmount: money(newTotal),
+        projectId: data.projectId !== undefined ? (data.projectId ? Number(data.projectId) : null) : existing.projectId,
+        notes: data.notes !== undefined ? String(data.notes).trim() : existing.notes
+      }).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0), workLogFreeOfLivePayroll())).returning();
+      if (!updated) {
+        throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
+      }
+      return updated;
+    });
   }
 
   /**
@@ -733,19 +736,19 @@ export class PieceworkService {
    */
   static async deleteWorkLog(
     id: number,
-    executor: DbExecutor = orm
+    executor?: DbExecutor
   ): Promise<typeof pieceworkLogs.$inferSelect> {
-    const [existing] = await executor.select().from(pieceworkLogs).where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0)));
-    if (!existing) {
-      throw new NotFoundError('ردیف کارکرد یافت نشد');
-    }
-
-    if (existing.status === 'paid' || existing.payrollId) {
-      throw new BadRequestError('امکان حذف کارکرد تسویه شده وجود ندارد');
-    }
-
-    await executor.update(pieceworkLogs).set({ isDeleted: 1 }).where(eq(pieceworkLogs.id, id));
-    return existing;
+    return inTransaction(executor, async (tx) => {
+      // v8.0.76 (TD-328): همان قفل و گارد ویرایش
+      const existing = await lockEditableWorkLog(tx, id, 'امکان حذف کارکردی که در فیش حقوقی درج شده وجود ندارد');
+      const [deleted] = await tx.update(pieceworkLogs).set({ isDeleted: 1 })
+        .where(and(eq(pieceworkLogs.id, id), eq(pieceworkLogs.isDeleted, 0), workLogFreeOfLivePayroll()))
+        .returning({ id: pieceworkLogs.id });
+      if (!deleted) {
+        throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
+      }
+      return existing;
+    });
   }
 
   /**

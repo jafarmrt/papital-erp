@@ -144,7 +144,7 @@ export interface AuditLogParams {
   req?: Request | any; // If express req is passed, IP & User are auto-extracted if missing
   strict?: boolean; // When true, does not swallow insertion errors; re-throws after structured logging
   throwOnError?: boolean; // Alias for strict
-  tx?: any; // Allows participating in an ongoing database transaction
+  tx?: any; // Allows participating in an ongoing database transaction (insertion errors then always propagate)
 }
 
 export interface AuditLogResult {
@@ -206,7 +206,8 @@ export async function logActivity(params: AuditLogParams): Promise<AuditLogResul
       }
     });
 
-    if (params.strict === true || params.throwOnError === true) {
+    // v8.0.77 (TD-324): خطای درج درون تراکنش، تراکنش را باطل کرده است؛ بلعیدنش COMMIT را بی‌صدا به ROLLBACK بدل می‌کند
+    if (params.strict === true || params.throwOnError === true || params.tx) {
       throw err;
     }
 

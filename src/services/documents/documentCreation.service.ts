@@ -13,6 +13,7 @@ import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
+import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { DocumentRefNumberService, MAX_REF_COUNTER_VALUE, extractRefSerial } from './documentRefNumber.service.js';
 import { ItemWarehouseStockService } from '../inventory/itemWarehouseStock.service.js';
 import { DocumentStockEngine } from './documentStockEngine.service.js';
@@ -278,6 +279,10 @@ export class DocumentCreationService {
     let projectReservation: ProjectReservationRelease | null = null;
 
     const execute = async (tx: DbClient): Promise<number> => {
+      // v8.0.67 (TD-320): کالاهای سند نهایی پیش از شماره سند و هر نوشتن دیگر، یک‌جا و به ترتیب صعودی شناسه قفل می‌شوند
+      // (همان ترتیب نهایی‌سازی و ابطال)؛ پیش‌تر رسید کالاها را به ترتیب سطرها قفل می‌کرد و با فاکتور یا ابطالِ همان
+      // کالاها به ترتیب دیگر به بن‌بست می‌رسید
+      if (docStatus === 'final') await lockStockItems(tx, (docLines || []).map(l => l.itemId));
       if (finalProjectId !== null) {
         const [projExists] = await tx
           .select({ id: productionProjects.id })
@@ -401,7 +406,7 @@ export class DocumentCreationService {
           })
           .from(items)
           .where(and(inArray(items.id, sortedAuditItemIds), eq(items.isDeleted, 0)))
-          .for('update');
+          .for('no key update');
         const auditItemMap = new Map(lockedAuditItems.map(it => [it.id, it]));
         // v7.0.45 (audit P2-1): موجودی ثبت‌شده هر انبار از جدول موجودی انبارها (منبع حقیقت)
         const auditStockMap = await ItemWarehouseStockService.getStocksForItems(tx, sortedAuditItemIds);
@@ -481,7 +486,7 @@ export class DocumentCreationService {
             })
             .from(items)
             .where(and(inArray(items.id, distinctSortedIds), eq(items.isDeleted, 0)))
-            .for('update');
+            .for('no key update');
           const dbItemMap = new Map(lockedDbItems.map(it => [it.id, it]));
           // v7.0.45 (audit P2-1): موجودی انبارها از جدول نرمال (منبع حقیقت)، نه کش JSONB
           const tableStockMap = await ItemWarehouseStockService.getStocksForItems(tx, distinctSortedIds);

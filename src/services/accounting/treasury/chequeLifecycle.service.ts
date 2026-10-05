@@ -364,8 +364,8 @@ export class ChequeLifecycleService {
           throw new ValidationError(`حساب معین مرتبط در چارت حساب‌ها برای حساب بانکی «${bank.title}» تعریف نشده است؛ وصول چک به این حساب ممکن نیست`);
         }
 
-        // 2. Lock cheque (level 20) SECOND
-        const [chq] = await txEngine.select().from(cheques).where(eq(cheques.id, id)).for('update');
+        // 2. Lock cheque (level 20) SECOND — v8.0.69 (TD-322): چک حذف‌شده «یافت نشد» است؛ پیش‌تر وصول آن پذیرفته و مانده بانک زیاد می‌شد
+        const [chq] = await txEngine.select().from(cheques).where(and(eq(cheques.id, id), eq(cheques.isDeleted, 0))).for('update');
         if (!chq) throw new NotFoundError('چک مورد نظر یافت نشد');
         existing = chq;
         bankRecord = bank;
@@ -373,7 +373,7 @@ export class ChequeLifecycleService {
         validateLockOrder([
           { name: 'cheque', hierarchyLevel: LockHierarchyLevel.CHEQUES },
         ]);
-        const [chq] = await txEngine.select().from(cheques).where(eq(cheques.id, id)).for('update');
+        const [chq] = await txEngine.select().from(cheques).where(and(eq(cheques.id, id), eq(cheques.isDeleted, 0))).for('update'); // v8.0.69 (TD-322)
         if (!chq) throw new NotFoundError('چک مورد نظر یافت نشد');
         existing = chq;
       }
@@ -712,7 +712,8 @@ export class ChequeLifecycleService {
       validateLockOrder([
         { name: 'cheque', hierarchyLevel: LockHierarchyLevel.CHEQUES },
       ]);
-      const [existing] = await txEngine.select().from(cheques).where(eq(cheques.id, id)).for('update');
+      // v8.0.69 (TD-322): حذف دوباره چک حذف‌شده «یافت نشد» است و اسناد آن را دوباره بی‌اثر نمی‌کند
+      const [existing] = await txEngine.select().from(cheques).where(and(eq(cheques.id, id), eq(cheques.isDeleted, 0))).for('update');
       if (!existing) throw new NotFoundError('چک مورد نظر یافت نشد');
       if (existing.status === 'passed' || existing.status === 'spent') {
         throw new BusinessLogicError('چک وصول‌شده یا خرج‌شده قابل حذف نیست — اسناد مالی مربوط به آن صادر گردیده است');

@@ -10,6 +10,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { ProjectService } from '../services/projects.service.js';
+import { idempotency } from '../middleware/idempotency.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -104,7 +105,9 @@ const addProjectToInventorySchema = z.object({
       notes: z.string().optional(),
       unitPrice: z.union([z.number(), z.string()]).optional()
     })).min(1, 'حداقل یک محصول برای ورود به انبار الزامی است'),
-    markCompleted: z.boolean().optional()
+    markCompleted: z.boolean().optional(),
+    // v8.0.72 (TD-327): دلیل تحویل بیش از مقدار برنامه‌ریزی‌شده پروژه
+    overDeliveryReason: z.string().max(500).optional()
   })),
   params: z.object({
     id: z.string().regex(/^\d+$/, 'شناسه پروژه نامعتبر است')
@@ -748,10 +751,10 @@ router.put('/projects/:id', authorizePermission('projects.edit'), validate(updat
 }));
 
 // POST /api/projects/:id/add-to-inventory - Add produced project products to warehouse stock
-router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit'), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
+router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit'), idempotency({ scope: 'project_delivery' }), validate(addProjectToInventorySchema), asyncHandler(async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { itemsToAdd, markCompleted } = req.body;
+    const { itemsToAdd, markCompleted, overDeliveryReason } = req.body;
     const currentUser = req.user?.username || 'سیستم';
 
     const result = await ProjectService.addProjectToInventory({
@@ -759,7 +762,8 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       itemsToAdd,
       markCompleted,
       currentUser,
-      userId: req.user?.id
+      userId: req.user?.id,
+      overDeliveryReason
     });
 
     await logActivity({
@@ -769,7 +773,8 @@ router.post('/projects/:id/add-to-inventory', authorizePermission('projects.edit
       action: 'UPDATE',
       entity: 'پروژه تولید',
       entityId: String(id),
-      description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}`
+      description: `افزایش موجودی انبار بابت تحویل ${result.addedCount} قلم محصول از پروژه ${result.projectCode}${result.refNumber ? ` با رسید تولید ${result.refNumber}` : ''}${result.overDeliveries.length > 0 ? ` (تحویل بیش از برنامه با دلیل: ${overDeliveryReason})` : ''}`,
+      ...(result.overDeliveries.length > 0 ? { details: { overDeliveries: result.overDeliveries, overDeliveryReason } } : {})
     });
 
     res.json({

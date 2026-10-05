@@ -36,8 +36,12 @@ async function rawWithStock(wh: string, quantity: number, unitPrice: number): Pr
   return { itemId: item.id, documentId };
 }
 
-async function newProject(title: string): Promise<number> {
-  const { project } = await ProjectService.createProject({ title, startDate: await businessTodayIsoDate(), quantity: 1 } as Parameters<typeof ProjectService.createProject>[0]);
+/** products: محصولات پروژه و مقدار برنامه‌ریزی‌شده؛ «ورود به انبار» فقط همین کالاها را می‌پذیرد (v8.0.72، TD-327) */
+async function newProject(title: string, products: Array<{ itemId: number; quantity: number }> = []): Promise<number> {
+  const { project } = await ProjectService.createProject({
+    title, startDate: await businessTodayIsoDate(), quantity: 1,
+    products: products.map((p, i) => ({ id: `prod-${i + 1}`, item_id: p.itemId, item_code: '', item_name: '', customer_code: '', quantity: p.quantity, unit: 'عدد', needs_assembly: false })),
+  } as Parameters<typeof ProjectService.createProject>[0]);
   return project.id;
 }
 
@@ -170,7 +174,7 @@ export async function checkProjectDeliveryPostsVoucher(wh: string): Promise<stri
   const mark = await voucherMark();
   const raw = await rawWithStock(wh, 10, 100000);
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
-  const projectId = await newProject('پروژه آزمون تحویل');
+  const projectId = await newProject('پروژه آزمون تحویل', [{ itemId: product.id, quantity: 3 }]);
   const scope = { itemIds: [raw.itemId, product.id], documentIdAfter: 0, voucherIdAfter: mark };
   await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId: raw.itemId, quantity: 4, location: wh }], username: 'inv' });
 
@@ -279,7 +283,7 @@ export async function probeBomReceiptAllocationFromNothing(wh: string): Promise<
 /** TD-285 (کاوش رگرسیون؛ رفع v8.0.35): تحویل کالای ساخته‌شده پروژه به انبار («ورود به انبار») موجودی را بی‌سند حسابداری بالا می‌برد */
 export async function probeProjectDeliveryWithoutVoucher(wh: string): Promise<boolean> {
   const product = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
-  const projectId = await newProject('پروژه کاوش تحویل');
+  const projectId = await newProject('پروژه کاوش تحویل', [{ itemId: product.id, quantity: 2 }]);
   const mark = await voucherMark();
   await ProjectService.addProjectToInventory({ projectId, itemsToAdd: [{ itemId: product.id, quantity: 2, unitPrice: 300000, location: wh }], currentUser: 'inv' });
   const { gap } = await inventoryValueGap({ itemIds: [product.id], documentIdAfter: 0, voucherIdAfter: mark });

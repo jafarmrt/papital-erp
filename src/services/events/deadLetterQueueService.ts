@@ -6,6 +6,8 @@ import { domainEventBus } from './domainEventBus.js';
 import { BaseDomainEvent, AggregateType } from './domainEvents.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
+import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
+import { lockIdleDeadLetterRows, RESOLVED_STATUS_LABELS, withDeadLetterRowLock } from './deadLetterRowLock.js';
 
 /**
  * TD-245: وضعیت‌های «حل‌شده» صف قرنطینه — رویداد بازپخش‌شده یا صرف‌نظرشده دیگر خطای باز نیست.
@@ -276,9 +278,20 @@ export class DeadLetterQueueService {
    * Replay/Reprocess a single DLQ item.
    */
   static async replayEvent(id: number, updatedPayload?: unknown, userId?: number): Promise<{ success: boolean; message: string; event: typeof deadLetterEvents.$inferSelect }> {
+    return withDeadLetterRowLock(id, () => this.replayLocked(id, updatedPayload, userId));
+  }
+
+  /**
+   * v8.0.75 (TD-342): ردیف زیر قفل و پس از گرفتن آن دوباره خوانده می‌شود؛ رویداد بازپخش‌شده دوباره بازپخش نمی‌شود (پیش‌تر
+   * دو بازپخش هم‌زمان یا پشت هم گرداننده‌ها را دو بار اجرا می‌کرد). رویداد صرف‌نظرشده را می‌توان بازپخش کرد.
+   */
+  private static async replayLocked(id: number, updatedPayload: unknown, userId: number | undefined): Promise<{ success: boolean; message: string; event: typeof deadLetterEvents.$inferSelect }> {
     const record = await this.getById(id);
     if (!record) {
-      throw new Error(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
+      throw new NotFoundError(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
+    }
+    if (record.status === 'replayed') {
+      throw new ConflictError(`رویداد #${id} صف خطا پیش‌تر بازپخش شده است و دوباره بازپخش نمی‌شود.`);
     }
 
     const payload = updatedPayload || record.payload;
@@ -388,19 +401,26 @@ export class DeadLetterQueueService {
    * Dismiss a quarantined DLQ event (ignoring it from alert metrics).
    */
   static async dismissEvent(id: number, userId?: number, notes?: string) {
-    const record = await this.getById(id);
-    if (!record) {
-      throw new Error(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
-    }
+    // v8.0.75 (TD-342): زیر قفل همان ردیف — صرف‌نظر هم‌زمان با بازپخش رد می‌شود و رویداد حل‌شده دوباره علامت نمی‌خورد
+    return withDeadLetterRowLock(id, async () => {
+      const record = await this.getById(id);
+      if (!record) {
+        throw new NotFoundError(`رکورد با شناسه ${id} در صف DLQ یافت نشد.`);
+      }
+      const resolvedAs = RESOLVED_STATUS_LABELS[record.status];
+      if (resolvedAs) {
+        throw new ConflictError(`رویداد #${id} صف خطا پیش‌تر ${resolvedAs} شده است.`);
+      }
 
-    const [updated] = await orm
-      .update(deadLetterEvents)
-      .set(this.resolutionFields('dismissed', userId, notes || 'صرف‌نظر شده توسط کاربر مدیر'))
-      .where(eq(deadLetterEvents.id, id))
-      .returning();
+      const [updated] = await orm
+        .update(deadLetterEvents)
+        .set(this.resolutionFields('dismissed', userId, notes || 'صرف‌نظر شده توسط کاربر مدیر'))
+        .where(eq(deadLetterEvents.id, id))
+        .returning();
 
-    logger.info(`[DLQ] Dismissed event #${id} by user ${userId || 'system'}`);
-    return updated;
+      logger.info(`[DLQ] Dismissed event #${id} by user ${userId || 'system'}`);
+      return updated;
+    });
   }
 
   /**
@@ -411,12 +431,15 @@ export class DeadLetterQueueService {
    * با moveToDeadLetter دوباره قرنطینه می‌کند. ردیف‌های replayed / dismissed دست نمی‌خورند.
    */
   static async requeueUnresolvedToOutbox(tx: DbTransaction, userId?: number): Promise<DeadLetterRequeueResult> {
-    const pending = await tx
+    const unresolved = await tx
       .select()
       .from(deadLetterEvents)
       .where(unresolvedDeadLetterCondition())
       .orderBy(deadLetterEvents.id)
       .for('update');
+    // v8.0.75 (TD-342): ردیفی که هم‌اکنون بازپخش می‌شود (قفل مشورتی‌اش گرفته شده) کنار می‌ماند تا Outbox آن را دوباره
+    // اجرا نکند؛ قفل تراکنشی همان کلید ردیف‌های برگزیده را تا پایان این تراکنش از بازپخش دستی هم دور نگه می‌دارد.
+    const pending = await lockIdleDeadLetterRows(tx, unresolved);
 
     if (pending.length === 0) {
       return { requeuedCount: 0, dlqIds: [], originalEventIds: [], reinsertedEventIds: [], before: [] };

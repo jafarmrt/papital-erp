@@ -48,11 +48,11 @@ const syncBanksHandler = asyncHandler(async (req, res) => {
     action: 'UPDATE',
     entity: 'bank_reconciliation',
     entityId: 'sync',
-    description: `همگام‌سازی و تطبیق مانده حساب‌های بانکی با دفاتر اسناد دوبل (${report.syncedCount} حساب همگام، ${report.discrepantCount} مغایرت)`,
+    description: `همگام‌سازی مانده حساب‌های بانکی از تراکنش‌ها (${report.syncedCount} حساب هم‌خوان با دفتر کل، ${report.discrepantCount} اختلاف)`,
     details: { report },
     ipAddress: req.ip || '',
   });
-  res.json({ message: 'عملیات تطبیق و همگام‌سازی با دفاتر اسناد دوبل با موفقیت انجام شد', report });
+  res.json({ message: 'مانده حساب‌های بانکی از تراکنش‌ها ساخته شد؛ اختلاف با دفتر کل در گزارش آمده است', report });
 });
 router.post('/accounting/banks/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);
 router.post('/accounting/bank-accounts/sync-reconcile', authorizePermission('accounting.treasury'), syncBanksHandler);

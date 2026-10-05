@@ -38,6 +38,8 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingCode, setIsLoadingCode] = useState(false);
   const [autoCodeGenerated, setAutoCodeGenerated] = useState(false);
+  /** آخرین کد پیشنهادی سرور؛ اگر کاربر تغییرش ندهد کد نهایی هنگام ثبت از شمارنده سرور گرفته می‌شود (v8.0.78، TD-325) */
+  const [suggestedCode, setSuggestedCode] = useState('');
   const [showAllAccounts, setShowAllAccounts] = useState(false);
 
   // واکشی کد خودکار پیشنهادی برای حساب جدید بر اساس نوع
@@ -47,6 +49,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
       const res = await fetchJson<{ code: string }>(`/accounting/banks/next-code?type=${accountType}`);
       if (res && res.code) {
         setFormData(prev => ({ ...prev, code: res.code }));
+        setSuggestedCode(res.code);
         setAutoCodeGenerated(true);
       }
     } catch {
@@ -108,7 +111,8 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onSave(formData, editingBank?.id);
+      const serverAssignsCode = !editingBank && autoCodeGenerated && formData.code.trim() === suggestedCode;
+      await onSave(serverAssignsCode ? { ...formData, code: '' } : formData, editingBank?.id);
       onClose();
     } catch {
       // Error handled in parent

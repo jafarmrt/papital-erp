@@ -84,7 +84,7 @@ export class DocumentStockEngine {
       })
       .from(items)
       .where(eq(items.id, itemId))
-      .for('update');
+      .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems، بی ارتقای قفل
 
     if (!itemData) {
       throw new NotFoundError(`کالای مورد نظر با شناسه ${itemId} در سیستم یافت نشد.`);
@@ -216,7 +216,7 @@ export class DocumentStockEngine {
       .select({ weightedAverageCost: items.weightedAverageCost, version: items.version })
       .from(items)
       .where(eq(items.id, itemId))
-      .for('update');
+      .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems، بی ارتقای قفل
     if (!itemData) return;
     const whInfo = await ItemWarehouseStockService.resolveWarehouse(tx, targetLoc);
     const revMovement: 'in' | 'out' = originalDirection === 'in' ? 'out' : 'in';

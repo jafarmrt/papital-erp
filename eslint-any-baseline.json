@@ -160,7 +160,6 @@
   "src/lib/requestContext.ts": 4,
   "src/lib/ssrfGuard.ts": 1,
   "src/middleware/auth.ts": 6,
-  "src/middleware/idempotency.ts": 5,
   "src/middleware/logger.ts": 11,
   "src/middleware/metrics.ts": 2,
   "src/middleware/validate.ts": 6,
