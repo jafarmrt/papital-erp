@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.56 — Work Logs Stay Consistent With Their Payroll
+- Editing or deleting a work log now locks it and checks the payroll link under that lock, so a change racing with payroll issue either lands before the payroll or is refused after it; a work log whose payroll was deleted can be edited again.
+
 ### v8.0.55 — Dead-Letter Events Are Replayed Once
 - Replaying a dead-letter event now runs under a lock on that event: a concurrent replay, dismissal or outbox requeue of the same event is refused, and an event already replayed is not replayed again, so webhooks and SMS are not sent twice.
 

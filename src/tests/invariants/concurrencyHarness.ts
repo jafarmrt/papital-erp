@@ -42,13 +42,16 @@ export async function untilQueued(holderPid: number, expected: number, settled: 
 }
 
 /** جدول‌هایی که سناریوها ردیفشان را نگه می‌دارند (نام ثابت، نه ورودی) */
-type LockedTable = 'items' | 'journal_vouchers' | 'cheques' | 'bank_accounts' | 'purchase_requisitions' | 'production_projects';
+type LockedTable = 'items' | 'journal_vouchers' | 'cheques' | 'bank_accounts' | 'purchase_requisitions' | 'production_projects' | 'piecework_logs';
 
 /**
  * ردیف‌های داده‌شده را در یک تراکنش جدا FOR UPDATE نگه می‌دارد، عملیات‌ها را شروع می‌کند، تا همه پشت قفل صف بکشند
- * (یا پیش از آن تمام شوند) صبر می‌کند و سپس قفل را رها می‌کند تا همه با هم ادامه دهند.
+ * (یا پیش از آن تمام شوند) صبر می‌کند و سپس قفل را رها می‌کند تا همه با هم ادامه دهند. با `staggered` هر عملیات پس از
+ * صف کشیدن عملیات پیشین شروع می‌شود، پس ترتیب صف (و ترتیب ادامه پس از رها شدن قفل) همان ترتیب فهرست است.
  */
-export async function raceBehindRowLock<T>(table: LockedTable, ids: number[], ops: Array<() => Promise<T>>): Promise<PromiseSettledResult<T>[]> {
+export async function raceBehindRowLock<T>(
+  table: LockedTable, ids: number[], ops: Array<() => Promise<T>>, options: { staggered?: boolean } = {}
+): Promise<PromiseSettledResult<T>[]> {
   const holder = await pool.connect();
   let open = false;
   try {
@@ -57,7 +60,13 @@ export async function raceBehindRowLock<T>(table: LockedTable, ids: number[], op
     await holder.query(`SELECT id FROM ${table} WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`, [ids]);
     const pid = (await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0].pid;
     let done = 0;
-    const running = ops.map(op => op().finally(() => { done++; }));
+    const running: Array<Promise<T>> = [];
+    for (const op of ops) {
+      const run = op().finally(() => { done++; });
+      run.catch(() => undefined); // نتیجه را allSettled می‌خواند؛ رد زودهنگام در حالت staggered «بی‌گرداننده» نشود
+      running.push(run);
+      if (options.staggered) await untilQueued(pid, running.length, () => done);
+    }
     const all = Promise.allSettled(running);
     await untilQueued(pid, ops.length, () => done);
     await holder.query('COMMIT');

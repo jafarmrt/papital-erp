@@ -4,6 +4,7 @@ import { checkBankSyncFromTransactions, checkDeletedChequeFrozen, checkTransferV
 import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.js';
 import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
+import { checkWorkLogFrozenInPayroll } from './payrollConcurrencyScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -29,4 +30,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkBankSyncFromTransactions(), 'مانده‌ها ۷۰۰، ۳۰۰ و ۷۰۰۰ ماندند؛ گزارش مانده خزانه را نشان داد'],
   ['inv_td_342_dlq_replayed_once', 'v8.0.55: رویداد صف خطا (DLQ) یک بار بازپخش می‌شود؛ بازپخش، صرف‌نظر و بازگردانی گروهی هم‌زمان با بازپخش کنار می‌مانند و رویداد بازپخش‌شده دوباره بازپخش نمی‌شود (TD-342)',
     () => checkDlqReplayedOnce(), 'گرداننده یک بار اجرا شد؛ کار هم‌زمان و بازپخش دوباره رد شد؛ رویداد صرف‌نظرشده یک بار بازپخش شد'],
+  ['inv_td_328_work_log_frozen_in_payroll', 'v8.0.56: ویرایش یا حذف کارکرد هم‌زمان با صدور فیش، فیش را با کارکردهای پیوندشده‌اش ناهم‌خوان نمی‌کند؛ تغییر پس از فیش رد می‌شود و کارکرد فیش حذف‌شده آزاد است (TD-328)',
+    () => checkWorkLogFrozenInPayroll(), 'در هر چهار ترتیب فیش با کارکردهای پیوندشده خواند؛ تغییر پس از فیش رد شد؛ کارکرد فیش حذف‌شده ویرایش شد'],
 ];

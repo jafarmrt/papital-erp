@@ -20,7 +20,7 @@ let seq = 0;
 const tag = (prefix: string) => `${prefix}${Date.now().toString().slice(-7)}${++seq}`;
 const PERIOD = { startDate: '2026-04-01', endDate: '2026-04-30', username: 'inv' };
 
-async function newWorker(name: string, salary?: { salaryType: string; monthlySalary: number }): Promise<number> {
+export async function newWorker(name: string, salary?: { salaryType: string; monthlySalary: number }): Promise<number> {
   const [row] = await orm.insert(personnel).values({
     fullName: `${name} ${tag('W')}`,
     salaryType: salary?.salaryType ?? 'piecework',
@@ -29,7 +29,7 @@ async function newWorker(name: string, salary?: { salaryType: string; monthlySal
   return row.id;
 }
 
-async function newTask(): Promise<number> {
+export async function newTask(): Promise<number> {
   const [row] = await orm.insert(pieceworkTasks).values({ code: tag('PT'), title: `کار آزمون حقوق ${tag('')}`, defaultRate: money(1) }).returning({ id: pieceworkTasks.id });
   return row.id;
 }

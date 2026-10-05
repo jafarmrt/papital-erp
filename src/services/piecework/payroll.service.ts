@@ -11,6 +11,7 @@ import { computeFixedSalaryShares, describeFixedSalaryShares, priorFixedGrantsOf
 import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payrollVoucherLink.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
+import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -76,7 +77,7 @@ export class PieceworkPayrollService {
       // 1. Find pending work logs in this date range WITH ROW LOCKING (.for('update'))
       // v8.0.28 (TD-281): کارکرد فقط وقتی آزاد است که به فیش زنده‌ای پیوند نداشته باشد (بی‌فیش، یا فیشش حذف‌شده). پیش‌تر
       // کارکرد «pending» با پیوند به فیش زنده هم شمرده می‌شد ولی دوباره پیوند نمی‌خورد و در هر فیش بعدی تکرار می‌شد.
-      const unlinkedOrOrphan = sql`(${pieceworkLogs.payrollId} IS NULL OR EXISTS (SELECT 1 FROM piecework_payrolls pp WHERE pp.id = ${pieceworkLogs.payrollId} AND pp.is_deleted = 1))`;
+      const unlinkedOrOrphan = workLogFreeOfLivePayroll();
       const allPersonnelLogs = await tx.select()
         .from(pieceworkLogs)
         .where(and(
