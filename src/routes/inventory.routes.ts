@@ -404,7 +404,8 @@ router.get(
 // POST /api/inventory/allocations/allocate
 router.post(
   '/allocations/allocate',
-  authorizePermission('warehouse.view', 'projects.view'),
+  // حوزه H (TD-298): تخصیص کالا را از انبار خارج و سند ۱۴۰۲ صادر می‌کند؛ مجوز مشاهده کافی نیست
+  authorizePermission('projects.edit', 'warehouse.out'),
   idempotency({ scope: 'inventory' }),
   validate(projectAllocateSchema),
   asyncHandler(async (req, res) => {
@@ -472,7 +473,7 @@ router.post(
 // POST /api/inventory/allocations/:id/release
 router.post(
   '/allocations/:id/release',
-  authorizePermission('inventory.reconcile', 'projects.edit', 'warehouse.manage'),
+  authorizePermission('inventory.reconcile', 'projects.edit', 'warehouse.out'),
   idempotency({ scope: 'inventory' }),
   validate(releaseAllocationSchema),
   asyncHandler(async (req, res) => {

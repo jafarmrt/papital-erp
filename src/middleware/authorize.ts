@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { orm } from '../db/drizzle.js';
 import { roles } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -39,8 +39,18 @@ async function roleOrPermissionGranted(role: string, entries: string[]): Promise
   return perms.includes('*') || permissionKeys.some(k => perms.includes(k));
 }
 
+/**
+ * نشانه گارد روی میدل‌ور، برای استخراج جدول «مسیر ← مجوز» از روترها (`src/lib/routeGuardTable.ts`).
+ * کلید رشته‌ای است نه Symbol: express-async-errors هر هندلر را می‌پوشاند و فقط کلیدهای رشته‌ای را کپی می‌کند.
+ */
+export const GUARD_ENTRIES = '__erpRouteGuardEntries';
+
+function tagGuard(entries: string[], mw: RequestHandler): RequestHandler {
+  return Object.assign(mw, { [GUARD_ENTRIES]: [...entries] });
+}
+
 export const authorize = (...allowedRolesOrPermissions: string[]) => {
-  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  return tagGuard(allowedRolesOrPermissions, asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) {
       return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
@@ -55,11 +65,11 @@ export const authorize = (...allowedRolesOrPermissions: string[]) => {
     }
 
     return res.status(403).json({ error: 'دسترسی غیرمجاز برای این عملیات' });
-  });
+  }));
 };
 
 export const authorizePermission = (...permissionKeys: string[]) => {
-  return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  return tagGuard(permissionKeys, asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) {
       return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
@@ -74,7 +84,7 @@ export const authorizePermission = (...permissionKeys: string[]) => {
     } catch (err) {
       return res.status(500).json({ error: 'خطا در بررسی مجوز دسترسی' });
     }
-  });
+  }));
 };
 
 /**

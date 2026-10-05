@@ -18,6 +18,42 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.66 — Project Reservations Are Built by the Server (TD-306)
+- A project's stock reservation is no longer taken from the browser: finalizing builds it on the server from the inventory control sections and item stock, and later saves keep it.
+
+### v8.0.65 — Piecework Logs Need the Piecework Permission; Rates From the Server (TD-300)
+- Recording piecework needs the piecework log permission instead of the daily-log one, and only personnel or rate managers enter a manual rate; others get the personnel or task rate.
+
+### v8.0.64 — CRM Won Needs a Proforma on Every Path (TD-309)
+- A sales lead can be marked won only after a proforma, whether through its stage or its status; a new lead cannot start as won.
+
+### v8.0.63 — Vouchers Approved at Creation Record Their Approver (TD-308)
+- A manual journal voucher created as approved records its creator as the approver.
+
+### v8.0.62 — Document Creator Name Comes From the Session (TD-307)
+- The creator name of a document, its Kardex rows and its voucher is the signed-in user, not a name sent in the request.
+
+### v8.0.61 — Editing an Item Keeps the WAC of Stocked Items (TD-305)
+- Editing an item that has stock no longer overwrites its weighted average cost without a Kardex row or voucher; the WAC changes only through stock in.
+
+### v8.0.60 — Roles Accept Only Catalog Permissions (TD-304)
+- A role can be given only permission keys from the catalog; "*" and unknown keys are refused.
+
+### v8.0.59 — Payroll Payments Follow the Payroll Read Permission (TD-303)
+- Payroll payments and personnel advance balances are read with the payroll read permissions only, like the payslips themselves.
+
+### v8.0.58 — Pending Material Edits Need the Approval Permission (TD-302)
+- Editing a pending raw-material request needs the approval permission and is refused once the request was approved or rejected.
+
+### v8.0.57 — Private Daily Logs Stay Private by ID (TD-301)
+- Opening a daily work log by its id applies the same visibility rule as the list; private and manager-only logs of others are no longer returned.
+
+### v8.0.56 — Only an Admin Manages Admin Accounts (TD-299)
+- A user manager without the admin role can no longer grant or remove the admin role, or change or delete an admin account.
+
+### v8.0.55 — Area H Audit; Route Permission Table and View-Only Mutations (TD-298)
+- Area H (security and access) was audited from a route → permission table built from the Express routers; BOM allocation and workflow start no longer open to view-only permissions, and a test keeps every route within the access policy.
+
 ### v8.0.54 — Stock Movement Chart by Jalali Month (TD-316)
 - The stock movement chart now groups inflows and outflows by Jalali month over the current Jalali month and the five before it, instead of labelling Gregorian months with Jalali month names.
 

@@ -129,22 +129,40 @@ function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<
   };
 }
 
+/** مدیر سیستم، مدیر، یا نقش دارای daily_logs.manage_all همه گزارش‌ها (محرمانه هم) را می‌بیند */
+async function canManageAllDailyLogs(role: string | undefined): Promise<boolean> {
+  if (role === 'admin' || role === 'manager') return true;
+  const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role || ''));
+  const perms = roleRecord && Array.isArray(roleRecord.permissions) ? (roleRecord.permissions as string[]) : [];
+  return perms.includes('daily_logs.manage_all') || perms.includes('*');
+}
+
+/** قاعده محرمانگی یک گزارش کار برای کاربر (فهرست و دریافت تکی، حوزه H / TD-301) */
+function canSeeDailyLog(l: typeof dailyWorkLogs.$inferSelect, userId: number | undefined, canManageAll: boolean): boolean {
+  if (canManageAll) return true;
+  if (userId === undefined) return false;
+  if (l.userId === userId) return true; // Author can always see their own log
+
+  const visibility = l.visibility || 'public';
+  if (visibility === 'public' || visibility === 'all') return true;
+
+  const mentionsArr = Array.isArray(l.mentions) ? l.mentions : [];
+  if (visibility === 'mentioned_only') return mentionsArr.includes(userId);
+
+  const allowedArr = Array.isArray(l.allowedUsers) ? l.allowedUsers : [];
+  if (visibility === 'custom') return allowedArr.includes(userId) || mentionsArr.includes(userId);
+
+  // 'managers' و 'private' فقط برای مدیران
+  return false;
+}
+
 // GET all accessible daily work logs
 router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
   const currentUserRole = req.user?.role;
   if (!currentUserId) throw new UnauthorizedError('احراز هویت انجام نشده است');
 
-  // Check if user has manage_all permission or is admin
-  let canManageAll = currentUserRole === 'admin' || currentUserRole === 'manager';
-  if (!canManageAll) {
-    const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, currentUserRole || ''));
-    if (roleRecord && Array.isArray(roleRecord.permissions)) {
-      if ((roleRecord.permissions as string[]).includes('daily_logs.manage_all') || (roleRecord.permissions as string[]).includes('*')) {
-        canManageAll = true;
-      }
-    }
-  }
+  const canManageAll = await canManageAllDailyLogs(currentUserRole);
 
   const { date, user_id, work_mode, search, filter_type } = req.query;
 
@@ -176,29 +194,7 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
       if (!mList.includes(currentUserId)) return false;
     }
 
-    // Privacy checks
-    if (l.userId === currentUserId) return true; // Author can always see their own log
-
-    const visibility = l.visibility || 'public';
-    if (visibility === 'public' || visibility === 'all') return true;
-
-    if (visibility === 'managers') return canManageAll;
-
-    const mentionsArr = Array.isArray(l.mentions) ? l.mentions : [];
-    if (visibility === 'mentioned_only') {
-      return mentionsArr.includes(currentUserId);
-    }
-
-    const allowedArr = Array.isArray(l.allowedUsers) ? l.allowedUsers : [];
-    if (visibility === 'custom') {
-      return allowedArr.includes(currentUserId) || mentionsArr.includes(currentUserId);
-    }
-
-    if (visibility === 'private') {
-      return canManageAll;
-    }
-
-    return false;
+    return canSeeDailyLog(l, currentUserId, canManageAll);
   });
 
   // Secondary filters (search, date, work_mode, user_id)
@@ -417,7 +413,10 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
 router.get('/daily-logs/:id', authorizePermission('daily_logs.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const logId = Number(req.params.id);
   const [l] = await orm.select().from(dailyWorkLogs).where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.isDeleted, 0)));
-  if (!l) throw new NotFoundError('گزارش کار یافت نشد');
+  // حوزه H (TD-301): همان قاعده محرمانگی فهرست؛ گزارشی که کاربر نمی‌بیند «یافت نشد» است
+  if (!l || !canSeeDailyLog(l, req.user?.id, await canManageAllDailyLogs(req.user?.role))) {
+    throw new NotFoundError('گزارش کار یافت نشد');
+  }
 
   res.json(formatDailyLog(l));
 }));

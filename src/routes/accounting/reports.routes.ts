@@ -83,10 +83,10 @@ const accountCardReportHandler = asyncHandler(async (req, res) => {
   });
   res.json({ report: data, ...data });
 });
-router.get('/accounting/reports/account-card', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
-router.get('/accounting/reports/ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
+router.get('/accounting/reports/account-card', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
+router.get('/accounting/reports/ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(accountCardQuerySchema), accountCardReportHandler);
 
-router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(partyLedgerQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/reports/party-ledger', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(partyLedgerQuerySchema), asyncHandler(async (req, res) => {
   const { partyId, partyType, partyName, startDate, endDate, currency, includeDrafts } = (req.query as ValidatedQuery<typeof partyLedgerQuerySchema>) || {};
   const data = await AccountingService.getDetailedPartyLedger({
     partyId: partyId ? Number(partyId) : undefined,
@@ -100,7 +100,7 @@ router.get('/accounting/reports/party-ledger', authorizePermission('accounting.r
   res.json({ report: data, ...data });
 }));
 
-router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'sales.view', 'documents.view'), validate(partiesQuerySchema), asyncHandler(async (req, res) => {
+router.get('/accounting/reports/parties', authorizePermission('accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'), validate(partiesQuerySchema), asyncHandler(async (req, res) => {
   const { search, type } = (req.query as ValidatedQuery<typeof partiesQuerySchema>) || {};
   const data = await AccountingService.getPartiesList({ search, type });
   res.json({ data });

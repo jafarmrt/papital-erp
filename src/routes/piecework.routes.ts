@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorize, authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { PayrollPaymentService } from '../services/accounting/payrollPayment.service.js';
@@ -511,12 +511,16 @@ router.get('/piecework/logs', authorizePermission(...READ_PERMISSIONS.pieceworkR
 }));
 
 // POST /api/piecework/logs - Record work logs (Supports single or batch array)
-router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create', 'admin'), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
+// حوزه H (TD-300): ثبت کارکرد مبلغ فیش را می‌سازد؛ مجوزش «ثبت کارکرد پرسنل» است نه «ثبت گزارش کار روزانه»
+router.post('/piecework/logs', authorize('personnel.manage', 'piecework.log', 'admin'), validate(createPieceworkLogsSchema), asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user?.id;
     const currentUsername = req.user?.username || 'سیستم';
 
     const items = Array.isArray(req.body.items) ? req.body.items : [req.body];
+    // حوزه H (TD-300، گزینه پیشنهادی «نرخ از سرور»): نرخ دستی فقط برای مدیر پرسنل یا مدیر تعرفه‌ها؛ دیگران نرخ
+    // اختصاصی پرسنل یا نرخ پایه عنوان کار را می‌گیرند (logWorkEntries با نرخ خالی همین را می‌خواند)
+    const canSetRate = await userHasRoleOrPermission(req.user, 'personnel.manage', 'piecework.manage_tasks');
 
     if (items.length === 0) {
       return res.status(400).json({ error: 'حداقل یک ردیف کارکرد انتخاب کنید' });
@@ -525,6 +529,7 @@ router.post('/piecework/logs', authorize('personnel.manage', 'daily_logs.create'
     const insertedIds = await PieceworkService.logWorkEntries(
       items.map((item: PieceworkLogItemInput) => ({
         ...item,
+        unitRate: canSetRate ? item.unitRate : undefined,
         createdById: currentUserId,
         createdByUsername: currentUsername
       }))
@@ -802,7 +807,8 @@ router.post('/piecework/payrolls/:id/payments/:transactionId/void', authorize('p
 }));
 
 // GET /api/piecework/payrolls/:id/payments — V4.0.33: دریافت سابقه اقساط و پرداخت‌های خزانه‌ای متصل به یک فیش
-router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+// حوزه H (TD-303): مبالغ پرداخت فیش همان محدوده خواندن فیش‌ها را دارد (AGENTS.md §5)
+router.get('/piecework/payrolls/:id/payments', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -816,7 +822,7 @@ router.get('/piecework/payrolls/:id/payments', authorize('personnel.view', 'pers
 }));
 
 // GET /api/piecework/personnel/:id/advance-balance — V4.0.33: استعلام سیستمی مانده مساعده تسویه‌نشده پرسنل
-router.get('/piecework/personnel/:id/advance-balance', authorize('personnel.view', 'personnel.manage', 'accounting.view', 'admin'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/piecework/personnel/:id/advance-balance', authorizePermission(...READ_PERMISSIONS.payrolls), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
     const balance = await PayrollPaymentService.getPersonnelAdvanceBalance(id);

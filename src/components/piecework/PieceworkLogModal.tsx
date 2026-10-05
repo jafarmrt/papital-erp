@@ -32,6 +32,8 @@ interface PieceworkLogModalProps {
   onAddLogRow: () => void;
   onRemoveLogRow: (idx: number) => void;
   isSaving?: boolean;
+  /** حوزه H (TD-300): بی مجوز مدیر پرسنل/تعرفه، نرخ از سرور است و فیلد فقط نمایش */
+  canSetRate?: boolean;
 }
 
 export function PieceworkLogModal({
@@ -55,7 +57,8 @@ export function PieceworkLogModal({
   onTaskChangeInRow,
   onAddLogRow,
   onRemoveLogRow,
-  isSaving = false
+  isSaving = false,
+  canSetRate = true
 }: PieceworkLogModalProps) {
   const appCurrency = useAppCurrency();
   const curLbl = formatCurrencyLabel(appCurrency);
@@ -285,6 +288,7 @@ export function PieceworkLogModal({
                               newRows[idx].unitRate = val;
                               setBatchLogRows(newRows);
                             }}
+                            readOnly={!canSetRate}
                             currency={appCurrency}
                             variant="table"
                             placeholder="0"
