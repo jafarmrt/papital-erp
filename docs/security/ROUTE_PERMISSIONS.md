@@ -252,7 +252,7 @@
 | DELETE | `/api/piecework/categories/:id` | personnel.manage \| admin \| settings.manage |
 | PUT | `/api/piecework/categories/:id` | personnel.manage \| admin \| settings.manage |
 | GET | `/api/piecework/logs` | piecework.view \| piecework.log \| piecework.manage_tasks \| projects.view \| settings.manage |
-| POST | `/api/piecework/logs` | personnel.manage \| daily_logs.create \| admin |
+| POST | `/api/piecework/logs` | personnel.manage \| piecework.log \| admin |
 | DELETE | `/api/piecework/logs/:id` | personnel.manage \| admin |
 | PUT | `/api/piecework/logs/:id` | personnel.manage \| admin |
 | GET | `/api/piecework/payrolls` | piecework.payroll \| personnel.manage \| accounting.treasury |

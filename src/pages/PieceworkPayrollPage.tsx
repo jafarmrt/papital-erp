@@ -121,7 +121,8 @@ export function PieceworkPayrollPage() {
     totalLoggedAmount,
     pendingLoggedAmount,
     taskCategories,
-    canViewPayrolls
+    canViewPayrolls,
+    canSetLogRate
   } = usePiecework();
 
   return (
@@ -241,6 +242,7 @@ export function PieceworkPayrollPage() {
       {/* MODAL 1: CREATE / EDIT WORK LOG */}
       <PieceworkLogModal
         isOpen={isLogModalOpen}
+        canSetRate={canSetLogRate}
         onClose={() => setIsLogModalOpen(false)}
         onSubmit={handleSaveLogs}
         editingLog={editingLog}

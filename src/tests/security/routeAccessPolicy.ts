@@ -2,7 +2,7 @@ import request from 'supertest';
 import { asc, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, personnel, pieceworkTasks, pieceworkLogs, items, documents, accounts, journalVouchers, journalVoucherItems, crmLeads, crmActivities } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -132,6 +132,31 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
       const wrong = checks.filter(([, got, want]) => got !== want);
       if (wrong.length > 0) throw new Error(wrong.map(([n, got, want]) => `${n}: ${got} (انتظار ${want})`).join('، '));
       return `${checks.length} بررسی`;
+    }),
+    record('sec_piecework_log_permission_td_300', 'حوزه H: ثبت کارکرد کارمزدی با مجوز «ثبت کارکرد پرسنل»؛ نرخ دستی فقط برای مدیر پرسنل یا تعرفه‌ها (TD-300)', 'real_database', async () => {
+      const logger = await userWith(['daily_logs.view', 'daily_logs.create']);
+      const operator = await userWith(['piecework.view', 'piecework.log']);
+      const manager = await userWith(['personnel.manage']);
+      const [person] = await orm.insert(personnel).values({ fullName: 'td300 آزمون', personnelCode: `TD300-${Date.now()}` }).returning();
+      const [task] = await orm.insert(pieceworkTasks).values({ code: `TD300-${Date.now()}`, title: `td300-${Date.now()}`, defaultRate: money(1000) }).returning();
+      try {
+        const body = { personnelId: person.id, taskId: task.id, date: '2026-10-01', quantity: 2, unitRate: 50000000 };
+        const byLogger = await send(logger.session, 'post', '/api/piecework/logs', body);
+        if (byLogger.status !== 403) throw new Error(`کاربر ثبت گزارش روزانه کارکرد ثبت کرد (${byLogger.status})`);
+        const byOperator = await send(operator.session, 'post', '/api/piecework/logs', body);
+        if (byOperator.status !== 201) throw new Error(`دارنده piecework.log رد شد (${byOperator.status}: ${JSON.stringify(byOperator.body).slice(0, 200)})`);
+        const [opLog] = await orm.select({ unitRate: pieceworkLogs.unitRate }).from(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
+        if (!money(opLog.unitRate).equals(1000)) throw new Error(`نرخ دستی اپراتور ${opLog.unitRate} ثبت شد، انتظار نرخ پایه 1000`);
+        await orm.delete(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
+        const byManager = await send(manager.session, 'post', '/api/piecework/logs', { ...body, unitRate: 2000 });
+        const [mgrLog] = await orm.select({ unitRate: pieceworkLogs.unitRate }).from(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
+        if (byManager.status !== 201 || !money(mgrLog?.unitRate ?? 0).equals(2000)) throw new Error(`نرخ دستی مدیر پرسنل پذیرفته نشد (${byManager.status}، ${mgrLog?.unitRate})`);
+        return 'daily_logs.create ← 403؛ اپراتور نرخ پایه؛ مدیر پرسنل نرخ دستی';
+      } finally {
+        await orm.delete(pieceworkLogs).where(eq(pieceworkLogs.personnelId, person.id));
+        await orm.delete(pieceworkTasks).where(eq(pieceworkTasks.id, task.id));
+        await orm.delete(personnel).where(eq(personnel.id, person.id));
+      }
     }),
     record('sec_daily_log_by_id_visibility_td_301', 'حوزه H: دریافت تکی گزارش کار همان قاعده محرمانگی فهرست را دارد (TD-301)', 'real_database', async () => {
       const author = await userWith(['daily_logs.view', 'daily_logs.create']);

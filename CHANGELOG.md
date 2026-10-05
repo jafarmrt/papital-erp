@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.57 — Piecework Logs Need the Piecework Permission; Rates From the Server (TD-300)
+- Recording piecework needs the piecework log permission instead of the daily-log one, and only personnel or rate managers enter a manual rate; others get the personnel or task rate.
+
 ### v8.0.56 — CRM Won Needs a Proforma on Every Path (TD-309)
 - A sales lead can be marked won only after a proforma, whether through its stage or its status; a new lead cannot start as won.
 
