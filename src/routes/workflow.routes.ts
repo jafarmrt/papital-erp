@@ -146,7 +146,10 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
       snapshotData
     });
 
-    res.json({ success: true, message: 'وظیفه با موفقیت اجرا گردید', data: result });
+    // v8.0.82 (TD-371): امضایی که حدنصاب را کامل نکرده کار را باز می‌گذارد و پیام شمار امضاها را برمی‌گرداند
+    const pendingSignature = 'task' in result && result.task.status === 'pending';
+    const message = pendingSignature && 'message' in result && result.message ? result.message : 'وظیفه با موفقیت اجرا گردید';
+    res.json({ success: true, message, data: result });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route /tasks/:taskId/execute] Error: ${errMsg}`);

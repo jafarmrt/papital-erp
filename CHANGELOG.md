@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.82 — Multi-Signature Tasks Stay Open Until the Quorum
+- A K-of-N or all-members approval task stays in every signer's inbox until the quorum is met; a partial or repeated signature no longer closes it, and the signer sees how many signatures are collected.
+
 ### v8.0.81 — Inbox Tasks Run Their Own Transition
 - Approving a workflow task runs that task's own transition instead of the first forward transition of the step, and rejecting runs only a reject transition of the current step; a step without one refuses the rejection instead of approving it.
 

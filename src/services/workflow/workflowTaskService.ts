@@ -357,28 +357,38 @@ export class WorkflowTaskService {
         tx
       });
 
-      const taskNewStatus = params.action === 'reject' ? 'rejected' : 'approved';
-      await tx.update(workflowTasks)
-        .set({
-          status: taskNewStatus,
-          completedAt: new Date().toISOString(),
-          delegatedToUserId: delegationLogDetails ? params.userId : null
-        })
-        .where(eq(workflowTasks.id, task.id));
+      // v8.0.82 (TD-371): کار فقط وقتی انتقال واقعاً انجام شد بسته می‌شود؛ امضایی که حدنصاب را کامل نکرده (یا تکراری
+      // است) کار را برای امضاکنندگان دیگر در کارتابل باز می‌گذارد. پیش‌تر امضای اول K_OF_N کار را «تأییدشده» می‌بست.
+      const advanced = 'toState' in transitionResult;
+      const taskNewStatus = advanced ? (params.action === 'reject' ? 'rejected' : 'approved') : 'pending';
+      if (advanced) {
+        await tx.update(workflowTasks)
+          .set({
+            status: taskNewStatus,
+            completedAt: new Date().toISOString(),
+            delegatedToUserId: delegationLogDetails ? params.userId : null
+          })
+          .where(eq(workflowTasks.id, task.id));
+      }
 
+      const outcomeText = advanced
+        ? `با اقدام «${params.action === 'reject' ? 'رد' : 'تایید'}» اجرا گردید`
+        : `امضای ${params.action === 'reject' ? 'رد' : 'تایید'} ثبت شد و تا تکمیل حدنصاب باز است`;
       await logActivity({
         userId: params.userId,
         username: params.userName,
         action: 'UPDATE',
         entity: 'وظیفه فرآیند کاری',
         entityId: task.id,
-        description: `وظیفه شماره #${task.id} («${task.title}») با اقدام «${params.action === 'reject' ? 'رد' : 'تایید'}» اجرا گردید.${delegationLogDetails ? ` (به‌واسطه تفویض اختیار از کاربر #${delegationLogDetails.delegatedFromUserId})` : ''}`,
+        description: `وظیفه شماره #${task.id} («${task.title}») ${outcomeText}.${delegationLogDetails ? ` (به‌واسطه تفویض اختیار از کاربر #${delegationLogDetails.delegatedFromUserId})` : ''}`,
         details: {
           taskId: task.id,
           instanceId: task.instanceId,
           action: params.action,
+          advanced,
           delegation: delegationLogDetails
-        }
+        },
+        tx
       });
 
       return {
