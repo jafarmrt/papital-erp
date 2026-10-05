@@ -21,6 +21,14 @@ import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
+
+/**
+ * حوزه H (TD-307): نام ثبت‌کننده سند، کاردکس و سند حسابداری از نشست است نه از بدنه درخواست
+ * (پیش‌تر فیلد `user` بدنه هر نامی را در documents.user و createdBy کاردکس می‌نوشت).
+ */
+function sessionUserLabel(user: AuthUserPayload | undefined): string {
+  return user?.full_name || user?.username || 'سیستم';
+}
 router.use(authenticateToken);
 
 const nonNegativeMoney = (label: string) => (val: unknown): boolean =>
@@ -284,7 +292,7 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
   // v7.0.102 (TD-233): رزرو پروژه حواله خروج داخل همان تراکنش ثبت سند کم می‌شود (پیش‌تر بعد از ثبت، بیرون از تراکنش و با بلعیدن خطا)
   // v8.0.4 (TD-257): سند انبار با تاریخ پیش از آخرین گردش کالا فقط با مجوز «ثبت سند انبار با تاریخ گذشته»
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
-  const { docId: newDocId, projectReservation } = await DocumentService.createDocumentWithDetails(req.body, { userId: req.user?.id, allowBackdate });
+  const { docId: newDocId, projectReservation } = await DocumentService.createDocumentWithDetails({ ...req.body, user: sessionUserLabel(req.user) }, { userId: req.user?.id, allowBackdate });
   const title = docTypeTitles[req.body.docType] || 'سند انبار';
 
   // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
@@ -441,7 +449,8 @@ router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documents),
 
 router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_keeper', 'accountant', 'documents.edit', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  const { user, vatAmount, vatPercent, exchangeRate } = req.body || {};
+  const { vatAmount, vatPercent, exchangeRate } = req.body || {};
+  const user = sessionUserLabel(req.user);
   const beforeDoc = await DocumentService.getDocumentById(docId);
   if (!beforeDoc) {
     throw new NotFoundError('سند مورد نظر یافت نشد.');
@@ -482,7 +491,7 @@ router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_k
 
 router.put('/documents/:id', authorize('admin', 'manager', 'sales_manager', 'accountant', 'warehouse_keeper', 'documents.edit'), validate(documentUpdateSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
-  await DocumentService.updateDocument(docId, req.body);
+  await DocumentService.updateDocument(docId, { ...req.body, user: sessionUserLabel(req.user) });
 
   // V10-4.3: امکان ست/به‌روزرسانی لینک CRM هنگام ویرایش (null = قطع لینک)
   if ('crmLeadId' in req.body) {

@@ -2,7 +2,7 @@ import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { roles, users, dailyWorkLogs, pendingMaterials, items } from '../../db/schema.js';
+import { roles, users, dailyWorkLogs, pendingMaterials, items, documents } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { buildRouteGuardTable, formatGuards, type RouteGuardRow } from '../../lib/routeGuardTable.js';
 
@@ -215,6 +215,27 @@ export async function runRouteAccessPolicyTests(shouldRun: (id: string, ...extra
         if (wrong.length > 0) throw new Error(wrong.join('، '));
         return 'WAC تازه 422، هم‌مقدار 200، WAC همان 50000';
       } finally {
+        await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
+      }
+    }),
+    record('sec_document_user_from_session_td_307', 'حوزه H: نام ثبت‌کننده سند از نشست است نه از بدنه درخواست (TD-307)', 'real_database', async () => {
+      const clerk = await userWith(['documents.view', 'documents.create']);
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ currentStock: 5 });
+      const [clerkRow] = await orm.select({ username: users.username, fullName: users.fullName }).from(users).where(eq(users.id, clerk.id));
+      const res = await send(clerk.session, 'post', '/api/documents', {
+        docType: 'invoice', refNumber: `TD307-${Date.now()}`, date: new Date().toISOString().split('T')[0], status: 'draft', inOut: 'out',
+        buyer_name: 'td307', user: 'مدیر عامل (جعلی)', items: [{ itemId: item.id, quantity: 1, unit_price: 1000 }]
+      });
+      const docId = Number(res.body?.docId ?? res.body?.id ?? res.body?.data?.id);
+      try {
+        if (res.status !== 200 && res.status !== 201) throw new Error(`ثبت سند شکست خورد (${res.status}): ${JSON.stringify(res.body).slice(0, 200)}`);
+        const [doc] = await orm.select({ user: documents.user }).from(documents).where(eq(documents.id, docId));
+        const expected = clerkRow.fullName || clerkRow.username;
+        if (doc?.user !== expected) throw new Error(`ثبت‌کننده سند «${doc?.user}» شد، انتظار «${expected}»`);
+        return `ثبت‌کننده «${expected}»`;
+      } finally {
+        if (docId) await orm.update(documents).set({ isDeleted: 1 }).where(eq(documents.id, docId));
         await orm.update(items).set({ isDeleted: 1 }).where(eq(items.id, item.id));
       }
     }),

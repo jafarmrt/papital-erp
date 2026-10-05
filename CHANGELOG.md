@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.54 — Document Creator Name Comes From the Session (TD-307)
+- The creator name of a document, its Kardex rows and its voucher is the signed-in user, not a name sent in the request.
+
 ### v8.0.53 — Editing an Item Keeps the WAC of Stocked Items (TD-305)
 - Editing an item that has stock no longer overwrites its weighted average cost without a Kardex row or voucher; the WAC changes only through stock in.
 
