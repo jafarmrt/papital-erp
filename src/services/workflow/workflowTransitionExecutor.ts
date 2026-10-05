@@ -625,11 +625,20 @@ export class WorkflowTransitionExecutor {
         newStatus = toState.stateKey === 'rejected' ? 'REJECTED' : 'COMPLETED';
       }
 
+      // v8.0.84 (TD-373): امضاهای انتقال‌های گامی که فرایند واردش می‌شود از نو شمرده می‌شوند. پیش‌تر امضای دور قبل
+      // (پیش از رد یا بازگشت) می‌ماند: همان کاربر گام را دوباره اجرا نمی‌توانست و امضای کهنه حدنصاب را پر می‌کرد.
+      const enteredStepTransitionIds = new Set(
+        (await this.transitionsFromState(instance, toState.id, tx)).map(t => String(t.id))
+      );
+      const progressAfterMove = Object.fromEntries(
+        Object.entries(updatedProgressMap).filter(([id]) => !enteredStepTransitionIds.has(id))
+      );
+
       await tx.update(workflowInstances)
         .set({
           currentStateId: toState.id,
           status: newStatus,
-          approvalProgressJson: updatedProgressMap,
+          approvalProgressJson: progressAfterMove,
           updatedAt: new Date().toISOString()
         })
         .where(eq(workflowInstances.id, instance.id));
