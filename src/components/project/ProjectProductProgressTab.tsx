@@ -87,7 +87,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
   }, [projectId]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const stages = data?.stages || [];
@@ -223,7 +223,7 @@ export default function ProjectProductProgressTab({ projectId, onUpdate }: { pro
       if (res?.success) {
         toast.success(`${toPersianDigits(res.applied)} تغییر وضعیت ثبت شد`);
         setDirty(new Map());
-        load();
+        void load();
         onUpdate?.();
       } else {
         toast.error(res?.error || 'خطا در ثبت تغییرات');

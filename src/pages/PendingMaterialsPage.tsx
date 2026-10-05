@@ -68,7 +68,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
   });
 
   const loadData = () => {
-    refetch();
+    void refetch();
   };
 
   // Statistics

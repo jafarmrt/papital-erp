@@ -6,6 +6,7 @@ import { formatPersianPrice, formatPersianNumber, formatPersianPhone, formatPers
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface CRMLeadDrawerProps {
   selectedLeadDrawer: CRMLead | null;
@@ -399,8 +400,10 @@ export function CRMLeadDrawer({
                         </span>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(`${item.code} - ${item.name}`);
-                            toast.success(`کد و نام کالا کپی شد: ${item.code}`);
+                            void copyToClipboard(`${item.code} - ${item.name}`).then(ok => {
+                              if (ok) toast.success(`کد و نام کالا کپی شد: ${item.code}`);
+                              else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                            });
                           }}
                           className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-0.5 cursor-pointer"
                         >

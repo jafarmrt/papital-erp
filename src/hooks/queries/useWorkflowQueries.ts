@@ -121,8 +121,8 @@ export function useStartWorkflowMutation() {
       });
     },
     onSuccess: (_, variables) => {
-      invalidatePreset(queryClient, 'workflowChange');
-      queryClient.invalidateQueries({
+      void invalidatePreset(queryClient, 'workflowChange');
+      void queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
       });
       toast.success('چرخه تایید ورکفلو با موفقیت فعال گردید');
@@ -151,9 +151,9 @@ export function useExecuteTransitionMutation() {
       });
     },
     onSuccess: (res, variables) => {
-      invalidatePreset(queryClient, 'workflowChange');
+      void invalidatePreset(queryClient, 'workflowChange');
       if (variables.entityType && variables.entityId) {
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
         });
       }
@@ -236,7 +236,7 @@ export function useSaveWorkflowDefinitionMutation() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workflow', 'definitions'] });
+      void queryClient.invalidateQueries({ queryKey: ['workflow', 'definitions'] });
       toast.success('تعریف ورکفلو با موفقیت ذخیره گردید');
     },
     onError: (err: any) => {
@@ -297,8 +297,8 @@ export function useExecuteTaskMutation() {
       });
     },
     onSuccess: () => {
-      invalidatePreset(queryClient, 'workflowChange');
-      queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
+      void invalidatePreset(queryClient, 'workflowChange');
+      void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
       toast.success('وظیفه با موفقیت تعیین تکلیف و اجرا گردید');
     },
     onError: (err: any) => {
@@ -336,8 +336,8 @@ export function useCreateDelegationMutation() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
-      queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
+      void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
       toast.success('تفویض اختیار جدید با موفقیت ایجاد گردید');
     },
     onError: (err: any) => {
@@ -356,8 +356,8 @@ export function useRevokeDelegationMutation() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
-      queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
+      void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
       toast.success('تفویض اختیار با موفقیت لغو گردید');
     },
     onError: (err: any) => {

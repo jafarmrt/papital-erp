@@ -52,7 +52,8 @@ export default tseslint.config(
     plugins: { '@typescript-eslint': tseslint.plugin, 'react-hooks': reactHooks },
     linterOptions: { reportUnusedDisableDirectives: 'off' },
     rules: {
-      '@typescript-eslint/no-floating-promises': 'warn',
+      // v8.0.46: صفر شد؛ error تا Promise رهاشده تازه (حتی خاموش‌شده با eslint-disable) بدون توجه به فایل پایه رد شود
+      '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': ['warn', { checksVoidReturn: { attributes: false } }],
       '@typescript-eslint/no-explicit-any': 'warn',
       'react-hooks/rules-of-hooks': 'warn',

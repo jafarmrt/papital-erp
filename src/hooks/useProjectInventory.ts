@@ -189,7 +189,7 @@ export function useProjectInventory(
         toast.error('خطا در دریافت اطلاعات پیش‌نیاز کنترل موجودی پروژه');
       }
     }
-    loadData();
+    void loadData();
     return () => { controller.abort(); };
   }, [project.inventory_control]);
 

@@ -46,7 +46,7 @@ export default function NotificationBell() {
     }
     setIsOpen(false);
     if (notif.link) {
-      navigate(notif.link);
+      void navigate(notif.link);
     }
   };
 
@@ -186,7 +186,7 @@ export default function NotificationBell() {
             <button
               onClick={() => {
                 setIsOpen(false);
-                navigate('/daily-logs');
+                void navigate('/daily-logs');
               }}
               className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1"
             >

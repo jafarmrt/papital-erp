@@ -21,6 +21,7 @@ import { Personnel } from '../../types';
 import { formatPersianCode, formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber } from '../../utils';
 import { ActionMenu } from '../ActionMenu';
 import toast from 'react-hot-toast';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface PersonnelTableProps {
   personnelList: Personnel[];
@@ -300,8 +301,10 @@ export function PersonnelTable({
                                       icon: Copy,
                                       onClick: () => {
                                         const clean = normalizePhoneNumber(p.phone) || p.phone || '';
-                                        navigator.clipboard.writeText(clean);
-                                        toast.success('شماره تماس کپی شد');
+                                        void copyToClipboard(clean).then(ok => {
+                                          if (ok) toast.success('شماره تماس کپی شد');
+                                          else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                        });
                                       },
                                     },
                                   ]
@@ -312,8 +315,10 @@ export function PersonnelTable({
                                       label: `کپی کد پرسنلی (${p.personnelCode})`,
                                       icon: Copy,
                                       onClick: () => {
-                                        navigator.clipboard.writeText(p.personnelCode || '');
-                                        toast.success('کد پرسنلی کپی شد');
+                                        void copyToClipboard(p.personnelCode || '').then(ok => {
+                                          if (ok) toast.success('کد پرسنلی کپی شد');
+                                          else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                        });
                                       },
                                     },
                                   ]

@@ -36,7 +36,7 @@ export function useMarkNotificationReadMutation() {
       return fetchJson(`/notifications/${id}/read`, { method: 'PUT' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'notifications');
+      void invalidateDomain(queryClient, 'notifications');
     },
   });
 }
@@ -49,7 +49,7 @@ export function useMarkAllNotificationsReadMutation() {
       return fetchJson('/notifications/read-all', { method: 'PUT' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'notifications');
+      void invalidateDomain(queryClient, 'notifications');
     },
   });
 }
@@ -62,7 +62,7 @@ export function useDeleteNotificationMutation() {
       return fetchJson(`/notifications/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'notifications');
+      void invalidateDomain(queryClient, 'notifications');
     },
   });
 }

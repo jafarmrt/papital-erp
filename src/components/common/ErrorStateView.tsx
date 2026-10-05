@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export interface ErrorStateViewProps {
   title?: string;
@@ -45,9 +46,11 @@ export function ErrorStateView({
 
   const handleCopyDetails = () => {
     const details = `[خطای سامانه پاپیتال]\nپیام: ${errorMessage || 'نامشخص'}\nجزئیات: ${errorStack || '---'}`;
-    navigator.clipboard.writeText(details);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    void copyToClipboard(details).then(ok => {
+      if (!ok) return;
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   if (compact) {

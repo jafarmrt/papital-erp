@@ -68,7 +68,7 @@ export function FiscalYearClosingTab({ onViewVoucher, onPrintVoucher }: FiscalYe
   };
 
   useEffect(() => {
-    loadPreview();
+    void loadPreview();
   }, [selectedYear]);
 
   // Computed safe values from previewData

@@ -83,7 +83,7 @@ export function useSaveItemMutation() {
       });
     },
     onSuccess: (_, variables) => {
-      invalidatePreset(queryClient, 'inventoryChange');
+      void invalidatePreset(queryClient, 'inventoryChange');
       toast.success(variables.id ? 'اطلاعات کالا با موفقیت به‌روزرسانی شد' : 'کالای جدید با موفقیت ثبت شد');
     },
     onError: (err: any) => {
@@ -103,7 +103,7 @@ export function useArchiveItemMutation() {
       return fetchJson(`/items/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidatePreset(queryClient, 'inventoryChange');
+      void invalidatePreset(queryClient, 'inventoryChange');
       toast.success('کالا با موفقیت بایگانی گردید');
     },
     onError: (err: any) => {
@@ -126,7 +126,7 @@ export function useSyncItemMutation() {
       });
     },
     onSuccess: (res: any) => {
-      invalidateDomain(queryClient, 'items');
+      void invalidateDomain(queryClient, 'items');
       toast.success(res?.message || 'موجودی با موفقیت با ووکامرس همگام‌سازی شد');
     },
     onError: (err: any) => {

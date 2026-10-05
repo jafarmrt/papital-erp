@@ -123,7 +123,7 @@ export function useItemForm({
       if (defaultType === 'product') {
         const p = cleanCategoryPrefix(catObj?.prefix || 'N');
         setProductCatPrefix(p);
-        peekNextProductCode(productYear, p, productTransferCode).then(parts => {
+        void peekNextProductCode(productYear, p, productTransferCode).then(parts => {
           if (parts) {
             setProductYear(parts.year);
             setProductCatPrefix(parts.catPrefix);
@@ -135,7 +135,7 @@ export function useItemForm({
       } else {
         const p = cleanCategoryPrefix(catObj?.prefix || 'B');
         setRawPrefix(p);
-        peekNextRawCode(p).then(parts => {
+        void peekNextRawCode(p).then(parts => {
           if (parts) {
             setRawNum(parts.serial);
             setRawPrefix(parts.prefix);
@@ -164,7 +164,7 @@ export function useItemForm({
         setRawPrefix(p);
         const newCode = buildRawItemCode(p, rawNum);
         setForm(prev => ({ ...prev, code: newCode, category: catName, unit: newUnit }));
-        peekNextRawCode(p).then(parts => {
+        void peekNextRawCode(p).then(parts => {
           if (parts) {
             setRawNum(parts.serial);
             setForm(prev => ({ ...prev, code: parts.code }));

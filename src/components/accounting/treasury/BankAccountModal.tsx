@@ -90,7 +90,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
       });
       setAutoCodeGenerated(false);
       setShowAllAccounts(false);
-      fetchNextCode('bank');
+      void fetchNextCode('bank');
     }
   }, [editingBank, isOpen, fetchNextCode]);
 
@@ -98,7 +98,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   const handleTypeChange = (newType: 'bank' | 'cash' | 'pos') => {
     setFormData(prev => ({ ...prev, type: newType }));
     if (!editingBank) {
-      fetchNextCode(newType);
+      void fetchNextCode(newType);
     }
   };
 

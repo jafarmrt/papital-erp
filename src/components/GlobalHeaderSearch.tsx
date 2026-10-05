@@ -136,7 +136,7 @@ export default function GlobalHeaderSearch() {
 
   const handleSelectResult = (path: string) => {
     setIsOpen(false);
-    navigate(path);
+    void navigate(path);
   };
 
   return (

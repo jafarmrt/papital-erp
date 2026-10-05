@@ -208,7 +208,7 @@ export default function ActivityLogsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => { filterOptionsQuery.refetch(); logsQuery.refetch(); }}
+            onClick={() => { void filterOptionsQuery.refetch(); void logsQuery.refetch(); }}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
             title="بروزرسانی داده‌ها"
           >

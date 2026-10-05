@@ -5,6 +5,7 @@ import { formatPersianDateTime, formatPersianDate } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
 import { ShopWarehouseSelect } from './ShopWarehouseSelect';
 import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface WooCommerceTabProps {
   wcStoreUrl: string;
@@ -67,10 +68,12 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   const webhookUrl = `${origin}/api/woocommerce/webhook/order`;
 
   const handleCopyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl);
-    setCopiedWebhook(true);
-    toast.success('آدرس وب‌هوک کپی شد');
-    setTimeout(() => setCopiedWebhook(false), 2500);
+    void copyToClipboard(webhookUrl).then(ok => {
+      if (!ok) { toast.error('کپی در کلیپ‌بورد ممکن نشد'); return; }
+      setCopiedWebhook(true);
+      toast.success('آدرس وب‌هوک کپی شد');
+      setTimeout(() => setCopiedWebhook(false), 2500);
+    });
   };
 
   return (

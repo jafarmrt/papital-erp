@@ -77,7 +77,7 @@ export function useSaveCustomerMutation() {
       });
     },
     onSuccess: (_, variables) => {
-      invalidateDomain(queryClient, 'customers');
+      void invalidateDomain(queryClient, 'customers');
       toast.success(variables.id ? 'اطلاعات مشتری با موفقیت ویرایش شد' : 'حساب شخص جدید با موفقیت ثبت شد');
     },
     onError: (err: any) => {
@@ -94,7 +94,7 @@ export function useDeleteCustomerMutation() {
       return fetchJson(`/customers/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      invalidateDomain(queryClient, 'customers');
+      void invalidateDomain(queryClient, 'customers');
       toast.success('حساب مشتری با موفقیت حذف شد');
     },
     onError: (err: any) => {

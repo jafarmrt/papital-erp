@@ -102,7 +102,7 @@ export function useAuditLogIntegrityQuery() {
 export function useInvalidateActivityLogs() {
   const queryClient = useQueryClient();
   return () => {
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activityLogs.all });
-    queryClient.invalidateQueries({ queryKey: ['activity-logs', 'integrity'] });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activityLogs.all });
+    void queryClient.invalidateQueries({ queryKey: ['activity-logs', 'integrity'] });
   };
 }

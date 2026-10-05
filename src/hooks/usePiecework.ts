@@ -161,7 +161,7 @@ export function usePiecework() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadData(controller.signal);
+    void loadData(controller.signal);
     return () => controller.abort();
   }, []);
 
@@ -312,7 +312,7 @@ export function usePiecework() {
       }
 
       setIsLogModalOpen(false);
-      loadData();
+      void loadData();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ثبت کارکرد');
     } finally {
@@ -325,7 +325,7 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/logs/${id}`, { method: 'DELETE' });
         hotToast.success('ردیف کارکرد حذف شد');
-        loadData();
+        void loadData();
       } catch (err) {
         hotToast.error(errorMessageOf(err) || 'خطا در حذف کارکرد');
       }
@@ -379,7 +379,7 @@ export function usePiecework() {
       }
 
       setIsTaskModalOpen(false);
-      loadData();
+      void loadData();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در ذخیره عنوان کاری');
     } finally {
@@ -395,7 +395,7 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/tasks/${task.id}`, { method: 'DELETE' });
         hotToast.success('عنوان کاری به بایگانی منتقل شد و سوابق آن ذخیره گردید');
-        loadData();
+        void loadData();
       } catch (err: any) {
         hotToast.error(err?.message || 'خطا در حذف عنوان کاری');
       }
@@ -410,7 +410,7 @@ export function usePiecework() {
       try {
         await fetchJson(`/piecework/tasks/${task.id}/restore`, { method: 'POST' });
         hotToast.success('عنوان کاری با موفقیت بازیابی شد');
-        loadData();
+        void loadData();
       } catch (err: any) {
         hotToast.error(err?.message || 'خطا در بازیابی عنوان کاری');
       }
@@ -473,7 +473,7 @@ export function usePiecework() {
   const handleSelectPersonnelForRates = (id: number | '') => {
     setSelectedPersonnelForRates(id);
     if (id) {
-      loadCustomRates(Number(id));
+      void loadCustomRates(Number(id));
     } else {
       setCustomRatesMap({});
     }
@@ -589,7 +589,7 @@ export function usePiecework() {
 
       hotToast.success(`فیش حقوقی با موفقیت با شماره ${res.payrollNumber || ''} صادر شد`);
       setIsPayrollModalOpen(false);
-      loadData();
+      void loadData();
       setActiveTab('payrolls');
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در صدور فیش حقوقی');
@@ -618,7 +618,7 @@ export function usePiecework() {
       if (viewingPayroll && viewingPayroll.id === id) {
         setViewingPayroll(prev => prev ? { ...prev, status } : null);
       }
-      loadData();
+      void loadData();
     } catch (err) {
       hotToast.error(errorMessageOf(err) || 'خطا در به‌روزرسانی وضعیت فیش');
     }
@@ -632,7 +632,7 @@ export function usePiecework() {
         if (viewingPayroll && viewingPayroll.id === id) {
           setViewingPayroll(null);
         }
-        loadData();
+        void loadData();
       } catch (err) {
         hotToast.error(errorMessageOf(err) || 'خطا در ابطال فیش حقوقی');
       }

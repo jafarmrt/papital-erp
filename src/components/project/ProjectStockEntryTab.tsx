@@ -73,7 +73,7 @@ export default function ProjectStockEntryTab({ project, itemsList = [], onUpdate
   }, [project.id, markCompleted]);
 
   useEffect(() => {
-    checkProgressMatrix();
+    void checkProgressMatrix();
   }, [checkProgressMatrix, project.progress_percent, project.status, project.updated_at, project.updatedAt]);
 
   useEffect(() => {

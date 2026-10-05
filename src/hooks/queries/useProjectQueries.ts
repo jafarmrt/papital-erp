@@ -39,7 +39,7 @@ export function useDeleteProjectMutation() {
     },
     onSuccess: (res) => {
       if (res && res.success) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.projects.all });
         toast.success('پروژه با موفقیت حذف شد');
       } else {
         toast.error(res?.error || 'خطا در حذف پروژه');

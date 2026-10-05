@@ -346,7 +346,7 @@ export function DomainEventsTab() {
               </div>
 
               <button
-                onClick={() => { refetchOutboxStats(); refetchOutboxEvents(); }}
+                onClick={() => { void refetchOutboxStats(); void refetchOutboxEvents(); }}
                 disabled={isLoadingOutbox}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 rounded-lg transition-all"
               >
@@ -448,7 +448,7 @@ export function DomainEventsTab() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleRetrySingle(evt.eventId);
+                                void handleRetrySingle(evt.eventId);
                               }}
                               disabled={retryingEventId === evt.eventId}
                               className="px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 rounded-lg transition-all"

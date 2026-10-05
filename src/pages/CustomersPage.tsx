@@ -440,7 +440,7 @@ export default function CustomersPage({ user }: { user: User }) {
                             if (pType === 'customer' || pType === 'both') {
                               setSelectedDossierCustomer(c);
                             } else {
-                              handleOpenLedger(c);
+                              void handleOpenLedger(c);
                             }
                           }}
                           className="font-bold text-slate-900 hover:text-blue-700 hover:underline cursor-pointer text-right transition-colors"
@@ -770,7 +770,7 @@ export default function CustomersPage({ user }: { user: User }) {
         isOpen={showExcelModal}
         onClose={() => setShowExcelModal(false)}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
+          void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.customers.all });
         }}
         existingCustomers={customers}
         activeTabFilter={activeTab}

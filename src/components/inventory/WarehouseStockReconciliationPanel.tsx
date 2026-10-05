@@ -72,7 +72,7 @@ export function WarehouseStockReconciliationPanel() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadReport(controller.signal);
+    void loadReport(controller.signal);
     return () => controller.abort();
   }, [loadReport]);
 

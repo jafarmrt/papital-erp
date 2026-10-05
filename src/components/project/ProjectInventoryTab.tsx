@@ -119,7 +119,7 @@ export function ProjectInventoryTab({
       }
     }
     setSectionPurchase(null);
-    onUpdate?.();
+    void onUpdate?.();
   };
 
   return (

@@ -52,7 +52,7 @@ export default function TransfersPage({ user }: { user?: User }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadTransfers = () => {
-    refetch();
+    void refetch();
   };
 
   // Close lightbox on Escape key

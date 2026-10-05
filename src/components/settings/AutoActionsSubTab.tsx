@@ -47,7 +47,7 @@ export function AutoActionsSubTab() {
       });
       if (data?.success) {
         showNotification(data.message || 'وضعیت قانون به‌روز شد.');
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       }
     } catch (err: any) {
       showNotification(err?.message || 'خطا در تغییر وضعیت قانون', 'error');
@@ -62,7 +62,7 @@ export function AutoActionsSubTab() {
         method: 'DELETE'
       });
       showNotification('قانون با موفقیت حذف گردید.');
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
     } catch (err: any) {
       showNotification(err?.message || 'خطا در حذف قانون', 'error');
     }
@@ -76,7 +76,7 @@ export function AutoActionsSubTab() {
       });
       if (data?.success) {
         showNotification(`تست قانون اجرا شد: وضعیت [${data.status}] (${data.durationMs}ms)`);
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
       } else {
         showNotification('خطا در اجرای تست قانون', 'error');
       }
@@ -97,7 +97,7 @@ export function AutoActionsSubTab() {
       });
 
       showNotification(data?.message || 'قانون با موفقیت ذخیره گردید.');
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.events.all });
     } catch (err: any) {
       showNotification(err?.message || 'خطا در ذخیره‌سازی قانون', 'error');
       throw err;

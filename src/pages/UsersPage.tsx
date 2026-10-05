@@ -55,9 +55,9 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
   }>({ isOpen: false, roleId: 0, roleName: '' });
 
   const loadData = () => {
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users.all });
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.roles.all });
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.permissions.all });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users.all });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.roles.all });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.permissions.all });
   };
 
   // Total permissions count in catalog

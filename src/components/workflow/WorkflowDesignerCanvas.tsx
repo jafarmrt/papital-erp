@@ -225,7 +225,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
 
     saveMutation.mutate(payload, {
       onSuccess: () => {
-        refetch();
+        void refetch();
       }
     });
   };

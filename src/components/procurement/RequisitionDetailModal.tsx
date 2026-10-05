@@ -53,7 +53,7 @@ export function RequisitionDetailModal({
 
   useEffect(() => {
     if (isOpen) {
-      loadLinkedOrders();
+      void loadLinkedOrders();
     }
   }, [isOpen, loadLinkedOrders]);
 

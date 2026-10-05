@@ -125,8 +125,8 @@ export default function SystemHealthDiagnostic() {
   };
 
   useEffect(() => {
-    loadHealthData();
-    runReconciliationCheck();
+    void loadHealthData();
+    void runReconciliationCheck();
   }, []);
 
   const formatUptime = (seconds: number) => {

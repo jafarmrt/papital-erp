@@ -70,7 +70,7 @@ export function AccountingSettingsTab({ currentUser }: { currentUser: any }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadData(controller.signal);
+    void loadData(controller.signal);
     return () => controller.abort();
   }, []);
 

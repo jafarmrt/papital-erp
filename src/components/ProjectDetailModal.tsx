@@ -141,8 +141,8 @@ export default function ProjectDetailModal({
   useEffect(() => {
     if (isOpen && projectId) {
       const controller = new AbortController();
-      loadProjectData(controller.signal);
-      loadAuxiliaryData(controller.signal);
+      void loadProjectData(controller.signal);
+      void loadAuxiliaryData(controller.signal);
       setEditingStageId(null);
       // V3.1.0: دیگر تب به‌اجبار reset نمی‌شود — initialTab از فراخواننده محترم شمرده می‌شود
       return () => controller.abort();
@@ -788,7 +788,7 @@ export default function ProjectDetailModal({
                             body: JSON.stringify({ attachments: newAttachments })
                           });
                           toast.success('پیوست‌های پروژه به‌روزرسانی شد');
-                          loadProjectData();
+                          void loadProjectData();
                           onUpdate();
                         } catch (err: any) {
                           toast.error(err.message || 'خطا در ذخیره پیوست‌ها');

@@ -278,7 +278,7 @@ export function NewVoucherModal({
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         e.preventDefault();
         if (isBalanced && description.trim()) {
-          submitVoucher();
+          void submitVoucher();
         } else if (!isBalanced) {
           toast.error(`سند تراز نیست! اختلاف: ${formatPersianPrice(difference, appCurrency)}`);
         } else {
@@ -412,7 +412,7 @@ export function NewVoucherModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    submitVoucher();
+    void submitVoucher();
   };
 
   if (!isOpen) return null;

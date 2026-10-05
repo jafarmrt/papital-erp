@@ -33,8 +33,8 @@ export default function InventoryStatusPage() {
   const error = statsError || biError ? 'خطا در دریافت اطلاعات داشبورد تحلیلی' : null;
 
   const loadData = () => {
-    refetchStats();
-    refetchBi();
+    void refetchStats();
+    void refetchBi();
   };
 
   let locationTotal: number = 0;
