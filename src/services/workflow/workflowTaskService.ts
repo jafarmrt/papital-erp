@@ -256,6 +256,13 @@ export class WorkflowTaskService {
     snapshotData?: Record<string, unknown>;
   }) {
     return await orm.transaction(async (tx) => {
+      // v8.0.86 (TD-375): ترتیب قفل همان مسیر انتقال مستقیم است: نخست ردیف فرایند، سپس ردیف کار. پیش‌تر کار پیش از
+      // فرایند قفل می‌شد و اجرای هم‌زمان همان گام از ویجت سند (فرایند، سپس لغو کارهای گام) به بن‌بست می‌رسید.
+      const [taskRef] = await tx.select({ instanceId: workflowTasks.instanceId }).from(workflowTasks).where(eq(workflowTasks.id, params.taskId));
+      if (!taskRef) {
+        throw new NotFoundError('وظیفه مورد نظر یافت نشد');
+      }
+      await tx.select({ id: workflowInstances.id }).from(workflowInstances).where(eq(workflowInstances.id, taskRef.instanceId)).for('update');
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
       if (!task) {
         throw new NotFoundError('وظیفه مورد نظر یافت نشد');
