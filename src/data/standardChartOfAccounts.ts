@@ -118,9 +118,11 @@ export const STANDARD_CHART_OF_ACCOUNTS: InitialAccountItem[] = [
   // ==========================================
   { code: '6', name: 'بهای تمام‌شده کالای فروش‌رفته', level: 'group', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
   { code: '60', name: 'بهای تمام‌شده محصولات فروش‌رفته', level: 'general', parentCode: '6', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
-  { code: '6001', name: 'هزینه مواد اولیه مصرفی در تولید', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
+  // v8.0.114 (TD-413، تصمیم مالک محصول): ۶۰۰۱ همان بهای تمام‌شده فروش است؛ ضایعات حساب جدای ۶۰۰۴ دارد
+  { code: '6001', name: 'بهای تمام‌شده کالای فروش‌رفته', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
   { code: '6002', name: 'دستمزد مستقیم تولید (کارمزد پرکیسی و قطعه‌کاری)', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
-  { code: '6003', name: 'سربار ساخت و هزینه‌های کارگاه (پخت، برق، ضایعات)', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
+  { code: '6003', name: 'سربار ساخت و هزینه‌های کارگاه (پخت، برق)', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
+  { code: '6004', name: 'ضایعات و افت کیفی', level: 'subsidiary', parentCode: '60', accountType: 'cost_of_sales', nature: 'debit', isSystem: 1 },
 
   // ==========================================
   // گروه ۷: هزینه‌های عمومی، اداری و توزیع (Operating Expenses)

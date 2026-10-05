@@ -22,6 +22,7 @@ import { fin, type DecimalValue, type FinancialDecimal } from '../../lib/financi
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { salesReturnKardexUnitCosts } from '../documents/salesReturnCost.js';
 import { kardexInCostByItem } from './productionReceiptCost.js';
+import { documentOutflowCost } from './outflowVoucherCost.js';
 import { foreignCostRow, irrToForeignAmount, rowExchangeRate } from './foreignCostRow.js';
 import { ValidationError, NotFoundError } from '../../errors/customErrors.js';
 import type { JournalVoucher } from '../../types.js';
@@ -776,7 +777,8 @@ export class VoucherSyncService {
     const finishedGoodsAcc = (await AccountMappingService.getInventoryFinishedGoodsAccount(tx)) || allAccs.find(a => a.code === '1403') || allAccs.find(a => a.code === '14');
     // V5.0.17 (TD-121): سرفصل کالای در جریان ساخت (۱۴۰۲) — حذف قطعی فالبک اشتباه ۶۰۰۱ (بهای تمام‌شده کالای فروش‌رفته)
     const wipAcc = (await AccountMappingService.getWorkInProgressAccount(tx)) || allAccs.find(a => a.code === '1402');
-    const wasteExpenseAcc = allAccs.find(a => a.code === '6003') || allAccs.find(a => a.code === '7009') || allAccs.find(a => a.code === '70');
+    // v8.0.114 (TD-413، TD-400): هزینه ضایعات از نگاشت حساب‌ها («ضایعات و افت کیفی» ۶۰۰۴)، نه کد ثابت ۶۰۰۳ (سربار)
+    const wasteExpenseAcc = (await AccountMappingService.getWasteExpenseAccount(tx)) || allAccs.find(a => a.code === '6003') || allAccs.find(a => a.code === '7009') || allAccs.find(a => a.code === '70');
     const salesReturnAcc = allAccs.find(a => a.code === '5101') || allAccs.find(a => a.code === '51');
     // v8.0.14 (TD-259): بدهکاران تجاری برگشت از فروش از نگاشت حساب‌ها، همان حساب سند فروش
     const customerAcc = (await AccountMappingService.getTradeReceivablesAccount(tx)) || allAccs.find(a => a.code === '1201') || allAccs.find(a => a.code === '12');
@@ -820,24 +822,11 @@ export class VoucherSyncService {
     }[] = [];
 
     if (doc.type === 'remittance') {
-      // V9-1.3: جمع مبالغ با FinancialDecimal
-      let rawMatCost = fin(0);
-      let productCost = fin(0);
-
-      for (const line of itemsList) {
-        const q = Number(line.quantity) || 0;
-        // P1-06 (M-07 & F11): حواله مصرف بر مبنای بهای تمام‌شده میانگین موزون (WAC) ارزیابی می‌شود، نه قیمت فروش
-        const lineCostRate = fin(line.weightedAverageCost).isPositive() ? fin(line.weightedAverageCost) : fin(line.unitPrice);
-        const cost = fin(q).multiply(lineCostRate);
-        if (line.itemType === 'product') {
-          productCost = productCost.add(cost);
-        } else {
-          rawMatCost = rawMatCost.add(cost);
-        }
-      }
-
-      const rawMatCostNum = rawMatCost.round(4);
-      const productCostNum = productCost.round(4);
+      // v8.0.115 (TD-400): بهای حواله همان بهای ردیف‌های خروج کاردکس همین سند است (بی کاردکس: WAC جاری، هرگز قیمت سند)؛
+      // پیش‌تر WAC لحظه صدور خوانده می‌شد و همگام‌سازی دوباره پیش‌نویس پس از رسید تازه عدد سند را عوض می‌کرد
+      const outCost = await documentOutflowCost(executor, docId, itemsList);
+      const rawMatCostNum = outCost.raw.round(4);
+      const productCostNum = outCost.finished.round(4);
       const totalCost = fin(rawMatCostNum).add(productCostNum).round(4);
       if (!totalCost.isPositive()) return null;
       if (!wipAcc) {
@@ -898,29 +887,15 @@ export class VoucherSyncService {
       }
 
     } else if (doc.type === 'waste') {
-      // V9-1.3: جمع مبالغ با FinancialDecimal
-      let rawMatWaste = fin(0);
-      let productWaste = fin(0);
-
-      for (const line of itemsList) {
-        const q = Number(line.quantity) || 0;
-        // P1-06 (M-07 & F11): ثبت هزینه ضایعات بر مبنای بهای تمام‌شده میانگین موزون (WAC)، نه قیمت فروش
-        const lineCostRate = fin(line.weightedAverageCost).isPositive() ? fin(line.weightedAverageCost) : fin(line.unitPrice);
-        const cost = fin(q).multiply(lineCostRate);
-        if (line.itemType === 'product') {
-          productWaste = productWaste.add(cost);
-        } else {
-          rawMatWaste = rawMatWaste.add(cost);
-        }
-      }
-
-      const rawMatWasteNum = rawMatWaste.round(4);
-      const productWasteNum = productWaste.round(4);
+      // v8.0.115 (TD-400): بهای ضایعات همان بهای ردیف‌های خروج کاردکس همین سند است (مانند حواله)
+      const wasteCost = await documentOutflowCost(executor, docId, itemsList);
+      const rawMatWasteNum = wasteCost.raw.round(4);
+      const productWasteNum = wasteCost.finished.round(4);
       const totalWasteAmount = fin(rawMatWasteNum).add(productWasteNum).round(4);
       if (!totalWasteAmount.isPositive()) return null;
       if (!wasteExpenseAcc) {
         if (isStrict) {
-          throw new ValidationError('سرفصل حسابداری هزینه ضایعات و افت کیفی (۶۰۰۳) در تنظیمات حسابداری یافت نشد.');
+          throw new ValidationError('سرفصل حسابداری ضایعات و افت کیفی (۶۰۰۴) در تنظیمات حسابداری یافت نشد.');
         }
         return null;
       }
@@ -1245,24 +1220,27 @@ export class VoucherSyncService {
       return null;
     }
 
-    const pieceworkAmount = Number(pay.totalPieceworkAmount) || 0;
-    const bonuses = Number(pay.totalBonuses) || 0;
-    const fixedAmount = Number(pay.totalFixedAmount) || 0;
-    const grossAmount = pieceworkAmount + bonuses + fixedAmount;
-    if (grossAmount <= 0) return null;
+    // v8.0.117 (TD-402): مبالغ فیش با FinancialDecimal (§1.8)، نه عدد جاوااسکریپت؛ پیش‌تر مبلغ بزرگ با رقم اعشار با
+    // Number() گرد می‌شد و سند حسابداری با مبلغ فیش یکی نبود
+    const nonNegative = (v: DecimalValue) => { const d = fin(v); return d.isPositive() ? d : fin(0); };
+    const pieceworkAmount = fin(pay.totalPieceworkAmount);
+    const bonuses = fin(pay.totalBonuses);
+    const fixedAmount = fin(pay.totalFixedAmount);
+    const grossAmount = pieceworkAmount.add(bonuses).add(fixedAmount);
+    if (!grossAmount.isPositive()) return null;
 
     const items: Array<{
       accountId: number;
       detailedType: 'personnel';
       detailedId: number;
       detailedName: string;
-      debit: number;
-      credit: number;
+      debit: DecimalValue;
+      credit: DecimalValue;
       currency: string;
       description: string;
     }> = [];
     // سهم دستمزد مستقیم تولید (کارکرد پرکیسی)
-    if (pieceworkAmount > 0) {
+    if (pieceworkAmount.isPositive()) {
       items.push({
         accountId: wageExpenseAcc.id,
         detailedType: 'personnel',
@@ -1275,8 +1253,8 @@ export class VoucherSyncService {
       });
     }
     // سهم هزینه حقوق ثابت (+ پاداش/اضافه‌کار)
-    const fixedBucket = fixedAmount + bonuses;
-    if (fixedBucket > 0) {
+    const fixedBucket = fixedAmount.add(bonuses);
+    if (fixedBucket.isPositive()) {
       items.push({
         accountId: fixedSalaryExpenseAcc.id,
         detailedType: 'personnel',
@@ -1285,7 +1263,7 @@ export class VoucherSyncService {
         debit: fixedBucket,
         credit: 0,
         currency: 'IRR',
-        description: `هزینه حقوق و دستمزد ثابت فیش ${pay.payrollNumber}${bonuses > 0 ? ' (شامل پاداش/اضافه‌کار)' : ''}`
+        description: `هزینه حقوق و دستمزد ثابت فیش ${pay.payrollNumber}${bonuses.isPositive() ? ' (شامل پاداش/اضافه‌کار)' : ''}`
       });
     }
 
@@ -1293,11 +1271,11 @@ export class VoucherSyncService {
     // ۱. کسر از مساعده پرسنلی (بستانکار حساب 1301 مساعده)
     // ۲. سایر کسورات پرداختنی (بستانکار حساب 3202 کسورات)
     // ۳. خالص حقوق پرداختنی (بستانکار حساب 3201 حقوق پرداختنی)
-    const advanceDeduction = Math.max(0, Number(pay.advanceDeduction) || 0);
-    const otherDeductions = Math.max(0, Number(pay.totalDeductions) || 0);
-    let allocatedCredits = 0;
+    const advanceDeduction = nonNegative(pay.advanceDeduction);
+    const otherDeductions = nonNegative(pay.totalDeductions);
+    let allocatedCredits = fin(0);
 
-    if (advanceDeduction > 0) {
+    if (advanceDeduction.isPositive()) {
       const advanceAcc = await AccountMappingService.getEmployeeAdvanceAccount(tx);
       if (advanceAcc) {
         items.push({
@@ -1310,13 +1288,13 @@ export class VoucherSyncService {
           currency: 'IRR',
           description: `کسر مساعده/وام پرسنلی ${pers?.fullName || ''} در فیش ${pay.payrollNumber}`
         });
-        allocatedCredits += advanceDeduction;
+        allocatedCredits = allocatedCredits.add(advanceDeduction);
       } else if (isStrict) {
         throw new ValidationError(`حساب معین مساعده پرسنلی (1301) جهت کسر مساعده فیش ${pay.payrollNumber} یافت نشد.`);
       }
     }
 
-    if (otherDeductions > 0) {
+    if (otherDeductions.isPositive()) {
       const deductionsAcc = await AccountMappingService.getEmployeeDeductionsPayableAccount(tx);
       if (deductionsAcc) {
         items.push({
@@ -1329,15 +1307,15 @@ export class VoucherSyncService {
           currency: 'IRR',
           description: `سایر کسورات فیش ${pay.payrollNumber} (${pers?.fullName || 'پرسنل'})`
         });
-        allocatedCredits += otherDeductions;
+        allocatedCredits = allocatedCredits.add(otherDeductions);
       } else if (isStrict) {
         throw new ValidationError(`حساب معین سایر کسورات پرداختنی (3202) جهت ثبت کسورات فیش ${pay.payrollNumber} یافت نشد.`);
       }
     }
 
     // بستانکاری خالص حقوق پرداختنی به پرسنل (تضمین موازنه ۱۰۰٪ بدهکار و بستانکار)
-    const payableCredit = Math.max(0, grossAmount - allocatedCredits);
-    if (payableCredit > 0) {
+    const payableCredit = nonNegative(grossAmount.subtract(allocatedCredits));
+    if (payableCredit.isPositive()) {
       items.push({
         accountId: payableAcc.id,
         detailedType: 'personnel',
