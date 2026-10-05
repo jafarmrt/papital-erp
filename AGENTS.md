@@ -162,7 +162,7 @@
 - **Business Invariants & Known-Findings Baseline (v8.0.1, V8 roadmap):** `src/tests/invariants/businessInvariants.ts` holds the executable business invariants (read-only SQL) and `src/tests/simulation/` the seeded one-business-year simulator (`npm run simulate:year`, one isolated schema per seed). The `business_invariants` suite (last in the runner) requires zero violations on clean flows and exactly the finding classes listed in `src/tests/simulation/knownFindings.ts`, each tied to an open `TD-###`. The baseline only shrinks: a release that fixes a finding removes its class there and closes its TD row in the same change; a new class is a regression and is never added without a new TD row.
 - **Test Runs (v7.0.64, product-owner decision):**
   - **While working:** verify with `npm run lint` and run ONLY the tests relevant to the change (`npx tsx scripts/run-tests.ts --suite <name> --filter <id-or-keyword>`), plus the same test on the previous code to prove it fails there.
-  - **Before every push:** run the full suite with the CI settings (`npm test` with the environment of the `test` job in `.github/workflows/ci.yml` against PostgreSQL 16) and `npm run build`; push only when both pass.
+  - **Before every push:** run the full suite with the CI settings (`npm test` with the environment of the `test` job in `.github/workflows/ci.yml` against PostgreSQL 16) and `npm run build`; push only when both pass. Locally: `source scripts/ci-test-env.sh && npm test` (the CI test job's values). In Claude Code on the web the session-start hook (`.claude/hooks/session-start.sh`, registered in `.claude/settings.json`, v8.0.45) runs `npm ci` when `node_modules` is missing or older than the lock file, starts PostgreSQL 16, sets the `postgres` password to the CI value and creates `erp_test` / `erp_e2e`.
   - **Otherwise:** a full run happens only when the user explicitly asks for it.
   - **No Polling Loops:** never poll long background jobs repeatedly; wait for the completion notification.
 
@@ -220,6 +220,7 @@
 - **Local Dev & MCP References:**
   - Windows local PostgreSQL & portable `.pgdata` lifecycle: see `docs/LOCAL_DEV_WINDOWS.md`.
   - DBHub read-only MCP configuration: see `docs/LOCAL_MCP_TOOLING.md`.
+- **Release Paperwork (v8.0.45):** `npm run release:v8 -- <spec.json>` (`scripts/v8-release.ts`, spec fields documented at its top) writes one release's paperwork: the 8.ts entry, the CHANGELOG.md line, the four version locations, the closed TD row moved to `TECH_DEBT_ARCHIVE.md` with the counts and «آخرین بازبینی», the fixed known-findings class replaced by a «رفع شد» comment, and exact-text edits of the roadmap, audit report and AGENTS.md; then run `npm run check:version`.
 - **Release Version Bump = 4 Synced Locations (enforced by `npm run check:version`):**
   1. `"version"` in `package.json` (single source of truth; dynamically resolved by `src/lib/version.ts` and `/health`).
   2. Top entry in active changelog `src/data/changelogs/8.ts` (`ACTIVE_CHANGELOG` in `src/data/changelogs/index.ts`).
