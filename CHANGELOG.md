@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.49 — Browser «Today» in the Business Time Zone (TD-312)
+- Stock counts and the invoice and treasury date fallbacks take today's date in the business time zone; a count saved after midnight in Tehran (on Nowruz night, in the new fiscal year) no longer gets yesterday's UTC date.
+
 ### v8.0.48 — Default Numbering Year Follows the Business Clock (TD-311)
 - Without a date, the numbering year is today's Jalali year in the business time zone; requisition codes and the next-number preview no longer jump to the next year between 1 January and Nowruz.
 
