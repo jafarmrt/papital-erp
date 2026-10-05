@@ -76,6 +76,6 @@ export async function checkWooDeletedOrderFlagged(): Promise<string[]> {
 
 /** آزمون‌های سخت‌گیرانه TD-407 در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const WOO_DELETED_ORDER_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_407_woo_deleted_order_flagged', 'v8.0.114: سفارش فاکتورشده‌ای که در ووکامرس حذف شود (وب‌هوک order.deleted یا وضعیت trash) «نیازمند بررسی» می‌شود و فاکتور فعال می‌ماند (TD-407)',
+  ['inv_td_407_woo_deleted_order_flagged', 'v8.0.126: سفارش فاکتورشده‌ای که در ووکامرس حذف شود (وب‌هوک order.deleted یا وضعیت trash) «نیازمند بررسی» می‌شود و فاکتور فعال می‌ماند (TD-407)',
     () => checkWooDeletedOrderFlagged(), 'وب‌هوک حذف و وضعیت trash هر دو needs_review با فاکتور فعال؛ بدنه پیشین ماند؛ سفارش پرداخت‌نشده cancelled شد'],
 ];

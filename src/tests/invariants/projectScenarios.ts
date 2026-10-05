@@ -337,3 +337,30 @@ export async function probeRequisitionReceiptCountsFirstLine(wh: string): Promis
   const received = (after.items as unknown as Array<{ receivedQty?: number }>)[0]?.receivedQty ?? 0;
   return Number(received) !== 5;
 }
+
+/**
+ * TD-412 (تصمیم مالک محصول — گزینه الف): پروژه‌ای که تخصیص مواد باز دارد حذف نمی‌شود (پروژه، تخصیص و گردش ۱۴۰۲ آن دست
+ * نمی‌خورند)؛ پس از آزادسازی تخصیص حذف می‌شود، و تخصیص به پروژه حذف‌شده رد می‌شود.
+ */
+export async function checkProjectDeleteNeedsReleasedAllocations(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const { itemId } = await rawWithStock(wh, 10, 100000);
+  const projectId = await newProject('پروژه آزمون حذف با تخصیص باز');
+  const allocated = await ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 4, location: wh }], username: 'inv' });
+  const wipBefore = await projectNet('1402', projectId);
+  const isDeleted = async () => Number((await pool.query<{ d: number }>('SELECT is_deleted AS d FROM production_projects WHERE id = $1', [projectId])).rows[0]?.d ?? -1);
+
+  const refused = await refusalOf(() => ProjectService.deleteProject(projectId));
+  if (!refused?.includes('تخصیص مواد باز')) problems.push(`حذف پروژه با تخصیص باز رد نشد (${refused ?? 'پذیرفته شد'})`);
+  if (await isDeleted() !== 0) problems.push('پروژه با تخصیص باز حذف شد');
+  if (await projectNet('1402', projectId) !== wipBefore) problems.push('حذف ردشده گردش کالای در جریان ساخت پروژه را تغییر داد');
+
+  await ProjectBomAllocationService.releaseAllocation(allocated.allocations[0].id, { username: 'inv' });
+  const afterRelease = await refusalOf(() => ProjectService.deleteProject(projectId));
+  if (afterRelease) problems.push(`حذف پروژه پس از آزادسازی تخصیص رد شد (${afterRelease})`);
+  if (await isDeleted() !== 1) problems.push('پروژه پس از آزادسازی تخصیص حذف نشد');
+  if (!fin(await projectNet('1402', projectId)).isZero()) problems.push(`گردش ۱۴۰۲ پروژه حذف‌شده ${await projectNet('1402', projectId)}، انتظار صفر`);
+  const late = await refusalOf(() => ProjectBomAllocationService.allocateMaterialsForProject({ projectId, allocations: [{ itemId, quantity: 1, location: wh }], username: 'inv' }));
+  if (!late) problems.push('تخصیص مواد به پروژه حذف‌شده پذیرفته شد');
+  return problems;
+}

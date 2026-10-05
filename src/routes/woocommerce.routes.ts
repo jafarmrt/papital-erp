@@ -205,7 +205,7 @@ const handleWebhookPingOrPayload = async (req: Request, res: Response) => {
     }
 
     // v7.0.30 (TD-190 / audit P1-2): سیاست وضعیت سفارش (فاکتور / ابطال / بررسی / انتظار پرداخت) در سرویس اعمال می‌شود
-    // v8.0.114 (TD-407): موضوع order.deleted (سطل زباله یا حذف دائم) بی وضعیت می‌رسد و «نیازمند بررسی» می‌شود
+    // v8.0.126 (TD-407): موضوع order.deleted (سطل زباله یا حذف دائم) بی وضعیت می‌رسد و «نیازمند بررسی» می‌شود
     const result = await WooOrderSyncService.handleOrder(payload, String(topicHeader));
     return res.status(200).json(result);
   } catch (error) {

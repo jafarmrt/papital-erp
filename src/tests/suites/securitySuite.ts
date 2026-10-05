@@ -1368,6 +1368,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
 
   const { runRouteAccessPolicyTests } = await import('../security/routeAccessPolicy.js');
   results.push(...await runRouteAccessPolicyTests(shouldRunAccess));
+  const { runRecordGuardTests } = await import('../security/recordGuardTests.js');
+  results.push(...await runRecordGuardTests(shouldRunAccess));
 
   return results;
 }

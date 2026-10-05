@@ -14,6 +14,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { fetchJson } from '../../api';
+import { useHasPermission } from '../../contexts/AuthContext';
+import { NO_VOUCHER_TREASURY_PERMISSION } from '../../lib/noVoucherPermission';
 import { toast } from 'react-hot-toast';
 import { 
   formatPersianPrice, 
@@ -86,6 +88,8 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
   const [trackingNumber, setTrackingNumber] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [createVoucher, setCreateVoucher] = useState<boolean>(true);
+  // v8.0.118 (TD-409): تسویه بدون سند حسابداری فقط برای دارنده مجوز جدا (سرور هم می‌سنجد)
+  const canSkipVoucher = useHasPermission(NO_VOUCHER_TREASURY_PERMISSION);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState<boolean>(false);
 
@@ -176,7 +180,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
         trackingNumber: trackingNumber.trim() || undefined,
         documentId: doc.id,
         description: description.trim() || undefined,
-        createVoucher,
+        createVoucher: canSkipVoucher ? createVoucher : true,
       };
 
       await fetchJson('/accounting/treasury', {
@@ -439,6 +443,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
           </div>
 
           {/* Auto Journal Voucher Option */}
+          {canSkipVoucher && (
           <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck size={18} className="text-emerald-600" />
@@ -459,6 +464,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
               <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
             </label>
           </div>
+          )}
 
           {/* Previous Settlement History (if any) */}
           {doc.settlements && doc.settlements.length > 0 && (

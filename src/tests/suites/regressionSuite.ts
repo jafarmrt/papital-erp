@@ -5605,7 +5605,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         phone: `0912${String(now).slice(-7)}`,
         partyType: 'both',
         city: 'اصفهان',
-        address: 'خیابان به‌روزرسانی پلاک ۲'
+        address: 'خیابان به‌روزرسانی پلاک ۲',
+        version: cust.version
       });
 
       if (updatedCust.name !== `طرف حساب تست معماری به‌روزرسانی شده ${now}` || updatedCust.partyType !== 'both') {
@@ -6163,7 +6164,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       createdBankId = bank.id;
       const receipt = await TreasuryTransactionService.createTreasuryTransaction({
         type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id,
-        partyName: 'ERP-TEST-MARKER', createVoucher: false,
+        partyName: 'ERP-TEST-MARKER', createVoucher: false, allowNoVoucher: true,
       });
       createdTxIds.push(receipt.id);
       const [bankAfter] = await orm.select().from(bankAccounts).where(eq(bankAccounts.id, bank.id));
@@ -7393,7 +7394,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         d.setUTCDate(d.getUTCDate() + days);
         return d.toISOString().slice(0, 10);
       };
-      const base = { type: 'received' as const, bankName: 'ERP-TEST-MARKER بانک', amount: 1000, partyName: 'ERP-TEST-MARKER TD-232 چک', createVoucher: false };
+      const base = { type: 'received' as const, bankName: 'ERP-TEST-MARKER بانک', amount: 1000, partyName: 'ERP-TEST-MARKER TD-232 چک', createVoucher: false, allowNoVoucher: true };
       const overdue = await ChequeLifecycleService.createCheque({ ...base, chequeNumber: `TD232-A-${Date.now()}`, issueDate: isoToJalaliDate(shiftIso(-30)), dueDate: isoToJalaliDate(shiftIso(-3)) });
       chequeIds.push(overdue.id);
       const future = await ChequeLifecycleService.createCheque({ ...base, chequeNumber: `TD232-B-${Date.now()}`, issueDate: isoToJalaliDate(shiftIso(-1)), dueDate: isoToJalaliDate(shiftIso(40)) });

@@ -144,18 +144,20 @@ export async function checkDocumentDatesStrict(wh: string): Promise<string[]> {
 }
 
 /**
- * TD-317: پیش‌فاکتوری که نهایی می‌شود شماره بعدی سری فاکتور سال خودش را می‌گیرد (گزینه الف)، حتی وقتی شماره
- * پیش‌فاکتورش در فاکتورهای همان سال هست، و شماره پیش‌فاکتور در یادداشت می‌ماند. سال ۱۳۹۸.
+ * TD-317: پیش‌فاکتوری که نهایی می‌شود شماره بعدی سری فاکتور سالِ تاریخ فاکتور را می‌گیرد (گزینه الف)، حتی وقتی شماره
+ * پیش‌فاکتورش در فاکتورهای همان سال هست، و شماره پیش‌فاکتور در یادداشت می‌ماند. از v8.0.119 (TD-410) تاریخ فاکتور روز
+ * نهایی‌سازی است، پس فاکتور هم‌شماره در سال جاری صادر می‌شود.
  */
 export async function checkProformaTakesInvoiceNumber(wh: string): Promise<string[]> {
   const problems: string[] = [];
+  const today = await businessTodayIsoDate();
   const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
   await DocumentService.createDocument({
     docType: 'receipt', inOut: 'in', status: 'final', date: '2019-05-01', user: 'inv', buyerName: 'تامین‌کننده آزمون پیش‌فاکتور',
     items: [{ itemId: item.id, quantity: 5, unitPrice: 1000, location: wh }],
   });
   const invoiceId = await DocumentService.createDocument({
-    docType: 'invoice', inOut: 'out', status: 'final', date: '2019-05-02', user: 'inv', buyerName: 'مشتری آزمون پیش‌فاکتور',
+    docType: 'invoice', inOut: 'out', status: 'final', date: today, user: 'inv', buyerName: 'مشتری آزمون پیش‌فاکتور',
     items: [{ itemId: item.id, quantity: 1, unitPrice: 2000, location: wh }],
   });
   const invoice = await documentRow(invoiceId);
@@ -172,7 +174,7 @@ export async function checkProformaTakesInvoiceNumber(wh: string): Promise<strin
   const res = await pool.query<{ type: string; ref_number: string; ref_fiscal_year: number; notes: string | null }>(
     'SELECT type, ref_number, ref_fiscal_year, notes FROM documents WHERE id = $1', [proformaId]);
   const after = res.rows[0];
-  if (after?.type !== 'invoice' || after.ref_fiscal_year !== 1398) problems.push(`فاکتور حاصل نوع ${after?.type} و سال ${after?.ref_fiscal_year} دارد`);
+  if (after?.type !== 'invoice' || after.ref_fiscal_year !== invoice?.refFiscalYear) problems.push(`فاکتور حاصل نوع ${after?.type} و سال ${after?.ref_fiscal_year} دارد؛ انتظار سال ${invoice?.refFiscalYear}`);
   if (after?.ref_number !== String(Number(invoice?.refNumber) + 1)) {
     problems.push(`فاکتور حاصل شماره ${after?.ref_number} گرفت؛ انتظار شماره بعدی سری فاکتور (${Number(invoice?.refNumber) + 1})`);
   }
@@ -180,6 +182,46 @@ export async function checkProformaTakesInvoiceNumber(wh: string): Promise<strin
   const kardex = await pool.query<{ document_ref: string }>(
     `SELECT DISTINCT document_ref FROM transactions WHERE document_id = $1 AND is_deleted = 0`, [proformaId]);
   if (kardex.rows.some(r => r.document_ref !== after?.ref_number)) problems.push(`ردیف کاردکس شماره ${kardex.rows.map(r => r.document_ref).join('،')} دارد`);
+  return problems;
+}
+
+/**
+ * TD-410 (تصمیم مالک محصول — گزینه الف): فاکتورِ حاصل از پیش‌فاکتورِ ۱۳۹۸ تاریخ روز نهایی‌سازی را می‌گیرد — سند، سال
+ * شماره‌گذاری، ردیف کاردکس و سند حسابداری — و تاریخ و شماره پیش‌فاکتور در یادداشت می‌ماند.
+ */
+export async function checkProformaInvoiceTakesFinalizeDate(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ type: 'product', stocks: {}, weightedAverageCost: 0 });
+  await DocumentService.createDocument({
+    docType: 'receipt', inOut: 'in', status: 'final', date: '2019-06-01', user: 'inv', buyerName: 'تامین‌کننده آزمون تاریخ پیش‌فاکتور',
+    items: [{ itemId: item.id, quantity: 5, unitPrice: 1000, location: wh }],
+  });
+  const proformaId = await DocumentService.createDocument({
+    docType: 'proforma', inOut: 'out', status: 'proforma', date: '2019-06-02', user: 'inv', buyerName: 'مشتری آزمون تاریخ پیش‌فاکتور',
+    items: [{ itemId: item.id, quantity: 2, unitPrice: 3000, location: wh }],
+  });
+  const proforma = await documentRow(proformaId);
+  const before = await businessTodayIsoDate();
+  await DocumentService.finalizeDocument(proformaId, 'inv');
+  const after = await businessTodayIsoDate();
+  const today = new Set([before, after]);
+  const invoice = await documentRow(proformaId);
+  const res = await pool.query<{ notes: string | null; k: string | null; v: string | null }>(
+    `SELECT d.notes,
+            (SELECT string_agg(DISTINCT to_char(t.date, 'YYYY-MM-DD'), ',') FROM transactions t WHERE t.document_id = d.id AND t.is_deleted = 0) AS k,
+            (SELECT string_agg(DISTINCT LEFT(v.date::text, 10), ',') FROM journal_vouchers v WHERE v.source_document_id = d.id AND v.is_deleted = 0) AS v
+       FROM documents d WHERE d.id = $1`, [proformaId]);
+  const row = res.rows[0];
+  const invoiceDay = invoice?.date.slice(0, 10) ?? '';
+  if (!today.has(invoiceDay)) problems.push(`تاریخ فاکتور ${invoice?.date}، انتظار امروز ${after}`);
+  const expectedYear = Number(isoToJalaliDate(invoiceDay).slice(0, 4));
+  if (invoice?.refFiscalYear !== expectedYear) problems.push(`سال شماره‌گذاری فاکتور ${invoice?.refFiscalYear}، انتظار ${expectedYear}`);
+  if (row?.k !== invoiceDay) problems.push(`تاریخ ردیف کاردکس ${row?.k}، انتظار ${invoiceDay}`);
+  if (row?.v !== invoiceDay) problems.push(`تاریخ سند حسابداری فاکتور ${row?.v ?? 'ندارد'}، انتظار ${invoiceDay}`);
+  const notes = String(row?.notes ?? '');
+  if (!notes.includes(`پیش‌فاکتور شماره ${proforma?.refNumber}`) || !notes.includes('1398/03/12')) {
+    problems.push(`یادداشت فاکتور شماره و تاریخ پیش‌فاکتور (۱۳۹۸/۰۳/۱۲) را ندارد: «${notes.slice(0, 120)}»`);
+  }
   return problems;
 }
 
@@ -279,7 +321,7 @@ export const DATE_BOUNDARY_CHECKS: Array<[string, string, (wh: string) => Promis
   ['inv_td_314_session_clock_utc', 'v8.0.52: جلسه پایگاه‌داده با پارامترهای راه‌اندازی استخر UTC است، حتی وقتی پیش‌فرض پایگاه‌داده تهران باشد؛ defaultNow() هم‌وقتِ toISOString کد است (TD-314)',
     () => checkSessionClockUtc(), 'استخر TimeZone=UTC از پارامترهای راه‌اندازی؛ جلسه با پیش‌فرض تهران now() را به UTC نوشت'],
   ['inv_td_317_proforma_takes_invoice_number', 'v8.0.51: پیش‌فاکتور نهایی‌شده شماره بعدی سری فاکتور سال خودش را می‌گیرد، حتی وقتی شماره‌اش در فاکتورها هست؛ شماره پیش‌فاکتور در یادداشت می‌ماند (TD-317، گزینه الف)',
-    checkProformaTakesInvoiceNumber, 'پیش‌فاکتور هم‌شماره فاکتور نهایی شد و شماره بعدی سری فاکتور ۱۳۹۸ را گرفت؛ کاردکس و یادداشت درست'],
+    checkProformaTakesInvoiceNumber, 'پیش‌فاکتور هم‌شماره فاکتور نهایی شد و شماره بعدی سری فاکتور سال جاری را گرفت؛ کاردکس و یادداشت درست'],
   ['inv_td_313_document_dates_strict', 'v8.0.50: تاریخ ناموجود یا غیرتاریخ سند رد می‌شود، سال شماره‌گذاری از تاریخ ذخیره‌شده است و پیش‌نویسی که به سال دیگر برود شماره همان سال را می‌گیرد (TD-313، گزینه الف)',
     checkDocumentDatesStrict, '۳۰ اسفند ۱۳۹۶، ۳۰ فوریه و متن غیرتاریخ رد شدند؛ سند ۰۰:۱۵ نوروز در ۱۳۹۷؛ پیش‌نویس منتقل‌شده شماره یکتای ۱۳۹۷ گرفت'],
   ['inv_td_310_closing_covers_leap_last_day', 'v8.0.47: بستن سال مالی کبیسه سند ۳۰ اسفند را هم می‌بندد؛ اسناد اختتامیه به آخرین روز سال و افتتاحیه به ۱ فروردین صادر می‌شوند و تاریخ دیگر رد می‌شود (TD-310، گزینه الف)',

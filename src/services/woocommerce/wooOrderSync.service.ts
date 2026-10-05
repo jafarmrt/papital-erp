@@ -21,7 +21,7 @@ import { resolveShopWarehouseCode } from './shopWarehouse.js';
  * - processing / completed  → صدور فاکتور قطعی و کسر موجودی
  * - cancelled / failed      → ابطال خودکار فاکتور صادرشده (حذف نرم + تراکنش معکوس کاردکس + سند حسابداری معکوس)
  * - refunded                → فقط علامت «نیازمند بررسی»؛ استرداد وجه لزوماً به معنای برگشت کالا نیست
- * - trash / وب‌هوک order.deleted → مثل refunded فقط «نیازمند بررسی» (v8.0.114، TD-407)؛ حذف سفارش در فروشگاه فاکتور را باطل نمی‌کند
+ * - trash / وب‌هوک order.deleted → مثل refunded فقط «نیازمند بررسی» (v8.0.126، TD-407)؛ حذف سفارش در فروشگاه فاکتور را باطل نمی‌کند
  * - سایر (pending، on-hold، ...) → ثبت در لاگ بدون فاکتور، تا وب‌هوک وضعیت پرداخت‌شده برسد
  *
  * همزمانی: ردیف woocommerce_order_logs (wc_order_id یکتا) پیش از هر کاری درج و قفل سطری می‌شود؛
@@ -33,7 +33,7 @@ export const WC_VOIDABLE_STATUSES: ReadonlySet<string> = new Set(['cancelled', '
 export const WC_REVIEW_STATUSES: ReadonlySet<string> = new Set(['refunded', 'trash']);
 
 /**
- * v8.0.114 (TD-407): وب‌هوک «حذف سفارش» ووکامرس (موضوع order.deleted، هنگام بردن به سطل زباله یا حذف دائم) فقط شناسه سفارش را
+ * v8.0.126 (TD-407): وب‌هوک «حذف سفارش» ووکامرس (موضوع order.deleted، هنگام بردن به سطل زباله یا حذف دائم) فقط شناسه سفارش را
  * می‌فرستد و وضعیتی ندارد؛ پیش‌تر به شاخه «در انتظار پرداخت» می‌رفت و فاکتور صادرشده بی‌هیچ علامتی می‌ماند.
  */
 export function isWcOrderDeletedTopic(topic: unknown): boolean {

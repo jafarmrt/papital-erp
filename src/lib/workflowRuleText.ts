@@ -14,6 +14,8 @@ const FIELD_LABELS: Record<string, string> = {
   amount: 'مبلغ',
   finalAmount: 'مبلغ نهایی',
   totalAmount: 'مبلغ کل',
+  amountInCurrency: 'مبلغ به ارز سند',
+  exchangeRate: 'نرخ تسعیر',
   itemCount: 'تعداد اقلام',
   docType: 'نوع سند',
   type: 'نوع',
@@ -68,6 +70,8 @@ export function workflowFieldLabel(field: string): string {
 export function formatRuleValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return 'خالی';
   if (Array.isArray(value)) return value.map(formatRuleValue).join('، ');
+  // v8.0.123 (TD-404): مبلغ ریالی سند ارزی بی نرخ تسعیر
+  if (typeof value === 'number' && Number.isNaN(value)) return 'نامعلوم (نرخ تسعیر ثبت نشده)';
   if (typeof value === 'number') return numberFormatter.format(value);
   if (typeof value === 'string' && value.trim() !== '' && /^-?\d+(\.\d+)?$/.test(value.trim())) {
     return numberFormatter.format(Number(value));

@@ -315,3 +315,31 @@ export async function probeFixedSalaryOneMonthPerPayroll(): Promise<boolean> {
   const twoMonths = await PieceworkPayrollService.generatePayroll({ personnelId: worker, startDate: '2026-03-21', endDate: '2026-05-21', username: 'inv' });
   return Boolean(twoMonths.payroll) && fin(twoMonths.payroll!.totalFixedAmount).equals(10000000);
 }
+
+/**
+ * TD-411 (تصمیم مالک محصول — گزینه الف، مثل TD-278): روش «چک» در پرداخت حقوق رد می‌شود — نه تراکنش خزانه، نه سند و نه
+ * تغییر مانده بانک یا وضعیت فیش؛ همان پرداخت با انتقال بانکی پذیرفته است.
+ */
+export async function checkPayrollChequeMethodRefused(): Promise<string[]> {
+  const problems: string[] = [];
+  const worker = await newWorker('کارگر آزمون پرداخت چکی');
+  await addLog(worker, await newTask(), '2026-04-06', 700000);
+  const issued = await generate(worker);
+  if (!issued.payroll) return [`صدور فیش آزمون ناموفق بود (${issued.error})`];
+  const payrollId = issued.payroll.id;
+  const bankId = await fundedBank();
+  const paymentsOf = async () => Number((await pool.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM treasury_transactions WHERE payroll_id = $1', [payrollId])).rows[0].n);
+
+  const refused = await refusalOf(() => PayrollPaymentService.registerPayrollPayment({ payrollId, bankAccountId: bankId, method: 'cheque', paymentDate: '2026-05-01', username: 'inv' }));
+  if (!refused?.includes('چک')) problems.push(`پرداخت حقوق با روش چک رد نشد (${refused ?? 'پذیرفته شد'})`);
+  const [bank] = await orm.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bankId));
+  if (!fin(bank?.currentBalance ?? 0).equals(5000000)) problems.push(`مانده بانک پس از پرداخت چکی ردشده ${bank?.currentBalance}، انتظار ۵٬۰۰۰٬۰۰۰`);
+  if (await paymentsOf() !== 0) problems.push('پرداخت چکی ردشده تراکنش خزانه ساخت');
+  const [payroll] = await orm.select({ status: pieceworkPayrolls.status, paidAmount: pieceworkPayrolls.paidAmount }).from(pieceworkPayrolls).where(eq(pieceworkPayrolls.id, payrollId));
+  if (!fin(payroll?.paidAmount ?? 0).isZero()) problems.push(`پرداخت‌شده فیش پس از پرداخت چکی ردشده ${payroll?.paidAmount}`);
+
+  const bankTransfer = await refusalOf(() => PayrollPaymentService.registerPayrollPayment({ payrollId, bankAccountId: bankId, method: 'bank_transfer', paymentDate: '2026-05-01', username: 'inv' }));
+  if (bankTransfer) problems.push(`پرداخت حقوق با انتقال بانکی رد شد (${bankTransfer})`);
+  if (await paymentsOf() !== 1) problems.push('پرداخت با انتقال بانکی تراکنش خزانه نساخت');
+  return problems;
+}

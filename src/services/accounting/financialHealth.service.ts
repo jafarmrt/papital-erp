@@ -2,8 +2,10 @@ import { orm } from '../../db/drizzle.js';
 import { sql, asc, and, eq, or, like } from 'drizzle-orm';
 import { documents, legacyDateRepairs, refFiscalYearCorrections } from '../../db/schema.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
+import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import {
   findDuplicatePieceworkTaskCodes,
   hasPieceworkTaskCodeUniqueIndex,
@@ -16,7 +18,7 @@ import type {
   HealthCheckIssueItem,
   HealthCheckStatus,
 } from '../../types.js';
-import { formatPersianPrice, toStorageDate, isoToJalaliDate } from '../../utils.js';
+import { formatPersianNumber, formatPersianPrice, toStorageDate, isoToJalaliDate } from '../../utils.js';
 
 /**
  * TD-246 (تصمیم «قید یکتا»): آزمون یکتایی کد عناوین کاری فعال پرکیسی. مهاجرت 0037 ایندکس یکتا را روی داده دارای
@@ -167,11 +169,13 @@ export class FinancialHealthService {
         LIMIT 50;
       `),
 
-      // د: ارزش فیزیکی انبار بر اساس قیمت میانگین موزون یا آخرین قیمت تعریف‌شده کالا
+      // د: ارزش فیزیکی انبار فقط به بهای تمام‌شده میانگین موزون (v8.0.116، TD-401): کالای بی‌WAC ارزش صفر می‌گیرد و
+      // جدا شمرده می‌شود (هرگز قیمت فهرست فروش، P2-4)؛ جمع در SQL به متن و در سرور با FinancialDecimal (§1.8)
       orm.execute(sql`
         SELECT 
           COUNT(*)::int AS total_items_count,
-          COALESCE(SUM(CASE WHEN current_stock > 0 THEN current_stock * COALESCE(NULLIF(weighted_average_cost, 0), (SELECT price FROM item_prices ip WHERE ip.item_id = items.id AND ip.is_deleted = 0 ORDER BY ip.id ASC LIMIT 1), 0) ELSE 0 END), 0)::float AS total_physical_valuation,
+          COALESCE(SUM(CASE WHEN current_stock > 0 AND weighted_average_cost > 0 THEN current_stock * weighted_average_cost ELSE 0 END), 0)::text AS total_physical_valuation,
+          COALESCE(SUM(CASE WHEN current_stock > 0 AND COALESCE(weighted_average_cost, 0) <= 0 THEN 1 ELSE 0 END), 0)::int AS unvalued_stock_count,
           COALESCE(SUM(CASE WHEN current_stock < 0 THEN 1 ELSE 0 END), 0)::int AS negative_stock_count
         FROM items
         WHERE is_deleted = 0;
@@ -180,7 +184,7 @@ export class FinancialHealthService {
       // هـ: مانده دفاتر حسابداری در گروه ۱۴ (موجودی مواد و کالا)
       orm.execute(sql`
         SELECT 
-          COALESCE(SUM(vi.debit_irr - vi.credit_irr), 0)::float AS total_ledger_valuation
+          COALESCE(SUM(vi.debit_irr - vi.credit_irr), 0)::text AS total_ledger_valuation
         FROM (${IRR_VOUCHER_ITEMS}) vi
         JOIN accounts a ON vi.account_id = a.id AND a.is_deleted = 0
         WHERE a.code LIKE '14%';
@@ -451,19 +455,28 @@ export class FinancialHealthService {
     // =========================================================================
     const physicalData = (inventoryPhysicalRes.rows?.[0] || {}) as {
       total_items_count?: number;
-      total_physical_valuation?: number;
+      total_physical_valuation?: string;
+      unvalued_stock_count?: number;
       negative_stock_count?: number;
     };
     const ledgerData = (inventoryLedgerRes.rows?.[0] || {}) as {
-      total_ledger_valuation?: number;
+      total_ledger_valuation?: string;
     };
 
-    const warehouseVal = Math.round(Number(physicalData.total_physical_valuation) || 0);
-    const ledgerVal = Math.round(Number(ledgerData.total_ledger_valuation) || 0);
+    const warehouseValDec = fin(physicalData.total_physical_valuation).round(0);
+    const ledgerValDec = fin(ledgerData.total_ledger_valuation).round(0);
+    const invDiscrepancyDec = warehouseValDec.subtract(ledgerValDec).abs();
+    const warehouseVal = warehouseValDec.toNumber();
+    const ledgerVal = ledgerValDec.toNumber();
+    const unvaluedStockCount = Number(physicalData.unvalued_stock_count) || 0;
     const negativeStockCount = Number(physicalData.negative_stock_count) || 0;
-    const invDiscrepancy = Math.abs(warehouseVal - ledgerVal);
+    const invDiscrepancy = invDiscrepancyDec.toNumber();
     const maxVal = Math.max(warehouseVal, ledgerVal, 1);
     const invDiscrepancyPercent = Number(((invDiscrepancy / maxVal) * 100).toFixed(1));
+
+    const unvaluedNote = unvaluedStockCount > 0
+      ? ` ${formatPersianNumber(unvaluedStockCount)} کالای دارای موجودی هنوز بهای تمام‌شده ندارد و با ارزش صفر شمرده شد.`
+      : '';
 
     if (invDiscrepancy <= 1000 && negativeStockCount === 0) {
       tests.push({
@@ -474,13 +487,14 @@ export class FinancialHealthService {
         status: 'healthy',
         scoreImpact: 0,
         count: 0,
-        message: 'ارزش کاردکس فیزیکی انبار با مانده سرفصل کل ۱۴ حسابداری در تراز کامل قرار دارد.',
+        message: 'ارزش کاردکس فیزیکی انبار با مانده سرفصل کل ۱۴ حسابداری در تراز کامل قرار دارد.' + unvaluedNote,
         metrics: {
           warehouseValuation: warehouseVal,
           ledgerValuation: ledgerVal,
           discrepancy: invDiscrepancy,
           discrepancyPercent: invDiscrepancyPercent,
           negativeStockCount,
+          unvaluedStockCount,
         },
       });
     } else {
@@ -504,6 +518,15 @@ export class FinancialHealthService {
           title: 'کالاهای دارای موجودی منفی فیزیکی',
           subtitle: `${negativeStockCount} قلم کالا دارای موجودی فیزیکی کمتر از صفر هستند که نیازمند انبارگردانی یا ثبت رسید خرید است.`,
           details: 'موجودی منفی باعث خطا در بهای تمام شده میانگین موزون می‌شود.',
+          linkType: 'item',
+        });
+      }
+      if (unvaluedStockCount > 0) {
+        itemsList.push({
+          id: 'unvalued_stock',
+          title: 'کالاهای دارای موجودی بدون بهای تمام‌شده',
+          subtitle: `${formatPersianNumber(unvaluedStockCount)} قلم کالا موجودی دارند ولی میانگین موزون ندارند و در ارزش انبار صفر شمرده شدند.`,
+          details: 'ارزش انبار فقط به بهای تمام‌شده سنجیده می‌شود، نه قیمت فهرست فروش؛ رسید با قیمت یا بهای اولیه کالا را ثبت کنید.',
           linkType: 'item',
         });
       }
@@ -537,6 +560,7 @@ export class FinancialHealthService {
           discrepancy: invDiscrepancy,
           discrepancyPercent: invDiscrepancyPercent,
           negativeStockCount,
+          unvaluedStockCount,
         },
       });
     }
@@ -1008,6 +1032,9 @@ export class FinancialHealthService {
     const taskCodeTest = buildPieceworkTaskCodeHealthTest(duplicateTaskCodes, taskCodeIndexPresent);
     overallScore += taskCodeTest.scoreImpact;
     tests.push(taskCodeTest);
+
+    // آزمون ۱۳: v8.0.118 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
+    tests.push(buildNoVoucherTreasuryHealthTest(await findTreasuryEntriesWithoutVoucher()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
