@@ -6,7 +6,7 @@ import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTran
 import { refusal, refusalStatus, uniqueTag, wfUser } from './workflowScenarioHelpers.js';
 
 /**
- * v8.0.90 — اقدام گردش‌کار درخواست خرید (حوزه G). هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
+ * v8.0.99 — اقدام گردش‌کار درخواست خرید (حوزه G). هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 
 const ADMIN = { username: 'wfg', role: 'admin', permissions: [] as string[] };

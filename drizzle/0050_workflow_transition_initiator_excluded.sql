@@ -1,4 +1,4 @@
--- Drizzle Migration 0050: per-transition separation of duties — the instance initiator may not run it (v8.0.93 / TD-392)
+-- Drizzle Migration 0050: per-transition separation of duties — the instance initiator may not run it (v8.0.102 / TD-392)
 --
 -- Product-owner decision («گزینه در هر گام»): the workflow designer gets a per-transition flag «آغازکننده تأیید نکند».
 -- When set, the user who started the instance (workflow_instances.started_by) — signing for themselves or through a

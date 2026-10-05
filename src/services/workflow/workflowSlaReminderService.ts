@@ -53,7 +53,7 @@ async function resolveRecipients(tx: DbExecutor, task: TaskRow, workflowCode: st
         .where(and(eq(users.isDeleted, 0), inArray(sql`lower(${users.role})`, roles)));
     owners = byRole.map((u) => u.id);
   }
-  // v8.0.88 (TD-377): جانشین فعالِ هم‌حوزه مسئولان کار (کاربر تعیین‌شده، نامزد یا عضو نقش) هم یادآوری می‌گیرد
+  // v8.0.97 (TD-377): جانشین فعالِ هم‌حوزه مسئولان کار (کاربر تعیین‌شده، نامزد یا عضو نقش) هم یادآوری می‌گیرد
   const delegates = await WorkflowDelegationService.activeDelegations(tx, { fromUserIds: owners }, now);
   const deputies = delegates.filter((d) => WorkflowDelegationService.delegationCovers(d.scope, workflowCode)).map((d) => d.toUserId);
   return [...new Set([...owners, ...deputies])];

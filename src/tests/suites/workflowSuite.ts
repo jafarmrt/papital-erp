@@ -12,7 +12,7 @@ import { runWorkflowChecks } from '../invariants/workflowChecks.js';
 
 export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
-  // v8.0.81 به بعد (حوزه G): آزمون‌های سخت‌گیرانه گردش‌کار روی پایگاه‌داده واقعی؛ با فیلتر فقط همان‌ها اجرا می‌شوند
+  // v8.0.90 به بعد (حوزه G): آزمون‌های سخت‌گیرانه گردش‌کار روی پایگاه‌داده واقعی؛ با فیلتر فقط همان‌ها اجرا می‌شوند
   const norm = filter?.toLowerCase().replace(/[-_]/g, '').trim();
   results.push(...await runWorkflowChecks(id => !norm || id.toLowerCase().replace(/[-_]/g, '').includes(norm)));
 

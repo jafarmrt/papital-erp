@@ -221,13 +221,13 @@ export class WorkflowTaskService {
     userRole: string;
     userPermissions?: string[];
     action: 'approve' | 'reject';
-    /** v8.0.81 (TD-370): انتقال «رد» انتخابی وقتی گام چند انتقال رد دارد */
+    /** v8.0.90 (TD-370): انتقال «رد» انتخابی وقتی گام چند انتقال رد دارد */
     transitionId?: number;
     comment?: string;
     snapshotData?: Record<string, unknown>;
   }) {
     return await orm.transaction(async (tx) => {
-      // v8.0.86 (TD-375): ترتیب قفل همان مسیر انتقال مستقیم است: نخست ردیف فرایند، سپس ردیف کار. پیش‌تر کار پیش از
+      // v8.0.95 (TD-375): ترتیب قفل همان مسیر انتقال مستقیم است: نخست ردیف فرایند، سپس ردیف کار. پیش‌تر کار پیش از
       // فرایند قفل می‌شد و اجرای هم‌زمان همان گام از ویجت سند (فرایند، سپس لغو کارهای گام) به بن‌بست می‌رسید.
       const [taskRef] = await tx.select({ instanceId: workflowTasks.instanceId }).from(workflowTasks).where(eq(workflowTasks.id, params.taskId));
       if (!taskRef) {
@@ -264,7 +264,7 @@ export class WorkflowTaskService {
       const userPerms = params.userPermissions || [];
       const isAdmin = userRole === 'admin' || userPerms.includes('workflow.admin') || userPerms.includes('admin');
 
-      // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
+      // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
       // و کار نقش تفویض‌کننده را انجام می‌دهد؛ پیش‌تر فقط کار کاربر تعیین‌شده یا نامزد را، و کار نقشی هرگز
       let delegationLogDetails: Record<string, unknown> | null = null;
       let isAuthorized = isAdmin || WorkflowTaskService.assignedDirectly(task, params.userId, userRole);
@@ -287,7 +287,7 @@ export class WorkflowTaskService {
         throw new ForbiddenError('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر) (WF_TASK_UNAUTHORIZED).');
       }
 
-      // v8.0.81 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
+      // v8.0.90 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
       // فرایند). پیش‌تر اولین انتقال مثبت یا منفی جدول برداشته می‌شد و «رد» در گام بی‌انتقال رد همان تأیید را اجرا می‌کرد.
       const effectiveTransitionId = await WorkflowTaskService.resolveTaskTransition(tx, task, instance, params);
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
@@ -302,7 +302,7 @@ export class WorkflowTaskService {
         tx
       });
 
-      // v8.0.82 (TD-371): کار فقط وقتی انتقال واقعاً انجام شد بسته می‌شود؛ امضایی که حدنصاب را کامل نکرده (یا تکراری
+      // v8.0.91 (TD-371): کار فقط وقتی انتقال واقعاً انجام شد بسته می‌شود؛ امضایی که حدنصاب را کامل نکرده (یا تکراری
       // است) کار را برای امضاکنندگان دیگر در کارتابل باز می‌گذارد. پیش‌تر امضای اول K_OF_N کار را «تأییدشده» می‌بست.
       const advanced = 'toState' in transitionResult;
       const taskNewStatus = advanced ? (params.action === 'reject' ? 'rejected' : 'approved') : 'pending';
@@ -364,7 +364,7 @@ export class WorkflowTaskService {
   }
 
   /**
-   * v8.0.93 (TD-392): کار گامی که آغازکننده را کنار می‌گذارد در کارتابل آغازکننده (و جانشینش) نمی‌آید؛ تیک انتقال از
+   * v8.0.102 (TD-392): کار گامی که آغازکننده را کنار می‌گذارد در کارتابل آغازکننده (و جانشینش) نمی‌آید؛ تیک انتقال از
    * تصویر نسخه فرایند خوانده می‌شود.
    */
   private static excludedAsInitiator(
@@ -383,7 +383,7 @@ export class WorkflowTaskService {
   }
 
   /**
-   * v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض فعالی که کار را به جانشین می‌دهد: حوزه‌اش گردش‌کار را
+   * v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض فعالی که کار را به جانشین می‌دهد: حوزه‌اش گردش‌کار را
    * می‌پوشاند و تفویض‌کننده کاربر تعیین‌شده یا نامزد کار است یا نقش کار را دارد (همان قاعده نقش اجرای انتقال).
    */
   private static delegationForTask(
@@ -401,7 +401,7 @@ export class WorkflowTaskService {
   }
 
   /**
-   * v8.0.81 (TD-370): انتقالی که اجرای کار انجام می‌دهد. تأیید: انتقال خود کار، اگر از گام جاری باشد. رد: انتقال رد
+   * v8.0.90 (TD-370): انتقالی که اجرای کار انجام می‌دهد. تأیید: انتقال خود کار، اگر از گام جاری باشد. رد: انتقال رد
    * انتخاب‌شده (transitionId)، یا انتقال خود کار اگر رد است، یا تنها انتقال رد گامی که کاربر اجازه‌اش را دارد.
    */
   private static async resolveTaskTransition(

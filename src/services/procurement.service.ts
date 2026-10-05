@@ -584,7 +584,7 @@ export class ProcurementService {
         targetActionKeys.includes(t.actionKey) && (!t.fromStateId || t.fromStateId === wfInst.currentStateId)
       );
 
-      // v8.0.92 (TD-390، تصمیم مالک محصول «تأیید با نام او»): «دریافت کالا»ی درخواستِ تأییدنشده نخست انتقال تأیید گام
+      // v8.0.101 (TD-390، تصمیم مالک محصول «تأیید با نام او»): «دریافت کالا»ی درخواستِ تأییدنشده نخست انتقال تأیید گام
       // جاری را به نام دریافت‌کننده اجرا می‌کند (نقش و مجوز او سنجیده و در تاریخچه ثبت می‌شود) و سپس کالا را دریافت می‌کند.
       // پیش‌تر گام فرایند بی امضا و بی ثبت مستقیم به «سفارش‌شده» برده می‌شد.
       if (!matchedTransition && (actionKey === 'mark_received' || actionKey === 'receive_items')) {
@@ -645,7 +645,7 @@ export class ProcurementService {
           else if (toStateKey === 'rejected') mappedStatus = 'rejected';
         }
       } else {
-        // v8.0.90 (TD-379): اقدامی که انتقالی از گام جاری ندارد رد می‌شود. پیش‌تر «میان‌بر» وضعیت درخواست را مستقیم
+        // v8.0.99 (TD-379): اقدامی که انتقالی از گام جاری ندارد رد می‌شود. پیش‌تر «میان‌بر» وضعیت درخواست را مستقیم
         // عوض می‌کرد: درخواستِ دریافت‌شده «بازگشایی» و دوباره سفارش و وارد انبار می‌شد و درخواستِ ردشده بی بازگشایی تأیید.
         const stepTitle = states.find(s => s.id === wfInst.currentStateId)?.title || req.status;
         throw new ConflictError(`اقدام «${actionKey}» در گام فعلی درخواست خرید ${req.code} («${stepTitle}») مجاز نیست (WF_ACTION_NOT_IN_STEP).`);

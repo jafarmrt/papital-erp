@@ -146,7 +146,7 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
       snapshotData
     });
 
-    // v8.0.82 (TD-371): امضایی که حدنصاب را کامل نکرده کار را باز می‌گذارد و پیام شمار امضاها را برمی‌گرداند
+    // v8.0.91 (TD-371): امضایی که حدنصاب را کامل نکرده کار را باز می‌گذارد و پیام شمار امضاها را برمی‌گرداند
     const pendingSignature = 'task' in result && result.task.status === 'pending';
     const alreadyDecided = 'idempotent' in result && result.idempotent;
     const message = (pendingSignature || alreadyDecided) && 'message' in result && result.message ? result.message : 'وظیفه با موفقیت اجرا گردید';

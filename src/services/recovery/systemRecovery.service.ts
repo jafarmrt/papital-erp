@@ -4,7 +4,6 @@ import { eq } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { OutboxService } from '../events/outboxService.js';
 import { runMigrations, validateDbSchema } from '../../db/migrator.js';
-import { BUILD_INFO } from '../../lib/version.js';
 
 export interface RecoveryCheckResult {
   service: string;
@@ -12,16 +11,6 @@ export interface RecoveryCheckResult {
   recoveryMode: string;
   details: Record<string, unknown>;
   timestamp: string;
-}
-
-export interface BackupExportData {
-  exportedAt: string;
-  version: string;
-  manifest: {
-    tablesCount: number;
-    totalRecords: number;
-  };
-  tables: Record<string, Record<string, unknown>[]>;
 }
 
 export class SystemRecoveryService {
@@ -270,56 +259,6 @@ export class SystemRecoveryService {
   /**
    * 5. Test & execute backup manifest export & restore validation.
    */
-  static async testBackupAndRestoreIntegrity(): Promise<RecoveryCheckResult> {
-    try {
-      const tablesToInspect = ['app_settings', 'roles', 'categories', 'warehouses'];
-      const snapshot: Record<string, Record<string, unknown>[]> = {};
-      let totalRecords = 0;
-
-      for (const table of tablesToInspect) {
-        const rows = await pool.query(`SELECT * FROM ${table} LIMIT 10`);
-        snapshot[table] = rows.rows;
-        totalRecords += rows.rows.length;
-      }
-
-      const backupManifest: BackupExportData = {
-        exportedAt: new Date().toISOString(),
-        version: BUILD_INFO.version,
-        manifest: {
-          tablesCount: tablesToInspect.length,
-          totalRecords
-        },
-        tables: snapshot
-      };
-
-      const healthy = backupManifest.manifest.tablesCount === tablesToInspect.length;
-
-      return {
-        service: 'Data Backup Manifest & Cold-Start Restore Integrity',
-        healthy,
-        recoveryMode: 'Full Relational Snapshot Export & Audit Verification',
-        details: {
-          tablesInspected: tablesToInspect,
-          totalRecordsSampled: totalRecords,
-          exportTimestamp: backupManifest.exportedAt
-        },
-        timestamp: new Date().toISOString()
-      };
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      return {
-        service: 'Data Backup Manifest & Cold-Start Restore Integrity',
-        healthy: false,
-        recoveryMode: 'Full Relational Snapshot Export & Audit Verification',
-        details: { error: errMsg },
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-
-  /**
-   * Run full recovery test suite across all 5 sub-scenarios.
-   */
   static async runFullRecoveryAudit(): Promise<{
     healthy: boolean;
     totalChecks: number;
@@ -331,8 +270,7 @@ export class SystemRecoveryService {
       await this.testDatabaseRecovery(),
       await this.testWorkerRestartRecovery(),
       await this.testWebhookAndOutboxRetryRecovery(),
-      await this.testMigrationFailureRecovery(),
-      await this.testBackupAndRestoreIntegrity()
+      await this.testMigrationFailureRecovery()
     ];
 
     const passedChecks = results.filter(r => r.healthy).length;

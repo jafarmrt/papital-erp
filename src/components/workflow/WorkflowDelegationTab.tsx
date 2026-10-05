@@ -27,7 +27,7 @@ export function WorkflowDelegationTab() {
   const createMutation = useCreateDelegationMutation();
   const revokeMutation = useRevokeDelegationMutation();
   const { user } = useAuth();
-  // v8.0.89 (TD-378): فقط تفویض‌کننده یا ادمین تفویض را لغو می‌کند
+  // v8.0.98 (TD-378): فقط تفویض‌کننده یا ادمین تفویض را لغو می‌کند
   const canRevoke = (fromUserId: number) => user?.role === 'admin' || user?.id === fromUserId;
 
   // Fetch users for selection

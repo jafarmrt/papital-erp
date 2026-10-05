@@ -90,7 +90,7 @@ export class WorkflowTransitionExecutor {
   /**
    * Helper: Find equivalent roles
    *
-   * v8.0.85 (TD-374): هم‌ارزی فقط میان نقش‌های یک بخش است؛ نقش تولید دیگر هم‌ارز «manager» نیست.
+   * v8.0.94 (TD-374): هم‌ارزی فقط میان نقش‌های یک بخش است؛ نقش تولید دیگر هم‌ارز «manager» نیست.
    */
   static getEquivalentRoles(roleName: string): string[] {
     const r = (roleName || '').trim().toLowerCase();
@@ -127,7 +127,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * مجوزهای ثبت هر بخش که گام نقش همان بخش را مجاز می‌کنند. v8.0.85 (TD-374): مجوز مشاهده (warehouse.view،
+   * مجوزهای ثبت هر بخش که گام نقش همان بخش را مجاز می‌کنند. v8.0.94 (TD-374): مجوز مشاهده (warehouse.view،
    * accounting.view) و مجوز خزانه دیگر گام تأیید انبار یا حسابدار را مجاز نمی‌کنند (همان قاعده TD-298: تغییر با مجوز
    * مشاهده باز نمی‌شود) و هیچ مجوزی گام نقش «manager» را.
    */
@@ -196,13 +196,13 @@ export class WorkflowTransitionExecutor {
     let filtered = transitions.filter(t => {
       return WorkflowTransitionExecutor.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
     });
-    // v8.0.91 (TD-391): انتقالی که مجوز لازمش را کاربر ندارد پیشنهاد نمی‌شود
+    // v8.0.100 (TD-391): انتقالی که مجوز لازمش را کاربر ندارد پیشنهاد نمی‌شود
     const permitted: WorkflowTransitionSnapshot[] = [];
     for (const t of filtered) {
       if (await WorkflowTransitionExecutor.holdsRequiredPermission(t, { role: userRole, permissions: userPermissions, ownPermissions: true }, txExecutor)) permitted.push(t);
     }
     filtered = permitted;
-    // v8.0.93 (TD-392): انتقالی که آغازکننده را کنار می‌گذارد به آغازکننده پیشنهاد نمی‌شود
+    // v8.0.102 (TD-392): انتقالی که آغازکننده را کنار می‌گذارد به آغازکننده پیشنهاد نمی‌شود
     if (userId && filtered.some(t => Number(t.isInitiatorExcluded) === 1)) {
       const [inst] = await txExecutor.select({ startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
       filtered = filtered.filter(t => !WorkflowTransitionExecutor.initiatorExcluded(t, inst?.startedBy, { userId, actorId: userId, role: userRole }));
@@ -218,7 +218,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * v8.0.81 (TD-370): انتقال‌های یک گام فرایند از تصویر نسخه خود فرایند (یا جدول‌های جاری وقتی تصویر قابل استفاده نیست)
+   * v8.0.90 (TD-370): انتقال‌های یک گام فرایند از تصویر نسخه خود فرایند (یا جدول‌های جاری وقتی تصویر قابل استفاده نیست)
    */
   static async transitionsFromState(
     instance: { workflowDefinitionId: number; snapshotDsl: unknown },
@@ -235,7 +235,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * v8.0.91 (TD-391، تصمیم مالک محصول «بررسی شود»): مجوز لازم انتقال. انتقالی که «مجوز لازم» دارد فقط برای کسی است که
+   * v8.0.100 (TD-391، تصمیم مالک محصول «بررسی شود»): مجوز لازم انتقال. انتقالی که «مجوز لازم» دارد فقط برای کسی است که
    * علاوه بر نقش گام آن مجوز را دارد (ادمین همیشه). امضای جانشین با مجوزهای نقش تفویض‌کننده سنجیده می‌شود. مجوزهای
    * نقش با همان اتصال تراکنش خوانده می‌شوند. پیش‌تر این ستون ذخیره می‌شد ولی هیچ‌جا سنجیده نمی‌شد.
    */
@@ -257,7 +257,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * v8.0.93 (TD-392، تصمیم مالک محصول «گزینه در هر گام»): انتقالی که تیک «آغازکننده تأیید نکند» دارد برای آغازکننده
+   * v8.0.102 (TD-392، تصمیم مالک محصول «گزینه در هر گام»): انتقالی که تیک «آغازکننده تأیید نکند» دارد برای آغازکننده
    * فرایند بسته است: نه به نام خودش، نه به‌عنوان جانشین کسی و نه از راه جانشینش. ادمین همیشه مجاز است.
    */
   static initiatorExcluded(
@@ -271,7 +271,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * v8.0.88 (TD-377): اجازه کاربر برای گام؛ تفویضی که به جای آن امضا می‌کند، یا undefined برای امضای خود کاربر.
+   * v8.0.97 (TD-377): اجازه کاربر برای گام؛ تفویضی که به جای آن امضا می‌کند، یا undefined برای امضای خود کاربر.
    */
   static async resolveSigner(
     transition: Pick<WorkflowTransitionSnapshot, 'requiredRole' | 'title'>,
@@ -293,7 +293,7 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
-   * v8.0.87 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): اعضای فعال نقش لازم گام AND_ALL (کاربران حذف‌نشده با همان کد
+   * v8.0.96 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): اعضای فعال نقش لازم گام AND_ALL (کاربران حذف‌نشده با همان کد
    * نقش). گام بی‌نقش undefined می‌گیرد و همان K طراح را می‌خواهد.
    */
   static async andAllMemberIds(transition: Pick<WorkflowTransitionSnapshot, 'approvalRuleType' | 'requiredRole'>, txExecutor: DbClient = orm): Promise<number[] | undefined> {
@@ -334,7 +334,7 @@ export class WorkflowTransitionExecutor {
   /**
    * Refresh pending approvals & tasks when instance state advances
    *
-   * v8.0.83 (TD-372): مهلت و کارهای گام تازه از تصویر نسخه خود فرایند ساخته می‌شوند (snapshotDsl)، نه جدول‌های جاری.
+   * v8.0.92 (TD-372): مهلت و کارهای گام تازه از تصویر نسخه خود فرایند ساخته می‌شوند (snapshotDsl)، نه جدول‌های جاری.
    * ذخیره طرح در طراح وضعیت‌ها و انتقال‌ها را با شناسه تازه می‌سازد؛ پیش‌تر فرایند در جریان پس از ویرایش طرح در گام بعد
    * هیچ کار و مهلتی نمی‌گرفت و از کارتابل بیرون می‌رفت.
    */
@@ -564,7 +564,7 @@ export class WorkflowTransitionExecutor {
         throw new NotFoundError('نمونه ورکفلو یافت نشد');
       }
 
-      // v8.0.90 (TD-379): فرایند ردشده فقط با انتقالی ادامه می‌یابد که طراح از گام ردشده کشیده است (مثل «بازگشایی»)؛
+      // v8.0.99 (TD-379): فرایند ردشده فقط با انتقالی ادامه می‌یابد که طراح از گام ردشده کشیده است (مثل «بازگشایی»)؛
       // پایین‌تر انتقال باید از گام جاری باشد. فرایند تکمیل‌شده هرگز ادامه نمی‌یابد.
       if (instance.status !== 'IN_PROGRESS' && instance.status !== 'REJECTED') {
         throw new ConflictError('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
@@ -614,7 +614,7 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
       }
 
-      // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
+      // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
       // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
       const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, params, tx);
       const signerHoldsPermission = await WorkflowTransitionExecutor.holdsRequiredPermission(transition, actingFor
@@ -729,7 +729,7 @@ export class WorkflowTransitionExecutor {
         newStatus = toState.stateKey === 'rejected' ? 'REJECTED' : 'COMPLETED';
       }
 
-      // v8.0.84 (TD-373): امضاهای انتقال‌های گامی که فرایند واردش می‌شود از نو شمرده می‌شوند. پیش‌تر امضای دور قبل
+      // v8.0.93 (TD-373): امضاهای انتقال‌های گامی که فرایند واردش می‌شود از نو شمرده می‌شوند. پیش‌تر امضای دور قبل
       // (پیش از رد یا بازگشت) می‌ماند: همان کاربر گام را دوباره اجرا نمی‌توانست و امضای کهنه حدنصاب را پر می‌کرد.
       const enteredStepTransitionIds = new Set(
         (await WorkflowTransitionExecutor.transitionsFromState(instance, toState.id, tx)).map(t => String(t.id))

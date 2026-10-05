@@ -7,7 +7,7 @@ import { eq, or, and, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 
-/** v8.0.88 (TD-377): تفویض فعالی که کاربر به‌واسطه آن به جای تفویض‌کننده کار می‌کند */
+/** v8.0.97 (TD-377): تفویض فعالی که کاربر به‌واسطه آن به جای تفویض‌کننده کار می‌کند */
 export interface ActingDelegation {
   id: number;
   fromUserId: number;
@@ -25,7 +25,7 @@ export class WorkflowDelegationService {
   }
 
   /**
-   * v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض‌های فعال (لغونشده و در بازه) به کاربر یا از کاربران داده‌شده،
+   * v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): تفویض‌های فعال (لغونشده و در بازه) به کاربر یا از کاربران داده‌شده،
    * با نقش و نام تفویض‌کننده؛ تفویض‌کننده یا جانشین حذف‌شده شمرده نمی‌شود.
    */
   static async activeDelegations(
@@ -71,7 +71,7 @@ export class WorkflowDelegationService {
     createdByUserId?: number;
     createdByName?: string;
   }) {
-    // v8.0.89 (TD-378): ورودی نادرست ۴۲۲ و کاربر ناموجود ۴۰۴ است، نه خطای خام ۵۰۰
+    // v8.0.98 (TD-378): ورودی نادرست ۴۲۲ و کاربر ناموجود ۴۰۴ است، نه خطای خام ۵۰۰
     if (params.fromUserId === params.toUserId) {
       throw new ValidationError('کاربر تفویض‌کننده و دریافت‌کننده نمی‌تواند یکسان باشد (WF_DELEGATION_SELF_NOT_ALLOWED)');
     }
@@ -183,7 +183,7 @@ export class WorkflowDelegationService {
         throw new NotFoundError('رکورد تفویض اختیار یافت نشد');
       }
 
-      // v8.0.89 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
+      // v8.0.98 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
       const isAdmin = params.userRole === 'admin';
       if (!isAdmin && delegation.fromUserId !== params.userId) {
         throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند (WF_DELEGATION_REVOKE_FORBIDDEN)');

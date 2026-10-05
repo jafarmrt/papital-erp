@@ -6,7 +6,7 @@ import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestUser } from '../fixtures/factories.js';
 
 /**
- * v8.0.81 — ابزار سناریوهای گردش‌کار حوزه G: تعریف واقعی با saveWorkflowDefinition، نمونه با startInstance
+ * v8.0.90 — ابزار سناریوهای گردش‌کار حوزه G: تعریف واقعی با saveWorkflowDefinition، نمونه با startInstance
  * و اجرای کار و انتقال با سرویس‌های واقعی روی PostgreSQL.
  */
 

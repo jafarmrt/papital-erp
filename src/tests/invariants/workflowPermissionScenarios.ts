@@ -5,7 +5,7 @@ import { createTestRole } from '../fixtures/factories.js';
 import { defineWorkflow, instanceRow, refusalStatus, startWf, tasksOf, transit, runTask, uniqueTag, wfUser } from './workflowScenarioHelpers.js';
 
 /**
- * v8.0.91 — مجوز لازم انتقال گردش‌کار (حوزه G). هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
+ * v8.0.100 — مجوز لازم انتقال گردش‌کار (حوزه G). هر تابع فهرست مشکلات را برمی‌گرداند؛ فهرست خالی یعنی رفتار درست.
  */
 
 /**

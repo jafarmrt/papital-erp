@@ -1,7 +1,7 @@
 export interface SignatureEntry {
-  /** امضاکننده؛ برای امضای جانشین، تفویض‌کننده (v8.0.88، TD-377) */
+  /** امضاکننده؛ برای امضای جانشین، تفویض‌کننده (v8.0.97، TD-377) */
   userId: number;
-  /** v8.0.88 (TD-377): جانشینی که به جای userId امضا کرده */
+  /** v8.0.97 (TD-377): جانشینی که به جای userId امضا کرده */
   signedBy?: number;
   delegationId?: number;
   userName?: string;
@@ -63,7 +63,7 @@ export class WorkflowQuorumService {
       if (params.totalCandidatesCount && params.totalCandidatesCount > 0) {
         return params.totalCandidatesCount;
       }
-      // v8.0.87 (TD-376): گام بی‌نقش (یا نقش بی‌عضو) همان K طراح را می‌خواهد؛ پیش‌تر کمینه ۲ بود
+      // v8.0.96 (TD-376): گام بی‌نقش (یا نقش بی‌عضو) همان K طراح را می‌خواهد؛ پیش‌تر کمینه ۲ بود
       return Math.max(1, params.kValue || 1);
     }
     return 1;
@@ -79,12 +79,12 @@ export class WorkflowQuorumService {
     totalCandidatesCount?: number;
     existingSignatures?: SignatureEntry[];
     /**
-     * v8.0.87 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): کاربران فعال نقش لازم گام AND_ALL. گام وقتی رد می‌شود که
+     * v8.0.96 (TD-376، تصمیم مالک محصول «همه اعضای نقش»): کاربران فعال نقش لازم گام AND_ALL. گام وقتی رد می‌شود که
      * همه آن‌ها امضا کرده باشند؛ امضای کسی بیرون از فهرست (مثلاً ادمین) ثبت می‌شود ولی جای عضوی را پر نمی‌کند.
      */
     memberIds?: number[];
     userId: number;
-    /** v8.0.88 (TD-377): کاربری که واقعاً امضا می‌کند وقتی جانشین userId است؛ یک نفر دو امضا نمی‌شمارد */
+    /** v8.0.97 (TD-377): کاربری که واقعاً امضا می‌کند وقتی جانشین userId است؛ یک نفر دو امضا نمی‌شمارد */
     actorId?: number;
     delegationId?: number;
     userName?: string;

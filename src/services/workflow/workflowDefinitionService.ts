@@ -71,7 +71,7 @@ export interface SaveWorkflowDefinitionPayload {
     parallelApprovalRule?: string;
     kValue?: number;
     autoActionKey?: string;
-    /** v8.0.93 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند */
+    /** v8.0.102 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند */
     isInitiatorExcluded?: number | boolean;
     [key: string]: unknown;
   }>;

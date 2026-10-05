@@ -39,7 +39,7 @@ export const workflowTransitions = pgTable('workflow_transitions', {
   kValue: integer('k_value').default(1),
   ruleConditionsJson: jsonb('rule_conditions_json').default([]),
   autoActionKey: text('auto_action_key').default(''),
-  // v8.0.93 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند (جداسازی وظایف، تیک طراح)
+  // v8.0.102 (TD-392): آغازکننده فرایند این انتقال را اجرا نمی‌کند (جداسازی وظایف، تیک طراح)
   isInitiatorExcluded: integer('is_initiator_excluded').notNull().default(0),
 });
 
