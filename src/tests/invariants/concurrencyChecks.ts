@@ -8,6 +8,7 @@ import { checkWorkLogFrozenInPayroll } from './payrollConcurrencyScenarios.js';
 import { checkNoSecondConnectionInTransactions } from './poolScenarios.js';
 import { checkBankAccountMaintenanceLocked } from './bankAccountScenarios.js';
 import { checkIdempotencyKeyContract } from './idempotencyScenarios.js';
+import { checkProjectCodesAtomic } from './projectCodeScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -41,4 +42,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkBankAccountMaintenanceLocked(), 'موجودی ۱۵۰ و یک سند اصلاحی؛ پنج کد یکتا و کد تکراری رد شد؛ حذف حساب دارای تراکنش و چک رد شد'],
   ['inv_td_329_idempotency_key_contract', 'v8.0.79: کلید تکرار درخواست فقط پاسخ موفق را نگه می‌دارد، با بدنه یا مسیر دیگر پاسخ کهنه نمی‌دهد و قفلش در طول درخواست طولانی تمدید می‌شود (TD-329)',
     () => checkIdempotencyKeyContract(), 'پرداخت ردشده پس از واریز اجرا شد؛ کلید تکراری با بدنه و مسیر دیگر رد شد؛ درخواست طولانی یک بار اجرا شد'],
+  ['inv_td_350_project_code_atomic', 'v8.0.80: کد خودکار پروژه از شمارنده اتمی سال ساخته می‌شود؛ پروژه‌های هم‌زمان کد یکتا می‌گیرند و کد دستیِ هم‌زمان یا شماره بعدیِ گرفته‌شده خطای یکتایی نمی‌دهد (TD-350)',
+    () => checkProjectCodesAtomic(), 'پنج پروژه هم‌زمان با پنج کد یکتا ساخته شد؛ کد دستی هم‌زمان پسوند گرفت؛ شماره گرفته‌شده کنار گذاشته شد'],
 ];
