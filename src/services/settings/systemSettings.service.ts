@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { appSettings } from '../../db/schema.js';
+import { appSettings, warehouses } from '../../db/schema.js';
 import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { userHasRoleOrPermission } from '../../middleware/authorize.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -35,6 +35,8 @@ const BUSINESS_SETTING_KEYS = new Set([
   'display_timezone',
   'project_workflow_presets',
   'inventory_control_preset_sections',
+  // v8.0.44 (TD-293): «انبار فروشگاه اینترنتی» — کد انبار فعال یا خالی (انبار پیش‌فرض)
+  'wc_shop_warehouse',
 ]);
 
 /** کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی — فقط مدیر سیستم (admin) */
@@ -75,6 +77,13 @@ function normalizeSettingValue(key: string, raw: string): string {
 }
 
 async function validateSettingValue(key: string, value: string): Promise<void> {
+  if (key === 'wc_shop_warehouse' && value.trim() !== '') {
+    const [wh] = await orm.select({ id: warehouses.id }).from(warehouses)
+      .where(and(eq(warehouses.code, value.trim()), eq(warehouses.isActive, 1)));
+    if (!wh) {
+      throw new ValidationError(`انبار فروشگاه اینترنتی «${value}» انبار فعالی نیست.`);
+    }
+  }
   if (key === 'display_timezone') {
     const { ALLOWED_TIMEZONES } = await import('../../lib/businessClock.js');
     if (!(ALLOWED_TIMEZONES as readonly string[]).includes(value)) {

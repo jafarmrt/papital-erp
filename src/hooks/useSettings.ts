@@ -99,6 +99,8 @@ export function useSettings() {
   const [wcConsumerKey, setWcConsumerKey] = useState('');
   const [wcConsumerSecret, setWcConsumerSecret] = useState('');
   const [wcWebhookSecret, setWcWebhookSecret] = useState('');
+  // v8.0.44 (TD-293): انبار فروشگاه اینترنتی (خالی = انبار پیش‌فرض)
+  const [wcShopWarehouse, setWcShopWarehouse] = useState('');
   const [syncedWcOrders, setSyncedWcOrders] = useState<any[]>([]);
   const [wcOrderLogs, setWcOrderLogs] = useState<any[]>([]);
   const [manualOrderId, setManualOrderId] = useState('');
@@ -183,6 +185,9 @@ export function useSettings() {
 
     const wcWebhookSecretSetting = data.find((s) => s.key === 'wc_webhook_secret');
     if (wcWebhookSecretSetting) setWcWebhookSecret(wcWebhookSecretSetting.value);
+
+    const wcShopWarehouseSetting = data.find((s) => s.key === 'wc_shop_warehouse');
+    if (wcShopWarehouseSetting) setWcShopWarehouse(wcShopWarehouseSetting.value);
   }, [settingsData]);
 
   const loadSyncedWcOrders = (signal?: AbortSignal) => {
@@ -294,7 +299,8 @@ export function useSettings() {
         { key: 'wc_store_url', value: wcStoreUrl },
         { key: 'wc_consumer_key', value: wcConsumerKey },
         { key: 'wc_consumer_secret', value: wcConsumerSecret },
-        { key: 'wc_webhook_secret', value: wcWebhookSecret }
+        { key: 'wc_webhook_secret', value: wcWebhookSecret },
+        { key: 'wc_shop_warehouse', value: wcShopWarehouse }
     ];
     const changedSettings = candidateSettings.filter(
       (item) => item.value !== MASKED_SETTING_VALUE && (!serverValues.has(item.key) || serverValues.get(item.key) !== item.value)
@@ -390,6 +396,7 @@ export function useSettings() {
     wcConsumerKey, setWcConsumerKey,
     wcConsumerSecret, setWcConsumerSecret,
     wcWebhookSecret, setWcWebhookSecret,
+    wcShopWarehouse, setWcShopWarehouse,
     wcOrderLogs,
     isSyncingAllStocks,
     handleSyncAllStocks,

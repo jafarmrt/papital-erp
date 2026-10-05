@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { customers, documents, items, warehouses, woocommerceOrderLogs } from '../../db/schema.js';
+import { customers, documents, items, woocommerceOrderLogs } from '../../db/schema.js';
 import { DocumentService } from '../document.service.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { OutboxService } from '../events/outboxService.js';
@@ -12,6 +12,7 @@ import { phoneMatchKey, phoneMatchKeySql } from './phoneMatchKey.js';
 import { currencyScale, exactLineSplit } from './exactLineTotal.js';
 import { allocateFeeDiscount } from './feeDiscount.js';
 import { describeOrderChange } from './orderChange.js';
+import { resolveShopWarehouseCode } from './shopWarehouse.js';
 
 /**
  * v7.0.30 (TD-190 / audit P1-2): پردازش سفارش‌های ووکامرس — منتقل‌شده از woocommerce.routes.ts (RULE 01).
@@ -315,13 +316,9 @@ export class WooOrderSyncService {
           if (it.code && !itemBySku.has(it.code)) itemBySku.set(it.code, it.id);
         }
 
-        // (و) انبار پیش‌فرض قطعی: قدیمی‌ترین انبار فعال
-        const [defLoc] = await tx.select({ code: warehouses.code })
-          .from(warehouses)
-          .where(eq(warehouses.isActive, 1))
-          .orderBy(asc(warehouses.id))
-          .limit(1);
-        const targetLoc = defLoc?.code || 'main';
+        // v8.0.44 (TD-293، تصمیم مالک محصول — گزینه الف): فاکتور از «انبار فروشگاه اینترنتی» کم می‌کند (تنظیم wc_shop_warehouse؛
+        // بی‌تنظیم انبار پیش‌فرض)، همان انباری که همگام‌سازی موجودی قابل فروشش را به فروشگاه می‌فرستد
+        const targetLoc = await resolveShopWarehouseCode(tx);
 
         const docLines: Array<{ itemId: number; quantity: number; unit_price: number; discount?: number; location: string }> = [];
         const problems: string[] = [];

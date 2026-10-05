@@ -11,6 +11,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { WooOrderSyncService } from '../services/woocommerce/wooOrderSync.service.js';
+import { shopSellableStocks } from '../services/woocommerce/shopWarehouse.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { assertSafeExternalUrl } from '../lib/ssrfGuard.js';
@@ -314,7 +315,9 @@ router.post('/sync-item', authorize('admin', 'manager', 'woocommerce.manage'), v
     if (!item.code) return res.status(400).json({ error: 'کالا فاقد کد (SKU) است و قابل همگام‌سازی نیست.' });
 
     const sku = item.code;
-    const currentStock = Number(item.currentStock || 0);
+    // v8.0.44 (TD-293، گزینه الف): موجودی قابل فروش انبار فروشگاه (همان انباری که فاکتور سفارش از آن کم می‌کند)، نه جمع همه انبارها
+    const { sellable } = await shopSellableStocks(orm, [item.id]);
+    const currentStock = sellable.get(item.id) ?? 0;
 
     const wcProducts = await makeWcRequest('GET', 'products', url, key, secret, null, { sku });
 
@@ -362,11 +365,13 @@ router.post('/sync-all-stocks', authorize('admin', 'manager', 'woocommerce.manag
     let updatedCount = 0;
     let failedCount = 0;
     const errors: string[] = [];
+    // v8.0.44 (TD-293، گزینه الف): موجودی قابل فروش انبار فروشگاه برای همه کالاها با یک گزارش رزرو
+    const { sellable } = await shopSellableStocks(orm, erpItems.map(item => item.id));
 
     for (const item of erpItems) {
       const sku = (item.code || '').trim();
       if (!sku) continue;
-      const currentStock = Number(item.currentStock || 0);
+      const currentStock = sellable.get(item.id) ?? 0;
 
       try {
         const wcProducts = await makeWcRequest('GET', 'products', url, key, secret, null, { sku });

@@ -3,6 +3,8 @@ import { FolderTree, ShoppingBag, Copy, Check, RefreshCw, Key, ShieldCheck, Data
 import { toast } from 'react-hot-toast';
 import { formatPersianDateTime, formatPersianDate } from '../../utils';
 import { WcOrderLogStatusBadge } from './WcOrderLogStatusBadge';
+import { ShopWarehouseSelect } from './ShopWarehouseSelect';
+import type { WarehouseItem } from '../../hooks/queries/useSettingsQueries';
 
 interface WooCommerceTabProps {
   wcStoreUrl: string;
@@ -13,6 +15,9 @@ interface WooCommerceTabProps {
   setWcConsumerSecret: (v: string) => void;
   wcWebhookSecret: string;
   setWcWebhookSecret: (v: string) => void;
+  wcShopWarehouse: string;
+  setWcShopWarehouse: (v: string) => void;
+  warehouses: WarehouseItem[];
   handleSaveSettings: () => void;
   isSaving: boolean;
   handleTestWcConnection: () => void;
@@ -37,6 +42,9 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
   setWcConsumerSecret,
   wcWebhookSecret,
   setWcWebhookSecret,
+  wcShopWarehouse,
+  setWcShopWarehouse,
+  warehouses,
   handleSaveSettings,
   isSaving,
   handleTestWcConnection,
@@ -191,6 +199,8 @@ export const WooCommerceTab: React.FC<WooCommerceTabProps> = ({
             در صورت تنظیم این کلید در ووکامرس و سیستم، تمام وب‌هوک‌های دریافتی از نظر اصالت فرستنده با امضای HMAC SHA-256 اعتبارسنجی می‌شوند.
           </p>
         </div>
+
+        <ShopWarehouseSelect value={wcShopWarehouse} onChange={setWcShopWarehouse} warehouses={warehouses} />
 
         <div className="bg-white/80 rounded-lg p-3 text-xs text-blue-900 space-y-1.5 border border-blue-100">
           <div className="font-semibold text-blue-950 mb-1">📋 مراحل ثبت وب‌هوک در ووکامرس:</div>

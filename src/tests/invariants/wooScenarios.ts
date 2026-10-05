@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { orm, pool } from '../../db/drizzle.js';
-import { customers, documents, items, woocommerceOrderLogs } from '../../db/schema.js';
+import { customers, documents, woocommerceOrderLogs } from '../../db/schema.js';
 import { WooOrderSyncService, type WcOrderPayload } from '../../services/woocommerce/wooOrderSync.service.js';
 import { createTestItem, createTestWarehouse } from '../fixtures/factories.js';
 
@@ -63,7 +63,7 @@ export async function probeWooEditedOrderIgnored(): Promise<boolean> {
 }
 
 /**
- * کالایی که فقط در انبار غیرپیش‌فرض موجودی دارد: موجودی کل (همان عددی که «همگام‌سازی موجودی» به فروشگاه می‌فرستد) ۵ است
+ * TD-293 (کاوش رگرسیون؛ رفع v8.0.44، با انبار فروشگاه پیش‌فرض): کالایی که فقط در انبار غیرفروشگاه موجودی دارد: موجودی کل ۵ است
  * ولی فاکتور سفارش فقط از انبار پیش‌فرض کم می‌کند و سفارش پرداخت‌شده رد می‌شود
  */
 export async function probeWooStockOutsideDefaultWarehouse(): Promise<boolean> {
@@ -71,8 +71,10 @@ export async function probeWooStockOutsideDefaultWarehouse(): Promise<boolean> {
   const item = await createTestItem({ code: `WC_WH_${wooOrderId()}`, stocks: { [other.code]: 5 } });
   const id = wooOrderId();
   const result = await WooOrderSyncService.handleOrder(wooOrder(id, 'processing', item.code, 2, 2000));
-  const [row] = await orm.select({ stock: items.currentStock }).from(items).where(eq(items.id, item.id));
-  return result.status === 'failed' && Number(row?.stock ?? 0) >= 2;
+  // آنچه همگام‌سازی موجودی برای این کالا به فروشگاه می‌فرستد (از v8.0.44 موجودی قابل فروش انبار فروشگاه)
+  const { shopSellableStocks } = await import('../../services/woocommerce/shopWarehouse.js');
+  const { sellable } = await shopSellableStocks(orm, [item.id]);
+  return result.status === 'failed' && (sellable.get(item.id) ?? 0) >= 2;
 }
 
 /** TD-295 (کاوش رگرسیون؛ رفع v8.0.42): سفارشی با تخفیف به‌صورت کارمزد منفی (fee_lines = −۲۰۰) کلاً فاکتور نمی‌شود */
@@ -282,6 +284,106 @@ export async function checkWooChangedOrderFlagged(): Promise<string[]> {
   const refundLog = await logOf(refunded);
   if (refund.status !== 'needs_review' || !String(refundLog?.errorMessage || '').includes('استرداد تازه به مبلغ 1000')) {
     problems.push(`استرداد جزئی: ${refund.status} / ${String(refundLog?.errorMessage || '').slice(0, 120)}`);
+  }
+  return problems;
+}
+
+/** تنظیم موقت app_settings؛ مقدارهای پیشین را برای بازگرداندن برمی‌گرداند */
+async function withSettings<T>(values: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  const { appSettings } = await import('../../db/schema.js');
+  const { inArray } = await import('drizzle-orm');
+  const keys = Object.keys(values);
+  const previous = await orm.select().from(appSettings).where(inArray(appSettings.key, keys));
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      await orm.insert(appSettings).values({ key, value }).onConflictDoUpdate({ target: appSettings.key, set: { value } });
+    }
+    return await fn();
+  } finally {
+    await orm.delete(appSettings).where(inArray(appSettings.key, keys));
+    for (const row of previous) await orm.insert(appSettings).values({ key: row.key, value: row.value });
+  }
+}
+
+/** فروشگاه ووکامرس ساختگی روی 127.0.0.1: جستجوی محصول با SKU و ثبت stock_quantity هر PUT */
+async function mockWooStore(productIdBySku: Map<string, number>): Promise<{ url: string; pushed: Map<number, number>; close: () => Promise<void> }> {
+  const http = await import('http');
+  const pushed = new Map<number, number>();
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    let body = '';
+    req.on('data', chunk => { body += String(chunk); });
+    req.on('end', () => {
+      res.setHeader('Content-Type', 'application/json');
+      if (req.method === 'GET' && url.pathname.endsWith('/wp-json/wc/v3/products')) {
+        const id = productIdBySku.get(url.searchParams.get('sku') || '');
+        res.end(JSON.stringify(id ? [{ id }] : []));
+        return;
+      }
+      const match = url.pathname.match(/\/wp-json\/wc\/v3\/products\/(\d+)$/);
+      if (req.method === 'PUT' && match) {
+        const parsed = JSON.parse(body || '{}') as { stock_quantity?: number };
+        pushed.set(Number(match[1]), Number(parsed.stock_quantity));
+        res.end('{}');
+        return;
+      }
+      res.statusCode = 404;
+      res.end('{}');
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => resolve()));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  return { url: `http://127.0.0.1:${port}`, pushed, close: () => new Promise<void>(resolve => server.close(() => resolve())) };
+}
+
+/**
+ * TD-293 (تصمیم مالک محصول — گزینه الف): «انبار فروشگاه اینترنتی». با تنظیم انبار دوم، فاکتور سفارش از همان انبار کم می‌کند
+ * (کالایی که فقط آنجا موجودی دارد فاکتور می‌شود)، و همگام‌سازی موجودی (تک‌کالا و دسته‌ای) موجودی قابل فروش همان انبار را
+ * می‌فرستد: ۵ منهای ۲ رزرو پیش‌فاکتور = ۳، و کالایی با ۶ در انبار پیش‌فرض و ۱ در انبار فروشگاه = ۱ (نه جمع ۷).
+ */
+export async function checkWooShopWarehouse(): Promise<string[]> {
+  const problems: string[] = [];
+  const shop = await createTestWarehouse({ name: `انبار فروشگاه آزمون ${wooOrderId()}` });
+  const onlyShop = await createTestItem({ code: `WC_SHOP_A_${wooOrderId()}`, stocks: { [shop.code]: 5 } });
+  const reserved = await createTestItem({ code: `WC_SHOP_B_${wooOrderId()}`, stocks: { [shop.code]: 5 } });
+  const mostlyDefault = await createTestItem({ code: `WC_SHOP_C_${wooOrderId()}`, stocks: { '': 6, [shop.code]: 1 } });
+  const { DocumentService } = await import('../../services/document.service.js');
+  await DocumentService.createDocument({
+    docType: 'proforma', status: 'proforma', inOut: 'out', date: new Date().toISOString().slice(0, 10), user: 'inv', buyerName: 'خریدار پیش‌فاکتور آزمون',
+    items: [{ itemId: reserved.id, quantity: 2, unitPrice: 1000, location: shop.code }],
+  });
+  const store = await mockWooStore(new Map([[onlyShop.code, 501], [reserved.code, 502], [mostlyDefault.code, 503]]));
+  try {
+    await withSettings({ wc_shop_warehouse: shop.code, wc_store_url: store.url, wc_consumer_key: 'ck_test', wc_consumer_secret: 'cs_test' }, async () => {
+      const result = await WooOrderSyncService.handleOrder(wooOrder(wooOrderId(), 'processing', onlyShop.code, 2, 2000));
+      if (result.status !== 'processed' || !result.docId) {
+        problems.push(`سفارش کالای انبار فروشگاه فاکتور نشد (${result.message.slice(0, 160)})`);
+      } else {
+        const loc = await pool.query<{ l: string }>('SELECT location AS l FROM document_items WHERE document_id = $1 AND is_deleted = 0', [result.docId]);
+        if (loc.rows[0]?.l !== shop.code) problems.push(`انبار سطر فاکتور «${loc.rows[0]?.l}»، انتظار «${shop.code}»`);
+      }
+
+      const request = (await import('supertest')).default;
+      const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+      const app = await getTestApp();
+      const session = await getAdminSession();
+      for (const item of [reserved, mostlyDefault]) {
+        const res = await request(app).post('/api/woocommerce/sync-item').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({ itemId: item.id });
+        if (res.status !== 200) problems.push(`همگام‌سازی کالای ${item.code}: ${res.status} ${JSON.stringify(res.body).slice(0, 120)}`);
+      }
+      if (store.pushed.get(502) !== 3) problems.push(`موجودی ارسالی کالای رزروشده ${store.pushed.get(502)}، انتظار ۳ (۵ منهای ۲ رزرو)`);
+      if (store.pushed.get(503) !== 1) problems.push(`موجودی ارسالی کالای انبار پیش‌فرض ${store.pushed.get(503)}، انتظار ۱ (فقط انبار فروشگاه)`);
+
+      store.pushed.clear();
+      const all = await request(app).post('/api/woocommerce/sync-all-stocks').set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send({});
+      if (all.status !== 200) problems.push(`همگام‌سازی دسته‌ای: ${all.status}`);
+      if (store.pushed.get(501) !== 3 || store.pushed.get(502) !== 3 || store.pushed.get(503) !== 1) {
+        problems.push(`همگام‌سازی دسته‌ای: ${[501, 502, 503].map(id => store.pushed.get(id)).join('، ')}، انتظار ۳، ۳، ۱`);
+      }
+    });
+  } finally {
+    await store.close();
   }
   return problems;
 }

@@ -18,7 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
-import { checkWooChangedOrderFlagged, checkWooExactLineTotals, checkWooNegativeFeeAsLineDiscount, checkWooPhoneMatchesCustomer, checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
+import { checkWooChangedOrderFlagged, checkWooShopWarehouse, checkWooExactLineTotals, checkWooNegativeFeeAsLineDiscount, checkWooPhoneMatchesCustomer, checkWooRialUnits, probeWooEditedOrderIgnored, probeWooFractionalRialResidue, probeWooNegativeFeeRejected, probeWooPartialRefundIgnored, probeWooPhoneFormatDuplicatesCustomer, probeWooStockOutsideDefaultWarehouse, probeWooThousandTomanCurrency } from '../invariants/wooScenarios.js';
 import { checkProcurementDeliveryIncomingOnly, checkRequisitionOverOrderNeedsReason, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
@@ -268,6 +268,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.44: TD-293 ──
+    ['inv_td_293_woo_shop_warehouse', 'v8.0.44: «انبار فروشگاه اینترنتی»: فاکتور سفارش ووکامرس از همان انبار کم می‌کند و همگام‌سازی موجودی، موجودی قابل فروش همان انبار (منهای رزرو) را می‌فرستد (TD-293، گزینه الف)',
+      () => checkWooShopWarehouse(), 'سفارش کالای انبار فروشگاه فاکتور شد؛ ارسال ۳ (۵ − ۲ رزرو) و ۱ (نه جمع ۷)، در همگام‌سازی تک‌کالا و دسته‌ای'],
     // ── v8.0.43: TD-294 ──
     ['inv_td_294_woo_changed_order_flagged', 'v8.0.43: سفارشِ فاکتورشده‌ای که در فروشگاه ویرایش شود یا استرداد جزئی بگیرد «نیازمند بررسی» می‌شود و پیام تفاوت را می‌گوید؛ فاکتور دست نمی‌خورد (TD-294، گزینه الف)',
       () => checkWooChangedOrderFlagged(), 'بی‌تغییر processed ماند؛ ویرایش ۲ ← ۳ و استرداد ۱۰۰۰ هر دو needs_review با پیام تفاوت؛ فاکتور ۲ عدد ماند'],

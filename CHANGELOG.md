@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.44 — Online Shop Warehouse for WooCommerce (TD-293)
+- A new setting picks the online shop's warehouse: WooCommerce invoices draw from it and the stock sync pushes its sellable stock instead of the total of all warehouses.
+
 ### v8.0.43 — Changed Invoiced WooCommerce Orders Need Review (TD-294)
 - When an invoiced order is edited in the shop or gets a partial refund, the order is flagged for review with the difference instead of being ignored.
 

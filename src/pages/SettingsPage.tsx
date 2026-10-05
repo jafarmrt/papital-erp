@@ -254,6 +254,9 @@ export default function SettingsPage({ currentUser, userPermissions }: SettingsP
             setWcConsumerSecret={s.setWcConsumerSecret}
             wcWebhookSecret={s.wcWebhookSecret}
             setWcWebhookSecret={s.setWcWebhookSecret}
+            wcShopWarehouse={s.wcShopWarehouse}
+            setWcShopWarehouse={s.setWcShopWarehouse}
+            warehouses={s.warehouses}
             handleSaveSettings={s.handleSaveSettings}
             isSaving={s.isSaving}
             handleTestWcConnection={s.handleTestWcConnection}
