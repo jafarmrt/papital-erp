@@ -124,7 +124,7 @@ router.get('/tasks/stats', authorizePermission('workflow.view', 'workflow.approv
 router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(taskIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const taskId = Number(req.params.taskId);
-    const { comment, snapshotData, action } = req.body;
+    const { comment, snapshotData, action, transitionId } = req.body;
     const userId = req.user?.id;
     const userName = req.user?.fullName || req.user?.username || '';
     const userRole = req.user?.role || '';
@@ -141,6 +141,7 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
       userRole,
       userPermissions,
       action: action === 'reject' ? 'reject' : 'approve',
+      transitionId: Number(transitionId) > 0 ? Number(transitionId) : undefined,
       comment,
       snapshotData
     });

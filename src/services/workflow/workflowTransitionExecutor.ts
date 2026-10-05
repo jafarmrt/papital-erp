@@ -201,6 +201,23 @@ export class WorkflowTransitionExecutor {
   }
 
   /**
+   * v8.0.81 (TD-370): انتقال‌های یک گام فرایند از تصویر نسخه خود فرایند (یا جدول‌های جاری وقتی تصویر قابل استفاده نیست)
+   */
+  static async transitionsFromState(
+    instance: { workflowDefinitionId: number; snapshotDsl: unknown },
+    stateId: number,
+    txExecutor: DbClient = orm
+  ): Promise<WorkflowTransitionSnapshot[]> {
+    const snapshotTransitions = snapshotTransitionsOf(instance.snapshotDsl);
+    const transitions = snapshotTransitions
+      ?? await txExecutor.select().from(workflowTransitions).where(and(
+        eq(workflowTransitions.workflowDefinitionId, instance.workflowDefinitionId),
+        eq(workflowTransitions.fromStateId, stateId)
+      ));
+    return transitions.filter(t => t.fromStateId === stateId).sort((a, b) => a.id - b.id);
+  }
+
+  /**
    * Helper to detect negative / rejection / cancellation transitions
    */
   static isNegativeTransition(actionKey?: string | null, title?: string | null): boolean {

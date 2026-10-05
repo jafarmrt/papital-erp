@@ -250,6 +250,8 @@ export class WorkflowTaskService {
     userRole: string;
     userPermissions?: string[];
     action: 'approve' | 'reject';
+    /** v8.0.81 (TD-370): انتقال «رد» انتخابی وقتی گام چند انتقال رد دارد */
+    transitionId?: number;
     comment?: string;
     snapshotData?: Record<string, unknown>;
   }) {
@@ -340,27 +342,9 @@ export class WorkflowTaskService {
         throw new ForbiddenError('شما مجاز به اجرای این وظیفه نیستید (فاقد تخصیص مستقیم، نقش متناظر یا تفویض اختیار معتبر) (WF_TASK_UNAUTHORIZED).');
       }
 
-      // Dynamically resolve target transition matching user's action ('approve' vs 'reject')
-      let effectiveTransitionId = task.transitionId;
-      const stateTransitions = await tx.select()
-        .from(workflowTransitions)
-        .where(and(
-          eq(workflowTransitions.workflowDefinitionId, instance.workflowDefinitionId),
-          eq(workflowTransitions.fromStateId, instance.currentStateId)
-        ));
-
-      if (params.action === 'reject') {
-        const rejectTr = stateTransitions.find(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
-        if (rejectTr) {
-          effectiveTransitionId = rejectTr.id;
-        }
-      } else {
-        const approveTr = stateTransitions.find(t => !WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
-        if (approveTr) {
-          effectiveTransitionId = approveTr.id;
-        }
-      }
-
+      // v8.0.81 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
+      // فرایند). پیش‌تر اولین انتقال مثبت یا منفی جدول برداشته می‌شد و «رد» در گام بی‌انتقال رد همان تأیید را اجرا می‌کرد.
+      const effectiveTransitionId = await this.resolveTaskTransition(tx, task, instance, params);
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
         instanceId: task.instanceId,
         transitionId: effectiveTransitionId,
@@ -406,6 +390,39 @@ export class WorkflowTaskService {
         }
       };
     });
+  }
+
+  /**
+   * v8.0.81 (TD-370): انتقالی که اجرای کار انجام می‌دهد. تأیید: انتقال خود کار، اگر از گام جاری باشد. رد: انتقال رد
+   * انتخاب‌شده (transitionId)، یا انتقال خود کار اگر رد است، یا تنها انتقال رد گامی که کاربر اجازه‌اش را دارد.
+   */
+  private static async resolveTaskTransition(
+    tx: Parameters<Parameters<typeof orm.transaction>[0]>[0],
+    task: typeof workflowTasks.$inferSelect,
+    instance: typeof workflowInstances.$inferSelect,
+    params: { action: 'approve' | 'reject'; transitionId?: number; userRole: string; userPermissions?: string[] }
+  ): Promise<number> {
+    const stateTransitions = await WorkflowTransitionExecutor.transitionsFromState(instance, instance.currentStateId, tx);
+    const own = stateTransitions.find(t => t.id === task.transitionId);
+    if (!own) {
+      throw new ConflictError('این وظیفه به گام جاری فرآیند تعلق ندارد؛ کارتابل را تازه کنید (WF_TASK_STALE)');
+    }
+    if (params.action === 'approve') return own.id;
+
+    const rejects = stateTransitions.filter(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title));
+    if (params.transitionId) {
+      const chosen = rejects.find(t => t.id === params.transitionId);
+      if (!chosen) throw new ValidationError('انتقال «رد» انتخاب‌شده از گام جاری این وظیفه نیست (WF_TASK_INVALID_REJECT)');
+      return chosen.id;
+    }
+    if (rejects.some(t => t.id === own.id)) return own.id;
+    if (rejects.length === 0) {
+      throw new ValidationError('این گام فرآیند انتقال «رد» ندارد؛ فقط تأیید ممکن است (WF_TASK_NO_REJECT_TRANSITION)');
+    }
+    const allowed = rejects.filter(t => WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, t.requiredRole || undefined, params.userPermissions || []));
+    if (allowed.length === 1) return allowed[0].id;
+    if (rejects.length === 1) return rejects[0].id;
+    throw new ValidationError(`این گام چند انتقال «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید (WF_TASK_REJECT_AMBIGUOUS)`);
   }
 
   /**

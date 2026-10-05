@@ -49,7 +49,7 @@ export async function defineWorkflow(spec: WfSpec): Promise<Wf> {
   for (const s of saved.states) stateId[s.stateKey] = s.id;
   const transitionId: Record<string, number> = {};
   for (const t of saved.transitions) transitionId[t.actionKey] = t.id;
-  return { definitionId: saved.id, code, entityType, spec, stateId, transitionId };
+  return { definitionId: saved.definition.id, code, entityType, spec, stateId, transitionId };
 }
 
 /** ذخیره دوباره همان طرح از طراح (وضعیت‌ها و انتقال‌ها با شناسه تازه ساخته می‌شوند) */
