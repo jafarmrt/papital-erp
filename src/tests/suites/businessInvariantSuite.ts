@@ -18,7 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
-import { checkProcurementDeliveryIncomingOnly } from '../invariants/procurementScenarios.js';
+import { checkProcurementDeliveryIncomingOnly, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
@@ -267,6 +267,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.37: TD-291 ──
+    ['inv_td_291_split_order_form_accepted', 'v8.0.37: مسیر تبدیل درخواست به سفارش بدنه فرم «تقسیم سفارش» را می‌پذیرد و انبار مقصد و وضعیت بسته را نگه می‌دارد (TD-291)',
+      () => checkSplitOrderFormAccepted(), 'فرم پذیرفته شد؛ سفارش پیش‌نویس در انبار مقصد ساخته شد و سفارش‌شده درخواست ۵ شد'],
     // ── v8.0.36: TD-290 ──
     ['inv_td_290_requisition_receipt_sums_lines', 'v8.0.36: تحویل سفارش خرید مقدار دریافتی درخواست را از جمع همه سطرهای هر کالا می‌شمارد و میان ردیف‌های همان کالا پر می‌کند؛ به‌روزرسانی درخواست در تراکنش تحویل و زیر قفل است و تحویل هم‌زمان نوشته دیگری را گم نمی‌کند (TD-290)',
       () => checkRequisitionReceiptSumsLines(wh), 'دو سطر ۲ و ۳ = ۵ و received؛ تحویل دوباره بی‌اثر؛ ۵ میان ردیف‌های ۳ و ۲ پر شد؛ نوشتن هم‌زمان ۴ + تحویل ۵ = ۹'],

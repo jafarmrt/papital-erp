@@ -18,6 +18,9 @@ going forward.
 
 ## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
 
+### v8.0.37 — Split-Order Form Accepted by the Convert Route (TD-291)
+- The requisition convert route validates exactly the split-order form body, so the form works again and keeps each package's warehouse and status.
+
 ### v8.0.36 — Requisition Receipt Counts Every Line (TD-290)
 - Delivering a purchase order counts every line of an item in its requisition and updates the requisition in the delivery transaction under a row lock.
 

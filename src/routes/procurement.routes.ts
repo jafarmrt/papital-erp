@@ -77,12 +77,21 @@ const convertToOrdersSchema = z.object({
     id: z.string().regex(/^\d+$/, 'شناسه نامعتبر است')
   }),
   body: z.object({
+    // v8.0.37 (TD-291): همان بدنه‌ای که فرم «تقسیم سفارش» می‌فرستد. پیش‌تر شناسه عددی ردیف درخواست (که فرم نمی‌فرستد و
+    // شناسه ردیف درخواست رشته است) الزامی بود و هر ثبت فرم با خطای ۴۰۰ رد می‌شد؛ انبار مقصد و وضعیت بسته هم از بدنه حذف می‌شد.
+    // وضعیت بسته فقط پیش‌نویس یا پیش‌فاکتور است؛ ورود کالا به انبار از مسیر «تحویل به انبار» است.
     orderGroups: z.array(z.object({
       supplierId: z.union([z.number().int().positive(), z.null()]).optional(),
       supplierName: z.string().max(200).optional(),
+      targetWarehouse: z.string().max(100).optional(),
+      docType: z.enum(['receipt', 'proforma']).optional(),
+      status: z.enum(['draft', 'proforma']).optional(),
       items: z.array(z.object({
-        requisitionItemId: z.number().int().positive(),
+        requisitionItemId: z.union([z.number().int().positive(), z.string().max(100)]).optional(),
         itemId: z.number().int().positive(),
+        itemCode: z.string().max(100).optional(),
+        itemName: z.string().max(300).optional(),
+        unit: z.string().max(50).optional(),
         quantity: z.number().positive(),
         unitPrice: z.number().nonnegative(),
         location: z.string().optional(),

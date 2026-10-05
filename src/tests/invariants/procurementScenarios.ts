@@ -82,3 +82,49 @@ export async function checkProcurementDeliveryIncomingOnly(wh: string): Promise<
   problems.push(...await invariantProblems(scope, 'پایان سناریوی تدارکات'));
   return problems;
 }
+
+/** درخواست تبدیل از راه API با همان بدنه‌ای که فرم «تقسیم سفارش» (SplitOrderModal) می‌فرستد */
+export async function postSplitOrderForm(requisitionId: number, body: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
+  const request = (await import('supertest')).default;
+  const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
+  const app = await getTestApp();
+  const session = await getAdminSession();
+  const res = await request(app).post(`/api/procurement/requisitions/${requisitionId}/convert-to-orders`)
+    .set('Cookie', session.cookie).set('x-csrf-token', session.csrfToken).send(body);
+  return { status: res.status, body: (res.body ?? {}) as Record<string, unknown> };
+}
+
+/**
+ * TD-291: مسیر تبدیل درخواست به سفارش بدنه فرم «تقسیم سفارش» را می‌پذیرد — پیش‌تر شناسه عددی ردیف درخواست (که فرم
+ * نمی‌فرستد) الزامی بود و هر درخواست فرم با خطای ۴۰۰ رد می‌شد، و انبار مقصد و وضعیت بسته سفارش از بدنه حذف می‌شد.
+ */
+export async function checkSplitOrderFormAccepted(): Promise<string[]> {
+  const problems: string[] = [];
+  const { createTestWarehouse } = await import('../fixtures/factories.js');
+  const target = await createTestWarehouse({ name: `انبار مقصد آزمون TD-291 ${Date.now()}` });
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const req = await ProcurementService.createRequisition({ title: 'درخواست آزمون فرم تقسیم سفارش', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
+
+  const res = await postSplitOrderForm(req.id, {
+    orderGroups: [{
+      supplierName: 'تامین‌کننده آزمون TD-291', targetWarehouse: target.code, docType: 'receipt', status: 'draft', notes: 'بسته ۱',
+      items: [{ itemId: item.id, itemCode: item.code, itemName: item.name, quantity: 5, unitPrice: 1000, unit: 'عدد' }],
+    }],
+    closeRequisition: true,
+    closureReason: 'تطابق کامل خرید با درخواست متقاضی',
+  });
+  if (res.status !== 200) return [...problems, `فرم تقسیم سفارش رد شد (${res.status}): ${String(res.body.message ?? res.body.error ?? '').slice(0, 200)}`];
+
+  const created = ((res.body.data as { createdDocuments?: Array<{ id: number }> } | undefined)?.createdDocuments ?? []).map(d => d.id);
+  const lines = await pool.query<{ location: string; status: string }>(
+    `SELECT di.location, d.status FROM document_items di JOIN documents d ON d.id = di.document_id
+      WHERE di.item_id = $1 AND di.is_deleted = 0 AND d.is_deleted = 0 AND d.id = ANY($2::int[])`, [item.id, created]);
+  if (lines.rows.length !== 1) problems.push(`سفارش ساخته‌شده ${lines.rows.length} سطر دارد، انتظار ۱`);
+  else {
+    if (lines.rows[0].location !== target.code) problems.push(`انبار مقصد سفارش «${lines.rows[0].location}»، انتظار «${target.code}»`);
+    if (lines.rows[0].status !== 'draft') problems.push(`وضعیت سفارش ${lines.rows[0].status}، انتظار draft`);
+  }
+  const ordered = (await ProcurementService.getRequisitionById(req.id)).items as unknown as Array<{ orderedQty?: number }>;
+  if (Number(ordered[0]?.orderedQty ?? 0) !== 5) problems.push(`مقدار سفارش‌شده درخواست ${ordered[0]?.orderedQty}، انتظار ۵`);
+  return problems;
+}
