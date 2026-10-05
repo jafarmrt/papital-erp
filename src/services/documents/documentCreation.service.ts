@@ -1,8 +1,8 @@
 import { eq, and, inArray } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
 import { documents, documentItems, items, documentRefCounters, productionProjects } from '../../db/schema.js';
-import { normalizeDateToDbTimestamp } from '../../utils.js';
 import { resolveJalaliFiscalYear } from '../../lib/businessClock.js';
+import { requireDocumentTimestamp, resolveDocumentTimestamp } from '../../lib/storageDate.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../../lib/occHelper.js';
 import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { domainEventBus } from '../events/domainEventBus.js';
@@ -93,6 +93,23 @@ export class DocumentCreationService {
 
       const newVer = nextVersion(existingDoc.version);
 
+      // v8.0.50 (TD-313، تصمیم مالک محصول — گزینه الف): تاریخ نامعتبر رد می‌شود؛ پیش‌نویس یا پیش‌فاکتوری که تاریخش به
+      // سال مالی دیگری برود شماره بعدی همان سال را می‌گیرد (مگر شماره تازه‌ای داده شده باشد). پیش‌تر شماره و سال
+      // شماره‌گذاری سال قبل می‌ماند.
+      const newDocDate = date ? requireDocumentTimestamp(date, 'سند') : null;
+      let nextRefNumber = refNumber ? String(refNumber) : existingDoc.refNumber;
+      let nextRefFiscalYear: number | undefined;
+      if (newDocDate) {
+        const newFiscalYear = resolveJalaliFiscalYear(newDocDate);
+        const currentFiscalYear = existingDoc.refFiscalYear ?? resolveJalaliFiscalYear(existingDoc.date);
+        if (newFiscalYear !== currentFiscalYear) {
+          if (!refNumber || String(refNumber) === String(existingDoc.refNumber)) {
+            nextRefNumber = await DocumentRefNumberService.getNextRef(existingDoc.type, newDocDate, tx);
+          }
+          nextRefFiscalYear = newFiscalYear;
+        }
+      }
+
       // v7.0.32 (TD-197 / audit P1-7): مالیات ساختاریافته پیش‌فاکتور/پیش‌نویس در ویرایش نیز ذخیره می‌شود؛
       // اگر فقط درصد داده شود یا اقلام تغییر کند، مبلغ از جمع خالص اقلام جدید (یا فعلی) دوباره محاسبه می‌شود.
       const vatInput = parseVatInput(body);
@@ -125,8 +142,9 @@ export class DocumentCreationService {
 
       // Atomic update with OCC WHERE clause to guarantee no concurrent modification slipped through
       const [updatedDoc] = await tx.update(documents).set({
-        refNumber: refNumber ? String(refNumber) : existingDoc.refNumber,
-        date: date ? normalizeDateToDbTimestamp(date) : existingDoc.date,
+        refNumber: nextRefNumber,
+        ...(nextRefFiscalYear !== undefined ? { refFiscalYear: nextRefFiscalYear } : {}),
+        date: newDocDate ?? existingDoc.date,
         user: user || existingDoc.user,
         notes: notes !== undefined ? notes : existingDoc.notes,
         buyerName: buyer_name !== undefined ? buyer_name : existingDoc.buyerName,
@@ -222,6 +240,8 @@ export class DocumentCreationService {
       throw new ValidationError('سند انبارگردانی فقط با وضعیت نهایی ثبت می‌شود؛ پیش‌نویس یا پیش‌فاکتور انبارگردانی مجاز نیست.');
     }
     const docLocation = location ? String(location).trim() : '';
+    // v8.0.50 (TD-313): تاریخ سند پیش از هر کاری نرمال و اعتبارسنجی می‌شود؛ سال شماره‌گذاری و گردش انبار از همین مقدار
+    const normalizedDocDate = await resolveDocumentTimestamp(date, 'سند');
 
     // V3.1.46 (TD-070): لینک رسمی سند به پروژه — اعتبارسنجی وجود پروژه پیش از درج (FK انسانی)
     const rawProjectId = body.projectId ?? body.project_id;
@@ -268,11 +288,11 @@ export class DocumentCreationService {
         }
       }
       // v7.0.21 (TD-178 / audit P0-2): سال مالی پارتیشن شماره‌گذاری — دقیقاً همان مقداری که
-      // DocumentRefNumberService.getNextRef برای همین `date` استفاده می‌کند؛ یکتایی شماره عطف در این دامنه است.
-      const refFiscalYear = resolveJalaliFiscalYear(date ?? null);
+      // DocumentRefNumberService.getNextRef برای همین تاریخ استفاده می‌کند؛ یکتایی شماره عطف در این دامنه است.
+      const refFiscalYear = resolveJalaliFiscalYear(normalizedDocDate);
       let finalRefNumber = refNumber;
       if (!finalRefNumber || finalRefNumber === 'auto' || String(finalRefNumber).trim() === '') {
-        finalRefNumber = await DocumentRefNumberService.getNextRef(docType, date, tx);
+        finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
       } else {
         // V7 Collision Prevention: If custom refNumber already exists in documents, auto-resolve to next valid atomic number
         // v7.0.21 (TD-178): بررسی تکرار فقط در دامنه یکتایی واقعی (نوع سند + سال مالی شماره‌گذاری)
@@ -286,7 +306,7 @@ export class DocumentCreationService {
             eq(documents.isDeleted, 0)
           ));
         if (existingDoc) {
-          finalRefNumber = await DocumentRefNumberService.getNextRef(docType, date, tx);
+          finalRefNumber = await DocumentRefNumberService.getNextRef(docType, normalizedDocDate, tx);
           if (docType === 'audit' && !String(finalRefNumber).startsWith('AUD-')) {
             finalRefNumber = `AUD-${finalRefNumber}`;
           }
@@ -337,8 +357,6 @@ export class DocumentCreationService {
           }
         }
       }
-
-      const normalizedDocDate = normalizeDateToDbTimestamp(date);
 
       // v7.0.32 (TD-197 / audit P1-7): مالیات بر ارزش افزوده در ستون‌های ساختاریافته ذخیره می‌شود و دیگر در متن
       // یادداشت نوشته/از آن خوانده نمی‌شود (پیش‌تر سند حسابداری مبلغ مالیات را با Regex از یادداشت استخراج می‌کرد).
@@ -537,7 +555,7 @@ export class DocumentCreationService {
               // v8.0.9 (TD-250): ورود با قیمت خالص پس از تخفیف ردیف (همان مبلغ سند حسابداری خرید)
               price: returnUnitCosts?.get(Number(itemId)) ?? stockUnitPriceInIrr(
                 stockDirection === 'in' ? netLineUnitPrice(price, qty, disc) : price, currency || 'IRR', docExchangeRate),
-              date: date || normalizedDocDate,
+              date: normalizedDocDate,
               documentType: docType,
               documentRef: String(finalRefNumber || ''),
               user: user || '',
