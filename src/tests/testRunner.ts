@@ -213,7 +213,7 @@ export class Phase21TestRunner {
         allCases = allCases.concat(await runDatabaseTests());
       }
       if (!layerFilter || layerFilter === 'workflow') {
-        allCases = allCases.concat(await runWorkflowTests());
+        allCases = allCases.concat(await runWorkflowTests(testFilter));
       }
       if (!layerFilter || layerFilter === 'concurrency') {
         allCases = allCases.concat(await runConcurrencyTests());

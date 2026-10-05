@@ -8,9 +8,13 @@ import { WorkflowDelegationService } from '../../services/workflow/workflowDeleg
 import { WorkflowSlaEvaluator } from '../../services/workflow/workflowSlaEvaluator.js';
 import { WorkflowDefinitionService } from '../../services/workflow/workflowDefinitionService.js';
 import { WorkflowTaskService } from '../../services/workflow/workflowTaskService.js';
+import { runWorkflowChecks } from '../invariants/workflowChecks.js';
 
-export async function runWorkflowTests(): Promise<TestCaseResult[]> {
+export async function runWorkflowTests(filter?: string): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
+  // v8.0.81 به بعد (حوزه G): آزمون‌های سخت‌گیرانه گردش‌کار روی پایگاه‌داده واقعی؛ با فیلتر فقط همان‌ها اجرا می‌شوند
+  const norm = filter?.toLowerCase().replace(/[-_]/g, '').trim();
+  results.push(...await runWorkflowChecks(id => !norm || id.toLowerCase().replace(/[-_]/g, '').includes(norm)));
 
   // 1. Unauthorized Workflow Access
   const t1Start = Date.now();
