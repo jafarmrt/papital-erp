@@ -1,8 +1,12 @@
 import React from 'react';
 
-/** v8.0.91 (TD-391): فیلدهای نگهبان انتقال در طراح گردش‌کار: «مجوز لازم» (کلید مجوز، علاوه بر نقش) */
+/**
+ * فیلدهای نگهبان انتقال در طراح گردش‌کار: «مجوز لازم» (کلید مجوز، علاوه بر نقش؛ v8.0.91، TD-391) و
+ * «آغازکننده تأیید نکند» (جداسازی وظایف؛ v8.0.93، TD-392)
+ */
 export interface WorkflowEdgeGuard {
   requiredPermission: string;
+  isInitiatorExcluded: number;
 }
 
 interface WorkflowEdgeGuardFieldsProps {
@@ -13,6 +17,7 @@ interface WorkflowEdgeGuardFieldsProps {
 }
 
 export const WorkflowEdgeGuardFields: React.FC<WorkflowEdgeGuardFieldsProps> = ({ value, onChange, permissionOptions }) => (
+  <div className="space-y-3">
   <div>
     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">مجوز لازم (اختیاری)</label>
     <input
@@ -30,5 +35,20 @@ export const WorkflowEdgeGuardFields: React.FC<WorkflowEdgeGuardFieldsProps> = (
     <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
       اگر پر شود، علاوه بر نقش، فقط کسی که این مجوز را دارد (یا مدیر سیستم) این انتقال را اجرا می‌کند.
     </p>
+  </div>
+  <label className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+    <input
+      type="checkbox"
+      checked={value.isInitiatorExcluded === 1}
+      onChange={(e) => onChange({ isInitiatorExcluded: e.target.checked ? 1 : 0 })}
+      className="mt-0.5"
+    />
+    <span>
+      آغازکننده تأیید نکند
+      <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+        کسی که فرایند را آغاز کرده (یا جانشینش) این گام را برای سند خودش اجرا نمی‌کند؛ مدیر سیستم مستثناست.
+      </span>
+    </span>
+  </label>
   </div>
 );

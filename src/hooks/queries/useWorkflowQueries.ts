@@ -23,6 +23,7 @@ export interface WorkflowTransition {
   title: string;
   requiredRole?: string;
   requiredPermission?: string;
+  isInitiatorExcluded?: number;
   approvalRuleType?: string;
   kValue?: number;
   autoActionKey?: string;

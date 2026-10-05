@@ -59,7 +59,7 @@ export async function checkAndAllNeedsEveryMember(): Promise<string[]> {
   return problems;
 }
 
-async function delegate(from: WfUser, to: WfUser, scope = 'ALL'): Promise<number> {
+export async function delegate(from: WfUser, to: WfUser, scope = 'ALL'): Promise<number> {
   const created = await WorkflowDelegationService.createDelegation({
     fromUserId: from.id, toUserId: to.id, scope, startDate: hourIso(-1), endDate: hourIso(24), reason: 'مرخصی آزمون',
   });

@@ -50,6 +50,7 @@ export interface WorkflowTransitionSnapshot {
   title: string;
   requiredRole?: string | null;
   requiredPermission?: string | null;
+  isInitiatorExcluded?: number | null;
   ruleConditionsJson?: unknown;
   approvalRuleType?: string | null;
   kValue?: number | null;
@@ -201,6 +202,11 @@ export class WorkflowTransitionExecutor {
       if (await WorkflowTransitionExecutor.holdsRequiredPermission(t, { role: userRole, permissions: userPermissions, ownPermissions: true }, txExecutor)) permitted.push(t);
     }
     filtered = permitted;
+    // v8.0.93 (TD-392): انتقالی که آغازکننده را کنار می‌گذارد به آغازکننده پیشنهاد نمی‌شود
+    if (userId && filtered.some(t => Number(t.isInitiatorExcluded) === 1)) {
+      const [inst] = await txExecutor.select({ startedBy: workflowInstances.startedBy }).from(workflowInstances).where(eq(workflowInstances.id, instanceId));
+      filtered = filtered.filter(t => !WorkflowTransitionExecutor.initiatorExcluded(t, inst?.startedBy, { userId, actorId: userId, role: userRole }));
+    }
 
     if (entityContext) {
       filtered = filtered.filter(t => {
@@ -248,6 +254,20 @@ export class WorkflowTransitionExecutor {
     const [roleRow] = await txExecutor.select({ permissions: roles.permissions }).from(roles)
       .where(sql`lower(${roles.code}) = ${role}`);
     return held(Array.isArray(roleRow?.permissions) ? (roleRow.permissions as string[]) : []);
+  }
+
+  /**
+   * v8.0.93 (TD-392، تصمیم مالک محصول «گزینه در هر گام»): انتقالی که تیک «آغازکننده تأیید نکند» دارد برای آغازکننده
+   * فرایند بسته است: نه به نام خودش، نه به‌عنوان جانشین کسی و نه از راه جانشینش. ادمین همیشه مجاز است.
+   */
+  static initiatorExcluded(
+    transition: Pick<WorkflowTransitionSnapshot, 'isInitiatorExcluded'>,
+    startedBy: number | null | undefined,
+    signer: { userId?: number; actorId?: number; role?: string }
+  ): boolean {
+    if (Number(transition.isInitiatorExcluded) !== 1 || !startedBy) return false;
+    if ((signer.role || '').trim().toLowerCase() === 'admin') return false;
+    return signer.userId === startedBy || signer.actorId === startedBy;
   }
 
   /**
@@ -602,6 +622,11 @@ export class WorkflowTransitionExecutor {
         : { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }, tx);
       if (!signerHoldsPermission) {
         throw new ForbiddenError(`انتقال «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد (WF_PERMISSION_REQUIRED).`);
+      }
+      if (WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, {
+        userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
+      })) {
+        throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند (WF_INITIATOR_EXCLUDED).`);
       }
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)

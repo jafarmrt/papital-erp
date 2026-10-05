@@ -5,7 +5,7 @@ import {
   checkTaskAndTransitionNoDeadlock, checkTaskRunsItsOwnTransition, checkViewPermissionCannotApprove,
 } from './workflowScenarios.js';
 import { checkReceiveApprovesInReceiverName, checkRequisitionActionFollowsWorkflow } from './workflowProcurementScenarios.js';
-import { checkTransitionRequiredPermission } from './workflowPermissionScenarios.js';
+import { checkInitiatorExcludedStep, checkTransitionRequiredPermission } from './workflowPermissionScenarios.js';
 import { checkAndAllNeedsEveryMember, checkDelegateActsForDelegatorRole, checkDelegationRevokedByDelegatorOnly } from './workflowDelegationScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه G (گردش‌کار و تأیید) در سوئیت workflow: [شناسه، نام، بررسی، شرح موفقیت] */
@@ -34,6 +34,8 @@ export const WORKFLOW_CHECKS: Array<[string, string, () => Promise<string[]>, st
     checkReceiveApprovesInReceiverName, 'تأیید به نام دریافت‌کننده در تاریخچه ثبت شد؛ دریافت‌کننده بی نقش تأیید ۴۰۳ گرفت و موجودی ۴ ماند'],
   ['wf_td_391_transition_required_permission', 'v8.0.91: انتقالی که «مجوز لازم» دارد فقط برای دارنده آن مجوز یا ادمین اجرا و پیشنهاد می‌شود (TD-391)',
     checkTransitionRequiredPermission, 'کاربر بی مجوز ۴۰۳ گرفت و انتقال به او پیشنهاد نشد؛ نقش دارای مجوز، مجوز خود کاربر و ادمین اجرا کردند'],
+  ['wf_td_392_initiator_excluded_step', 'v8.0.93: گام «آغازکننده تأیید نکند» برای آغازکننده و جانشینش بسته است و در کارتابل او نمی‌آید؛ همکار و ادمین اجرا می‌کنند (TD-392)',
+    checkInitiatorExcludedStep, 'آغازکننده و جانشینش ۴۰۳ گرفتند؛ کار فقط در کارتابل همکار آمد؛ همکار و ادمین اجرا کردند؛ گام بی تیک باز ماند'],
 ];
 
 export async function runWorkflowChecks(shouldRun: (id: string) => boolean): Promise<TestCaseResult[]> {

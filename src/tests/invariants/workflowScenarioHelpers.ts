@@ -11,7 +11,7 @@ import { createTestUser } from '../fixtures/factories.js';
  */
 
 export interface WfStateSpec { key: string; type?: 'initial' | 'normal' | 'terminal'; slaHours?: number }
-export interface WfTransitionSpec { from: string; to: string; action: string; title?: string; role?: string; rule?: string; k?: number; permission?: string }
+export interface WfTransitionSpec { from: string; to: string; action: string; title?: string; role?: string; rule?: string; k?: number; permission?: string; excludeInitiator?: boolean }
 export interface WfSpec { states: WfStateSpec[]; transitions: WfTransitionSpec[] }
 
 export interface Wf {
@@ -33,7 +33,7 @@ function payloadOf(spec: WfSpec, code: string, entityType: string, id?: number):
     id, code, entityType, title: `گردش‌کار آزمون حوزه G ${code}`,
     states: spec.states.map((s, i) => ({ stateKey: s.key, title: s.key, stateType: s.type ?? 'normal', stepOrder: i + 1, slaHours: s.slaHours ?? 24 })),
     transitions: spec.transitions.map(t => ({
-      from: t.from, to: t.to, actionKey: t.action, title: t.title ?? t.action, requiredRole: t.role ?? '', requiredPermission: t.permission ?? '',
+      from: t.from, to: t.to, actionKey: t.action, title: t.title ?? t.action, requiredRole: t.role ?? '', requiredPermission: t.permission ?? '', isInitiatorExcluded: t.excludeInitiator ? 1 : 0,
       approvalRuleType: t.rule ?? 'SINGLE', kValue: t.k ?? 1,
     })),
   };
@@ -57,8 +57,10 @@ export async function resaveWorkflow(wf: Wf): Promise<void> {
   await WorkflowDefinitionService.saveWorkflowDefinition(payloadOf(wf.spec, wf.code, wf.entityType, wf.definitionId));
 }
 
-export async function startWf(wf: Wf, entityId = uniqueTag()): Promise<number> {
-  const instance = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: wf.definitionId, entityType: wf.entityType, entityId });
+export async function startWf(wf: Wf, entityId = uniqueTag(), starter?: WfUser): Promise<number> {
+  const instance = await WorkflowTransitionExecutor.startInstance({
+    workflowDefinitionId: wf.definitionId, entityType: wf.entityType, entityId, userId: starter?.id, userName: starter?.name,
+  });
   return instance.id;
 }
 

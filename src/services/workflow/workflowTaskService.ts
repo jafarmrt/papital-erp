@@ -11,6 +11,7 @@ import { logActivity } from '../../lib/auditLogger.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
+import { snapshotTransitionsOf } from './workflowSnapshot.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
 export class WorkflowTaskService {
@@ -86,6 +87,10 @@ export class WorkflowTaskService {
         }
       }
 
+      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, instance, { userId: delegationInfo?.delegatedFromUserId ?? userId, actorId: userId, role: userRole })) {
+        isAssigned = false;
+      }
+
       if (isAssigned) {
         seenInstances.add(task.instanceId);
         matchedItems.push({ task, instance, delegationInfo });
@@ -153,6 +158,8 @@ export class WorkflowTaskService {
       dueAt: workflowTasks.dueAt,
       title: workflowTasks.title,
       snapshotDsl: workflowInstances.snapshotDsl,
+      startedBy: workflowInstances.startedBy,
+      transitionId: workflowTasks.transitionId,
       definitionCode: workflowDefinitions.code,
     })
     .from(workflowTasks)
@@ -170,8 +177,16 @@ export class WorkflowTaskService {
         continue;
       }
 
-      const isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole)
-        || !!WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), activeDelegations);
+      let isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole);
+      let signerId = userId;
+      if (!isAssigned) {
+        const del = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), activeDelegations);
+        isAssigned = !!del;
+        if (del) signerId = del.fromUserId;
+      }
+      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, task, { userId: signerId, actorId: userId, role: userRole })) {
+        isAssigned = false;
+      }
 
       if (isAssigned) {
         seenInstances.add(task.instanceId);
@@ -346,6 +361,19 @@ export class WorkflowTaskService {
     const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
     if (task.assignedUserId === userId || candidateUserIds.includes(userId)) return true;
     return WorkflowTaskService.taskRolesOf(task).some(r => r === '*' || r === 'all' || r === userRole);
+  }
+
+  /**
+   * v8.0.93 (TD-392): کار گامی که آغازکننده را کنار می‌گذارد در کارتابل آغازکننده (و جانشینش) نمی‌آید؛ تیک انتقال از
+   * تصویر نسخه فرایند خوانده می‌شود.
+   */
+  private static excludedAsInitiator(
+    task: { transitionId: number | null },
+    instance: { snapshotDsl: unknown; startedBy: number | null },
+    signer: { userId?: number; actorId?: number; role?: string }
+  ): boolean {
+    const transition = snapshotTransitionsOf(instance.snapshotDsl)?.find(t => t.id === task.transitionId);
+    return !!transition && WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, signer);
   }
 
   /** کد گردش‌کار فرایند برای حوزه تفویض: از تصویر نسخه، وگرنه از تعریف */

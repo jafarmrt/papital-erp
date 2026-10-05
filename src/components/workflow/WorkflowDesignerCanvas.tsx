@@ -34,6 +34,7 @@ interface CanvasEdge {
   title: string;
   requiredRole: string;
   requiredPermission: string;
+  isInitiatorExcluded: number;
   approvalRuleType: string;
   kValue: number;
   ruleConditionsJson: any[];
@@ -122,6 +123,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
         title: t.title || 'اقدام',
         requiredRole: t.requiredRole || '',
         requiredPermission: t.requiredPermission || '',
+        isInitiatorExcluded: Number(t.isInitiatorExcluded) === 1 ? 1 : 0,
         approvalRuleType: t.approvalRuleType || 'SINGLE',
         kValue: Number(t.kValue) || 1,
         ruleConditionsJson: t.ruleConditionsJson || [],
@@ -201,6 +203,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       title: 'اقدام جدید',
       requiredRole: '',
       requiredPermission: '',
+      isInitiatorExcluded: 0,
       approvalRuleType: 'SINGLE',
       kValue: 1,
       ruleConditionsJson: [],
