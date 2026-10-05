@@ -18,7 +18,7 @@ import { classifyFinding, KNOWN_FINDINGS } from '../simulation/knownFindings.js'
 import { checkAuditMustBeFinal, checkExcelAdjustmentVoucher, checkExcelWacChangeRefused, checkStockCountVoucher, probeExcelWacOverwrite } from '../invariants/stockAdjustmentScenarios.js';
 import { checkReturnWithinSold } from '../invariants/salesReturnScenarios.js';
 import { checkFreeGoodsVoucherAtWac, checkPurchaseDiscountInCost, checkVoidOutflowRestoresCost, checkZeroPriceReceiptAtWac, probeZeroPricePurchaseWithoutVoucher } from '../invariants/purchaseCostScenarios.js';
-import { checkProcurementDeliveryIncomingOnly, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
+import { checkProcurementDeliveryIncomingOnly, checkRequisitionOverOrderNeedsReason, checkSplitOrderFormAccepted } from '../invariants/procurementScenarios.js';
 import { checkVouchersFollowAccountMapping } from '../invariants/accountMappingScenarios.js';
 import { checkReportsIgnoreDeletedVoucherItems } from '../invariants/voucherReportScenarios.js';
 import { checkReportsConvertForeignRows } from '../invariants/currencyReportScenarios.js';
@@ -267,6 +267,9 @@ export async function runBusinessInvariantTests(): Promise<TestCaseResult[]> {
       checkExcelAdjustmentVoucher, 'سند اصلاح اکسل و سند افتتاحیه کالای تازه صادر شد؛ ارزش انبار = دفتر کل'],
     ['inv_td_263_audit_must_be_final', 'v8.0.3: انبارگردانی فقط نهایی ثبت می‌شود، پیش‌نویس قدیمی نهایی نمی‌شود و ابطالش موجودی را برمی‌گرداند (TD-263)',
       checkAuditMustBeFinal, 'پیش‌نویس رد شد، نهایی‌سازی رد شد، ابطال موجودی را برگرداند'],
+    // ── v8.0.38: TD-289 ──
+    ['inv_td_289_requisition_over_order_needs_reason', 'v8.0.38: سفارش بیش از درخواست خرید فقط با دلیل ثبت می‌شود و دلیل روی ردیف، یادداشت درخواست و سند سفارش می‌نشیند؛ تبدیل یک‌جاست (TD-289، گزینه ب)',
+      () => checkRequisitionOverOrderNeedsReason(wh), 'بی‌دلیل رد شد (سرویس و فرم ۴۲۲)؛ با دلیل ۴ اضافه ثبت شد؛ ۷ برای ۵ فقط ۲ اضافه؛ شکست بسته دوم چیزی باقی نگذاشت'],
     // ── v8.0.37: TD-291 ──
     ['inv_td_291_split_order_form_accepted', 'v8.0.37: مسیر تبدیل درخواست به سفارش بدنه فرم «تقسیم سفارش» را می‌پذیرد و انبار مقصد و وضعیت بسته را نگه می‌دارد (TD-291)',
       () => checkSplitOrderFormAccepted(), 'فرم پذیرفته شد؛ سفارش پیش‌نویس در انبار مقصد ساخته شد و سفارش‌شده درخواست ۵ شد'],

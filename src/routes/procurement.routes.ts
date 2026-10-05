@@ -102,6 +102,8 @@ const convertToOrdersSchema = z.object({
     })).min(1, 'حداقل یک گروه سفارش خرید الزامی است'),
     closeRequisition: z.boolean().optional(),
     closureReason: z.string().max(500).optional(),
+    // v8.0.38 (TD-289): دلیل سفارش بیش از درخواست (بی آن، سفارش بیش از مانده درخواست رد می‌شود)
+    overOrderReason: z.string().max(500).optional(),
     notes: z.string().max(1000).optional()
   })
 });
@@ -248,13 +250,14 @@ router.post('/requisitions/:id/workflow-action', authorize('procurement.approve'
  */
 router.post('/requisitions/:id/convert-to-orders', authorize('procurement.order', 'procurement_officer', 'manager', 'admin'), validate(convertToOrdersSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { orderGroups, closeRequisition, closureReason, notes } = req.body;
+  const { orderGroups, closeRequisition, closureReason, overOrderReason, notes } = req.body;
 
   const result = await ProcurementService.convertToPurchaseOrders({
     requisitionId: id,
     orderGroups,
     closeRequisition,
     closureReason,
+    overOrderReason,
     notes
   }, {
     id: req.user!.id,

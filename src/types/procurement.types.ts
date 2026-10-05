@@ -28,6 +28,17 @@ export interface PurchaseRequisitionItemRow {
   notes?: string;
   closureNote?: string;
   closure_note?: string;
+  /** v8.0.38 (TD-289): سفارش‌های بیش از درخواست این ردیف با دلیل ثبت‌شده */
+  overOrders?: RequisitionOverOrderRecord[];
+}
+
+/** v8.0.38 (TD-289، تصمیم مالک محصول — گزینه ب): سفارش بیش از درخواست با دلیل، کاربر، تاریخ (ISO) و اسناد سفارش */
+export interface RequisitionOverOrderRecord {
+  quantity: number;
+  reason: string;
+  user: string;
+  date: string;
+  documentIds: number[];
 }
 
 export type PurchaseRequisitionItem = PurchaseRequisitionItemRow;

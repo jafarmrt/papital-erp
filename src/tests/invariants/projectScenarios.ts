@@ -311,7 +311,7 @@ export async function probeBomReleaseAtCurrentWac(wh: string): Promise<boolean> 
   return Boolean(out && back) && !fin(back.unitPrice ?? 0).equals(out.unitPrice ?? 0);
 }
 
-/** TD-289: درخواست خریدی که کامل سفارش داده شده دوباره به سفارش خرید تبدیل می‌شود (۲۰ سفارش برای ۱۰ درخواست) */
+/** TD-289 (کاوش رگرسیون؛ رفع v8.0.38): درخواست خریدی که کامل سفارش داده شده بی‌دلیل دوباره به سفارش خرید تبدیل می‌شود (۲۰ سفارش برای ۱۰ درخواست) */
 export async function probeRequisitionReconvertedOverOrdered(wh: string): Promise<boolean> {
   const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
   const req = await ProcurementService.createRequisition({ title: 'درخواست کاوش سفارش دوباره', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);

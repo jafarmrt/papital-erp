@@ -128,3 +128,66 @@ export async function checkSplitOrderFormAccepted(): Promise<string[]> {
   if (Number(ordered[0]?.orderedQty ?? 0) !== 5) problems.push(`مقدار سفارش‌شده درخواست ${ordered[0]?.orderedQty}، انتظار ۵`);
   return problems;
 }
+
+/** ردیف اول درخواست و اسناد سفارشی که یادداشتشان کد درخواست را دارد */
+async function requisitionState(requisitionId: number): Promise<{ ordered: number; overOrders: Array<{ quantity: number; reason: string; documentIds: number[] }>; notes: string; orders: Array<{ id: number; notes: string }> }> {
+  const req = await ProcurementService.getRequisitionById(requisitionId);
+  const row = (req.items as unknown as Array<{ orderedQty?: number; overOrders?: Array<{ quantity: number; reason: string; documentIds: number[] }> }>)[0];
+  const orders = await pool.query<{ id: number; notes: string }>(
+    `SELECT id, notes FROM documents WHERE is_deleted = 0 AND position($1 in notes) > 0 ORDER BY id`, [`[تدارکات: درخواست ${req.code}]`]);
+  return { ordered: Number(row?.orderedQty ?? 0), overOrders: row?.overOrders ?? [], notes: String(req.notes ?? ''), orders: orders.rows };
+}
+
+/**
+ * TD-289 (تصمیم مالک محصول — گزینه ب): سفارش بیش از درخواست فقط با دلیل. درخواستِ کامل‌سفارش‌شده (۱۰ از ۱۰) دوباره بی‌دلیل
+ * سفارش داده نمی‌شود — نه از سرویس، نه از فرم (کد OVER_ORDER_REASON_REQUIRED) — و چیزی ساخته نمی‌شود؛ با دلیل ۴ واحد اضافه
+ * ثبت و دلیل روی ردیف، یادداشت درخواست و سند سفارش می‌نشیند. سفارش بیشتر از مانده (۷ برای ۵) فقط اضافه را دلیل‌دار می‌کند. تبدیل
+ * یک‌جاست: اگر بسته دوم شکست بخورد، سفارش بسته اول هم نمی‌ماند.
+ */
+export async function checkRequisitionOverOrderNeedsReason(wh: string): Promise<string[]> {
+  const problems: string[] = [];
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  const group = (quantity: number, itemId = item.id) => ({ supplierName: 'تامین‌کننده آزمون TD-289', targetWarehouse: wh, items: [{ itemId, quantity, unitPrice: 1000 }] });
+  const convert = (requisitionId: number, groups: unknown[], overOrderReason?: string) =>
+    ProcurementService.convertToPurchaseOrders({ requisitionId, orderGroups: groups as never, overOrderReason }, USER);
+  const refusal = async (fn: () => Promise<unknown>) => { try { await fn(); return null; } catch (err) { return getErrorMessage(err); } };
+
+  // درخواست ۱۰ کامل سفارش داده می‌شود (بی‌دلیل، چون بیش از درخواست نیست)
+  const full = await ProcurementService.createRequisition({ title: 'درخواست آزمون سفارش دوباره', items: [{ itemId: item.id, requestedQty: 10, unitPriceEstimate: 1000 } as never] }, USER);
+  const first = await refusal(() => convert(full.id, [group(10)]));
+  if (first) problems.push(`سفارش ۱۰ از ۱۰ رد شد: ${first}`);
+
+  const again = await refusal(() => convert(full.id, [group(10)]));
+  if (!again?.includes('دلیل')) problems.push(`سفارش دوباره درخواستِ کامل‌سفارش‌شده بی‌دلیل رد نشد (${again ?? 'پذیرفته شد'})`);
+  const form = await postSplitOrderForm(full.id, { orderGroups: [{ ...group(10), docType: 'receipt', status: 'draft', items: [{ itemId: item.id, itemName: item.name, quantity: 10, unitPrice: 1000 }] }] });
+  if (form.status !== 422 || form.body.code !== 'OVER_ORDER_REASON_REQUIRED') problems.push(`فرم بی‌دلیل: ${form.status} / ${String(form.body.code)}، انتظار 422 / OVER_ORDER_REASON_REQUIRED`);
+  const refused = await requisitionState(full.id);
+  if (refused.ordered !== 10 || refused.orders.length !== 1) problems.push(`پس از ردها: سفارش‌شده ${refused.ordered} در ${refused.orders.length} سند، انتظار ۱۰ در ۱ سند`);
+
+  const reason = 'حداقل تیراژ تامین‌کننده';
+  const withReason = await refusal(() => convert(full.id, [group(4)], reason));
+  if (withReason) problems.push(`سفارش اضافه با دلیل رد شد: ${withReason}`);
+  const accepted = await requisitionState(full.id);
+  const record = accepted.overOrders[0];
+  if (accepted.ordered !== 14) problems.push(`سفارش‌شده پس از سفارش اضافه ${accepted.ordered}، انتظار ۱۴`);
+  if (!record || record.quantity !== 4 || record.reason !== reason || record.documentIds.length !== 1) problems.push(`ثبت سفارش اضافه روی ردیف: ${JSON.stringify(accepted.overOrders)}`);
+  if (!accepted.notes.includes(reason)) problems.push('دلیل سفارش اضافه در یادداشت درخواست نیامد');
+  const extraOrder = accepted.orders.find(o => o.id === record?.documentIds[0]);
+  if (!extraOrder?.notes.includes(reason)) problems.push('دلیل سفارش اضافه در یادداشت سند سفارش نیامد');
+
+  // بیشتر از مانده: فقط اضافه (۲ از ۷) دلیل‌دار است
+  const partial = await ProcurementService.createRequisition({ title: 'درخواست آزمون مانده', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
+  const partialRefusal = await refusal(() => convert(partial.id, [group(7)]));
+  if (!partialRefusal?.includes('2 بیش از درخواست')) problems.push(`سفارش ۷ برای ۵ بی‌دلیل: ${partialRefusal ?? 'پذیرفته شد'}، انتظار رد با «2 بیش از درخواست»`);
+  await convert(partial.id, [group(7)], 'پک ۷ تایی');
+  const partialState = await requisitionState(partial.id);
+  if (partialState.overOrders[0]?.quantity !== 2) problems.push(`مقدار ثبت‌شده سفارش اضافه ${partialState.overOrders[0]?.quantity}، انتظار ۲`);
+
+  // تبدیل یک‌جا: بسته دوم با کالای ناموجود شکست می‌خورد و سفارش بسته اول هم نمی‌ماند
+  const atomic = await ProcurementService.createRequisition({ title: 'درخواست آزمون یک‌جا', items: [{ itemId: item.id, requestedQty: 5, unitPriceEstimate: 1000 } as never] }, USER);
+  const broken = await refusal(() => convert(atomic.id, [group(5), group(1, 2_000_000_000)], 'آزمون شکست'));
+  const atomicState = await requisitionState(atomic.id);
+  if (!broken) problems.push('تبدیل با کالای ناموجود پذیرفته شد');
+  if (atomicState.orders.length !== 0 || atomicState.ordered !== 0) problems.push(`پس از شکست بسته دوم: ${atomicState.orders.length} سند و سفارش‌شده ${atomicState.ordered}، انتظار ۰ و ۰`);
+  return problems;
+}

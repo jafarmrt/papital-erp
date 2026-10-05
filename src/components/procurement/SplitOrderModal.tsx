@@ -8,6 +8,7 @@ import { SearchableSelect } from '../SearchableSelect';
 import { useWarehousesQuery } from '../../hooks/queries/useSettingsQueries';
 import { useSupplierSelectOptions } from '../../hooks/useEntitySelectors';
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
+import { OverOrderWarning, type OverOrderedItem } from './OverOrderWarning';
 
 interface SplitOrderModalProps {
   isOpen: boolean;
@@ -65,6 +66,8 @@ export function SplitOrderModal({
   const [closeRequisition, setCloseRequisition] = useState(true);
   const [closureReasonType, setClosureReasonType] = useState('complete');
   const [closureNotes, setClosureNotes] = useState('');
+  // v8.0.38 (TD-289): دلیل سفارش بیش از مانده درخواست
+  const [overOrderReason, setOverOrderReason] = useState('');
 
   // Initial calculation of active items with remaining quantity
   const requisitionItems = useMemo(() => {
@@ -161,6 +164,14 @@ export function SplitOrderModal({
   }, [packages, requisitionItems]);
 
   if (!isOpen) return null;
+
+  // v8.0.38 (TD-289): کالاهایی که بسته‌ها بیش از مانده درخواست سفارش می‌دهند؛ ثبت بدون دلیل ممکن نیست
+  const overOrderedItems: OverOrderedItem[] = requisitionItems
+    .map(it => {
+      const key = it.id || String(it.itemId);
+      return { key, itemName: it.itemName || it.itemCode || '', unit: it.unit || 'عدد', excess: -getLiveRemainingQty(key) };
+    })
+    .filter(it => it.excess > 0);
 
   // Add new split package (Package #2, #3, ...)
   const handleAddPackage = () => {
@@ -319,6 +330,11 @@ export function SplitOrderModal({
       }
     }
 
+    if (overOrderedItems.length > 0 && !overOrderReason.trim()) {
+      toast.error('سفارش بیش از مانده درخواست است؛ دلیل سفارش بیش از درخواست را وارد کنید.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const orderGroups = packages.map(p => ({
@@ -351,7 +367,8 @@ export function SplitOrderModal({
           body: JSON.stringify({ 
             orderGroups,
             closeRequisition,
-            closureReason: finalClosureReason
+            closureReason: finalClosureReason,
+            overOrderReason: overOrderedItems.length > 0 ? overOrderReason.trim() : undefined
           })
         }
       );
@@ -758,6 +775,8 @@ export function SplitOrderModal({
               );
             })}
           </div>
+
+          <OverOrderWarning items={overOrderedItems} reason={overOrderReason} onReasonChange={setOverOrderReason} />
 
           {/* REQUISITION CLOSURE & DISCREPANCY REASON CARD */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">

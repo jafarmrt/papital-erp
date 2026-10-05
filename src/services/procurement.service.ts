@@ -6,7 +6,7 @@ import { errorMessageOf } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
-import { ValidationError, NotFoundError } from '../errors/customErrors.js';
+import { AppError, ValidationError, NotFoundError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
 import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
@@ -28,6 +28,7 @@ function assertProcurementIncomingDocument(doc: { id: number; type: string | nul
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { applyDeliveredLines, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
+import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
 
@@ -96,6 +97,8 @@ export interface ConvertToOrdersInput {
   closeRequisition?: boolean;
   closureReason?: string;
   notes?: string;
+  /** v8.0.38 (TD-289): دلیل سفارش بیش از درخواست؛ بدون آن سفارش بیش از مانده درخواست رد می‌شود */
+  overOrderReason?: string;
 }
 
 
@@ -738,6 +741,13 @@ export class ProcurementService {
 
   /**
    * Split & Convert Requisition Items into Purchase Documents (Orders/Receipts/Proformas)
+   *
+   * v8.0.38 (TD-289، تصمیم مالک محصول — گزینه ب): سفارش بیش از درخواست مجاز است، ولی فقط با دلیل. اگر این تبدیل کالایی را
+   * بیش از مانده درخواست سفارش دهد (درخواستِ کامل‌سفارش‌شده یا مقدار بیشتر از مانده) و دلیلی نیامده باشد، با کد
+   * OVER_ORDER_REASON_REQUIRED رد می‌شود و پیام فهرست کالاها را می‌گوید (فرم هشدار می‌دهد و دلیل می‌خواهد). با دلیل، سفارش
+   * ثبت و دلیل روی ردیف درخواست (overOrders)، در یادداشت درخواست و سند سفارش و در گزارش فعالیت ثبت می‌شود. پیش‌تر درخواستِ
+   * کامل‌سفارش‌شده بی‌هیچ هشداری دوباره سفارش داده می‌شد. همه سفارش‌ها و به‌روزرسانی درخواست در یک تراکنش و زیر قفل ردیف
+   * درخواست است، تا دو تبدیل هم‌زمان از بررسی نگذرند و شکست یک بسته سفارش‌های دیگر را نیمه‌کاره باقی نگذارد.
    */
   static async convertToPurchaseOrders(
     params: ConvertToOrdersInput,
@@ -747,101 +757,142 @@ export class ProcurementService {
     if (!orderGroups || !Array.isArray(orderGroups) || orderGroups.length === 0) {
       throw new ValidationError('حداقل یک گروه سفارش خرید باید تعیین شود.');
     }
+    const overOrderReason = params.overOrderReason?.trim() || '';
+    const username = user.username || 'کارشناس تدارکات';
+    const today = await businessTodayIsoDate();
 
-    const req = await this.getRequisitionById(requisitionId);
-    const createdDocuments: CreatedProcurementDocument[] = [];
-    const updatedItems = [...req.items];
+    const converted = await orm.transaction(async (tx) => {
+      const [locked] = await tx.select().from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, requisitionId), eq(purchaseRequisitions.isDeleted, 0)))
+        .for('update');
+      if (!locked) {
+        throw new NotFoundError(`درخواست خرید با شناسه #${requisitionId} یافت نشد.`);
+      }
+      const req = toRequisitionDto(locked);
+      const updatedItems = (Array.isArray(req.items) ? req.items : []).map(it => ({ ...it }));
 
-    for (const group of orderGroups) {
-      if (!group.items || group.items.length === 0) continue;
-
-      const supplierName = group.supplierName?.trim() || 'تامین‌کننده تدارکات';
-      // v8.0.10 (TD-267): سفارش خرید همیشه سند ورودی (رسید) است؛ «پیش‌فاکتور خرید» رسید با وضعیت پیش‌فاکتور است. پیش‌تر
-      // نوع proforma ساخته می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش می‌کرد: کالا از انبار خارج و فروش ثبت می‌شد
-      const docType = 'receipt';
-      const docStatus = group.docType === 'proforma' ? 'proforma' : (group.status || 'draft');
-      const warehouseLoc = group.targetWarehouse || '';
-
-      // Format items for DocumentService
-      const docLines = group.items.map(i => ({
-        itemId: i.itemId,
-        quantity: Number(i.quantity),
-        unit_price: Number(i.unitPrice || 0),
-        discount: 0,
-        location: warehouseLoc
-      }));
-
-      const docNotes = `[تدارکات: درخواست ${req.code}] ${req.projectName ? `[پروژه: ${req.projectName}]` : ''} ${group.notes || ''}`.trim();
-
-      const createdDocId = await DocumentService.createDocument({
-        docType,
-        date: await businessTodayIsoDate(),
-        status: docStatus,
-        buyer_name: supplierName,
-        notes: docNotes,
-        location: warehouseLoc,
-        inOut: 'in',
-        currency: 'IRR',
-        user: user.username || 'کارشناس تدارکات',
-        items: docLines
-      });
-
-      const [createdDocRecord] = await orm.select().from(documents).where(eq(documents.id, createdDocId));
-      createdDocuments.push(createdDocRecord || { id: createdDocId, refNumber: `DOC-${createdDocId}` });
-
-      // Update matching items in the requisition
-      for (const groupItem of group.items) {
-        const targetReqItem = updatedItems.find(r => 
-          (r.itemId && r.itemId === groupItem.itemId) || 
-          (r.itemCode && groupItem.itemCode && r.itemCode === groupItem.itemCode)
+      const overOrders = findOverOrders(updatedItems, orderGroups.flatMap(g => g.items || []));
+      if (overOrders.length > 0 && !overOrderReason) {
+        throw new AppError(
+          `سفارش بیش از درخواست خرید ${req.code}: ${describeOverOrders(overOrders)}. برای ثبت، دلیل سفارش بیش از درخواست را وارد کنید.`,
+          422, 'OVER_ORDER_REASON_REQUIRED', { overOrders }
         );
+      }
+      const overOrderedIds = new Set(overOrders.map(o => o.itemId));
+      const createdDocuments: CreatedProcurementDocument[] = [];
+      const documentIdsByItem = new Map<number, number[]>();
 
-        if (targetReqItem) {
-          const ordQty = (targetReqItem.orderedQty || 0) + Number(groupItem.quantity);
-          targetReqItem.orderedQty = ordQty;
-          targetReqItem.remainingQty = Math.max(0, (targetReqItem.requestedQty || 0) - ordQty);
-          targetReqItem.targetSupplierName = supplierName;
-          targetReqItem.targetSupplierId = group.supplierId || targetReqItem.targetSupplierId;
-          targetReqItem.status = targetReqItem.remainingQty <= 0 ? 'ordered' : 'pending';
-          
-          if (!targetReqItem.linkedDocumentIds) targetReqItem.linkedDocumentIds = [];
-          if (createdDocId && !targetReqItem.linkedDocumentIds.includes(createdDocId)) {
-            targetReqItem.linkedDocumentIds.push(createdDocId);
+      for (const group of orderGroups) {
+        if (!group.items || group.items.length === 0) continue;
+
+        const supplierName = group.supplierName?.trim() || 'تامین‌کننده تدارکات';
+        // v8.0.10 (TD-267): سفارش خرید همیشه سند ورودی (رسید) است؛ «پیش‌فاکتور خرید» رسید با وضعیت پیش‌فاکتور است. پیش‌تر
+        // نوع proforma ساخته می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش می‌کرد: کالا از انبار خارج و فروش ثبت می‌شد
+        const docType = 'receipt';
+        const docStatus = group.docType === 'proforma' ? 'proforma' : (group.status || 'draft');
+        const warehouseLoc = group.targetWarehouse || '';
+
+        // Format items for DocumentService
+        const docLines = group.items.map(i => ({
+          itemId: i.itemId,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unitPrice || 0),
+          discount: 0,
+          location: warehouseLoc
+        }));
+
+        const overOrderNote = group.items.some(i => overOrderedIds.has(Number(i.itemId))) ? `[سفارش بیش از درخواست: ${overOrderReason}]` : '';
+        const docNotes = `[تدارکات: درخواست ${req.code}] ${req.projectName ? `[پروژه: ${req.projectName}]` : ''} ${overOrderNote} ${group.notes || ''}`.replace(/\s+/g, ' ').trim();
+
+        const createdDocId = await DocumentService.createDocument({
+          docType,
+          date: today,
+          status: docStatus,
+          buyer_name: supplierName,
+          notes: docNotes,
+          location: warehouseLoc,
+          inOut: 'in',
+          currency: 'IRR',
+          user: username,
+          items: docLines,
+          externalTx: tx
+        });
+
+        const [createdDocRecord] = await tx.select().from(documents).where(eq(documents.id, createdDocId));
+        createdDocuments.push(createdDocRecord || { id: createdDocId, refNumber: `DOC-${createdDocId}` });
+
+        // Update matching items in the requisition
+        for (const groupItem of group.items) {
+          const docIds = documentIdsByItem.get(Number(groupItem.itemId)) ?? [];
+          if (!docIds.includes(createdDocId)) documentIdsByItem.set(Number(groupItem.itemId), [...docIds, createdDocId]);
+
+          const targetReqItem = updatedItems.find(r =>
+            (r.itemId && r.itemId === groupItem.itemId) ||
+            (r.itemCode && groupItem.itemCode && r.itemCode === groupItem.itemCode)
+          );
+
+          if (targetReqItem) {
+            const ordQty = (targetReqItem.orderedQty || 0) + Number(groupItem.quantity);
+            targetReqItem.orderedQty = ordQty;
+            targetReqItem.remainingQty = Math.max(0, (targetReqItem.requestedQty || 0) - ordQty);
+            targetReqItem.targetSupplierName = supplierName;
+            targetReqItem.targetSupplierId = group.supplierId || targetReqItem.targetSupplierId;
+            targetReqItem.status = targetReqItem.remainingQty <= 0 ? 'ordered' : 'pending';
+
+            if (!targetReqItem.linkedDocumentIds) targetReqItem.linkedDocumentIds = [];
+            if (createdDocId && !targetReqItem.linkedDocumentIds.includes(createdDocId)) {
+              targetReqItem.linkedDocumentIds = [...targetReqItem.linkedDocumentIds, createdDocId];
+            }
           }
         }
       }
-    }
 
-    // Determine overall requisition status
-    const allOrdered = updatedItems.every(i => (i.orderedQty || 0) >= (i.requestedQty || 0));
-    const shouldCloseRequisition = Boolean(params.closeRequisition || allOrdered);
+      // v8.0.38 (TD-289): هر سفارش بیش از درخواست با دلیل روی ردیف همان کالا ثبت می‌شود
+      for (const over of overOrders) {
+        const row = updatedItems.find(r => Number(r.itemId) === over.itemId);
+        if (!row) continue;
+        row.overOrders = [...(Array.isArray(row.overOrders) ? row.overOrders : []), {
+          quantity: over.excess, reason: overOrderReason, user: username, date: today, documentIds: documentIdsByItem.get(over.itemId) ?? [],
+        }];
+      }
 
-    if (shouldCloseRequisition) {
-      // If closing formally, mark remaining items as closed/ordered with optional note
-      for (const item of updatedItems) {
-        if ((item.remainingQty || 0) > 0) {
-          item.remainingQty = 0;
-          item.status = 'ordered';
-          if (params.closureReason) {
-            item.closureNote = params.closureReason;
+      // Determine overall requisition status
+      const allOrdered = updatedItems.every(i => (i.orderedQty || 0) >= (i.requestedQty || 0));
+      const shouldCloseRequisition = Boolean(params.closeRequisition || allOrdered);
+
+      if (shouldCloseRequisition) {
+        // If closing formally, mark remaining items as closed/ordered with optional note
+        for (const item of updatedItems) {
+          if ((item.remainingQty || 0) > 0) {
+            item.remainingQty = 0;
+            item.status = 'ordered';
+            if (params.closureReason) {
+              item.closureNote = params.closureReason;
+            }
           }
         }
       }
-    }
 
-    const newStatus = shouldCloseRequisition ? 'ordered' : 'under_review';
+      const newStatus = shouldCloseRequisition ? 'ordered' : 'under_review';
 
-    let updatedReqNotes = req.notes || '';
-    if (params.closureReason) {
-      updatedReqNotes = `${updatedReqNotes}\n[تکمیل/بستن خرید: ${params.closureReason}]`.trim();
-    }
+      let updatedReqNotes = req.notes || '';
+      if (overOrders.length > 0) {
+        updatedReqNotes = `${updatedReqNotes}\n[سفارش بیش از درخواست (${username}، ${today}): ${overOrderReason} — ${describeOverOrders(overOrders)}]`.trim();
+      }
+      if (params.closureReason) {
+        updatedReqNotes = `${updatedReqNotes}\n[تکمیل/بستن خرید: ${params.closureReason}]`.trim();
+      }
 
-    const [finalUpdatedReq] = await orm.update(purchaseRequisitions).set({
-      status: newStatus,
-      items: updatedItems,
-      notes: updatedReqNotes,
-      updatedAt: new Date().toISOString()
-    }).where(eq(purchaseRequisitions.id, req.id)).returning();
+      const [finalUpdatedReq] = await tx.update(purchaseRequisitions).set({
+        status: newStatus,
+        items: updatedItems,
+        notes: updatedReqNotes,
+        updatedAt: new Date().toISOString()
+      }).where(eq(purchaseRequisitions.id, req.id)).returning();
+
+      return { req, createdDocuments, finalUpdatedReq, newStatus, overOrders };
+    });
+    const { req, createdDocuments, finalUpdatedReq, newStatus, overOrders } = converted;
 
     // Keep workflow instance state synchronized with new status
     if (newStatus === 'ordered' || newStatus === 'under_review') {
@@ -883,12 +934,13 @@ export class ProcurementService {
       action: 'UPDATE',
       entity: 'درخواست خرید',
       entityId: req.id,
-      description: `تبدیل و صدور ${createdDocuments.length} سفارش خرید برای درخواست ${req.code}`,
+      description: `تبدیل و صدور ${createdDocuments.length} سفارش خرید برای درخواست ${req.code}${overOrders.length > 0 ? ` (سفارش بیش از درخواست با دلیل: ${overOrderReason})` : ''}`,
       details: {
         code: req.code,
         createdDocsCount: createdDocuments.length,
         docNumbers: createdDocuments.map(d => d.refNumber || d.id),
-        newStatus
+        newStatus,
+        ...(overOrders.length > 0 ? { overOrders, overOrderReason } : {})
       }
     });
 
