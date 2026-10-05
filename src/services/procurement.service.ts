@@ -8,6 +8,7 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
+import { WorkflowDefinitionService } from './workflow/workflowDefinitionService.js';
 import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
@@ -229,6 +230,10 @@ export class ProcurementService {
       }
     }
 
+    // v8.0.57 (TD-324): تعریف‌های پیش‌فرض گردش‌کار پیش از تراکنش (seed روی اتصال جدا) تا شروع گردش‌کار درون تراکنش
+    // اتصال دومی نخواهد
+    await WorkflowDefinitionService.seedDefaultWorkflows();
+
     const createdReq = await orm.transaction(async (tx) => {
       const code = await this.generateRequisitionCode(tx);
 
@@ -251,14 +256,16 @@ export class ProcurementService {
       }).returning();
 
       // Start workflow instance if definition exists
+      // v8.0.57 (TD-324): در همان تراکنش، درون savepoint — شکست گردش‌کار فقط همان را برمی‌گرداند، نه درخواست را
       try {
-        const wfInstance = await WorkflowTransitionExecutor.startInstance({
+        const wfInstance = await tx.transaction((sp) => WorkflowTransitionExecutor.startInstance({
           workflowCode: 'PURCHASE_REQUISITION_WORKFLOW',
           entityType: 'purchase_requisition',
           entityId: String(inserted.id),
           userId: user.id,
-          userName: user.username
-        });
+          userName: user.username,
+          tx: sp
+        }));
 
         if (wfInstance && wfInstance.id) {
           await tx.update(purchaseRequisitions)
@@ -271,6 +278,7 @@ export class ProcurementService {
       }
 
       await logActivity({
+        tx,
         userId: user.id,
         username: user.username || 'سیستم',
         action: 'CREATE',

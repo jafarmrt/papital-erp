@@ -5,6 +5,7 @@ import { checkRequisitionReceivedOnce } from './procurementConcurrencyScenarios.
 import { checkProjectDeliveryCapped } from './projectConcurrencyScenarios.js';
 import { checkDlqReplayedOnce } from './eventConcurrencyScenarios.js';
 import { checkWorkLogFrozenInPayroll } from './payrollConcurrencyScenarios.js';
+import { checkNoSecondConnectionInTransactions } from './poolScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه J در جدول سوئیت business_invariants: [شناسه، نام، بررسی، شرح موفقیت] */
 export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
@@ -32,4 +33,6 @@ export const CONCURRENCY_CHECKS: Array<[string, string, (wh: string) => Promise<
     () => checkDlqReplayedOnce(), 'گرداننده یک بار اجرا شد؛ کار هم‌زمان و بازپخش دوباره رد شد؛ رویداد صرف‌نظرشده یک بار بازپخش شد'],
   ['inv_td_328_work_log_frozen_in_payroll', 'v8.0.56: ویرایش یا حذف کارکرد هم‌زمان با صدور فیش، فیش را با کارکردهای پیوندشده‌اش ناهم‌خوان نمی‌کند؛ تغییر پس از فیش رد می‌شود و کارکرد فیش حذف‌شده آزاد است (TD-328)',
     () => checkWorkLogFrozenInPayroll(), 'در هر چهار ترتیب فیش با کارکردهای پیوندشده خواند؛ تغییر پس از فیش رد شد؛ کارکرد فیش حذف‌شده ویرایش شد'],
+  ['inv_td_324_no_second_pool_connection', 'v8.0.57: سند اول سال مالی تازه، ابطال سند، ثبت درخواست خرید و حساب بانکی با یک اتصال آزاد استخر کامل می‌شوند (بی اتصال دوم درون تراکنش) و خطای ممیزی درون تراکنش بلعیده نمی‌شود (TD-324)',
+    checkNoSecondConnectionInTransactions, 'هر چهار مسیر بی انتظار کامل شد؛ گردش‌کار و ممیزی ثبت شد؛ خطای ممیزی تراکنش را برگرداند'],
 ];

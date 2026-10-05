@@ -367,7 +367,8 @@ export class BankAccountService {
           entityType: 'bank_account',
           entityId: String(inserted.id),
           userId: data.userId,
-          userName: data.username
+          userName: data.username,
+          tx // v8.0.57 (TD-324)
         });
         if (!wfInstance) {
           await this.issueTreasuryOpeningVoucher(inserted.id, {

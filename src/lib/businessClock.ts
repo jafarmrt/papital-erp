@@ -32,12 +32,39 @@ export const ALLOWED_TIMEZONES = [
   'America/New_York',
 ] as const;
 
+let refreshingTz: Promise<string> | null = null;
+/** با هر invalidate بالا می‌رود تا خواندنی که پیش از تغییر تنظیمات شروع شده مقدار کهنه را در کش ننشاند */
+let tzGeneration = 0;
+
 /**
  * منطقه زمانی توافقی را برمی‌گرداند (کش ۶۰ ثانیه‌ای برای پرهیز از هر بار DB query).
  * هر مقدار غیرمعتبر/خالی به پیش‌فرض تهران می‌افتد.
+ *
+ * v8.0.57 (TD-324): کش کهنه بی‌انتظار برگردانده و در پس‌زمینه تازه می‌شود. این تابع درون تراکنش‌ها (ابطال سند و ...)
+ * صدا زده می‌شود و خواندن تنظیمات روی اتصال دوم استخر انجام می‌شد؛ با استخر پر، تراکنشی که اتصال خودش را نگه داشته
+ * پشت مهلت اتصال دوم می‌ماند. فقط کش خالی (پیش از اولین خواندن یا پس از invalidateTimezoneCache) منتظر می‌ماند و
+ * سرور پس از مهاجرت‌ها و تغییر تنظیمات آن را از بیرون تراکنش گرم می‌کند (`warmDisplayTimezone`).
  */
 export async function getDisplayTimezone(): Promise<string> {
-  if (cachedTz && Date.now() < cachedTz.expiresAt) return cachedTz.value;
+  if (cachedTz) {
+    if (Date.now() >= cachedTz.expiresAt) void refreshDisplayTimezone();
+    return cachedTz.value;
+  }
+  return refreshDisplayTimezone();
+}
+
+/** خواندن تازه تنظیم منطقه زمانی و پر کردن کش (یک خواندن هم‌زمان؛ شکست، کش موجود را نگه می‌دارد) */
+function refreshDisplayTimezone(): Promise<string> {
+  if (!refreshingTz) {
+    const run: Promise<string> = readDisplayTimezone(tzGeneration).finally(() => {
+      if (refreshingTz === run) refreshingTz = null;
+    });
+    refreshingTz = run;
+  }
+  return refreshingTz;
+}
+
+async function readDisplayTimezone(generation: number): Promise<string> {
   try {
     const [row] = await orm
       .select({ value: appSettings.value })
@@ -45,17 +72,25 @@ export async function getDisplayTimezone(): Promise<string> {
       .where(eq(appSettings.key, 'display_timezone'))
       .limit(1);
     const raw = String(row?.value || '').trim();
-    const valid = (ALLOWED_TIMEZONES as readonly string[]).includes(raw) ? raw : '';
-    cachedTz = { value: valid || FALLBACK_TIMEZONE, expiresAt: Date.now() + TZ_TTL_MS };
-    return cachedTz.value;
+    const value = (ALLOWED_TIMEZONES as readonly string[]).includes(raw) ? raw : FALLBACK_TIMEZONE;
+    if (generation === tzGeneration) cachedTz = { value, expiresAt: Date.now() + TZ_TTL_MS };
+    return value;
   } catch {
-    return FALLBACK_TIMEZONE;
+    if (cachedTz) cachedTz.expiresAt = Date.now() + TZ_TTL_MS;
+    return cachedTz?.value ?? FALLBACK_TIMEZONE;
   }
+}
+
+/** v8.0.57 (TD-324): کش منطقه زمانی را بیرون از هر تراکنش پر می‌کند (پس از مهاجرت‌های سرور و تغییر تنظیمات) */
+export async function warmDisplayTimezone(): Promise<void> {
+  await refreshDisplayTimezone();
 }
 
 /** باطل کردن کش TZ پس از تغییر تنظیمات توسط مدیر */
 export function invalidateTimezoneCache(): void {
   cachedTz = null;
+  refreshingTz = null;
+  tzGeneration++;
 }
 
 /**

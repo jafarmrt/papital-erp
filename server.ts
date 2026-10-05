@@ -6,6 +6,7 @@ import 'dotenv/config';
 import { logger } from './src/middleware/logger.js';
 import { createApp, markStartupComplete } from './src/app.js';
 import { runMigrations } from './src/db/migrator.js';
+import { warmDisplayTimezone } from './src/lib/businessClock.js';
 import { runSeedWithLock } from './src/db/seed.js';
 import { migratePlainPasswords } from './src/db/migratePlainPasswords.js';
 import { registerWorkflowListeners } from './src/services/workflow/workflowEventBus.js';
@@ -63,6 +64,8 @@ async function startServer() {
         await WorkflowEngineService.seedDefaultWorkflows();
         await EventActionEngineService.seedDefaultRules();
         await WebhookSubscriptionService.seedDefaultSubscriptions();
+        // v8.0.57 (TD-324): کش منطقه زمانی پیش از اولین درخواست، بیرون از هر تراکنش پر می‌شود
+        await warmDisplayTimezone();
         logger.info('Database schema verified, migrated, seeded, passwords checked and workflow/event action/webhook engines initialized successfully');
         // v7.0.31 (TD-193 / audit P1-8): همگام‌سازی کامل اسناد حسابداری و پرکردن موجودی اولیه کاردکس از مسیر
         // بوت حذف شدند (زمان آماده‌شدن Pod با رشد داده خطی بود و چند Pod همزمان اسناد تکراری می‌ساختند).

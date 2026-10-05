@@ -23,13 +23,16 @@ export class FiscalPeriodService {
   }
 
   /**
-   * ردیف سال را در صورت نبود می‌سازد. روی اتصال جدا (autocommit) اجرا می‌شود تا درج همزمان اولین سند دو تراکنش
-   * طولانی در یک سال تازه، آن‌ها را پشت قفل کلید یکتا منتظر یکدیگر نگذارد.
+   * ردیف سال را در صورت نبود در همان تراکنش می‌سازد. v8.0.57 (TD-324): پیش‌تر روی اتصال جدا (autocommit) ساخته می‌شد؛
+   * تراکنشی که خودش یک اتصال استخر را نگه داشته بود اتصال دومی می‌خواست و ۲۰ سند هم‌زمان در اولین روز سال تازه (سقف
+   * استخر) پشت مهلت اتصال می‌ماندند. اکنون اولین اسناد هم‌زمان یک سال تازه پشت کلید یکتای همان ردیف (فقط یک بار در سال)
+   * منتظر هم می‌مانند. سال فقط وقتی در کش می‌رود که ردیفش پیش‌تر ثبت شده باشد (درج این تراکنش ممکن است برگردد).
    */
-  private static async ensureRow(year: number): Promise<void> {
+  private static async ensureRow(year: number, tx: DbExecutor): Promise<void> {
     if (this.knownYears.has(year)) return;
-    await orm.insert(fiscalPeriods).values({ fiscalYear: year, status: 'open' }).onConflictDoNothing();
-    this.knownYears.add(year);
+    const inserted = await tx.insert(fiscalPeriods).values({ fiscalYear: year, status: 'open' }).onConflictDoNothing()
+      .returning({ fiscalYear: fiscalPeriods.fiscalYear });
+    if (inserted.length === 0) this.knownYears.add(year);
   }
 
   /** برای آزمون‌ها: کش سال‌های شناخته‌شده را خالی می‌کند (مثلاً پس از ساخت اسکیمای ایزوله تازه) */
@@ -45,7 +48,7 @@ export class FiscalPeriodService {
     const year = this.yearOf(date);
     let row: { status: string; closingVoucherId: number | null } | undefined;
     if (tx) {
-      await this.ensureRow(year);
+      await this.ensureRow(year, tx);
       [row] = await tx
         .select({ status: fiscalPeriods.status, closingVoucherId: fiscalPeriods.closingVoucherId })
         .from(fiscalPeriods)
@@ -79,7 +82,7 @@ export class FiscalPeriodService {
    * بسته شده باشد ConflictError می‌دهد. باید داخل تراکنش بستن سال و پیش از محاسبه مانده‌ها صدا زده شود.
    */
   static async lockForClosing(tx: DbExecutor, year: number): Promise<void> {
-    await this.ensureRow(year);
+    await this.ensureRow(year, tx);
     const [row] = await tx
       .select({ status: fiscalPeriods.status, closingVoucherId: fiscalPeriods.closingVoucherId })
       .from(fiscalPeriods)

@@ -1117,7 +1117,8 @@ export class ItemCatalogService {
           entityType: 'item',
           entityId: String(itemId),
           userId: user?.id,
-          userName: user?.fullName || user?.username
+          userName: user?.fullName || user?.username,
+          tx // v8.0.57 (TD-324)
         });
         if (!wfInstance) {
           const opening = await ItemOpeningService.issueItemOpeningVoucher(itemId, {

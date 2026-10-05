@@ -313,8 +313,9 @@ export class WorkflowTransitionExecutor {
         ));
       }
 
-      if (!def) {
-        // Fallback: auto-seed default workflows if missing
+      // Fallback: auto-seed default workflows if missing — v8.0.57 (TD-324): نه درون تراکنش فراخواننده (seed روی اتصال
+      // جدای استخر اجرا می‌شود)؛ فراخواننده‌ای که tx می‌دهد پیش از تراکنش seed می‌کند
+      if (!def && !params.tx) {
         await WorkflowDefinitionService.seedDefaultWorkflows();
         if (params.workflowCode) {
           [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, params.workflowCode));

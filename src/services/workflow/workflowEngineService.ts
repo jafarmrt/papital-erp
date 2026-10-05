@@ -16,7 +16,9 @@ import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowEventPublisher } from './workflowEventPublisher.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
 import { logger } from '../../middleware/logger.js';
-import { workflowInstances } from '../../db/schema.js';
+import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
+import type { DbExecutor } from '../../db/drizzle.js';
+import { and, asc, eq } from 'drizzle-orm';
 
 export { WorkflowRuleEngine, WorkflowQuorumService };
 export type { 
@@ -106,8 +108,29 @@ export class WorkflowEngineService {
     entityId: string | number;
     userId?: number;
     userName?: string;
+    /** v8.0.57 (TD-324): تراکنش فراخواننده؛ گردش‌کار درون savepoint همان تراکنش شروع می‌شود */
+    tx?: DbExecutor;
   }): Promise<typeof workflowInstances.$inferSelect | null> {
     try {
+      if (params.tx) {
+        // تعریف فعال با همان تراکنش خوانده می‌شود (نه getDefinitions که seed و آمار را روی اتصال جدا می‌خواند)؛ شکست
+        // فقط savepoint را برمی‌گرداند و عملیات اصلی ادامه می‌یابد
+        return await params.tx.transaction(async (sp) => {
+          const [def] = await sp.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
+            .where(and(eq(workflowDefinitions.entityType, params.entityType), eq(workflowDefinitions.isActive, 1)))
+            .orderBy(asc(workflowDefinitions.id))
+            .limit(1);
+          if (!def) return null;
+          return WorkflowTransitionExecutor.startInstance({
+            workflowCode: def.code,
+            entityType: params.entityType,
+            entityId: String(params.entityId),
+            userId: params.userId,
+            userName: params.userName || 'سیستم',
+            tx: sp
+          });
+        });
+      }
       const defs = await WorkflowDefinitionService.getDefinitions({ isActive: true, entityType: params.entityType });
       if (!defs || defs.length === 0) return null;
       const def = defs[0];

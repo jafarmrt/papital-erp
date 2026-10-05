@@ -190,8 +190,9 @@ export class SystemSettingsService {
 
     if (changes.length > 0) {
       invalidateSettingsCache();
-      const { invalidateTimezoneCache } = await import('../../lib/businessClock.js');
+      const { invalidateTimezoneCache, warmDisplayTimezone } = await import('../../lib/businessClock.js');
       invalidateTimezoneCache();
+      await warmDisplayTimezone(); // v8.0.57 (TD-324): بیرون از تراکنش، تا خواندن بعدی درون تراکنشی منتظر اتصال دوم نماند
 
       await logActivity({
         userId: actor.id,

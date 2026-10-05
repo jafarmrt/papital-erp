@@ -466,8 +466,9 @@ export class DocumentLifecycleService {
         }
       }
 
-      // 5. Audit log
+      // 5. Audit log — v8.0.57 (TD-324): در همان تراکنش (پیش‌تر اتصال دوم استخر و ردیف ممیزی ماندگار حتی با برگشت ابطال)
       await logActivity({
+        tx,
         username: deletedByUser,
         action: 'DELETE',
         entity: 'اسناد انبار',
