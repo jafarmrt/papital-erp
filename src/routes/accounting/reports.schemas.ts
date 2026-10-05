@@ -112,7 +112,8 @@ export const docSignaturesQuerySchema = z.object({
 export const fiscalClosingPreviewQuerySchema = z.object({
   query: z.object({
     year: z.string().min(1, 'سال مالی الزامی است'),
-    closingDate: z.string().min(1, 'تاریخ سند اختتامیه الزامی است'),
+    // v8.0.47 (TD-310): تاریخ‌ها از خود سال ساخته می‌شوند؛ اگر فرستاده شوند باید آخرین روز سال و ۱ فروردین بعد باشند
+    closingDate: z.string().optional(),
     openingDateNewYear: z.string().optional(),
   })
 });
@@ -120,7 +121,7 @@ export const fiscalClosingPreviewQuerySchema = z.object({
 export const fiscalClosingExecuteSchema = z.object({
   body: z.object({
     year: z.string().min(1, 'سال مالی الزامی است'),
-    closingDate: z.string().min(1, 'تاریخ سند بستن سال الزامی است'),
+    closingDate: z.string().optional(),
     openingDateNewYear: z.string().optional(),
     createOpeningVoucher: z.boolean().optional(),
   })

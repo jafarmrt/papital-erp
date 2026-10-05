@@ -82,6 +82,18 @@ export function isoToJalaliDate(value: unknown): string {
   return `${jy}/${pad2(jm)}/${pad2(jd)}`;
 }
 
+/**
+ * v8.0.47 (TD-310): نخستین و آخرین روز سال شمسی و نخستین روز سال بعد، به قالب ذخیره. آخرین روز در سال کبیسه
+ * ۳۰ اسفند و در سال عادی ۲۹ اسفند است. سال بیرون از بازه پذیرفته‌شده ← null.
+ */
+export function jalaliYearBounds(jy: number): { firstDay: string; lastDay: string; nextFirstDay: string } | null {
+  if (!Number.isInteger(jy) || jy < JALALI_MIN_YEAR || jy >= JALALI_MAX_YEAR) return null;
+  const firstDay = toStorageDate(`${jy}/01/01`);
+  const lastDay = toStorageDate(`${jy}/12/30`) || toStorageDate(`${jy}/12/29`);
+  const nextFirstDay = toStorageDate(`${jy + 1}/01/01`);
+  return firstDay && lastDay && nextFirstDay ? { firstDay, lastDay, nextFirstDay } : null;
+}
+
 /** آیا مقدار دقیقاً به قالب ذخیره (`YYYY-MM-DD` میلادی معتبر) است؟ */
 export function isStorageDate(value: unknown): boolean {
   return typeof value === 'string' && value !== '' && toStorageDate(value) === value;

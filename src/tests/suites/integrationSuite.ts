@@ -639,7 +639,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     // 3. Verify Fiscal Year Closing Preview
     const preview = await AccountingService.getFiscalYearClosingPreview({
       year: 1403,
-      closingDate: '1403-12-29',
+      closingDate: '1403-12-30', // v8.0.47 (TD-310): ۱۴۰۳ کبیسه است؛ آخرین روز سال ۳۰ اسفند
       openingDateNewYear: '1404-01-01'
     });
 

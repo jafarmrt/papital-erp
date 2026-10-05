@@ -6,8 +6,9 @@ import { VoucherService } from './voucher.service.js';
 import { FiscalPeriodService } from './fiscalPeriod.service.js';
 import { AccountingReportService } from './accountingReport.service.js';
 import { AccountMappingService } from './accountMapping.service.js';
-import { ConflictError } from '../../errors/customErrors.js';
-import { jalaliToGregorian, normalizeDateToIso } from '../../lib/businessClock.js';
+import { ConflictError, ValidationError } from '../../errors/customErrors.js';
+import { jalaliYearBounds, isoToJalaliDate, toStorageDate } from '../../utils/calendarDate.js';
+import { toEnglishDigits } from '../../utils/persianNumber.js';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import type {
   FiscalYearClosingPreview,
@@ -23,9 +24,36 @@ const FISCAL_CLOSING_LOCK_NAMESPACE = 918273;
 /** v8.0.2 (TD-252): بیشترین تعداد سند پیش‌نویس که پیش‌نمایش بستن سال فهرست می‌کند */
 export const FISCAL_CLOSING_DRAFT_LIST_LIMIT = 50;
 
-function jalaliYearStartIso(year: number): string {
-  const { gy, gm, gd } = jalaliToGregorian(year, 1, 1);
-  return `${gy}-${String(gm).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
+/**
+ * v8.0.47 (TD-310، تصمیم مالک محصول): سال مالی همان سال شمسی است، پس سند اختتامیه همیشه به آخرین روز سال (۲۹ یا ۳۰
+ * اسفند) و سند افتتاحیه به ۱ فروردین سال بعد صادر می‌شود و مانده‌ها تا آخرین روز سال حساب می‌شوند. پیش‌تر فرم بستن سال
+ * ۲۹ اسفند را پیش‌فرض می‌گذاشت و هر تاریخی پذیرفته می‌شد: اسناد ۳۰ اسفند سال کبیسه (و هر سند پس از تاریخ دلخواه)
+ * در بستن حساب‌ها نمی‌آمدند و سال با حساب‌های موقتِ صفرنشده بسته می‌شد. تاریخ ارسالی فقط اگر همین تاریخ‌ها باشد
+ * پذیرفته می‌شود.
+ */
+export function resolveFiscalClosingDates(
+  rawYear: unknown,
+  closingDateInput?: string | null,
+  openingDateInput?: string | null
+): { year: number; startDate: string; closingDate: string; openingDate: string } {
+  const yearText = toEnglishDigits(String(rawYear ?? '')).trim();
+  const year = /^\d{4}$/.test(yearText) ? Number(yearText) : NaN;
+  const bounds = jalaliYearBounds(year);
+  if (!bounds) {
+    throw new ValidationError(`سال مالی «${String(rawYear ?? '')}» معتبر نیست؛ سال شمسی چهاررقمی مانند ۱۴۰۴ وارد کنید.`, { field: 'year' });
+  }
+  const mustEqual = (input: string | null | undefined, expected: string, label: string, rule: string): void => {
+    if (input === undefined || input === null || String(input).trim() === '') return;
+    if (toStorageDate(input) !== expected) {
+      throw new ValidationError(
+        `تاریخ ${label} سال مالی ${year} باید ${rule} (${isoToJalaliDate(expected)}) باشد؛ «${String(input)}» داده شد.`,
+        { field: label, expected }
+      );
+    }
+  };
+  mustEqual(closingDateInput, bounds.lastDay, 'سند اختتامیه', 'آخرین روز همان سال');
+  mustEqual(openingDateInput, bounds.nextFirstDay, 'سند افتتاحیه', 'نخستین روز سال بعد');
+  return { year, startDate: bounds.firstDay, closingDate: bounds.lastDay, openingDate: bounds.nextFirstDay };
 }
 
 export class FiscalYearService {
@@ -36,8 +64,7 @@ export class FiscalYearService {
    */
   static async findDraftVouchersOfYear(year: number, tx?: DbExecutor): Promise<FiscalClosingDraftVoucher[]> {
     const executor = tx || orm;
-    const startIso = jalaliYearStartIso(year);
-    const endIso = jalaliYearStartIso(year + 1);
+    const { startDate: startIso, openingDate: endIso } = resolveFiscalClosingDates(year);
     const rows = await executor.select({
       id: journalVouchers.id,
       voucherNumber: journalVouchers.voucherNumber,
@@ -77,12 +104,11 @@ export class FiscalYearService {
     openingDateNewYear?: string;
     externalTx?: DbExecutor;
   }): Promise<FiscalYearClosingPreview> {
-    const currentYear = params.year || 1403;
-    const closingDate = params.closingDate || `${currentYear}-12-29`;
-    const openingDateNewYear = params.openingDateNewYear || `${Number(currentYear) + 1}-01-01`;
+    const { year: currentYear, closingDate, openingDate: openingDateNewYear } =
+      resolveFiscalClosingDates(params.year, params.closingDate, params.openingDateNewYear);
 
-    const normClosingDate = normalizeDateToIso(closingDate) || closingDate;
-    const draftVouchers = await this.findDraftVouchersOfYear(Number(currentYear), params.externalTx);
+    const normClosingDate = closingDate;
+    const draftVouchers = await this.findDraftVouchersOfYear(currentYear, params.externalTx);
 
     const trial = await AccountingReportService.getTrialBalance({
       level: 'subsidiary',
@@ -267,14 +293,15 @@ export class FiscalYearService {
    */
   static async executeFiscalYearClosing(data: {
     year: number | string;
-    closingDate: string;
+    closingDate?: string;
     openingDateNewYear?: string;
     createOpeningVoucher?: boolean;
     userId?: number;
     username?: string;
   }): Promise<FiscalYearClosingResult> {
-    const normClosingDate = normalizeDateToIso(data.closingDate) || data.closingDate;
-    const normOpeningDate = normalizeDateToIso(data.openingDateNewYear || `${Number(data.year) + 1}-01-01`) || `${Number(data.year) + 1}-01-01`;
+    // v8.0.47 (TD-310): تاریخ‌ها همیشه آخرین روز سال و ۱ فروردین سال بعد؛ تاریخ دیگر رد می‌شود
+    const { year, closingDate: normClosingDate, openingDate: normOpeningDate } =
+      resolveFiscalClosingDates(data.year, data.closingDate, data.openingDateNewYear);
 
     // Conceptual Account Resolution (Subphase 9.2: Summary Profit/Loss and Retained Earnings)
     let summaryProfitAcc = await AccountMappingService.getSummaryProfitLossAccount();
@@ -303,10 +330,10 @@ export class FiscalYearService {
 
     // V3.0.6 (BUG-03): گارد Double-Close اولیه
     const closingRefNumbers = [
-      `CLOSE-TEMP-${data.year}`,
-      `CLOSE-PROFIT-${data.year}`,
-      `CLOSING-${data.year}`,
-      `OPENING-${Number(data.year) + 1}`
+      `CLOSE-TEMP-${year}`,
+      `CLOSE-PROFIT-${year}`,
+      `CLOSING-${year}`,
+      `OPENING-${year + 1}`
     ];
     const existingClosing = await orm
       .select({ id: journalVouchers.id, referenceNumber: journalVouchers.referenceNumber })
@@ -317,7 +344,7 @@ export class FiscalYearService {
       ));
     if (existingClosing.length > 0) {
       throw new ConflictError(
-        `سال مالی ${data.year} قبلاً بسته شده است (سند شماره ${existingClosing.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
+        `سال مالی ${year} قبلاً بسته شده است (سند شماره ${existingClosing.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
         'FISCAL_YEAR_ALREADY_CLOSED'
       );
     }
@@ -330,12 +357,12 @@ export class FiscalYearService {
     // پیش‌نمایش و تراز آزمایشی منحصراً درون تراکنش (tx) و پس از اخذ قفل محاسبه می‌شوند.
     await orm.transaction(async (tx) => {
       const lockRes = await tx.execute(
-        sql`SELECT pg_try_advisory_xact_lock(${FISCAL_CLOSING_LOCK_NAMESPACE}, ${Number(data.year)}) AS acquired`
+        sql`SELECT pg_try_advisory_xact_lock(${FISCAL_CLOSING_LOCK_NAMESPACE}, ${year}) AS acquired`
       );
       const lockRows = (lockRes as unknown as { rows?: Array<{ acquired?: boolean }> }).rows || [];
       if (!lockRows[0]?.acquired) {
         throw new ConflictError(
-          `عملیات بستن سال مالی ${data.year} هم‌اکنون توسط دیگری در حال اجراست. لطفاً بعداً تلاش کنید.`,
+          `عملیات بستن سال مالی ${year} هم‌اکنون توسط دیگری در حال اجراست. لطفاً بعداً تلاش کنید.`,
           'FISCAL_CLOSING_LOCKED'
         );
       }
@@ -350,18 +377,18 @@ export class FiscalYearService {
         ));
       if (existingClosingInTx.length > 0) {
         throw new ConflictError(
-          `سال مالی ${data.year} قبلاً بسته شده است (سند شماره ${existingClosingInTx.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
+          `سال مالی ${year} قبلاً بسته شده است (سند شماره ${existingClosingInTx.map(v => `#${v.id}`).join('، ')} موجود است). بستن مجدد سال مجاز نیست.`,
           'FISCAL_YEAR_ALREADY_CLOSED'
         );
       }
 
       // v7.0.49 (audit P2-5): قفل انحصاری ردیف سال در fiscal_periods — منتظر اسنادی می‌ماند که هم‌اکنون در این سال
       // ثبت می‌شوند و تا پایان این تراکنش هیچ سند تازه‌ای وارد سال نمی‌شود؛ مانده‌ها پس از این قفل محاسبه می‌شوند
-      await FiscalPeriodService.lockForClosing(tx, Number(data.year));
+      await FiscalPeriodService.lockForClosing(tx, year);
 
       // C-02 & P0-05: محاسبه تراز اختتامیه و ارقام به صورت تازه در داخل تراکنش و زیر چتر قفل
       const preview = await this.getFiscalYearClosingPreview({
-        year: data.year,
+        year,
         closingDate: normClosingDate,
         openingDateNewYear: normOpeningDate,
         externalTx: tx
@@ -373,7 +400,7 @@ export class FiscalYearService {
       if (draftCount > 0) {
         const shown = (preview.draftVouchers ?? []).slice(0, 10).map(v => `#${v.voucherNumber}`).join('، ');
         throw new ConflictError(
-          `سال مالی ${data.year} ${draftCount} سند حسابداری پیش‌نویس دارد (${shown}${draftCount > 10 ? ' و …' : ''}). ` +
+          `سال مالی ${year} ${draftCount} سند حسابداری پیش‌نویس دارد (${shown}${draftCount > 10 ? ' و …' : ''}). ` +
           'پیش از بستن سال، این اسناد را تأیید یا حذف کنید؛ سند پیش‌نویس در بستن حساب‌ها شمرده نمی‌شود و پس از بستن سال دیگر تأییدشدنی نیست.',
           'FISCAL_YEAR_HAS_DRAFT_VOUCHERS'
         );
@@ -419,7 +446,7 @@ export class FiscalYearService {
             detailedName: 'خلاصه سود و زیان',
             debit: 0,
             credit: diff.round(4).toNumber(),
-            description: `سود ویژه سال مالی ${data.year} منتقل‌شده به خلاصه سود و زیان`
+            description: `سود ویژه سال مالی ${year} منتقل‌شده به خلاصه سود و زیان`
           });
         } else if (diff.lessThan(0)) {
           v1Items.push({
@@ -428,7 +455,7 @@ export class FiscalYearService {
             detailedName: 'خلاصه سود و زیان',
             debit: diff.abs().round(4).toNumber(),
             credit: 0,
-            description: `زیان ویژه سال مالی ${data.year} منتقل‌شده به خلاصه سود و زیان`
+            description: `زیان ویژه سال مالی ${year} منتقل‌شده به خلاصه سود و زیان`
           });
         }
 
@@ -437,9 +464,9 @@ export class FiscalYearService {
             date: normClosingDate,
             voucherType: 'closing',
             status: 'approved',
-            description: `بستن حساب‌های موقت (درآمدها، بهای تمام شده و هزینه‌ها) به حساب خلاصه سود و زیان سال مالی ${data.year}`,
+            description: `بستن حساب‌های موقت (درآمدها، بهای تمام شده و هزینه‌ها) به حساب خلاصه سود و زیان سال مالی ${year}`,
             referenceModule: 'manual',
-            referenceNumber: `CLOSE-TEMP-${data.year}`,
+            referenceNumber: `CLOSE-TEMP-${year}`,
             userId: data.userId,
             username: data.username,
             items: v1Items
@@ -460,7 +487,7 @@ export class FiscalYearService {
             detailedName: 'خلاصه سود و زیان',
             debit: profitNum,
             credit: 0,
-            description: `بستن حساب خلاصه سود و زیان سال مالی ${data.year}`
+            description: `بستن حساب خلاصه سود و زیان سال مالی ${year}`
           });
           v2Items.push({
             accountId: retainedEarningsAcc.id,
@@ -468,7 +495,7 @@ export class FiscalYearService {
             detailedName: 'سود انباشته',
             debit: 0,
             credit: profitNum,
-            description: `انتقال سود خالص سال مالی ${data.year} به سود انباشته سنواتی`
+            description: `انتقال سود خالص سال مالی ${year} به سود انباشته سنواتی`
           });
         } else {
           const lossNum = profitFin.abs().round(4).toNumber();
@@ -478,7 +505,7 @@ export class FiscalYearService {
             detailedName: 'زیان انباشته',
             debit: lossNum,
             credit: 0,
-            description: `انتقال زیان سال مالی ${data.year} به سود (زیان) انباشته سنواتی`
+            description: `انتقال زیان سال مالی ${year} به سود (زیان) انباشته سنواتی`
           });
           v2Items.push({
             accountId: summaryProfitAcc.id,
@@ -486,7 +513,7 @@ export class FiscalYearService {
             detailedName: 'خلاصه سود و زیان',
             debit: 0,
             credit: lossNum,
-            description: `بستن حساب خلاصه سود و زیان سال مالی ${data.year}`
+            description: `بستن حساب خلاصه سود و زیان سال مالی ${year}`
           });
         }
 
@@ -494,9 +521,9 @@ export class FiscalYearService {
           date: normClosingDate,
           voucherType: 'closing',
           status: 'approved',
-          description: `انتقال ${profitFin.greaterThan(0) ? 'سود' : 'زیان'} خالص سال مالی ${data.year} به حساب سود (زیان) انباشته سنواتی`,
+          description: `انتقال ${profitFin.greaterThan(0) ? 'سود' : 'زیان'} خالص سال مالی ${year} به حساب سود (زیان) انباشته سنواتی`,
           referenceModule: 'manual',
-          referenceNumber: `CLOSE-PROFIT-${data.year}`,
+          referenceNumber: `CLOSE-PROFIT-${year}`,
           userId: data.userId,
           username: data.username,
           items: v2Items
@@ -572,9 +599,9 @@ export class FiscalYearService {
           date: normClosingDate,
           voucherType: 'closing',
           status: 'approved',
-          description: `سند اختتامیه سال مالی ${data.year} (بستن کلیه حساب‌های ترازنامه‌ای، دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام)`,
+          description: `سند اختتامیه سال مالی ${year} (بستن کلیه حساب‌های ترازنامه‌ای، دارایی‌ها، بدهی‌ها و حقوق صاحبان سهام)`,
           referenceModule: 'manual',
-          referenceNumber: `CLOSING-${data.year}`,
+          referenceNumber: `CLOSING-${year}`,
           userId: data.userId,
           username: data.username,
           items: v3Items
@@ -590,16 +617,16 @@ export class FiscalYearService {
           detailedName: it.detailedName,
           debit: it.credit,
           credit: it.debit,
-          description: `ثبت افتتاحیه مانده اول دوره ${it.detailedName} در سال مالی ${Number(data.year) + 1}`
+          description: `ثبت افتتاحیه مانده اول دوره ${it.detailedName} در سال مالی ${year + 1}`
         }));
 
         const v4 = await VoucherService.createJournalVoucher({
           date: normOpeningDate,
           voucherType: 'opening',
           status: 'approved',
-          description: `سند افتتاحیه سال مالی ${Number(data.year) + 1} (انتقال مانده‌های ابتدای دوره دارایی‌ها، بدهی‌ها و سرمایه از سال مالی ${data.year})`,
+          description: `سند افتتاحیه سال مالی ${year + 1} (انتقال مانده‌های ابتدای دوره دارایی‌ها، بدهی‌ها و سرمایه از سال مالی ${year})`,
           referenceModule: 'manual',
-          referenceNumber: `OPENING-${Number(data.year) + 1}`,
+          referenceNumber: `OPENING-${year + 1}`,
           userId: data.userId,
           username: data.username,
           items: v4Items
@@ -608,15 +635,15 @@ export class FiscalYearService {
       }
 
       // v7.0.49 (audit P2-5): وضعیت بسته سال در fiscal_periods (در همان تراکنش، پیش از آزاد شدن قفل)
-      const closingVoucher = createdVouchers.find(v => v.referenceNumber === `CLOSING-${data.year}`)
+      const closingVoucher = createdVouchers.find(v => v.referenceNumber === `CLOSING-${year}`)
         ?? [...createdVouchers].reverse().find(v => v.voucherType === 'closing');
-      await FiscalPeriodService.markClosed(tx, Number(data.year), closingVoucher?.id ?? null, data.username);
+      await FiscalPeriodService.markClosed(tx, year, closingVoucher?.id ?? null, data.username);
     }); // پایان تراکنش اتمیک بستن سال
 
     return {
       success: true,
-      message: `عملیات بستن سال مالی ${data.year} با موفقیت انجام شد و ${createdVouchers.length} سند حسابداری در سیستم ثبت گردید.`,
-      year: data.year,
+      message: `عملیات بستن سال مالی ${year} با موفقیت انجام شد و ${createdVouchers.length} سند حسابداری در سیستم ثبت گردید.`,
+      year,
       netProfit: finalNetProfit,
       closingVouchers: createdVouchers
     };
