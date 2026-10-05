@@ -18,6 +18,8 @@ import { useInvoiceSave } from '../hooks/invoices/useInvoiceSave';
 import { getSellableStock } from '../lib/stockAvailability';
 import { computeInvoiceTotals } from '../lib/invoiceTotals';
 import { lineDiscountError } from '../lib/invoices/invoiceLine';
+import { printLineAmounts } from '../lib/invoices/invoicePrintTotals';
+import { amountDecimalsOf } from '../lib/invoices/invoiceListDocuments';
 import { customerLocationLabel, invoiceFormFromDocument, type BuyerSource, type InvoiceDocItem, type InvoiceDocumentDetails } from '../lib/invoices/invoiceForm';
 import type { InvoiceListDocument } from '../lib/invoices/invoiceListDocuments';
 import { Sparkles } from 'lucide-react';
@@ -320,6 +322,8 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
 
   // v7.0.76 (P3-6): Decimal و همان قاعده مالیات سرور (قبلاً ضرب و جمع اعشاری جاوااسکریپت)
   const { gross: totalSum, discount: totalDiscount, vatAmount, payable: finalPrice } = computeInvoiceTotals(docItems, applyVat ? vatRate : 0, currency);
+  // v8.0.84 (TD-383): مبالغ فاکتور ارزی با دو رقم اعشار، همان مقدار ذخیره‌شده (پیش‌تر ۲۰۰٫۵ دلار «۲۰۱»)
+  const amountDecimals = amountDecimalsOf(currency);
 
   if (printedDoc) {
     return (
@@ -580,8 +584,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 </thead>
                 <tbody className="divide-y text-sm">
                   {docItems.map((d, i) => {
-                    const rowTotal = d.quantity * d.unitPrice;
-                    const rowFinal = rowTotal - d.discount;
+                    const { total: rowTotal, net: rowFinal } = printLineAmounts({ quantity: d.quantity, unit_price: d.unitPrice, discount: d.discount });
                     return (
                     <tr key={i} className="hover:bg-slate-50">
                       <td className="p-3 font-mono text-slate-500" dir="ltr">{formatPersianCode(d.item.code)}</td>
@@ -589,10 +592,10 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                       <td className="p-3 text-center">
                         <span className="font-bold">{formatPersianNumber(d.quantity)}</span> <span className="text-slate-500 text-xs">{d.item.unit}</span>
                       </td>
-                      <td className="p-3 text-center text-slate-700">{formatPersianPrice(d.unitPrice)}</td>
-                      <td className="p-3 text-center font-bold text-slate-700">{formatPersianPrice(rowTotal)}</td>
-                      <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount) : '-'}</td>
-                      <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal)}</td>
+                      <td className="p-3 text-center text-slate-700">{formatPersianPrice(d.unitPrice, undefined, amountDecimals)}</td>
+                      <td className="p-3 text-center font-bold text-slate-700">{formatPersianPrice(rowTotal, undefined, amountDecimals)}</td>
+                      <td className="p-3 text-center text-rose-600">{d.discount > 0 ? formatPersianPrice(d.discount, undefined, amountDecimals) : '-'}</td>
+                      <td className="p-3 text-center font-bold text-indigo-700">{formatPersianPrice(rowFinal, undefined, amountDecimals)}</td>
                       <td className="p-3 text-center">
                         <button type="button" onClick={() => handleRemove(d.item.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition-colors inline-block">
                           <Trash2 size={16} />
@@ -633,21 +636,21 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
                 <div className="flex flex-wrap items-center justify-end gap-6">
                   <div className="text-center font-medium text-slate-500 text-xs">
                     مبلغ ناخالص: 
-                    <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(totalSum)}</span>
+                    <span className="text-slate-800 font-bold block mt-0.5 text-base">{formatPersianPrice(totalSum, undefined, amountDecimals)}</span>
                   </div>
                   <div className="text-center font-medium text-slate-500 text-xs">
                     تخفیفات: 
-                    <span className="text-rose-600 font-bold block mt-0.5 text-base">{formatPersianPrice(totalDiscount)}</span>
+                    <span className="text-rose-600 font-bold block mt-0.5 text-base">{formatPersianPrice(totalDiscount, undefined, amountDecimals)}</span>
                   </div>
                   {applyVat && (
                     <div className="text-center font-medium text-slate-500 text-xs">
                       ارزش افزوده ({vatRate}٪): 
-                      <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount)}</span>
+                      <span className="text-amber-700 font-bold block mt-0.5 text-base">{formatPersianPrice(vatAmount, undefined, amountDecimals)}</span>
                     </div>
                   )}
                   <div className="text-center font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-lg text-xs">
                     مبلغ نهایی قابل پرداخت: 
-                    <span className="font-bold block mt-0.5 text-lg text-indigo-900">{formatPersianPrice(finalPrice)} {formatCurrencyLabel(currency)}</span>
+                    <span className="font-bold block mt-0.5 text-lg text-indigo-900">{formatPersianPrice(finalPrice, undefined, amountDecimals)} {formatCurrencyLabel(currency)}</span>
                   </div>
                 </div>
               </div>
