@@ -1,7 +1,7 @@
 import { pool } from '../../db/drizzle.js';
 import { WorkflowDefinitionService, type SaveWorkflowDefinitionPayload } from '../../services/workflow/workflowDefinitionService.js';
 import { WorkflowTransitionExecutor } from '../../services/workflow/workflowTransitionExecutor.js';
-import { WorkflowTaskService } from '../../services/workflow/workflowTaskService.js';
+import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { createTestUser } from '../fixtures/factories.js';
 
@@ -84,14 +84,15 @@ export async function tasksOf(instanceId: number, status = 'pending'): Promise<T
   return res.rows;
 }
 
+// اجرای انتقال و کار از نمای WorkflowEngineService، همان مسیری که روت‌ها صدا می‌زنند (this آن کلاس نما است)
 export function transit(instanceId: number, transitionId: number, user: WfUser) {
-  return WorkflowTransitionExecutor.executeTransition({
+  return WorkflowEngineService.executeTransition({
     instanceId, transitionId, userId: user.id, userName: user.name, userRole: user.role, userPermissions: user.permissions,
   });
 }
 
 export function runTask(taskId: number, user: WfUser, action: 'approve' | 'reject' = 'approve', transitionId?: number) {
-  return WorkflowTaskService.executeTaskById({
+  return WorkflowEngineService.executeTaskById({
     taskId, userId: user.id, userName: user.name, userRole: user.role, userPermissions: user.permissions, action, transitionId,
   });
 }

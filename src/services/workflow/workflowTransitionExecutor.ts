@@ -158,12 +158,12 @@ export class WorkflowTransitionExecutor {
       return true;
     }
 
-    const equivalentRoles = this.getEquivalentRoles(uRole);
+    const equivalentRoles = WorkflowTransitionExecutor.getEquivalentRoles(uRole);
     if (equivalentRoles.some(eqR => eqR.toLowerCase() === rRole)) {
       return true;
     }
 
-    return this.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
+    return WorkflowTransitionExecutor.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
       roles.includes(rRole) && permissions.some(p => userPermissions.includes(p)));
   }
 
@@ -191,7 +191,7 @@ export class WorkflowTransitionExecutor {
     }
 
     let filtered = transitions.filter(t => {
-      return this.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
+      return WorkflowTransitionExecutor.checkUserRoleMatch(userRole, t.requiredRole || undefined, userPermissions);
     });
 
     if (entityContext) {
@@ -230,12 +230,12 @@ export class WorkflowTransitionExecutor {
     txExecutor: DbClient = orm
   ): Promise<ActingDelegation | undefined> {
     const requiredRole = transition.requiredRole || undefined;
-    if (this.checkUserRoleMatch(params.userRole, requiredRole, params.userPermissions || [])) return undefined;
+    if (WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, requiredRole, params.userPermissions || [])) return undefined;
     const delegations = params.userId
       ? await WorkflowDelegationService.activeDelegations(txExecutor, { toUserId: params.userId })
       : [];
     const acting = delegations.find(d =>
-      WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && this.checkUserRoleMatch(d.fromRole, requiredRole, []));
+      WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, []));
     if (!acting) {
       throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
     }
@@ -312,7 +312,7 @@ export class WorkflowTransitionExecutor {
     }
 
     // 3. Fetch outgoing transitions
-    const transitions = await this.transitionsFromState({ workflowDefinitionId, snapshotDsl }, newStateId, txExecutor);
+    const transitions = await WorkflowTransitionExecutor.transitionsFromState({ workflowDefinitionId, snapshotDsl }, newStateId, txExecutor);
 
     // 3. Consolidated Pending Approvals & Task Cards:
     // Do NOT generate duplicate cards/tasks for rejection/cancellation actions.
@@ -469,7 +469,7 @@ export class WorkflowTransitionExecutor {
         updatedAt: new Date().toISOString()
       }).returning();
 
-      await this.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl);
+      await WorkflowTransitionExecutor.refreshPendingApprovals(newInstance.id, initialStateId, def.id, tx, snapshotDsl);
 
       await tx.insert(workflowHistoryLogs).values({
         instanceId: newInstance.id,
@@ -566,7 +566,7 @@ export class WorkflowTransitionExecutor {
 
       // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
       // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
-      const actingFor = await this.resolveSigner(transition, definition?.code, params, tx);
+      const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, params, tx);
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
       const authoritativeContext = await getEntityContext(instance.entityType, instance.entityId, tx);
@@ -593,7 +593,7 @@ export class WorkflowTransitionExecutor {
       const quorumEval = WorkflowQuorumService.evaluateAndAddSignature({
         approvalRuleType: transition.approvalRuleType as 'SINGLE' | 'AND_ALL' | 'OR_ANY' | 'K_OF_N' | undefined,
         kValue: transition.kValue ?? undefined,
-        memberIds: await this.andAllMemberIds(transition, tx),
+        memberIds: await WorkflowTransitionExecutor.andAllMemberIds(transition, tx),
         existingSignatures,
         userId: actingFor ? actingFor.fromUserId : (params.userId || 0),
         userName: actingFor ? `${actingFor.fromName} (جانشین: ${params.userName || params.userId})` : params.userName,
@@ -671,7 +671,7 @@ export class WorkflowTransitionExecutor {
       // v8.0.84 (TD-373): امضاهای انتقال‌های گامی که فرایند واردش می‌شود از نو شمرده می‌شوند. پیش‌تر امضای دور قبل
       // (پیش از رد یا بازگشت) می‌ماند: همان کاربر گام را دوباره اجرا نمی‌توانست و امضای کهنه حدنصاب را پر می‌کرد.
       const enteredStepTransitionIds = new Set(
-        (await this.transitionsFromState(instance, toState.id, tx)).map(t => String(t.id))
+        (await WorkflowTransitionExecutor.transitionsFromState(instance, toState.id, tx)).map(t => String(t.id))
       );
       const progressAfterMove = Object.fromEntries(
         Object.entries(updatedProgressMap).filter(([id]) => !enteredStepTransitionIds.has(id))
@@ -687,7 +687,7 @@ export class WorkflowTransitionExecutor {
         .where(eq(workflowInstances.id, instance.id));
 
       if (newStatus === 'IN_PROGRESS') {
-        await this.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx, instance.snapshotDsl);
+        await WorkflowTransitionExecutor.refreshPendingApprovals(instance.id, toState.id, instance.workflowDefinitionId, tx, instance.snapshotDsl);
       } else {
         await tx.delete(workflowPendingApprovals).where(eq(workflowPendingApprovals.instanceId, instance.id));
         await tx.update(workflowTasks)
@@ -790,7 +790,7 @@ export class WorkflowTransitionExecutor {
       return { allowed: false, reason: 'انتقال با وضعیت فعلی مطابقت ندارد' };
     }
 
-    const isAuthorized = this.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
+    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
     if (!isAuthorized) {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
     }

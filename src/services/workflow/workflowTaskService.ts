@@ -76,10 +76,10 @@ export class WorkflowTaskService {
       let isAssigned = false;
       let delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null = null;
 
-      if (isAdmin || this.assignedDirectly(task, userId, userRole)) {
+      if (isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole)) {
         isAssigned = true;
       } else {
-        const del = this.delegationForTask(task, this.workflowCodeOf(instance, item.definitionCode), activeDelegations);
+        const del = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(instance, item.definitionCode), activeDelegations);
         if (del) {
           isAssigned = true;
           delegationInfo = { delegatedFromUserId: del.fromUserId, delegationScope: del.scope };
@@ -170,8 +170,8 @@ export class WorkflowTaskService {
         continue;
       }
 
-      const isAssigned = isAdmin || this.assignedDirectly(task, userId, userRole)
-        || !!this.delegationForTask(task, this.workflowCodeOf(task, task.definitionCode), activeDelegations);
+      const isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole)
+        || !!WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), activeDelegations);
 
       if (isAssigned) {
         seenInstances.add(task.instanceId);
@@ -252,12 +252,12 @@ export class WorkflowTaskService {
       // v8.0.88 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
       // و کار نقش تفویض‌کننده را انجام می‌دهد؛ پیش‌تر فقط کار کاربر تعیین‌شده یا نامزد را، و کار نقشی هرگز
       let delegationLogDetails: Record<string, unknown> | null = null;
-      let isAuthorized = isAdmin || this.assignedDirectly(task, params.userId, userRole);
+      let isAuthorized = isAdmin || WorkflowTaskService.assignedDirectly(task, params.userId, userRole);
       if (!isAuthorized) {
         const [definition] = await tx.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
           .where(eq(workflowDefinitions.id, instance.workflowDefinitionId));
         const delegations = await WorkflowDelegationService.activeDelegations(tx, { toUserId: params.userId });
-        const validDelegation = this.delegationForTask(task, this.workflowCodeOf(instance, definition?.code), delegations);
+        const validDelegation = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(instance, definition?.code), delegations);
         if (validDelegation) {
           isAuthorized = true;
           delegationLogDetails = {
@@ -274,7 +274,7 @@ export class WorkflowTaskService {
 
       // v8.0.81 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
       // فرایند). پیش‌تر اولین انتقال مثبت یا منفی جدول برداشته می‌شد و «رد» در گام بی‌انتقال رد همان تأیید را اجرا می‌کرد.
-      const effectiveTransitionId = await this.resolveTaskTransition(tx, task, instance, params);
+      const effectiveTransitionId = await WorkflowTaskService.resolveTaskTransition(tx, task, instance, params);
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
         instanceId: task.instanceId,
         transitionId: effectiveTransitionId,
@@ -345,7 +345,7 @@ export class WorkflowTaskService {
   ): boolean {
     const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
     if (task.assignedUserId === userId || candidateUserIds.includes(userId)) return true;
-    return this.taskRolesOf(task).some(r => r === '*' || r === 'all' || r === userRole);
+    return WorkflowTaskService.taskRolesOf(task).some(r => r === '*' || r === 'all' || r === userRole);
   }
 
   /** کد گردش‌کار فرایند برای حوزه تفویض: از تصویر نسخه، وگرنه از تعریف */
@@ -364,7 +364,7 @@ export class WorkflowTaskService {
     delegations: ActingDelegation[]
   ): ActingDelegation | undefined {
     const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-    const taskRoles = this.taskRolesOf(task);
+    const taskRoles = WorkflowTaskService.taskRolesOf(task);
     return delegations.find(d => WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && (
       d.fromUserId === task.assignedUserId
       || candidateUserIds.includes(d.fromUserId)
@@ -483,7 +483,7 @@ export class WorkflowTaskService {
   }) {
     const userId = params.userId || 0;
     const role = params.role || '';
-    const pending = await this.getPendingApprovalsForUser(userId, [role]);
+    const pending = await WorkflowTaskService.getPendingApprovalsForUser(userId, [role]);
     return {
       data: pending,
       total: pending.length,
