@@ -304,7 +304,6 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
     actionDate: req.body.actionDate,
     bankAccountId: req.body.bankAccountId,
     transfereePartyId: req.body.transfereePartyId,
-    transfereePartyName: req.body.transfereePartyName,
     notes,
     description: req.body.description,
     userId: req.user?.id,

@@ -285,5 +285,49 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  const spentId = 'reg_cheque_spent_needs_supplier_td_498';
+  if (shouldRun(spentId, 'td498', 'cheque', 'spent', 'party', 'package4')) {
+    await runCase(results, spentId, 'v9.0.75: spending a received cheque needs a supplier id, the voucher debits trade payables with that supplier\'s detail and the payee name comes from the supplier row (TD-498)', async () => {
+      const { createTestCustomer } = await import('../fixtures/factories.js');
+      const api = await client();
+      const problems: string[] = [];
+      const payablesAcc = await accountId('3001');
+      const customer = await createTestCustomer({ name: `ERP-TEST-MARKER p04 spend customer ${tagOf()}` });
+      const supplier = await createTestCustomer({ name: `ERP-TEST-MARKER p04 spend supplier ${tagOf()}`, partyType: 'supplier' });
+      const base = { type: 'received', bankName: 'ملت', issueDate: '2026-03-01', dueDate: '2026-04-01', partyType: 'customer', partyId: customer.id, partyName: customer.name };
+      const create = async (amount: number) => {
+        const res = await api.post('/api/accounting/cheques', { ...base, chequeNumber: `S04${tagOf()}`, amount });
+        if (res.status !== 201) throw new Error(`cheque create returned ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
+        return Number(res.body.id);
+      };
+      const first = await create(4_000_000);
+      const second = await create(2_500_000);
+      const spend = (id: number, body: object) => api.patch(`/api/accounting/cheques/${id}/status`, { status: 'spent', ...body });
+
+      // the old status form sent only a typed name
+      const nameOnly = await spend(first, { transfereePartyName: 'شرکت بازرگانی پارس' });
+      if (nameOnly.status !== 422 || errorCode(nameOnly) !== 'CHEQUE_TRANSFEREE_REQUIRED') problems.push(`spend with a name only returned ${nameOnly.status} ${errorCode(nameOnly)}, expected 422 CHEQUE_TRANSFEREE_REQUIRED (before: 200 with detail «other»)`);
+      const toCustomer = await spend(first, { transfereePartyId: customer.id });
+      if (toCustomer.status !== 422 || errorCode(toCustomer) !== 'TREASURY_PARTY_INVALID') problems.push(`spend to a customer-only party returned ${toCustomer.status} ${errorCode(toCustomer)}, expected 422 TREASURY_PARTY_INVALID`);
+      const [still] = await orm.select({ status: cheques.status }).from(cheques).where(eq(cheques.id, first));
+      if (still?.status !== 'received') problems.push(`refused spends changed the cheque status to ${still?.status}`);
+
+      for (const id of [first, second]) {
+        const res = await spend(id, { transfereePartyId: supplier.id });
+        if (res.status !== 200) problems.push(`spend of cheque ${id} to the supplier returned ${res.status}: ${JSON.stringify(res.body).slice(0, 160)}`);
+        else if (res.body.payeeName !== supplier.name) problems.push(`payee name ${res.body.payeeName}, expected the supplier's name`);
+      }
+      const supplierDebits = [...await chequeVoucherRows(first), ...await chequeVoucherRows(second)]
+        .filter(r => r.accountId === payablesAcc && r.debit.toNumber() > 0);
+      const onSupplier = supplierDebits.filter(r => r.detailedType === 'supplier' && r.detailedId === supplier.id);
+      const total = onSupplier.reduce((sum, r) => sum + r.debit.toNumber(), 0);
+      if (onSupplier.length !== 2 || total !== 6_500_000) {
+        problems.push(`supplier detail carries ${onSupplier.length} trade-payables debits totalling ${total}, expected 2 rows of 6,500,000 (before: only the API spend, 2,500,000)`);
+      }
+      assertNoProblems(problems);
+      return 'Spend with a typed name only 422, to a customer-only party 422 (cheque stays received); two spends 4,000,000 + 2,500,000 to the supplier: 2 rows Dr 3001 with the supplier detail, 6,500,000, payee name from the supplier row';
+    });
+  }
+
   return results;
 }

@@ -405,7 +405,6 @@ export const updateChequeStatusSchema = z.object({
     actionDate: z.string().optional(),
     bankAccountId: z.coerce.number().int().positive().optional(),
     transfereePartyId: z.coerce.number().int().positive().optional(),
-    transfereePartyName: z.string().optional(),
     notes: z.string().optional(),
     description: z.string().optional()
   })

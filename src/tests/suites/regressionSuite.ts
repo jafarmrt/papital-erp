@@ -2190,9 +2190,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // 2. Transition received cheque to 'spent' (واگذاری و خرج چک به تامین‌کننده)
+      // v9.0.75 (TD-498): spending a cheque needs the supplier's id; the payee name comes from the supplier row
+      const { createTestCustomer: createSpendSupplier } = await import('../fixtures/factories.js');
+      const spendSupplier = await createSpendSupplier({ name: `بازرگانی فلزات البرز ${Date.now()}`, partyType: 'supplier' });
       const spentChq = await AccountingService.updateChequeStatus(recChq.id, {
         status: 'spent',
-        transfereePartyName: 'بازرگانی فلزات البرز',
+        transfereePartyId: spendSupplier.id,
         notes: 'واگذاری به تامین‌کننده بابت تسویه شمش طلا'
       });
 
@@ -2200,7 +2203,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`وضعیت چک پس از واگذاری باید spent باشد اما ${spentChq.status} است`);
       }
 
-      if (spentChq.payeeName !== 'بازرگانی فلزات البرز') {
+      if (spentChq.payeeName !== spendSupplier.name) {
         throw new Error(`نام تحویل‌گیرنده در payeeName چک درج نشد: ${spentChq.payeeName}`);
       }
 
@@ -2254,7 +2257,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       try {
         await AccountingService.updateChequeStatus(paidChq.id, {
           status: 'spent',
-          transfereePartyName: 'شخص ثالث'
+          transfereePartyId: spendSupplier.id
         });
       } catch (err: any) {
         if (err.message?.includes('تنها چک‌های دریافتی') || err.message?.includes('مجاز نیست')) {

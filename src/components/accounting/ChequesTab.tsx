@@ -29,7 +29,7 @@ interface ChequesTabProps {
   loading: boolean;
   onRefresh: () => void;
   onCreateCheque: (data: any) => Promise<void>;
-  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyName?: string) => Promise<void>;
+  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyId?: number) => Promise<void>;
   onDeleteCheque: (id: number) => Promise<void>;
 }
 
@@ -105,7 +105,7 @@ export function ChequesTab({
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
-  const [transfereePartyName, setTransfereePartyName] = useState('');
+  const [transfereePartyId, setTransfereePartyId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
@@ -164,7 +164,7 @@ export function ChequesTab({
     if (statusModalCheque) {
       const opts = CHEQUE_TRANSITIONS[String(statusModalCheque.status)] || [];
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
-      setTransfereePartyName('');
+      setTransfereePartyId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusModalCheque?.id]);
@@ -213,6 +213,11 @@ export function ChequesTab({
       toast.error('وضعیت انتخابی برای این چک مجاز نیست');
       return;
     }
+    // v9.0.75 (TD-498، تصمیم ت۳ الف): خرج چک بی تأمین‌کننده انتخاب‌شده فرستاده نمی‌شود
+    if (targetStatus === 'spent' && !transfereePartyId) {
+      toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -221,7 +226,7 @@ export function ChequesTab({
         targetStatus, 
         statusDescription, 
         targetBankAccountId || undefined,
-        targetStatus === 'spent' ? transfereePartyName : undefined
+        targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined
       );
       toast.success('وضعیت چک به‌روزرسانی شد');
       setStatusModalCheque(null);
@@ -1016,14 +1021,13 @@ export function ChequesTab({
               {targetStatus === 'spent' && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    نام تحویل‌گیرنده / تأمین‌کننده (طرف حساب واگذاری)
+                    تأمین‌کننده گیرنده چک *
                   </label>
-                  <input
-                    type="text"
-                    value={transfereePartyName}
-                    onChange={e => setTransfereePartyName(e.target.value)}
-                    placeholder="مثال: شرکت بازرگانی پارس (تأمین‌کننده)..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  <SearchableSelect
+                    value={String(transfereePartyId || '')}
+                    onChange={(val) => setTransfereePartyId(Number(val) || null)}
+                    placeholder="جستجو و انتخاب تأمین‌کننده..."
+                    options={supplierList.map(s => ({ value: String(s.id), label: `${s.name}${s.phone ? ` - ${s.phone}` : ''}` }))}
                   />
                 </div>
               )}

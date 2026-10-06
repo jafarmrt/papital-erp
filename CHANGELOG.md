@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.75 — Spent Cheques Need a Supplier
+- **Spent Cheque Supplier (P1):** spending a cheque needs a supplier picked from the list and posts to that supplier's detail; before, the form sent only a typed name and the voucher missed the supplier's account card (TD-498, `reg_cheque_spent_needs_supplier_td_498`).
+
 ### v9.0.74 — Cheque Vouchers Follow the Party Type
 - **Cheque Party Account (P1):** a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to a chosen account) and its bounce and return follow it; before, a personnel cheque landed on the customer with the same id (TD-497, `reg_cheque_voucher_follows_party_type_td_497`).
 

@@ -31,7 +31,6 @@
 | TD-494 | انبار و کاردکس (بسته ۶) | P3 (B06-15) — خطاهای کاری انتقال و بازسازی (`throw new Error`، برابری دقیق کد انبار) ۵۰۰ می‌دهند و کاردکس جاری کالای ناموجود کالای ساختگی برمی‌گرداند | inventoryStockRepair.service.ts، kardexWacRecalculator.service.ts، runningKardex.service.ts | open (P3) |
 | TD-495 | انبار و کاردکس (بسته ۶) | P3 (B06-16) — بررسی سلامت سامانه لایه انبار را با `status: 'ok'` ثابت گزارش می‌کند، حتی با مغایرت در گزارش سلامت انبار | systemReconciliation.service.ts | open (P3) |
 | TD-496 | انبار و کاردکس (بسته ۶) | P3 (B06-17) — رابط انبار: اصطلاح انگلیسی و آوانویسی (داشبورد، آلارم، متریال، فیلتر، WAC، کارتکس)، «بروزرسانی»، رقم لاتین، برچسب «کسری سیستمی» برای اضافی و «قلم» برای جمع مقدار، نام انگلیسی فایل‌های خروجی، پیام‌های کلی و `window.confirm` | InventoryStatusPage.tsx، InventoryAuditPage.tsx، PhysicalAuditSheetTab.tsx، WarehouseStockReconciliationPanel.tsx، auditSheet.ts، RunningKardexModal.tsx، useTransactionsExport.ts | open (P3، تصمیم ت۶) |
-| TD-498 | خزانه و چک (بسته ۴) | P1 (B04-02) — خرج چک دریافتی از رابط فقط نام گیرنده را می‌فرستد و سند `3001 dr` با تفصیلی `other` بی شناسه می‌گیرد: از دو چک ۴٬۰۰۰٬۰۰۰ و ۲٬۵۰۰٬۰۰۰ خرج‌شده به یک تأمین‌کننده، کارت او فقط ۲٬۵۰۰٬۰۰۰ را دید | chequeLifecycle.service.ts، useChequeQueries.ts، ChequesTab.tsx | open (P1، تصمیم ت۳ الف) |
 | TD-505 | خزانه و چک (بسته ۴)؛ اثر روی ۲ | P2 (B04-09) — `GET /accounting/bank-accounts` با گارد درون‌خطی `warehouse.in` / `warehouse.out` / `documents.view` / `documents.create` همه ستون‌ها (شماره حساب، کارت، شبا) و مانده خزانه، مانده دفتر و مغایرت را می‌دهد، در حالی که همان کاربر `GET /accounting/treasury` را ۴۰۳ می‌گیرد | treasury.routes.ts، InvoiceSettlementModal.tsx، PayrollPaymentModal.tsx | open (P2، تصمیم ت۷ الف) |
 | TD-506 | خزانه و چک (بسته ۴) | P2 (B04-10) — چک با `issueDate` پنج ماه آینده (۲۰۱) و وصول با `actionDate` آینده (۲۰۰، مانده بانک همین امروز زیاد شد) پذیرفته می‌شود؛ پنجره وضعیت چک کادر تاریخ ندارد و چک دیروز پاس‌شده امروز در دفتر می‌نشیند | chequeLifecycle.service.ts، ChequesTab.tsx | open (P2، تصمیم ت۶ الف؛ با TD-669 (B16-05)) |
 | TD-508 | خزانه و چک (بسته ۴) | P2 (B04-12) — فرم حساب بانکی کادر ارز ندارد و `PUT currency USD` ۲۰۰ می‌گیرد ولی ارز `IRR` می‌ماند؛ پس مسیر ارزی خزانه (TD-274) فقط از API باز است | BankAccountModal.tsx، bankAccount.service.ts | open (P2، تصمیم ت۵ الف) |
@@ -47,8 +46,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۲۶ ردیف
-- **آرشیو شده (resolved):** ۴۳۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۲۵ ردیف
+- **آرشیو شده (resolved):** ۴۳۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -57,4 +56,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.74 — TD-497 (سند چک بر پایه نوع طرف حساب، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.75 — TD-498 (گیرنده چک خرج‌شده، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

@@ -320,7 +320,6 @@ export class ChequeLifecycleService {
     actionDate?: string;
     bankAccountId?: number | null;
     transfereePartyId?: number;
-    transfereePartyName?: string;
     notes?: string;
     description?: string;
     userId?: number;
@@ -387,6 +386,16 @@ export class ChequeLifecycleService {
 
       if (data.status === 'spent' && existing.type !== 'received') {
         throw new ValidationError('تنها چک‌های دریافتی از مشتریان قابل واگذاری و خرج کردن به غیر هستند');
+      }
+      // v9.0.75 (TD-498، B04-02، تصمیم مالک محصول ت۳ الف): خرج چک بدهی ما به یک تأمین‌کننده مشخص را کم می‌کند، پس
+      // شناسه تأمین‌کننده الزامی است و نام او از جدول طرف حساب خوانده می‌شود. پیش‌تر رابط فقط نام می‌فرستاد و سند «بدهکار
+      // پرداختنی تجاری» با تفصیلی «سایر» و بی شناسه صادر می‌شد که به کارت حساب تأمین‌کننده نمی‌رسید.
+      let transfereeName: string | null = null;
+      if (data.status === 'spent') {
+        if (!data.transfereePartyId) {
+          throw new ValidationError('برای خرج چک، تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید.', undefined, 'CHEQUE_TRANSFEREE_REQUIRED');
+        }
+        transfereeName = await resolveTreasuryPartyName(txEngine, 'supplier', data.transfereePartyId);
       }
 
       const history = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
@@ -642,7 +651,7 @@ export class ChequeLifecycleService {
           || (await AccountMappingService.getChequeInCollectionAccount(txEngine));
 
         if (tradePayablesAcc && inTreasuryAcc) {
-          const transferee = data.transfereePartyName || data.notes || data.description || 'طرف حساب واگذاری';
+          const transferee = transfereeName || 'طرف حساب واگذاری';
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'treasury',
@@ -656,7 +665,7 @@ export class ChequeLifecycleService {
             items: [
               {
                 accountId: tradePayablesAcc.id,
-                detailedType: data.transfereePartyId ? 'supplier' : 'other',
+                detailedType: 'supplier',
                 detailedId: data.transfereePartyId,
                 detailedName: transferee,
                 debit: amount,
@@ -676,7 +685,7 @@ export class ChequeLifecycleService {
         }
       }
 
-      const effectiveNotes = data.notes || data.description || (data.transfereePartyName ? `واگذاری به ${data.transfereePartyName}` : undefined);
+      const effectiveNotes = data.notes || data.description || (transfereeName ? `واگذاری به ${transfereeName}` : undefined);
 
       history.push({
         date: voucherIsoDate,
@@ -692,7 +701,7 @@ export class ChequeLifecycleService {
         ...(data.status === 'passed' && bankRecord
           ? { bankAccountId: bankRecord.id }
           : data.bankAccountId !== undefined ? { bankAccountId: data.bankAccountId } : {}),
-        ...(data.transfereePartyName ? { payeeName: data.transfereePartyName } : {}),
+        ...(transfereeName ? { payeeName: transfereeName } : {}),
         statusHistory: history,
       }).where(eq(cheques.id, id)).returning();
 
