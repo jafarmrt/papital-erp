@@ -128,3 +128,14 @@ export function replayKardexWac(rows: KardexReplayRow[], fallbackWac: DecimalVal
     minimumBalance,
   };
 }
+
+/** v9.0.75 (TD-486): بیشترین اختلاف WAC زنده و بازپخش که هنوز «همخوان» است (همان آستانه ناوردایی I13) */
+export const KARDEX_WAC_TOLERANCE = 0.01;
+
+/**
+ * v9.0.75 (TD-486): WAC زنده کالای دارای موجودی با WAC بازپخش کاردکس نمی‌خواند. گزارش «بررسی سلامت و تطبیق موجودی»،
+ * بازسازی و ناوردایی I13 همین قاعده را به کار می‌برند؛ کالای بی موجودی هیچ‌وقت مغایر نیست.
+ */
+export function wacDiffersFromReplay(liveWac: DecimalValue, replayWac: DecimalValue, stock: DecimalValue): boolean {
+  return fin(stock).isPositive() && fin(liveWac).subtract(fin(replayWac)).abs().greaterThan(fin(KARDEX_WAC_TOLERANCE));
+}

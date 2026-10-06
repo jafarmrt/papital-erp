@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.75 — Integrity Report WAC Uses the Kardex Replay
+- **Inventory Integrity Report:** the WAC check compares the live WAC with the same Kardex replay the rebuild and invariant I13 use, so an item that ran out and was bought again at another price is no longer reported as mismatched (TD-486, `reg_integrity_report_replay_wac_td_486`).
+
 ### v9.0.74 — Clear Errors for Transfers and Kardex Rebuild
 - **Inventory Errors:** a transfer accepts a warehouse code or name in any case, and transfer and Kardex rebuild errors answer 422 or 404 with Persian messages instead of 500; the running Kardex of a missing item is 404 (TD-494, `reg_inventory_business_errors_td_494`).
 

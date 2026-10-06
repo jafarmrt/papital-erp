@@ -10513,6 +10513,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.74, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
   const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
   results.push(...await runInventoryBusinessErrorsTests(shouldRun));
+  // Package 6 (v9.0.75, TD-486): the integrity report checks WAC against the Kardex replay
+  const { runIntegrityReportReplayWacTests } = await import('../regression/integrityReportReplayWacTests.js');
+  results.push(...await runIntegrityReportReplayWacTests(shouldRun));
 
   return results;
 }
