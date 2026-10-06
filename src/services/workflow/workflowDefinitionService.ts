@@ -9,6 +9,7 @@ import { eq, and, sql, inArray, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js';
+import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
 import { DOC_APPROVAL_STEP_GUARDS, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
 import { 
@@ -90,7 +91,12 @@ function assertSavableWorkflowDesign(payload: SaveWorkflowDefinitionPayload): vo
     typeof payload.title === 'string' && payload.title.trim() ? '' : 'عنوان گردش کار باید متن باشد.',
     typeof payload.entityType === 'string' && payload.entityType.trim() ? '' : 'نوع موجودیت گردش کار باید متن باشد.',
   ].filter(Boolean);
-  const errors = [...header, ...workflowDesignErrors(payload.states, payload.transitions)];
+  // v9.0.48 (TD-456، B14-14): قاعده هر اقدام هنگام ذخیره سنجیده می‌شود (پیش‌تر هرچه می‌رسید ذخیره می‌شد)
+  const ruleErrors = (Array.isArray(payload.transitions) ? payload.transitions : []).flatMap((tr) => {
+    const check = tr && typeof tr === 'object' ? RuleEngineService.validateExpression(tr.ruleConditionsJson as RuleExpression) : { valid: true };
+    return check.valid ? [] : [`شرط اقدام «${String(tr.title || tr.actionKey || '')}» نامعتبر است: ${check.error}.`];
+  });
+  const errors = [...header, ...workflowDesignErrors(payload.states, payload.transitions), ...ruleErrors];
   if (errors.length > 0) {
     throw new ValidationError(`طرح گردش کار ذخیره نشد: ${errors.join(' ')}`, { errors });
   }

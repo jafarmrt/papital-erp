@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.48 — Invalid Workflow Rules Are Refused and Fail Closed
+- **Workflow Rule Validation:** a transition rule is validated on save (422), and a stored node that is neither a rule nor a group evaluates closed with a Persian reason; an empty expression still means no condition (TD-456, `sec_workflow_rule_validation_td_456`).
+
 ### v9.0.47 — Designer Saves Keep the Step Order
 - **Workflow Step Order:** saving a design keeps each step's `stepOrder` (a missing one takes the step's list position) and the designer reads, assigns and edits it (TD-454, `sec_workflow_step_order_td_454`).
 

@@ -46,6 +46,29 @@ export interface EvaluationTraceResult {
   flatTrace: { path: string; passed: boolean; details: string }[];
 }
 
+/**
+ * v9.0.48 (TD-456، B14-14): شرطی که نه قاعده (field و operator) است نه گروه (آرایه conditions یا rules)، «بسته» ارزیابی
+ * می‌شود: پیش‌تر گروه خالی و «درست» شمرده می‌شد، پس `{field, op}` به‌جای `operator` سقف مبلغ را بی‌صدا برمی‌داشت و
+ * `null` ارزیابی را با خطای ۵۰۰ می‌شکست. عبارت تهی (null، [] یا {}) همچنان «بی شرط» است.
+ */
+export const INVALID_RULE_OPERATOR = 'invalid_rule';
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+export function isEmptyRuleExpression(expression: unknown): boolean {
+  if (expression === null || expression === undefined) return true;
+  if (Array.isArray(expression)) return expression.length === 0;
+  return isPlainObject(expression) && Object.keys(expression).length === 0;
+}
+
+function isSingleRuleNode(node: unknown): node is SingleRuleCondition {
+  return isPlainObject(node) && typeof node.field === 'string' && node.field.trim() !== '' && node.operator !== undefined && node.operator !== null;
+}
+
+function isRuleGroupNode(node: unknown): node is RuleGroup {
+  return isPlainObject(node) && !('field' in node) && (Array.isArray(node.conditions) || Array.isArray(node.rules));
+}
+
 export class RuleEngineService {
   /**
    * Resolve nested property paths using dot notation and array index notation.
@@ -216,7 +239,7 @@ export class RuleEngineService {
   public static evaluateWithTrace(expression: RuleExpression, context: unknown): EvaluationTraceResult {
     const startTime = Date.now();
 
-    if (!expression) {
+    if (isEmptyRuleExpression(expression)) {
       const emptyTrace: EvaluationTraceItem = {
         type: 'group',
         logic: 'AND',
@@ -257,11 +280,14 @@ export class RuleEngineService {
       return this.evaluateGroupNode({ logic: 'AND', conditions: node }, context, flatTraceList, parentPath);
     }
 
-    // 2. Check if Single Rule or Group
-    const objNode = node as Record<string, unknown>;
-    const isSingleRule = typeof objNode.field === 'string' && objNode.operator !== undefined;
+    // 2. Check if Single Rule or Group; anything else fails closed (v9.0.48, TD-456)
+    if (!isSingleRuleNode(node) && !isRuleGroupNode(node)) {
+      const reason = 'شرط نامعتبر است (نه قاعده با فیلد و عملگر است نه گروه شرط‌ها)';
+      flatTraceList.push({ path: parentPath || 'root', passed: false, details: reason });
+      return { type: 'rule', field: '', operator: INVALID_RULE_OPERATOR, expectedValue: undefined, actualValue: undefined, passed: false, reason };
+    }
 
-    if (isSingleRule) {
+    if (isSingleRuleNode(node)) {
       const singleRule = node as SingleRuleCondition;
       const res = this.evaluateSingleRule(singleRule, context);
       const currentPath = parentPath ? `${parentPath}.${singleRule.field}` : singleRule.field;
@@ -350,7 +376,6 @@ export class RuleEngineService {
    * Validate Rule Expression Syntax
    */
   public static validateExpression(expression: RuleExpression): { valid: boolean; error?: string } {
-    if (!expression) return { valid: true };
 
     const validOperators = [
       '=', '==', 'eq', 'equal',
@@ -367,7 +392,8 @@ export class RuleEngineService {
     ];
 
     const validateNode = (node: unknown, path: string): string | null => {
-      if (!node) return null;
+      // v9.0.48 (TD-456): شرط تهی درون گروه، و شیئی که نه قاعده است نه گروه، نامعتبر است
+      if (node === null || node === undefined) return `شرط تهی در مسیر ${path} مجاز نیست`;
 
       if (Array.isArray(node)) {
         for (let i = 0; i < node.length; i++) {
@@ -382,7 +408,10 @@ export class RuleEngineService {
       }
 
       const nodeObj = node as Record<string, unknown>;
-      const isSingle = typeof nodeObj.field === 'string' && nodeObj.operator !== undefined;
+      const isSingle = isSingleRuleNode(nodeObj);
+      if (!isSingle && !isRuleGroupNode(nodeObj)) {
+        return `شرط مسیر ${path} نه قاعده (فیلد و عملگر) است نه گروه شرط‌ها`;
+      }
 
       if (isSingle) {
         if (!nodeObj.field || typeof nodeObj.field !== 'string') {
@@ -409,6 +438,7 @@ export class RuleEngineService {
       }
     };
 
+    if (isEmptyRuleExpression(expression)) return { valid: true };
     const error = validateNode(expression, 'root');
     return error ? { valid: false, error } : { valid: true };
   }

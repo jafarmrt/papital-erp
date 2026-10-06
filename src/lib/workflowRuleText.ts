@@ -80,10 +80,14 @@ export function formatRuleValue(value: unknown): string {
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
+/** v9.0.48 (TD-456): عملگری که موتور قاعده به شرطِ نه‌قاعده‌نه‌گروه می‌دهد (`INVALID_RULE_OPERATOR`) */
+const INVALID_RULE_TEXT = 'شرط این اقدام نامعتبر است و تا اصلاح طرح گردش کار اجرا نمی‌شود';
+
 /** «مبلغ کل بیشتر از ۵۰٬۰۰۰ باشد» */
 export function describeWorkflowRule(rule: WorkflowRuleLike): string {
   const label = workflowFieldLabel(rule.field);
   const op = String(rule.operator || 'eq').toLowerCase();
+  if (op === 'invalid_rule') return INVALID_RULE_TEXT;
   if (UNARY_TEXT[op]) return `${label} ${UNARY_TEXT[op]}`;
   if (op === 'regex' || op === 'regexp') return `${label} با الگوی ${String(rule.value ?? '')} جور باشد`;
   const opText = OPERATOR_TEXT[op] ?? op;
@@ -92,5 +96,6 @@ export function describeWorkflowRule(rule: WorkflowRuleLike): string {
 
 /** «مبلغ کل بیشتر از ۵۰٬۰۰۰ باشد (مقدار فعلی: ۳۰٬۰۰۰)» */
 export function describeUnmetWorkflowRule(rule: WorkflowRuleLike, actualValue: unknown): string {
+  if (String(rule.operator).toLowerCase() === 'invalid_rule') return INVALID_RULE_TEXT;
   return `${describeWorkflowRule(rule)} (مقدار فعلی: ${formatRuleValue(actualValue)})`;
 }

@@ -1,6 +1,6 @@
 import { TestCaseResult } from '../types.js';
 import { WorkflowDefinitionService, type SaveWorkflowDefinitionPayload } from '../../services/workflow/workflowDefinitionService.js';
-import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
+import { runCase, draftSalesDocument, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
  * بسته ۱۴ (گردش کار)، PR ج — طراح، قاعده‌ها و پایگاه‌داده: اعتبار ساختار طرح، seed، ترتیب گام‌ها، قاعده‌های اقدام،
@@ -157,6 +157,58 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
         if (kept !== 'draft:2,review:3,done:1') wrong.push(`ترتیب صریح «${kept}» ذخیره شد، نه draft:2,review:3,done:1`);
       } finally {
         for (const code of codes) await dropDefinition(h, code);
+      }
+    });
+  }
+
+  if (shouldRun('sec_workflow_rule_validation_td_456', 'security', 'td456', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_rule_validation_td_456',
+      name: 'v9.0.48: قاعده نادرست اقدام هنگام ذخیره ۴۲۲ می‌گیرد و قاعده نادرست ذخیره‌شده «بسته» ارزیابی می‌شود (TD-456)',
+      details: 'ذخیره {field, op} به‌جای operator و [null] رد می‌شود؛ در فرایندی که قاعده نادرست در تصویرش دارد، اقدام روی سند ۵٬۰۰۰ ریالی رد می‌شود (نه ۲۰۰) و ویجت مراحل با [null] پاسخ ۲۰۰ و اقدام بسته می‌دهد (نه ۵۰۰)',
+    }, async (h, wrong) => {
+      const codes: string[] = [];
+      try {
+        const twoSteps = [validStates[0], validStates[2]];
+        for (const [label, rule] of [['op به‌جای operator', { field: 'amount', op: 'lt', value: 1000 }], ['شرط تهی', [null]]] as const) {
+          const code = designCode(h, 'RULE');
+          codes.push(code);
+          const res = await h.post('/api/workflow/definitions', {
+            code, title: `قاعده ${label}`, entityType: 'document', states: twoSteps,
+            transitions: [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'ok', title: 'تأیید', ruleConditionsJson: rule }],
+          });
+          if (res.status !== 422) wrong.push(`ذخیره قاعده «${label}» ${res.status} داد، نه ۴۲۲`);
+        }
+
+        // قاعده نادرستی که پیش از این نسخه ذخیره شده و در تصویر فرایند است
+        const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+        const code = designCode(h, 'STORED');
+        codes.push(code);
+        const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+          code, title: 'قاعده ذخیره‌شده', entityType: 'document', states: twoSteps,
+          transitions: [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }],
+        });
+        const definitionId = Number(saved?.definition.id);
+        const withStoredRule = async (rule: unknown): Promise<{ docId: number; instanceId: number; transitionId: number }> => {
+          const docId = await draftSalesDocument(h);
+          const inst = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: definitionId, entityType: 'document', entityId: String(docId) });
+          await h.q(`UPDATE workflow_instances SET snapshot_dsl = jsonb_set(snapshot_dsl, '{transitions,0,ruleConditionsJson}', $1::jsonb) WHERE id = $2`, [JSON.stringify(rule), inst.id]);
+          const [row] = await h.q(`SELECT (snapshot_dsl->'transitions'->0->>'id')::int AS id FROM workflow_instances WHERE id = $1`, [inst.id]);
+          return { docId, instanceId: inst.id, transitionId: Number(row?.id) };
+        };
+
+        const open = await withStoredRule({ field: 'amount', op: 'lt', value: 1000 });
+        const run = await h.post('/api/workflow/transition', { instanceId: open.instanceId, transitionId: open.transitionId });
+        if (run.status !== 422) wrong.push(`اقدام با قاعده {op:'lt'} روی سند ۵٬۰۰۰ ریالی ${run.status} گرفت، نه ۴۲۲`);
+
+        const broken = await withStoredRule([null]);
+        const view = await h.get(`/api/workflow/instance/document/${broken.docId}`);
+        if (view.status !== 200) wrong.push(`ویجت مراحل با قاعده [null] ${view.status} داد، نه ۲۰۰`);
+        else if ((view.body?.availableTransitions ?? []).some((t: Row) => t.actionKey === 'ok')) wrong.push('اقدام با قاعده [null] در اقدام‌های مجاز آمد');
+        await h.q(`UPDATE workflow_instances SET status = 'TERMINATED' WHERE id = ANY($1::int[])`, [[open.instanceId, broken.instanceId]]);
+      } finally {
+        await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code = ANY($1::text[]))`, [codes]);
+        for (const c of codes) await dropDefinition(h, c);
       }
     });
   }
