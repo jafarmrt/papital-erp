@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.54 — Package 6 Inventory and Kardex Audit Documentation
+- **Stability Audit, Package 6 (Inventory and Kardex):** `docs/audit/STABILITY_AUDIT_V9.md` gets the inventory section; its 17 proven findings are registered as open rows TD-480 to TD-496 (one P0: the stock-count sheet can zero the whole stock of a warehouse). Documentation only; no behaviour change.
+
 ### v9.0.53 — node_modules No Longer Tracked by Git
 - **Deployment:** the `node_modules` symlink committed in v9.0.25 is removed, `.gitignore` uses `/node_modules` (also matches a symlink), and `update.sh` untracks a leftover symlink entry before `git pull`; servers on v9.0.25+ run `git rm -q --cached node_modules` once before updating (TD-472, B01-03, `node_modules_never_tracked_td_472`).
 
