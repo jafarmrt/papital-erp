@@ -8,6 +8,7 @@ import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './vouc
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
+import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1090,6 +1091,11 @@ export class FinancialHealthService {
     const futureMovementTest = buildFutureStockMovementHealthTest(await findFutureStockMovements());
     overallScore += futureMovementTest.scoreImpact;
     tests.push(futureMovementTest);
+
+    // آزمون ۲۲: v9.0.93 (TD-481) سند افتتاحیه کالا برابر ردیف‌های افتتاحیه کاردکس (فقط فهرست، بی بازنویسی)
+    const openingVoucherTest = buildOpeningVoucherHealthTest(await findOpeningVoucherMismatches());
+    overallScore += openingVoucherTest.scoreImpact;
+    tests.push(openingVoucherTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

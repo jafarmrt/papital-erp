@@ -1,4 +1,3 @@
-import * as xlsx from 'xlsx';
 import type { User } from '../../types';
 import { getTodayIsoDate, parseCleanNumber } from '../../utils';
 
@@ -46,29 +45,6 @@ export interface AuditSavePayload {
   items: Array<{ itemId: number; system_stock: number; physical_stock: number; quantity: number; location: string }>;
 }
 
-export interface IntegrityItem {
-  itemId?: number;
-  itemCode?: string;
-  itemName?: string;
-  category?: string;
-  unit?: string;
-  currentStock?: number;
-  warehouseStocksSum?: number;
-  ledgerStock?: number;
-  variance?: number;
-  isSynchronized?: boolean;
-  discrepancyType?: string;
-  transactionCount?: number;
-  storedWac?: number;
-  recalculatedWac?: number;
-  [key: string]: unknown;
-}
-
-export interface IntegrityReport {
-  summary?: { discrepancyItems?: number; [key: string]: unknown };
-  items?: IntegrityItem[];
-  [key: string]: unknown;
-}
 
 type RawAuditItem = Partial<AuditItemRow> & {
   id: number;
@@ -153,45 +129,4 @@ export function filterAuditItems(items: AuditSheetItem[], categoryFilter: string
 
 export function auditCategories(items: AuditSheetItem[]): string[] {
   return Array.from(new Set(items.map(i => i.category).filter(Boolean)));
-}
-
-export function filterIntegrityItems(report: IntegrityReport | null, search: string, discrepancyOnly: boolean): IntegrityItem[] {
-  return (report?.items || []).filter(item => {
-    if (discrepancyOnly && item.isSynchronized) return false;
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      item.itemName?.toLowerCase().includes(q) ||
-      item.itemCode?.toLowerCase().includes(q) ||
-      item.category?.toLowerCase().includes(q)
-    );
-  });
-}
-
-export function exportIntegrityExcel(report: IntegrityReport | null): void {
-  if (!report?.items?.length) return;
-  try {
-    const rows = report.items.map((i, idx) => ({
-      'ردیف': idx + 1,
-      'کد کالا': i.itemCode,
-      'نام کالا': i.itemName,
-      'دسته‌بندی': i.category,
-      'واحد': i.unit,
-      'موجودی کل کالا': i.currentStock,
-      'مجموع موجودی انبارها': i.warehouseStocksSum,
-      'مانده کاردکس': i.ledgerStock,
-      'مغایرت مقداری': i.variance,
-      'وضعیت تطبیق': i.isSynchronized ? 'منطبق' : i.discrepancyType,
-      'تعداد تراکنش‌ها': i.transactionCount,
-      'میانگین بهای خرید': i.storedWac,
-      'میانگین بهای بازسازی‌شده': i.recalculatedWac
-    }));
-
-    const ws = xlsx.utils.json_to_sheet(rows);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, 'ممیزی سلامت انبار');
-    xlsx.writeFile(wb, `Inventory_Integrity_Audit.xlsx`);
-  } catch (err) {
-    console.error(err);
-  }
 }

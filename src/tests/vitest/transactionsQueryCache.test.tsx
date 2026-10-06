@@ -187,10 +187,20 @@ describe('RunningKardexModal on the stock-count page', () => {
   it('opens from the integrity tab, loads with a signal and is refreshed by a stock adjustment', async () => {
     fetchJson.mockImplementation((url: string) => {
       if (url === '/inventory/integrity-audit') {
-        return Promise.resolve({ report: { summary: { discrepancyItems: 0 }, items: [{
-          itemId: 7, itemCode: 'R-7', itemName: 'سیم نقره', category: 'سیم', unit: 'متر', currentStock: 10,
-          warehouseStocksSum: 10, ledgerStock: 10, variance: 0, isSynchronized: true, transactionCount: 1, storedWac: 1000, recalculatedWac: 1000,
-        }] } });
+        // v9.0.89 (TD-485): the server's response shape ({ summary, audits, warehouses })
+        return Promise.resolve({
+          summary: {
+            totalItems: 1, totalItemsChecked: 1, synchronizedItems: 1, healthyItemsCount: 1, discrepancyItems: 0, discrepantItemsCount: 0,
+            negativeStockItems: 0, healthScorePercentage: 100, totalScalarStock: 10, totalKardexStock: 10, totalScalarStockValue: 10000,
+            totalKardexStockValue: 10000, totalInventoryValuationStored: 10000, policy: 'forbidden',
+          },
+          audits: [{
+            itemId: 7, itemCode: 'R-7', itemName: 'سیم نقره', category: 'سیم', unit: 'متر', scalarCurrentStock: 10, whStocksSum: 10,
+            kardexNetBalance: 10, recordedWac: 1000, computedWac: 1000, discrepancies: [], whBreakdown: { MAIN: 10 }, kardexLocBreakdown: { MAIN: 10 },
+            kardexTotalIn: 10, kardexTotalOut: 0, hasKardexAnomalies: false, anomalyDetails: [],
+          }],
+          warehouses: [],
+        });
       }
       if (url === '/documents/next-ref?type=audit') return Promise.resolve({ nextRef: 'AUD-2001' });
       if (url === KARDEX_URL) return Promise.resolve(kardex);

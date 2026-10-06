@@ -1322,7 +1322,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }).returning();
 
     // Execute Kardex Rebuild on item
-    await KardexWacRecalculatorService.rebuildItemFromLedger(testItem.id);
+    const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(testItem.id);
 
     // Fetch updated item from DB
     const [refreshedItem] = await orm.select().from(items).where(eq(items.id, testItem.id));
@@ -1331,9 +1331,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`موجودی کالا پس از خروج کامل باید صفر باشد، اما مقدار ${refreshedItem.currentStock} است.`);
     }
 
-    // TD-136 assertion: WAC must NOT be reset to 0; it must preserve 750000
-    if (Number(refreshedItem.weightedAverageCost) !== 750000) {
-      throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
+    // TD-136 assertion: the Kardex replay must NOT reset WAC to 0 after depletion; it keeps 750000. Since v9.0.90 (TD-487,
+    // decision t3) the rebuild reports that replay WAC and keeps the item's WAC; «اصلاح بها» is the separate action.
+    if (rebuilt.replayWac !== 750000) {
+      throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${rebuilt.replayWac} ثبت شد.`);
+    }
+    if (Number(refreshedItem.weightedAverageCost) !== 500000) {
+      throw new Error(`بازسازی کاردکس نباید WAC کالا را تغییر دهد (v9.0.90، TD-487)، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
     }
 
     // Clean up test data
@@ -10528,6 +10532,21 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.81, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
   const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
   results.push(...await runInventoryBusinessErrorsTests(shouldRun));
+  // Package 6 (v9.0.88, TD-486): the integrity report checks WAC against the Kardex replay
+  const { runIntegrityReportReplayWacTests } = await import('../regression/integrityReportReplayWacTests.js');
+  results.push(...await runIntegrityReportReplayWacTests(shouldRun));
+  // Package 6 (v9.0.90, TD-487): the Kardex rebuild keeps WAC; WAC correction is a separate permission with a draft voucher
+  const { runKardexWacCorrectionTests } = await import('../regression/kardexWacCorrectionTests.js');
+  results.push(...await runKardexWacCorrectionTests(shouldRun));
+  // Package 6 (v9.0.91, TD-491): an unchanged item gets no version bump, outbox event or audit row from the rebuild
+  const { runKardexRebuildQuietTests } = await import('../regression/kardexRebuildQuietTests.js');
+  results.push(...await runKardexRebuildQuietTests(shouldRun));
+  // Package 6 (v9.0.92, TD-488): the initial Kardex backfill never reprices its earlier rows
+  const { runKardexBackfillNoRewriteTests } = await import('../regression/kardexBackfillNoRewriteTests.js');
+  results.push(...await runKardexBackfillNoRewriteTests(shouldRun));
+  // Package 6 (v9.0.93, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
+  const { runItemOpeningVoucherValueTests } = await import('../regression/itemOpeningVoucherValueTests.js');
+  results.push(...await runItemOpeningVoucherValueTests(shouldRun));
 
   return results;
 }

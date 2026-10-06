@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.93 — Item Opening Voucher From Opening Kardex Rows
+- **Item Opening Voucher:** the opening voucher is worth the item's opening Kardex rows with or without the item workflow, no Kardex row is repriced, and mismatched opening vouchers are listed by the health check (TD-481, `reg_item_opening_voucher_value_td_481`).
+
+### v9.0.92 — Initial Kardex Backfill Never Reprices Its Rows
+- **Kardex Backfill:** a second run of the initial Kardex backfill no longer reprices its earlier zero-cost rows with the WAC of the day, so the Kardex replay keeps the live WAC (TD-488, `reg_kardex_backfill_no_rewrite_td_488`).
+
+### v9.0.91 — Kardex Rebuild Writes Only for Changed Items
+- **Kardex Rebuild:** an item whose warehouse stock already matches its Kardex gets no version bump, outbox event or audit row; only changed items do (TD-491, `reg_kardex_rebuild_quiet_td_491`).
+
+### v9.0.90 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
+- **Kardex Rebuild and WAC Correction:** the rebuild only rebuilds quantities and lists items whose WAC differs from the Kardex; correcting the WAC is a separate action with its own permission that issues a draft voucher for the value difference against 7012 (TD-487, `reg_kardex_wac_correction_td_487`).
+
+### v9.0.89 — Inventory Integrity Table Reads the Server Report
+- **Inventory Integrity Tab:** the table and Excel export read the report the server sends (one shared type), so discrepant items are listed and exported instead of an always-empty table (TD-485, Vitest `inventoryIntegrityReport.test.tsx`).
+
+### v9.0.88 — Integrity Report WAC Uses the Kardex Replay
+- **Inventory Integrity Report:** the WAC check compares the live WAC with the same Kardex replay the rebuild and invariant I13 use, so an item that ran out and was bought again at another price is no longer reported as mismatched (TD-486, `reg_integrity_report_replay_wac_td_486`).
+
 ### v9.0.87 — One Permission Check and Permission Ratchets
 - **Permission Check:** `can()` and `requirePermission` ask catalog permission keys only (an unknown key or a role code fails when the router is built); `npm run ratchet:permissions` keeps role-code literals and stray permission keys from growing (TD-881).
 

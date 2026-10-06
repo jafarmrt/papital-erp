@@ -268,8 +268,12 @@ export async function checkOpeningApprovalsFollowTransaction(): Promise<string[]
     });
   const stateOf = async (id: number) => (await pool.query<{ current_state_id: number }>('SELECT current_state_id FROM workflow_instances WHERE id = $1', [id])).rows[0]?.current_state_id;
 
-  // کالا با موجودی ۱۰۰ و میانگین ۵۰٬۰۰۰ (کارخانه آزمون)، بی سند افتتاحیه
-  const item = await createTestItem({ type: 'raw_material' });
+  // کالا با موجودی افتتاحیه ۱۰۰ × ۵۰٬۰۰۰ در کاردکس، بی سند افتتاحیه (v9.0.93، TD-481: ارزش سند از ردیف افتتاحیه کاردکس است)
+  const item = await createTestItem({ type: 'raw_material', stocks: {}, weightedAverageCost: 0 });
+  await orm.transaction(async (tx) => DocumentService.applyStockMovement(tx, {
+    itemId: item.id, inOut: 'in', quantity: 100, price: 50000, date: await businessTodayIsoDate(), documentType: 'audit',
+    documentRef: 'ثبت اولیه کالا', user: 'wf415', targetLoc: (await getDefaultWarehouseCode(orm)) as string, notes: 'موجودی اولیه هنگام تعریف کالا',
+  }));
   const itemOpenings = () => count(`SELECT count(*)::int AS n FROM journal_vouchers WHERE reference_module = 'item_opening' AND reference_id = $1 AND is_deleted = 0`, [item.id]);
   const itemWf = await approvalWorkflow('item');
   const itemInstance = await WorkflowTransitionExecutor.startInstance({

@@ -1,15 +1,17 @@
 import { ShieldCheck, Layers, AlertTriangle, TrendingDown, DollarSign, Warehouse, Search, Download, RefreshCw, RotateCcw, CheckCircle2, Eye } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
+import type { InventoryIntegrityReport, ItemIntegrityAuditResult } from '../../types';
+import { integrityStatusLabel, integrityVariance, isIntegrityItemSynchronized } from '../../lib/inventoryAudit/integrityReport';
 
 interface Inventory3WayIntegrityTabProps {
-  integrityReport: any;
+  integrityReport: InventoryIntegrityReport | null;
   integrityLoading: boolean;
   integritySearch: string;
   setIntegritySearch: (val: string) => void;
   integrityDiscrepancyOnly: boolean;
   setIntegrityDiscrepancyOnly: (val: boolean) => void;
-  filteredIntegrityItems: any[];
+  filteredIntegrityItems: ItemIntegrityAuditResult[];
   loadIntegrityReport: () => void;
   onOpenRebuildModal: (itemId?: number) => void;
   onOpenKardexModal?: (itemId: number) => void;
@@ -82,10 +84,10 @@ export function Inventory3WayIntegrityTab({
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 text-xs">
             <span>مغایرت‌های شناسایی‌شده</span>
-            <AlertTriangle className={integrityReport?.summary?.discrepancyItems > 0 ? "text-amber-500" : "text-slate-400"} size={18} />
+            <AlertTriangle className={(integrityReport?.summary?.discrepancyItems ?? 0) > 0 ? "text-amber-500" : "text-slate-400"} size={18} />
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className={`text-2xl font-black font-mono ${integrityReport?.summary?.discrepancyItems > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            <span className={`text-2xl font-black font-mono ${(integrityReport?.summary?.discrepancyItems ?? 0) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
               {formatPersianNumber(integrityReport?.summary?.discrepancyItems || 0)}
             </span>
             <span className="text-xs text-slate-500">قلم کالا</span>
@@ -97,10 +99,10 @@ export function Inventory3WayIntegrityTab({
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 text-xs">
             <span>موجودی منفی در انبار</span>
-            <TrendingDown className={integrityReport?.summary?.negativeStockItems > 0 ? "text-rose-500" : "text-slate-400"} size={18} />
+            <TrendingDown className={(integrityReport?.summary?.negativeStockItems ?? 0) > 0 ? "text-rose-500" : "text-slate-400"} size={18} />
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className={`text-2xl font-black font-mono ${integrityReport?.summary?.negativeStockItems > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+            <span className={`text-2xl font-black font-mono ${(integrityReport?.summary?.negativeStockItems ?? 0) > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
               {formatPersianNumber(integrityReport?.summary?.negativeStockItems || 0)}
             </span>
             <span className="text-xs text-slate-500">قلم بحرانی</span>
@@ -136,7 +138,7 @@ export function Inventory3WayIntegrityTab({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {integrityReport?.warehouses?.map((wh: any) => {
+          {(Array.isArray(integrityReport?.warehouses) ? integrityReport.warehouses : []).map((wh) => {
             const isBalanced = Math.abs(wh.variance) < 0.0001;
             return (
               <div key={wh.code} className="bg-slate-800/90 border border-slate-700/60 p-3 rounded-xl text-xs space-y-1.5">
@@ -271,9 +273,14 @@ export function Inventory3WayIntegrityTab({
                   </td>
                 </tr>
               ) : (
-                filteredIntegrityItems.map((item: any, idx: number) => {
-                  const hasDiscrepancy = !item.isSynchronized;
-                  const isNegative = item.currentStock < 0 || item.ledgerStock < 0;
+                filteredIntegrityItems.map((item, idx) => {
+                  const synchronized = isIntegrityItemSynchronized(item);
+                  const hasDiscrepancy = !synchronized;
+                  const isNegative = item.scalarCurrentStock < 0 || item.kardexNetBalance < 0;
+                  const variance = integrityVariance(item);
+                  const wacMismatch = item.discrepancies.includes('kardex_wac_mismatch');
+                  const statusLabel = integrityStatusLabel(item);
+                  const statusTitle = item.anomalyDetails.join(' ');
 
                   return (
                     <tr 
@@ -292,57 +299,55 @@ export function Inventory3WayIntegrityTab({
 
                       {/* Current Stock */}
                       <td className="py-3 px-3 text-center font-mono font-bold bg-blue-50/30 border-x border-blue-100 text-blue-900">
-                        {formatPersianNumber(item.currentStock)}
+                        {formatPersianNumber(item.scalarCurrentStock)}
                       </td>
 
                       {/* Warehouse Sum */}
                       <td className="py-3 px-3 text-center font-mono font-bold bg-indigo-50/30 border-x border-indigo-100 text-indigo-900">
-                        {formatPersianNumber(item.warehouseStocksSum)}
+                        {formatPersianNumber(item.whStocksSum)}
                       </td>
 
                       {/* Ledger Stock */}
                       <td className="py-3 px-3 text-center font-mono font-bold bg-amber-50/30 border-x border-amber-100 text-amber-900">
-                        {formatPersianNumber(item.ledgerStock)}
-                        <div className="text-[10px] text-slate-400 font-normal">({formatPersianNumber(item.transactionCount)} تراکنش)</div>
+                        {formatPersianNumber(item.kardexNetBalance)}
+                        <div className="text-[10px] text-slate-400 font-normal">(ورود {formatPersianNumber(item.kardexTotalIn)}، خروج {formatPersianNumber(item.kardexTotalOut)})</div>
                       </td>
 
                       {/* Variance */}
                       <td className="py-3 px-3 text-center font-mono font-bold">
-                        {item.variance === 0 ? (
+                        {variance === 0 ? (
                           <span className="text-slate-400">۰</span>
                         ) : (
                           <span className="text-rose-600 dir-ltr inline-block">
-                            {item.variance > 0 ? `+${item.variance}` : item.variance}
+                            {variance > 0 ? `+${formatPersianNumber(variance)}` : formatPersianNumber(variance)}
                           </span>
                         )}
                       </td>
 
                       {/* WAC */}
                       <td className="py-3 px-3 text-center font-mono text-slate-700">
-                        <div>{formatPersianPrice(item.storedWac)}</div>
-                        {item.storedWac !== item.recalculatedWac && (
-                          <div className="text-[10px] text-amber-600" title="بازسازی شده از کاردکس">
-                            محاسبه‌شده: {formatPersianPrice(item.recalculatedWac)}
+                        <div>{formatPersianPrice(item.recordedWac)}</div>
+                        {wacMismatch && (
+                          <div className="text-[10px] text-amber-600" title="بازپخش کاردکس">
+                            بازپخش کاردکس: {formatPersianPrice(item.computedWac)}
                           </div>
                         )}
                       </td>
 
                       {/* Status Badge */}
                       <td className="py-3 px-3 text-center">
-                        {item.isSynchronized ? (
+                        {synchronized ? (
                           <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
                             <CheckCircle2 size={13} />
-                            <span>منطبق</span>
-                          </span>
-                        ) : item.variance < 0 ? (
-                          <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 text-[11px] font-bold px-2 py-0.5 rounded-full" title={item.discrepancyType}>
-                            <AlertTriangle size={13} />
-                            <span>کسری در انبار</span>
+                            <span>{statusLabel}</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full" title={item.discrepancyType}>
+                          <span
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${isNegative || variance < 0 ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}
+                            title={statusTitle}
+                          >
                             <AlertTriangle size={13} />
-                            <span>مازاد در انبار</span>
+                            <span>{statusLabel}</span>
                           </span>
                         )}
                       </td>

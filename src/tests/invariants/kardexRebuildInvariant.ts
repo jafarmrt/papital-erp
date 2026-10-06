@@ -1,6 +1,6 @@
 import { fin, FinancialDecimal } from '../../lib/financialDecimal.js';
 import { createLedgerLocationResolver } from '../../services/inventory/warehouseResolver.js';
-import { replayKardexWac } from '../../services/inventory/kardexReplay.js';
+import { replayKardexWac, wacDiffersFromReplay } from '../../services/inventory/kardexReplay.js';
 import type { InvariantScope, InvariantViolation } from './businessInvariants.js';
 import { QTY_TOLERANCE, rows } from './ledgerRows.js';
 
@@ -92,7 +92,7 @@ export async function checkKardexRebuildWac(scope: InvariantScope): Promise<Inva
         expected: 'مانده نامنفی در ترتیب تاریخ',
         actual: 'مانده منفی',
       });
-    } else if (fin(it.current_stock).isPositive() && liveWac.subtract(replay.wac).abs().greaterThan(fin(0.01))) {
+    } else if (wacDiffersFromReplay(liveWac, replay.wac, it.current_stock)) {
       violations.push({
         invariant: 'I13_kardex_rebuild_wac',
         key: `item:${it.id}`,
