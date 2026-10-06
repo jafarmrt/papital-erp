@@ -53,7 +53,7 @@ export function useAccounting() {
   const treeQuery = useAccountsTreeQuery();
   const vouchersQuery = useVouchersQuery();
   const bankAccountsQuery = useBankAccountsQuery();
-  // v9.0.88 (TD-505، ت۷): دفتر چک فقط فهرست انتخاب را می‌خواند؛ فهرست کامل فقط برای خوانندگان خزانه
+  // v9.0.97 (TD-505، ت۷): دفتر چک فقط فهرست انتخاب را می‌خواند؛ فهرست کامل فقط برای خوانندگان خزانه
   const bankAccountOptionsQuery = useBankAccountOptionsQuery();
   const treasuryQuery = useTreasuryTransactionsQuery();
   const chequesQuery = useChequesQuery();

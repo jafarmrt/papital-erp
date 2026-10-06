@@ -43,7 +43,7 @@ export const READ_PERMISSIONS = {
   userDirectory: ['users.manage', 'roles.manage', 'personnel.manage', 'workflow.manage', 'settings.manage'],
   permissionCatalog: ['roles.manage', 'users.manage'],
   /**
-   * فهرست کامل حساب‌های خزانه با شماره حساب، کارت، شبا و مانده‌ها: همان خوانندگان تراکنش‌های خزانه (v9.0.88، TD-505،
+   * فهرست کامل حساب‌های خزانه با شماره حساب، کارت، شبا و مانده‌ها: همان خوانندگان تراکنش‌های خزانه (v9.0.97، TD-505،
    * تصمیم ت۷ الف؛ پیش‌تر کاربران انبار، اسناد، چک و سند حسابداری هم آن را می‌خواندند)
    */
   bankAccounts: ['accounting.treasury', 'accounting.reports', 'accounting.view'],

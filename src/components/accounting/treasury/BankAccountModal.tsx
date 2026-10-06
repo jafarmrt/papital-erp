@@ -333,7 +333,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             </>
           )}
 
-          {/* v9.0.90 (TD-508، ت۵ الف): ارز حساب؛ پس از نخستین گردش ثابت است و سرور تغییرش را با پیام فارسی رد می‌کند */}
+          {/* v9.0.99 (TD-508، ت۵ الف): ارز حساب؛ پس از نخستین گردش ثابت است و سرور تغییرش را با پیام فارسی رد می‌کند */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
               ارز حساب

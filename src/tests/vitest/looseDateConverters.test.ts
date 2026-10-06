@@ -5,7 +5,7 @@ import { MONEY_STOCK_PATHS } from '../../../eslint.config.js';
 import { toStorageDate } from '../../utils/calendarDate';
 import { jalaliToIsoDate } from '../../utils/dateUtils';
 
-// v9.0.89 (TD-669، B16-05): jalaliToIsoDate و normalizeDateToIso روز و ماه را نمی‌سنجند (۱۴۰۴/۱۲/۳۰ ← ۱ فروردین ۱۴۰۵).
+// v9.0.98 (TD-669، B16-05): jalaliToIsoDate و normalizeDateToIso روز و ماه را نمی‌سنجند (۱۴۰۴/۱۲/۳۰ ← ۱ فروردین ۱۴۰۵).
 // مسیرهای پول و انبار تاریخ ورودی را با requireStorageDate می‌خوانند؛ شمار فراخوان این دو تبدیلگر در آن مسیرها فقط کم می‌شود.
 const LOOSE_CALL = /\b(jalaliToIsoDate|normalizeDateToIso)\s*\(/g;
 const BASELINE: Record<string, number> = {

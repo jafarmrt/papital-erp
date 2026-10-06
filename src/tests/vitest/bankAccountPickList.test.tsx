@@ -18,7 +18,7 @@ afterEach(() => { cleanup(); fetchJson.mockClear(); });
 
 const bankUrls = () => fetchJson.mock.calls.map(c => c[0]).filter(u => u.startsWith('/accounting/bank'));
 
-// v9.0.88 (TD-505، B04-09، تصمیم ت۷ الف): فرم‌های پرداخت حقوق و تسویه فاکتور فقط فهرست انتخاب حساب‌ها را می‌خوانند؛
+// v9.0.97 (TD-505، B04-09، تصمیم ت۷ الف): فرم‌های پرداخت حقوق و تسویه فاکتور فقط فهرست انتخاب حساب‌ها را می‌خوانند؛
 // پیش‌تر فهرست کامل با شماره حساب، کارت، شبا و مانده‌ها را می‌گرفتند.
 describe('payment forms read the bank pick list (TD-505)', () => {
   it('the payroll payment form lists banks from the pick list', async () => {

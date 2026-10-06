@@ -21,7 +21,7 @@ import { resolveTreasuryWriteDate } from './treasuryDate.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
- * v9.0.89 (TD-669، B16-05): ورودی با `requireStorageDate` خوانده می‌شود (`resolveTreasuryWriteDate`)؛ روز ناموجود دیگر به
+ * v9.0.98 (TD-669، B16-05): ورودی با `requireStorageDate` خوانده می‌شود (`resolveTreasuryWriteDate`)؛ روز ناموجود دیگر به
  * روز بعد نمی‌رود.
  */
 export async function resolveTreasuryBusinessDate(rawDate?: string | null): Promise<string> {

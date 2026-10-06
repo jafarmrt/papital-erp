@@ -175,7 +175,7 @@ export class ChequeLifecycleService {
     if (!String(data.issueDate ?? '').trim() || !String(data.dueDate ?? '').trim()) {
       throw new ValidationError('تاریخ صدور و تاریخ سررسید چک الزامی است');
     }
-    // v9.0.89 (TD-506، B04-10، ت۶ الف): سند ثبت چک به تاریخ صدور است، پس صدور پس از امروز کسب‌وکار پذیرفته نیست
+    // v9.0.98 (TD-506، B04-10، ت۶ الف): سند ثبت چک به تاریخ صدور است، پس صدور پس از امروز کسب‌وکار پذیرفته نیست
     // (مانند فرم خزانه). سررسید آینده همچنان مجاز است.
     const issueDate = await resolveTreasuryWriteDate(data.issueDate, 'تاریخ صدور چک');
     const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');
@@ -191,7 +191,7 @@ export class ChequeLifecycleService {
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
-      // v9.0.91 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
+      // v9.0.100 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
       const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId);
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
@@ -406,7 +406,7 @@ export class ChequeLifecycleService {
       }
 
       const history = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
-      // v9.0.89 (TD-506 / TD-669، B04-10 / B16-05، ت۶ الف): تاریخ اقدام سند همه گام‌های چک است؛ خالی ← امروز کسب‌وکار،
+      // v9.0.98 (TD-506 / TD-669، B04-10 / B16-05، ت۶ الف): تاریخ اقدام سند همه گام‌های چک است؛ خالی ← امروز کسب‌وکار،
       // روز ناموجود یا پس از امروز ← 422. پیش‌تر `normalizeDateToIso` روز ناموجود را جابه‌جا و تاریخ آینده را بی‌سقف می‌پذیرفت.
       const voucherIsoDate = await resolveTreasuryWriteDate(data.actionDate, 'تاریخ اقدام چک');
 

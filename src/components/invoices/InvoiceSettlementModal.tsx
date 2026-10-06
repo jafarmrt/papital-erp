@@ -117,7 +117,7 @@ export const InvoiceSettlementModal: React.FC<InvoiceSettlementModalProps> = ({
 
     // Fetch active bank accounts and cash funds
     setIsLoadingAccounts(true);
-    // v9.0.88 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
+    // v9.0.97 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
     fetchJson('/accounting/bank-accounts/options')
       .then((res: any) => {
         const list = Array.isArray(res) ? res : (res?.data || []);

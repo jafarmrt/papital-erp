@@ -92,7 +92,7 @@ export const QUERY_KEYS = {
     // پیشوند حساب‌های بانکی و تراکنش‌های خزانه
     treasury: () => ['accounting', 'treasury'] as const,
     bankAccounts: () => ['accounting', 'treasury', 'bank-accounts'] as const,
-    /** v9.0.88 (TD-505): زیر کلید فهرست کامل، پس هر باطل‌سازی آن این را هم تازه می‌کند */
+    /** v9.0.97 (TD-505): زیر کلید فهرست کامل، پس هر باطل‌سازی آن این را هم تازه می‌کند */
     bankAccountOptions: () => ['accounting', 'treasury', 'bank-accounts', 'options'] as const,
     treasuryTransactions: () => ['accounting', 'treasury', 'transactions'] as const,
     // v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» (زیر پیشوند خزانه، چون سرفصل بانک‌ها کنار می‌رود)

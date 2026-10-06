@@ -40,7 +40,7 @@ const getBanksHandler = asyncHandler(async (req, res) => {
 });
 router.get('/accounting/banks', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
 router.get('/accounting/bank-accounts', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
-// v9.0.88 (TD-505، ت۷): فهرست انتخاب کمینه برای فرم‌ها؛ فهرست کامل با شماره‌ها و مانده‌ها فقط برای خوانندگان خزانه
+// v9.0.97 (TD-505، ت۷): فهرست انتخاب کمینه برای فرم‌ها؛ فهرست کامل با شماره‌ها و مانده‌ها فقط برای خوانندگان خزانه
 router.get('/accounting/bank-accounts/options', authorizePermission(...READ_PERMISSIONS.bankAccountOptions), asyncHandler(async (_req, res) => {
   res.json({ success: true, data: await getBankAccountOptions() });
 }));

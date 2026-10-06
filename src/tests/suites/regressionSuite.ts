@@ -10519,7 +10519,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 (v9.0.82 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
   const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
   results.push(...await runTreasuryPartyTests(shouldRun));
-  // Package 4 PR c (v9.0.88 on): treasury input and access (TD-505, TD-506, TD-508, TD-510, TD-514, TD-669)
+  // Package 4 PR c (v9.0.97 on): treasury input and access (TD-505, TD-506, TD-508, TD-510, TD-514, TD-669)
   const { runTreasuryInputTests } = await import('../regression/treasuryInputTests.js');
   results.push(...await runTreasuryInputTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
