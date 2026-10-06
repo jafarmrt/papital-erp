@@ -10,6 +10,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { getErrorMessage } from '../utils.js';
 import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
+import { canvasPositionsSchema, createDelegationSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
 
 const taskIdParamSchema = z.object({
   params: z.object({
@@ -207,17 +208,13 @@ router.post('/start', authorizePermission('workflow.execute', 'workflow.manage',
  * POST /api/workflow/transition
  * Execute a workflow transition
  */
-router.post('/transition', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/transition', authorizePermission('workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(executeTransitionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const { instanceId, transitionId, comment, snapshotData } = req.body;
-
-    if (!instanceId || !transitionId) {
-      return res.status(400).json({ error: 'شناسه نمونه ورکفلو و شناسه اکشن الزامی است' });
-    }
+    const { instanceId, transitionId, comment, snapshotData } = req.body as z.infer<typeof executeTransitionSchema>['body'];
 
     const updatedInstance = await WorkflowEngineService.executeTransition({
-      instanceId: Number(instanceId),
-      transitionId: Number(transitionId),
+      instanceId,
+      transitionId,
       userId: req.user?.id,
       userName: req.user?.fullName || req.user?.username,
       userRole: req.user?.role,
@@ -302,14 +299,10 @@ router.get('/definitions/:id/versions/:version', authorizePermission('workflow.m
  * POST /api/workflow/definitions
  * Save or update workflow definition (Visual Designer)
  */
-router.post('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/definitions', authorizePermission('workflow.manage', 'workflow.admin'), validate(saveDefinitionSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const payload = req.body;
-    if (!payload.title || !payload.code || !payload.entityType) {
-      return res.status(400).json({ error: 'عنوان، کد و نوع موجودیت الزامی هستند' });
-    }
-    payload.userId = req.user?.id;
-    const saved = await WorkflowEngineService.saveWorkflowDefinition(payload);
+    const payload = req.body as z.infer<typeof saveDefinitionSchema>['body'];
+    const saved = await WorkflowEngineService.saveWorkflowDefinition({ ...payload, userId: req.user?.id });
     res.json({ success: true, data: saved });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
@@ -322,13 +315,10 @@ router.post('/definitions', authorizePermission('workflow.manage', 'workflow.adm
  * POST /api/workflow/positions
  * Quick update canvas node positions from drag
  */
-router.post('/positions', authorizePermission('workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/positions', authorizePermission('workflow.manage', 'workflow.admin'), validate(canvasPositionsSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const { positions } = req.body;
-    if (!positions || !Array.isArray(positions)) {
-      return res.status(400).json({ error: 'موقعیت گره‌ها الزامی است' });
-    }
-    const result = await WorkflowEngineService.updateCanvasPositions(positions);
+    const { definitionId, positions } = req.body as z.infer<typeof canvasPositionsSchema>['body'];
+    const result = await WorkflowEngineService.updateCanvasPositions(definitionId, positions, req);
     res.json(result);
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
@@ -376,24 +366,16 @@ router.get('/delegations', authorizePermission('workflow.view', 'workflow.manage
  * POST /api/workflow/delegations
  * Create a new workflow delegation
  */
-router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/delegations', authorizePermission('workflow.approve', 'workflow.manage', 'workflow.admin'), validate(createDelegationSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id || 0;
     const userName = req.user?.username || 'کاربر';
     const userRole = req.user?.role || 'user';
 
-    const { fromUserId, toUserId, scope, startDate, endDate, reason } = req.body;
+    const { fromUserId, toUserId, scope, startDate, endDate, reason } = req.body as z.infer<typeof createDelegationSchema>['body'];
 
-    const targetFromUserId = (userRole === 'admin' && fromUserId) ? Number(fromUserId) : userId;
-    const targetToUserId = Number(toUserId);
-
-    if (!targetToUserId) {
-      return res.status(400).json({ error: 'کاربر دریافت‌کننده تفویض الزامی است' });
-    }
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({ error: 'تاریخ شروع و پایان تفویض الزامی است' });
-    }
+    const targetFromUserId = (userRole === 'admin' && fromUserId) ? fromUserId : userId;
+    const targetToUserId = toUserId;
 
     const created = await WorkflowEngineService.createDelegation({
       fromUserId: targetFromUserId,

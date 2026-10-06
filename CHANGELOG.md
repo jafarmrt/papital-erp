@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.50 — Workflow Write Routes Validate Their Bodies
+- **Workflow Route Bodies:** `/transition`, `/definitions`, `/positions` and `/delegations` validate their bodies with Zod (400, Persian); `/positions` needs the definition id and moves only that definition's steps in one transaction with an audit row (TD-459, `sec_workflow_route_bodies_td_459`).
+
 ### v9.0.49 — SLA Analytics Read Each Instance's Own Snapshot
 - **SLA Analytics from the Snapshot:** a running instance's step title and SLA come from its own definition snapshot and it is counted under the current step with the same key, so re-saving a design no longer marks it unknown and overdue (TD-457, `sec_workflow_sla_from_snapshot_td_457`).
 

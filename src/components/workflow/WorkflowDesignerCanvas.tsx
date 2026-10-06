@@ -168,7 +168,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       // Auto update positions on backend
       const posArray = nodes.map(n => ({ id: n.id || 0, positionX: n.positionX, positionY: n.positionY })).filter(p => p.id > 0);
       if (posArray.length > 0) {
-        updatePositionsMutation.mutate(posArray);
+        updatePositionsMutation.mutate({ definitionId, positions: posArray });
       }
     }
   };

@@ -73,7 +73,8 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
           const code = designCode(h, 'BAD');
           codes.push(code);
           const res = await h.post('/api/workflow/definitions', { code, title: `طرح ${label}`, entityType: 'document', states, transitions });
-          if (res.status !== 422) wrong.push(`طرح «${label}» ${res.status} داد، نه ۴۲۲`);
+          // از v9.0.50 (TD-459) بدنه‌ای که نوعش نادرست است پیش از سرویس با Zod ۴۰۰ می‌گیرد
+          if (res.status !== 422 && res.status !== 400) wrong.push(`طرح «${label}» ${res.status} داد، نه ۴۲۲`);
           else if (!/[؀-ۿ]/.test(String(res.body?.error ?? res.body?.message ?? ''))) wrong.push(`پیام رد طرح «${label}» فارسی نیست`);
           if ((await definitionsWithCode(h, code)).length > 0) wrong.push(`طرح «${label}» با وجود رد ذخیره شد`);
         }
@@ -263,6 +264,55 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
       } finally {
         await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code = $1)`, [code]);
         await dropDefinition(h, code);
+      }
+    });
+  }
+
+  if (shouldRun('sec_workflow_route_bodies_td_459', 'security', 'td459', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_route_bodies_td_459',
+      name: 'v9.0.50: بدنه نادرست /transition، /definitions، /positions و /delegations ۴۰۰ با پیام فارسی می‌گیرد، نه ۵۰۰؛ /positions فقط گام‌های همان گردش کار را در تراکنش و با گزارش فعالیت جابه‌جا می‌کند (TD-459)',
+      details: 'شناسه متنی، ترتیب متنی و شناسه کاربر اعشاری ۴۰۰؛ جابه‌جایی گام گردش کار دیگر ۴۲۲ و بی تغییر؛ جابه‌جایی گام خود گردش کار یک گزارش فعالیت دارد',
+    }, async (h, wrong) => {
+      const codes = [designCode(h, 'POS'), designCode(h, 'POS')];
+      const badCode = designCode(h, 'BODY');
+      try {
+        const twoSteps = [validStates[0], validStates[2]];
+        const okTransition = [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }];
+        const bad: Array<[string, string, unknown]> = [
+          ['اقدام با شناسه متنی', '/api/workflow/transition', { instanceId: 'abc', transitionId: 1 }],
+          ['تعریف با شناسه متنی', '/api/workflow/definitions', { id: 'abc', code: badCode, title: 'نادرست', entityType: 'document', states: twoSteps, transitions: okTransition }],
+          ['گام با ترتیب متنی', '/api/workflow/definitions', { code: badCode, title: 'نادرست', entityType: 'document', states: twoSteps.map(st => ({ ...st, stepOrder: 'first' })), transitions: okTransition }],
+          ['مختصات با شناسه متنی', '/api/workflow/positions', { definitionId: 1, positions: [{ id: 'abc', positionX: 1, positionY: 1 }] }],
+          ['تفویض به کاربر اعشاری', '/api/workflow/delegations', { toUserId: 2.5, startDate: '2026-10-06', endDate: '2026-10-07' }],
+        ];
+        for (const [label, url, body] of bad) {
+          const res = await h.post(url, body);
+          if (res.status !== 400) wrong.push(`${label} ${res.status} داد، نه ۴۰۰`);
+          else if (!/[\u0600-\u06FF]/.test(String(res.body?.message ?? ''))) wrong.push(`پیام ${label} فارسی نیست`);
+        }
+
+        const ids: number[] = [];
+        for (const code of codes) {
+          const res = await h.post('/api/workflow/definitions', { code, title: 'جابه‌جایی گام', entityType: 'document', states: twoSteps, transitions: okTransition });
+          const id = Number(res.body?.data?.definition?.id);
+          if (!(id > 0)) throw new Error(`تعریف آزمون ${res.status} داد: ${JSON.stringify(res.body).slice(0, 160)}`);
+          ids.push(id);
+        }
+        const stepOf = async (definitionId: number) => (await h.q(`SELECT id, position_x FROM workflow_states WHERE workflow_definition_id = $1 ORDER BY id LIMIT 1`, [definitionId]))[0];
+        const foreign = await stepOf(ids[1]);
+        const cross = await h.post('/api/workflow/positions', { definitionId: ids[0], positions: [{ id: Number(foreign?.id), positionX: 777, positionY: 777 }] });
+        if (cross.status !== 422) wrong.push(`جابه‌جایی گام گردش کار دیگر ${cross.status} داد، نه ۴۲۲`);
+        if (Number((await stepOf(ids[1]))?.position_x) === 777) wrong.push('گام گردش کار دیگر جابه‌جا شد');
+
+        const own = await stepOf(ids[0]);
+        const moved = await h.post('/api/workflow/positions', { definitionId: ids[0], positions: [{ id: Number(own?.id), positionX: 333, positionY: 222 }] });
+        if (moved.status !== 200) wrong.push(`جابه‌جایی گام خود گردش کار ${moved.status} داد`);
+        if (Number((await stepOf(ids[0]))?.position_x) !== 333) wrong.push('گام خود گردش کار جابه‌جا نشد');
+        const logs = await h.q(`SELECT id FROM activity_logs WHERE entity = 'طرح گردش کار' AND entity_id = $1`, [String(ids[0])]);
+        if (logs.length !== 1) wrong.push(`جابه‌جایی گام ${logs.length} گزارش فعالیت داشت، نه ۱`);
+      } finally {
+        for (const code of [...codes, badCode]) await dropDefinition(h, code);
       }
     });
   }

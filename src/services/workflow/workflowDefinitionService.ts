@@ -6,7 +6,9 @@ import {
   workflowInstances
 } from '../../db/schema.js';
 import { eq, and, sql, inArray, type SQL } from 'drizzle-orm';
+import type { Request } from 'express';
 import { logger } from '../../middleware/logger.js';
+import { logActivity } from '../../lib/auditLogger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js';
 import { RuleEngineService, type RuleExpression } from '../ruleEngine.service.js';
@@ -357,14 +359,38 @@ export class WorkflowDefinitionService {
 
   /**
    * Update node canvas coordinates
+   *
+   * v9.0.50 (TD-459، B14-17): فقط گام‌های همان گردش کار، در یک تراکنش زیر قفل ردیف تعریف و با یک گزارش فعالیت؛
+   * گام گردش کار دیگر ۴۲۲. پیش‌تر مختصات هر گامِ هر تعریفی بیرون از تراکنش و بی گزارش عوض می‌شد. مختصات فقط چیدمان
+   * طراح‌اند و نسخه تازه نمی‌سازند.
    */
-  static async updateCanvasPositions(positions: { id: number; positionX: number; positionY: number }[]) {
-    for (const pos of positions) {
-      await orm.update(workflowStates)
-        .set({ positionX: pos.positionX, positionY: pos.positionY })
-        .where(eq(workflowStates.id, pos.id));
-    }
-    return { success: true };
+  static async updateCanvasPositions(
+    definitionId: number,
+    positions: { id: number; positionX: number; positionY: number }[],
+    req?: Request,
+  ) {
+    return await orm.transaction(async (tx) => {
+      const [def] = await tx.select({ id: workflowDefinitions.id, title: workflowDefinitions.title })
+        .from(workflowDefinitions).where(eq(workflowDefinitions.id, definitionId)).for('update');
+      if (!def) throw new NotFoundError('گردش کار یافت نشد (WF_DEF_NOT_FOUND)');
+      const ids = [...new Set(positions.map(p => p.id))];
+      const own = await tx.select({ id: workflowStates.id }).from(workflowStates)
+        .where(and(eq(workflowStates.workflowDefinitionId, definitionId), inArray(workflowStates.id, ids)));
+      if (own.length !== ids.length) {
+        throw new ValidationError(`مختصات ذخیره نشد: ${ids.length - own.length} گام از این گردش کار نیست؛ طراح را دوباره باز کنید.`);
+      }
+      for (const pos of positions) {
+        await tx.update(workflowStates)
+          .set({ positionX: pos.positionX, positionY: pos.positionY })
+          .where(and(eq(workflowStates.id, pos.id), eq(workflowStates.workflowDefinitionId, definitionId)));
+      }
+      await logActivity({
+        tx, req, action: 'UPDATE', entity: 'طرح گردش کار', entityId: definitionId,
+        description: `جابه‌جایی ${positions.length} گام در طراح گردش کار «${def.title}»`,
+        details: { positions },
+      });
+      return { success: true };
+    });
   }
 
   /**

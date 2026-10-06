@@ -238,10 +238,10 @@ export function useSaveWorkflowDefinitionMutation() {
 
 export function useUpdateCanvasPositionsMutation() {
   return useMutation({
-    mutationFn: async (positions: Array<{ id: number; positionX: number; positionY: number }>) => {
+    mutationFn: async ({ definitionId, positions }: { definitionId: number; positions: Array<{ id: number; positionX: number; positionY: number }> }) => {
       return fetchJson('/workflow/positions', {
         method: 'POST',
-        body: JSON.stringify({ positions })
+        body: JSON.stringify({ definitionId, positions })
       });
     }
   });
