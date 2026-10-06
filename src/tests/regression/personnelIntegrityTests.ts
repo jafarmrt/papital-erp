@@ -2,7 +2,7 @@ import request from 'supertest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { personnel } from '../../db/schema.js';
+import { activityLogs, personnel } from '../../db/schema.js';
 
 /**
  * بسته ۱۲ (بخش پرسنل) — یکپارچگی داده پرسنل در مسیرهای واقعی Express؛ هر آزمون روی کد پیشین قرمز است.
@@ -79,6 +79,69 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       }
       if (wrong.length > 0) throw new Error(wrong.join('؛ '));
       return 'خانه خالی و ستون نیامده: زن، قطع همکاری، افغانستانی ماند و تلفن به‌روز شد؛ مقدار صریح جایگزین شد؛ پرسنل تازه پیش‌فرض گرفت';
+    });
+  }
+
+  const auditId = 'reg_personnel_audit_snapshot_td_437';
+  if (shouldRun(auditId, 'td437', 'personnel', 'audit', 'package12')) {
+    await runCase(results, auditId, 'v9.0.26: ممیزی پرسنل مقدار قبل و بعد فیلدهای تغییرکرده و IP را دارد، بی رمز نوبیتکس؛ ورود اکسل برای هر پرسنل ردیف خود را می‌نویسد (TD-437)', async (ids) => {
+      const { send } = await adminClient();
+      const tag = tagOf();
+      const previousKey = process.env.ERP_SECRETS_KEY;
+      process.env.ERP_SECRETS_KEY = previousKey || 'td437-test-key-0123456789-abcdefghijklmnop';
+      try {
+        const wrong: string[] = [];
+        const logsOf = async (pid: number) => (await orm.select().from(activityLogs)
+          .where(and(eq(activityLogs.entity, 'پرسنل'), eq(activityLogs.entityId, String(pid))))).sort((x, y) => x.id - y.id);
+        const created = await send('post', '/api/personnel', {
+          firstName: 'زهرا', lastName: `ممیزی ${tag}`, personnelCode: `AUD-${tag}`, salaryType: 'monthly_fixed', monthlySalary: 45000000,
+          shebaNumber: 'IR120120000000001234567890', nobitexPassword: 'Old#437',
+        });
+        if (created.status !== 201) throw new Error(`ثبت پرسنل ${created.status} داد`);
+        const pid = Number(created.body.id);
+        ids.push(pid);
+        const put = await send('put', `/api/personnel/${pid}`, {
+          firstName: 'زهرا', lastName: `ممیزی ${tag}`, salaryType: 'monthly_fixed', monthlySalary: 60000000,
+          shebaNumber: 'IR550560000000009876543210', nobitexPassword: 'New#437',
+        });
+        if (put.status !== 200) throw new Error(`ویرایش پرسنل ${put.status} داد`);
+        const logs = await logsOf(pid);
+        const create = logs.find(l => l.action === 'CREATE');
+        const update = logs.find(l => l.action === 'UPDATE');
+        const cd = (create?.details ?? {}) as { after?: Record<string, unknown> };
+        if (Number(cd.after?.monthlySalary) !== 45000000) wrong.push(`ردیف ثبت مقدار بعد ندارد: ${JSON.stringify(create?.details).slice(0, 120)}`);
+        const ud = (update?.details ?? {}) as { before?: Record<string, unknown>; after?: Record<string, unknown>; nobitexPasswordChanged?: boolean };
+        if (Number(ud.before?.monthlySalary) !== 45000000 || Number(ud.after?.monthlySalary) !== 60000000) wrong.push(`حقوق قبل و بعد ${JSON.stringify(ud).slice(0, 160)}`);
+        if (ud.before?.shebaNumber !== 'IR120120000000001234567890' || ud.after?.shebaNumber !== 'IR550560000000009876543210') wrong.push('شبای قبل و بعد ثبت نشد');
+        if (ud.before && 'firstName' in ud.before) wrong.push('فیلد تغییرنکرده در ممیزی آمد');
+        if (ud.nobitexPasswordChanged !== true) wrong.push('تغییر رمز نوبیتکس علامت نخورد');
+        const raw = JSON.stringify(logs.map(l => l.details));
+        if (raw.includes('Old#437') || raw.includes('New#437') || raw.includes('enc:v1:')) wrong.push('رمز نوبیتکس یا متن رمزشده در ممیزی آمد');
+        if (!create?.ipAddress || !update?.ipAddress) wrong.push(`IP ثبت نشد (ثبت «${create?.ipAddress}»، ویرایش «${update?.ipAddress}»)`);
+
+        // ورود اکسل: ردیف ممیزی برای هر پرسنل ساخته‌شده یا به‌روزشده
+        const imp = await send('post', '/api/personnel/bulk-import', { rows: [
+          { personnelCode: `AUD-${tag}`, firstName: 'زهرا', phone: '09121112233' },
+          { personnelCode: `AUD-${tag}-N`, firstName: 'تازه', lastName: `ممیزی ${tag}` },
+        ] });
+        if (imp.status !== 200) throw new Error(`ورود اکسل ${imp.status} داد`);
+        const [fresh] = await orm.select({ id: personnel.id }).from(personnel).where(and(eq(personnel.personnelCode, `AUD-${tag}-N`), eq(personnel.isDeleted, 0)));
+        if (fresh) ids.push(fresh.id);
+        const importUpdate = (await logsOf(pid)).filter(l => l.action === 'UPDATE').pop();
+        const iu = (importUpdate?.details ?? {}) as { before?: Record<string, unknown>; after?: Record<string, unknown> };
+        if (iu.before?.phone !== '' || iu.after?.phone !== '09121112233') wrong.push(`ورود اکسل ردیف ممیزی به‌روزرسانی با تلفن قبل و بعد نساخت ${JSON.stringify(iu).slice(0, 120)}`);
+        if (!fresh || !(await logsOf(fresh.id)).some(l => l.action === 'CREATE')) wrong.push('ورود اکسل برای پرسنل تازه ردیف ممیزی نساخت');
+
+        // حذف: مقدار قبل
+        await send('delete', `/api/personnel/${pid}`);
+        const del = (await logsOf(pid)).find(l => l.action === 'DELETE');
+        if (Number(((del?.details ?? {}) as { before?: Record<string, unknown> }).before?.monthlySalary) !== 60000000) wrong.push('ردیف حذف مقدار قبل ندارد');
+
+        if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+        return 'ثبت (بعد)، ویرایش (فقط حقوق و شبای قبل و بعد، علامت تغییر رمز بی متن رمز)، IP، یک ردیف برای هر پرسنل ورود اکسل و حذف (قبل)';
+      } finally {
+        if (previousKey === undefined) delete process.env.ERP_SECRETS_KEY; else process.env.ERP_SECRETS_KEY = previousKey;
+      }
     });
   }
 

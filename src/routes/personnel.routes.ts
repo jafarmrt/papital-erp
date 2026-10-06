@@ -6,6 +6,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
@@ -272,7 +273,7 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
 
         if (existing) {
           if (updateIfExists) {
-            await orm
+            const [updated] = await orm
               .update(personnel)
               .set({
                 firstName: firstName || existing.firstName,
@@ -297,8 +298,16 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
                 notes: notes || existing.notes,
                 updatedAt: nowIso
               })
-              .where(eq(personnel.id, existing.id));
+              .where(eq(personnel.id, existing.id))
+              .returning();
 
+            // v9.0.26 (TD-437): یک ردیف ممیزی برای هر پرسنل، با مقدار قبل و بعد فیلدهای تغییرکرده
+            await logActivity({
+              req, action: 'UPDATE', entity: 'پرسنل', entityId: existing.id,
+              description: `به‌روزرسانی پرسنل «${updated.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
+              details: personnelAuditChanges(existing, updated)
+            });
+            codeMap.set(personnelCode, updated);
             updatedCount++;
           } else {
             errors.push({
@@ -338,6 +347,11 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
             })
             .returning();
 
+          await logActivity({
+            req, action: 'CREATE', entity: 'پرسنل', entityId: newRecord.id,
+            description: `ثبت پرسنل «${newRecord.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
+            details: { after: personnelAuditSnapshot(newRecord) }
+          });
           if (personnelCode) {
             codeMap.set(personnelCode, newRecord);
           }
@@ -352,6 +366,7 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
     }
 
     await logActivity({
+      req,
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
       action: 'CREATE',
@@ -517,6 +532,8 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         entity: 'پرسنل',
         entityId: row.id,
         description: `ثبت پرسنل جدید «${computedFullName}» (کد پرسنلی: ${personnelCode || '---'})`,
+        details: { after: personnelAuditSnapshot(row) },
+        req,
         tx
       });
       return row;
@@ -600,7 +617,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
     await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
       const requestedUserId = parsePersonnelUserId(userId);
       const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
-      await tx
+      const [updated] = await tx
         .update(personnel)
         .set({
           firstName: firstName ? firstName.trim() : '',
@@ -634,7 +651,8 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
           notes: notes ? notes.trim() : '',
           updatedAt: nowIso
         })
-        .where(eq(personnel.id, id));
+        .where(eq(personnel.id, id))
+        .returning();
 
       await logActivity({
         userId: req.user?.id,
@@ -643,6 +661,8 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         entity: 'پرسنل',
         entityId: id,
         description: `ویرایش اطلاعات پرسنل «${computedFullName}» (کد ${id})`,
+        details: personnelAuditChanges(existing, updated),
+        req,
         tx
       });
     }));
@@ -682,7 +702,9 @@ router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'
       action: 'DELETE',
       entity: 'پرسنل',
       entityId: id,
-      description: `حذف پرسنل «${existing.fullName}» (کد ${id})`
+      description: `حذف پرسنل «${existing.fullName}» (کد ${id})`,
+      details: { before: personnelAuditSnapshot(existing) },
+      req
     });
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });

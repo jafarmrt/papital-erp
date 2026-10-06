@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.26 — Personnel Audit Rows Carry Before and After
+- **Personnel Audit:** Creating, editing, deleting and importing personnel now records the changed values (before/after) and the user's IP in the activity log, one row per person; the Nobitex password is never logged (TD-437, `reg_personnel_audit_snapshot_td_437`).
+
 ### v9.0.25 — Personnel Excel Import Keeps Empty Cells
 - **Personnel Excel Import:** With «به‌روزرسانی», an empty gender, employment-status or nationality cell no longer resets an existing employee to «مرد», «فعال» and «ایرانی»; defaults apply only to new personnel (owner decision D3; TD-436, `reg_personnel_import_keeps_status_td_436`).
 
