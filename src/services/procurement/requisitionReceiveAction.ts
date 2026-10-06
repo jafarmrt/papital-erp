@@ -4,10 +4,24 @@ import { documentItems, documents } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
 import { DocumentService } from '../document.service.js';
+import { ValidationError } from '../../errors/customErrors.js';
 import { applyDeliveredLines, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
 
 /** v8.0.10 (TD-267): انواع سندی که مسیر تحویل تدارکات به انبار نهایی می‌کند (فقط ورود کالا) */
 export const PROCUREMENT_INCOMING_TYPES = ['receipt', 'purchase'];
+const PROCUREMENT_INCOMING_TYPE_SET = new Set(PROCUREMENT_INCOMING_TYPES);
+/** v8.0.71 (TD-326): درخواستی که کالایش دریافت شده دوباره دریافت یا سفارش داده نمی‌شود */
+export const RECEIVED_REQUISITION_STATUSES = new Set(['received', 'completed']);
+
+/**
+ * v8.0.10 (TD-267): تحویل تدارکات فقط سند ورودی خرید را نهایی می‌کند. پیش‌تر هر سند غیرنهایی (از جمله پیش‌فاکتور فروش)
+ * از این مسیر نهایی می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش با خروج کالا می‌کرد.
+ */
+export function assertProcurementIncomingDocument(doc: { id: number; type: string | null; refNumber: string | null }): void {
+  if (!PROCUREMENT_INCOMING_TYPE_SET.has(String(doc.type))) {
+    throw new ValidationError(`سند «${doc.refNumber ?? doc.id}» (نوع ${doc.type ?? '-'}) سند خرید نیست و از مسیر تحویل تدارکات به انبار نهایی نمی‌شود.`);
+  }
+}
 
 interface ReceivedRequisition {
   code: string;

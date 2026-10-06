@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.2 — Workflow Auto-Actions Inside the Approval Transaction
+- **Workflow Approval Atomicity:** What a workflow transition does to its entity (invoice finalize, item and treasury opening vouchers, journal voucher status, purchase requisition status and goods receipt) now runs in the transition's own transaction; a failing action refuses the approval with its real error. The in-process `workflowEventBus` and its duplicate `publishEvent` bridge are removed; workflow events go through the outbox only (TD-415, phase-2 finding A02-01).
+
 ### v9.0.1 — Test Runner Security Upgrade (vitest 5)
 - **Security Gate:** `vitest` upgraded from 3.2.7 to 5.0.3 (dev-only). The CI audit gate was red on every branch because of two critical advisories in `tinypool@1.1.1` (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr) and one moderate advisory in `@vitest/mocker` (GHSA-82fw-gwwq-j7x9); the new chain has no `tinypool` and a patched mocker (TD-414).
 

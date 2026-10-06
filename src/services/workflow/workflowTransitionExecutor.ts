@@ -12,16 +12,17 @@ import {
   roles
 } from '../../db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { workflowEventBus } from './workflowEventBus';
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from '../../errors/customErrors';
 import { domainEventBus } from '../events/domainEventBus';
 import { DomainEventType, AggregateType } from '../events/domainEvents';
 import { OutboxService } from '../events/outboxService';
 import { updateRequestContext } from '../../lib/requestContext.js';
+import { logActivity } from '../../lib/auditLogger.js';
 import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
+import { lockWorkflowEntity, runWorkflowTransitionAction } from './workflowTransitionActions.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -85,6 +86,10 @@ export interface WorkflowDefinitionRow {
   isActive?: number | null;
   dslJson?: unknown;
 }
+
+/** گام‌هایی که پایان موفق یا رد فرایند را منتشر می‌کنند (همان شرط پل درون‌فرایندی پیش از v9.0.2) */
+const WORKFLOW_COMPLETED_STATE_KEYS = new Set(['approved', 'final', 'completed']);
+const WORKFLOW_REJECTED_STATE_KEYS = new Set(['rejected', 'canceled']);
 
 export class WorkflowTransitionExecutor {
   /**
@@ -552,9 +557,13 @@ export class WorkflowTransitionExecutor {
     userPermissions?: string[];
     comment?: string;
     snapshotData?: Record<string, unknown>;
+    /** v9.0.2 (TD-415): مجوز تاریخ گذشته‌ای که فراخواننده برای همین کاربر سنجیده است، برای اقدام خودکار پس از انتقال */
+    allowBackdate?: boolean;
     tx?: DbClient;
   }) {
     const runInTx = async (tx: DbClient) => {
+      // v9.0.2 (TD-415): ردیف موجودیتی که اقدام پس از انتقالش آن را می‌نویسد، پیش از ردیف فرایند (ترتیب مسیر دامنه)
+      await lockWorkflowEntity(tx, params.instanceId);
       const [instance] = await tx.select()
         .from(workflowInstances)
         .where(eq(workflowInstances.id, params.instanceId))
@@ -772,11 +781,14 @@ export class WorkflowTransitionExecutor {
         snapshotData: params.snapshotData || {}
       });
 
+      const workflowCode = definition?.code || '';
+      const isCompleted = WORKFLOW_COMPLETED_STATE_KEYS.has(toState.stateKey);
+      const isRejected = WORKFLOW_REJECTED_STATE_KEYS.has(toState.stateKey);
       const transitionPayload = {
         instanceId: instance.id,
         entityType: instance.entityType,
         entityId: instance.entityId,
-        workflowCode: definition?.code || '',
+        workflowCode,
         fromStateId: fromState.id,
         fromStateKey: fromState.stateKey,
         toStateId: toState.id,
@@ -787,20 +799,69 @@ export class WorkflowTransitionExecutor {
         performedBy: params.userId,
         performedByName: params.userName,
         comment: params.comment,
-        snapshotData: params.snapshotData
+        snapshotData: params.snapshotData,
+        isCompleted,
+        isRejected
       };
 
-      workflowEventBus.emit('TRANSITION_COMPLETED', transitionPayload);
+      // v9.0.2 (TD-415، یافته A02-01): اقدام خودکار دامنه (قطعی‌سازی سند، سند افتتاحیه، وضعیت سند حسابداری، دریافت کالای
+      // درخواست خرید) همین‌جا و با همین تراکنش اجرا می‌شود؛ خطایش انتقال را رد می‌کند. پیش‌تر workflowEventBus پیش از
+      // commit پرتاب می‌شد و شنونده‌ها با اتصال جدا و خطای بلعیده کار می‌کردند (انتقالِ برگشت‌خورده هم اثر می‌گذاشت).
+      await runWorkflowTransitionAction(tx, {
+        instanceId: instance.id,
+        entityType: instance.entityType,
+        entityId: instance.entityId,
+        workflowCode,
+        fromStateKey: fromState.stateKey,
+        toStateKey: toState.stateKey,
+        actionKey: transition.actionKey,
+        autoActionKey: transition.autoActionKey || '',
+        performedBy: params.userId,
+        performedByName: params.userName,
+        allowBackdate: params.allowBackdate === true,
+      });
 
-      const workflowOutboxEvent = domainEventBus.createEvent(
+      await logActivity({
+        userId: params.userId || 0,
+        username: params.userName || 'سیستم ورکفلو',
+        action: 'UPDATE',
+        entity: `ورکفلو (${instance.entityType})`,
+        entityId: instance.entityId,
+        description: `تغییر وضعیت ورکفلو (${workflowCode}) بر روی ${instance.entityType} شماره ${instance.entityId} از ${fromState.stateKey} به ${toState.stateKey}`,
+        details: {
+          before: { state: fromState.stateKey },
+          after: { state: toState.stateKey, action: transition.actionKey, comment: params.comment },
+          changes: { instanceId: instance.id, entityId: instance.entityId }
+        },
+        tx
+      });
+
+      // v9.0.2 (TD-415): هر انتقال یک بار و فقط از outbox (پس از commit) منتشر می‌شود؛ پل درون‌فرایندی که همان را پیش از
+      // commit و حتی برای انتقالِ برگشت‌خورده دوباره منتشر می‌کرد حذف شد و رویداد پایان فرایند هم به outbox آمد
+      const eventMetadata = { userId: params.userId, userName: params.userName };
+      await OutboxService.recordEvent(tx, domainEventBus.createEvent(
         DomainEventType.WORKFLOW_TRANSITIONED,
         instance.entityType as AggregateType,
         String(instance.entityId),
         transitionPayload,
-        { userId: params.userId, username: params.userName }
-      );
-
-      await OutboxService.recordEvent(tx, workflowOutboxEvent);
+        eventMetadata
+      ));
+      if (isCompleted || isRejected) {
+        await OutboxService.recordEvent(tx, domainEventBus.createEvent(
+          isCompleted ? DomainEventType.WORKFLOW_COMPLETED : DomainEventType.WORKFLOW_REJECTED,
+          'Workflow',
+          String(instance.id),
+          {
+            instanceId: instance.id,
+            workflowCode,
+            entityType: instance.entityType,
+            entityId: instance.entityId,
+            finalState: toState.stateKey,
+            ...(isRejected ? { comment: params.comment } : {})
+          },
+          eventMetadata
+        ));
+      }
 
       return {
         instanceId: instance.id,

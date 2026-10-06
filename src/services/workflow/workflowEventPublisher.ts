@@ -1,4 +1,3 @@
-import { workflowEventBus } from './workflowEventBus.js';
 import { domainEventBus } from '../events/domainEventBus.js';
 import { DomainEventType, AggregateType } from '../events/domainEvents.js';
 import { WorkflowEventPayload } from './contracts/workflowDomainContracts.js';
@@ -33,14 +32,11 @@ function toAggregateType(entityType?: string): AggregateType {
 
 export class WorkflowEventPublisher {
   /**
-   * Publish workflow transition completed event to both local bus and domain event bus
+   * Publish workflow transition completed event to the domain event bus
    */
   static async publishTransitionCompleted(payload: WorkflowEventPayload): Promise<void> {
     try {
-      // 1. Local Workflow Event Bus dispatch
-      workflowEventBus.emit('TRANSITION_COMPLETED', payload);
-
-      // 2. Central Domain Event Bus dispatch
+      // v9.0.2 (TD-415): گذرگاه درون‌فرایندی workflowEventBus و شنونده‌هایش حذف شد
       const event = domainEventBus.createEvent(
         DomainEventType.WORKFLOW_TRANSITIONED,
         toAggregateType(payload.entityType),
@@ -60,8 +56,6 @@ export class WorkflowEventPublisher {
    */
   static async publishWorkflowCompleted(payload: WorkflowEventPayload): Promise<void> {
     try {
-      workflowEventBus.emit('WORKFLOW_COMPLETED', payload);
-
       const event = domainEventBus.createEvent(
         'WORKFLOW_COMPLETED',
         toAggregateType(payload.entityType),
@@ -81,8 +75,6 @@ export class WorkflowEventPublisher {
    */
   static async publishWorkflowRejected(payload: WorkflowEventPayload): Promise<void> {
     try {
-      workflowEventBus.emit('WORKFLOW_REJECTED', payload);
-
       const event = domainEventBus.createEvent(
         'WORKFLOW_REJECTED',
         toAggregateType(payload.entityType),

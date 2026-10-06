@@ -8,6 +8,10 @@ import { checkReceiveApprovesInReceiverName, checkRequisitionActionFollowsWorkfl
 import { checkInitiatorExcludedStep, checkTransitionRequiredPermission } from './workflowPermissionScenarios.js';
 import { checkRequisitionStepNotRewritten, checkWorkflowDocumentAmountInRials } from './workflowObservationScenarios.js';
 import { checkAndAllNeedsEveryMember, checkDelegateActsForDelegatorRole, checkDelegationRevokedByDelegatorOnly } from './workflowDelegationScenarios.js';
+import {
+  checkDeliveryWithoutUserIdNotAttributedToUserOne, checkDocumentApprovalFinalizesInTransaction, checkOpeningApprovalsFollowTransaction,
+  checkRefusedReceiveLeavesNoTrace, checkTransitionEffectsFollowCommit, checkVoucherApprovalRefusedWhenStatusCannotChange,
+} from './workflowAutoActionScenarios.js';
 
 /** آزمون‌های سخت‌گیرانه حوزه G (گردش‌کار و تأیید) در سوئیت workflow: [شناسه، نام، بررسی، شرح موفقیت] */
 export const WORKFLOW_CHECKS: Array<[string, string, () => Promise<string[]>, string]> = [
@@ -41,6 +45,18 @@ export const WORKFLOW_CHECKS: Array<[string, string, () => Promise<string[]>, st
     checkWorkflowDocumentAmountInRials, 'فاکتور ۱۱۰ دلاری ۵۵ میلیون ریال سنجیده شد؛ فاکتور ریالی ۱٬۱۵۰٬۰۰۰ بی ردیف حذف‌شده؛ سند بی نرخ از هیچ شرط مبلغی نگذشت'],
   ['wf_td_405_requisition_step_not_rewritten', 'v8.0.124: اقدام درخواست خرید گام گردش‌کار را از وضعیت درخواست بازنویسی نمی‌کند و درخواستِ دریافت‌شده اقدامی نمی‌پذیرد (TD-405)',
     checkRequisitionStepNotRewritten, 'هر جابه‌جایی گام در تاریخچه ثبت شد و تأیید پیش از دریافت آمد؛ اقدام روی درخواستِ دریافت‌شده ۴۰۹ گرفت و گامش دست نخورد'],
+  ['wf_td_415_refused_receive_leaves_no_trace', 'v9.0.2: «دریافت کالا»ی ردشده (سفارش ماندهٔ سال مالی بسته) هیچ کالا، کاردکس، سند حسابداری یا تغییر وضعیتی باقی نمی‌گذارد (TD-415)',
+    checkRefusedReceiveLeavesNoTrace, 'اقدام رد شد؛ هر دو سفارش پیش‌نویس، موجودی و کاردکس صفر، بی سند حسابداری؛ درخواست و گام «سفارش‌شده» ماند'],
+  ['wf_td_415_transition_effects_follow_commit', 'v9.0.2: انتقالِ برگشت‌خورده اثری بیرون نمی‌گذارد و انتقالِ ثبت‌شده فقط یک بار و فقط از outbox منتشر می‌شود (TD-415)',
+    checkTransitionEffectsFollowCommit, 'انتقالِ برگشت‌خورده بی وضعیت، لاگ، outbox و انتشار ماند؛ انتقالِ ثبت‌شده یک ردیف outbox و یک لاگ داشت و درون‌فرایندی منتشر نشد'],
+  ['wf_td_415_document_approval_finalizes_in_tx', 'v9.0.2: تأیید نهایی گردش‌کار سند، سند را در همان تراکنش قطعی می‌کند و قطعی‌سازیِ ناممکن تأیید را رد می‌کند (TD-415)',
+    checkDocumentApprovalFinalizesInTransaction, 'تأیید فاکتورِ بی‌موجودی رد شد و گام و سند ماندند؛ تأیید فاکتور دیگر آن را در پاسخ قطعی کرد'],
+  ['wf_td_415_voucher_approval_refused', 'v9.0.2: تأیید گردش‌کار سند حسابداری دائم رد می‌شود و گام و وضعیت سند دست نمی‌خورد (TD-415)',
+    checkVoucherApprovalRefusedWhenStatusCannotChange, 'تأیید رد شد؛ گام «پیش‌نویس» و سند «دائم» ماند'],
+  ['wf_td_415_opening_approval_in_tx', 'v9.0.2: تأیید نهایی کالا و حساب خزانه سند افتتاحیه را در همان تراکنش صادر می‌کند و صدورِ ناممکن تأیید را رد می‌کند (TD-415)',
+    checkOpeningApprovalsFollowTransaction, 'تأییدِ برگشت‌خورده کالا سندی نگذاشت و تأیید ثبت‌شده یک سند افتتاحیه داشت؛ تأیید صندوق بی سرفصل رد شد و گام ماند'],
+  ['wf_td_415_delivery_not_attributed_to_user_one', 'v9.0.2: تحویل سفارش بی شناسه کاربر، گام «دریافت‌شده» و لاگ تحویل را به نام کاربر ۱ ثبت نمی‌کند (TD-415)',
+    checkDeliveryWithoutUserIdNotAttributedToUserOne, 'گام «دریافت‌شده» و لاگ تحویل بی کاربر ثبت شدند'],
 ];
 
 export async function runWorkflowChecks(shouldRun: (id: string) => boolean): Promise<TestCaseResult[]> {
