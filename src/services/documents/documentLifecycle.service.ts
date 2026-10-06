@@ -421,7 +421,7 @@ export class DocumentLifecycleService {
                 originalDirection: orig.type as 'in' | 'out',
                 unitPrice: orig.unitPrice ?? 0,
                 location: targetLoc,
-                // v9.0.73 (TD-489): حواله انتقال بین انبارها فقط مقدار را جابه‌جا کرده بود؛ ابطالش هم WAC را تغییر نمی‌دهد
+                // v9.0.80 (TD-489): حواله انتقال بین انبارها فقط مقدار را جابه‌جا کرده بود؛ ابطالش هم WAC را تغییر نمی‌دهد
                 quantityOnly: orig.documentType === 'transfer',
               });
             }

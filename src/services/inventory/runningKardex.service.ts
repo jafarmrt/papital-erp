@@ -82,7 +82,7 @@ export async function buildItemRunningKardex(itemId: number): Promise<RunningKar
     })
     .from(items)
     .where(eq(items.id, itemId));
-  // v9.0.74 (TD-494): کاردکس کالای ناموجود ۴۰۴ است؛ پیش‌تر کالایی ساختگی («کالای <شناسه>»، کد «-») برمی‌گشت
+  // v9.0.81 (TD-494): کاردکس کالای ناموجود ۴۰۴ است؛ پیش‌تر کالایی ساختگی («کالای <شناسه>»، کد «-») برمی‌گشت
   if (!item) throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
   const defaultWac = fin(item?.weightedAverageCost || 0).toNumber();
 

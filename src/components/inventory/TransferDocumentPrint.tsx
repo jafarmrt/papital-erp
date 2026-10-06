@@ -2,7 +2,7 @@ import { DocPrintModal } from '../print/DocPrintModal';
 import { formatPersianDate, formatPersianNumber } from '../../utils';
 import type { InventoryDocumentDetail } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 
-/** v9.0.73 (TD-489): نسخه چاپی حواله انتقال بین انبارها (قالب یکدست DocPrintModal) */
+/** v9.0.80 (TD-489): نسخه چاپی حواله انتقال بین انبارها (قالب یکدست DocPrintModal) */
 export function TransferDocumentPrint({ doc, isOpen, onClose }: { doc: InventoryDocumentDetail; isOpen: boolean; onClose: () => void }) {
   const ref = doc.ref_number || doc.refNumber || '';
   return (

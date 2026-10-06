@@ -42,13 +42,34 @@
 | TD-513 | خزانه و چک (بسته ۴) | P3 (B04-17) — پنجره تاریخچه `description` می‌خواند و سرور `notes` می‌نویسد؛ پیام‌ها «in_collection» / «passed» / «bounced» دارند؛ فیلتر وضعیت `in_treasury` ندارد؛ «کلیپ‌بورد» در دو پیام | ChequesTab.tsx، chequeLifecycle.service.ts | open (P3) |
 | TD-514 | خزانه و چک (بسته ۴) | P3 (B04-18) — `amount`، `initialBalance` و `exchangeRate` با `z.coerce.number()`: «۲۵۰۰۰۰۰» و «2,500,000» ← ۴۰۰ «Invalid input: expected number, received NaN» (AGENTS §۶، TD-385)؛ ارز آزاد است | accounting.schemas.ts | open (P3) |
 | TD-515 | خزانه و چک (بسته ۴) | P3 (B04-19) — فرم برای حساب بی سرفصل «سند دوبل صادر نخواهد شد» می‌گوید و سرور ۴۲۲ می‌دهد؛ سرعنوان «… / چک …»؛ اکسل خزانه `customer` و `bank_transfer` خام و نام فایل با تاریخ UTC؛ `react-multi-date-picker` به‌جای `JalaliDateInput` | TreasuryTransactionModal.tsx، BankAndTreasuryTab.tsx | open (P3) |
+| TD-516 | دسترسی (بسته ۲)؛ اثر روی همه بسته‌ها | P1 (B02-01) — کد نقش در ۴۹ گارد route (۳۸ تغییردهنده؛ `manager` در هر ۴۹) پیش از هر مجوزی عبور می‌دهد: «مدیر فروش» پس از برداشتن همه `customers.*` طرف حساب را حذف کرد، «مدیر» بی `settings.manage` تنظیمات را عوض کرد و نقش سفارشی با کد `accountant` و فقط `accounting.view` سند انبار را قطعی کرد؛ صفحه نقش‌ها این دسترسی را نه نشان می‌دهد و نه می‌گیرد | authorize.ts، routeهای بسته‌های ۴ تا ۱۶ | open (P1، تصمیم ت۱ الف و مدل مجوز) |
+| TD-519 | دسترسی (بسته ۲)؛ اثر روی ۱۲ | P1 (B02-04) — ساخت کاربر با نام کاربری کاربر حذف‌شده همان شناسه را زنده می‌کند: فرد تازه اعلان محرمانه و فیش ۱۸۲٬۵۰۰٬۰۰۰ ریالی با کارت و شبای فرد قبلی را دید و سجل دو نفر یکی شد | users.routes.ts | open (P1، تصمیم ت۲ الف) |
+| TD-520 | دسترسی (بسته ۲) | P2 (B02-05) — دارنده `roles.manage` به نقش خودش `accounting.vouchers`، `users.manage` و `settings.manage` افزود و دارنده `users.manage` نقش خودش را `cfo_accountant` کرد (ارتقای خودسرانه) | users.routes.ts | open (P2، تصمیم ت۳ الف) |
+| TD-522 | دسترسی (بسته ۲) | P2 (B02-07) — «پاک‌سازی ایمن سجل» با «حفاظت رویدادهای بحرانی و مالی» ۷ از ۱۰ رویداد مالی ۲۰۰ روزه (قطعی‌سازی سند حسابداری، پرداخت خزانه، تغییر شبا، پرداخت حقوق…) را پاک کرد؛ ۵ نام فهرست بحرانی هرگز نوشته نمی‌شوند و `preserveCritical: false` تقریباً کل سجل را پاک می‌کند | auditLogger.ts، SystemOperationsTab.tsx | open (P2، تصمیم ت۴ الف) |
+| TD-523 | دسترسی (بسته ۲) | P2 (B02-08) — سرور `mustResetPassword` را نمی‌سنجد، رمزی که مدیر می‌گذارد پرچم را ۰ می‌کند و مودال اجباری با × و «انصراف» بسته می‌شود | middleware/auth.ts، users.routes.ts، UserProfileModal.tsx | open (P2، تصمیم ت۵ الف) |
+| TD-525 | دسترسی (بسته ۲)؛ اثر روی ۱۶ | P2 (B02-10) — صفحه و منوی «کاربران و نقش‌ها» فقط برای کد `admin` باز است، در حالی که مسیر صفحه و API دارنده `users.manage` / `roles.manage` را می‌پذیرند | UsersPage.tsx، menuConfig.ts | open (P2، تصمیم ت۳ الف) |
+| TD-526 | دسترسی (بسته ۲)؛ اثر روی ۱ | P2 (B02-11) — نصب تازه تولیدی (seed خاموش) هیچ نقشی ندارد: پس از جادوگر `GET /roles` خالی است و `POST /users` با هر نقشی جز admin ۴۰۰ می‌گیرد؛ آزمون‌ها و E2E seed را روشن فرض می‌کنند | server.ts، seed.ts، auth.routes.ts | open (P2، تصمیم ت۶ بازنگری‌شده الف) |
+| TD-527 | دسترسی (بسته ۲) | P2 (B02-12) — گزارش چاپی رسمی سجل «تعداد کل رکوردها» را تعداد ردیف صفحه جاری (۲۵) می‌نویسد، پالایه موجودیت و جست‌وجو را چاپ نمی‌کند و چاپ و Excel فقط صفحه جاری را دارند | AuditPrintModal.tsx، ActivityLogsPage.tsx | open (P2) |
+| TD-530 | دسترسی (بسته ۲) | P3 (B02-15) — پاک‌کننده سجل فقط نام کامل snake_case را می‌شناسد: `cardNumber`، `shebaNumber`، `consumerSecret`، `nobitexPassword` و `setupToken` خام ماندند و شماره کارت و حساب طرف حساب در سجل و `GET /activity-logs` خام است | auditLogger.ts، customers.routes.ts | open (P3، تصمیم ت۷ الف) |
+| TD-531 | دسترسی (بسته ۲) | P3 (B02-16) — تغییر رمز از نمایه نسخه توکن را بالا می‌برد و کوکی تازه نمی‌دهد: پیام موفقیت و درخواست بعدی همان نشست ۴۰۱ | users.routes.ts، UserProfileModal.tsx | open (P3) |
+| TD-532 | دسترسی (بسته ۲) | P3 (B02-17) — کمینه طول رمز: فرم نمایه ۴، API نمایه ۸، رمز مدیر ۶ و جادوگر ۸ نویسه | UserProfileModal.tsx، users.routes.ts، auth.routes.ts | open (P3، تصمیم ت۵ الف) |
+| TD-533 | دسترسی (بسته ۲) | P3 (B02-18) — آواتار هر رشته‌ای (نشانی ردیاب بیرونی، یک میلیون نویسه) و نام ۵٬۰۰۰ نویسه‌ای پذیرفته می‌شود و `list-simple` برای هر کاربر حدود یک مگابایت شد | users.routes.ts | open (P3) |
+| TD-534 | دسترسی (بسته ۲) | P3 (B02-19) — `list-simple` نام کاربری و کد نقش همه کاربران را به هر کاربر واردشده می‌دهد («ثبت‌کننده گزارش روزانه» که `GET /users` برایش ۴۰۳ است) | users.routes.ts | open (P3) |
+| TD-535 | دسترسی (بسته ۲) | P3 (B02-20) — حذف نقش کاربران حذف‌شده را هم می‌شمارد: نقشی که تنها کاربرش حذف شده «به ۱ کاربر تخصیص یافته است» | users.routes.ts | open (P3) |
+| TD-536 | دسترسی (بسته ۲) | P3 (B02-21) — کلیک روی عنوان مجوز در ماتریس نقش دو بار تغییر می‌دهد و کاری نمی‌کند (`onClick` روی `label` دربرگیرنده چک‌باکس) | RoleFormModal.tsx | open (P3) |
+| TD-537 | دسترسی (بسته ۲) | P3 (B02-22) — صفحه سجل ۴۰۳ را «هیچ رکوردی یافت نشد» نشان می‌دهد؛ جست‌وجو با هر کلید درخواست می‌فرستد و صفحه را به ۱ برنمی‌گرداند | ActivityLogsPage.tsx | open (P3) |
+| TD-538 | دسترسی (بسته ۲) | P3 (B02-23) — خروجی Excel سجل تاریخ میلادی UTC در نام فایل (۰۰:۱۵ تهران ۱۴ مهر ← `2026-10-05`) و کد انگلیسی اقدام (`LOGIN_FAILED`) دارد | auditExportUtils.ts | open (P3) |
+| TD-539 | دسترسی (بسته ۲) | P3 (B02-24) — پنل قفل ورود ارقام لاتین، «(Lockout)» و «۵ تلاش» ثابت دارد و قفل را از متن پیام می‌شناسد؛ ۴۲۹ محدودکننده عمومی هم شمارش ۱۵ دقیقه‌ای ساختگی می‌سازد | LoginPage.tsx، api.ts | open (P3) |
+| TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
+| TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
+| TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۲۶ ردیف
-- **آرشیو شده (resolved):** ۴۳۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۴۷ ردیف
+- **آرشیو شده (resolved):** ۴۴۰ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -57,4 +78,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.74 — TD-494 (خطاهای کاری انتقال و بازسازی کاردکس، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.81 — TD-494 (خطاهای کاری انتقال و بازسازی کاردکس، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

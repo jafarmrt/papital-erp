@@ -121,7 +121,7 @@ export default function WarehouseTransferModal({
         })
       });
 
-      // v9.0.73 (TD-489): انتقال سند «حواله انتقال» با شماره خودش می‌سازد
+      // v9.0.80 (TD-489): انتقال سند «حواله انتقال» با شماره خودش می‌سازد
       const issuedRef = res?.data?.refNumber;
       setSuccessMsg(`حواله انتقال${issuedRef ? ` شماره «${issuedRef}»` : ''} صادر و موجودی انبارها به‌روزرسانی شد.`);
       setTimeout(() => {

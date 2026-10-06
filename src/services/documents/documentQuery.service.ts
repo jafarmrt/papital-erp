@@ -167,7 +167,7 @@ export class DocumentQueryService {
       };
     });
 
-    // v9.0.73 (TD-489): انبار مبدأ و مقصد حواله‌های انتقال
+    // v9.0.80 (TD-489): انبار مبدأ و مقصد حواله‌های انتقال
     const transferLocations = await transferLocationsByDocument(docs.filter(d => d.type === 'transfer').map(d => d.id));
     for (const d of formattedDocs) {
       const loc = transferLocations.get(d.id);
@@ -308,7 +308,7 @@ export class DocumentQueryService {
       settlementStatus: amounts.settlementStatus,
       // قرارداد API: مبلغ عدد (P2-6)
       settlements: settlements.map(t => ({ ...t, amount: t.amount.toNumber() })),
-      // v9.0.73 (TD-489): انبار مبدأ و مقصد حواله انتقال
+      // v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال
       ...(doc.type === 'transfer' ? (await transferLocationsByDocument([doc.id])).get(doc.id) : {}),
       items: formattedItems
     };
