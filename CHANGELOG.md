@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.4 — Party Account Card by Id
+- **Party Balance:** The customers page «تراز مالی» card and the customer dossier load the account card from `GET /customers/:id/account-card`, which selects customer and supplier voucher rows by the party's detailed id; legacy rows without an id match the current name exactly. A similarly named party is no longer added in, and renaming a party no longer empties its card (TD-416, package-9 finding B09-01).
+
 ### v9.0.3 — Package 9 Audit Documentation (Customers & CRM)
 - **Stability Audit, Package 9:** `docs/audit/STABILITY_AUDIT_V9.md` opens with the customers and CRM section; its 16 proven findings are registered as open rows TD-416 to TD-431 (two P1). The phase-1 baseline and the series targets the product owner confirmed are recorded in the roadmap. Documentation only; no behaviour change.
 
