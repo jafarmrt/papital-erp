@@ -8,6 +8,7 @@ import { phoneMatchKey } from './woocommerce/phoneMatchKey.js';
 import {
   assertCustomerNameAvailable, assertCustomerPhoneAvailable, customerNameKey, guardCustomerName, isCustomerNameUniqueViolation, CUSTOMER_NAME_TAKEN_MESSAGE,
 } from './customers/customerIdentity.js';
+import { assertCustomerDeletable } from './customers/customerDeleteGuard.js';
 
 export interface ContactPerson {
   id?: string;
@@ -239,21 +240,27 @@ export class CustomerService {
     executor: DbExecutor = orm
   ): Promise<typeof customers.$inferSelect> {
     const customerId = Number(id);
-    const [delCust] = await executor
-      .select()
-      .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.isDeleted, 0)));
+    // v9.0.10 (TD-431): زیر قفل ردیف طرف حساب؛ مانده، سند پیش‌نویس یا پیش‌فاکتور، پرونده فعال، پروژه یا چک باز حذف را رد می‌کند
+    const remove = async (tx: DbExecutor) => {
+      const [delCust] = await tx
+        .select()
+        .from(customers)
+        .where(and(eq(customers.id, customerId), eq(customers.isDeleted, 0)))
+        .for('update');
 
-    if (!delCust) {
-      throw new NotFoundError('مشتری یافت نشد.');
-    }
+      if (!delCust) {
+        throw new NotFoundError('مشتری یافت نشد.');
+      }
+      await assertCustomerDeletable(delCust, tx);
 
-    await executor
-      .update(customers)
-      .set({ isDeleted: 1 })
-      .where(sql`${customers.id} = ${customerId}`);
+      await tx
+        .update(customers)
+        .set({ isDeleted: 1 })
+        .where(sql`${customers.id} = ${customerId}`);
 
-    return delCust;
+      return delCust;
+    };
+    return executor === orm ? orm.transaction(remove) : remove(executor);
   }
 
   /**

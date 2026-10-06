@@ -10463,6 +10463,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.9، TD-421): نوع خالی در درون‌ریزی اکسل طرف حساب‌ها
   const { runCustomerImportPartyTypeTests } = await import('../regression/customerImportPartyTypeTests.js');
   results.push(...await runCustomerImportPartyTypeTests(shouldRun));
+  // بسته ۹ (v9.0.10، TD-431): رد حذف طرف حساب دارای مانده یا کار باز
+  const { runCustomerDeleteGuardTests } = await import('../regression/customerDeleteGuardTests.js');
+  results.push(...await runCustomerDeleteGuardTests(shouldRun));
 
   return results;
 }
