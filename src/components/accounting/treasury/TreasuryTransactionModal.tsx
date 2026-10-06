@@ -200,7 +200,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     const pt = c.partyType || (c as any).party_type;
     return pt === 'supplier' || pt === 'both';
   });
-  const actualSupplierList = supplierList.length > 0 ? supplierList : safeCustomers;
+  // v9.0.73 (TD-501): سرور فقط تأمین‌کننده (یا «هر دو») را برای این نوع می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
+  const actualSupplierList = supplierList;
 
   const isReceipt = formData.type === 'receipt';
   const selectedBank = safeBankAccounts.find(b => b.id === formData.bankAccountId);

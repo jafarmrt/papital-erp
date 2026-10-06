@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.73 — Treasury Links Are Checked
+- **Treasury Links (P2):** a receipt or payment is refused when its document is missing, voided, of the other direction or of another party, or its party id is not in the table of its type; before, a receipt from one customer settled another customer's invoice (TD-501, `reg_treasury_document_and_party_links_td_501`).
+
 ### v9.0.72 — Misc Receipts and Payments Take a Chosen Account
 - **Misc Counter Account (P2):** a misc receipt or payment and a personnel «other» payment post to the counter account the user chooses, and a personnel payment requires its purpose; before, they went to trade receivables and wages payable (TD-507, `reg_treasury_misc_contra_account_td_507`).
 

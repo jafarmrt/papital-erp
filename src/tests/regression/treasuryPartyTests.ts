@@ -154,5 +154,47 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  const linkId = 'reg_treasury_document_and_party_links_td_501';
+  if (shouldRun(linkId, 'td501', 'treasury', 'invoice', 'party', 'package4')) {
+    await runCase(results, linkId, 'v9.0.73: a treasury receipt or payment links only to an active document of its own direction and party, and its party id must exist in the table of its party type (TD-501)', async () => {
+      const { createTestCustomer, createTestDocument } = await import('../fixtures/factories.js');
+      const api = await client();
+      const problems: string[] = [];
+      const bank = await createBank('Link bank');
+      const customerA = await createTestCustomer({ name: `ERP-TEST-MARKER p04 customer A ${tagOf()}` });
+      const customerB = await createTestCustomer({ name: `ERP-TEST-MARKER p04 customer B ${tagOf()}` });
+      const supplier = await createTestCustomer({ name: `ERP-TEST-MARKER p04 supplier ${tagOf()}`, partyType: 'supplier' });
+      const { document: invoiceB } = await createTestDocument({ type: 'invoice', buyerName: customerB.name });
+      const { document: purchase } = await createTestDocument({ type: 'purchase', buyerName: supplier.name });
+      const { document: voidedB } = await createTestDocument({ type: 'invoice', buyerName: customerB.name, isDeleted: 1 });
+      const base = { method: 'bank_transfer', bankAccountId: bank.id, date: '2026-04-01' };
+      const asB = { partyType: 'customer', partyId: customerB.id, partyName: customerB.name };
+      const funded = await api.post('/api/accounting/treasury', { ...base, type: 'receipt', amount: 10_000_000, ...asB });
+      if (funded.status !== 201) throw new Error(`funding receipt returned ${funded.status}: ${JSON.stringify(funded.body).slice(0, 200)}`);
+
+      const expect422 = async (label: string, body: object, code: string) => {
+        const res = await api.post('/api/accounting/treasury', { ...base, ...body });
+        if (res.status !== 422 || errorCode(res) !== code) problems.push(`${label} returned ${res.status} ${errorCode(res)}, expected 422 ${code}`);
+      };
+      await expect422('receipt from customer A on customer B\'s invoice', { type: 'receipt', amount: 2_000_000, partyType: 'customer', partyId: customerA.id, partyName: customerA.name, documentId: invoiceB.id }, 'TREASURY_DOCUMENT_PARTY_MISMATCH');
+      await expect422('supplier payment on a sales invoice', { type: 'payment', amount: 400_000, partyType: 'supplier', partyId: supplier.id, partyName: supplier.name, documentId: invoiceB.id }, 'TREASURY_DOCUMENT_INVALID');
+      await expect422('receipt on a document that does not exist', { type: 'receipt', amount: 1_000, ...asB, documentId: 999_999_999 }, 'TREASURY_DOCUMENT_INVALID');
+      await expect422('receipt on a voided invoice', { type: 'receipt', amount: 1_000, ...asB, documentId: voidedB.id }, 'TREASURY_DOCUMENT_INVALID');
+      await expect422('receipt from a customer id that does not exist', { type: 'receipt', amount: 1_000, partyType: 'customer', partyId: 999_999_999, partyName: 'nobody' }, 'TREASURY_PARTY_INVALID');
+      await expect422('supplier payment to a customer-only party', { type: 'payment', amount: 1_000, partyType: 'supplier', partyId: customerA.id, partyName: customerA.name }, 'TREASURY_PARTY_INVALID');
+      await expect422('personnel payment to an id that is no personnel', { type: 'payment', amount: 1_000, partyType: 'personnel', partyId: 999_999_999, partyName: 'nobody', purpose: 'advance' }, 'TREASURY_PARTY_INVALID');
+
+      const rows = await orm.select({ id: treasuryTransactions.id }).from(treasuryTransactions).where(eq(treasuryTransactions.bankAccountId, bank.id));
+      if (rows.length !== 1) problems.push(`bank has ${rows.length} treasury rows after the refused entries, expected 1 (the funding receipt)`);
+
+      const good = await api.post('/api/accounting/treasury', { ...base, type: 'receipt', amount: 2_000_000, ...asB, documentId: invoiceB.id });
+      if (good.status !== 201) problems.push(`receipt from customer B on its own invoice returned ${good.status}: ${JSON.stringify(good.body).slice(0, 200)}`);
+      const paid = await api.post('/api/accounting/treasury', { ...base, type: 'payment', amount: 400_000, partyType: 'supplier', partyId: supplier.id, partyName: supplier.name, documentId: purchase.id });
+      if (paid.status !== 201) problems.push(`supplier payment on its purchase returned ${paid.status}: ${JSON.stringify(paid.body).slice(0, 200)}`);
+      assertNoProblems(problems);
+      return 'Receipt from A on B\'s invoice, supplier payment on a sales invoice, missing or voided document and party ids that do not exist in their table: all 422 with no row; B on its own invoice and the supplier on its purchase: 201';
+    });
+  }
+
   return results;
 }

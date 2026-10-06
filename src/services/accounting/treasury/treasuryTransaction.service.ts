@@ -6,6 +6,7 @@ import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
+import { assertTreasuryDocumentLink, resolveTreasuryPartyName } from './treasuryLinks.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
@@ -347,6 +348,7 @@ export class TreasuryTransactionService {
     return await orm.transaction(async (txEngine) => {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
+        ...(data.documentId ? [{ name: 'document', hierarchyLevel: LockHierarchyLevel.DOCUMENTS }] : []),
       ]);
       // سرفصل انتخابی حتی در ثبت بی‌سند سنجیده می‌شود تا ردیف به حساب نامجاز اشاره نکند
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
@@ -355,6 +357,13 @@ export class TreasuryTransactionService {
         .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!bank) throw new NotFoundError('حساب بانکی یا صندوق انتخاب‌شده یافت نشد');
+      // v9.0.73 (TD-501، B04-05): شناسه طرف حساب در جدول همان نوع، و سند پیوسته فعال، هم‌سو و با همان طرف حساب
+      const partyCurrentName = await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      if (data.documentId) {
+        await assertTreasuryDocumentLink(txEngine, {
+          type: data.type, documentId: data.documentId, partyType, partyName: partyCurrentName ?? data.partyName,
+        });
+      }
 
       // V1.4.0: گارد هم‌ارزی ارز — تراکنش باید هم‌ارز با حساب باشد تا مانده‌ها معنادار بمانند
       const txCurrency = data.currency || bank.currency || 'IRR';
