@@ -8,6 +8,7 @@ import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { money } from '../../lib/money.js';
+import { requireStorageDate } from '../../lib/storageDate.js';
 import { assertStockMovementDate } from './stockMovementDate.js';
 
 export class InventoryStockRepairService {
@@ -41,7 +42,8 @@ export class InventoryStockRepairService {
       throw new Error('مبداء و مقصد انتقال نمی‌توانند یکسان باشند.');
     }
 
-    const txDate = params.date || await businessTodayIsoDate();
+    // v9.0.57 (TD-483): تاریخ شمسی یا میلادی به ISO؛ نامعتبر ۴۲۲ (پیش‌تر متن غیرتاریخ خطای ۵۰۰ پایگاه‌داده می‌داد)
+    const txDate = params.date ? requireStorageDate(params.date, 'تاریخ انتقال') : await businessTodayIsoDate();
     const operatorName = params.user || params.createdBy || 'سیستم';
 
     return await orm.transaction(async (txEngine) => {

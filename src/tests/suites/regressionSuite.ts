@@ -10501,6 +10501,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.55, TD-480): stock-count sheet book stock by warehouse code or name, stale book stock 409
   const { runStockCountSheetTests } = await import('../regression/stockCountSheetTests.js');
   results.push(...await runStockCountSheetTests(shouldRun));
+  // Package 6 (v9.0.57, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
+  const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
+  results.push(...await runStockMovementFutureDateTests(shouldRun));
 
   return results;
 }

@@ -6,6 +6,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
+import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1075,6 +1076,11 @@ export class FinancialHealthService {
     const workflowReferenceTest = buildWorkflowReferenceHealthTest(await findWorkflowReferenceGaps());
     overallScore += workflowReferenceTest.scoreImpact;
     tests.push(workflowReferenceTest);
+
+    // آزمون ۲۰: v9.0.57 (TD-483) گردش کاردکس با تاریخ پس از امروز (فقط فهرست، بی بازنویسی)
+    const futureMovementTest = buildFutureStockMovementHealthTest(await findFutureStockMovements());
+    overallScore += futureMovementTest.scoreImpact;
+    tests.push(futureMovementTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
