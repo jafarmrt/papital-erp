@@ -122,3 +122,36 @@ describe('stock-count sheet (TD-480)', () => {
     expect(countInput().value).toBe('9');
   });
 });
+
+describe('stock-count sheet warehouse change (TD-484)', () => {
+  it('switching the warehouse after counting asks first; cancel keeps the sheet, confirm clears the counts', async () => {
+    stock = { main: 10, shop: 3 };
+    fetchJson.mockImplementation(server);
+    renderPage();
+    await screen.findByText('A-501');
+    fireEvent.change(countInput(), { target: { value: '7' } });
+
+    fireEvent.change(locationSelect(), { target: { value: 'shop' } });
+    expect(await screen.findByText(/شمارش‌های واردشده برای «انبار مرکزی» پاک می‌شوند/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'ماندن در همین انبار' }));
+    expect(locationSelect().value).toBe('main');
+    expect(countInput().value).toBe('7');
+
+    fireEvent.change(locationSelect(), { target: { value: 'shop' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'پاک کردن و تغییر انبار' }));
+    await waitFor(() => expect(locationSelect().value).toBe('shop'));
+    await waitFor(() => expect(systemCell().textContent).toBe('۳'));
+    expect(countInput().value).toBe('');
+    expect((screen.getByRole('button', { name: /ثبت نهایی سند انبارگردانی/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('switching the warehouse before any count needs no confirmation', async () => {
+    stock = { main: 10, shop: 3 };
+    fetchJson.mockImplementation(server);
+    renderPage();
+    await screen.findByText('A-501');
+    fireEvent.change(locationSelect(), { target: { value: 'shop' } });
+    await waitFor(() => expect(systemCell().textContent).toBe('۳'));
+    expect(screen.queryByRole('button', { name: 'پاک کردن و تغییر انبار' })).toBeNull();
+  });
+});

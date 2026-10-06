@@ -39,6 +39,8 @@ export function useAuditSheet({ serverItems, selectedLocation, locationLabel, ne
   const [auditedItemsMap, setAuditedItemsMap] = useState<AuditedItemsMap>({});
   // V10-3.4: خلاصه شمارش برای مودال تایید پیش از ثبت نهایی انبارگردانی
   const [pendingAuditSummary, setPendingAuditSummary] = useState<AuditSummary | null>(null);
+  // v9.0.56 (TD-484): انبار تازه‌ای که کاربر انتخاب کرده و منتظر تأیید پاک شدن شمارش‌های برگه است
+  const [pendingLocation, setPendingLocation] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const saveMutation = useInventoryAuditSave();
@@ -67,6 +69,31 @@ export function useAuditSheet({ serverItems, selectedLocation, locationLabel, ne
       updatedMap[i.id] = { ...i, physical_stock: String(i.system_stock_computed) };
     });
     setAuditedItemsMap(updatedMap);
+  };
+
+  const switchLocation = (code: string) => {
+    setAuditedItemsMap({});
+    setPendingAuditSummary(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    onLocationChange(code);
+  };
+
+  /** v9.0.56 (TD-484): شمارش‌های یک انبار هرگز برای انبار دیگر فرستاده نمی‌شوند؛ اگر شمارشی وارد شده، اول تأیید */
+  const requestLocationChange = (code: string) => {
+    if (code === selectedLocation) return;
+    if (Object.keys(auditedItemsMap).length === 0) {
+      switchLocation(code);
+      return;
+    }
+    setPendingLocation(code);
+  };
+
+  const confirmLocationChange = () => {
+    if (pendingLocation === null) return;
+    const code = pendingLocation;
+    setPendingLocation(null);
+    switchLocation(code);
   };
 
   const handleSubmitAudit = () => {
@@ -119,7 +146,10 @@ export function useAuditSheet({ serverItems, selectedLocation, locationLabel, ne
     successMsg,
     pendingAuditSummary,
     cancelPendingAudit: () => setPendingAuditSummary(null),
-    requestLocationChange: onLocationChange,
+    pendingLocation,
+    requestLocationChange,
+    confirmLocationChange,
+    cancelLocationChange: () => setPendingLocation(null),
     handlePhysicalChange,
     handleApplyCurrentStockAsPhysical,
     handleSubmitAudit,

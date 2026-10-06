@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.56 — Changing the Stock-Count Warehouse Clears the Counts
+- **Stock-Count Warehouse Change:** switching the warehouse after entering counts asks first and clears the counts on confirmation, so counts of one warehouse are never posted for another (TD-484, Vitest `stockCountSheet.test.tsx`).
+
 ### v9.0.55 — The Stock-Count Sheet Reads the Real Book Stock
 - **Stock-Count Sheet:** the sheet selects warehouses by code and reads each item's book stock of that warehouse (code or name accepted, unknown 422), so «copy + submit» can no longer zero a warehouse; a count whose shown book stock changed before posting is refused with 409 and the sheet reloads (TD-480, `reg_stock_count_sheet_book_stock_td_480`).
 

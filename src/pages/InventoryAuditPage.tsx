@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
 import { useWarehousesQuery, type WarehouseItem } from '../hooks/queries/useSettingsQueries';
+import ConfirmModal from '../components/ConfirmModal';
 
 // Subcomponents
 import { Inventory3WayIntegrityTab } from '../components/inventory/Inventory3WayIntegrityTab';
@@ -225,6 +226,16 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
         />
       )}
 
+      {/* v9.0.56 (TD-484): عوض کردن انبار پس از شمارش، شمارش‌ها را پاک می‌کند */}
+      <ConfirmModal
+        isOpen={sheet.pendingLocation !== null}
+        title="تغییر انبار شمارش"
+        message={`شمارش‌های واردشده برای «${locationLabel}» پاک می‌شوند و برگه «${warehouseName(sheet.pendingLocation ?? '')}» بارگذاری می‌شود. ادامه می‌دهید؟`}
+        confirmText="پاک کردن و تغییر انبار"
+        cancelText="ماندن در همین انبار"
+        onConfirm={sheet.confirmLocationChange}
+        onCancel={sheet.cancelLocationChange}
+      />
     </div>
   );
 }
