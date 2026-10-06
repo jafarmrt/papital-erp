@@ -133,5 +133,55 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
     });
   }
 
+  const settledId = 'reg_invoice_settled_after_void_and_rereceipt_td_500';
+  if (shouldRun(settledId, 'td500', 'treasury', 'invoice', 'settlement', 'package4')) {
+    await runCase(results, settledId, 'v9.0.56: an invoice whose receipt was voided and received again shows the new receipt as paid in its detail and in the invoice list (TD-500)', async () => {
+      const { createTestItem, createTestCustomer } = await import('../fixtures/factories.js');
+      const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+      const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+      const problems: string[] = [];
+      const api = await client();
+      const wh = (await getDefaultWarehouseCode(orm)) as string;
+      const item = await createTestItem({ type: 'product', stocks: { [wh]: 5 }, weightedAverageCost: 1_000_000 });
+      const customer = await createTestCustomer();
+      const bankId = await createBank('Settlement bank');
+      const invoice = await api.post('/api/documents', {
+        docType: 'invoice', status: 'final', inOut: 'out', refNumber: 'auto', date: await businessTodayIsoDate(), buyer_name: customer.name,
+        items: [{ itemId: item.id, quantity: 1, unit_price: 3_000_000, location: wh }],
+      });
+      if (invoice.status !== 201 && invoice.status !== 200) throw new Error(`invoice create returned ${invoice.status}: ${errorText(invoice)}`);
+      const docId = Number(invoice.body?.id ?? invoice.body?.docId);
+      const receive = async (label: string) => {
+        const res = await api.post('/api/accounting/treasury', {
+          type: 'receipt', method: 'bank_transfer', amount: 3_000_000, bankAccountId: bankId,
+          partyType: 'customer', partyId: customer.id, partyName: customer.name, documentId: docId,
+        });
+        if (res.status !== 201) throw new Error(`${label} returned ${res.status}: ${errorText(res)}`);
+        return Number(res.body.id);
+      };
+      const expectPaid = async (label: string, paid: number, status: string) => {
+        const detail = await api.get(`/api/documents/${docId}`);
+        if (detail.status !== 200) { problems.push(`${label}: invoice detail returned ${detail.status}`); return; }
+        const got = `${Number(detail.body.paidAmount)}/${Number(detail.body.remainingAmount)}/${detail.body.settlementStatus}`;
+        if (got !== `${paid}/${3_000_000 - paid}/${status}`) problems.push(`${label}: detail paid/remaining/status ${got}, expected ${paid}/${3_000_000 - paid}/${status}`);
+        const list = await api.get(`/api/documents?type=invoice&search=${encodeURIComponent(String(customer.name))}&limit=200`);
+        const rows: Array<{ id: number; paidAmount: number }> = Array.isArray(list.body?.data) ? list.body.data : (Array.isArray(list.body) ? list.body : []);
+        const row = rows.find(r => Number(r.id) === docId);
+        if (!row) problems.push(`${label}: invoice not found in the invoice list`);
+        else if (Number(row.paidAmount) !== paid) problems.push(`${label}: invoice list paid ${row.paidAmount}, expected ${paid}`);
+      };
+
+      const first = await receive('first receipt');
+      await expectPaid('after the first receipt', 3_000_000, 'fully_paid');
+      const voided = await api.post(`/api/accounting/treasury/${first}/void`, { reason: 'wrong bank' });
+      if (voided.status !== 200) throw new Error(`void returned ${voided.status}: ${errorText(voided)}`);
+      await expectPaid('after the void', 0, 'unpaid');
+      await receive('second receipt');
+      await expectPaid('after receiving again', 3_000_000, 'fully_paid');
+      assertNoProblems(problems);
+      return 'Invoice 3,000,000: receipt (paid 3,000,000), void (paid 0), receipt again (paid 3,000,000, fully paid) in the detail and the list';
+    });
+  }
+
   return results;
 }
