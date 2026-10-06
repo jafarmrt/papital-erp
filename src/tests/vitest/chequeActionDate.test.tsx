@@ -16,7 +16,7 @@ const received = {
   amount: 4_000_000, currency: 'IRR', partyName: 'Test customer', status: 'received',
 } as Cheque;
 
-// v9.0.87 (TD-506، B04-10، تصمیم ت۶ الف): پنجره تغییر وضعیت چک تاریخ اقدام دارد (پیش‌فرض امروز) و آن را می‌فرستد؛ پیش‌تر
+// v9.0.89 (TD-506، B04-10، تصمیم ت۶ الف): پنجره تغییر وضعیت چک تاریخ اقدام دارد (پیش‌فرض امروز) و آن را می‌فرستد؛ پیش‌تر
 // پنجره هیچ تاریخی نداشت و سند هر گام به تاریخ روز ثبت در سیستم صادر می‌شد.
 describe('cheque status form sends the action date (TD-506)', () => {
   it('shows an action date defaulting to today and sends it', async () => {

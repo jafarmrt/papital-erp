@@ -19,19 +19,19 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.90 — Treasury Amount Input
+### v9.0.92 — Treasury Amount Input
 - **Treasury Amount Input (P3):** treasury, transfer and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text gets a Persian message, and the currency must be a supported one. Before, «۲۵۰۰۰۰۰» and «2,500,000» were refused with an English NaN message (TD-514, `reg_treasury_decimal_inputs_td_514`).
 
-### v9.0.89 — Bank Ledger and Cheque Bank Links
+### v9.0.91 — Bank Ledger and Cheque Bank Links
 - **Bank Ledger and Cheque Bank Links (P3):** a bank account links only to an active subsidiary account under cash and bank (general 10), and a cheque only to an active bank account. Before, a bank on a missing account or on trade receivables 1201 and a cheque on a missing bank were saved (TD-510, `reg_bank_ledger_and_cheque_bank_td_510`).
 
-### v9.0.88 — Bank Account Currency
+### v9.0.90 — Bank Account Currency
 - **Bank Account Currency (P2):** the bank account form takes a currency (rial, dollar, euro, dirham, pound) and the currency is fixed after the account's first transaction, cheque or opening balance. Before, a currency edit returned success and was silently ignored, so a foreign account could be made only through the API (TD-508, `reg_bank_account_currency_td_508`).
 
-### v9.0.87 — Cheque and Treasury Dates
+### v9.0.89 — Cheque and Treasury Dates
 - **Cheque and Treasury Dates (P2):** a cheque issue or action date after today and a non-existent day such as 1404/12/30 in a receipt, payment, transfer or cheque action are refused; the cheque status form sends the action date. Before, 1404/12/30 was posted on 1 Farvardin 1405 in the next fiscal year (TD-506, TD-669, `reg_cheque_and_treasury_dates_td_506`).
 
-### v9.0.86 — Bank Pick List for Forms
+### v9.0.88 — Bank Pick List for Forms
 - **Bank Account Readers (P2):** forms that only pick a bank account read a pick list without account, card or Sheba numbers or balances; the full list goes only to treasury readers. Before, warehouse and document users read every number and balance (TD-505, `reg_bank_account_options_td_505`).
 
 ### v9.0.85 — Spent Cheques Need a Supplier

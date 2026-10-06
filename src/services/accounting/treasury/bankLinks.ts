@@ -8,7 +8,7 @@ const CASH_AND_BANK_GENERAL_CODE = '10';
 const MAX_ACCOUNT_DEPTH = 8;
 
 /**
- * v9.0.89 (TD-510، B04-14): سرفصل حساب خزانه باید معین، فعال، حذف‌نشده و زیر کل ۱۰ «موجودی نقد و بانک» باشد؛ وگرنه
+ * v9.0.91 (TD-510، B04-14): سرفصل حساب خزانه باید معین، فعال، حذف‌نشده و زیر کل ۱۰ «موجودی نقد و بانک» باشد؛ وگرنه
  * 422 `BANK_LEDGER_ACCOUNT_INVALID`. خالی (حساب بی سرفصل) پذیرفته است. پیش‌تر شناسه ناموجود (۹۹۹۹۹۹) ساخته می‌شد و هر
  * دریافت روی آن ۴۰۹ «ارجاع به رکورد ناموجود» می‌گرفت، و سرفصل ۱۲۰۱ (حساب‌های دریافتنی تجاری) هم پذیرفته می‌شد.
  */
@@ -33,7 +33,7 @@ export async function requireBankLedgerAccount(tx: DbExecutor, accountId: number
 }
 
 /**
- * v9.0.89 (TD-510، B04-14): حساب بانکی چک باید حساب خزانه فعال و حذف‌نشده باشد (قفل اشتراکی، تا حذف هم‌زمان حساب منتظر
+ * v9.0.91 (TD-510، B04-14): حساب بانکی چک باید حساب خزانه فعال و حذف‌نشده باشد (قفل اشتراکی، تا حذف هم‌زمان حساب منتظر
  * بماند)؛ وگرنه 422 `CHEQUE_BANK_ACCOUNT_INVALID`. پیش‌تر چک با `bankAccountId 999999` ۲۰۱ می‌گرفت.
  */
 export async function requireChequeBankAccount(tx: DbExecutor, bankAccountId: number | null | undefined): Promise<number | null> {

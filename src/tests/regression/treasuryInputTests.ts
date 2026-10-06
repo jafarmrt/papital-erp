@@ -67,7 +67,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
 
   const optionsId = 'reg_bank_account_options_td_505';
   if (shouldRun(optionsId, 'td505', 'bank', 'permission', 'package4')) {
-    await runCase(results, optionsId, 'v9.0.86: warehouse, document and cheque users read only the bank account pick list (id, code, title, type, bank, currency, has-ledger); the full list with numbers and balances needs a treasury read permission (TD-505)', async () => {
+    await runCase(results, optionsId, 'v9.0.88: warehouse, document and cheque users read only the bank account pick list (id, code, title, type, bank, currency, has-ledger); the full list with numbers and balances needs a treasury read permission (TD-505)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const created = await admin.post('/api/accounting/bank-accounts', {
@@ -113,7 +113,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
 
   const datesId = 'reg_cheque_and_treasury_dates_td_506';
   if (shouldRun(datesId, 'td506', 'td669', 'cheque', 'date', 'package4')) {
-    await runCase(results, datesId, 'v9.0.87: a non-existent day (1404/12/30, 1404/07/31) is refused by treasury receipts, bank transfers and cheque actions instead of moving to another day or fiscal year, and a cheque issue or action date after the business today is refused (TD-506, TD-669)', async () => {
+    await runCase(results, datesId, 'v9.0.89: a non-existent day (1404/12/30, 1404/07/31) is refused by treasury receipts, bank transfers and cheque actions instead of moving to another day or fiscal year, and a cheque issue or action date after the business today is refused (TD-506, TD-669)', async () => {
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
       const admin = await adminClient();
       const problems: string[] = [];
@@ -161,7 +161,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
 
   const currencyId = 'reg_bank_account_currency_td_508';
   if (shouldRun(currencyId, 'td508', 'bank', 'currency', 'package4')) {
-    await runCase(results, currencyId, 'v9.0.88: a bank account takes its currency from the supported list on create and edit, and the currency is fixed after its first treasury row, cheque or opening balance (422 instead of a silently ignored edit) (TD-508)', async () => {
+    await runCase(results, currencyId, 'v9.0.90: a bank account takes its currency from the supported list on create and edit, and the currency is fixed after its first treasury row, cheque or opening balance (422 instead of a silently ignored edit) (TD-508)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const lower = await admin.post('/api/accounting/bank-accounts', { title: `Dollar bank ${tagOf()}`, type: 'bank', currency: 'usd', initialBalance: 0 });
@@ -198,7 +198,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
 
   const linksId = 'reg_bank_ledger_and_cheque_bank_td_510';
   if (shouldRun(linksId, 'td510', 'bank', 'cheque', 'ledger', 'package4')) {
-    await runCase(results, linksId, 'v9.0.89: a bank account links only to an active subsidiary ledger account under general account 10 (cash and bank), and a cheque only to an active bank account (TD-510)', async () => {
+    await runCase(results, linksId, 'v9.0.91: a bank account links only to an active subsidiary ledger account under general account 10 (cash and bank), and a cheque only to an active bank account (TD-510)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const [inactive] = await orm.insert(accounts).values({
@@ -238,7 +238,7 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
 
   const decimalId = 'reg_treasury_decimal_inputs_td_514';
   if (shouldRun(decimalId, 'td514', 'treasury', 'decimal', 'currency', 'package4')) {
-    await runCase(results, decimalId, 'v9.0.90: treasury and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text is refused with a Persian message, and the currency comes from the supported list (TD-514)', async () => {
+    await runCase(results, decimalId, 'v9.0.92: treasury and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text is refused with a Persian message, and the currency comes from the supported list (TD-514)', async () => {
       const admin = await adminClient();
       const problems: string[] = [];
       const bank = await createBank('Decimal bank');

@@ -8,7 +8,7 @@ import { TREASURY_CURRENCIES, normalizeTreasuryCurrency } from '../../lib/treasu
 
 afterEach(cleanup);
 
-// v9.0.88 (TD-508، B04-12، تصمیم ت۵ الف): فرم حساب بانکی ارز را از فهرست AGENTS §6 می‌گیرد و می‌فرستد؛ پیش‌تر کلیدهای ذخیره
+// v9.0.90 (TD-508، B04-12، تصمیم ت۵ الف): فرم حساب بانکی ارز را از فهرست AGENTS §6 می‌گیرد و می‌فرستد؛ پیش‌تر کلیدهای ذخیره
 // فرم `currency` نداشتند و حساب ارزی فقط از API ساخته می‌شد.
 describe('bank account form currency (TD-508)', () => {
   it('offers the supported currencies and sends the chosen one', async () => {

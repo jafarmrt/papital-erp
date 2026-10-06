@@ -27,7 +27,7 @@ export interface ChequeStatusVariables {
   bankAccountId?: number;
   /** v9.0.85 (TD-498): خرج چک فقط با شناسه تأمین‌کننده */
   transfereePartyId?: number;
-  /** v9.0.87 (TD-506): تاریخ اقدام (ISO)؛ خالی ← امروز کسب‌وکار در سرور */
+  /** v9.0.89 (TD-506): تاریخ اقدام (ISO)؛ خالی ← امروز کسب‌وکار در سرور */
   actionDate?: string;
 }
 

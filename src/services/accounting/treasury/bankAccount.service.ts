@@ -317,7 +317,7 @@ export class BankAccountService {
   }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = money(data.initialBalance);
     const isStrict = data.strict !== false;
-    // v9.0.88 (TD-508، ت۵ الف): ارز از فهرست پشتیبانی‌شده (خالی ← ریال)
+    // v9.0.90 (TD-508، ت۵ الف): ارز از فهرست پشتیبانی‌شده (خالی ← ریال)
     const currency = requireTreasuryCurrency(data.currency);
 
     // V4.0.5 (F-3 / TD-093): قانون صریح — اگر موجودی اولیه غیرصفر باشد، انتساب به سرفصل معین حسابداری برای صدور سند افتتاحیه الزامی است
@@ -329,7 +329,7 @@ export class BankAccountService {
       // v8.0.78 (TD-325): کد از شمارنده اتمی پیشوند، یا کد دستی یکتا زیر قفل همان شمارنده
       const finalCode = await assignTreasuryAccountCode(tx, data.type, data.code);
 
-      // v9.0.89 (TD-510): سرفصل معین فعال زیر کل ۱۰
+      // v9.0.91 (TD-510): سرفصل معین فعال زیر کل ۱۰
       const ledgerAccountId = await requireBankLedgerAccount(tx, data.accountId);
       const [inserted] = await tx.insert(bankAccounts).values({
         code: finalCode,
@@ -498,10 +498,10 @@ export class BankAccountService {
       if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
         await assertNoPendingOpeningApproval(tx, existing);
       }
-      // v9.0.88 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
+      // v9.0.90 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
-      // v9.0.89 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
+      // v9.0.91 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
       const ledgerAccountId = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null)
         ? await requireBankLedgerAccount(tx, data.accountId)
         : undefined;

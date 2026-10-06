@@ -24,7 +24,7 @@ import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
 interface ChequesTabProps {
   cheques: Cheque[];
-  /** v9.0.86 (TD-505): فهرست انتخاب حساب‌های خزانه، بی شماره حساب و مانده */
+  /** v9.0.88 (TD-505): فهرست انتخاب حساب‌های خزانه، بی شماره حساب و مانده */
   bankAccounts: BankAccountOption[];
   customers: Customer[];
   personnelList: Personnel[];
@@ -106,7 +106,7 @@ export function ChequesTab({
   const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
-  // v9.0.87 (TD-506، ت۶ الف): تاریخ اقدام (ISO)؛ پیش‌فرض امروز، سند گام چک به همین تاریخ صادر می‌شود
+  // v9.0.89 (TD-506، ت۶ الف): تاریخ اقدام (ISO)؛ پیش‌فرض امروز، سند گام چک به همین تاریخ صادر می‌شود
   const [statusActionDate, setStatusActionDate] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
   const [transfereePartyId, setTransfereePartyId] = useState<number | null>(null);

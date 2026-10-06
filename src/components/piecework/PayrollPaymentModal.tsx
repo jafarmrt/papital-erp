@@ -58,7 +58,7 @@ export function PayrollPaymentModal({ payroll, onClose, onPaid }: PayrollPayment
     if (!payroll) return;
     let controller = new AbortController();
     setLoadingBanks(true);
-    // v9.0.86 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
+    // v9.0.88 (TD-505، ت۷): فهرست انتخاب، بی شماره حساب و مانده
     fetchJson<{ data?: BankAccountOption[] } | BankAccountOption[]>('/accounting/bank-accounts/options', { signal: controller.signal })
       .then((res) => {
         setBankAccounts(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));

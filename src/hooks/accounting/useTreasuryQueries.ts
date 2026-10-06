@@ -24,7 +24,7 @@ export function useBankAccountsQuery() {
   });
 }
 
-/** v9.0.86 (TD-505، ت۷): فهرست انتخاب حساب‌های خزانه (بی شماره حساب و مانده) برای دفتر چک */
+/** v9.0.88 (TD-505، ت۷): فهرست انتخاب حساب‌های خزانه (بی شماره حساب و مانده) برای دفتر چک */
 export function useBankAccountOptionsQuery() {
   return useQuery<BankAccountOption[]>({
     queryKey: QUERY_KEYS.accounting.bankAccountOptions(),

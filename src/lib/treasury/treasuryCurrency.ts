@@ -1,5 +1,5 @@
 /**
- * v9.0.88 (TD-508، B04-12، تصمیم مالک محصول ت۵ الف): ارزهای حساب خزانه، مشترک سرور و فرم حساب بانکی (فهرست AGENTS §6).
+ * v9.0.90 (TD-508، B04-12، تصمیم مالک محصول ت۵ الف): ارزهای حساب خزانه، مشترک سرور و فرم حساب بانکی (فهرست AGENTS §6).
  */
 export const TREASURY_CURRENCIES = ['IRR', 'USD', 'EUR', 'AED', 'GBP'] as const;
 export type TreasuryCurrency = typeof TREASURY_CURRENCIES[number];
