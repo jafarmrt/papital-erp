@@ -366,5 +366,37 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     });
   }
 
+  if (shouldRun('sec_workflow_single_open_instance_td_455', 'security', 'td455', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_single_open_instance_td_455',
+      name: 'v9.0.37: شروع هم‌زمان برای یک موجودیت فقط یک فرایند در جریان می‌سازد و پایگاه‌داده فرایند باز دوم را نمی‌پذیرد (TD-455)',
+      details: 'شش شروع هم‌زمان روی یک سند: یک فرایند در جریان؛ درج مستقیم فرایند باز دوم با شاخص یکتای جزئی رد می‌شود',
+    }, async (h, wrong) => {
+      const docId = await draftSalesDocument(h);
+      const starts = await Promise.all(Array.from({ length: 6 }, () =>
+        h.post('/api/workflow/start', { workflowCode: 'DOC_APPROVAL_WORKFLOW', entityType: 'document', entityId: docId })));
+      const statuses = starts.map(r => r.status);
+      if (statuses.some(s => s !== 200)) wrong.push(`شروع‌های هم‌زمان ${statuses.join(',')} دادند`);
+      const open = await h.q(`SELECT id FROM workflow_instances WHERE entity_type = 'document' AND entity_id = $1 AND status = 'IN_PROGRESS'`, [String(docId)]);
+      if (open.length !== 1) wrong.push(`${open.length} فرایند در جریان برای یک سند ساخته شد`);
+      const ids = new Set(starts.map(r => Number(r.body?.data?.id)));
+      if (ids.size !== 1) wrong.push(`شروع‌های هم‌زمان ${ids.size} فرایند متفاوت برگرداندند`);
+
+      const [first] = open;
+      if (first) {
+        try {
+          await h.q(
+            `INSERT INTO workflow_instances (workflow_definition_id, definition_version, entity_type, entity_id, current_state_id, status, started_by_name)
+             SELECT workflow_definition_id, definition_version, entity_type, entity_id, current_state_id, 'IN_PROGRESS', 'آزمون' FROM workflow_instances WHERE id = $1`,
+            [first.id],
+          );
+          wrong.push('پایگاه‌داده فرایند در جریان دوم را برای همان سند پذیرفت');
+        } catch (err) {
+          if ((err as { code?: string }).code !== '23505') wrong.push(`درج فرایند دوم خطای دیگری داد: ${String(err)}`);
+        }
+      }
+    });
+  }
+
   return results;
 }

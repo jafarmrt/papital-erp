@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.37 — One Open Workflow Instance per Entity
+- **Single Open Instance:** `startInstance` serializes starts on an entity with a transaction advisory lock and the partial unique index `uq_workflow_instances_open_entity` (migration 0056, created only on clean data) backs it; duplicates are listed by the financial health check (TD-455, `sec_workflow_single_open_instance_td_455`).
+
 ### v9.0.36 — Workflow Start Failures Are Not Swallowed
 - **Workflow Start Failures (P1):** `maybeStartWorkflow` returns null only when no active definition exists and otherwise throws, so a broken active definition rejects the bank account or item instead of issuing its opening voucher without approval; item creation and its workflow start share one transaction (TD-451, `sec_workflow_start_failure_td_451`).
 

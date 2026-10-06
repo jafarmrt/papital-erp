@@ -22,6 +22,11 @@ export const ADVISORY_LOCK_KEYS = {
  */
 export const ROW_ADVISORY_LOCK_NAMESPACES = {
   DLQ_EVENT: 91007,
+  /**
+   * v9.0.37 (TD-455): شروع فرایند گردش‌کار یک موجودیت؛ قفل تراکنشی با کلید hashtext(نوع:شناسه)، تا شروع هم‌زمان دو
+   * فرایند در جریان نسازد
+   */
+  WORKFLOW_ENTITY_START: 91009,
 } as const;
 
 export type AdvisoryLockOutcome<T> = { acquired: true; result: T } | { acquired: false };

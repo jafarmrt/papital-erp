@@ -22,6 +22,7 @@ import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
+import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { lockWorkflowEntity, runWorkflowTransitionAction, workflowActionPermissions, workflowEntityExists } from './workflowTransitionActions.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
@@ -480,15 +481,19 @@ export class WorkflowTransitionExecutor {
         throw new NotFoundError(`موجودیت «${params.entityType}» با شناسه ${params.entityId} یافت نشد`);
       }
 
-      // Check if instance already exists
+      // v9.0.37 (TD-455): شروع‌های هم‌زمان یک موجودیت پشت هم می‌آیند (قفل تراکنشی تا پایان تراکنش فراخواننده) و فرایند
+      // در جریانِ هر تعریفی دیده می‌شود؛ شاخص یکتای جزئی uq_workflow_instances_open_entity (مهاجرت 0056) پشتوانه است.
+      // پیش‌تر بررسی سپس درج بی قفل بود و شش شروع هم‌زمان دو فرایند در جریان می‌ساخت.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_ENTITY_START}::int, hashtext(${`${params.entityType}:${String(params.entityId)}`}::text))`);
       const [existing] = await tx.select().from(workflowInstances).where(and(
-        eq(workflowInstances.workflowDefinitionId, def.id),
         eq(workflowInstances.entityType, params.entityType),
-        eq(workflowInstances.entityId, String(params.entityId))
-      ));
+        eq(workflowInstances.entityId, String(params.entityId)),
+        eq(workflowInstances.status, 'IN_PROGRESS')
+      )).orderBy(desc(workflowInstances.id)).limit(1);
 
-      if (existing && existing.status === 'IN_PROGRESS') {
-        return existing;
+      if (existing) {
+        if (existing.workflowDefinitionId === def.id) return existing;
+        throw new ConflictError(`موجودیت «${params.entityType}» با شناسه ${params.entityId} فرایند در جریان دیگری دارد (WF_INSTANCE_ALREADY_OPEN)`);
       }
 
       const targetVersionNumber = params.definitionVersion || def.version || 1;
