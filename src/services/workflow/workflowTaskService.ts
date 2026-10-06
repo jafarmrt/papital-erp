@@ -1,4 +1,4 @@
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowInstances, 
   workflowPendingApprovals, 
@@ -14,6 +14,15 @@ import { lockWorkflowEntity } from './workflowTransitionActions.js';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { snapshotTransitionsOf } from './workflowSnapshot.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
+
+/** v9.0.34 (TD-444): کاربر کارتابل و مجوزهایی که موتور برای او و تفویض‌کنندگانش می‌خواند */
+interface TaskSigner {
+  userId: number;
+  role: string;
+  permissions: string[];
+  delegations: ActingDelegation[];
+  delegatorPermissions: Map<number, string[]>;
+}
 
 export class WorkflowTaskService {
   // v7.0.101 (TD-085، تصمیم مالک محصول «بازگشایی با گزارش»): markExpiredTasks حذف شد؛ کار تاییدی با گذشتن مهلت
@@ -33,8 +42,7 @@ export class WorkflowTaskService {
     const userId = params.userId;
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';
-
-    const activeDelegations = await WorkflowDelegationService.activeDelegations(orm, { toUserId: userId });
+    const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, params.userPermissions);
 
     const targetStatus = params.status || 'pending';
     const allTasks = await orm.select({
@@ -78,10 +86,10 @@ export class WorkflowTaskService {
       let isAssigned = false;
       let delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null = null;
 
-      if (isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole)) {
+      if (isAdmin || WorkflowTaskService.assignedDirectly(task, instance, signer)) {
         isAssigned = true;
       } else {
-        const del = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(instance, item.definitionCode), activeDelegations);
+        const del = WorkflowTaskService.delegationForTask(task, instance, WorkflowTaskService.workflowCodeOf(instance, item.definitionCode), signer);
         if (del) {
           isAssigned = true;
           delegationInfo = { delegatedFromUserId: del.fromUserId, delegationScope: del.scope };
@@ -142,12 +150,12 @@ export class WorkflowTaskService {
    * Get Task Stats
    * V4 Phase 5.3 (A-2): کوئری مستقیم سبک شمارش تسک‌های منتظر و منقضی بدون فراخوانی getMyTasks و بارگذاری N+1 کانتکست موجودیت‌ها
    */
-  static async getTaskStats(params: { userId: number; userRole?: string }) {
+  static async getTaskStats(params: { userId: number; userRole?: string; userPermissions?: string[] }) {
     const userId = Number(params.userId);
     const userRole = (params.userRole || '').trim().toLowerCase();
     const isAdmin = userRole === 'admin';
     const nowIso = new Date().toISOString();
-    const activeDelegations = await WorkflowDelegationService.activeDelegations(orm, { toUserId: userId });
+    const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, params.userPermissions);
 
     const pendingTasks = await orm.select({
       id: workflowTasks.id,
@@ -178,10 +186,10 @@ export class WorkflowTaskService {
         continue;
       }
 
-      let isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, userId, userRole);
+      let isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, task, signer);
       let signerId = userId;
       if (!isAssigned) {
-        const del = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), activeDelegations);
+        const del = WorkflowTaskService.delegationForTask(task, task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), signer);
         isAssigned = !!del;
         if (del) signerId = del.fromUserId;
       }
@@ -264,18 +272,18 @@ export class WorkflowTaskService {
       }
 
       const userRole = (params.userRole || '').trim().toLowerCase();
-      const userPerms = params.userPermissions || [];
-      const isAdmin = userRole === 'admin' || userPerms.includes('workflow.admin') || userPerms.includes('admin');
+      // v9.0.34 (TD-444، ت۱ الف): فقط مدیر سیستم هر کاری را اجرا می‌کند؛ مجوزهای نقش از پایگاه‌داده، همان قاعده موتور
+      const isAdmin = userRole === 'admin';
+      const signer = await WorkflowTaskService.signerContext(tx, params.userId, userRole, params.userPermissions);
 
       // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): جانشین در بازه و حوزه تفویض کار کاربر تعیین‌شده یا نامزد
       // و کار نقش تفویض‌کننده را انجام می‌دهد؛ پیش‌تر فقط کار کاربر تعیین‌شده یا نامزد را، و کار نقشی هرگز
       let delegationLogDetails: Record<string, unknown> | null = null;
-      let isAuthorized = isAdmin || WorkflowTaskService.assignedDirectly(task, params.userId, userRole);
+      let isAuthorized = isAdmin || WorkflowTaskService.assignedDirectly(task, instance, signer);
       if (!isAuthorized) {
         const [definition] = await tx.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
           .where(eq(workflowDefinitions.id, instance.workflowDefinitionId));
-        const delegations = await WorkflowDelegationService.activeDelegations(tx, { toUserId: params.userId });
-        const validDelegation = WorkflowTaskService.delegationForTask(task, WorkflowTaskService.workflowCodeOf(instance, definition?.code), delegations);
+        const validDelegation = WorkflowTaskService.delegationForTask(task, instance, WorkflowTaskService.workflowCodeOf(instance, definition?.code), signer);
         if (validDelegation) {
           isAuthorized = true;
           delegationLogDetails = {
@@ -292,7 +300,7 @@ export class WorkflowTaskService {
 
       // v8.0.90 (TD-370): تأیید همان انتقال خود کار را اجرا می‌کند و «رد» فقط انتقال رد گام جاری را (از تصویر نسخه
       // فرایند). پیش‌تر اولین انتقال مثبت یا منفی جدول برداشته می‌شد و «رد» در گام بی‌انتقال رد همان تأیید را اجرا می‌کرد.
-      const effectiveTransitionId = await WorkflowTaskService.resolveTaskTransition(tx, task, instance, params);
+      const effectiveTransitionId = await WorkflowTaskService.resolveTaskTransition(tx, task, instance, { ...params, userPermissions: signer.permissions });
       const transitionResult = await WorkflowTransitionExecutor.executeTransition({
         instanceId: task.instanceId,
         transitionId: effectiveTransitionId,
@@ -355,15 +363,51 @@ export class WorkflowTaskService {
     return (candidateRoles.length > 0 ? candidateRoles : [(task.assignedRole || '').trim().toLowerCase()]).filter(Boolean);
   }
 
-  /** کار به خود کاربر داده شده: کاربر تعیین‌شده یا نامزد، یا نقش کار (یا «همه») */
-  private static assignedDirectly(
-    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole'>,
+  /**
+   * v9.0.34 (TD-444): کاربر کارتابل با مجوزهای نقشش (از پایگاه‌داده، همان signerPermissions موتور) و تفویض‌های فعالی که
+   * به او رسیده، هر کدام با مجوزهای نقش تفویض‌کننده.
+   */
+  private static async signerContext(
+    tx: DbExecutor,
     userId: number,
-    userRole: string
+    userRole: string,
+    given?: string[]
+  ): Promise<TaskSigner> {
+    const permissions = await WorkflowTransitionExecutor.signerPermissions(userRole, given, tx);
+    const delegations = await WorkflowDelegationService.activeDelegations(tx, { toUserId: userId });
+    const delegatorPermissions = new Map<number, string[]>();
+    for (const d of delegations) {
+      delegatorPermissions.set(d.id, await WorkflowTransitionExecutor.signerPermissions(d.fromRole, [], tx));
+    }
+    return { userId, role: userRole, permissions, delegations, delegatorPermissions };
+  }
+
+  /**
+   * v9.0.34 (TD-444): همان قاعده موتور برای یک امضاکننده: نقش کار با checkUserRoleMatch (نقش، نقش هم‌ارز همان بخش، یا
+   * مجوز ثبت همان بخش) و مجوز لازم انتقال (TD-391) از تصویر نسخه فرایند. پیش‌تر کارتابل فقط کد نقش برابر را می‌شناخت.
+   */
+  private static roleAllows(
+    task: Pick<typeof workflowTasks.$inferSelect, 'candidateRoles' | 'assignedRole' | 'transitionId'>,
+    instance: { snapshotDsl: unknown },
+    role: string | undefined,
+    permissions: string[]
+  ): boolean {
+    const transition = snapshotTransitionsOf(instance.snapshotDsl)?.find(t => t.id === task.transitionId);
+    const required = (transition?.requiredPermission || '').trim();
+    if (required && (role || '').trim().toLowerCase() !== 'admin' && !permissions.includes(required) && !permissions.includes('*')) return false;
+    const roles = WorkflowTaskService.taskRolesOf(task);
+    return roles.length === 0 || roles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(role, r === 'all' ? 'ALL' : r, permissions));
+  }
+
+  /** کار به خود کاربر داده شده: کاربر تعیین‌شده یا نامزد، یا نقش کار (یا «همه») با قاعده موتور */
+  private static assignedDirectly(
+    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole' | 'transitionId'>,
+    instance: { snapshotDsl: unknown },
+    signer: TaskSigner
   ): boolean {
     const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-    if (task.assignedUserId === userId || candidateUserIds.includes(userId)) return true;
-    return WorkflowTaskService.taskRolesOf(task).some(r => r === '*' || r === 'all' || r === userRole);
+    if (task.assignedUserId === signer.userId || candidateUserIds.includes(signer.userId)) return true;
+    return WorkflowTaskService.roleAllows(task, instance, signer.role, signer.permissions);
   }
 
   /**
@@ -390,16 +434,16 @@ export class WorkflowTaskService {
    * می‌پوشاند و تفویض‌کننده کاربر تعیین‌شده یا نامزد کار است یا نقش کار را دارد (همان قاعده نقش اجرای انتقال).
    */
   private static delegationForTask(
-    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole'>,
+    task: Pick<typeof workflowTasks.$inferSelect, 'assignedUserId' | 'candidateUsers' | 'candidateRoles' | 'assignedRole' | 'transitionId'>,
+    instance: { snapshotDsl: unknown },
     workflowCode: string,
-    delegations: ActingDelegation[]
+    signer: TaskSigner
   ): ActingDelegation | undefined {
     const candidateUserIds = Array.isArray(task.candidateUsers) ? task.candidateUsers.map(Number) : [];
-    const taskRoles = WorkflowTaskService.taskRolesOf(task);
-    return delegations.find(d => WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && (
+    return signer.delegations.find(d => WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && (
       d.fromUserId === task.assignedUserId
       || candidateUserIds.includes(d.fromUserId)
-      || taskRoles.some(r => WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, r, []))
+      || WorkflowTaskService.roleAllows(task, instance, d.fromRole, signer.delegatorPermissions.get(d.id) ?? [])
     ));
   }
 

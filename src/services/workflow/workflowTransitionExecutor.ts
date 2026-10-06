@@ -153,12 +153,9 @@ export class WorkflowTransitionExecutor {
     const uRole = (userRole || '').trim().toLowerCase();
     const rRole = (requiredRole || '').trim().toLowerCase();
 
-    if (
-      uRole === 'admin' || 
-      userPermissions.includes('workflow.admin') || 
-      userPermissions.includes('workflow.manage') || 
-      userPermissions.includes('*')
-    ) {
+    // v9.0.34 (TD-444، تصمیم مالک محصول ت۱ الف): فقط مدیر سیستم همه گام‌ها را امضا می‌کند؛ workflow.manage و workflow.admin
+    // مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند (پیش‌تر می‌کردند، ولی چون مجوزها به موتور نمی‌رسید پنهان بود)
+    if (uRole === 'admin' || userPermissions.includes('*')) {
       return true;
     }
 
@@ -173,6 +170,21 @@ export class WorkflowTransitionExecutor {
 
     return WorkflowTransitionExecutor.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
       roles.includes(rRole) && permissions.some(p => userPermissions.includes(p)));
+  }
+
+  /**
+   * v9.0.34 (TD-444): مجوزهای امضاکننده = مجوزهای نقش او که موتور خودش با همان اتصال از جدول نقش‌ها می‌خواند، به‌اضافه
+   * آنچه فراخواننده داده است. پیش‌تر موتور فقط req.user.permissions را می‌گرفت که هرگز پر نمی‌شود (توکن مجوز ندارد)، پس
+   * قاعده «مجوز ثبت همان بخش» (TD-374) از هیچ مسیری اجرا نمی‌شد و کارتابل و ویجت سند دو جواب می‌دادند.
+   */
+  static async signerPermissions(userRole: string | undefined, given: string[] | undefined, txExecutor: DbClient = orm): Promise<string[]> {
+    const role = (userRole || '').trim().toLowerCase();
+    const own = Array.isArray(given) ? given : [];
+    if (!role) return own;
+    const [roleRow] = await txExecutor.select({ permissions: roles.permissions }).from(roles)
+      .where(sql`lower(${roles.code}) = ${role}`);
+    const rolePermissions = Array.isArray(roleRow?.permissions) ? (roleRow.permissions as string[]) : [];
+    return Array.from(new Set([...rolePermissions, ...own]));
   }
 
   /**
@@ -289,8 +301,13 @@ export class WorkflowTransitionExecutor {
     const delegations = params.userId
       ? await WorkflowDelegationService.activeDelegations(txExecutor, { toUserId: params.userId })
       : [];
-    const acting = delegations.find(d =>
-      WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, []));
+    let acting: ActingDelegation | undefined;
+    for (const d of delegations) {
+      if (!WorkflowDelegationService.delegationCovers(d.scope, workflowCode)) continue;
+      // v9.0.34 (TD-444): نقش تفویض‌کننده با مجوزهای همان نقش سنجیده می‌شود، همان قاعده‌ای که خود او را می‌سنجد
+      const fromPermissions = await WorkflowTransitionExecutor.signerPermissions(d.fromRole, [], txExecutor);
+      if (WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, fromPermissions)) { acting = d; break; }
+    }
     if (!acting) {
       throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
     }
@@ -645,12 +662,14 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
       }
 
+      // v9.0.34 (TD-444): مجوزهای نقش امضاکننده از پایگاه‌داده، از هر مسیری (ویجت، کارتابل، تدارکات)
+      const userPermissions = await WorkflowTransitionExecutor.signerPermissions(params.userRole, params.userPermissions, tx);
       // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
       // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
-      const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, params, tx);
+      const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, { ...params, userPermissions }, tx);
       const signerHoldsPermission = await WorkflowTransitionExecutor.holdsRequiredPermission(transition, actingFor
         ? { role: actingFor.fromRole, ownPermissions: false }
-        : { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }, tx);
+        : { role: params.userRole, permissions: userPermissions, ownPermissions: true }, tx);
       if (!signerHoldsPermission) {
         throw new ForbiddenError(`انتقال «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد (WF_PERMISSION_REQUIRED).`);
       }
@@ -934,11 +953,12 @@ export class WorkflowTransitionExecutor {
       return { allowed: false, reason: 'انتقال با وضعیت فعلی مطابقت ندارد' };
     }
 
-    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
+    const userPermissions = await WorkflowTransitionExecutor.signerPermissions(params.userRole, params.userPermissions);
+    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, userPermissions);
     if (!isAuthorized) {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
     }
-    if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }))) {
+    if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: userPermissions, ownPermissions: true }))) {
       return { allowed: false, reason: `این انتقال مجوز «${transition.requiredPermission}» را می‌خواهد` };
     }
 
@@ -1009,7 +1029,7 @@ export class WorkflowTransitionExecutor {
       snapshotTransitionsOf(inst.snapshotDsl), 
       undefined, 
       txExecutor,
-      userPermissions
+      await WorkflowTransitionExecutor.signerPermissions(userRole, userPermissions, txExecutor) // v9.0.34 (TD-444)
     );
     const availableTransitions: Array<WorkflowTransitionSnapshot & WorkflowTransitionConditionText> = [];
     const blockedTransitions: Array<Pick<WorkflowTransitionSnapshot, 'id' | 'title' | 'actionKey'> & WorkflowTransitionConditionText & { unmetConditions: string[] }> = [];

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.34 — Workflow Signer Permissions From the Role
+- **Workflow Signer Permissions (P1):** the engine reads the signer's role permissions itself, so the department posting-permission rule (TD-374) works and the inbox, its counts and task execution follow the same rule as the document widget; `workflow.manage` / `workflow.admin` no longer sign other roles' steps (TD-444, `sec_workflow_signer_permissions_td_444`).
+
 ### v9.0.33 — Workflow Start Scoped to the Definition's Entity Type
 - **Workflow Start Scope (P0):** `POST /workflow/start` and `startInstance` accept only an active definition whose entity type is the entity's own, on an existing entity; a mismatched instance created earlier no longer advances or shows in the document widget (TD-443, `sec_workflow_start_entity_scope_td_443`).
 

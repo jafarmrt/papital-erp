@@ -97,12 +97,14 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // 2. Role matching checks
+    // v9.0.34 (TD-444، تصمیم ت۱): workflow.admin و workflow.manage مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند؛ فقط مدیر سیستم
     const adminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['workflow.admin']);
     const manageCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['workflow.manage']);
+    const systemAdminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('admin', 'finance_manager', []);
     const warehouseCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'warehouse', ['warehouse.in']);
     const rejectCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['items.view']);
 
-    if (adminCheck && manageCheck && warehouseCheck && !rejectCheck) {
+    if (!adminCheck && !manageCheck && systemAdminCheck && warehouseCheck && !rejectCheck) {
       results.push(makeTestCase({
         id: 'sec_workflow_granular_permissions',
         name: 'ماتریس اعتبارسنجی مجوزهای ۵ گانه امنیتی فرآیندهای کاری (Workflow Authorization Matrix)',
