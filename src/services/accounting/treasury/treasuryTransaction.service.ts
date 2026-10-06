@@ -511,27 +511,28 @@ export class TreasuryTransactionService {
       if (original.payrollId) {
         throw new BusinessLogicError('این تراکنش یک پرداخت حقوق ثبت‌شده است و از این مسیر قابل ابطال نیست؛ آن را از پنجره پرداخت همان فیش («ابطال پرداخت») ابطال کنید.');
       }
+      // v9.0.67 (TD-499، تصمیم مالک محصول ت۱ الف): ردیف معکوس («ابطال تراکنش دیگر») ابطال نمی‌شود. پیش‌تر ابطال آن اثر اصل
+      // را «احیا» می‌کرد؛ وقتی سند پیش‌نویس اصل در ابطال اول حذف نرم شده بود، پول بی هیچ سندی به بانک برمی‌گشت (دور زدن TD-409).
+      if (original.reversalOfId !== null) {
+        throw new ConflictError('این ردیف ابطالِ تراکنش دیگری است و ابطال نمی‌شود؛ برای ثبت دوباره، تراکنش تازه ثبت کنید.');
+      }
       // طرفی که پیش‌تر جدا باطل شده (پیش از v8.0.73) سند مشترک را هم باطل کرده است؛ این طرف فقط مانده و ردیف خودش را برمی‌گرداند
       const partner = sides.find(t => t.id !== id && t.status !== 'voided');
       const isTransfer = sideIds.length > 1;
 
       // سند معکوس اتوماتیک (اگر اصل سند دارد و طرف دیگر انتقال آن را پیش‌تر باطل نکرده است)
       let reversalVoucherId: number | null = null;
-      const isReversalOfReversal = original.reversalOfId !== null;
       const sharedVoucherVoided = isTransfer && !partner;
       if (original.voucherId && !sharedVoucherVoided) {
         // v8.0.2 (TD-251، تصمیم مالک محصول): سند پیش‌نویس حذف نرم می‌شود و سند معکوس نمی‌گیرد
         const rv = await VoucherService.voidSourceVoucher({
           voucherId: original.voucherId,
-          reason: isReversalOfReversal
-            ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId}) — ${reason}`
-            : partner
-              ? `ابطال انتقال ${original.transactionNumber} و ${partner.transactionNumber} — ${reason}`
-              : `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
+          reason: partner
+            ? `ابطال انتقال ${original.transactionNumber} و ${partner.transactionNumber} — ${reason}`
+            : `ابطال تراکنش ${original.transactionNumber} — ${reason}`,
           userId: params.userId,
           username: params.username,
           externalTx: txEngine,
-          allowReversalOfReversal: true,
         });
         reversalVoucherId = rv.reversalVoucherId;
       }
@@ -603,7 +604,6 @@ export class TreasuryTransactionService {
     // تراکنش معکوس با شماره سری جدید
     const reversalType = original.type === 'receipt' ? 'payment' : 'receipt';
     const reversalNum = await this.generateTransactionNumber(reversalType, txEngine);
-    const isReversalOfReversal = original.reversalOfId !== null;
 
     const [reversalTx] = await txEngine.insert(treasuryTransactions).values({
       transactionNumber: reversalNum,
@@ -622,9 +622,7 @@ export class TreasuryTransactionService {
       chequeId: original.chequeId || null,
       documentId: original.documentId || null,
       reversalOfId: original.id,
-      description: isReversalOfReversal
-        ? `ابطال تراکنش معکوس ${original.transactionNumber} (احیا و اصلاح تراکنش اصلی #${original.reversalOfId})${pairNote} — دلیل: ${reason}`
-        : `ابطال تراکنش ${original.transactionNumber}${pairNote} — دلیل: ${reason}`,
+      description: `ابطال تراکنش ${original.transactionNumber}${pairNote} — دلیل: ${reason}`,
       status: 'completed',
       createdById: params.userId || null,
     }).returning();

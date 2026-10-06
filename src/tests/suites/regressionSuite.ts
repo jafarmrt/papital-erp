@@ -10509,6 +10509,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.55, TD-480): stock-count sheet book stock by warehouse code or name, stale book stock 409
   const { runStockCountSheetTests } = await import('../regression/stockCountSheetTests.js');
   results.push(...await runStockCountSheetTests(shouldRun));
+  // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
+  const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
+  results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
 
   return results;
 }
