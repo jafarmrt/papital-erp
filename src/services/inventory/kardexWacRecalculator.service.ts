@@ -50,7 +50,7 @@ export class KardexWacRecalculatorService {
         .for('update');
 
       if (!item) {
-        // v9.0.68 (TD-494): کالای ناموجود ۴۰۴، نه ۵۰۰
+        // v9.0.74 (TD-494): کالای ناموجود ۴۰۴، نه ۵۰۰
         throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
       }
 
@@ -97,7 +97,7 @@ export class KardexWacRecalculatorService {
       // v8.0.13 (TD-269): بازپخش از WAC صفر شروع می‌شود؛ WAC کنونی فقط جایگزین نتیجه غیرمثبت است
       const replay = replayKardexWac(allItemTxs, item.weightedAverageCost);
       if (replay.firstNegativeRowId !== null && policy === 'forbidden') {
-        // v9.0.68 (TD-494): خطای کاری با پیام فارسی و ۴۲۲ (پیش‌تر Error انگلیسی و ۵۰۰)
+        // v9.0.74 (TD-494): خطای کاری با پیام فارسی و ۴۲۲ (پیش‌تر Error انگلیسی و ۵۰۰)
         throw new ValidationError(
           `بازسازی کاردکس کالای «${item.name}» (${item.code}) انجام نشد: مانده کاردکس به ترتیب ثبت در ردیف #${replay.firstNegativeRowId} ` +
           `به ${replay.minimumBalance.toNumber()} می‌رسد و موجودی منفی مجاز نیست.`,

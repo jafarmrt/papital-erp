@@ -8,7 +8,7 @@ import { money } from '../../lib/money.js';
 /**
  * Package 6 (inventory and Kardex), TD-494 / B06-15: business errors of the warehouse transfer and the Kardex rebuild
  * are typed (422 / 404, never 500), the transfer resolves its warehouses with the shared resolver (code or name, any
- * case), and the running Kardex of a missing item is 404 instead of a made-up item. On v9.0.67 an upper-case code, a
+ * case), and the running Kardex of a missing item is 404 instead of a made-up item. On v9.0.73 an upper-case code, a
  * warehouse name, a missing item and a negative rebuild all answered 500 and the running Kardex returned a fake item.
  */
 
@@ -19,7 +19,7 @@ export async function runInventoryBusinessErrorsTests(shouldRun: (id: string, ..
   const id = 'reg_inventory_business_errors_td_494';
   if (!shouldRun(id, 'td494', 'transfer', 'rebuild', 'kardex', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.68: transfer and Kardex rebuild business errors are 422/404, warehouses resolve by code or name, missing item Kardex is 404 (TD-494)';
+  const name = 'v9.0.74: transfer and Kardex rebuild business errors are 422/404, warehouses resolve by code or name, missing item Kardex is 404 (TD-494)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const txIds: number[] = [];

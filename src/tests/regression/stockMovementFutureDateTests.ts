@@ -24,7 +24,7 @@ export async function runStockMovementFutureDateTests(shouldRun: (id: string, ..
   const id = 'reg_stock_movement_future_date_td_483';
   if (!shouldRun(id, 'td483', 'transfer', 'future', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.66: a stock movement dated after today is refused, a transfer date is normalized, and future Kardex rows are listed by the health check (TD-483)';
+  const name = 'v9.0.72: a stock movement dated after today is refused, a transfer date is normalized, and future Kardex rows are listed by the health check (TD-483)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const txIds: number[] = [];
@@ -90,7 +90,7 @@ export async function runStockMovementFutureDateTests(shouldRun: (id: string, ..
     }
     if (receiptError !== 'STOCK_MOVEMENT_FUTURE_DATE') wrong.push(`final receipt dated ${tomorrow}: ${receiptError || 'accepted'}, expected STOCK_MOVEMENT_FUTURE_DATE`);
 
-    // an existing future-dated row (recorded before v9.0.66) is listed by the health check and left as it is
+    // an existing future-dated row (recorded before v9.0.72) is listed by the health check and left as it is
     const [future] = await orm.insert(transactions).values({
       itemId: a.id, type: 'in', quantity: 0.0001, unitPrice: money(0), totalPrice: money(0), date: '2099-01-01 00:00:00',
       documentType: 'receipt', documentRef: 'TD483-LEGACY', location: wh2.code, notes: 'td483', createdBy: 'td483', isDeleted: 0,

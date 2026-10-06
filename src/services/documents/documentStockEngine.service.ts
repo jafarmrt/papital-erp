@@ -39,7 +39,7 @@ export interface ApplyStockReversalParams {
   originalDirection: 'in' | 'out';
   unitPrice: DecimalValue;
   location: string;
-  /** v9.0.67 (TD-489): ردیف حواله انتقال بین انبارها فقط مقدار را برمی‌گرداند و WAC را تغییر نمی‌دهد (مثل ثبت آن) */
+  /** v9.0.73 (TD-489): ردیف حواله انتقال بین انبارها فقط مقدار را برمی‌گرداند و WAC را تغییر نمی‌دهد (مثل ثبت آن) */
   quantityOnly?: boolean;
 }
 
@@ -241,7 +241,7 @@ export class DocumentStockEngine {
     const oldWAC = fin(itemData.weightedAverageCost);
     let newWAC = oldWAC;
     if (quantityOnly) {
-      // v9.0.67 (TD-489): ابطال حواله انتقال — همان قاعده بازپخش کاردکس (replayKardexWac)
+      // v9.0.73 (TD-489): ابطال حواله انتقال — همان قاعده بازپخش کاردکس (replayKardexWac)
     } else if (originalDirection === 'in' && newTotalStock > 0) {
       const oldTotalVal = fin(oldTotalStock).multiply(oldWAC);
       const revertVal = fin(qty).multiply(unitPrice);

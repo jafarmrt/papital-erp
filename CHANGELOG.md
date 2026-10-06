@@ -19,14 +19,32 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.68 — Clear Errors for Transfers and Kardex Rebuild
+### v9.0.74 — Clear Errors for Transfers and Kardex Rebuild
 - **Inventory Errors:** a transfer accepts a warehouse code or name in any case, and transfer and Kardex rebuild errors answer 422 or 404 with Persian messages instead of 500; the running Kardex of a missing item is 404 (TD-494, `reg_inventory_business_errors_td_494`).
 
-### v9.0.67 — Warehouse Transfers Are Documents
+### v9.0.73 — Warehouse Transfers Are Documents
 - **Transfer Document:** every warehouse transfer is a numbered «حواله انتقال» document with its lines and linked Kardex rows, listed with source and destination, printable and voidable without changing WAC (TD-489, `reg_warehouse_transfer_document_td_489`).
 
-### v9.0.66 — No Future-Dated Stock Movements
+### v9.0.72 — No Future-Dated Stock Movements
 - **Future Stock Dates:** a stock movement dated after the business today is refused for every user, a transfer date is normalized (Jalali accepted, text 422), and earlier future-dated Kardex rows are listed by the financial health check (TD-483, `reg_stock_movement_future_date_td_483`).
+
+### v9.0.71 — Opening Balance Edit Waits for Approval
+- **Opening Balance Approval (P2):** editing the opening balance of a treasury account whose approval workflow is still open is refused with 409; before, the edit issued the opening voucher at once, bypassing the approval (TD-504, `reg_opening_balance_edit_refused_while_approval_pending_td_504`).
+
+### v9.0.70 — Deleting a Bank Account Voids Its Opening Voucher
+- **Bank Account Delete (P2):** deleting a treasury account now voids its opening and opening-adjustment vouchers in the same transaction (draft removed, approved reversed) and is refused with 409 when one is permanent; before, the opening voucher stayed and the bank ledger kept a balance no account explained (TD-503, `reg_bank_delete_voids_opening_voucher_td_503`).
+
+### v9.0.69 — Cheques With a Permanent Voucher Are Not Deleted
+- **Cheque Delete (P2):** deleting a cheque whose voucher is permanent is refused with 409 naming the voucher; before, the cheque was deleted and the permanent voucher stayed in the ledger with no cheque behind it. The cheque menu no longer offers status change or delete in a terminal status (TD-502, `reg_cheque_with_permanent_voucher_not_deleted_td_502`, Vitest `chequeTerminalActions.test.tsx`).
+
+### v9.0.68 — Invoice Settlement After a Voided Receipt
+- **Invoice Settlement (P1):** an invoice whose receipt was voided and then received again now shows the new receipt as paid; before, the void was subtracted twice and the invoice stayed «unpaid» while the customer's ledger was settled (TD-500, `reg_invoice_settled_after_void_and_rereceipt_td_500`).
+
+### v9.0.67 — Treasury Reversal Rows Can No Longer Be Voided
+- **Treasury Void (P0):** voiding the reversal row of a voided receipt or payment is refused with 409 and the button is gone; before, it put the money back in the bank with no voucher and without the no-voucher permission. Legacy revived rows are listed by the financial health check, and new bank invariants I15/I16 compare each bank with its ledger (TD-499, `reg_treasury_reversal_void_refused_td_499`, `inv_td_499_bank_invariants_hold`).
+
+### v9.0.66 — Package 4 Treasury and Cheques Audit Documentation
+- **Stability Audit, Package 4 (Treasury and Cheques):** `docs/audit/STABILITY_AUDIT_V9.md` gets the treasury section; its 19 proven findings are registered as open rows TD-497 to TD-515 (one P0: voiding the reversal row of a voided receipt put the money back in the bank with no voucher). Documentation only; no behaviour change.
 
 ### v9.0.65 — Workflow UI and Messages Fully Persian
 - **Workflow Wording:** workflow UI and messages follow the owner glossary (decision t10), with Persian role and entity names and digits; `WF_*` codes go only into the error `code` field (TD-470, Vitest `workflowWording.test.ts`, `sec_workflow_error_code_td_470`).

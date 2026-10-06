@@ -369,8 +369,9 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Actions */}
+                    {/* v9.0.67 (TD-499، ت۱): ردیف معکوس (ابطال تراکنش دیگر) دکمه ابطال ندارد؛ سرور هم آن را رد می‌کند */}
                     <td className="py-3 px-3 text-center">
-                      {!isVoided ? (
+                      {!isVoided && !(tx.reversalOfId ?? tx.reversal_of_id) ? (
                         <button
                           onClick={() => onVoidTransaction(tx)}
                           title="ابطال تراکنش و ثبت سند معکوس"

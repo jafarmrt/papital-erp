@@ -10501,13 +10501,16 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.55, TD-480): stock-count sheet book stock by warehouse code or name, stale book stock 409
   const { runStockCountSheetTests } = await import('../regression/stockCountSheetTests.js');
   results.push(...await runStockCountSheetTests(shouldRun));
-  // Package 6 (v9.0.66, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
+  // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
+  const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
+  results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
+  // Package 6 (v9.0.72, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
-  // Package 6 (v9.0.67, TD-489): a warehouse transfer is a numbered transfer document, voidable without changing WAC
+  // Package 6 (v9.0.73, TD-489): a warehouse transfer is a numbered transfer document, voidable without changing WAC
   const { runWarehouseTransferDocumentTests } = await import('../regression/warehouseTransferDocumentTests.js');
   results.push(...await runWarehouseTransferDocumentTests(shouldRun));
-  // Package 6 (v9.0.68, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
+  // Package 6 (v9.0.74, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
   const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
   results.push(...await runInventoryBusinessErrorsTests(shouldRun));
 

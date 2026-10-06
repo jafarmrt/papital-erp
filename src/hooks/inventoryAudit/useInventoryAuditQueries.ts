@@ -180,7 +180,7 @@ export interface InventoryDocumentDetail {
   location?: string;
   user?: string;
   notes?: string | null;
-  /** v9.0.67 (TD-489): انبار مبدأ و مقصد حواله انتقال */
+  /** v9.0.73 (TD-489): انبار مبدأ و مقصد حواله انتقال */
   sourceLocation?: string;
   destinationLocation?: string;
   items?: InventoryDocumentLine[];

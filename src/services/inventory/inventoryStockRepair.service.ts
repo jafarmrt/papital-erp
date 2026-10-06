@@ -15,7 +15,7 @@ import { DocumentRefNumberService } from '../documents/documentRefNumber.service
 /** نوع سند حواله انتقال بین انبارها (documents.type و transactions.document_type) */
 export const TRANSFER_DOCUMENT_TYPE = 'transfer';
 
-/** انبار فعال انتقال (کد، نام یا شناسه)؛ ناشناخته یا غیرفعال ۴۲۲ با نام طرف انتقال (v9.0.68، TD-494) */
+/** انبار فعال انتقال (کد، نام یا شناسه)؛ ناشناخته یا غیرفعال ۴۲۲ با نام طرف انتقال (v9.0.74، TD-494) */
 async function resolveTransferWarehouse(tx: DbExecutor, raw: string, side: 'مبدأ' | 'مقصد') {
   try {
     return await ItemWarehouseStockService.resolveWarehouse(tx, raw);
@@ -38,7 +38,7 @@ export class InventoryStockRepairService {
     quantity: number;
     date?: string;
     notes?: string;
-    /** شماره حواله دلخواه کاربر؛ خالی یا تکراری = شماره بعدی سری حواله انتقال (v9.0.67، TD-489) */
+    /** شماره حواله دلخواه کاربر؛ خالی یا تکراری = شماره بعدی سری حواله انتقال (v9.0.73، TD-489) */
     refNumber?: string;
     createdBy?: string;
     user?: string;
@@ -46,7 +46,7 @@ export class InventoryStockRepairService {
     allowBackdate?: boolean;
   }): Promise<{
     success: boolean;
-    /** شناسه سند حواله انتقال (documents.id)؛ پیش از v9.0.67 شناسه ردیف خروج کاردکس بود */
+    /** شناسه سند حواله انتقال (documents.id)؛ پیش از v9.0.73 شناسه ردیف خروج کاردکس بود */
     transferDocId: number;
     refNumber: string;
     quantity: number;
@@ -62,7 +62,7 @@ export class InventoryStockRepairService {
       throw new ValidationError('مبدأ و مقصد انتقال نمی‌توانند یکسان باشند.');
     }
 
-    // v9.0.66 (TD-483): تاریخ شمسی یا میلادی به ISO؛ نامعتبر ۴۲۲ (پیش‌تر متن غیرتاریخ خطای ۵۰۰ پایگاه‌داده می‌داد)
+    // v9.0.72 (TD-483): تاریخ شمسی یا میلادی به ISO؛ نامعتبر ۴۲۲ (پیش‌تر متن غیرتاریخ خطای ۵۰۰ پایگاه‌داده می‌داد)
     const txDate = params.date ? requireStorageDate(params.date, 'تاریخ انتقال') : await businessTodayIsoDate();
     const operatorName = params.user || params.createdBy || 'سیستم';
 
@@ -81,7 +81,7 @@ export class InventoryStockRepairService {
         throw new NotFoundError(`کالا با شناسه ${params.itemId} یافت نشد.`);
       }
 
-      // v9.0.68 (TD-494): انبار مبدأ و مقصد با resolver مشترک (کد یا نام، بی‌توجه به حروف بزرگ و کوچک، فقط انبار فعال)؛
+      // v9.0.74 (TD-494): انبار مبدأ و مقصد با resolver مشترک (کد یا نام، بی‌توجه به حروف بزرگ و کوچک، فقط انبار فعال)؛
       // ناشناخته ۴۲۲ و نه ۵۰۰. پیش‌تر فقط کد دقیق پذیرفته می‌شد و خطای کاری ۵۰۰ می‌داد.
       const fromWh = await resolveTransferWarehouse(txEngine, params.fromLocation, 'مبدأ');
       const toWh = await resolveTransferWarehouse(txEngine, params.toLocation, 'مقصد');
@@ -123,7 +123,7 @@ export class InventoryStockRepairService {
       const itemUnitPrice = money(item.weightedAverageCost);
       const itemTotalPrice = money(itemUnitPrice.multiply(qty));
 
-      // v9.0.67 (TD-489، تصمیم ت۲ الف): هر انتقال یک سند «حواله انتقال» است — نوع transfer با شماره سری خودش (همان
+      // v9.0.73 (TD-489، تصمیم ت۲ الف): هر انتقال یک سند «حواله انتقال» است — نوع transfer با شماره سری خودش (همان
       // قاعده شماره دستی و تکراری اسناد)، یک ردیف با بهای کاردکس و انبار مبدأ، و دو ردیف کاردکس با document_id؛ با
       // ابطال سند (deleteDocument) هر دو ردیف فقط از نظر مقدار برمی‌گردند. پیش‌تر دو ردیف کاردکس بی سند ثبت می‌شد و
       // شماره مرجع و توضیح فرم دور ریخته می‌شد. قفل‌ها: کالا (بالا) ← شمارنده شماره سند ← ردیف سند.

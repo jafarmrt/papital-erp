@@ -6,7 +6,7 @@ interface WarehouseTransfersListTabProps {
   transfers: any[];
   handleViewTransfer: (docId: number) => void;
   onOpenTransferModal: () => void;
-  /** v9.0.67 (TD-489): ابطال حواله با مسیر ابطال اسناد */
+  /** v9.0.73 (TD-489): ابطال حواله با مسیر ابطال اسناد */
   onVoidTransfer: (transfer: { id: number; refNumber?: string }) => void;
   voidingId: number | null;
 }
