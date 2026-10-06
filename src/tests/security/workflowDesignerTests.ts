@@ -1,4 +1,5 @@
 import { TestCaseResult } from '../types.js';
+import { pool } from '../../db/drizzle.js';
 import { WorkflowDefinitionService, type SaveWorkflowDefinitionPayload } from '../../services/workflow/workflowDefinitionService.js';
 import { runCase, draftSalesDocument, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
@@ -209,6 +210,59 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
       } finally {
         await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code = ANY($1::text[]))`, [codes]);
         for (const c of codes) await dropDefinition(h, c);
+      }
+    });
+  }
+
+  if (shouldRun('sec_workflow_sla_from_snapshot_td_457', 'security', 'td457', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_sla_from_snapshot_td_457',
+      name: 'v9.0.49: تحلیل مهلت انجام فرایند در جریان را با گام‌های تصویر نسخه خودش می‌سنجد، حتی پس از ذخیره دوباره طرح (TD-457)',
+      details: 'فرایند ۳۰ ساعته در گام ۷۲ ساعته: پیش و پس از ذخیره بی‌تغییر طرح دارای تأخیر نیست و در شمار فعال همان گام (با شناسه تازه) می‌آید؛ پیش‌تر پس از ذخیره «نامشخص، مهلت ۲۴، ۶ ساعت تأخیر» شد و شمار فعال گام ۰',
+    }, async (h, wrong) => {
+      const code = designCode(h, 'SLA');
+      try {
+        const design: SaveWorkflowDefinitionPayload = {
+          code, title: 'مهلت از تصویر', entityType: `wf14c_sla_${h.tag}`,
+          states: [
+            { stateKey: 'wait', title: 'انتظار ۷۲ ساعته', stateType: 'initial', slaHours: 72 },
+            { stateKey: 'done', title: 'پایان', stateType: 'terminal' },
+          ],
+          transitions: [{ fromStateKey: 'wait', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }],
+        };
+        const saved = await WorkflowDefinitionService.saveWorkflowDefinition(design);
+        const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+        const inst = await WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: Number(saved?.definition.id), entityType: design.entityType, entityId: '1' });
+        // ورود به گام ۳۰ ساعت پیش (ماشه updated_at برای این به‌روزرسانی خاموش است)
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(`SET LOCAL session_replication_role = replica`);
+          await client.query(`UPDATE workflow_instances SET updated_at = now() - interval '30 hours' WHERE id = $1`, [inst.id]);
+          await client.query('COMMIT');
+        } finally {
+          client.release();
+        }
+
+        const check = async (label: string) => {
+          const res = await h.get('/api/workflow/analytics/sla');
+          if (res.status !== 200) {
+            wrong.push(`${label}: تحلیل مهلت ${res.status} داد`);
+            return;
+          }
+          const overdue = (res.body?.overdueInstances ?? []).find((o: Row) => Number(o.instanceId) === inst.id);
+          if (overdue) wrong.push(`${label}: فرایند ۳۰ ساعته در گام ۷۲ ساعته دارای تأخیر شد (${String(overdue.stateTitle)}، مهلت ${String(overdue.slaHours)})`);
+          const [current] = await h.q(`SELECT s.id FROM workflow_states s JOIN workflow_definitions d ON d.id = s.workflow_definition_id WHERE d.code = $1 AND s.state_key = 'wait'`, [code]);
+          const row = (res.body?.stateSlaReport ?? []).find((r: Row) => Number(r.stateId) === Number(current?.id));
+          if (Number(row?.activeCount) !== 1) wrong.push(`${label}: شمار فعال گام «انتظار» ${String(row?.activeCount)} شد، نه ۱`);
+          if (Number(row?.slaHours) !== 72) wrong.push(`${label}: مهلت گام «انتظار» ${String(row?.slaHours)} شد، نه ۷۲`);
+        };
+        await check('پیش از ذخیره دوباره');
+        await WorkflowDefinitionService.saveWorkflowDefinition({ ...design, id: Number(saved?.definition.id) });
+        await check('پس از ذخیره دوباره');
+      } finally {
+        await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code = $1)`, [code]);
+        await dropDefinition(h, code);
       }
     });
   }
