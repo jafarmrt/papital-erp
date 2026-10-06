@@ -119,7 +119,7 @@ export async function runSeed(
         'workflow.view', 'workflow.approve', 'workflow.manage',
         'events.view', 'events.manage',
         'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
-        'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
+        'personnel.view', 'personnel.manage', 'personnel.view_sensitive', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll', 'payroll.view_sensitive',
         'pending_materials.view', 'pending_materials.approve',
         'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve',
         'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
@@ -145,6 +145,8 @@ export async function runSeed(
         'events.view', 'events.manage',
         'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all',
         'personnel.view', 'personnel.manage', 'piecework.view', 'piecework.manage_tasks', 'piecework.log', 'piecework.payroll',
+        // v9.0.109 (TD-882): اطلاعات بانکی پرسنل و فیش را تا v9.0.108 با کد خود بی پوشش می‌دید (همان مهاجرت 0064)
+        'personnel.view_sensitive', 'payroll.view_sensitive',
         'pending_materials.view', 'pending_materials.approve', 'pending_materials.delete',
         'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve',
         'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',

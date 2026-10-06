@@ -449,6 +449,13 @@
       "when": 1792830000000,
       "tag": "0063_documents_finalize_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792840000000,
+      "tag": "0064_sensitive_personnel_permissions",
+      "breakpoints": true
     }
   ]
 }

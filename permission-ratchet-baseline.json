@@ -23,7 +23,6 @@
     "src/hooks/documents/useStockDocumentForm.ts": 2,
     "src/hooks/useCRMData.ts": 2,
     "src/hooks/usePiecework.ts": 2,
-    "src/lib/piiMasker.ts": 2,
     "src/pages/AccountingPage.tsx": 1,
     "src/pages/CustomersPage.tsx": 2,
     "src/pages/DailyLogsPage.tsx": 1,
@@ -53,10 +52,7 @@
     "src/services/workflow/workflowTaskService.ts": 3,
     "src/services/workflow/workflowTransitionExecutor.ts": 27
   },
-  "uncataloguedPermissionKeys": [
-    "payroll.view_sensitive",
-    "personnel.view_sensitive"
-  ],
+  "uncataloguedPermissionKeys": [],
   "uncheckedCatalogKeys": [
     "audit.create"
   ]

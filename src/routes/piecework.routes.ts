@@ -10,7 +10,7 @@ import { PieceworkService, PieceworkReadService, PayrollReadService, PieceworkPa
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
-import { canAccessSensitivePersonnelData, sanitizePayrollRecord } from '../lib/piiMasker.js';
+import { canAccessSensitivePayrollData, sanitizePayrollRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
 const router = Router();
@@ -588,7 +588,7 @@ router.get('/piecework/payrolls', authorizePermission(...READ_PERMISSIONS.payrol
     const { personnelId, status } = req.query;
     const enhancedRows = await PayrollReadService.listPayrolls({ personnelId, status });
 
-    const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
+    const canViewSensitive = await canAccessSensitivePayrollData(req.user);
     const sanitizedRows = enhancedRows.map(r => sanitizePayrollRecord(r, canViewSensitive));
 
     res.json(sanitizedRows);
@@ -625,7 +625,7 @@ router.get('/piecework/payrolls/:id', authorizePermission(...READ_PERMISSIONS.pa
     }
 
     const { payroll: pay, items, voucherLink } = detail;
-    const canViewSensitive = await canAccessSensitivePersonnelData(req.user, pay.personnelUserId);
+    const canViewSensitive = await canAccessSensitivePayrollData(req.user, pay.personnelUserId);
     const sanitizedPay = sanitizePayrollRecord(pay, canViewSensitive);
 
     res.json({
