@@ -22,7 +22,8 @@ import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
-import { lockWorkflowEntity, runWorkflowTransitionAction } from './workflowTransitionActions.js';
+import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
+import { lockWorkflowEntity, runWorkflowTransitionAction, workflowActionPermissions, workflowEntityExists } from './workflowTransitionActions.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -153,12 +154,9 @@ export class WorkflowTransitionExecutor {
     const uRole = (userRole || '').trim().toLowerCase();
     const rRole = (requiredRole || '').trim().toLowerCase();
 
-    if (
-      uRole === 'admin' || 
-      userPermissions.includes('workflow.admin') || 
-      userPermissions.includes('workflow.manage') || 
-      userPermissions.includes('*')
-    ) {
+    // v9.0.34 (TD-444، تصمیم مالک محصول ت۱ الف): فقط مدیر سیستم همه گام‌ها را امضا می‌کند؛ workflow.manage و workflow.admin
+    // مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند (پیش‌تر می‌کردند، ولی چون مجوزها به موتور نمی‌رسید پنهان بود)
+    if (uRole === 'admin' || userPermissions.includes('*')) {
       return true;
     }
 
@@ -173,6 +171,21 @@ export class WorkflowTransitionExecutor {
 
     return WorkflowTransitionExecutor.DEPARTMENT_WRITE_PERMISSIONS.some(([roles, permissions]) =>
       roles.includes(rRole) && permissions.some(p => userPermissions.includes(p)));
+  }
+
+  /**
+   * v9.0.34 (TD-444): مجوزهای امضاکننده = مجوزهای نقش او که موتور خودش با همان اتصال از جدول نقش‌ها می‌خواند، به‌اضافه
+   * آنچه فراخواننده داده است. پیش‌تر موتور فقط req.user.permissions را می‌گرفت که هرگز پر نمی‌شود (توکن مجوز ندارد)، پس
+   * قاعده «مجوز ثبت همان بخش» (TD-374) از هیچ مسیری اجرا نمی‌شد و کارتابل و ویجت سند دو جواب می‌دادند.
+   */
+  static async signerPermissions(userRole: string | undefined, given: string[] | undefined, txExecutor: DbClient = orm): Promise<string[]> {
+    const role = (userRole || '').trim().toLowerCase();
+    const own = Array.isArray(given) ? given : [];
+    if (!role) return own;
+    const [roleRow] = await txExecutor.select({ permissions: roles.permissions }).from(roles)
+      .where(sql`lower(${roles.code}) = ${role}`);
+    const rolePermissions = Array.isArray(roleRow?.permissions) ? (roleRow.permissions as string[]) : [];
+    return Array.from(new Set([...rolePermissions, ...own]));
   }
 
   /**
@@ -289,8 +302,13 @@ export class WorkflowTransitionExecutor {
     const delegations = params.userId
       ? await WorkflowDelegationService.activeDelegations(txExecutor, { toUserId: params.userId })
       : [];
-    const acting = delegations.find(d =>
-      WorkflowDelegationService.delegationCovers(d.scope, workflowCode) && WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, []));
+    let acting: ActingDelegation | undefined;
+    for (const d of delegations) {
+      if (!WorkflowDelegationService.delegationCovers(d.scope, workflowCode)) continue;
+      // v9.0.34 (TD-444): نقش تفویض‌کننده با مجوزهای همان نقش سنجیده می‌شود، همان قاعده‌ای که خود او را می‌سنجد
+      const fromPermissions = await WorkflowTransitionExecutor.signerPermissions(d.fromRole, [], txExecutor);
+      if (WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, fromPermissions)) { acting = d; break; }
+    }
     if (!acting) {
       throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
     }
@@ -450,15 +468,32 @@ export class WorkflowTransitionExecutor {
         throw new NotFoundError(`هیچ فرآیند کاری فعال برای موجودیت '${params.entityType}' پیدا نشد.`);
       }
 
-      // Check if instance already exists
-      const [existing] = await tx.select().from(workflowInstances).where(and(
-        eq(workflowInstances.workflowDefinitionId, def.id),
-        eq(workflowInstances.entityType, params.entityType),
-        eq(workflowInstances.entityId, String(params.entityId))
-      ));
+      // v9.0.33 (TD-443): فرایند فقط با تعریف فعالِ همان نوع موجودیت و روی موجودیت موجود شروع می‌شود. پیش‌تر هر کد
+      // گردش‌کاری روی هر نوع موجودیتی شروع می‌شد و اقدام دامنه نوع موجودیت را از نمونه برمی‌داشت: گردش‌کار بی‌نقش اسناد
+      // روی سند حسابداری، آن را بی مجوز حسابداری تأیید می‌کرد.
+      if (def.entityType !== params.entityType) {
+        throw new ValidationError(`گردش کار «${def.title}» برای نوع «${def.entityType}» است و روی «${params.entityType}» شروع نمی‌شود (WF_ENTITY_TYPE_MISMATCH)`);
+      }
+      if (Number(def.isActive) !== 1) {
+        throw new ValidationError(`گردش کار «${def.title}» فعال نیست`);
+      }
+      if (!(await workflowEntityExists(tx, params.entityType, String(params.entityId)))) {
+        throw new NotFoundError(`موجودیت «${params.entityType}» با شناسه ${params.entityId} یافت نشد`);
+      }
 
-      if (existing && existing.status === 'IN_PROGRESS') {
-        return existing;
+      // v9.0.37 (TD-455): شروع‌های هم‌زمان یک موجودیت پشت هم می‌آیند (قفل تراکنشی تا پایان تراکنش فراخواننده) و فرایند
+      // در جریانِ هر تعریفی دیده می‌شود؛ شاخص یکتای جزئی uq_workflow_instances_open_entity (مهاجرت 0056) پشتوانه است.
+      // پیش‌تر بررسی سپس درج بی قفل بود و شش شروع هم‌زمان دو فرایند در جریان می‌ساخت.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${ROW_ADVISORY_LOCK_NAMESPACES.WORKFLOW_ENTITY_START}::int, hashtext(${`${params.entityType}:${String(params.entityId)}`}::text))`);
+      const [existing] = await tx.select().from(workflowInstances).where(and(
+        eq(workflowInstances.entityType, params.entityType),
+        eq(workflowInstances.entityId, String(params.entityId)),
+        eq(workflowInstances.status, 'IN_PROGRESS')
+      )).orderBy(desc(workflowInstances.id)).limit(1);
+
+      if (existing) {
+        if (existing.workflowDefinitionId === def.id) return existing;
+        throw new ConflictError(`موجودیت «${params.entityType}» با شناسه ${params.entityId} فرایند در جریان دیگری دارد (WF_INSTANCE_ALREADY_OPEN)`);
       }
 
       const targetVersionNumber = params.definitionVersion || def.version || 1;
@@ -579,6 +614,15 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
       }
 
+      // v9.0.33 (TD-443): فرایندی که تعریفش برای نوع دیگری است (ساخته‌شده پیش از v9.0.33 با کد دلخواه) پیش نمی‌رود؛
+      // اقدام دامنه فقط برای تعریفِ همان نوع موجودیت اجرا می‌شود
+      const definitionEntityType = (instance.snapshotDsl as WorkflowSnapshotDsl | null)?.entityType
+        ?? (await tx.select({ entityType: workflowDefinitions.entityType }).from(workflowDefinitions)
+          .where(eq(workflowDefinitions.id, instance.workflowDefinitionId)))[0]?.entityType;
+      if (definitionEntityType !== instance.entityType) {
+        throw new ConflictError(`این فرایند با گردش کار نوع «${definitionEntityType ?? 'نامعلوم'}» روی «${instance.entityType}» ساخته شده و پیش نمی‌رود (WF_ENTITY_TYPE_MISMATCH)`);
+      }
+
       updateRequestContext({
         workflowId: String(instance.id),
         entityId: `${instance.entityType}:${instance.entityId}`,
@@ -623,12 +667,14 @@ export class WorkflowTransitionExecutor {
         throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
       }
 
+      // v9.0.34 (TD-444): مجوزهای نقش امضاکننده از پایگاه‌داده، از هر مسیری (ویجت، کارتابل، تدارکات)
+      const userPermissions = await WorkflowTransitionExecutor.signerPermissions(params.userRole, params.userPermissions, tx);
       // v8.0.97 (TD-377، تصمیم مالک محصول «کارهای نقش او»): کسی که نقش گام را ندارد با تفویض فعالِ هم‌حوزه از کاربری
       // که نقش را دارد امضا می‌کند؛ امضا به نام تفویض‌کننده و با signedBy جانشین ثبت می‌شود
-      const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, params, tx);
+      const actingFor = await WorkflowTransitionExecutor.resolveSigner(transition, definition?.code, { ...params, userPermissions }, tx);
       const signerHoldsPermission = await WorkflowTransitionExecutor.holdsRequiredPermission(transition, actingFor
         ? { role: actingFor.fromRole, ownPermissions: false }
-        : { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }, tx);
+        : { role: params.userRole, permissions: userPermissions, ownPermissions: true }, tx);
       if (!signerHoldsPermission) {
         throw new ForbiddenError(`انتقال «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد (WF_PERMISSION_REQUIRED).`);
       }
@@ -636,6 +682,16 @@ export class WorkflowTransitionExecutor {
         userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
       })) {
         throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند (WF_INITIATOR_EXCLUDED).`);
+      }
+      // v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): گامی که اقدام دامنه دارد مجوز همان موجودیت را از امضاکننده (یا نقش
+      // تفویض‌کننده) می‌خواهد؛ پیش‌تر نقش گام بس بود و خزانه‌دار بی مجوز قطعی‌سازی، سند را از گردش‌کار قطعی می‌کرد
+      const entityPermissions = workflowActionPermissions(instance.entityType, { toStateKey: toState.stateKey, autoActionKey: transition.autoActionKey || '' });
+      if (entityPermissions.length > 0) {
+        const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
+        const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
+        if (signerRole !== 'admin' && !signerHeld.includes('*') && !entityPermissions.some(p => signerHeld.includes(p))) {
+          throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${entityPermissions.join('، ')}» را می‌خواهد (WF_ENTITY_PERMISSION_REQUIRED).`);
+        }
       }
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
@@ -912,11 +968,12 @@ export class WorkflowTransitionExecutor {
       return { allowed: false, reason: 'انتقال با وضعیت فعلی مطابقت ندارد' };
     }
 
-    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, params.userPermissions || []);
+    const userPermissions = await WorkflowTransitionExecutor.signerPermissions(params.userRole, params.userPermissions);
+    const isAuthorized = WorkflowTransitionExecutor.checkUserRoleMatch(params.userRole, transition.requiredRole || undefined, userPermissions);
     if (!isAuthorized) {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
     }
-    if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: params.userPermissions, ownPermissions: true }))) {
+    if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: userPermissions, ownPermissions: true }))) {
       return { allowed: false, reason: `این انتقال مجوز «${transition.requiredPermission}» را می‌خواهد` };
     }
 
@@ -958,10 +1015,17 @@ export class WorkflowTransitionExecutor {
     userPermissions: string[] = [],
     txExecutor: DbClient = orm
   ) {
-    const [inst] = await txExecutor.select().from(workflowInstances).where(and(
-      eq(workflowInstances.entityType, entityType),
-      eq(workflowInstances.entityId, String(entityId))
-    )).orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id)); // v7.0.127 (TD-247): زمان برابر → بزرگ‌ترین شناسه
+    // v9.0.33 (TD-443): فقط فرایند تعریفِ همان نوع موجودیت؛ فرایند ناهمخوان جای فرایند واقعی را در ویجت نمی‌گیرد
+    const [row] = await txExecutor.select({ instance: workflowInstances }).from(workflowInstances)
+      .innerJoin(workflowDefinitions, and(
+        eq(workflowDefinitions.id, workflowInstances.workflowDefinitionId),
+        eq(workflowDefinitions.entityType, workflowInstances.entityType)
+      ))
+      .where(and(
+        eq(workflowInstances.entityType, entityType),
+        eq(workflowInstances.entityId, String(entityId))
+      )).orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id)); // v7.0.127 (TD-247): زمان برابر → بزرگ‌ترین شناسه
+    const inst = row?.instance;
 
     if (!inst) return null;
 
@@ -980,7 +1044,7 @@ export class WorkflowTransitionExecutor {
       snapshotTransitionsOf(inst.snapshotDsl), 
       undefined, 
       txExecutor,
-      userPermissions
+      await WorkflowTransitionExecutor.signerPermissions(userRole, userPermissions, txExecutor) // v9.0.34 (TD-444)
     );
     const availableTransitions: Array<WorkflowTransitionSnapshot & WorkflowTransitionConditionText> = [];
     const blockedTransitions: Array<Pick<WorkflowTransitionSnapshot, 'id' | 'title' | 'actionKey'> & WorkflowTransitionConditionText & { unmetConditions: string[] }> = [];

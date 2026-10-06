@@ -310,6 +310,8 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
 
     // Step 2: Create Workflow with Parallel Approval
     const wf = await createTestWorkflow({
+      // v9.0.33 (TD-443): شناسه ساختگی؛ نوع «document» فقط روی سند موجود شروع می‌شود
+      definition: { entityType: 'test_document' },
       states: [
         { key: 'review', title: 'در حال بررسی', type: 'initial' },
         { key: 'approved', title: 'تایید شده', type: 'terminal' },
@@ -323,7 +325,7 @@ export async function runE2eTests(): Promise<TestCaseResult[]> {
 
     const instance = await WorkflowTransitionExecutor.startInstance({
       workflowDefinitionId: wf.definition.id,
-      entityType: 'document',
+      entityType: 'test_document',
       entityId: `DOC_PARALLEL_${Date.now()}`,
       userId: userA.id,
       userName: userA.username

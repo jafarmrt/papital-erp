@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { WORKFLOW_ENTITY_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { ForbiddenError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { getErrorMessage } from '../utils.js';
@@ -26,6 +28,17 @@ const definitionVersionParamSchema = z.object({
     id: numericIdString,
     version: numericIdString,
   })
+});
+
+/** v9.0.33 (TD-443): بدنه شروع فرایند؛ شناسه موجودیت عدد یا رشته کوتاه است، نه شیء */
+const workflowEntityIdInput = z.union([z.number().int().positive(), z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_.:-]+$/, 'شناسه موجودیت نامعتبر است')])
+  .transform((v) => String(v));
+const startWorkflowSchema = z.object({
+  body: z.object({
+    workflowCode: z.string().trim().min(1, 'کد گردش کار الزامی است').max(100),
+    entityType: z.string().trim().min(1, 'نوع موجودیت الزامی است').max(50).regex(/^[a-z][a-z0-9_]*$/, 'نوع موجودیت نامعتبر است'),
+    entityId: workflowEntityIdInput,
+  }),
 });
 
 const router = Router();
@@ -168,6 +181,12 @@ router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const userPermissions = req.user?.permissions || [];
+    // v9.0.38 (TD-458، ت۹ الف): داده موجودیت فقط برای دارنده مجوز خواندن همان موجودیت (پیش‌تر workflow.view بس بود و
+    // بیننده بی مجوز حسابداری شماره، وضعیت و جمع سند حسابداری و تاریخچه آن را می‌دید)
+    const entityRead = WORKFLOW_ENTITY_READ_PERMISSIONS[String(entityType)];
+    if (entityRead && !(await userHasRoleOrPermission(req.user, ...entityRead))) {
+      throw new ForbiddenError('برای دیدن گردش کار این مورد، مجوز دیدن خود آن را لازم دارید.');
+    }
 
     const instanceData = await WorkflowEngineService.getInstanceByEntity(
       entityType,
@@ -190,18 +209,14 @@ router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view
  * Start or attach a workflow instance to an entity
  */
 // حوزه H (TD-298): شروع فرآیند تغییر است؛ workflow.view (مشاهده) کافی نیست
-router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'documents.create', 'documents.edit'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'documents.create', 'documents.edit'), validate(startWorkflowSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const { workflowCode, entityType, entityId } = req.body;
-
-    if (!workflowCode || !entityType || !entityId) {
-      return res.status(400).json({ error: 'اطلاعات کد ورکفلو، نوع و شناسه موجودیت الزامی است' });
-    }
+    const { workflowCode, entityType, entityId } = req.body as z.infer<typeof startWorkflowSchema>['body'];
 
     const instanceData = await WorkflowEngineService.startWorkflow({
       workflowCode,
       entityType,
-      entityId: String(entityId),
+      entityId,
       userId: req.user?.id,
       userName: req.user?.fullName || req.user?.username
     });

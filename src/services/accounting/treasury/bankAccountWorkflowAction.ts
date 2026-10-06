@@ -1,5 +1,7 @@
+import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
-import { registerWorkflowTransitionAction, type WorkflowTransitionEvent } from '../../workflow/workflowTransitionActions.js';
+import { bankAccounts } from '../../../db/schema.js';
+import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowTransitionEvent } from '../../workflow/workflowTransitionActions.js';
 import { BankAccountService } from './bankAccount.service.js';
 
 /**
@@ -17,6 +19,19 @@ export async function issueApprovedTreasuryOpening(tx: DbExecutor, event: Workfl
   });
 }
 
+/** v9.0.33 (TD-443): حساب خزانه هست و حذف نشده است */
+async function bankAccountExists(tx: DbExecutor, entityId: string): Promise<boolean> {
+  const id = workflowEntityNumericId(entityId);
+  if (id === undefined) return false;
+  const [row] = await tx.select({ id: bankAccounts.id }).from(bankAccounts).where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)));
+  return !!row;
+}
+
 export function registerBankAccountWorkflowAction(): void {
-  registerWorkflowTransitionAction(['bank_account'], { run: issueApprovedTreasuryOpening });
+  registerWorkflowTransitionAction(['bank_account'], {
+    run: issueApprovedTreasuryOpening,
+    entityExists: bankAccountExists,
+    // v9.0.35 (TD-445، ت۳): سند افتتاحیه حساب خزانه همان مجوز ساخت حساب (`POST /accounting/bank-accounts`) را می‌خواهد
+    requiredPermissions: (t) => (t.toStateKey === 'approved' ? ['accounting.treasury'] : []),
+  });
 }

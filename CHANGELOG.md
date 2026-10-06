@@ -19,6 +19,27 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.38 — Workflow Widget Requires the Entity's Read Permission
+- **Workflow Widget Read Scope:** `GET /workflow/instance/:entityType/:entityId` also requires the entity's own read permission (document, journal voucher, item, bank account, purchase requisition), else 403 (TD-458, `sec_workflow_instance_entity_read_td_458`).
+
+### v9.0.37 — One Open Workflow Instance per Entity
+- **Single Open Instance:** `startInstance` serializes starts on an entity with a transaction advisory lock and the partial unique index `uq_workflow_instances_open_entity` (migration 0056, created only on clean data) backs it; duplicates are listed by the financial health check (TD-455, `sec_workflow_single_open_instance_td_455`).
+
+### v9.0.36 — Workflow Start Failures Are Not Swallowed
+- **Workflow Start Failures (P1):** `maybeStartWorkflow` returns null only when no active definition exists and otherwise throws, so a broken active definition rejects the bank account or item instead of issuing its opening voucher without approval; item creation and its workflow start share one transaction (TD-451, `sec_workflow_start_failure_td_451`).
+
+### v9.0.35 — Document Workflow Steps Guarded by Permissions
+- **Document Workflow Permissions (P1):** the default document workflow's warehouse and accounting steps require `warehouse.out` / `accounting.vouchers` (direct approval `workflow.admin`), an untouched installed definition is upgraded, and a step that runs a domain action requires the entity's own permission from the signer (TD-445, `sec_workflow_document_steps_permission_td_445`).
+
+### v9.0.34 — Workflow Signer Permissions From the Role
+- **Workflow Signer Permissions (P1):** the engine reads the signer's role permissions itself, so the department posting-permission rule (TD-374) works and the inbox, its counts and task execution follow the same rule as the document widget; `workflow.manage` / `workflow.admin` no longer sign other roles' steps (TD-444, `sec_workflow_signer_permissions_td_444`).
+
+### v9.0.33 — Workflow Start Scoped to the Definition's Entity Type
+- **Workflow Start Scope (P0):** `POST /workflow/start` and `startInstance` accept only an active definition whose entity type is the entity's own, on an existing entity; a mismatched instance created earlier no longer advances or shows in the document widget (TD-443, `sec_workflow_start_entity_scope_td_443`).
+
+### v9.0.32 — Package 14 Workflow Audit Documentation
+- **Stability Audit, Package 14 (Workflow and Approvals):** `docs/audit/STABILITY_AUDIT_V9.md` gets the workflow section; its 28 proven findings are registered as open rows TD-443 to TD-470 (one P0: starting any workflow on any entity approves a journal voucher without permission). Documentation only; no behaviour change.
+
 ### v9.0.31 — Persian Wording in the Personnel UI
 - **Personnel Wording:** The personnel pages no longer show «(Update Existing)», «(IBAN)», «اکانت» or «کلیپ‌بورد»; a Vitest check keeps English words out of the Persian personnel UI (TD-440, `personnelWording.test.ts`).
 

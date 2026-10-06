@@ -7,6 +7,8 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
+import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
@@ -1056,6 +1058,17 @@ export class FinancialHealthService {
     const personnelCodeTest = buildPersonnelCodeHealthTest(duplicatePersonnelCodes, personnelCodeIndexPresent);
     overallScore += personnelCodeTest.scoreImpact;
     tests.push(personnelCodeTest);
+
+    // آزمون ۱۷: v9.0.35 (TD-445) اقدام قطعی‌سازی بی نقش و بی مجوز در گردش کار فعال اسناد
+    const unguardedApprovalTest = buildUnguardedDocumentApprovalHealthTest(await findUnguardedDocumentApprovals());
+    overallScore += unguardedApprovalTest.scoreImpact;
+    tests.push(unguardedApprovalTest);
+
+    // آزمون ۱۸: v9.0.37 (TD-455) یک فرایند در جریان برای هر موجودیت (مهاجرت 0056)
+    const [duplicateOpenInstances, openInstanceIndexPresent] = await Promise.all([findDuplicateOpenInstances(), hasOpenInstanceUniqueIndex()]);
+    const openInstanceTest = buildOpenInstanceHealthTest(duplicateOpenInstances, openInstanceIndexPresent);
+    overallScore += openInstanceTest.scoreImpact;
+    tests.push(openInstanceTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

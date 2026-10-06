@@ -97,12 +97,14 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
     }
 
     // 2. Role matching checks
+    // v9.0.34 (TD-444، تصمیم ت۱): workflow.admin و workflow.manage مجوز طراحی‌اند و گام دیگران را امضا نمی‌کنند؛ فقط مدیر سیستم
     const adminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['workflow.admin']);
     const manageCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['workflow.manage']);
+    const systemAdminCheck = WorkflowTransitionExecutor.checkUserRoleMatch('admin', 'finance_manager', []);
     const warehouseCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'warehouse', ['warehouse.in']);
     const rejectCheck = WorkflowTransitionExecutor.checkUserRoleMatch('user', 'finance_manager', ['items.view']);
 
-    if (adminCheck && manageCheck && warehouseCheck && !rejectCheck) {
+    if (!adminCheck && !manageCheck && systemAdminCheck && warehouseCheck && !rejectCheck) {
       results.push(makeTestCase({
         id: 'sec_workflow_granular_permissions',
         name: 'ماتریس اعتبارسنجی مجوزهای ۵ گانه امنیتی فرآیندهای کاری (Workflow Authorization Matrix)',
@@ -1381,6 +1383,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۲، بخش پرسنل (v9.0.24، TD-435): هر کاربر حداکثر به یک پرسنل فعال
   const { runPersonnelUserLinkTests } = await import('../security/personnelUserLinkTests.js');
   results.push(...await runPersonnelUserLinkTests(shouldRunAccess));
+  // بسته ۱۴ (از v9.0.33، TD-443 به بعد): دسترسی و یکپارچگی موتور گردش‌کار از مسیرهای واقعی
+  const { runWorkflowAccessTests } = await import('../security/workflowAccessTests.js');
+  results.push(...await runWorkflowAccessTests(shouldRunAccess));
 
   return results;
 }
