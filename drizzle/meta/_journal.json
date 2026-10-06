@@ -372,6 +372,13 @@
       "when": 1792600000000,
       "tag": "0052_customers_unique_active_name",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792650000000,
+      "tag": "0053_personnel_unique_active_user",
+      "breakpoints": true
     }
   ]
 }

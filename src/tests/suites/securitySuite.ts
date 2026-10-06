@@ -1378,6 +1378,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۲، بخش پرسنل (v9.0.23، TD-434): دامنه فیلدهای فهرست و جزئیات پرسنل
   const { runPersonnelFieldScopeTests } = await import('../security/personnelFieldScopeTests.js');
   results.push(...await runPersonnelFieldScopeTests(shouldRunAccess));
+  // بسته ۱۲، بخش پرسنل (v9.0.24، TD-435): هر کاربر حداکثر به یک پرسنل فعال
+  const { runPersonnelUserLinkTests } = await import('../security/personnelUserLinkTests.js');
+  results.push(...await runPersonnelUserLinkTests(shouldRunAccess));
 
   return results;
 }

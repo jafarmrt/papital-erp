@@ -7,6 +7,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
   findDuplicatePieceworkTaskCodes,
   hasPieceworkTaskCodeUniqueIndex,
@@ -1042,6 +1043,12 @@ export class FinancialHealthService {
     const customerNameTest = buildCustomerNameHealthTest(duplicateCustomerNames, customerNameIndexPresent);
     overallScore += customerNameTest.scoreImpact;
     tests.push(customerNameTest);
+
+    // آزمون ۱۵: v9.0.24 (TD-435) هر کاربر حداکثر به یک پرسنل فعال (مهاجرت 0053)
+    const [duplicateUserLinks, personnelUserIndexPresent] = await Promise.all([findDuplicatePersonnelUserLinks(), hasPersonnelUserUniqueIndex()]);
+    const personnelUserLinkTest = buildPersonnelUserLinkHealthTest(duplicateUserLinks, personnelUserIndexPresent);
+    overallScore += personnelUserLinkTest.scoreImpact;
+    tests.push(personnelUserLinkTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

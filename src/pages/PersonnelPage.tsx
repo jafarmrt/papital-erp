@@ -6,6 +6,7 @@ import { PersonnelTable } from '../components/personnel/PersonnelTable';
 import { PersonnelFormModal } from '../components/personnel/PersonnelFormModal';
 import { PersonnelDetailModal } from '../components/personnel/PersonnelDetailModal';
 import { PersonnelExcelModal } from '../components/personnel/PersonnelExcelModal';
+import { usersLinkedToOtherPersonnel } from '../lib/personnel/personnelUserLinks';
 
 export function PersonnelPage() {
   const [showExcelModal, setShowExcelModal] = useState<boolean>(false);
@@ -118,6 +119,7 @@ export function PersonnelPage() {
         formData={formData}
         setFormData={setFormData}
         usersList={usersList}
+        linkedUsers={usersLinkedToOtherPersonnel(personnelList, editingId)}
         isSaving={isSaving}
       />
 

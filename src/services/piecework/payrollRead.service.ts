@@ -1,5 +1,6 @@
 import { eq, and, asc, desc, inArray } from 'drizzle-orm';
-import { orm } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { personnelIdsOfUser } from '../personnel/personnelUserLink.js';
 import { pieceworkLogs, pieceworkPayrolls, pieceworkTasks, personnel, journalVouchers, treasuryTransactions, bankAccounts } from '../../db/schema.js';
 import { payrollVouchersForListWhere, payrollVouchersWhere, pickPayrollVoucher } from '../accounting/payrollVoucherLink.js';
 
@@ -139,16 +140,15 @@ export class PayrollReadService {
     return rows.map(r => ({ ...r, ...PayrollReadService.voucherLinkFields(voucherMap.get(r.id)) }));
   }
 
-  /** فیش‌های پرسنلِ متصل به کاربر (personnel.userId → users.id) همراه با ریز کارکرد هر فیش. */
-  static async listPayrollsForUser(uid: number) {
-    const linkedPersonnel = await orm.select({ id: personnel.id })
-      .from(personnel)
-      .where(and(eq(personnel.userId, uid), eq(personnel.isDeleted, 0)));
+  /**
+   * فیش‌های پرسنلِ متصل به کاربر (personnel.userId → users.id) همراه با ریز کارکرد هر فیش.
+   * v9.0.24 (TD-435): کاربرِ وصل به بیش از یک پرسنل (پیوند تکراری قدیمی) ۴۰۹ می‌گیرد، نه فیش پرسنل دیگر.
+   */
+  static async listPayrollsForUser(uid: number, db: DbExecutor = orm) {
+    const pIds = await personnelIdsOfUser(uid, db);
+    if (!pIds.length) return [];
 
-    if (!linkedPersonnel.length) return [];
-
-    const pIds = linkedPersonnel.map(p => p.id);
-    const rows = await orm.select({
+    const rows = await db.select({
       ...payrollHeadColumns,
       ...payrollPersonnelColumns,
       ...payrollAmountColumns,
@@ -163,7 +163,7 @@ export class PayrollReadService {
     const payrollIds = rows.map(r => r.id);
     const itemsByPayroll = new Map<number, PayrollLogItem[]>();
     if (payrollIds.length > 0) {
-      const logs = await orm.select({
+      const logs = await db.select({
         id: pieceworkLogs.id,
         payrollId: pieceworkLogs.payrollId,
         ...payrollLogItemColumns,

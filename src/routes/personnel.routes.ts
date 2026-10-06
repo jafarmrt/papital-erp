@@ -15,6 +15,7 @@ import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money, moneyOr } from '../lib/money.js';
+import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 
 const router = Router();
@@ -470,50 +471,56 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
 
     const nowIso = new Date().toISOString();
 
-    const [inserted] = await orm
-      .insert(personnel)
-      .values({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        fullName: computedFullName,
-        personnelCode: personnelCode.trim(),
-        userId: userId ? Number(userId) : null,
-        gender,
-        birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
-        nationality,
-        nationalId: normalizeNationalId(nationalId),
-        phone: normalizePhoneNumber(phone),
-        employmentStatus,
-        salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-        monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
-        jobTitle: jobTitle.trim(),
-        education: education.trim(),
-        endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
-        terminationReason,
-        specializedSkills,
-        otherSkills,
-        referralSource,
-        cardNumber: cardNumber.trim(),
-        accountNumber: accountNumber.trim(),
-        shebaNumber: shebaNumber.trim(),
-        bankName: bankName.trim(),
-        nobitexUsername: nobitexUsername.trim(),
-        nobitexPassword: encryptSecret(nobitexPassword.trim()),
-        address: address.trim(),
-        notes: notes.trim(),
-        createdAt: nowIso,
-        updatedAt: nowIso
-      })
-      .returning();
+    // v9.0.24 (TD-435): کاربر متصل زیر قفل ردیف کاربر سنجیده می‌شود (ناموجود ۴۲۲، وصل به پرسنل فعال دیگر ۴۰۹)
+    const inserted = await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+      const linkedUserId = await resolvePersonnelUserLink(tx, userId);
+      const [row] = await tx
+        .insert(personnel)
+        .values({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          fullName: computedFullName,
+          personnelCode: personnelCode.trim(),
+          userId: linkedUserId,
+          gender,
+          birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
+          nationality,
+          nationalId: normalizeNationalId(nationalId),
+          phone: normalizePhoneNumber(phone),
+          employmentStatus,
+          salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
+          monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
+          jobTitle: jobTitle.trim(),
+          education: education.trim(),
+          endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
+          terminationReason,
+          specializedSkills,
+          otherSkills,
+          referralSource,
+          cardNumber: cardNumber.trim(),
+          accountNumber: accountNumber.trim(),
+          shebaNumber: shebaNumber.trim(),
+          bankName: bankName.trim(),
+          nobitexUsername: nobitexUsername.trim(),
+          nobitexPassword: encryptSecret(nobitexPassword.trim()),
+          address: address.trim(),
+          notes: notes.trim(),
+          createdAt: nowIso,
+          updatedAt: nowIso
+        })
+        .returning();
 
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'CREATE',
-      entity: 'پرسنل',
-      entityId: inserted.id,
-      description: `ثبت پرسنل جدید «${computedFullName}» (کد پرسنلی: ${personnelCode || '---'})`
-    });
+      await logActivity({
+        userId: req.user?.id,
+        username: req.user?.username || 'سیستم',
+        action: 'CREATE',
+        entity: 'پرسنل',
+        entityId: row.id,
+        description: `ثبت پرسنل جدید «${computedFullName}» (کد پرسنلی: ${personnelCode || '---'})`,
+        tx
+      });
+      return row;
+    }));
 
     res.status(201).json(openPersonnelSecret(inserted));
   } catch (err) {
@@ -587,51 +594,58 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
     }
 
     const nowIso = new Date().toISOString();
+    const nextNobitex = await nextNobitexPassword(nobitexPassword, existing, req.user);
 
-    await orm
-      .update(personnel)
-      .set({
-        firstName: firstName ? firstName.trim() : '',
-        lastName: lastName ? lastName.trim() : '',
-        fullName: computedFullName,
-        personnelCode: personnelCode ? personnelCode.trim() : '',
-        userId: userId ? Number(userId) : null,
-        gender,
-        birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
-        nationality,
-        nationalId: nationalId ? normalizeNationalId(nationalId) : '',
-        phone: phone ? normalizePhoneNumber(phone) : '',
-        employmentStatus,
-        // V10-4.4: مدل حقوق ثابت/ترکیبی
-        salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-        monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
-        jobTitle: jobTitle ? jobTitle.trim() : '',
-        education: education ? education.trim() : '',
-        endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
-        terminationReason: terminationReason || '',
-        specializedSkills: specializedSkills || '',
-        otherSkills: otherSkills || '',
-        referralSource: referralSource || '',
-        cardNumber: cardNumber ? cardNumber.trim() : '',
-        accountNumber: accountNumber ? accountNumber.trim() : '',
-        shebaNumber: shebaNumber ? shebaNumber.trim() : '',
-        bankName: bankName ? bankName.trim() : '',
-        nobitexUsername: nobitexUsername ? nobitexUsername.trim() : '',
-        nobitexPassword: await nextNobitexPassword(nobitexPassword, existing, req.user),
-        address: address ? address.trim() : '',
-        notes: notes ? notes.trim() : '',
-        updatedAt: nowIso
-      })
-      .where(eq(personnel.id, id));
+    // v9.0.24 (TD-435): پیوند تازه یا عوض‌شده کاربر زیر قفل ردیف کاربر سنجیده می‌شود؛ پیوند فعلی دست نمی‌خورد
+    await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+      const requestedUserId = parsePersonnelUserId(userId);
+      const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
+      await tx
+        .update(personnel)
+        .set({
+          firstName: firstName ? firstName.trim() : '',
+          lastName: lastName ? lastName.trim() : '',
+          fullName: computedFullName,
+          personnelCode: personnelCode ? personnelCode.trim() : '',
+          userId: linkedUserId,
+          gender,
+          birthDate: requireStorageDate(birthDate, 'تاریخ تولد'),
+          nationality,
+          nationalId: nationalId ? normalizeNationalId(nationalId) : '',
+          phone: phone ? normalizePhoneNumber(phone) : '',
+          employmentStatus,
+          // V10-4.4: مدل حقوق ثابت/ترکیبی
+          salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
+          monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
+          jobTitle: jobTitle ? jobTitle.trim() : '',
+          education: education ? education.trim() : '',
+          endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
+          terminationReason: terminationReason || '',
+          specializedSkills: specializedSkills || '',
+          otherSkills: otherSkills || '',
+          referralSource: referralSource || '',
+          cardNumber: cardNumber ? cardNumber.trim() : '',
+          accountNumber: accountNumber ? accountNumber.trim() : '',
+          shebaNumber: shebaNumber ? shebaNumber.trim() : '',
+          bankName: bankName ? bankName.trim() : '',
+          nobitexUsername: nobitexUsername ? nobitexUsername.trim() : '',
+          nobitexPassword: nextNobitex,
+          address: address ? address.trim() : '',
+          notes: notes ? notes.trim() : '',
+          updatedAt: nowIso
+        })
+        .where(eq(personnel.id, id));
 
-    await logActivity({
-      userId: req.user?.id,
-      username: req.user?.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'پرسنل',
-      entityId: id,
-      description: `ویرایش اطلاعات پرسنل «${computedFullName}» (کد ${id})`
-    });
+      await logActivity({
+        userId: req.user?.id,
+        username: req.user?.username || 'سیستم',
+        action: 'UPDATE',
+        entity: 'پرسنل',
+        entityId: id,
+        description: `ویرایش اطلاعات پرسنل «${computedFullName}» (کد ${id})`,
+        tx
+      });
+    }));
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت ویرایش شد' });
   } catch (err) {
