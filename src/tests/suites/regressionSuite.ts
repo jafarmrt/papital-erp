@@ -10454,6 +10454,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.6، TD-417): اسناد پرونده مشتری با نام خریدار برابر و فقط نوع‌های فروش
   const { runCustomerDossierDocumentsTests } = await import('../regression/customerDossierDocumentsTests.js');
   results.push(...await runCustomerDossierDocumentsTests(shouldRun));
+  // بسته ۹ (v9.0.7، TD-419): تلفن طرف حساب با کلید تطبیق
+  const { runCustomerPhoneKeyTests } = await import('../regression/customerPhoneKeyTests.js');
+  results.push(...await runCustomerPhoneKeyTests(shouldRun));
 
   return results;
 }

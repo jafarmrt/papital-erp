@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.7 — Customer Phone Matching by Key
+- **Customer Phone Identity:** The sales lead link, the customer form's duplicate check and the customer Excel import compare phones with `phoneMatchKey` (the WooCommerce key of TD-296): spaces, +98 / 0098, Persian digits and a leading zero dropped by Excel no longer create a second customer for one number. Existing duplicates are left as they are (TD-419, package-9 finding B09-04).
+
 ### v9.0.6 — Customer Dossier Documents by Exact Buyer
 - **Customer Dossier:** The «پیش‌فاکتورها و اسناد» tab loads `GET /customers/:id/documents`: only sales documents (invoice, proforma, return) whose buyer name equals the party's current name exactly, instead of a text search over number, buyer, notes, user, phone and city. Each row shows its own type and status (TD-417, package-9 finding B09-02).
 

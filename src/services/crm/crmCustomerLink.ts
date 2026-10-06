@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { findActiveCustomerByPhone, samePhone } from '../customers/customerIdentity.js';
 
 /**
  * v9.0.5 (TD-418، تصمیم مالک محصول ت۲ الف): پرونده فروش فقط به طرف حساب پیوند می‌دهد یا طرف حساب تازه می‌سازد و هرگز
@@ -31,7 +32,8 @@ const keep = 'طرف حساب تغییر نکرد.';
 
 function phoneDifference(customer: CustomerRow, leadPhone: string): string | null {
   const current = (customer.phone ?? '').trim();
-  if (!leadPhone || leadPhone === current) return null;
+  // v9.0.7 (TD-419): همان شماره با نگارش دیگر اختلاف نیست
+  if (!leadPhone || leadPhone === current || samePhone(leadPhone, current)) return null;
   const theirs = current ? `تلفن طرف حساب ${toPersianDigits(current)} است` : 'طرف حساب تلفن ندارد';
   return `اختلاف با طرف حساب «${customer.name}»: تلفن پرونده ${toPersianDigits(leadPhone)} و ${theirs}. ${keep}`;
 }
@@ -66,10 +68,9 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
     if (byId) return linkTo(byId, [nameDifference(byId, cCompany), phoneDifference(byId, cPhone)]);
   }
 
-  if (cPhone) {
-    const [byPhone] = await active(eq(customers.phone, cPhone));
-    if (byPhone) return linkTo(byPhone, [nameDifference(byPhone, cCompany)]);
-  }
+  // v9.0.7 (TD-419): طرف حساب با کلید تطبیق تلفن پیدا می‌شود، نه برابری دقیق رشته
+  const byPhone = await findActiveCustomerByPhone(cPhone, db);
+  if (byPhone) return linkTo(byPhone, [nameDifference(byPhone, cCompany)]);
 
   const [byName] = await active(eq(customers.name, primaryCustomerName));
   if (byName) return linkTo(byName, [phoneDifference(byName, cPhone)]);

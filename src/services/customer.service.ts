@@ -1,8 +1,10 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
+import { phoneMatchKey } from './woocommerce/phoneMatchKey.js';
+import { assertCustomerPhoneAvailable } from './customers/customerIdentity.js';
 
 export interface ContactPerson {
   id?: string;
@@ -123,15 +125,8 @@ export class CustomerService {
       }
     }
 
-    if (phone) {
-      const existingPhone = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
-      if (existingPhone.length > 0) {
-        throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.7 (TD-419): تلفن با کلید تطبیق (همان شماره با نگارش دیگر تکراری است)
+    await assertCustomerPhoneAvailable(phone, executor);
 
     const createdAt = new Date().toISOString();
     const [created] = await executor
@@ -215,15 +210,8 @@ export class CustomerService {
       }
     }
 
-    if (phone) {
-      const existingPhone = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
-      if (existingPhone.length > 0 && existingPhone[0].id !== customerId) {
-        throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.7 (TD-419): فقط شماره تازه سنجیده می‌شود؛ نگه داشتن شماره قبلی (با هر نگارشی) ویرایش را رد نمی‌کند
+    if (phoneMatchKey(phone) !== phoneMatchKey(prevCust.phone)) await assertCustomerPhoneAvailable(phone, executor, customerId);
 
     const updatedData: Partial<typeof customers.$inferInsert> = {
       name,
@@ -293,7 +281,7 @@ export class CustomerService {
     const createdRecords: Array<{ id: number; name: string; partyType: string; phone?: string }> = [];
     const updatedRecords: Array<{ id: number; name: string; partyType: string; updatedData: Partial<typeof customers.$inferInsert> }> = [];
 
-    const existingList = await executor.select().from(customers).where(eq(customers.isDeleted, 0));
+    const existingList = await executor.select().from(customers).where(eq(customers.isDeleted, 0)).orderBy(asc(customers.id));
 
     const idMap = new Map<number, typeof customers.$inferSelect>();
     const nameMap = new Map<string, typeof customers.$inferSelect>();
@@ -304,8 +292,9 @@ export class CustomerService {
       if (c.name && c.name.trim()) {
         nameMap.set(c.name.trim().toLowerCase(), c);
       }
-      if (c.phone && c.phone.trim()) {
-        phoneMap.set(c.phone.trim(), c);
+      // v9.0.7 (TD-419): نقشه تلفن با کلید تطبیق؛ شماره‌ای که اکسل صفر اولش را انداخته هم همان شماره است
+      if (phoneMatchKey(c.phone) && !phoneMap.has(phoneMatchKey(c.phone))) {
+        phoneMap.set(phoneMatchKey(c.phone), c);
       }
     });
 
@@ -353,8 +342,8 @@ export class CustomerService {
           matchedCust = idMap.get(id);
         } else if (nameMap.has(name.toLowerCase())) {
           matchedCust = nameMap.get(name.toLowerCase());
-        } else if (phone && phoneMap.has(phone)) {
-          matchedCust = phoneMap.get(phone);
+        } else if (phoneMatchKey(phone) && phoneMap.has(phoneMatchKey(phone))) {
+          matchedCust = phoneMap.get(phoneMatchKey(phone));
         }
 
         if (matchedCust) {
@@ -401,7 +390,7 @@ export class CustomerService {
             }
             idMap.set(saved.id, saved);
             nameMap.set(name.toLowerCase(), saved);
-            if (saved.phone) phoneMap.set(saved.phone.trim(), saved);
+            if (phoneMatchKey(saved.phone)) phoneMap.set(phoneMatchKey(saved.phone), saved);
 
             updatedRecords.push({ id: matchedCust.id, name, partyType, updatedData });
             updatedCount++;
@@ -436,7 +425,7 @@ export class CustomerService {
 
           idMap.set(newCust.id, newCust);
           nameMap.set(name.toLowerCase(), newCust);
-          if (phone) phoneMap.set(phone, newCust);
+          if (phoneMatchKey(phone)) phoneMap.set(phoneMatchKey(phone), newCust);
 
           createdRecords.push({ id: newCust.id, name, partyType, phone });
           createdCount++;
