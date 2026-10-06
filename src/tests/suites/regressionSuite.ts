@@ -10457,6 +10457,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.7، TD-419): تلفن طرف حساب با کلید تطبیق
   const { runCustomerPhoneKeyTests } = await import('../regression/customerPhoneKeyTests.js');
   results.push(...await runCustomerPhoneKeyTests(shouldRun));
+  // بسته ۹ (v9.0.8، TD-420): یکتایی نام طرف حساب فعال
+  const { runCustomerUniqueNameTests } = await import('../regression/customerUniqueNameTests.js');
+  results.push(...await runCustomerUniqueNameTests(shouldRun));
 
   return results;
 }

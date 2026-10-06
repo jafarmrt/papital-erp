@@ -2,9 +2,11 @@ import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
-import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
+import { NotFoundError } from '../errors/customErrors.js';
 import { phoneMatchKey } from './woocommerce/phoneMatchKey.js';
-import { assertCustomerPhoneAvailable } from './customers/customerIdentity.js';
+import {
+  assertCustomerNameAvailable, assertCustomerPhoneAvailable, customerNameKey, guardCustomerName, isCustomerNameUniqueViolation, CUSTOMER_NAME_TAKEN_MESSAGE,
+} from './customers/customerIdentity.js';
 
 export interface ContactPerson {
   id?: string;
@@ -115,21 +117,14 @@ export class CustomerService {
       }
     }
 
-    if (name) {
-      const existingName = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
-      if (existingName.length > 0) {
-        throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.8 (TD-420): نام با کلید ایندکس یکتای uq_customers_name_active؛ نقض ایندکس در رقابت همان پیام را می‌دهد
+    if (name) await assertCustomerNameAvailable(name, executor);
 
     // v9.0.7 (TD-419): تلفن با کلید تطبیق (همان شماره با نگارش دیگر تکراری است)
     await assertCustomerPhoneAvailable(phone, executor);
 
     const createdAt = new Date().toISOString();
-    const [created] = await executor
+    const [created] = await guardCustomerName(() => executor
       .insert(customers)
       .values({
         name,
@@ -148,7 +143,7 @@ export class CustomerService {
         isDeleted: 0,
         version: 1
       })
-      .returning();
+      .returning());
 
     return created;
   }
@@ -200,15 +195,8 @@ export class CustomerService {
       }
     }
 
-    if (name) {
-      const existingName = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
-      if (existingName.length > 0 && existingName[0].id !== customerId) {
-        throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.8 (TD-420): فقط نام تازه سنجیده می‌شود (هم‌نام‌های قدیمی ویرایش را نمی‌بندند)
+    if (name && customerNameKey(name) !== customerNameKey(prevCust.name)) await assertCustomerNameAvailable(name, executor, customerId);
 
     // v9.0.7 (TD-419): فقط شماره تازه سنجیده می‌شود؛ نگه داشتن شماره قبلی (با هر نگارشی) ویرایش را رد نمی‌کند
     if (phoneMatchKey(phone) !== phoneMatchKey(prevCust.phone)) await assertCustomerPhoneAvailable(phone, executor, customerId);
@@ -230,11 +218,11 @@ export class CustomerService {
     };
 
     // ویرایش هم‌زمانی که میان خواندن و نوشتن نسخه را جلو برده باشد ردیفی را تغییر نمی‌دهد و تداخل گزارش می‌شود
-    const [current] = await executor
+    const [current] = await guardCustomerName(() => executor
       .update(customers)
       .set(updatedData)
       .where(and(eq(customers.id, customerId), eq(customers.version, prevCust.version), eq(customers.isDeleted, 0)))
-      .returning();
+      .returning());
     if (!current) {
       throw new OptimisticLockError({ entityType: 'Customer', entityId: customerId, expectedVersion });
     }
@@ -431,7 +419,7 @@ export class CustomerService {
           createdCount++;
         }
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : 'خطای ناشناخته در پردازش سطر';
+        const errorMsg = isCustomerNameUniqueViolation(err) ? CUSTOMER_NAME_TAKEN_MESSAGE : (err instanceof Error ? err.message : 'خطای ناشناخته در پردازش سطر');
         errors.push({
           row: rowIndex,
           name: rows[i]?.name,

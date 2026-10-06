@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.8 — Unique Active Customer Names
+- **Customer Name Uniqueness:** Migration 0052 adds the partial unique index `uq_customers_name_active` on `lower(btrim(name))` of active parties, created only when existing data has no duplicate (old rows are never renamed or merged; the financial health check lists duplicates as `customer_name_uniqueness`). The form, the sales lead link and the Excel import check the same key, and a race ends in the same Persian duplicate-name error (TD-420, package-9 finding B09-05).
+
 ### v9.0.7 — Customer Phone Matching by Key
 - **Customer Phone Identity:** The sales lead link, the customer form's duplicate check and the customer Excel import compare phones with `phoneMatchKey` (the WooCommerce key of TD-296): spaces, +98 / 0098, Persian digits and a leading zero dropped by Excel no longer create a second customer for one number. Existing duplicates are left as they are (TD-419, package-9 finding B09-04).
 

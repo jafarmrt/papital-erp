@@ -6,6 +6,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
+import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import {
   findDuplicatePieceworkTaskCodes,
   hasPieceworkTaskCodeUniqueIndex,
@@ -1035,6 +1036,12 @@ export class FinancialHealthService {
 
     // آزمون ۱۳: v8.0.118 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
     tests.push(buildNoVoucherTreasuryHealthTest(await findTreasuryEntriesWithoutVoucher()));
+
+    // آزمون ۱۴: v9.0.8 (TD-420) یکتایی نام طرف حساب‌های فعال (مهاجرت 0052)
+    const [duplicateCustomerNames, customerNameIndexPresent] = await Promise.all([findDuplicateCustomerNames(), hasCustomerNameUniqueIndex()]);
+    const customerNameTest = buildCustomerNameHealthTest(duplicateCustomerNames, customerNameIndexPresent);
+    overallScore += customerNameTest.scoreImpact;
+    tests.push(customerNameTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
