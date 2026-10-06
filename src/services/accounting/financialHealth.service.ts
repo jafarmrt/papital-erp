@@ -7,6 +7,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
+import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1081,6 +1082,11 @@ export class FinancialHealthService {
     const futureMovementTest = buildFutureStockMovementHealthTest(await findFutureStockMovements());
     overallScore += futureMovementTest.scoreImpact;
     tests.push(futureMovementTest);
+
+    // آزمون ۲۱: v9.0.80 (TD-481) سند افتتاحیه کالا برابر ردیف‌های افتتاحیه کاردکس (فقط فهرست، بی بازنویسی)
+    const openingVoucherTest = buildOpeningVoucherHealthTest(await findOpeningVoucherMismatches());
+    overallScore += openingVoucherTest.scoreImpact;
+    tests.push(openingVoucherTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

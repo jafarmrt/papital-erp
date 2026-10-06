@@ -1,18 +1,16 @@
 import { orm, DbExecutor } from '../../db/drizzle.js';
-import { items, journalVouchers, transactions } from '../../db/schema.js';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { items, journalVouchers } from '../../db/schema.js';
+import { and, eq } from 'drizzle-orm';
 import { AccountMappingService } from '../accounting/accountMapping.service.js';
 import { VoucherService } from '../accounting/voucher.service.js';
-import { logger } from '../../middleware/logger.js';
 import { businessTodayJalaliDash } from '../../lib/businessClock.js';
 import type { JournalVoucher } from '../../types.js';
-import { money } from '../../lib/money.js';
-import { fin } from '../../lib/financialDecimal.js';
+import { openingKardexValue } from './itemOpeningValue.js';
 
 /**
  * V2.0.0: سند افتتاحیه موجودی اولیه کالا — اتمیک و idempotent
- * DR موجودی مواد اولیه (1401) یا کالای تولیدشده (1403) × (موجودی × WAC) / CR سرمایه اولیه (4001)
- * + اصلاح unitPrice تراکنش‌های «ثبت اولیه کالا» (قبلاً صفر ثبت می‌شد و WAC را خراب می‌کرد)
+ * DR موجودی مواد اولیه (1401) یا کالای تولیدشده (1403) / CR سرمایه اولیه (4001)، به ارزش ردیف‌های افتتاحیه کاردکس
+ * (v9.0.80، TD-481)
  */
 export class ItemOpeningService {
   static async issueItemOpeningVoucher(itemId: number, params: { userId?: number; username?: string; tx?: DbExecutor } = {}): Promise<JournalVoucher | null> {
@@ -30,10 +28,12 @@ export class ItemOpeningService {
       ));
     if (existing) return VoucherService.getJournalVoucherById(existing.id, params.tx);
 
-    const stock = Number(item.currentStock) || 0;
-    const wac = money(item.weightedAverageCost);
-    const amount = fin(stock).multiply(wac).round(4);
-    if (!amount.isPositive()) return null; // موجودی اولیه یا WAC ندارد — سند ندارد
+    // v9.0.80 (TD-481، تصمیم ت۴): ارزش = جمع ردیف‌های افتتاحیه کاردکس همین کالا (مقدار × بهای ثبت‌شده هنگام ساخت)، با گردش
+    // کار یا بی آن یکی. پیش‌تر «موجودی جاری × WAC جاری» بود و رسید ثبت‌شده پیش از تأیید دوباره به سرمایه اولیه می‌رفت.
+    const opening = await openingKardexValue(executor, itemId);
+    const amount = opening.value;
+    if (!amount.isPositive() || !opening.quantity.isPositive()) return null; // ردیف افتتاحیه با بها ندارد — سند ندارد
+    const unitCost = amount.divide(opening.quantity).round(4);
 
     const inventoryAcc = item.type === 'raw_material'
       ? await AccountMappingService.getInventoryRawMaterialsAccount(params.tx)
@@ -43,27 +43,8 @@ export class ItemOpeningService {
       throw new Error('حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
     }
 
-    // P1-07 (M-09 & INV-03): اصلاح unitPrice منحصراً برای تراکنش «ثبت اولیه کالا»، نه دستکاری اسناد انبارگردانی دوره‌ای
-    try {
-      await executor.update(transactions)
-        .set({
-          unitPrice: wac,
-          totalPrice: sql`${transactions.quantity} * ${wac.toDbString()}::numeric`
-        })
-        .where(and(
-          eq(transactions.itemId, itemId),
-          eq(transactions.documentType, 'audit'),
-          or(
-            eq(transactions.documentRef, 'ثبت اولیه کالا'),
-            eq(transactions.documentRef, 'درون‌ریزی اکسل'),
-            eq(transactions.unitPrice, money(0))
-          ),
-          eq(transactions.isDeleted, 0)
-        ));
-    } catch (err: unknown) {
-      logger.warn({ message: `Could not update initial audit tx unit price for item ${itemId}`, error: err });
-    }
-
+    // v9.0.80 (TD-481): ردیف کاردکس تغییرناپذیر است؛ پیش‌تر بهای ردیف‌های افتتاحیه (و هر ردیف انبارگردانی با بهای ۰) با WAC
+    // روز بازنویسی می‌شد و بازپخش کاردکس دیگر به WAC جاری نمی‌رسید (I13).
     const voucher = await VoucherService.createJournalVoucher({
       date: await businessTodayJalaliDash(),
       voucherType: 'opening',
@@ -83,7 +64,7 @@ export class ItemOpeningService {
           debit: amount,
           credit: 0,
           currency: 'IRR',
-          description: `موجودی اولیه ${stock} ${item.unit} × ${wac} — ${item.name}`
+          description: `موجودی اولیه ${opening.quantity.toString()} ${item.unit} × ${unitCost.toString()} — ${item.name}`
         },
         {
           accountId: capitalAcc.id,

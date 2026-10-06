@@ -10525,6 +10525,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.79, TD-488): the initial Kardex backfill never reprices its earlier rows
   const { runKardexBackfillNoRewriteTests } = await import('../regression/kardexBackfillNoRewriteTests.js');
   results.push(...await runKardexBackfillNoRewriteTests(shouldRun));
+  // Package 6 (v9.0.80, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
+  const { runItemOpeningVoucherValueTests } = await import('../regression/itemOpeningVoucherValueTests.js');
+  results.push(...await runItemOpeningVoucherValueTests(shouldRun));
 
   return results;
 }
