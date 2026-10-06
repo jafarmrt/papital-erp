@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApprovalInboxPage } from '../../pages/ApprovalInboxPage';
 
@@ -120,5 +120,43 @@ describe('TD-463 a step with several reject actions asks which one', () => {
     fireEvent.click(screen.getByText('رد و عودت وظیفه'));
     await waitFor(() => expect(executeBody(1)).toBeDefined());
     expect(executeBody(1).transitionId).toBeUndefined();
+  });
+});
+
+describe('TD-464 the task modal shows only the opened task entity', () => {
+  it('a late document response of a closed task is ignored and its request is aborted', async () => {
+    let resolveDoc1: (v: unknown) => void = () => {};
+    let doc1Signal: AbortSignal | undefined;
+    fetchJson.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/documents/1') {
+        doc1Signal = init?.signal ?? undefined;
+        return new Promise((r) => { resolveDoc1 = r; });
+      }
+      if (url === '/documents/2') return Promise.resolve({ id: 2, refNumber: 'INV-2', buyerName: 'خریدار دوم', items: [] });
+      return Promise.resolve(inboxRoutes([taskRow(1, '1'), taskRow(2, '2')])(url, init));
+    });
+    renderPage();
+    await screen.findAllByText('تأیید سند 1');
+    fireEvent.click(openButtons()[0]);
+    fireEvent.click(screen.getByText('انصراف'));
+    expect(doc1Signal?.aborted).toBe(true);
+    fireEvent.click(openButtons()[1]);
+    expect(await screen.findByText('خریدار دوم')).toBeTruthy();
+    await act(async () => { resolveDoc1({ id: 1, refNumber: 'INV-1', buyerName: 'خریدار اول', items: [] }); });
+    expect(screen.getByText(/«تأیید سند 2»/)).toBeTruthy();
+    expect(screen.queryByText('خریدار اول')).toBeNull();
+    expect(screen.getByText('خریدار دوم')).toBeTruthy();
+  });
+
+  it('a requisition task reads the requisition once', async () => {
+    const row = taskRow(1, '7', { entityType: 'purchase_requisition', instance: instance(1, '7', 'purchase_requisition') });
+    routeFetch(inboxRoutes([row], (url) => (url === '/procurement/requisitions/7'
+      ? { success: true, data: { id: 7, code: 'PR-7', title: 'خرید', items: [] } }
+      : {})));
+    renderPage();
+    await screen.findAllByText('تأیید سند 7');
+    fireEvent.click(openButtons()[0]);
+    await screen.findByText('PR-7');
+    expect(fetchJson.mock.calls.filter((c) => c[0] === '/procurement/requisitions/7')).toHaveLength(1);
   });
 });

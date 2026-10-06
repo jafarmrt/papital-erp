@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   useMyTasksQuery,
   useTaskStatsQuery,
@@ -24,13 +24,11 @@ import {
   Layers,
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
-import { fetchJson } from '../api';
-import toast from 'react-hot-toast';
+import { useApprovalTaskEntity } from '../hooks/useApprovalTaskEntity';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
 import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
-import { PurchaseRequisition } from '../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
 
 type DocumentDetails = ApprovalDocumentDetails;
@@ -107,12 +105,8 @@ export function ApprovalInboxPage() {
   const [comment, setComment] = useState<string>('');
   const [rejectTransitionId, setRejectTransitionId] = useState<number | null>(null);
   
-  // Document details state for rich preview in modal
-  const [docDetails, setDocDetails] = useState<DocumentDetails | null>(null);
-  const [isLoadingDoc, setIsLoadingDoc] = useState<boolean>(false);
   const [printDoc, setPrintDoc] = useState<DocumentDetails | null>(null);
-  const [requisitionDetails, setRequisitionDetails] = useState<PurchaseRequisition | null>(null);
-  const [isLoadingRequisition, setIsLoadingRequisition] = useState<boolean>(false);
+  const { docDetails, isLoadingDoc, requisitionDetails, isLoadingRequisition } = useApprovalTaskEntity(selectedTask);
 
   const { data: myTasksData, isLoading: isTasksLoading, isFetching, refetch: refetchTasks } = useMyTasksQuery(taskStatusFilter);
   const { data: taskStats, refetch: refetchStats } = useTaskStatsQuery();
@@ -121,103 +115,6 @@ export function ApprovalInboxPage() {
 
   const rawTasks = Array.isArray(myTasksData) ? myTasksData : (Array.isArray(myTasksData?.data) ? myTasksData.data : []);
   const myTasks: TaskItem[] = rawTasks;
-
-  // Fetch document details or requisition details when a task or transition item is opened
-  useEffect(() => {
-    if (!selectedTask) {
-      setDocDetails(null);
-      setIsLoadingDoc(false);
-      setRequisitionDetails(null);
-      setIsLoadingRequisition(false);
-      return;
-    }
-
-    const itemObj = selectedTask;
-    const entityType = selectedTask.instance?.entityType || selectedTask.entityType || selectedTask.entity_type || '';
-    const entityId = selectedTask.instance?.entityId || selectedTask.entityId || selectedTask.entity_id;
-
-    const isRequisition = entityType === 'purchase_requisition' || entityType === 'requisition';
-    const isDoc = !isRequisition && (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma' || entityType === '');
-
-    if (isDoc && entityId) {
-      setIsLoadingDoc(true);
-
-      // Prepopulate with cached context from task/item if available
-      const itemAny = itemObj as any;
-      const cachedContext = itemObj?.entityContext;
-      if (cachedContext && (cachedContext.buyerName || cachedContext.refNumber || cachedContext.amount)) {
-        setDocDetails({
-          ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
-          buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
-          buyer_city: cachedContext.buyerCity || '',
-          total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
-          currency: cachedContext.currency || 'IRR',
-          notes: cachedContext.notes || '',
-          items: []
-        });
-      }
-
-      fetchJson<DocumentDetails>(`/documents/${entityId}`)
-        .then((res) => {
-          const doc = (res as { data?: DocumentDetails })?.data ? (res as { data: DocumentDetails }).data : (res as DocumentDetails);
-          if (doc && (doc.id || doc.refNumber || doc.ref_number)) {
-            setDocDetails(doc);
-          } else if (cachedContext && (cachedContext.buyerName || cachedContext.amount)) {
-            setDocDetails({
-              ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
-              buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
-              buyer_city: cachedContext.buyerCity || '',
-              total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
-              currency: cachedContext.currency || 'IRR',
-              items: []
-            });
-          }
-        })
-        .catch((err) => {
-          console.error('Could not load document details:', err);
-          if (cachedContext && (cachedContext.buyerName || cachedContext.amount)) {
-            setDocDetails({
-              ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
-              buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
-              buyer_city: cachedContext.buyerCity || '',
-              total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
-              currency: cachedContext.currency || 'IRR',
-              items: []
-            });
-          } else {
-            setDocDetails(null);
-            toast.error(err?.message || 'خطا در دریافت جزئیات سند کارتابل');
-          }
-        })
-        .finally(() => {
-          setIsLoadingDoc(false);
-        });
-    } else {
-      setDocDetails(null);
-      setIsLoadingDoc(false);
-    }
-
-    if (isRequisition && entityId) {
-      setIsLoadingRequisition(true);
-      fetchJson<{ success?: boolean; data?: PurchaseRequisition }>(`/procurement/requisitions/${entityId}`)
-        .then((res) => {
-          const req = res?.data || (res as any);
-          if (req && (req.id || req.code)) {
-            setRequisitionDetails(req);
-          }
-        })
-        .catch((err) => {
-          console.error('Could not load requisition details in ApprovalInboxPage:', err);
-          toast.error(err?.message || 'خطا در دریافت مشخصات و اقلام درخواست خرید');
-        })
-        .finally(() => {
-          setIsLoadingRequisition(false);
-        });
-    } else {
-      setRequisitionDetails(null);
-      setIsLoadingRequisition(false);
-    }
-  }, [selectedTask]);
 
   const handleRefreshAll = () => {
     void refetchTasks();

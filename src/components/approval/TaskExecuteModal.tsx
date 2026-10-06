@@ -1,11 +1,9 @@
-import { useState, useEffect } from 'react';
 import {
   ShieldCheck, X, Printer, CheckCircle2, XCircle, MessageSquare, Send
 } from 'lucide-react';
 import DocumentDetailsPreview, { ApprovalDocumentDetails } from './DocumentDetailsPreview';
 import RequisitionDetailsPreview from './RequisitionDetailsPreview';
 import { PurchaseRequisition } from '../../types';
-import { fetchJson } from '../../api';
 
 export type ApprovalTaskAction = 'approve' | 'reject';
 export interface ApprovalRejectOption { id: number; title: string }
@@ -45,46 +43,22 @@ export function TaskExecuteModal({
   onCommentChange,
   onExecute,
   isExecuting,
-  requisitionDetails: propRequisitionDetails,
-  isLoadingRequisition: propIsLoadingRequisition,
+  requisitionDetails,
+  isLoadingRequisition = false,
   rejectOptions = [],
   rejectTransitionId = null,
   onRejectTransitionChange
 }: TaskExecuteModalProps) {
   const needsRejectChoice = taskAction === 'reject' && rejectOptions.length > 1;
   const rejectBlocked = taskAction === 'reject' && (!comment.trim() || (needsRejectChoice && rejectTransitionId === null));
-  const [internalReq, setInternalReq] = useState<PurchaseRequisition | null>(null);
-  const [internalLoading, setInternalLoading] = useState(false);
-
   const entityType = selectedTask?.instance?.entityType || selectedTask?.entityType;
   const entityId = selectedTask?.instance?.entityId || selectedTask?.entityId || selectedTask?.entity_id;
   const isRequisition = entityType === 'purchase_requisition' || entityType === 'requisition';
 
-  useEffect(() => {
-    if (selectedTask && isRequisition && entityId && !propRequisitionDetails && !propIsLoadingRequisition) {
-      setInternalLoading(true);
-      fetchJson<{ success?: boolean; data?: PurchaseRequisition }>(`/procurement/requisitions/${entityId}`)
-        .then((res) => {
-          const reqData = res?.data || (res as any);
-          if (reqData && (reqData.id || reqData.code)) {
-            setInternalReq(reqData);
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to load requisition inside TaskExecuteModal:', err);
-        })
-        .finally(() => {
-          setInternalLoading(false);
-        });
-    } else if (!selectedTask) {
-      setInternalReq(null);
-    }
-  }, [selectedTask, isRequisition, entityId, propRequisitionDetails, propIsLoadingRequisition]);
-
   if (!selectedTask) return null;
 
-  const activeRequisition = propRequisitionDetails || internalReq;
-  const isLoadingReq = propIsLoadingRequisition !== undefined ? propIsLoadingRequisition : internalLoading;
+  // TD-464: درخواست خرید را فقط صفحه (useApprovalTaskEntity) می‌خواند؛ پیش‌تر مودال هم آن را دوباره می‌خواند
+  const activeRequisition = requisitionDetails ?? null;
 
   const getEntityLabel = () => {
     if (entityType === 'document' || entityType === 'doc') return 'پیش‌فاکتور / سند فروش';
@@ -145,7 +119,7 @@ export function TaskExecuteModal({
           {/* Purchase Requisition Items & Details when entity is requisition */}
           {isRequisition && (
             <div className="border border-amber-200/80 dark:border-amber-900/50 rounded-xl overflow-hidden bg-amber-50/20 dark:bg-gray-900/40">
-              <RequisitionDetailsPreview requisition={activeRequisition} isLoading={isLoadingReq} />
+              <RequisitionDetailsPreview requisition={activeRequisition} isLoading={isLoadingRequisition} />
             </div>
           )}
 
