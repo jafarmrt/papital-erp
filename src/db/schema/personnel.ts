@@ -43,6 +43,8 @@ export const personnel = pgTable('personnel', {
 }, (table) => ({
   idx_personnel_code: index('idx_personnel_code').on(table.personnelCode),
   idx_personnel_user: index('idx_personnel_user').on(table.userId),
+  // v9.0.24 (TD-435): ایندکس یکتای جزئی uq_personnel_user_active روی user_id پرسنل فعال را مهاجرت 0053 فقط روی داده
+  // بی پیوند تکراری می‌سازد (src/services/personnel/personnelUserLink.ts)
   idx_personnel_status: index('idx_personnel_status').on(table.employmentStatus),
   idx_personnel_deleted: index('idx_personnel_deleted').on(table.isDeleted),
 }));

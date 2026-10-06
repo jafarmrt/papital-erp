@@ -25,6 +25,8 @@ interface PersonnelFormModalProps {
   formData: PersonnelFormData;
   setFormData: React.Dispatch<React.SetStateAction<PersonnelFormData>>;
   usersList: User[];
+  /** کاربرانی که به پرسنل دیگری وصل‌اند (نام آن پرسنل)؛ v9.0.24، TD-435 */
+  linkedUsers?: Map<number, string>;
   isSaving: boolean;
 }
 
@@ -36,6 +38,7 @@ export function PersonnelFormModal({
   formData,
   setFormData,
   usersList,
+  linkedUsers,
   isSaving
 }: PersonnelFormModalProps) {
   if (!isOpen) return null;
@@ -255,11 +258,14 @@ export function PersonnelFormModal({
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 >
                   <option value="">-- غیرکاربر (بدون اکانت ورودی به سامانه) --</option>
-                  {usersList.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      کاربر: {u.full_name} ({u.username})
-                    </option>
-                  ))}
+                  {usersList.map((u) => {
+                    const linkedTo = linkedUsers?.get(Number(u.id));
+                    return (
+                      <option key={u.id} value={u.id} disabled={linkedTo !== undefined}>
+                        کاربر: {u.full_name} ({u.username}){linkedTo !== undefined ? ` — وصل به ${linkedTo}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
