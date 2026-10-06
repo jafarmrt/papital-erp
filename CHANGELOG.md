@@ -11,12 +11,22 @@ going forward.
 | Client-bundled update center | `src/data/changelogs/0.ts` | baseline `v1.0.0` entry |
 | Client-bundled update center (archive) | `src/data/changelogs/archive_1_6.ts` | condensed `1.x.y` – `6.x.y` series (`v1.x` - `v6.0.28`), replaced `1.ts` … `6.ts` in v7.0.11 |
 | Client-bundled update center (archive) | `src/data/changelogs/7.ts` | closed `7.x.y` series (`v7.0.0` – `v7.0.140`), frozen in v8.0.0 (fingerprint checked by `npm run check:version`) |
-| Client-bundled update center (active) | `src/data/changelogs/8.ts` | current `8.x.y` release series (`v8.0.0` onward); short entries, important points only (v7.0.54) |
+| Client-bundled update center (archive) | `src/data/changelogs/8.ts` | closed `8.x.y` series (`v8.0.0` – `v8.0.128`), frozen in v9.0.0 (fingerprint checked by `npm run check:version`) |
+| Client-bundled update center (active) | `src/data/changelogs/9.ts` | current `9.x.y` release series (`v9.0.0` onward); short entries, important points only (v7.0.54) |
 | Root archive (this file) | `CHANGELOG.md` | summary of the pre-reset history & milestones |
 
 ---
 
-## Version 8.x Series (Active — see `src/data/changelogs/8.ts`)
+## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
+
+### v9.0.0 — Closure of Version 8 & Launch of Version 9
+- **Version 8 Closure:** Concluded and archived the v8.x series (`v8.0.0` through `v8.0.128`). `V8_MASTER_ROADMAP.md` is archived with a closing report; 129 debt rows (TD-250 – TD-413) were recorded and all are resolved or closed by product-owner decision (TD-369 closed as an accepted risk); `src/data/changelogs/8.ts` is frozen.
+- **Version 9 Mission:** `V9_MASTER_ROADMAP.md` — package-by-package stability audit (architecture and layering, data integrity, concurrency, security, error handling, performance, code quality, tests, UI) of the modules V8 did not cover as areas; stability over rewrites. New debt rows start at TD-414.
+- **Governance:** `npm run check:version` now also rejects any change to the closed 8.x series; release paperwork moved to the generic `npm run release` (`scripts/release.ts`, reads the active series), and changes land only through a branch and a draft pull request (`AGENTS.md` §24).
+
+---
+
+## Version 8.x Series (Archived at v8.0.128)
 
 ### v8.0.128 — پاکسازی تست‌ها و ابزارهای بلااستفاده
 - - سوئیت stress (دو سناریوی آن کد برنامه را اجرا نمی‌کرد)، سرویس‌های فقط‌تستی SystemRecoveryService و DataReconciliationService، شابلون ماژول v4، اسکریپت‌های قدیمی (start/stop/clean-install، db:baseline، setup:init، create-local-db)، فایل‌های AI Studio، دو سند قدیمی، سه وابستگی و خروجی‌های بی‌استفاده حذف شدند؛ رفتار برنامه تغییری نکرد.
@@ -510,7 +520,7 @@ Rules:
 
 ## Pre-1.0 history summary (v8.29.0 → v9.0.0 → baseline)
 
-### v9.0.0 — Stability & Production-Ready (final V9 release)
+### v9.0.0 — Stability & Production-Ready (final V9 release; pre-reset era, unrelated to the current 9.x series)
 **Phase 0 — P0 hotfixes**
 - Locked down `PUT /documents/:id` finalization bypass (status transitions may no longer reach `final`; Zod body schema + service guard).
 - Positive quantity / non-negative price validation on document line items and inside `applyStockMovement`.

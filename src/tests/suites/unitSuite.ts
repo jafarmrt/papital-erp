@@ -1180,9 +1180,9 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     }));
   }
 
-  // v8.0.0: سری ۷ بسته و منجمد است و تغییرات تازه فقط در سری فعال ۸ (8.ts) ثبت می‌شوند
+  // v9.0.0: سری‌های ۷ و ۸ بسته و منجمدند و تغییرات تازه فقط در سری فعال ۹ (9.ts) ثبت می‌شوند
   const tSeriesStart = Date.now();
-  const seriesTestName = 'v8.0.0: سری فعال چنج‌لاگ ۸ است، نسخه package.json در آن است و سری بسته‌شده ۷ (v7.0.140) دست‌نخورده است';
+  const seriesTestName = 'v9.0.0: سری فعال چنج‌لاگ ۹ است، نسخه package.json در آن است و سری‌های بسته‌شده ۷ (v7.0.140) و ۸ (v8.0.128) دست‌نخورده‌اند';
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -1190,37 +1190,44 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const { findChangelogSeriesViolations } = await import('../../data/changelogs/seriesGuard.js');
     const pkgVersion = String(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version || '');
     const violations: string[] = [];
-    if (ACTIVE_CHANGELOG.series !== 8 || ACTIVE_CHANGELOG.file !== 'src/data/changelogs/8.ts') {
-      violations.push(`سری فعال باید ۸ (8.ts) باشد، اما ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file}) است`);
+    if (ACTIVE_CHANGELOG.series !== 9 || ACTIVE_CHANGELOG.file !== 'src/data/changelogs/9.ts') {
+      violations.push(`سری فعال باید ۹ (9.ts) باشد، اما ${ACTIVE_CHANGELOG.series} (${ACTIVE_CHANGELOG.file}) است`);
     }
-    const closed7 = CLOSED_CHANGELOG_SERIES.find(c => c.series === 7);
-    if (!closed7 || closed7.finalVersion !== 'v7.0.140') violations.push('سری ۷ با نسخه پایانی v7.0.140 در فهرست سری‌های بسته‌شده نیست');
+    const expectedClosed: Array<[number, string]> = [[7, 'v7.0.140'], [8, 'v8.0.128']];
+    for (const [series, finalVersion] of expectedClosed) {
+      const closed = CLOSED_CHANGELOG_SERIES.find(c => c.series === series);
+      if (!closed || closed.finalVersion !== finalVersion) {
+        violations.push(`سری ${series} با نسخه پایانی ${finalVersion} در فهرست سری‌های بسته‌شده نیست`);
+        continue;
+      }
+      // گارد باید نسخه تازه در هر سری بسته‌شده و ویرایش مدخل منجمد آن را رد کند
+      const [major, minor, patch] = finalVersion.slice(1).split('.').map(Number);
+      const nextVersion = `${major}.${minor}.${patch + 1}`;
+      const tampered = CLOSED_CHANGELOG_SERIES.map(c => (c.series === series ? { ...c, updates: [{ ...c.updates[0], version: `v${nextVersion}` }, ...c.updates] } : c));
+      if (findChangelogSeriesViolations(nextVersion, ACTIVE_CHANGELOG, tampered).length < 3) {
+        violations.push(`گارد سری‌ها نسخه v${nextVersion} در سری بسته‌شده ${series} را رد نکرد`);
+      }
+      const edited = CLOSED_CHANGELOG_SERIES.map(c => (c.series === series ? { ...c, updates: c.updates.map((u, i) => (i === 5 ? { ...u, title: `${u.title}.` } : u)) } : c));
+      if (!findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, edited).some(v => v.includes(`سری بسته‌شده ${series} تغییر کرده است`))) {
+        violations.push(`گارد سری‌ها ویرایش مدخل سری بسته‌شده ${series} را رد نکرد`);
+      }
+    }
     violations.push(...findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, CLOSED_CHANGELOG_SERIES));
-
-    // گارد باید نسخه تازه در سری بسته‌شده و تغییر چنج‌لاگ منجمد را رد کند
-    const tampered = CLOSED_CHANGELOG_SERIES.map(c => ({ ...c, updates: [{ ...c.updates[0], version: 'v7.0.141' }, ...c.updates] }));
-    if (findChangelogSeriesViolations('7.0.141', ACTIVE_CHANGELOG, tampered).length < 3) {
-      violations.push('گارد سری‌ها نسخه v7.0.141 در سری بسته‌شده ۷ را رد نکرد');
-    }
-    const edited = CLOSED_CHANGELOG_SERIES.map(c => ({ ...c, updates: c.updates.map((u, i) => (i === 5 ? { ...u, title: `${u.title}.` } : u)) }));
-    if (!findChangelogSeriesViolations(pkgVersion, ACTIVE_CHANGELOG, edited).some(v => v.includes('تغییر کرده است'))) {
-      violations.push('گارد سری‌ها ویرایش مدخل سری بسته‌شده ۷ را رد نکرد');
-    }
 
     if (violations.length > 0) throw new Error(violations.join(' | '));
     results.push(makeTestCase({
-      id: 'unit_changelog_series_closure_v8',
+      id: 'unit_changelog_series_closure_v9',
       name: seriesTestName,
       layer: 'unit',
       executionType: 'real_code',
       passed: true,
       durationMs: Date.now() - tSeriesStart,
-      details: `package.json v${pkgVersion}؛ ${ACTIVE_CHANGELOG.updates.length} مدخل فعال؛ سری ۷ با ${closed7?.updates.length} مدخل منجمد`
+      details: `package.json v${pkgVersion}؛ ${ACTIVE_CHANGELOG.updates.length} مدخل فعال؛ سری‌های بسته‌شده ${CLOSED_CHANGELOG_SERIES.map(c => `${c.series} (${c.updates.length} مدخل)`).join('، ')}`
     }));
   } catch (err) {
     const { getErrorMessage } = await import('../../utils/formatters.js');
     results.push(makeTestCase({
-      id: 'unit_changelog_series_closure_v8',
+      id: 'unit_changelog_series_closure_v9',
       name: seriesTestName,
       layer: 'unit',
       executionType: 'real_code',
