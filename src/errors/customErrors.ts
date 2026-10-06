@@ -33,9 +33,12 @@ export class AppError extends Error {
   }
 }
 
+/**
+ * TD-470: کد ماشینی خطا (مانند WF_TASK_STALE) در `code` پاسخ می‌آید، نه درون پیام فارسی که به کاربر نشان داده می‌شود.
+ */
 export class NotFoundError extends AppError {
-  constructor(message = 'مورد درخواستی یافت نشد', details?: unknown) {
-    super(message, 404, 'NOT_FOUND', details);
+  constructor(message = 'مورد درخواستی یافت نشد', details?: unknown, code = 'NOT_FOUND') {
+    super(message, 404, code, details);
   }
 }
 
@@ -46,14 +49,14 @@ export class BadRequestError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message = 'اطلاعات ورودی معتبر نیست', details?: unknown) {
-    super(message, 422, 'VALIDATION_ERROR', details);
+  constructor(message = 'اطلاعات ورودی معتبر نیست', details?: unknown, code = 'VALIDATION_ERROR') {
+    super(message, 422, code, details);
   }
 }
 
 export class ConflictError extends AppError {
-  constructor(message = 'شناسه یا مقدار ارسالی با داده‌های موجود تداخل دارد', details?: unknown) {
-    super(message, 409, 'CONFLICT', details);
+  constructor(message = 'شناسه یا مقدار ارسالی با داده‌های موجود تداخل دارد', details?: unknown, code = 'CONFLICT') {
+    super(message, 409, code, details);
   }
 }
 
@@ -64,8 +67,8 @@ export class UnauthorizedError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message = 'دسترسی غیرمجاز', details?: unknown) {
-    super(message, 403, 'FORBIDDEN', details);
+  constructor(message = 'دسترسی غیرمجاز', details?: unknown, code = 'FORBIDDEN') {
+    super(message, 403, code, details);
   }
 }
 

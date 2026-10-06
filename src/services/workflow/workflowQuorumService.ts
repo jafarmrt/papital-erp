@@ -116,7 +116,7 @@ export class WorkflowQuorumService {
         requiredCount,
         signaturesCount: countOf(existingSignatures),
         signatures: existingSignatures,
-        message: 'امضای شما قبلاً برای این مرحله ثبت گردیده است (WF_DUPLICATE_SIGNATURE)'
+        message: 'امضای شما برای این گام پیش‌تر ثبت شده است.'
       };
     }
 
@@ -140,8 +140,8 @@ export class WorkflowQuorumService {
       signaturesCount,
       signatures: updatedSignatures,
       message: quorumMet 
-        ? `حدنصاب امضاها (${signaturesCount} از ${requiredCount}) با موفقیت تکمیل گردید.`
-        : `امضای شما با موفقیت ثبت شد (${signaturesCount} از ${requiredCount} امضا دریافت شد).`
+        ? `حدنصاب امضاها کامل شد (${signaturesCount} از ${requiredCount}).`
+        : `امضای شما ثبت شد (${signaturesCount} از ${requiredCount} امضا).`
     };
   }
 }

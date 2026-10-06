@@ -1,14 +1,27 @@
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { workflowHistoryLogs, workflowInstances } from '../../db/schema.js';
+import { workflowHistoryLogs, workflowInstances, workflowStates } from '../../db/schema.js';
 import { getEntityContext } from './workflowDslParser.js';
-import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
+import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
+import { isUsableSnapshot } from './workflowSnapshot.js';
 
 /** اقدام یا امضای خود کاربر روی یک گام (ردیف تاریخچه با انتقال؛ شروع و بستن فرایند انتقال ندارند) */
 export const completedByUserCondition = (userId: number) =>
   and(eq(workflowHistoryLogs.performedBy, userId), isNotNull(workflowHistoryLogs.transitionId));
 
-/** فیلدهای فرایند و موجودیت هر ردیف کارتابل */
+/** عنوان گام جاری فرایند از تصویر نسخه خودش؛ تصویر قدیمی بی شناسه: جدول جاری */
+async function currentStepTitleOf(instance: typeof workflowInstances.$inferSelect): Promise<string> {
+  const snapshot = instance.snapshotDsl as WorkflowSnapshotDsl | null;
+  if (isUsableSnapshot(snapshot)) return snapshot.states?.find(st => st.id === instance.currentStateId)?.title ?? '';
+  const [state] = await orm.select({ title: workflowStates.title }).from(workflowStates).where(eq(workflowStates.id, instance.currentStateId));
+  return state?.title ?? '';
+}
+
+/**
+ * فیلدهای فرایند و موجودیت هر ردیف کارتابل. TD-465 (یافته B14-23): کارت کار عنوان گام جاری و نام آغازکننده را از همین
+ * ردیف می‌خواند؛ پیش‌تر نه گام فرستاده می‌شد و نه نام، و کارت «گام جاری» را همان عنوان کار و «متقاضی» را همیشه
+ * «ثبت‌کننده سیستم» نشان می‌داد. مبلغ سند ریالی است (workflowDocumentAmount).
+ */
 export async function inboxEntityFields(instance: typeof workflowInstances.$inferSelect) {
   const context = await getEntityContext(instance.entityType, instance.entityId);
   return {
@@ -21,12 +34,15 @@ export async function inboxEntityFields(instance: typeof workflowInstances.$infe
       entityId: instance.entityId,
       currentStateId: instance.currentStateId,
       status: instance.status,
+      startedBy: instance.startedBy,
+      startedByName: instance.startedByName || '',
       createdAt: instance.createdAt,
       updatedAt: instance.updatedAt
     },
     refNumber: context.refNumber || context.code || instance.entityId,
     buyerName: context.buyerName || '',
-    amount: context.amount || context.totalAmount || 0,
+    amount: Number(context.amount || context.totalAmount || 0),
+    currentStepTitle: await currentStepTitleOf(instance),
   };
 }
 

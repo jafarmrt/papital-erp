@@ -135,6 +135,10 @@ export const QUERY_KEYS = {
     all: ['workflow'] as const,
     inbox: (params?: Record<string, unknown> | object) => ['workflow', 'inbox', params ?? {}] as const,
     instance: (entityType: string, entityId: string | number) => ['workflow', 'instance', entityType, String(entityId)] as const,
+    // TD-469: فهرست، جزئیات و نسخه‌های تعریف زیر یک پیشوند، تا ذخیره طرح یا مختصات همه را تازه کند
+    definitions: () => ['workflow', 'definitions'] as const,
+    definition: (id: number | undefined) => ['workflow', 'definitions', 'detail', id ?? 0] as const,
+    definitionVersions: (id: number | undefined) => ['workflow', 'definitions', 'versions', id ?? 0] as const,
   },
 
   // V9 Phase 5.1 — Documents & Invoices

@@ -107,7 +107,9 @@ export async function checkDelegateActsForDelegatorRole(): Promise<string[]> {
 
   // تفویض حوزه دیگر یا لغوشده اجازه نمی‌دهد
   const other = await wfUser(`wfg_deputy_${uniqueTag()}`);
-  await delegate(owner, other, 'OTHER_WORKFLOW_CODE');
+  // TD-467: حوزه باید کد گردش کار تعریف‌شده باشد؛ گردش کار دیگری برای همین ساخته می‌شود
+  const otherWf = await defineWorkflow({ states: [{ key: 'draft', type: 'initial' }, { key: 'done', type: 'terminal' }], transitions: [{ from: 'draft', to: 'done', action: 'approve' }] });
+  await delegate(owner, other, otherWf.code);
   const revokedDeputy = await wfUser(`wfg_deputy_${uniqueTag()}`);
   const revokedId = await delegate(owner, revokedDeputy);
   await WorkflowDelegationService.revokeDelegation({ id: revokedId, userId: owner.id, userRole: owner.role });

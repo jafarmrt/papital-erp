@@ -65,3 +65,12 @@ describe('WorkflowVersionHistoryModal (TD-112)', () => {
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['', expect.stringContaining('نسخه ۲'), expect.stringContaining('نسخه ۱')]);
   });
 });
+
+describe('TD-468 version time in the business time zone', () => {
+  it('a version saved at 21:00 UTC shows the next Tehran day and its Tehran time', async () => {
+    fetchJson.mockResolvedValue([{ ...versions[1], version: 3, createdAt: '2026-10-05T21:00:00Z' }]);
+    renderModal();
+    expect(await screen.findByText(/۱۴۰۵\/۰۷\/۱۴/)).toBeTruthy();
+    expect(screen.getByText(/۰۰:۳۰/)).toBeTruthy();
+  });
+});
