@@ -10475,6 +10475,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.13، TD-424): یک پیش‌فاکتور برای هر پرونده زیر درخواست‌های هم‌زمان
   const { runLeadProformaConcurrencyTests } = await import('../regression/leadProformaConcurrencyTests.js');
   results.push(...await runLeadProformaConcurrencyTests(shouldRun));
+  // بسته ۹ (v9.0.14، TD-428): پیگیری‌های باز بی بازه تاریخ اقدام
+  const { runCrmFollowupsTests } = await import('../regression/crmFollowupsTests.js');
+  results.push(...await runCrmFollowupsTests(shouldRun));
 
   return results;
 }

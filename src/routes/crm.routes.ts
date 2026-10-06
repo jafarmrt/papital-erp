@@ -19,6 +19,7 @@ import { money } from '../lib/money.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
+import { listFollowups, type FollowupStatus } from '../services/crm/crmFollowups.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -718,6 +719,34 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     .limit(Math.min(Number(req.query.limit) || 200, 500));
 
   res.json(activities.map(formatActivity));
+}));
+
+// v9.0.14 (TD-428، تصمیم مالک محصول ت۵ الف): پیگیری‌ها بی بازه تاریخ اقدام و با صفحه‌بندی (`listFollowups`)؛
+// پیش‌تر فهرست پیگیری‌ها از اقدام‌های ۳۰ روز اخیر با سقف ۲۰۰ ردیف ساخته می‌شد
+const followupsQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(['pending', 'completed', 'all']).optional(),
+    due: z.enum(['all', 'due']).optional(),
+    assignedPersonnelId: numericIdString.optional(),
+    search: z.string().max(200).optional(),
+    page: numericIdString.optional(),
+    limit: numericIdString.optional(),
+  }).passthrough(),
+}).passthrough();
+
+router.get('/crm/followups', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(followupsQuerySchema), asyncHandler(async (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  const { page } = parsePagination(q, { page: 1, limit: 50 });
+  const limit = Math.min(Math.max(Number(q.limit) || 50, 1), 200);
+  const { rows, ...meta } = await listFollowups({
+    status: (q.status as FollowupStatus | undefined) ?? 'pending',
+    dueOnly: q.due === 'due',
+    assignedPersonnelId: q.assignedPersonnelId ? Number(q.assignedPersonnelId) : undefined,
+    search: q.search,
+    page,
+    limit,
+  });
+  res.json({ ...meta, data: rows.map(formatActivity) });
 }));
 
 // POST /api/crm/activities - Add call log/action

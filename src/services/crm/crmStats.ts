@@ -1,9 +1,9 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { crmActivities, crmLeads } from '../../db/schema.js';
-import { businessTodayIsoDate } from '../../lib/businessClock.js';
+import { crmLeads } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { sortCurrencyTotals, type CrmStats, type CurrencyTotal } from '../../lib/crm/leadCurrencyTotals.js';
+import { countDueFollowups, countOpenFollowups } from './crmFollowups.js';
 
 const currencySql = sql<string>`UPPER(COALESCE(NULLIF(btrim(${crmLeads.currency}), ''), 'IRR'))`;
 
@@ -27,16 +27,9 @@ export async function getCrmStats(): Promise<CrmStats> {
   const pipelineByCurrency = await totalsByCurrency(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.status, 'active')));
   const wonByCurrency = await totalsByCurrency(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.stage, 'won')));
 
-  const todayIso = await businessTodayIsoDate();
-  const [pending] = await orm.select({ count: sql<string>`count(*)::text` })
-    .from(crmActivities)
-    .where(and(
-      eq(crmActivities.isDeleted, 0),
-      eq(crmActivities.isFollowUpCompleted, 0),
-      // v7.0.132 (TD-232): سررسید میلادی ISO است و با «امروز» میلادی مقایسه می‌شود
-      sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <> ''`,
-      sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`,
-    ));
+  // v9.0.14 (TD-428): همان شرط فهرست «پیگیری‌های باز» (`crmFollowups.ts`)
+  const pendingFollowupsCount = await countDueFollowups();
+  const openFollowupsCount = await countOpenFollowups();
 
   const stageRows = await orm.select({
     stage: crmLeads.stage,
@@ -58,7 +51,8 @@ export async function getCrmStats(): Promise<CrmStats> {
     pipelineByCurrency,
     wonLeadsCount: countOf(wonByCurrency),
     wonByCurrency,
-    pendingFollowupsCount: Number(pending?.count ?? 0),
+    pendingFollowupsCount,
+    openFollowupsCount,
     stageCounts,
   };
 }

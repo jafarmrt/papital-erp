@@ -16,7 +16,10 @@ export interface CrmStats {
   pipelineByCurrency: CurrencyTotal[];
   wonLeadsCount: number;
   wonByCurrency: CurrencyTotal[];
+  /** پیگیری‌های باز با سررسید امروز یا گذشته */
   pendingFollowupsCount: number;
+  /** همه پیگیری‌های باز (v9.0.14، TD-428) */
+  openFollowupsCount: number;
   stageCounts: Record<string, { count: number; byCurrency: CurrencyTotal[] }>;
 }
 

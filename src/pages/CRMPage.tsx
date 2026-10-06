@@ -4,6 +4,7 @@ import { Search, Filter, Calendar, Briefcase, PhoneCall, Clock, Building2 } from
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../api';
 import { CRMLead, Customer } from '../types';
+import { formatPersianNumber } from '../utils';
 import { useCRMData, STAGES } from '../hooks/useCRMData';
 import { CRMStatsCards } from '../components/crm/CRMStatsCards';
 import { CRMKanbanPipeline } from '../components/crm/CRMKanbanPipeline';
@@ -191,7 +192,8 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <Clock size={15} />
-              پیگیری‌های من ({crm.activities.filter((a) => a.nextFollowUpDate).length})
+              {/* v9.0.14 (TD-428): شمار پیگیری‌های باز از سرور، بی بازه تاریخ اقدام */}
+              پیگیری‌های من ({formatPersianNumber(crm.stats.openFollowupsCount ?? 0)})
             </button>
           </div>
 
