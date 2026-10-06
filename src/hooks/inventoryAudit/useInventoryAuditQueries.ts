@@ -173,11 +173,16 @@ export interface InventoryDocumentLine {
 }
 
 export interface InventoryDocumentDetail {
+  id?: number;
   ref_number?: string;
   refNumber?: string;
   date?: string;
   location?: string;
   user?: string;
+  notes?: string | null;
+  /** v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال */
+  sourceLocation?: string;
+  destinationLocation?: string;
   items?: InventoryDocumentLine[];
 }
 

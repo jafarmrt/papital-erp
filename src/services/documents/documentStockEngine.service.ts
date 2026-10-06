@@ -39,6 +39,8 @@ export interface ApplyStockReversalParams {
   originalDirection: 'in' | 'out';
   unitPrice: DecimalValue;
   location: string;
+  /** v9.0.80 (TD-489): ردیف حواله انتقال بین انبارها فقط مقدار را برمی‌گرداند و WAC را تغییر نمی‌دهد (مثل ثبت آن) */
+  quantityOnly?: boolean;
 }
 
 /** نوع سند انبارگردانی و اصلاح موجودی (شمارش، ورود اکسل، موجودی اولیه و افتتاحیه) در کاردکس */
@@ -210,7 +212,7 @@ export class DocumentStockEngine {
     tx: DbClient,
     params: ApplyStockReversalParams
   ): Promise<void> {
-    const { itemId, quantity: qty, originalDirection, unitPrice, location: targetLoc } = params;
+    const { itemId, quantity: qty, originalDirection, unitPrice, location: targetLoc, quantityOnly } = params;
 
     const [itemData] = await tx
       .select({ weightedAverageCost: items.weightedAverageCost, version: items.version })
@@ -238,7 +240,9 @@ export class DocumentStockEngine {
 
     const oldWAC = fin(itemData.weightedAverageCost);
     let newWAC = oldWAC;
-    if (originalDirection === 'in' && newTotalStock > 0) {
+    if (quantityOnly) {
+      // v9.0.80 (TD-489): ابطال حواله انتقال — همان قاعده بازپخش کاردکس (replayKardexWac)
+    } else if (originalDirection === 'in' && newTotalStock > 0) {
       const oldTotalVal = fin(oldTotalStock).multiply(oldWAC);
       const revertVal = fin(qty).multiply(unitPrice);
       const remainingVal = oldTotalVal.subtract(revertVal);

@@ -5,6 +5,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { InsufficientStockError, ValidationError } from '../../errors/customErrors.js';
 import { isoToJalaliDate } from '../../utils/calendarDate.js';
 import { normalizeDateToDbTimestamp } from '../../utils.js';
+import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
 
 /**
@@ -19,6 +20,9 @@ import { createLedgerLocationResolver } from './warehouseResolver.js';
  * با این قاعده ترتیب تاریخ و ترتیب ثبت کاردکس یکی می‌ماند و بازسازی کاردکس با موتور زنده همخوان است (TD-258).
  */
 export const BACKDATE_PERMISSION = 'warehouse.backdate';
+
+/** v9.0.79 (TD-483، تصمیم ت۱ بسته ۶): گردش با تاریخ پس از امروز کسب‌وکار، برای همه کاربران و همه مسیرها */
+export const FUTURE_MOVEMENT_CODE = 'STOCK_MOVEMENT_FUTURE_DATE';
 
 /** ردیف‌های فعال کاردکس که گردش واقعی‌اند: بدون ردیف حذف‌شده و بدون ردیف معکوسِ ردیف حذف‌شده (همان دفتر §12) */
 export const LEDGER_ROW_FILTER = sql`t.is_deleted = 0
@@ -87,9 +91,17 @@ async function minimumStockFromDay(tx: DbExecutor, itemId: number, day: string, 
   return minimum === null ? balance.toNumber() : minimum;
 }
 
-/** قاعده تاریخ گردش انبار؛ پیش از ثبت ردیف کاردکس و زیر قفل سطری کالا صدا زده می‌شود */
+/** قاعده تاریخ گردش انبار (نه آینده، نه پیش از آخرین گردش کالا)؛ پیش از ثبت ردیف کاردکس و زیر قفل سطری کالا صدا زده می‌شود */
 export async function assertStockMovementDate(tx: DbExecutor, check: StockMovementDateCheck): Promise<void> {
   const day = normalizeDateToDbTimestamp(check.date).slice(0, 10);
+  const today = await businessTodayIsoDate();
+  if (day > today) {
+    throw new ValidationError(
+      `تاریخ گردش کالای ${check.itemLabel} (${isoToJalaliDate(day)}) پس از امروز (${isoToJalaliDate(today)}) است. ` +
+      'گردش انبار با تاریخ آینده ثبت نمی‌شود؛ تاریخ سند را اصلاح کنید.',
+      { code: FUTURE_MOVEMENT_CODE, itemId: check.itemId, date: day, today }
+    );
+  }
   const lastDay = await lastStockMovementDay(tx, check.itemId);
   if (!lastDay || day >= lastDay) return;
 

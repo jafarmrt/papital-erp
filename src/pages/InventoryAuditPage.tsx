@@ -28,6 +28,7 @@ import {
 } from '../hooks/inventoryAudit/useInventoryAuditQueries';
 import { useAuditSheet } from '../hooks/inventoryAudit/useAuditSheet';
 import { invalidateAfterStockAdjustment } from '../hooks/inventoryAudit/useInventoryAuditSave';
+import { useTransferVoid } from '../hooks/inventoryAudit/useTransferVoid';
 import { exportIntegrityExcel, filterIntegrityItems } from '../lib/inventoryAudit/auditSheet';
 
 const NO_WAREHOUSES: WarehouseItem[] = [];
@@ -76,6 +77,7 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
 
   // هر تغییر موجودی در این صفحه کش صفحات دیگر (کالاها، کاردکس، داشبورد، اسناد، رزروها) را هم باطل می‌کند
   const refreshAfterStockChange = () => { void invalidateAfterStockAdjustment(queryClient); };
+  const transferVoid = useTransferVoid(refreshAfterStockChange);
 
   const filteredIntegrityItems = filterIntegrityItems(data.integrityReport, integritySearch, integrityDiscrepancyOnly);
 
@@ -157,6 +159,8 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
           transfers={data.transfers}
           handleViewTransfer={setViewTransferId}
           onOpenTransferModal={() => setShowTransferModal(true)}
+          onVoidTransfer={(t) => { void transferVoid.voidTransfer(t); }}
+          voidingId={transferVoid.voidingId}
         />
       )}
 
