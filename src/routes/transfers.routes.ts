@@ -4,7 +4,7 @@ import { transfers, items } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorize, authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission } from '../middleware/authorize.js';
 import { logger } from '../middleware/logger.js';
 import { parsePagination } from '../lib/pagination.js';
 import { z } from 'zod';
@@ -235,13 +235,13 @@ const handleSaveTransfer = async (req: Request, res: Response) => {
   }
 };
 
-router.post('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
-router.post('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
-router.put('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
-router.put('/transfers', authenticateToken, authorize('admin', 'manager', 'warehouse_keeper', 'products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.post('/transfers', authenticateToken, authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.post('/transfers/:code', authenticateToken, authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.put('/transfers/:code', authenticateToken, authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
+router.put('/transfers', authenticateToken, authorizePermission('products.create', 'products.edit'), idempotency({ scope: 'transfers' }), validate(saveTransferSchema), asyncHandler(handleSaveTransfer));
 
 // DELETE /api/transfers/:code - Delete transfer details/image
-router.delete('/transfers/:code', authenticateToken, authorize('admin', 'manager', 'products.delete'), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
+router.delete('/transfers/:code', authenticateToken, authorizePermission('products.delete'), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
     await TransferService.deleteTransfer(code, req.user);

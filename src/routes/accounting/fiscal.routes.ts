@@ -3,7 +3,7 @@
  * authenticateToken در src/routes/accounting.routes.ts پیش از این روتر اعمال می‌شود.
  */
 import { Router } from 'express';
-import { authorize, authorizePermission } from '../../middleware/authorize.js';
+import { authorizePermission } from '../../middleware/authorize.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate } from '../../middleware/validate.js';
@@ -30,7 +30,7 @@ router.get('/accounting/fiscal-closing/preview', authorizePermission('accounting
   res.json(data);
 }));
 
-router.post('/accounting/fiscal-closing/execute', authorize('admin'), validate(fiscalClosingExecuteSchema), asyncHandler(async (req, res) => {
+router.post('/accounting/fiscal-closing/execute', authorizePermission('accounting.fiscal_close'), validate(fiscalClosingExecuteSchema), asyncHandler(async (req, res) => {
   const { year, closingDate, openingDateNewYear, createOpeningVoucher } = req.body;
 
   const result = await AccountingService.executeFiscalYearClosing({

@@ -207,5 +207,110 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_route_guards_permission_only_td_516', 'security', 'td516', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_route_guards_permission_only_td_516',
+      name: 'v9.0.88: no route guard lets a role code through; taking a tick off a seed role takes the access away (TD-516)',
+      details: 'the route table names no role code except the system-admin-only maintenance routes; seed roles without the ticks get 403 where their code used to pass (customer delete, settings save); the new keys open warehouses, fiscal closing and pending-material delete; the legacy «*» opens nothing; a role with every catalog key gets 403 on a maintenance route',
+    }, async (h, wrong) => {
+      const { buildRouteGuardTable } = await import('../../lib/routeGuardTable.js');
+      const { routeAccessPolicyViolations } = await import('./routeAccessPolicy.js');
+      const { PERMISSION_KEYS } = await import('../../lib/permissions/permissionCatalog.js');
+      const { invalidateRoleCache } = await import('../../lib/memoryCache.js');
+      const { createTestRole } = await import('../fixtures/factories.js');
+      const roleCodeViolations = routeAccessPolicyViolations(buildRouteGuardTable(h.app as Parameters<typeof buildRouteGuardTable>[0]), new Set(PERMISSION_KEYS))
+        .filter(v => /role code|SYSTEM_ADMIN_ONLY_ROUTES/.test(v));
+      if (roleCodeViolations.length > 0) wrong.push(`${roleCodeViolations.length} route guard(s) still name a role code: ${roleCodeViolations.slice(0, 5).join(' | ')}`);
+
+      // ۱) نقش‌های پیش‌فرض بی تیک: کدشان دیگر از گارد نمی‌گذرد
+      const seedCodes = ['sales_manager', 'manager'];
+      const saved = await orm.select({ code: roles.code, permissions: roles.permissions }).from(roles).where(inArray(roles.code, seedCodes));
+      if (saved.length !== seedCodes.length) throw new Error('the seed roles sales_manager and manager are missing from the test database');
+      try {
+        await orm.update(roles).set({ permissions: [] }).where(inArray(roles.code, seedCodes));
+        seedCodes.forEach(c => invalidateRoleCache(c));
+        const sales = await h.sessionWith('sales_manager');
+        const manager = await h.sessionWith('manager');
+        const del = await h.del('/api/customers/999999999', sales);
+        if (del.status !== 403) wrong.push(`sales_manager without customers.* deleting a customer got ${del.status}, not 403`);
+        const save = await h.post('/api/settings', {}, manager);
+        if (save.status !== 403) wrong.push(`manager without settings.manage saving settings got ${save.status}, not 403`);
+      } finally {
+        for (const r of saved) await orm.update(roles).set({ permissions: r.permissions }).where(eq(roles.code, r.code));
+        seedCodes.forEach(c => invalidateRoleCache(c));
+      }
+
+      // ۲) مجوزهای تازه کارهای پیشین «فقط مدیر سیستم» و گاردهای بی‌کلید را باز می‌کنند
+      const passes: Array<[string[], 'get' | 'put' | 'post' | 'del', string]> = [
+        [['warehouse.view', 'warehouse.manage'], 'put', '/api/warehouses/999999999'],
+        [['accounting.view', 'accounting.fiscal_close'], 'post', '/api/accounting/fiscal-closing/execute'],
+        [['pending_materials.view', 'pending_materials.delete'], 'del', '/api/pending-materials/999999999'],
+        [['audit_logs.view'], 'get', '/api/activity-logs'],
+      ];
+      for (const [perms, method, url] of passes) {
+        const s = await h.sessionWith(perms);
+        const res = method === 'get' ? await h.get(url, s) : method === 'del' ? await h.del(url, s) : await h[method](url, {}, s);
+        if (res.status === 403 || res.status === 401) wrong.push(`${perms.join(' + ')} got ${res.status} on ${method.toUpperCase()} ${url}`);
+      }
+
+      // ۳) «*» قدیمی چیزی نمی‌دهد و همه کلیدهای فهرست هم کار نگهداری را باز نمی‌کنند
+      const star = await createTestRole({ permissions: ['*'] });
+      try {
+        const s = await h.sessionWith(star.code);
+        const list = await h.get('/api/customers', s);
+        if (list.status !== 403) wrong.push(`a role holding only «*» listed customers with ${list.status}, not 403`);
+      } finally {
+        await orm.delete(roles).where(eq(roles.id, star.id));
+      }
+      const everything = await h.sessionWith([...PERMISSION_KEYS]);
+      const health = await h.get('/api/system/health', everything);
+      if (health.status !== 403) wrong.push(`a role with every catalog key got ${health.status} on the system health route, not 403`);
+      else if (!/[؀-ۿ]/.test(String(health.body?.error ?? ''))) wrong.push('the system-admin-only refusal is not Persian');
+      const adminHealth = await h.get('/api/system/health');
+      if (adminHealth.status !== 200) wrong.push(`the system admin got ${adminHealth.status} on the system health route`);
+    });
+  }
+
+  if (shouldRun('sec_role_code_access_migration_td_516', 'security', 'td516', 'permissions', 'package2', 'migration')) {
+    await runCase(results, {
+      id: 'sec_role_code_access_migration_td_516',
+      name: 'v9.0.88: migration 0062 turns what a seed role passed only by its code into ticks, expands «*» and logs every change (TD-516)',
+      details: 'manager missing settings.manage gets it and the new pending_materials.delete; warehouse_keeper missing documents.edit gets it; a seed role that already holds a guard key and a custom role with a seed code are untouched; a «*» role gets every catalog key and loses «*»; one activity_logs row per changed role with before, after, added keys and routes',
+    }, async (h, wrong) => {
+      const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');
+      const { PERMISSION_KEYS } = await import('../../lib/permissions/permissionCatalog.js');
+      const managerBefore = PERMISSION_KEYS.filter(k => k !== 'settings.manage' && k !== 'pending_materials.delete');
+      const keeperBefore = ['products.view', 'products.create', 'products.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out', 'customers.view'];
+      const starCode = `td516_star_${h.tag}`;
+      const outcome = await runMigrationRolledBack('0062_role_code_guards_to_permissions.sql', async (q) => {
+        await q(`UPDATE roles SET permissions = $1::jsonb, is_system = 1 WHERE code = 'manager'`, [JSON.stringify(managerBefore)]);
+        await q(`UPDATE roles SET permissions = $1::jsonb, is_system = 1 WHERE code = 'warehouse_keeper'`, [JSON.stringify(keeperBefore)]);
+        await q(`UPDATE roles SET permissions = '["customers.view","customers.manage","documents.view","documents.create","documents.edit"]'::jsonb, is_system = 1 WHERE code = 'sales_manager'`);
+        await q(`UPDATE roles SET permissions = '[]'::jsonb, is_system = 0 WHERE code = 'accountant'`);
+        await q(`INSERT INTO roles (name, code, permissions, is_system) VALUES ('td516 star', $1, '["legacy.key","*"]'::jsonb, 0)`, [starCode]);
+      }, async (q) => ({
+        roles: await q(`SELECT code, permissions FROM roles WHERE code IN ('manager', 'warehouse_keeper', 'sales_manager', 'accountant', $1)`, [starCode]),
+        logs: await q(`SELECT entity_id, details FROM activity_logs WHERE details->>'migration' = '0062_role_code_guards_to_permissions' ORDER BY id`),
+        ids: await q(`SELECT id, code FROM roles WHERE code IN ('manager', 'warehouse_keeper', 'sales_manager', 'accountant', $1)`, [starCode]),
+      }));
+      const permsOf = (code: string) => (outcome.roles.find(r => r.code === code)?.permissions ?? null) as string[] | null;
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+      if (!same(permsOf('manager'), [...managerBefore, 'pending_materials.delete', 'settings.manage'])) wrong.push(`manager after 0062: ${JSON.stringify(permsOf('manager'))}`);
+      if (!same(permsOf('warehouse_keeper'), [...keeperBefore, 'documents.edit'])) wrong.push(`warehouse_keeper after 0062: ${JSON.stringify(permsOf('warehouse_keeper'))}`);
+      if (!same(permsOf('sales_manager'), ['customers.view', 'customers.manage', 'documents.view', 'documents.create', 'documents.edit'])) wrong.push('sales_manager, which holds every guard key, was changed');
+      if (!same(permsOf('accountant'), [])) wrong.push('a custom role coded accountant was changed');
+      if (!same(permsOf(starCode), ['legacy.key', ...PERMISSION_KEYS])) wrong.push(`the «*» role after 0062: ${JSON.stringify(permsOf(starCode))}`);
+
+      const idOf = (code: string) => String(outcome.ids.find(r => r.code === code)?.id);
+      const logged = outcome.logs.map(l => l.entity_id as string).sort();
+      const expected = [idOf('manager'), idOf('warehouse_keeper'), idOf(starCode)].sort();
+      if (!same(logged, expected)) wrong.push(`activity_logs rows for roles ${logged.join(', ')}, expected ${expected.join(', ')}`);
+      const managerLog = outcome.logs.find(l => l.entity_id === idOf('manager'))?.details as Record<string, unknown> | undefined;
+      if (!same(managerLog?.addedPermissions, ['pending_materials.delete', 'settings.manage'])) wrong.push(`manager log addedPermissions: ${JSON.stringify(managerLog?.addedPermissions)}`);
+      if (!same(managerLog?.routes, ['DELETE /api/pending-materials/:id', 'POST /api/settings'])) wrong.push(`manager log routes: ${JSON.stringify(managerLog?.routes)}`);
+      if (!same(managerLog?.beforePermissions, managerBefore)) wrong.push('manager log beforePermissions differ from the stored ones');
+    });
+  }
+
   return results;
 }

@@ -3,6 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { appSettings, warehouses } from '../../db/schema.js';
 import { ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 import { userHasRoleOrPermission } from '../../middleware/authorize.js';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { invalidateSettingsCache, appSettingsCache } from '../../lib/memoryCache.js';
 
@@ -94,7 +95,7 @@ async function validateSettingValue(key: string, value: string): Promise<void> {
 
 async function assertKeyPermission(key: string, actor: SettingsActor): Promise<void> {
   if (ADMIN_ONLY_SETTING_KEYS.has(key)) {
-    if (actor.role !== 'admin') {
+    if (actor.role !== SYSTEM_ADMIN_ROLE) {
       throw new ForbiddenError(`تغییر تنظیم «${key}» (کلیدهای محرمانه یکپارچه‌سازی و فلگ‌های سیستمی) فقط برای مدیر سیستم مجاز است.`);
     }
     return;

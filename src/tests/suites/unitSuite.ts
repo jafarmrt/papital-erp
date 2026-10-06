@@ -1521,7 +1521,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     const path = await import('path');
     const ts = (await import('typescript')).default;
     const { asyncHandler } = await import('../../middleware/asyncHandler.js');
-    const { authorize, authorizePermission } = await import('../../middleware/authorize.js');
+    const { requireSystemAdmin, authorizePermission } = await import('../../middleware/authorize.js');
     const { validate } = await import('../../middleware/validate.js');
     const { idempotency } = await import('../../middleware/idempotency.js');
     const { z } = await import('zod');
@@ -1561,7 +1561,7 @@ export async function runUnitTests(): Promise<TestCaseResult[]> {
     if (violations.length > 0) violations.splice(0, violations.length, `هندلر async خام: ${violations.length} مورد (${violations.slice(0, 5).join(', ')})`);
 
     const factories: Array<[string, unknown]> = [
-      ['authorize', authorize('admin')],
+      ['requireSystemAdmin', requireSystemAdmin],
       ['authorizePermission', authorizePermission('products.view')],
       ['validate', validate(z.object({}))],
       ['idempotency', idempotency()],

@@ -37,6 +37,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     category: 'انبارداری و جابجایی',
     permissions: [
       { key: 'warehouse.view', title: 'مشاهده انبارها', description: 'مشاهده لیست انبارها و موجودی تفکیکی' },
+      { key: 'warehouse.manage', title: 'تعریف و ویرایش انبارها', description: 'افزودن، ویرایش و حذف انبارها', requires: ['warehouse.view'] },
       { key: 'warehouse.in', title: 'ثبت ورود کالا (رسید)', description: 'افزایش موجودی و ثبت رسیدهای ورودی', requires: ['warehouse.view'] },
       { key: 'warehouse.out', title: 'ثبت خروج کالا (حواله)', description: 'کاهش موجودی و ثبت حواله‌های خروجی', requires: ['warehouse.view'] },
       { key: 'warehouse.transfer', title: 'جابجایی بین انبارها', description: 'انتقال کالا از یک انبار به انبار دیگر', requires: ['warehouse.view'] },
@@ -132,6 +133,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     permissions: [
       { key: 'pending_materials.view', title: 'مشاهده درخواست‌های مواد اولیه', description: 'مشاهده پیشنهادها و ثبت مواد اولیه توسط کاربران' },
       { key: 'pending_materials.approve', title: 'تایید و تبدیل به کالا/انبار', description: 'تایید درخواست‌های مواد اولیه و انتقال به انبار اصلی یا رد درخواست', requires: ['pending_materials.view'] },
+      { key: 'pending_materials.delete', title: 'حذف درخواست مواد اولیه', description: 'حذف درخواست‌های مواد اولیه ثبت‌شده', requires: ['pending_materials.view'] },
     ]
   },
   {
@@ -155,6 +157,7 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       // v8.0.118 (TD-409، تصمیم مالک محصول): برای مانده‌های افتتاحیه؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
       { key: 'accounting.treasury_no_voucher', title: 'ثبت خزانه و چک بدون سند حسابداری', description: 'ثبت دریافت، پرداخت، انتقال وجه یا چک بدون صدور سند حسابداری (مثلاً مانده افتتاحیه)؛ این موارد در بررسی سلامت مالی فهرست می‌شوند', requires: ['accounting.treasury'] },
       { key: 'accounting.reports', title: 'مشاهده تراز آزمایشی و صورت‌های مالی', description: 'مشاهده تراز آزمایشی، ترازنامه، صورت سود و زیان و کارت حساب', requires: ['accounting.view'] },
+      { key: 'accounting.fiscal_close', title: 'اجرای بستن سال مالی', description: 'بستن حساب‌های موقت و دائم سال مالی و صدور اسناد اختتامیه و افتتاحیه سال بعد', requires: ['accounting.view'] },
     ]
   },
   {

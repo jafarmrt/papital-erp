@@ -29,19 +29,14 @@ export function isPermissionKey(entry: string): boolean {
   return entry.includes('.');
 }
 
-/** مجوزهای نقش (از کش ۶۰ ثانیه‌ای)؛ `*` قدیمی تا حذفش در ۲-M2 همه را می‌دهد */
+/**
+ * مجوزهای نقش (از کش ۶۰ ثانیه‌ای). v9.0.88 (TD-516): `*` دیگر چیزی نمی‌دهد؛ مهاجرت 0062 آن را در نقش‌های موجود با
+ * همه کلیدهای فهرست جایگزین کرده است و ساخت تازه‌اش از v8.0.57 (TD-304) رد می‌شود.
+ */
 async function roleHoldsAny(role: string, permissionKeys: readonly string[]): Promise<boolean> {
   const roleData = await getCachedRoleData(role);
   const perms: string[] = roleData?.permissions || [];
-  return perms.includes('*') || permissionKeys.some(k => perms.includes(k));
-}
-
-async function roleOrPermissionGranted(role: string, entries: string[]): Promise<boolean> {
-  // Admin always has full access
-  if (role === SYSTEM_ADMIN_ROLE) return true;
-  const roleCodes = entries.filter(e => !isPermissionKey(e));
-  if (roleCodes.includes(role)) return true;
-  return roleHoldsAny(role, entries.filter(isPermissionKey));
+  return permissionKeys.some(k => perms.includes(k));
 }
 
 /**
@@ -68,24 +63,22 @@ function tagGuard(entries: string[], mw: RequestHandler): RequestHandler {
   return Object.assign(mw, { [GUARD_ENTRIES]: [...entries] });
 }
 
-export const authorize = (...allowedRolesOrPermissions: string[]) => {
-  return tagGuard(allowedRolesOrPermissions, asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const user = req.user;
-    if (!user) {
-      return res.status(401).json({ error: 'احراز هویت انجام نشده است' });
-    }
-
-    try {
-      if (await roleOrPermissionGranted(user.role, allowedRolesOrPermissions)) {
-        return next();
-      }
-    } catch (e) {
-      // Continue to 403 if lookup fails
-    }
-
-    return res.status(403).json({ error: 'دسترسی غیرمجاز برای این عملیات' });
-  }));
-};
+/**
+ * v9.0.88 (TD-516، تصمیم ت۱ و فهرست تأییدشده M2): گارد کارهای نگهداری سامانه که فقط «مدیر سیستم» انجام می‌دهد
+ * (پشتیبان‌گیری، پاک کردن داده، پاک‌سازی سجل و پیوست‌ها، بازگرداندن پیش‌فرض‌ها، سلامت سامانه). جای `authorize`
+ * را گرفت که کد نقش را هم می‌پذیرفت؛ هیچ گارد دیگری کد نقش نمی‌پرسد.
+ */
+export const requireSystemAdmin: RequestHandler = tagGuard([SYSTEM_ADMIN_ROLE], (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    res.status(401).json({ error: 'احراز هویت انجام نشده است' });
+    return;
+  }
+  if (req.user.role === SYSTEM_ADMIN_ROLE) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: 'این کار فقط برای مدیر سیستم مجاز است' });
+});
 
 /**
  * v9.0.87 (TD-881): گارد route فقط با کلیدهای کاتالوگ مجوز. کلید بیرون از کاتالوگ یا کد نقش هنگام ساختن روتر
@@ -118,17 +111,17 @@ export const requirePermission = (...permissionKeys: string[]) => {
 export const authorizePermission = requirePermission;
 
 /**
- * v7.0.26 (TD-184): بررسی برنامه‌ای «نقش یا مجوز» برای منطق سرویس‌ها (مثلاً مجوز سطح کلید در تنظیمات)
- * با همان کش نقش‌ها و همان قاعده‌های میدل‌ور authorize.
+ * v7.0.26 (TD-184): بررسی برنامه‌ای مجوز برای منطق سرویس‌ها (مثلاً مجوز سطح کلید در تنظیمات). v9.0.88 (TD-516):
+ * فقط کلید مجوز و همان `can`؛ خطای خواندن نقش بی‌دسترسی است. کد تازه `can` را به کار ببرد.
  */
 export async function userHasRoleOrPermission(
   user: { role?: string } | undefined,
-  ...rolesOrPermissions: string[]
+  ...permissionKeys: string[]
 ): Promise<boolean> {
-  if (!user?.role) return false;
   try {
-    return await roleOrPermissionGranted(user.role, rolesOrPermissions);
-  } catch {
+    return await can(user, ...permissionKeys);
+  } catch (err) {
+    if (err instanceof TypeError) throw err;
     return false;
   }
 }
