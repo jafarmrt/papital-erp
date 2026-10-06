@@ -6,7 +6,7 @@ import { money } from '../../lib/money.js';
 
 /**
  * Package 6 (inventory and Kardex), TD-486 / B06-07: the «inventory health and reconciliation» report compares the
- * live WAC with the same Kardex replay the rebuild and invariant I13 use. On v9.0.74 it compared with the average of
+ * live WAC with the same Kardex replay the rebuild and invariant I13 use. On v9.0.81 it compared with the average of
  * every incoming row ever recorded, so receipt 10 x 100, sale 10, receipt 10 x 200 (correct WAC 200) was reported as
  * "recorded 200 differs from computed 150" and no rebuild could clear it.
  */
@@ -15,7 +15,7 @@ export async function runIntegrityReportReplayWacTests(shouldRun: (id: string, .
   const id = 'reg_integrity_report_replay_wac_td_486';
   if (!shouldRun(id, 'td486', 'integrity', 'wac', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.75: the inventory integrity report checks WAC against the Kardex replay, not the average of all receipts (TD-486)';
+  const name = 'v9.0.82: the inventory integrity report checks WAC against the Kardex replay, not the average of all receipts (TD-486)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   try {

@@ -6,7 +6,7 @@ import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { replayKardexWac, wacDiffersFromReplay, type KardexReplayRow } from './kardexReplay.js';
 
-// v9.0.76 (TD-485): شکل پاسخ گزارش در `src/types/inventory.types.ts` مشترک سرور و صفحه است
+// v9.0.83 (TD-485): شکل پاسخ گزارش در `src/types/inventory.types.ts` مشترک سرور و صفحه است
 export type {
   DiscrepancyType, ItemIntegrityAuditResult, WarehouseReconciliationSummary, InventoryIntegrityReport,
 } from '../../types/inventory.types.js';
@@ -86,7 +86,7 @@ export class StockReconciliationService {
       });
     }
 
-    // v9.0.75 (TD-486): همه ردیف‌های کاردکس کالاها (حذف‌شده‌ها هم) به ترتیب ثبت، برای بازپخش WAC با قاعده موتور زنده
+    // v9.0.82 (TD-486): همه ردیف‌های کاردکس کالاها (حذف‌شده‌ها هم) به ترتیب ثبت، برای بازپخش WAC با قاعده موتور زنده
     const replayRowsByItem = new Map<number, KardexReplayRow[]>();
     if (activeItems.length > 0) {
       const replayRows = await orm
@@ -210,7 +210,7 @@ export class StockReconciliationService {
         negativeStockItemsCount++;
       }
 
-      // v9.0.75 (TD-486): WAC محاسباتی همان بازپخش کاردکس بازسازی و ناوردایی I13 است (replayKardexWac، به ترتیب ثبت و با
+      // v9.0.82 (TD-486): WAC محاسباتی همان بازپخش کاردکس بازسازی و ناوردایی I13 است (replayKardexWac، به ترتیب ثبت و با
       // قاعده «موجودی ≤ ۰ ← WAC = بهای ورود تازه»)؛ پیش‌تر میانگین همه ورودهای تاریخ بود و WAC درست کالایی که یک بار
       // به صفر رسیده و دوباره با قیمت دیگری خریده شده بود، همیشه «مغایر» شمرده می‌شد.
       const computedWac = replayKardexWac(replayRowsByItem.get(item.id) ?? [], recordedWac).wac.round(4).toNumber();

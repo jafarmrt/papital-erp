@@ -5,7 +5,7 @@ import { items, transactions } from '../../db/schema.js';
 
 /**
  * Package 6 (inventory and Kardex), TD-488 / B06-09 (decision t3): the initial Kardex backfill only adds rows for items
- * with stock and no incoming Kardex row; it never reprices its own earlier rows. On v9.0.78 a second run repriced the
+ * with stock and no incoming Kardex row; it never reprices its own earlier rows. On v9.0.85 a second run repriced the
  * row it had written at 0 with the WAC of that day, so the Kardex replay no longer reached the live WAC (I13).
  */
 export async function runKardexBackfillNoRewriteTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -13,7 +13,7 @@ export async function runKardexBackfillNoRewriteTests(shouldRun: (id: string, ..
   const id = 'reg_kardex_backfill_no_rewrite_td_488';
   if (!shouldRun(id, 'td488', 'backfill', 'kardex', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.79: the initial Kardex backfill never reprices its earlier rows, so the replay keeps the live WAC (TD-488)';
+  const name = 'v9.0.86: the initial Kardex backfill never reprices its earlier rows, so the replay keeps the live WAC (TD-488)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   try {

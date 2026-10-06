@@ -190,7 +190,7 @@ export async function checkRebuildMatchesLiveEngine(wh: string): Promise<string[
     const before = await itemState(itemId);
     const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
     const after = await itemState(itemId);
-    // v9.0.77 (TD-487): بازسازی فقط مقدار را می‌سازد؛ WAC بازپخش کاردکس که گزارش می‌کند همان WAC زنده است
+    // v9.0.84 (TD-487): بازسازی فقط مقدار را می‌سازد؛ WAC بازپخش کاردکس که گزارش می‌کند همان WAC زنده است
     if (after.stock !== before.stock || fin(rebuilt.replayWac).subtract(fin(before.wac)).abs().greaterThan(fin(0.01))) {
       problems.push(`${label}: بازسازی کاردکس موجودی را تغییر داد یا بازپخش به WAC دیگری رسید (${before.wac} × ${before.stock} ← ${rebuilt.replayWac} × ${after.stock})`);
     }

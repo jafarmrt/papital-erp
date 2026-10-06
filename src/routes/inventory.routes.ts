@@ -37,7 +37,7 @@ export const rebuildStockSchema = z.object({
   }).optional()
 });
 
-// v9.0.77 (TD-487، تصمیم ت۳): اصلاح WAC جدا از بازسازی، با مجوز خودش (WAC_CORRECTION_PERMISSION)
+// v9.0.84 (TD-487، تصمیم ت۳): اصلاح WAC جدا از بازسازی، با مجوز خودش (WAC_CORRECTION_PERMISSION)
 export const correctWacSchema = z.object({
   body: z.object({
     itemId: z.coerce.number().int().positive('شناسه کالا نامعتبر است'),
@@ -293,7 +293,7 @@ router.post(
 );
 
 // POST /api/inventory/correct-wac
-// v9.0.77 (TD-487، تصمیم ت۳): WAC کالا برابر بازپخش کاردکس می‌شود و در همان تراکنش سند پیش‌نویس اختلاف ارزش در برابر ۷۰۱۲ صادر
+// v9.0.84 (TD-487، تصمیم ت۳): WAC کالا برابر بازپخش کاردکس می‌شود و در همان تراکنش سند پیش‌نویس اختلاف ارزش در برابر ۷۰۱۲ صادر
 // می‌شود؛ بازسازی کاردکس دیگر WAC را تغییر نمی‌دهد
 router.post(
   '/correct-wac',

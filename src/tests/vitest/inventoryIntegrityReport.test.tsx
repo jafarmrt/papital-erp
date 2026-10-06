@@ -5,7 +5,7 @@ import { filterIntegrityItems, integrityExcelRows } from '../../lib/inventoryAud
 import { Inventory3WayIntegrityTab } from '../../components/inventory/Inventory3WayIntegrityTab';
 
 // Package 6 integrity report (TD-485 / B06-06): the tab reads the server's response shape ({ summary, audits, warehouses }
-// with scalarCurrentStock, whStocksSum, kardexNetBalance, recordedWac, computedWac). On v9.0.75 it read report.items and
+// with scalarCurrentStock, whStocksSum, kardexNetBalance, recordedWac, computedWac). On v9.0.82 it read report.items and
 // other field names, so the table was always empty and the Excel export did nothing.
 vi.mock('../../hooks/useAppCurrency', () => ({ useAppCurrency: () => 'IRR' }));
 

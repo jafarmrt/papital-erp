@@ -2,7 +2,7 @@ import * as xlsx from 'xlsx';
 import type { InventoryIntegrityReport, ItemIntegrityAuditResult } from '../../types';
 
 /**
- * v9.0.76 (TD-485): زبانه «بررسی سلامت و تطبیق موجودی» همان شکل پاسخ سرور (`InventoryIntegrityReport`، مشترک در
+ * v9.0.83 (TD-485): زبانه «بررسی سلامت و تطبیق موجودی» همان شکل پاسخ سرور (`InventoryIntegrityReport`، مشترک در
  * `src/types/inventory.types.ts`) را می‌خواند: آرایه `audits` با `scalarCurrentStock`، `whStocksSum`، `kardexNetBalance`،
  * `recordedWac` و `computedWac`. پیش‌تر `report.items` و فیلدهایی را می‌خواند که سرور نمی‌فرستاد، پس جدول همیشه خالی بود
  * و خروجی اکسل کاری نمی‌کرد.

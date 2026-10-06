@@ -60,7 +60,7 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     queryKey: INTEGRITY_KEY,
     queryFn: async ({ signal }) => {
       try {
-        // v9.0.76 (TD-485): پاسخ سرور خودِ گزارش است ({ summary, audits, warehouses })
+        // v9.0.83 (TD-485): پاسخ سرور خودِ گزارش است ({ summary, audits, warehouses })
         return (await fetchJson<InventoryIntegrityReport | null>('/inventory/integrity-audit', { signal })) ?? null;
       } catch (err: unknown) {
         logUnlessAborted(signal, 'Error loading integrity report:', err);
@@ -181,7 +181,7 @@ export interface InventoryDocumentDetail {
   location?: string;
   user?: string;
   notes?: string | null;
-  /** v9.0.73 (TD-489): انبار مبدأ و مقصد حواله انتقال */
+  /** v9.0.80 (TD-489): انبار مبدأ و مقصد حواله انتقال */
   sourceLocation?: string;
   destinationLocation?: string;
   items?: InventoryDocumentLine[];

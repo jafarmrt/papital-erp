@@ -351,7 +351,7 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
     if (rebuildRes1.newStock !== 15) {
       throw new Error(`موجودی پس از بازسازی باید ۱۵ باشد، اما ${rebuildRes1.newStock} محاسبه شد.`);
     }
-    // v9.0.77 (TD-487): بازسازی WAC را تغییر نمی‌دهد و بازپخش کاردکس را گزارش می‌کند؛ اصلاح WAC جداست و سند پیش‌نویس دارد
+    // v9.0.84 (TD-487): بازسازی WAC را تغییر نمی‌دهد و بازپخش کاردکس را گزارش می‌کند؛ اصلاح WAC جداست و سند پیش‌نویس دارد
     if (rebuildRes1.replayWac !== 1500 || rebuildRes1.newWac !== 99999 || !rebuildRes1.wacDiffers) {
       throw new Error(`بازپخش کاردکس باید WAC ۱۵۰۰ را گزارش کند و WAC ۹۹۹۹۹ دست نخورد، اما ${JSON.stringify({ replay: rebuildRes1.replayWac, wac: rebuildRes1.newWac })}`);
     }

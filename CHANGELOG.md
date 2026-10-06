@@ -19,32 +19,53 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.80 — Item Opening Voucher From Opening Kardex Rows
+### v9.0.87 — Item Opening Voucher From Opening Kardex Rows
 - **Item Opening Voucher:** the opening voucher is worth the item's opening Kardex rows with or without the item workflow, no Kardex row is repriced, and mismatched opening vouchers are listed by the health check (TD-481, `reg_item_opening_voucher_value_td_481`).
 
-### v9.0.79 — Initial Kardex Backfill Never Reprices Its Rows
+### v9.0.86 — Initial Kardex Backfill Never Reprices Its Rows
 - **Kardex Backfill:** a second run of the initial Kardex backfill no longer reprices its earlier zero-cost rows with the WAC of the day, so the Kardex replay keeps the live WAC (TD-488, `reg_kardex_backfill_no_rewrite_td_488`).
 
-### v9.0.78 — Kardex Rebuild Writes Only for Changed Items
+### v9.0.85 — Kardex Rebuild Writes Only for Changed Items
 - **Kardex Rebuild:** an item whose warehouse stock already matches its Kardex gets no version bump, outbox event or audit row; only changed items do (TD-491, `reg_kardex_rebuild_quiet_td_491`).
 
-### v9.0.77 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
+### v9.0.84 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
 - **Kardex Rebuild and WAC Correction:** the rebuild only rebuilds quantities and lists items whose WAC differs from the Kardex; correcting the WAC is a separate action with its own permission that issues a draft voucher for the value difference against 7012 (TD-487, `reg_kardex_wac_correction_td_487`).
 
-### v9.0.76 — Inventory Integrity Table Reads the Server Report
+### v9.0.83 — Inventory Integrity Table Reads the Server Report
 - **Inventory Integrity Tab:** the table and Excel export read the report the server sends (one shared type), so discrepant items are listed and exported instead of an always-empty table (TD-485, Vitest `inventoryIntegrityReport.test.tsx`).
 
-### v9.0.75 — Integrity Report WAC Uses the Kardex Replay
+### v9.0.82 — Integrity Report WAC Uses the Kardex Replay
 - **Inventory Integrity Report:** the WAC check compares the live WAC with the same Kardex replay the rebuild and invariant I13 use, so an item that ran out and was bought again at another price is no longer reported as mismatched (TD-486, `reg_integrity_report_replay_wac_td_486`).
 
-### v9.0.74 — Clear Errors for Transfers and Kardex Rebuild
+### v9.0.81 — Clear Errors for Transfers and Kardex Rebuild
 - **Inventory Errors:** a transfer accepts a warehouse code or name in any case, and transfer and Kardex rebuild errors answer 422 or 404 with Persian messages instead of 500; the running Kardex of a missing item is 404 (TD-494, `reg_inventory_business_errors_td_494`).
 
-### v9.0.73 — Warehouse Transfers Are Documents
+### v9.0.80 — Warehouse Transfers Are Documents
 - **Transfer Document:** every warehouse transfer is a numbered «حواله انتقال» document with its lines and linked Kardex rows, listed with source and destination, printable and voidable without changing WAC (TD-489, `reg_warehouse_transfer_document_td_489`).
 
-### v9.0.72 — No Future-Dated Stock Movements
+### v9.0.79 — No Future-Dated Stock Movements
 - **Future Stock Dates:** a stock movement dated after the business today is refused for every user, a transfer date is normalized (Jalali accepted, text 422), and earlier future-dated Kardex rows are listed by the financial health check (TD-483, `reg_stock_movement_future_date_td_483`).
+
+### v9.0.78 — Persian Validation Messages
+- **Validation Messages:** every 400 validation message is a Persian sentence naming the field and what to change, with Persian digits; schema-written messages are kept (TD-529, `persianValidationMessages.test.ts`).
+
+### v9.0.77 — Login and Logout Only From the Application Itself
+- **Session Endpoints:** login, logout and setup accept only the application's own origin, and logout of a valid session needs its CSRF header, so a forged form on another site can no longer log a user out or into another account (TD-528, `sec_session_endpoints_same_origin_td_528`).
+
+### v9.0.76 — Test-Prefixed Usernames Are Refused and Listed
+- **Synthetic Usernames:** `POST /users` and `/setup` refuse usernames starting with `test_`, `e2e_` or `testuser_` (422); user lists show every active user and the financial health check lists existing ones (TD-521, `sec_synthetic_username_refused_td_521`).
+
+### v9.0.75 — Last System Admin Keeps the Admin Role
+- **Last Admin:** editing a user can no longer move the last active system admin out of the admin role (409); edits and deletes of users run under one admin-set lock, so two concurrent changes cannot both remove an admin (TD-524, `sec_last_admin_role_change_td_524`).
+
+### v9.0.74 — Session End Clears the Browser Cache
+- **Session Cache:** logout and a 401 clear the React Query cache, so the next user of the same browser never sees the previous user's cached data (TD-518, `sessionCacheClear.test.tsx`).
+
+### v9.0.73 — New-User Form Preselects No Role
+- **New-User Role:** the new-user form opens with an empty «choose a role» option and sends nothing until a role is picked; the system admin is listed last with a full-access warning (TD-517, `userFormRole.test.tsx`).
+
+### v9.0.72 — Package 2 Access and Audit Log Documentation
+- **Stability Audit, Package 2 (Authentication, Access and Audit Log):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 2 section with the approved permission model; its 27 proven findings are registered as open rows TD-516 to TD-542 (four P1: role codes in route guards, the new-user form preselecting the system admin, the browser cache surviving logout, and a deleted username reviving the old account). Documentation only; no behaviour change.
 
 ### v9.0.71 — Opening Balance Edit Waits for Approval
 - **Opening Balance Approval (P2):** editing the opening balance of a treasury account whose approval workflow is still open is refused with 409; before, the edit issued the opening voucher at once, bypassing the approval (TD-504, `reg_opening_balance_edit_refused_while_approval_pending_td_504`).

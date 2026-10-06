@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
-import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -285,7 +284,7 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
     .where(eq(dailyWorkLogs.isDeleted, 0))
     .orderBy(desc(dailyWorkLogs.id));
 
-  // Get all system users (excluding test users)
+  // همه کاربران سامانه برای نام نویسنده گزارش (v9.0.76، TD-521: کاربر با پیشوند آزمون دیگر کنار گذاشته نمی‌شود)
   const allUsersList = await orm.select({
     id: users.id,
     username: users.username,
@@ -293,8 +292,7 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
     role: users.role,
     avatarUrl: users.avatarUrl
   })
-  .from(users)
-  .where(notSyntheticTestUsername(users.username));
+  .from(users);
 
   let filtered = allLogs;
 

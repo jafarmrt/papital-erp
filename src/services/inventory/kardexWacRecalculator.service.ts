@@ -23,7 +23,7 @@ export interface KardexRebuildOptions {
   user?: string;
 }
 
-/** v9.0.77 (TD-487): کالایی که WAC آن با بازپخش کاردکس نمی‌خواند (فقط گزارش؛ اصلاح با correctItemWacFromLedger) */
+/** v9.0.84 (TD-487): کالایی که WAC آن با بازپخش کاردکس نمی‌خواند (فقط گزارش؛ اصلاح با correctItemWacFromLedger) */
 export interface KardexWacDifference {
   itemId: number;
   itemCode: string;
@@ -42,7 +42,7 @@ export interface KardexRebuildItemResult {
   oldStock: number;
   newStock: number;
   oldWac: number;
-  /** v9.0.77 (TD-487): بازسازی WAC را تغییر نمی‌دهد؛ همان oldWac */
+  /** v9.0.84 (TD-487): بازسازی WAC را تغییر نمی‌دهد؛ همان oldWac */
   newWac: number;
   replayWac: number;
   wacDiffers: boolean;
@@ -50,11 +50,11 @@ export interface KardexRebuildItemResult {
   beforeStock: number;
   afterStock: number;
   whBreakdown: Record<string, number>;
-  /** v9.0.78 (TD-491): موجودی انبارها با بازسازی تغییر کرد (فقط آن‌گاه نسخه، رویداد و ردیف ممیزی) */
+  /** v9.0.85 (TD-491): موجودی انبارها با بازسازی تغییر کرد (فقط آن‌گاه نسخه، رویداد و ردیف ممیزی) */
   changed: boolean;
 }
 
-/** v9.0.78 (TD-491): دو نقشه موجودی انبار (کد → مقدار) برابرند؛ انبار بی ردیف یعنی صفر */
+/** v9.0.85 (TD-491): دو نقشه موجودی انبار (کد → مقدار) برابرند؛ انبار بی ردیف یعنی صفر */
 function sameWarehouseStocks(a: Record<string, number>, b: Record<string, number>): boolean {
   const codes = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const code of codes) {
@@ -81,7 +81,7 @@ export const WAC_CORRECTION_STOCK_MISMATCH_CODE = 'WAC_CORRECTION_STOCK_NOT_REBU
 export class KardexWacRecalculatorService {
   /**
    * Rebuilds the per-warehouse stock of a single item from its Kardex ledger.
-   * v9.0.77 (TD-487, decision t3): quantities only; the WAC is never changed here. The replayed WAC is reported and a
+   * v9.0.84 (TD-487, decision t3): quantities only; the WAC is never changed here. The replayed WAC is reported and a
    * difference is corrected only by correctItemWacFromLedger (own permission, draft voucher against 7012).
    */
   static async rebuildItemFromLedger(
@@ -100,7 +100,7 @@ export class KardexWacRecalculatorService {
         .for('update');
 
       if (!item) {
-        // v9.0.74 (TD-494): کالای ناموجود ۴۰۴، نه ۵۰۰
+        // v9.0.81 (TD-494): کالای ناموجود ۴۰۴، نه ۵۰۰
         throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
       }
 
@@ -147,14 +147,14 @@ export class KardexWacRecalculatorService {
       // v8.0.13 (TD-269): بازپخش از WAC صفر شروع می‌شود؛ WAC کنونی فقط جایگزین نتیجه غیرمثبت است
       const replay = replayKardexWac(allItemTxs, item.weightedAverageCost);
       if (replay.firstNegativeRowId !== null && policy === 'forbidden') {
-        // v9.0.74 (TD-494): خطای کاری با پیام فارسی و ۴۲۲ (پیش‌تر Error انگلیسی و ۵۰۰)
+        // v9.0.81 (TD-494): خطای کاری با پیام فارسی و ۴۲۲ (پیش‌تر Error انگلیسی و ۵۰۰)
         throw new ValidationError(
           `بازسازی کاردکس کالای «${item.name}» (${item.code}) انجام نشد: مانده کاردکس به ترتیب ثبت در ردیف #${replay.firstNegativeRowId} ` +
           `به ${replay.minimumBalance.toNumber()} می‌رسد و موجودی منفی مجاز نیست.`,
           { code: 'KARDEX_REBUILD_NEGATIVE_BALANCE', itemId, transactionId: replay.firstNegativeRowId, balance: replay.minimumBalance.toNumber() }
         );
       }
-      // v9.0.77 (TD-487): WAC بازپخش فقط گزارش می‌شود (replayKardexWac نتیجه غیرمثبت را با WAC کنونی جایگزین می‌کند، TD-136)
+      // v9.0.84 (TD-487): WAC بازپخش فقط گزارش می‌شود (replayKardexWac نتیجه غیرمثبت را با WAC کنونی جایگزین می‌کند، TD-136)
       const replayWac = replay.wac.round(4);
 
       // v7.0.45 (audit P2-1): پیش‌تر محل نامعلوم بی‌صدا از جدول موجودی انبارها کنار گذاشته می‌شد و دو محل هم‌انبار
@@ -186,7 +186,7 @@ export class KardexWacRecalculatorService {
       const whBreakdown = snapshot.byCode;
       const newStock = snapshot.total;
 
-      // v9.0.78 (TD-491): کالای بی‌تغییر فقط زمان آخرین بازسازی را می‌گیرد؛ نسخه، رویداد outbox و ردیف ممیزی فقط برای
+      // v9.0.85 (TD-491): کالای بی‌تغییر فقط زمان آخرین بازسازی را می‌گیرد؛ نسخه، رویداد outbox و ردیف ممیزی فقط برای
       // کالایی که موجودی انبارهایش واقعاً عوض شد (پیش‌تر هر اجرای «بازسازی همه کالاها» برای همه کالاها می‌نوشت)
       const changed = !sameWarehouseStocks(stockBefore.byCode, whBreakdown);
       await txEngine
@@ -267,7 +267,7 @@ export class KardexWacRecalculatorService {
   }
 
   /**
-   * Rebuilds the per-warehouse stock of ALL items from their Kardex ledgers (quantities only, v9.0.77 TD-487) and lists
+   * Rebuilds the per-warehouse stock of ALL items from their Kardex ledgers (quantities only, v9.0.84 TD-487) and lists
    * the items whose WAC differs from the Kardex replay.
    */
   static async rebuildAllFromLedger(
@@ -325,7 +325,7 @@ export class KardexWacRecalculatorService {
   }
 
   /**
-   * v9.0.77 (TD-487, decision t3): sets an item's WAC to its Kardex replay and, in the same transaction, issues a draft
+   * v9.0.84 (TD-487, decision t3): sets an item's WAC to its Kardex replay and, in the same transaction, issues a draft
    * voucher for the value difference (stock x (replay WAC - old WAC)) against «کسری و اضافات انبار» (7012), like a stock
    * count. Runs only when the stock already equals the Kardex balance (rebuild first) and the WAC really differs.
    */

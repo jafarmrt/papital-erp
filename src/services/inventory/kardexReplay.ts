@@ -13,7 +13,7 @@ import { fin, FinancialMath, type DecimalValue, type FinancialDecimal } from '..
  *   `applyStockReversal`: برگشتِ ورود ارزش همان ردیف را از ارزش انبار کم می‌کند، برگشتِ خروج (از v8.0.11، TD-254) کالا
  *   را با بهای همان خروج برمی‌گرداند و WAC را بازمحاسبه می‌کند — بازسازی این قاعده را بر ابطال‌های قدیمی‌تر هم اعمال
  *   می‌کند و WAC آن کالاها را با دفتر کل (که بهای اصلی را برگردانده بود) همخوان می‌کند؛
- * - انتقال بین انبارها (documentType = 'transfer')، ابطال آن (از v9.0.73، TD-489) و ردیف‌های معکوس قدیمی فقط مقدار را
+ * - انتقال بین انبارها (documentType = 'transfer')، ابطال آن (از v9.0.80، TD-489) و ردیف‌های معکوس قدیمی فقط مقدار را
  *   جابه‌جا می‌کنند.
  *
  * ردیف حذف‌شده بدون ردیف معکوس فعال (حذف‌های پیش از DB-009) نادیده گرفته می‌شود، مانند دفتر کاردکس (§12).
@@ -77,7 +77,7 @@ export function createKardexReplayer(allRows: KardexReplayRow[], startWac: Decim
       || String(row.documentRef ?? '').startsWith('REV-')
       || row.documentType === 'transfer';
 
-    // v9.0.73 (TD-489): ابطال حواله انتقال (ردیف معکوسِ ردیف انتقال) مثل خود انتقال فقط مقدار را جابه‌جا می‌کند
+    // v9.0.80 (TD-489): ابطال حواله انتقال (ردیف معکوسِ ردیف انتقال) مثل خود انتقال فقط مقدار را جابه‌جا می‌کند
     if (original && original.isDeleted === 1 && original.documentType !== 'transfer') {
       // ابطال سند: همان فرمول DocumentStockEngine.applyStockReversal
       if (!isIn) {
@@ -129,11 +129,11 @@ export function replayKardexWac(rows: KardexReplayRow[], fallbackWac: DecimalVal
   };
 }
 
-/** v9.0.75 (TD-486): بیشترین اختلاف WAC زنده و بازپخش که هنوز «همخوان» است (همان آستانه ناوردایی I13) */
+/** v9.0.82 (TD-486): بیشترین اختلاف WAC زنده و بازپخش که هنوز «همخوان» است (همان آستانه ناوردایی I13) */
 export const KARDEX_WAC_TOLERANCE = 0.01;
 
 /**
- * v9.0.75 (TD-486): WAC زنده کالای دارای موجودی با WAC بازپخش کاردکس نمی‌خواند. گزارش «بررسی سلامت و تطبیق موجودی»،
+ * v9.0.82 (TD-486): WAC زنده کالای دارای موجودی با WAC بازپخش کاردکس نمی‌خواند. گزارش «بررسی سلامت و تطبیق موجودی»،
  * بازسازی و ناوردایی I13 همین قاعده را به کار می‌برند؛ کالای بی موجودی هیچ‌وقت مغایر نیست.
  */
 export function wacDiffersFromReplay(liveWac: DecimalValue, replayWac: DecimalValue, stock: DecimalValue): boolean {

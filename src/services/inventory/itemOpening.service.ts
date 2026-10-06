@@ -10,7 +10,7 @@ import { openingKardexValue } from './itemOpeningValue.js';
 /**
  * V2.0.0: سند افتتاحیه موجودی اولیه کالا — اتمیک و idempotent
  * DR موجودی مواد اولیه (1401) یا کالای تولیدشده (1403) / CR سرمایه اولیه (4001)، به ارزش ردیف‌های افتتاحیه کاردکس
- * (v9.0.80، TD-481)
+ * (v9.0.87، TD-481)
  */
 export class ItemOpeningService {
   static async issueItemOpeningVoucher(itemId: number, params: { userId?: number; username?: string; tx?: DbExecutor } = {}): Promise<JournalVoucher | null> {
@@ -28,7 +28,7 @@ export class ItemOpeningService {
       ));
     if (existing) return VoucherService.getJournalVoucherById(existing.id, params.tx);
 
-    // v9.0.80 (TD-481، تصمیم ت۴): ارزش = جمع ردیف‌های افتتاحیه کاردکس همین کالا (مقدار × بهای ثبت‌شده هنگام ساخت)، با گردش
+    // v9.0.87 (TD-481، تصمیم ت۴): ارزش = جمع ردیف‌های افتتاحیه کاردکس همین کالا (مقدار × بهای ثبت‌شده هنگام ساخت)، با گردش
     // کار یا بی آن یکی. پیش‌تر «موجودی جاری × WAC جاری» بود و رسید ثبت‌شده پیش از تأیید دوباره به سرمایه اولیه می‌رفت.
     const opening = await openingKardexValue(executor, itemId);
     const amount = opening.value;
@@ -43,7 +43,7 @@ export class ItemOpeningService {
       throw new Error('حساب «موجودی» یا «سرمایه اولیه» در چارت یافت نشد — از تنظیمات ← تنظیمات حسابداری پیکربندی کنید');
     }
 
-    // v9.0.80 (TD-481): ردیف کاردکس تغییرناپذیر است؛ پیش‌تر بهای ردیف‌های افتتاحیه (و هر ردیف انبارگردانی با بهای ۰) با WAC
+    // v9.0.87 (TD-481): ردیف کاردکس تغییرناپذیر است؛ پیش‌تر بهای ردیف‌های افتتاحیه (و هر ردیف انبارگردانی با بهای ۰) با WAC
     // روز بازنویسی می‌شد و بازپخش کاردکس دیگر به WAC جاری نمی‌رسید (I13).
     const voucher = await VoucherService.createJournalVoucher({
       date: await businessTodayJalaliDash(),
