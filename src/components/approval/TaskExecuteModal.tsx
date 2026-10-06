@@ -62,7 +62,7 @@ export function TaskExecuteModal({
 
   const getEntityLabel = () => {
     if (entityType === 'document' || entityType === 'doc') return 'پیش‌فاکتور / سند فروش';
-    if (isRequisition) return 'درخواست خرید متریال / کالا';
+    if (isRequisition) return 'درخواست خرید مواد اولیه / کالا';
     return entityType || 'سند';
   };
 

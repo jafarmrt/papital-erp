@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
 import { useApprovalTaskEntity } from '../hooks/useApprovalTaskEntity';
+import { workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
 import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
@@ -194,7 +195,7 @@ export function ApprovalInboxPage() {
       case 'pending_material':
         return { label: 'ماده اولیه معلق', icon: Package, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' };
       default:
-        return { label: type, icon: FileText, color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' };
+        return { label: workflowEntityTypeLabel(type), icon: FileText, color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' };
     }
   };
 
@@ -210,10 +211,10 @@ export function ApprovalInboxPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                کارتابل متمرکز تاییدات و وظایف
+                کارتابل تأییدها و کارها
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                مدیریت وظایف تایید، پایش مهلت‌های SLA و تفویض اختیارات سازمانی
+                کارهای تأیید، مهلت انجام و تفویض اختیار
               </p>
             </div>
           </div>
@@ -259,7 +260,7 @@ export function ApprovalInboxPage() {
           }`}
         >
           <div>
-            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">دارای تاخیر (SLA)</span>
+            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">دارای تأخیر</span>
             <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{formatPersianNumber(taskStats?.overdueCount ?? 0)}</span>
           </div>
           <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
@@ -369,15 +370,15 @@ export function ApprovalInboxPage() {
                 {taskStatusFilter === 'completed'
                   ? 'هیچ وظیفه تکمیل‌شده‌ای در کارتابل شما یافت نشد!'
                   : taskStatusFilter === 'overdue'
-                  ? 'هیچ وظیفه دارای تاخیری یافت نشد!'
+                  ? 'هیچ کار دارای تأخیری نیست.'
                   : taskStatusFilter === 'delegated'
                   ? 'هیچ وظیفه تفویض‌شده‌ای یافت نشد!'
                   : 'هیچ وظیفه معلقی در کارتابل شما یافت نشد!'}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
                 {taskStatusFilter === 'completed'
-                  ? 'سوابق تاییدات قبلی شما پس از تعیین تکلیف وظایف در این بخش نمایش داده می‌شوند.'
-                  : 'کلیه وظایف تایید ارجاع شده به نقش یا کاربری شما با موفقیت به اتمام رسیده‌اند.'}
+                  ? 'کارهایی که انجام دهید این‌جا نشان داده می‌شوند.'
+                  : 'کاری برای تأیید شما در انتظار نیست.'}
               </p>
             </div>
           ) : (
@@ -465,8 +466,8 @@ export function ApprovalInboxPage() {
                             {isCompletedTask && t.completedAt
                               ? `تاریخ تکمیل: ${formatPersianDate(t.completedAt)}`
                               : overdue
-                              ? 'مهلت تایید منقضی شده است!'
-                              : `مهلت تایید: ${formatPersianDate(t.dueAt)}`}
+                              ? 'مهلت تأیید گذشته است.'
+                              : `مهلت تأیید: ${formatPersianDate(t.dueAt)}`}
                           </span>
                         </div>
                       </div>

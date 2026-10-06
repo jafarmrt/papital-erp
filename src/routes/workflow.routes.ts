@@ -144,7 +144,7 @@ router.post('/tasks/:taskId/execute', authorizePermission('workflow.approve', 'w
     // v8.0.91 (TD-371): امضایی که حدنصاب را کامل نکرده کار را باز می‌گذارد و پیام شمار امضاها را برمی‌گرداند
     const pendingSignature = 'task' in result && result.task.status === 'pending';
     const alreadyDecided = 'idempotent' in result && result.idempotent;
-    const message = (pendingSignature || alreadyDecided) && 'message' in result && result.message ? result.message : 'وظیفه با موفقیت اجرا گردید';
+    const message = (pendingSignature || alreadyDecided) && 'message' in result && result.message ? result.message : 'کار انجام شد.';
     res.json({ success: true, message, data: result });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
@@ -395,7 +395,7 @@ router.post('/delegations', authorizePermission('workflow.approve', 'workflow.ma
       createdByName: userName
     });
 
-    res.json({ success: true, message: 'تفویض اختیار با موفقیت ثبت گردید', data: created });
+    res.json({ success: true, message: 'تفویض اختیار ثبت شد.', data: created });
   } catch (err: unknown) {
     const errMsg = getErrorMessage(err);
     logger.error(`[Workflow Route POST /delegations] Error: ${errMsg}`);

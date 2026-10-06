@@ -96,7 +96,7 @@ export class WorkflowDelegationService {
   }) {
     // v8.0.98 (TD-378): ورودی نادرست ۴۲۲ و کاربر ناموجود ۴۰۴ است، نه خطای خام ۵۰۰
     if (params.fromUserId === params.toUserId) {
-      throw new ValidationError('کاربر تفویض‌کننده و دریافت‌کننده نمی‌تواند یکسان باشد (WF_DELEGATION_SELF_NOT_ALLOWED)');
+      throw new ValidationError('کاربر تفویض‌کننده و دریافت‌کننده نمی‌تواند یکسان باشد', undefined, 'WF_DELEGATION_SELF_NOT_ALLOWED');
     }
 
     // TD-468 (یافته B14-26): تفویضی که با روز فرستاده شود (YYYY-MM-DD، فرم تفویض) از ۰۰:۰۰ روز اول تا پایان روز آخر در منطقه
@@ -105,10 +105,10 @@ export class WorkflowDelegationService {
     const start = new Date(`${startDate.replace(' ', 'T')}${DAY_ONLY.test(params.startDate) ? 'Z' : ''}`).getTime();
     const end = new Date(`${endDate.replace(' ', 'T')}${DAY_ONLY.test(params.endDate) ? 'Z' : ''}`).getTime();
     if (Number.isNaN(start) || Number.isNaN(end)) {
-      throw new ValidationError('تاریخ شروع یا پایان تفویض معتبر نیست (WF_DELEGATION_INVALID_TIME)');
+      throw new ValidationError('تاریخ شروع یا پایان تفویض معتبر نیست', undefined, 'WF_DELEGATION_INVALID_TIME');
     }
     if (start > end) {
-      throw new ValidationError('تاریخ شروع تفویض نمی‌تواند بعد از تاریخ پایان باشد (WF_DELEGATION_INVALID_TIME)');
+      throw new ValidationError('تاریخ شروع تفویض نمی‌تواند بعد از تاریخ پایان باشد', undefined, 'WF_DELEGATION_INVALID_TIME');
     }
 
     const [fromUser] = await orm.select().from(users).where(eq(users.id, params.fromUserId));
@@ -145,7 +145,7 @@ export class WorkflowDelegationService {
       action: 'CREATE',
       entity: 'تفویض اختیار ورکفلو',
       entityId: inserted.id,
-      description: `تفویض اختیار از کاربر «${fromUser.fullName || fromUser.username}» به کاربر «${toUser.fullName || toUser.username}» با حوزه ${scope} ایجاد گردید.`,
+      description: `تفویض اختیار از کاربر «${fromUser.fullName || fromUser.username}» به کاربر «${toUser.fullName || toUser.username}» با حوزه ${scope} ثبت شد.`,
       details: {
         fromUserId: params.fromUserId,
         toUserId: params.toUserId,
@@ -221,7 +221,7 @@ export class WorkflowDelegationService {
       // v8.0.98 (TD-378): تفویض را فقط تفویض‌کننده یا ادمین لغو می‌کند؛ پیش‌تر خود جانشین هم آن را لغو می‌کرد
       const isAdmin = params.userRole === 'admin';
       if (!isAdmin && delegation.fromUserId !== params.userId) {
-        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند (WF_DELEGATION_REVOKE_FORBIDDEN)');
+        throw new ForbiddenError('فقط تفویض‌کننده یا مدیر سیستم می‌تواند این تفویض اختیار را لغو کند', undefined, 'WF_DELEGATION_REVOKE_FORBIDDEN');
       }
 
       await tx.update(workflowDelegations)
@@ -234,7 +234,7 @@ export class WorkflowDelegationService {
         action: 'UPDATE',
         entity: 'تفویض اختیار ورکفلو',
         entityId: params.id,
-        description: `تفویض اختیار شماره #${params.id} با موفقیت لغو گردید.`,
+        description: `تفویض اختیار شماره ${params.id} لغو شد.`,
         details: { delegationId: params.id, revokedBy: params.userId, before: { isActive: delegation.isActive }, after: { isActive: 0 } },
         tx
       });

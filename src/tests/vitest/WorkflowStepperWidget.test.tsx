@@ -43,7 +43,7 @@ describe('WorkflowStepperWidget (TD-085)', () => {
     fetchJson.mockResolvedValue(instanceResponse);
     renderWidget();
     expect(await screen.findByText('تایید شده')).toBeTruthy();
-    expect(screen.queryByText('شروع چرخه ورکفلو')).toBeNull();
+    expect(screen.queryByText('آغاز گردش کار')).toBeNull();
     expect(screen.getByText('تایید مالی نهایی')).toBeTruthy();
     expect(fetchJson).toHaveBeenCalledWith('/workflow/instance/document/9');
   });
@@ -51,8 +51,8 @@ describe('WorkflowStepperWidget (TD-085)', () => {
   it('shows signature progress against the required count recorded by the server', async () => {
     fetchJson.mockResolvedValue(instanceResponse);
     renderWidget();
-    expect(await screen.findByText(/امضاهای ثبت‌شده \(1 از 3\)/)).toBeTruthy();
-    expect(screen.getByText('1/3 امضا')).toBeTruthy();
+    expect(await screen.findByText(/امضاهای ثبت‌شده \(۱ از ۳\)/)).toBeTruthy();
+    expect(screen.getByText('۱ از ۳ امضا')).toBeTruthy();
   });
 
   it('shows why an action is blocked and the conditions of the chosen action (TD-085 part 1)', async () => {
@@ -68,7 +68,7 @@ describe('WorkflowStepperWidget (TD-085)', () => {
   it('offers to start the workflow when the document has none', async () => {
     fetchJson.mockResolvedValue({ instance: null });
     renderWidget();
-    expect(await screen.findByText('شروع چرخه ورکفلو')).toBeTruthy();
+    expect(await screen.findByText('آغاز گردش کار')).toBeTruthy();
   });
 });
 

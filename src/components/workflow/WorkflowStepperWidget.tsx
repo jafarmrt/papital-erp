@@ -15,6 +15,7 @@ import {
   Users
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice } from '../../utils';
+import { toPersianDigits } from '../../utils/persianNumber';
 import { WorkflowActionConditionList, WorkflowBlockedActions } from './WorkflowActionConditions';
 
 interface WorkflowStepperWidgetProps {
@@ -29,7 +30,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
   entityType,
   entityId,
   workflowCode,
-  title = 'چرخه تاییدات و گردش کار (Workflow)',
+  title = 'گردش کار و تأییدها',
   onStateChange
 }) => {
   const { data: wfData, isLoading } = useWorkflowInstanceQuery(entityType, entityId);
@@ -116,8 +117,8 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                 {wfData.definition.title}
               </span>
               {instance?.definitionVersion && (
-                <span className="text-[10px] bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600" title="نسخه‌بندی ثابت (Immutable) - تغییرات تعاریف بر روی این سند تاثیر نمی‌گذارد">
-                  نسخه v{instance.definitionVersion} (ثابت)
+                <span className="text-[10px] bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600" title="این سند با همین نسخه از طرح پیش می‌رود؛ تغییر طرح گردش کار بر آن اثری ندارد.">
+                  نسخه {toPersianDigits(instance.definitionVersion)}
                 </span>
               )}
             </div>
@@ -130,7 +131,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
           >
             <History className="w-3.5 h-3.5" />
-            <span>تاریخچه اقدامات ({history.length})</span>
+            <span>تاریخچه اقدامات ({toPersianDigits(history.length)})</span>
             {showHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         )}
@@ -149,7 +150,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5" />
-            <span>{startWorkflowMutation.isPending ? 'در حال فعال‌سازی...' : 'شروع چرخه ورکفلو'}</span>
+            <span>{startWorkflowMutation.isPending ? 'در حال فعال‌سازی...' : 'آغاز گردش کار'}</span>
           </button>
         </div>
       ) : (
@@ -226,16 +227,16 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                 // v7.0.88 (TD-085): تعداد لازم همان است که سرور هنگام ثبت امضا محاسبه کرده (requiredCount)
                 const reqCount = Number(prog.requiredCount) || tr?.kValue || 2;
                 const ruleType = prog.ruleType || tr?.approvalRuleType || 'MULTI';
-                const ruleLabel = ruleType === 'AND_ALL' || ruleType === 'ALL' ? 'اتفاق آرا (AND_ALL)' :
-                                  ruleType === 'OR_ANY' || ruleType === 'ANY' ? 'اولین تایید (OR_ANY)' :
-                                  ruleType === 'K_OF_N' ? `حد نصاب ${reqCount} امضا (K_OF_N)` : 'تایید موازی';
+                const ruleLabel = ruleType === 'AND_ALL' || ruleType === 'ALL' ? 'همه اعضای نقش' :
+                                  ruleType === 'OR_ANY' || ruleType === 'ANY' ? 'یکی از اعضا' :
+                                  ruleType === 'K_OF_N' ? `${toPersianDigits(reqCount)} امضا` : 'چند امضا';
 
                 return (
                   <div key={trId} className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 text-xs">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
                         <Users className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                        <span>پیشرفت تایید موازی: {tr?.title || 'اقدام در حال تایید'}</span>
+                        <span>پیشرفت امضاها: {tr?.title || 'اقدام در حال تأیید'}</span>
                       </div>
                       <span className="bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-full text-[10px] font-semibold">
                         {ruleLabel}
@@ -250,8 +251,8 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-amber-800 dark:text-amber-300">
-                      <span>امضاهای ثبت‌شده ({sigs.length} از {reqCount}):</span>
-                      <span>{reqCount - sigs.length > 0 ? `${reqCount - sigs.length} امضای دیگر تا تکمیل گام` : 'در حال نهایی‌سازی'}</span>
+                      <span>امضاهای ثبت‌شده ({toPersianDigits(sigs.length)} از {toPersianDigits(reqCount)}):</span>
+                      <span>{reqCount - sigs.length > 0 ? `${toPersianDigits(reqCount - sigs.length)} امضای دیگر تا تکمیل گام` : 'در حال نهایی‌سازی'}</span>
                     </div>
 
                     {sigs.length > 0 && (
@@ -259,7 +260,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                         {sigs.map((s: any, sIdx: number) => (
                           <div key={sIdx} className="flex items-center gap-1 bg-white/80 dark:bg-gray-800/80 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-700/50 text-[10px] text-gray-700 dark:text-gray-300 shadow-2xs">
                             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                            <span className="font-semibold">{s.userName || `کاربر #${s.userId}`}</span>
+                            <span className="font-semibold">{s.userName || 'کاربر'}</span>
                             {s.comment && <span className="text-gray-400">({s.comment})</span>}
                           </div>
                         ))}
@@ -304,7 +305,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                       <span>{tr.title}</span>
                       {isMulti && (
                         <span className="bg-black/20 text-white text-[10px] px-1.5 py-0.5 rounded-full font-mono">
-                          {sigCount}/{reqK} امضا
+                          {toPersianDigits(sigCount)} از {toPersianDigits(reqK)} امضا
                         </span>
                       )}
                     </button>
@@ -320,7 +321,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
             <div className="bg-white dark:bg-gray-800 border-2 border-indigo-500 rounded-xl p-3 my-3 shadow-md animate-fadeIn">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-gray-900 dark:text-white">
-                  تایید اقدام: «{selectedTransition.title}»
+                  تأیید اقدام: «{selectedTransition.title}»
                 </span>
                 <button
                   onClick={() => setSelectedTransition(null)}
@@ -371,7 +372,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="دلیل تایید، رد یا دستورات بعدی را ثبت کنید..."
+                  placeholder="دلیل تأیید، رد یا دستور بعدی را بنویسید..."
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   rows={2}
                 />
@@ -389,7 +390,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                   disabled={executeTransitionMutation.isPending}
                   className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1"
                 >
-                  {executeTransitionMutation.isPending ? 'در حال ثبت...' : 'ثبت و اعمال تغییر وضعیت'}
+                  {executeTransitionMutation.isPending ? 'در حال ثبت...' : 'ثبت اقدام'}
                 </button>
               </div>
             </div>
@@ -400,7 +401,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
               <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
                 <History className="w-3.5 h-3.5 text-indigo-500" />
-                سوابق و ردپای تغییرات وضعیت:
+                تاریخچه گام‌ها:
               </h4>
 
               {history.length === 0 ? (
@@ -414,7 +415,7 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-gray-800 dark:text-gray-200">
-                          {log.actionTitle || log.actionKey}
+                          {log.actionTitle || 'اقدام'}
                         </span>
                         <span className="text-[10px] text-gray-400">
                           {log.createdAt ? formatPersianDate(log.createdAt) : ''}

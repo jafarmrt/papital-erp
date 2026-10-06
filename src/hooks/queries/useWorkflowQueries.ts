@@ -116,10 +116,10 @@ export function useStartWorkflowMutation() {
       void queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
       });
-      toast.success('چرخه تایید ورکفلو با موفقیت فعال گردید');
+      toast.success('گردش کار آغاز شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در فعال‌سازی چرخه کاری');
+      toast.error(err.message || 'گردش کار آغاز نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -148,10 +148,10 @@ export function useExecuteTransitionMutation() {
           queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
         });
       }
-      toast.success('اقدام ورکفلو با موفقیت ثبت شد');
+      toast.success('اقدام ثبت شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در ثبت اقدام ورکفلو');
+      toast.error(err.message || 'اقدام ثبت نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -229,10 +229,10 @@ export function useSaveWorkflowDefinitionMutation() {
     onSuccess: () => {
       // TD-469: پیشوند definitions جزئیات و نسخه‌ها را هم دربرمی‌گیرد (پیش‌تر کلید جزئیات ['workflow','definition',id] بود)
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definitions() });
-      toast.success('تعریف ورکفلو با موفقیت ذخیره گردید');
+      toast.success('طرح گردش کار ذخیره شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در ذخیره‌سازی ورکفلو');
+      toast.error(err.message || 'طرح گردش کار ذخیره نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -297,10 +297,10 @@ export function useExecuteTaskMutation() {
       void invalidatePreset(queryClient, 'workflowChange');
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
       // v8.0.91 (TD-371): امضای ناقص حدنصاب کار را باز می‌گذارد؛ پیام سرور شمار امضاها را می‌گوید
-      toast.success(res?.data?.task?.status === 'pending' && res.message ? res.message : 'وظیفه با موفقیت تعیین تکلیف و اجرا گردید');
+      toast.success(res?.data?.task?.status === 'pending' && res.message ? res.message : 'کار انجام شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در اجرای وظیفه');
+      toast.error(err.message || 'کار انجام نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -336,10 +336,10 @@ export function useCreateDelegationMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
-      toast.success('تفویض اختیار جدید با موفقیت ایجاد گردید');
+      toast.success('تفویض اختیار ثبت شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در ثبت تفویض اختیار');
+      toast.error(err.message || 'تفویض اختیار ثبت نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -356,10 +356,10 @@ export function useRevokeDelegationMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
-      toast.success('تفویض اختیار با موفقیت لغو گردید');
+      toast.success('تفویض اختیار لغو شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در لغو تفویض اختیار');
+      toast.error(err.message || 'تفویض اختیار لغو نشد؛ دوباره تلاش کنید.');
     }
   });
 }

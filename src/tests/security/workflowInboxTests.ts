@@ -190,5 +190,36 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  if (shouldRun('sec_workflow_error_code_td_470', 'security', 'td470', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_error_code_td_470',
+      name: 'Workflow errors carry the WF_* code in the code field and a Persian message without it (TD-470)',
+      details: 'an ambiguous reject answers 422 with code WF_TASK_REJECT_AMBIGUOUS and a message without English words; an unknown definition version answers 404 with code WF_VER_NOT_FOUND',
+    }, async (h, wrong) => {
+      const code = inboxCode(h, 'ERRCODE');
+      try {
+        const { instanceId } = await startTwoRejectWorkflow(h, code);
+        const row = await inboxRowOf(h, instanceId);
+        if (!row) {
+          wrong.push('the admin inbox has no row for the new instance');
+          return;
+        }
+        const ambiguous = await h.post(`/api/workflow/tasks/${row.id}/execute`, { action: 'reject', comment: 'no choice' });
+        if (ambiguous.status !== 422 || ambiguous.body?.code !== 'WF_TASK_REJECT_AMBIGUOUS') {
+          wrong.push(`ambiguous reject answered ${ambiguous.status} with code ${JSON.stringify(ambiguous.body?.code)}`);
+        }
+        if (/[A-Za-z]{2,}/.test(String(ambiguous.body?.message ?? ''))) wrong.push(`ambiguous reject message has English text: ${JSON.stringify(ambiguous.body?.message)}`);
+        const [def] = await h.q(`SELECT id FROM workflow_definitions WHERE code = $1`, [code]);
+        const missing = await h.get(`/api/workflow/definitions/${def?.id}/versions/999`);
+        if (missing.status !== 404 || missing.body?.code !== 'WF_VER_NOT_FOUND') {
+          wrong.push(`missing version answered ${missing.status} with code ${JSON.stringify(missing.body?.code)}`);
+        }
+        if (/WF_/.test(String(missing.body?.message ?? ''))) wrong.push(`missing version message shows the code: ${JSON.stringify(missing.body?.message)}`);
+      } finally {
+        await dropDefinition(h, code);
+      }
+    });
+  }
+
   return results;
 }

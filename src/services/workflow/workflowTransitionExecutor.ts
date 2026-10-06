@@ -25,6 +25,7 @@ import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { lockWorkflowEntity, runWorkflowTransitionAction, workflowActionPermissions, workflowEntityExists } from './workflowTransitionActions.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
+import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
 
 type DbClient = typeof orm | Parameters<Parameters<typeof orm.transaction>[0]>[0];
@@ -309,7 +310,7 @@ export class WorkflowTransitionExecutor {
       if (WorkflowTransitionExecutor.checkUserRoleMatch(d.fromRole, requiredRole, fromPermissions)) { acting = d; break; }
     }
     if (!acting) {
-      throw new ForbiddenError(`نقش شما (${params.userRole || 'ناشناس'}) اجازه انجام این انتقال (${transition.title}) را ندارد.`);
+      throw new ForbiddenError(`نقش شما اجازه اقدام «${transition.title}» را ندارد؛ از دارنده نقش این گام بخواهید آن را انجام دهد.`);
     }
     return acting;
   }
@@ -455,7 +456,7 @@ export class WorkflowTransitionExecutor {
       // گردش‌کاری روی هر نوع موجودیتی شروع می‌شد و اقدام دامنه نوع موجودیت را از نمونه برمی‌داشت: گردش‌کار بی‌نقش اسناد
       // روی سند حسابداری، آن را بی مجوز حسابداری تأیید می‌کرد.
       if (def.entityType !== params.entityType) {
-        throw new ValidationError(`گردش کار «${def.title}» برای نوع «${def.entityType}» است و روی «${params.entityType}» شروع نمی‌شود (WF_ENTITY_TYPE_MISMATCH)`);
+        throw new ValidationError(`گردش کار «${def.title}» برای «${workflowEntityTypeLabel(def.entityType)}» است و روی «${workflowEntityTypeLabel(params.entityType)}» آغاز نمی‌شود.`, undefined, 'WF_ENTITY_TYPE_MISMATCH');
       }
       if (Number(def.isActive) !== 1) {
         throw new ValidationError(`گردش کار «${def.title}» فعال نیست`);
@@ -476,7 +477,7 @@ export class WorkflowTransitionExecutor {
 
       if (existing) {
         if (existing.workflowDefinitionId === def.id) return existing;
-        throw new ConflictError(`موجودیت «${params.entityType}» با شناسه ${params.entityId} فرایند در جریان دیگری دارد (WF_INSTANCE_ALREADY_OPEN)`);
+        throw new ConflictError(`این ${workflowEntityTypeLabel(params.entityType)} گردش کار در جریان دیگری دارد؛ نخست آن را به پایان برسانید.`, undefined, 'WF_INSTANCE_ALREADY_OPEN');
       }
 
       const targetVersionNumber = params.definitionVersion || def.version || 1;
@@ -525,7 +526,7 @@ export class WorkflowTransitionExecutor {
       }
 
       if (!initialStateId) {
-        throw new ValidationError('وضعیت اولیه (Initial State) برای این چرخه تعیین نشده است');
+        throw new ValidationError('این گردش کار گام آغاز ندارد؛ در طراح یک گام آغاز تعیین کنید.');
       }
 
       const [newInstance] = await tx.insert(workflowInstances).values({
@@ -551,7 +552,7 @@ export class WorkflowTransitionExecutor {
         performedByName: params.userName || 'سیستم',
         actionKey: 'START_WORKFLOW',
         actionTitle: 'شروع فرآیند کاری',
-        comment: `چرخه کاری '${def.title}' (نسخه ${targetVersionNumber}) آغاز گردید`
+        comment: `گردش کار «${def.title}» (نسخه ${targetVersionNumber}) آغاز شد`
       });
 
       return newInstance;
@@ -588,7 +589,7 @@ export class WorkflowTransitionExecutor {
         .for('update');
 
       if (!instance) {
-        throw new NotFoundError('نمونه ورکفلو یافت نشد');
+        throw new NotFoundError('این فرایند گردش کار یافت نشد.');
       }
 
       // v8.0.99 (TD-379): فرایند ردشده فقط با انتقالی ادامه می‌یابد که طراح از گام ردشده کشیده است (مثل «بازگشایی»)؛
@@ -603,7 +604,7 @@ export class WorkflowTransitionExecutor {
         ?? (await tx.select({ entityType: workflowDefinitions.entityType }).from(workflowDefinitions)
           .where(eq(workflowDefinitions.id, instance.workflowDefinitionId)))[0]?.entityType;
       if (definitionEntityType !== instance.entityType) {
-        throw new ConflictError(`این فرایند با گردش کار نوع «${definitionEntityType ?? 'نامعلوم'}» روی «${instance.entityType}» ساخته شده و پیش نمی‌رود (WF_ENTITY_TYPE_MISMATCH)`);
+        throw new ConflictError(`این فرایند با گردش کار «${workflowEntityTypeLabel(definitionEntityType)}» روی «${workflowEntityTypeLabel(instance.entityType)}» ساخته شده و پیش نمی‌رود.`, undefined, 'WF_ENTITY_TYPE_MISMATCH');
       }
 
       updateRequestContext({
@@ -639,15 +640,15 @@ export class WorkflowTransitionExecutor {
       }
 
       if (!transition) {
-        throw new NotFoundError('انتقال (Transition) مورد نظر یافت نشد');
+        throw new NotFoundError('این اقدام در گردش کار یافت نشد؛ صفحه را تازه کنید.');
       }
 
       if (!fromState || !toState) {
-        throw new NotFoundError('وضعیت‌های مرتبط با این انتقال یافت نشدند');
+        throw new NotFoundError('گام‌های این اقدام یافت نشدند؛ طرح گردش کار را بررسی کنید.');
       }
 
       if (transition.fromStateId !== instance.currentStateId) {
-        throw new ConflictError('انتقال در نظر گرفته شده با وضعیت فعلی سند مطابقت ندارد');
+        throw new ConflictError('این اقدام از گام جاری سند نیست؛ صفحه را تازه کنید.');
       }
 
       // v9.0.34 (TD-444): مجوزهای نقش امضاکننده از پایگاه‌داده، از هر مسیری (ویجت، کارتابل، تدارکات)
@@ -659,12 +660,12 @@ export class WorkflowTransitionExecutor {
         ? { role: actingFor.fromRole, ownPermissions: false }
         : { role: params.userRole, permissions: userPermissions, ownPermissions: true }, tx);
       if (!signerHoldsPermission) {
-        throw new ForbiddenError(`انتقال «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد (WF_PERMISSION_REQUIRED).`);
+        throw new ForbiddenError(`اقدام «${transition.title}» مجوز «${transition.requiredPermission}» را می‌خواهد.`, undefined, 'WF_PERMISSION_REQUIRED');
       }
       if (WorkflowTransitionExecutor.initiatorExcluded(transition, instance.startedBy, {
         userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
       })) {
-        throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند (WF_INITIATOR_EXCLUDED).`);
+        throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند.`, undefined, 'WF_INITIATOR_EXCLUDED');
       }
       // v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): گامی که اقدام دامنه دارد مجوز همان موجودیت را از امضاکننده (یا نقش
       // تفویض‌کننده) می‌خواهد؛ پیش‌تر نقش گام بس بود و خزانه‌دار بی مجوز قطعی‌سازی، سند را از گردش‌کار قطعی می‌کرد
@@ -673,7 +674,7 @@ export class WorkflowTransitionExecutor {
         const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
         const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
         if (signerRole !== 'admin' && !signerHeld.includes('*') && !entityPermissions.some(p => signerHeld.includes(p))) {
-          throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${entityPermissions.join('، ')}» را می‌خواهد (WF_ENTITY_PERMISSION_REQUIRED).`);
+          throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${entityPermissions.join('، ')}» را می‌خواهد.`, undefined, 'WF_ENTITY_PERMISSION_REQUIRED');
         }
       }
 
@@ -756,7 +757,7 @@ export class WorkflowTransitionExecutor {
           performedByName: params.userName || 'کاربر',
           actionKey: `${transition.actionKey}_SIGN`,
           actionTitle: `ثبت امضا (${transition.title})`,
-          comment: `امضای کاربر (${params.userName || params.userId})${actingFor ? ` به جانشینی ${actingFor.fromName}` : ''} ثبت گردید. (${quorumEval.signaturesCount} از ${quorumEval.requiredCount} امضا)`,
+          comment: `امضای کاربر (${params.userName || params.userId})${actingFor ? ` به جانشینی ${actingFor.fromName}` : ''} ثبت شد (${quorumEval.signaturesCount} از ${quorumEval.requiredCount} امضا).`,
           snapshotData: { quorum: quorumEval }
         });
 
@@ -862,11 +863,11 @@ export class WorkflowTransitionExecutor {
 
       await logActivity({
         userId: params.userId || 0,
-        username: params.userName || 'سیستم ورکفلو',
+        username: params.userName || 'سیستم گردش کار',
         action: 'UPDATE',
         entity: `ورکفلو (${instance.entityType})`,
         entityId: instance.entityId,
-        description: `تغییر وضعیت ورکفلو (${workflowCode}) بر روی ${instance.entityType} شماره ${instance.entityId} از ${fromState.stateKey} به ${toState.stateKey}`,
+        description: `گردش کار ${workflowCode}: ${instance.entityType} شماره ${instance.entityId} از گام «${fromState.title}» به گام «${toState.title}» رفت`,
         details: {
           before: { state: fromState.stateKey },
           after: { state: toState.stateKey, action: transition.actionKey, comment: params.comment },
@@ -944,11 +945,11 @@ export class WorkflowTransitionExecutor {
     }
 
     if (!transition) {
-      return { allowed: false, reason: 'انتقال یافت نشد' };
+      return { allowed: false, reason: 'اقدام یافت نشد' };
     }
 
     if (transition.fromStateId !== instance.currentStateId) {
-      return { allowed: false, reason: 'انتقال با وضعیت فعلی مطابقت ندارد' };
+      return { allowed: false, reason: 'این اقدام از گام جاری نیست' };
     }
 
     const userPermissions = await WorkflowTransitionExecutor.signerPermissions(params.userRole, params.userPermissions);
@@ -957,7 +958,7 @@ export class WorkflowTransitionExecutor {
       return { allowed: false, reason: `نقش شما (${params.userRole}) مجوز لازم را ندارد` };
     }
     if (!(await WorkflowTransitionExecutor.holdsRequiredPermission(transition, { role: params.userRole, permissions: userPermissions, ownPermissions: true }))) {
-      return { allowed: false, reason: `این انتقال مجوز «${transition.requiredPermission}» را می‌خواهد` };
+      return { allowed: false, reason: `این اقدام مجوز «${transition.requiredPermission}» را می‌خواهد` };
     }
 
     // Authoritative Server-side Context & Rule Check (Subphase 1.3)
@@ -966,7 +967,7 @@ export class WorkflowTransitionExecutor {
       const ruleEval = WorkflowRuleEngine.evaluateRuleBreakdown(transition.ruleConditionsJson, authoritativeContext);
       if (!ruleEval.passed) {
         const failedRules = ruleEval.breakdown.filter(b => !b.passed).map(b => describeUnmetWorkflowRule(b.rule, b.actualValue));
-        return { allowed: false, reason: `شرایط لازم برای این انتقال احراز نشده است (${failedRules.join('، ')})` };
+        return { allowed: false, reason: `شرط‌های این اقدام برقرار نیست (${failedRules.join('، ')})` };
       }
     }
 

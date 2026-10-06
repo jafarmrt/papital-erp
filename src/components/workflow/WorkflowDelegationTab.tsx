@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar, Layers, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate, formatPersianDate } from '../../utils';
+import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate, formatPersianDate, formatPersianNumber } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -39,6 +39,13 @@ export function WorkflowDelegationTab() {
     },
     staleTime: 60000
   });
+
+  // TD-470: the scope is shown by its workflow title, never by its code
+  const scopeLabel = (scope: string) => {
+    if (['all', '*'].includes(String(scope).trim().toLowerCase())) return 'همه گردش‌کارها';
+    const def = definitions.find((d: { code?: string }) => String(d.code).trim().toLowerCase() === String(scope).trim().toLowerCase());
+    return def ? `گردش کار: ${def.title}` : 'گردش کار حذف‌شده';
+  };
 
   // Local state
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,11 +83,11 @@ export function WorkflowDelegationTab() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!toUserId) {
-      toast.error('لطفاً کاربر جانشین (دریافت‌کننده) را انتخاب کنید');
+      toast.error('کاربر جانشین را انتخاب کنید.');
       return;
     }
     if (!startDate || !endDate) {
-      toast.error('لطفاً تاریخ شروع و پایان تفویض را مشخص نمایید');
+      toast.error('تاریخ آغاز و پایان تفویض را انتخاب کنید.');
       return;
     }
 
@@ -120,9 +127,9 @@ export function WorkflowDelegationTab() {
             <UserCheck className="w-6 h-6 text-indigo-300" />
           </div>
           <div>
-            <h2 className="text-lg font-bold">مدیریت تفویض اختیارات (Delegation)</h2>
+            <h2 className="text-lg font-bold">تفویض اختیار</h2>
             <p className="text-xs text-indigo-200 mt-0.5">
-              تعیین جانشین موقت جهت لغو یا تایید فرآیندها در فواصل مرخصی و ماموریت‌های کاری
+              جانشین موقت برای تأیید یا رد کارها در مرخصی و مأموریت
             </p>
           </div>
         </div>
@@ -141,7 +148,7 @@ export function WorkflowDelegationTab() {
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400">تفویض‌های فعال</p>
-            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{activeCount}</h3>
+            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{formatPersianNumber(activeCount)}</h3>
           </div>
           <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 rounded-lg">
             <CheckCircle2 className="w-5 h-5" />
@@ -151,7 +158,7 @@ export function WorkflowDelegationTab() {
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400">برنامه‌ریزی‌شده</p>
-            <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{scheduledCount}</h3>
+            <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{formatPersianNumber(scheduledCount)}</h3>
           </div>
           <div className="p-2.5 bg-amber-50 dark:bg-amber-950/60 text-amber-600 rounded-lg">
             <Clock className="w-5 h-5" />
@@ -161,7 +168,7 @@ export function WorkflowDelegationTab() {
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400">منقضی‌شده</p>
-            <h3 className="text-xl font-bold text-gray-600 dark:text-gray-400 mt-1">{expiredCount}</h3>
+            <h3 className="text-xl font-bold text-gray-600 dark:text-gray-400 mt-1">{formatPersianNumber(expiredCount)}</h3>
           </div>
           <div className="p-2.5 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-lg">
             <Calendar className="w-5 h-5" />
@@ -171,7 +178,7 @@ export function WorkflowDelegationTab() {
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400">لغو شده</p>
-            <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{revokedCount}</h3>
+            <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{formatPersianNumber(revokedCount)}</h3>
           </div>
           <div className="p-2.5 bg-rose-50 dark:bg-rose-950/60 text-rose-600 rounded-lg">
             <XCircle className="w-5 h-5" />
@@ -232,7 +239,7 @@ export function WorkflowDelegationTab() {
                 <tr>
                   <th className="p-3.5">تفویض‌کننده</th>
                   <th className="p-3.5">دریافت‌کننده (جانشین)</th>
-                  <th className="p-3.5">حوزه (Scope)</th>
+                  <th className="p-3.5">حوزه</th>
                   <th className="p-3.5">بازه زمانی اعتبار</th>
                   <th className="p-3.5">وضعیت</th>
                   <th className="p-3.5">دلیل / توضیحات</th>
@@ -252,7 +259,7 @@ export function WorkflowDelegationTab() {
                       <td className="p-3.5">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                           <Layers className="w-3 h-3 text-gray-400" />
-                          {item.scope === 'ALL' ? 'تمامی ورکفلوها (ALL)' : item.scope}
+                          {scopeLabel(item.scope)}
                         </span>
                       </td>
                       <td className="p-3.5 text-gray-600 dark:text-gray-300 text-[11px]">
@@ -339,7 +346,7 @@ export function WorkflowDelegationTab() {
                   <option value="">-- انتخاب کاربر جانشین --</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.full_name || u.username} ({u.role || 'کاربر'})
+                      {u.full_name || u.username}
                     </option>
                   ))}
                 </select>
@@ -347,7 +354,7 @@ export function WorkflowDelegationTab() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  حوزه شمول تفویض (Scope)
+                  حوزه تفویض
                 </label>
                 <select
                   value={scope}
@@ -368,7 +375,7 @@ export function WorkflowDelegationTab() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    تاریخ شروع تفویض <span className="text-rose-500">*</span>
+                    تاریخ آغاز تفویض <span className="text-rose-500">*</span>
                   </label>
                   <JalaliDateInput
                     value={startDate}
