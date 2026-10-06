@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowDownLeft, ArrowUpRight, X, ShieldCheck } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
@@ -11,6 +12,8 @@ import { formatPersianPrice, formatCurrencyLabel, extractDateString, getTodayIso
 import { fetchJson } from '../../../api';
 import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
+import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
+import { ContraAccountField } from './ContraAccountField';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -42,7 +45,9 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     partyType: 'customer' as 'customer' | 'supplier' | 'personnel' | 'other',
     partyId: null as number | null,
     partyName: '',
-    purpose: 'settlement' as 'settlement' | 'advance' | 'other',
+    // v9.0.72 (TD-507، ت۴ الف): هدف پرسنل پیش‌فرض ندارد و الزامی است؛ «متفرقه» و «سایر» سرفصل طرف مقابل می‌خواهند
+    purpose: '' as PersonnelPurpose | '',
+    contraAccountId: null as number | null,
     // v8.0.26 (TD-278، تصمیم مالک محصول): روش «چک» حذف شد؛ چک فقط از «مدیریت چک‌های صیادی» ثبت می‌شود
     method: 'bank_transfer' as 'bank_transfer' | 'pos' | 'cash',
     amount: 0,
@@ -115,7 +120,8 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               partyType: formData.partyType,
               partyId: formData.partyId,
               partyName: formData.partyName,
-              purpose: formData.purpose,
+              purpose: formData.partyType === 'personnel' ? (formData.purpose || undefined) : undefined,
+              contraAccountId: needsChosenContraAccount(formData.partyType, formData.purpose) ? formData.contraAccountId : null,
             }),
             signal: controller.signal,
           }
@@ -149,18 +155,26 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     formData.partyId,
     formData.partyName,
     formData.purpose,
+    formData.contraAccountId,
   ]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const needsContra = needsChosenContraAccount(formData.partyType, formData.purpose);
+    if (needsContra && !formData.contraAccountId) {
+      toast.error('سرفصل طرف مقابل را انتخاب کنید.');
+      return;
+    }
     setIsSaving(true);
     try {
       // v8.0.20 (TD-274): ارز تراکنش همان ارز حساب انتخاب‌شده است و تراکنش ارزی نرخ تسعیر می‌فرستد
       const bankCurrency = (safeBankAccounts.find(b => b.id === formData.bankAccountId)?.currency || 'IRR').toUpperCase();
       await onSave({
         ...formData,
+        purpose: formData.partyType === 'personnel' ? formData.purpose : undefined,
+        contraAccountId: needsContra ? formData.contraAccountId : null,
         currency: bankCurrency,
         exchangeRate: bankCurrency !== 'IRR' && formData.exchangeRate > 0 ? formData.exchangeRate : undefined,
         createVoucher: canSkipVoucher ? formData.createVoucher : true,
@@ -320,6 +334,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
                     partyType: e.target.value as any,
                     partyId: null,
                     partyName: '',
+                    contraAccountId: null,
                   })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
                 >
@@ -396,18 +411,27 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
             {formData.partyType === 'personnel' && (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  نوع پرداخت به پرسنل *
+                  {isReceipt ? 'نوع دریافت از پرسنل *' : 'نوع پرداخت به پرسنل *'}
                 </label>
                 <select
+                  required
                   value={formData.purpose}
-                  onChange={e => setFormData({ ...formData, purpose: e.target.value as any })}
+                  onChange={e => setFormData({ ...formData, purpose: e.target.value as PersonnelPurpose | '', contraAccountId: null })}
                   className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
                 >
-                  <option value="settlement">تسویه حقوق و دستمزد → بدهکار «حقوق پرداختنی»</option>
-                  <option value="advance">مساعده / وام → بدهکار «مساعده و وام پرسنل»</option>
-                  <option value="other">سایر</option>
+                  <option value="">انتخاب کنید...</option>
+                  <option value="settlement">تسویه حقوق و دستمزد → «حقوق پرداختنی»</option>
+                  <option value="advance">مساعده / وام → «مساعده و وام پرسنل»</option>
+                  <option value="other">سایر → سرفصلی که انتخاب می‌کنید</option>
                 </select>
               </div>
+            )}
+
+            {needsChosenContraAccount(formData.partyType, formData.purpose) && (
+              <ContraAccountField
+                value={formData.contraAccountId}
+                onChange={id => setFormData(prev => ({ ...prev, contraAccountId: id }))}
+              />
             )}
 
             <div className="grid grid-cols-2 gap-3 items-start">

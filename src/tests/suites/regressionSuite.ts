@@ -39,6 +39,7 @@ import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../
 import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -6140,7 +6141,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }).returning();
       createdBankId = bank.id;
       const receipt = await TreasuryTransactionService.createTreasuryTransaction({
-        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id,
+        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id, contraAccountId: await miscContraAccountId(),
         partyName: 'ERP-TEST-MARKER', createVoucher: false, allowNoVoucher: true,
       });
       createdTxIds.push(receipt.id);
@@ -10504,6 +10505,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
   const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
   results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
+  // Package 4 (v9.0.72 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
+  const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
+  results.push(...await runTreasuryPartyTests(shouldRun));
 
   return results;
 }

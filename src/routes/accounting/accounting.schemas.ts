@@ -282,6 +282,8 @@ export const createTreasuryTxSchema = z.object({
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
     purpose: z.enum(['settlement', 'advance', 'other']).optional(),
+    // v9.0.72 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
+    contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
 
@@ -296,6 +298,7 @@ export const previewTreasurySchema = z.object({
     purpose: z.string().optional(),
     partyId: z.coerce.number().int().positive().nullable().optional(),
     partyName: z.string().optional(),
+    contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
 

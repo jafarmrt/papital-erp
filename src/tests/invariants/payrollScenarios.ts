@@ -10,6 +10,7 @@ import { BankAccountService } from '../../services/accounting/treasury/bankAccou
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { PieceworkPayrollService } from '../../services/piecework/payroll.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 /**
  * v8.0.28 — سناریوهای حوزه D (حقوق و کارمزدی) برای سوئیت business_invariants: آزمون سخت‌گیرانه رفع‌ها (فهرست مشکلات؛
@@ -62,7 +63,7 @@ async function fundedBank(): Promise<number> {
   }).returning({ id: accounts.id });
   const bank = await BankAccountService.createBankAccount({ title: `بانک آزمون حقوق ${tag('B')}`, type: 'bank', accountId: ledger.id, initialBalance: 0, currency: 'IRR' });
   await TreasuryTransactionService.createTreasuryTransaction({
-    type: 'receipt', method: 'bank_transfer', amount: 5000000, bankAccountId: bank.id, partyType: 'other', partyName: 'واریز آزمون حقوق', date: '2026-04-01', username: 'inv',
+    type: 'receipt', method: 'bank_transfer', amount: 5000000, bankAccountId: bank.id, partyType: 'other', contraAccountId: await miscContraAccountId(), partyName: 'واریز آزمون حقوق', date: '2026-04-01', username: 'inv',
   });
   return bank.id;
 }

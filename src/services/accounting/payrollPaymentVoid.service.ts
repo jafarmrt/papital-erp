@@ -100,6 +100,7 @@ export class PayrollPaymentVoidService {
         partyType: payment.partyType,
         partyId: payment.partyId,
         partyName: payment.partyName,
+        purpose: payment.purpose,
         trackingNumber: payment.trackingNumber || '',
         voucherId: reversalVoucherId,
         payrollId: payroll.id,

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.72 — Misc Receipts and Payments Take a Chosen Account
+- **Misc Counter Account (P2):** a misc receipt or payment and a personnel «other» payment post to the counter account the user chooses, and a personnel payment requires its purpose; before, they went to trade receivables and wages payable (TD-507, `reg_treasury_misc_contra_account_td_507`).
+
 ### v9.0.71 — Opening Balance Edit Waits for Approval
 - **Opening Balance Approval (P2):** editing the opening balance of a treasury account whose approval workflow is still open is refused with 409; before, the edit issued the opening voucher at once, bypassing the approval (TD-504, `reg_opening_balance_edit_refused_while_approval_pending_td_504`).
 

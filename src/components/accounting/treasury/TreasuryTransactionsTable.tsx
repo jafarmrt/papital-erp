@@ -18,6 +18,7 @@ import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import { formatPersianPrice, formatCurrencyLabel, formatPersianDate, extractDateString } from '../../../utils';
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
+import { personnelPurposeLabel } from '../../../lib/treasury/partyPurpose';
 
 interface TreasuryTransactionsTableProps {
   transactions: TreasuryTransaction[];
@@ -300,7 +301,8 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                       </div>
                       <div className="text-[10px] text-slate-400">
                         {getPartyTypeLabel(tx.partyType || '')}
-                        {tx.purpose && <span className="mr-1">({tx.purpose})</span>}
+                        {tx.purpose && <span className="mr-1">({personnelPurposeLabel(tx.purpose)})</span>}
+                        {tx.contraAccountName && <span className="mr-1">← {tx.contraAccountName}</span>}
                       </div>
                     </td>
 

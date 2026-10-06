@@ -5,6 +5,7 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
+import { needsChosenContraAccount, normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { validateLockOrder, LockHierarchyLevel } from '../../../lib/lockOrder.js';
 import { domainEventBus } from '../../events/domainEventBus.js';
 import { DomainEventType } from '../../events/domainEvents.js';
@@ -67,14 +68,23 @@ export class TreasuryTransactionService {
   /**
    * V1.8.0: انتخاب طرف حساب متقابل — منطق مشترک بین ثبت و پیش‌نمایش سند
    * purpose برای پرسنل: 'settlement' (تسویه حقوق → 3201) | 'advance' (مساعده → 1301)
+   * v9.0.72 (TD-507، ت۴ الف): «متفرقه» و «سایر» پرسنل سرفصلی را می‌گیرند که کاربر انتخاب کرده است (`contraAccountId`)؛
+   * پیش‌تر «متفرقه» به دریافتنی تجاری و «سایر» به حقوق پرداختنی می‌رفت.
    */
   static async resolveContraAccount(
     partyType: string,
-    purpose: string | undefined,
-    tx?: DbExecutor
+    purpose: string | null | undefined,
+    tx?: DbExecutor,
+    contraAccountId?: number | null
   ): Promise<{ account: Account | null; fallbackGeneralId: number | null; conceptLabel: string }> {
     let account: Account | null = null;
     let conceptLabel = '';
+
+    if (needsChosenContraAccount(partyType, purpose)) {
+      if (!contraAccountId) return { account: null, fallbackGeneralId: null, conceptLabel: 'سرفصل طرف مقابل' };
+      account = await requireChoosableContraAccount(tx, contraAccountId);
+      return { account, fallbackGeneralId: null, conceptLabel: account.name };
+    }
 
     if (partyType === 'customer') {
       account = await AccountMappingService.getTradeReceivablesAccount(tx);
@@ -127,6 +137,7 @@ export class TreasuryTransactionService {
     purpose?: string;
     partyId?: number | null;
     partyName?: string;
+    contraAccountId?: number | null;
   }): Promise<{
     debit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
     credit: { accountId: number; accountCode: string; accountName: string; detailedName: string; amount: number } | null;
@@ -152,9 +163,18 @@ export class TreasuryTransactionService {
       warnings.push(`ارز تراکنش با ارز حساب «${bank.title}» (${bank.currency}) هم‌خوانی ندارد`);
     }
 
-    const contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose);
+    let contra: Awaited<ReturnType<typeof TreasuryTransactionService.resolveContraAccount>>;
+    try {
+      contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose, undefined, data.contraAccountId);
+    } catch (err) {
+      if (!(err instanceof ValidationError)) throw err;
+      warnings.push(err.message);
+      contra = { account: null, fallbackGeneralId: null, conceptLabel: 'سرفصل طرف مقابل' };
+    }
     const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
-    if (!contraAccountId) {
+    if (!contraAccountId && needsChosenContraAccount(data.partyType || 'other', data.purpose)) {
+      warnings.push('سرفصل طرف مقابل را انتخاب کنید؛ تا انتخاب نشود سند صادر نمی‌شود.');
+    } else if (!contraAccountId) {
       warnings.push(`حساب معین «${contra.conceptLabel}» در چارت یافت نشد — سند صادر نخواهد شد (از تنظیمات ← تنظیمات حسابداری پیکربندی کنید)`);
     }
 
@@ -241,6 +261,9 @@ export class TreasuryTransactionService {
       documentId: treasuryTransactions.documentId,
       payrollId: treasuryTransactions.payrollId,
       reversalOfId: treasuryTransactions.reversalOfId,
+      purpose: treasuryTransactions.purpose,
+      contraAccountId: treasuryTransactions.contraAccountId,
+      contraAccountName: accounts.name,
       // V1.6.0: وضعیت آشتی‌سنجی بانکی
       reconciled: treasuryTransactions.reconciled,
       reconciledAt: treasuryTransactions.reconciledAt,
@@ -256,6 +279,7 @@ export class TreasuryTransactionService {
     .from(treasuryTransactions)
     .leftJoin(bankAccounts, eq(bankAccounts.id, treasuryTransactions.bankAccountId))
     .leftJoin(users, eq(users.id, treasuryTransactions.createdById))
+    .leftJoin(accounts, eq(accounts.id, treasuryTransactions.contraAccountId))
     .where(and(...conditions))
     .orderBy(desc(treasuryTransactions.date), desc(treasuryTransactions.id));
 
@@ -299,8 +323,10 @@ export class TreasuryTransactionService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد، نه بدنه درخواست) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
-    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده)
+    // V1.8.0: انگیزه پرداخت به پرسنل — 'settlement' (تسویه حقوق) | 'advance' (مساعده) | 'other' (v9.0.72)
     purpose?: string;
+    /** v9.0.72 (TD-507): سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» پرسنل انتخاب کرده است */
+    contraAccountId?: number | null;
   }): Promise<TreasuryTransaction> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ تراکنش باید بزرگتر از صفر باشد');
@@ -312,6 +338,9 @@ export class TreasuryTransactionService {
     }
     // v8.0.118 (TD-409، تصمیم مالک محصول — گزینه الف): بدون سند حسابداری فقط با مجوز جدا
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, data.type === 'receipt' ? 'دریافت' : 'پرداخت');
+    // v9.0.72 (TD-507، ت۴ الف): پرسنل هدف می‌خواهد و «متفرقه» و «سایر» سرفصل طرف مقابل؛ هر دو روی ردیف ذخیره می‌شوند
+    const partyType = data.partyType || 'other';
+    const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
     // TD-105: تاریخ سرور-authoritative — پیش‌فرض business clock + اعتبارسنجی بازه
     const resolvedDate = await resolveTreasuryBusinessDate(data.date);
 
@@ -319,6 +348,8 @@ export class TreasuryTransactionService {
       validateLockOrder([
         { name: 'bankAccount', hierarchyLevel: LockHierarchyLevel.BANK_ACCOUNTS },
       ]);
+      // سرفصل انتخابی حتی در ثبت بی‌سند سنجیده می‌شود تا ردیف به حساب نامجاز اشاره نکند
+      if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // V1.4.0: قفل حساب با فیلتر isDeleted — ثبت وجه در حساب حذف‌شده ممنوع
       const [bank] = await txEngine.select().from(bankAccounts)
         .where(and(eq(bankAccounts.id, data.bankAccountId), eq(bankAccounts.isDeleted, 0)))
@@ -353,7 +384,7 @@ export class TreasuryTransactionService {
         }
 
         // V1.8.0: طرف حساب متقابل از منطق مشترک (مپینگ + purpose)
-        const contra = await this.resolveContraAccount(data.partyType || 'other', data.purpose, txEngine);
+        const contra = await this.resolveContraAccount(partyType, party.purpose, txEngine, party.contraAccountId);
         const contraAccountId = contra?.account?.id || contra?.fallbackGeneralId || null;
 
         if (!contraAccountId) {
@@ -416,9 +447,11 @@ export class TreasuryTransactionService {
         currency: txCurrency,
         exchangeRate: money(txExchangeRate),
         bankAccountId: data.bankAccountId,
-        partyType: data.partyType || 'other',
+        partyType,
         partyId: data.partyId || null,
         partyName: data.partyName.trim(),
+        purpose: party.purpose,
+        contraAccountId: party.contraAccountId,
         trackingNumber: data.trackingNumber?.trim() || '',
         voucherId,
         documentId: data.documentId || null,
@@ -617,6 +650,8 @@ export class TreasuryTransactionService {
       partyType: original.partyType,
       partyId: original.partyId,
       partyName: original.partyName,
+      purpose: original.purpose,
+      contraAccountId: original.contraAccountId,
       trackingNumber: original.trackingNumber || '',
       voucherId: reversalVoucherId,
       chequeId: original.chequeId || null,

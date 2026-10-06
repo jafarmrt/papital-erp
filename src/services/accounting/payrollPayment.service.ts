@@ -296,6 +296,8 @@ export class PayrollPaymentService {
         partyType: 'personnel',
         partyId: payroll.personnelId,
         partyName: pers?.fullName || '',
+        // v9.0.72 (TD-507): هدف پرداخت پرسنل ذخیره می‌شود؛ پرداخت فیش تسویه حقوق است
+        purpose: 'settlement',
         trackingNumber: input.paymentReference?.trim() || '',
         voucherId: voucher?.id ?? null,
         payrollId: payroll.id,

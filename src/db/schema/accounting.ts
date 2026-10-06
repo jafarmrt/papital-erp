@@ -216,6 +216,10 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   payrollId: integer('payroll_id').references(baseRelations.pieceworkPayrollsId),
   // V1.4.0: ابطال با سند معکوس (DB-009) — تراکنش معکوس به اصل اشاره می‌کند
   reversalOfId: integer('reversal_of_id'),
+  // v9.0.72 (TD-507، ت۴ الف): هدف دریافت و پرداخت پرسنل ('settlement' | 'advance' | 'other'، مهاجرت 0060) و سرفصل طرف
+  // مقابلی که کاربر برای «متفرقه» و «سایر» انتخاب کرده است
+  purpose: text('purpose'),
+  contraAccountId: integer('contra_account_id').references(() => accounts.id),
   description: text('description').default(''),
   status: text('status').default('completed'), // 'completed' | 'voided'
   // V1.6.0: آشتی‌سنجی بانکی (صورت‌حساب بیرونی)
