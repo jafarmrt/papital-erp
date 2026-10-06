@@ -301,7 +301,7 @@ export class DocumentCreationService {
           throw new NotFoundError(`پروژه با شناسه ${finalProjectId} یافت نشد.`);
         }
       }
-      // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.58 (TD-489) در
+      // v7.0.21 (TD-178 / audit P0-2): شماره عطف و سال مالی پارتیشن شماره‌گذاری؛ از v9.0.67 (TD-489) در
       // DocumentRefNumberService.assignDocumentRefNumber، مشترک با حواله انتقال بین انبارها
       const { refNumber: finalRefNumber, refFiscalYear } = await DocumentRefNumberService.assignDocumentRefNumber(
         tx, docType, normalizedDocDate, refNumber

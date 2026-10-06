@@ -9,7 +9,7 @@ import { documentItems, documents, items, transactions, warehouses } from '../..
  * is a «transfer» document with its own number series, the user's reference number and notes, one line and two Kardex
  * rows linked by document_id; it is listed with its source and destination and is voided through deleteDocument, which
  * moves the quantity back without changing WAC (the Kardex replay agrees). A void whose destination stock was consumed
- * is refused (TD-265). On v9.0.57 a transfer made no document and could not be voided.
+ * is refused (TD-265). On v9.0.66 a transfer made no document and could not be voided.
  */
 
 export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -17,7 +17,7 @@ export async function runWarehouseTransferDocumentTests(shouldRun: (id: string, 
   const id = 'reg_warehouse_transfer_document_td_489';
   if (!shouldRun(id, 'td489', 'transfer', 'void', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.58: a warehouse transfer is a numbered transfer document, listed with source and destination, and voided without changing WAC (TD-489)';
+  const name = 'v9.0.67: a warehouse transfer is a numbered transfer document, listed with source and destination, and voided without changing WAC (TD-489)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const docIds: number[] = [];

@@ -79,7 +79,7 @@ export async function upgradeLegacyDocApprovalGuards(): Promise<boolean> {
     }
     await recordDefinitionVersion(tx, def.id, {
       title: def.title,
-      description: 'مجوز گام‌های بررسی انبار، بررسی مالی و تأیید مستقیم (v9.0.35)',
+      description: 'مجوز گام‌های بررسی انبار، بررسی مالی و تأیید مستقیم',
     });
     return true;
   });
@@ -137,7 +137,7 @@ export function buildUnguardedDocumentApprovalHealthTest(rows: UnguardedDocument
       code: r.code,
       title: r.title,
       subtitle: `اقدام: ${r.transitionTitle}`,
-      details: 'این اقدام نه نقش دارد نه مجوز (TD-445).',
+      details: 'این اقدام نه نقش دارد نه مجوز؛ برای آن مجوز تعیین کنید.',
     })),
     metrics: { unguardedTransitions: rows.length, definitions: definitionCount },
   };

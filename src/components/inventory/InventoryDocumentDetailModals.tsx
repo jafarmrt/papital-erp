@@ -156,7 +156,7 @@ export function AuditDocumentDetailModal({ doc, loading, onClose }: DetailModalP
 }
 
 export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailModalProps) {
-  // v9.0.58 (TD-489): حواله انتقال سند است؛ مبدأ و مقصد از ردیف‌های کاردکس همان سند و چاپ با قالب یکدست اسناد
+  // v9.0.67 (TD-489): حواله انتقال سند است؛ مبدأ و مقصد از ردیف‌های کاردکس همان سند و چاپ با قالب یکدست اسناد
   const [printing, setPrinting] = useState(false);
   return (
     <DocumentDetailShell

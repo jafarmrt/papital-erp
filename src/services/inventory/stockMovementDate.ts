@@ -21,7 +21,7 @@ import { createLedgerLocationResolver } from './warehouseResolver.js';
  */
 export const BACKDATE_PERMISSION = 'warehouse.backdate';
 
-/** v9.0.57 (TD-483، تصمیم ت۱ بسته ۶): گردش با تاریخ پس از امروز کسب‌وکار، برای همه کاربران و همه مسیرها */
+/** v9.0.66 (TD-483، تصمیم ت۱ بسته ۶): گردش با تاریخ پس از امروز کسب‌وکار، برای همه کاربران و همه مسیرها */
 export const FUTURE_MOVEMENT_CODE = 'STOCK_MOVEMENT_FUTURE_DATE';
 
 /** ردیف‌های فعال کاردکس که گردش واقعی‌اند: بدون ردیف حذف‌شده و بدون ردیف معکوسِ ردیف حذف‌شده (همان دفتر §12) */

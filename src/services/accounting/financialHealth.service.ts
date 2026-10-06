@@ -1077,7 +1077,7 @@ export class FinancialHealthService {
     overallScore += workflowReferenceTest.scoreImpact;
     tests.push(workflowReferenceTest);
 
-    // آزمون ۲۰: v9.0.57 (TD-483) گردش کاردکس با تاریخ پس از امروز (فقط فهرست، بی بازنویسی)
+    // آزمون ۲۰: v9.0.66 (TD-483) گردش کاردکس با تاریخ پس از امروز (فقط فهرست، بی بازنویسی)
     const futureMovementTest = buildFutureStockMovementHealthTest(await findFutureStockMovements());
     overallScore += futureMovementTest.scoreImpact;
     tests.push(futureMovementTest);

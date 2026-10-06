@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   useMyTasksQuery,
   useTaskStatsQuery,
@@ -24,13 +24,12 @@ import {
   Layers,
 } from 'lucide-react';
 import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../utils';
-import { fetchJson } from '../api';
-import toast from 'react-hot-toast';
+import { useApprovalTaskEntity } from '../hooks/useApprovalTaskEntity';
+import { workflowEntityTypeLabel } from '../lib/workflow/workflowEntityLabels';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
-import TaskExecuteModal from '../components/approval/TaskExecuteModal';
+import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
-import { PurchaseRequisition } from '../types';
 import { PillBadge, type PillBadgeVariant, type PillBadgeVariants } from '../components/common/PillBadge';
 
 type DocumentDetails = ApprovalDocumentDetails;
@@ -58,7 +57,6 @@ interface TaskItem {
   priority?: string;
   assigneeId?: number;
   delegatedToId?: number;
-  isDelegated?: boolean;
   dueAt?: string;
   /** v9.0.41 (TD-448): تأخیر از زمان پایگاه‌داده */
   isOverdue?: boolean;
@@ -77,6 +75,12 @@ interface TaskItem {
   totalAmount?: number;
   currency?: string;
   notes?: string;
+  /** TD-465: عنوان گام جاری از تصویر فرایند */
+  currentStepTitle?: string;
+  /** TD-465: تفویضی که کار را به کاربر رسانده */
+  delegationInfo?: { delegatedFromUserId?: number; delegationScope?: string | null } | null;
+  /** TD-463: اقدام‌های «رد» گام جاری */
+  rejectTransitions?: ApprovalRejectOption[];
 }
 
 
@@ -103,13 +107,10 @@ export function ApprovalInboxPage() {
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [taskAction, setTaskAction] = useState<'approve' | 'reject'>('approve');
   const [comment, setComment] = useState<string>('');
+  const [rejectTransitionId, setRejectTransitionId] = useState<number | null>(null);
   
-  // Document details state for rich preview in modal
-  const [docDetails, setDocDetails] = useState<DocumentDetails | null>(null);
-  const [isLoadingDoc, setIsLoadingDoc] = useState<boolean>(false);
   const [printDoc, setPrintDoc] = useState<DocumentDetails | null>(null);
-  const [requisitionDetails, setRequisitionDetails] = useState<PurchaseRequisition | null>(null);
-  const [isLoadingRequisition, setIsLoadingRequisition] = useState<boolean>(false);
+  const { docDetails, isLoadingDoc, requisitionDetails, isLoadingRequisition } = useApprovalTaskEntity(selectedTask);
 
   const { data: myTasksData, isLoading: isTasksLoading, isFetching, refetch: refetchTasks } = useMyTasksQuery(taskStatusFilter);
   const { data: taskStats, refetch: refetchStats } = useTaskStatsQuery();
@@ -118,103 +119,6 @@ export function ApprovalInboxPage() {
 
   const rawTasks = Array.isArray(myTasksData) ? myTasksData : (Array.isArray(myTasksData?.data) ? myTasksData.data : []);
   const myTasks: TaskItem[] = rawTasks;
-
-  // Fetch document details or requisition details when a task or transition item is opened
-  useEffect(() => {
-    if (!selectedTask) {
-      setDocDetails(null);
-      setIsLoadingDoc(false);
-      setRequisitionDetails(null);
-      setIsLoadingRequisition(false);
-      return;
-    }
-
-    const itemObj = selectedTask;
-    const entityType = selectedTask.instance?.entityType || selectedTask.entityType || selectedTask.entity_type || '';
-    const entityId = selectedTask.instance?.entityId || selectedTask.entityId || selectedTask.entity_id;
-
-    const isRequisition = entityType === 'purchase_requisition' || entityType === 'requisition';
-    const isDoc = !isRequisition && (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma' || entityType === '');
-
-    if (isDoc && entityId) {
-      setIsLoadingDoc(true);
-
-      // Prepopulate with cached context from task/item if available
-      const itemAny = itemObj as any;
-      const cachedContext = itemObj?.entityContext;
-      if (cachedContext && (cachedContext.buyerName || cachedContext.refNumber || cachedContext.amount)) {
-        setDocDetails({
-          ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
-          buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
-          buyer_city: cachedContext.buyerCity || '',
-          total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
-          currency: cachedContext.currency || 'IRR',
-          notes: cachedContext.notes || '',
-          items: []
-        });
-      }
-
-      fetchJson<DocumentDetails>(`/documents/${entityId}`)
-        .then((res) => {
-          const doc = (res as { data?: DocumentDetails })?.data ? (res as { data: DocumentDetails }).data : (res as DocumentDetails);
-          if (doc && (doc.id || doc.refNumber || doc.ref_number)) {
-            setDocDetails(doc);
-          } else if (cachedContext && (cachedContext.buyerName || cachedContext.amount)) {
-            setDocDetails({
-              ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
-              buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
-              buyer_city: cachedContext.buyerCity || '',
-              total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
-              currency: cachedContext.currency || 'IRR',
-              items: []
-            });
-          }
-        })
-        .catch((err) => {
-          console.error('Could not load document details:', err);
-          if (cachedContext && (cachedContext.buyerName || cachedContext.amount)) {
-            setDocDetails({
-              ref_number: cachedContext.refNumber || itemAny?.refNumber || String(entityId),
-              buyer_name: cachedContext.buyerName || itemAny?.buyerName || '',
-              buyer_city: cachedContext.buyerCity || '',
-              total_amount: cachedContext.amount || cachedContext.totalAmount || itemAny?.amount || 0,
-              currency: cachedContext.currency || 'IRR',
-              items: []
-            });
-          } else {
-            setDocDetails(null);
-            toast.error(err?.message || 'خطا در دریافت جزئیات سند کارتابل');
-          }
-        })
-        .finally(() => {
-          setIsLoadingDoc(false);
-        });
-    } else {
-      setDocDetails(null);
-      setIsLoadingDoc(false);
-    }
-
-    if (isRequisition && entityId) {
-      setIsLoadingRequisition(true);
-      fetchJson<{ success?: boolean; data?: PurchaseRequisition }>(`/procurement/requisitions/${entityId}`)
-        .then((res) => {
-          const req = res?.data || (res as any);
-          if (req && (req.id || req.code)) {
-            setRequisitionDetails(req);
-          }
-        })
-        .catch((err) => {
-          console.error('Could not load requisition details in ApprovalInboxPage:', err);
-          toast.error(err?.message || 'خطا در دریافت مشخصات و اقلام درخواست خرید');
-        })
-        .finally(() => {
-          setIsLoadingRequisition(false);
-        });
-    } else {
-      setRequisitionDetails(null);
-      setIsLoadingRequisition(false);
-    }
-  }, [selectedTask]);
 
   const handleRefreshAll = () => {
     void refetchTasks();
@@ -247,19 +151,35 @@ export function ApprovalInboxPage() {
     });
   }, [myTasks, activeTab, search]);
 
+  // TD-462 (یافته B14-20): هر بار باز یا بسته شدن کار، تصمیم و توضیح از نو آغاز می‌شوند؛ پیش‌تر «رد» و دلیلِ کاری
+  // که انصراف خورده بود برای کار بعدی از پیش انتخاب‌شده می‌ماند و ثبت، کار دوم را با دلیل کار اول رد می‌کرد
+  const resetDecision = () => {
+    setTaskAction('approve');
+    setComment('');
+    setRejectTransitionId(null);
+  };
+  const openTask = (task: TaskItem) => {
+    resetDecision();
+    setSelectedTask(task);
+  };
+  const closeTask = () => {
+    resetDecision();
+    setSelectedTask(null);
+  };
+
   const handleExecuteTask = () => {
     if (!selectedTask) return;
     executeTaskMutation.mutate(
       {
         taskId: selectedTask.id,
         action: taskAction,
-        comment
+        comment,
+        // TD-463 (یافته B14-21): اقدام «رد» انتخابی وقتی گام بیش از یکی دارد
+        ...(taskAction === 'reject' && rejectTransitionId !== null ? { transitionId: rejectTransitionId } : {})
       },
       {
         onSuccess: () => {
-          setSelectedTask(null);
-          setComment('');
-          setTaskAction('approve');
+          closeTask();
           handleRefreshAll();
         }
       }
@@ -275,7 +195,7 @@ export function ApprovalInboxPage() {
       case 'pending_material':
         return { label: 'ماده اولیه معلق', icon: Package, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' };
       default:
-        return { label: type, icon: FileText, color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' };
+        return { label: workflowEntityTypeLabel(type), icon: FileText, color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' };
     }
   };
 
@@ -291,10 +211,10 @@ export function ApprovalInboxPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                کارتابل متمرکز تاییدات و وظایف
+                کارتابل تأییدها و کارها
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                مدیریت وظایف تایید، پایش مهلت‌های SLA و تفویض اختیارات سازمانی
+                کارهای تأیید، مهلت انجام و تفویض اختیار
               </p>
             </div>
           </div>
@@ -340,7 +260,7 @@ export function ApprovalInboxPage() {
           }`}
         >
           <div>
-            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">دارای تاخیر (SLA)</span>
+            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">دارای تأخیر</span>
             <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{formatPersianNumber(taskStats?.overdueCount ?? 0)}</span>
           </div>
           <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
@@ -450,15 +370,15 @@ export function ApprovalInboxPage() {
                 {taskStatusFilter === 'completed'
                   ? 'هیچ وظیفه تکمیل‌شده‌ای در کارتابل شما یافت نشد!'
                   : taskStatusFilter === 'overdue'
-                  ? 'هیچ وظیفه دارای تاخیری یافت نشد!'
+                  ? 'هیچ کار دارای تأخیری نیست.'
                   : taskStatusFilter === 'delegated'
                   ? 'هیچ وظیفه تفویض‌شده‌ای یافت نشد!'
                   : 'هیچ وظیفه معلقی در کارتابل شما یافت نشد!'}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
                 {taskStatusFilter === 'completed'
-                  ? 'سوابق تاییدات قبلی شما پس از تعیین تکلیف وظایف در این بخش نمایش داده می‌شوند.'
-                  : 'کلیه وظایف تایید ارجاع شده به نقش یا کاربری شما با موفقیت به اتمام رسیده‌اند.'}
+                  ? 'کارهایی که انجام دهید این‌جا نشان داده می‌شوند.'
+                  : 'کاری برای تأیید شما در انتظار نیست.'}
               </p>
             </div>
           ) : (
@@ -467,8 +387,10 @@ export function ApprovalInboxPage() {
                 const typeMeta = getEntityTypeLabel(t.instance?.entityType || 'document');
                 const TypeIcon = typeMeta.icon;
                 const overdue = t.isOverdue === true;
-                const amount = t.entityContext?.amount || t.entityContext?.totalAmount;
-                const requesterName = t.instance?.startedByName || t.entityContext?.buyerName || t.entityContext?.createdByName || 'ثبت‌کننده سیستم';
+                // TD-465 (یافته B14-23): فیلدهایی که ردیف کارتابل واقعاً دارد؛ مبلغ ریالی است
+                const amount = Number(t.amount) || 0;
+                const requesterName = t.instance?.startedByName || 'نامشخص';
+                const stepTitle = t.currentStepTitle || t.currentState?.title || t.title;
                 const isCompletedTask = t.status === 'approved' || t.status === 'rejected' || t.status === 'completed';
 
                 return (
@@ -499,7 +421,7 @@ export function ApprovalInboxPage() {
                             <ApprovalPriorityBadge priority={t.priority || t.entityContext?.priority} />
                           )}
 
-                          {t.isDelegated && (
+                          {t.delegationInfo && (
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 flex items-center gap-1">
                               <UserCheck className="w-3 h-3" />
                               <span>از تفویض</span>
@@ -523,16 +445,16 @@ export function ApprovalInboxPage() {
                           <span className="truncate">متقاضی: <strong className="text-gray-800 dark:text-gray-100">{requesterName}</strong></span>
                         </div>
 
-                        {amount !== undefined && amount !== null && (
+                        {amount > 0 && (
                           <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                             <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{formatPersianPrice(amount)}</strong></span>
+                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{formatPersianPrice(amount, 'IRR')}</strong></span>
                           </div>
                         )}
 
                         <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 col-span-2">
                           <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="truncate">گام جاری: <strong className="text-indigo-700 dark:text-indigo-300">{t.currentState?.title || t.title}</strong></span>
+                          <span className="truncate">گام جاری: <strong className="text-indigo-700 dark:text-indigo-300">{stepTitle}</strong></span>
                         </div>
                       </div>
 
@@ -544,8 +466,8 @@ export function ApprovalInboxPage() {
                             {isCompletedTask && t.completedAt
                               ? `تاریخ تکمیل: ${formatPersianDate(t.completedAt)}`
                               : overdue
-                              ? 'مهلت تایید منقضی شده است!'
-                              : `مهلت تایید: ${formatPersianDate(t.dueAt)}`}
+                              ? 'مهلت تأیید گذشته است.'
+                              : `مهلت تأیید: ${formatPersianDate(t.dueAt)}`}
                           </span>
                         </div>
                       </div>
@@ -554,7 +476,7 @@ export function ApprovalInboxPage() {
                     {/* Action Button */}
                     <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-end">
                       <button
-                        onClick={() => setSelectedTask(t)}
+                        onClick={() => openTask(t)}
                         className={`flex items-center gap-1 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${
                           isCompletedTask
                             ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
@@ -576,7 +498,7 @@ export function ApprovalInboxPage() {
       {selectedTask && (
         <TaskExecuteModal
           selectedTask={selectedTask}
-          onClose={() => setSelectedTask(null)}
+          onClose={closeTask}
           docDetails={docDetails}
           isLoadingDoc={isLoadingDoc}
           requisitionDetails={requisitionDetails}
@@ -586,6 +508,9 @@ export function ApprovalInboxPage() {
           onTaskActionChange={setTaskAction}
           comment={comment}
           onCommentChange={setComment}
+          rejectOptions={selectedTask.rejectTransitions ?? []}
+          rejectTransitionId={rejectTransitionId}
+          onRejectTransitionChange={setRejectTransitionId}
           onExecute={handleExecuteTask}
           isExecuting={executeTaskMutation.isPending}
         />

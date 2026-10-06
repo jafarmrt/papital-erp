@@ -16,6 +16,7 @@ import { WorkflowSlaAnalyticsTab } from '../components/workflow/WorkflowSlaAnaly
 import { WorkflowDelegationTab } from '../components/workflow/WorkflowDelegationTab';
 import { WorkflowVersionHistoryModal } from '../components/workflow/WorkflowVersionHistoryModal';
 import { toast } from 'react-hot-toast';
+import { formatPersianNumber } from '../utils/persianNumber';
 
 export const WorkflowManagementPage: React.FC = () => {
   const { data: definitions, isLoading, refetch } = useWorkflowDefinitionsQuery();
@@ -40,7 +41,7 @@ export const WorkflowManagementPage: React.FC = () => {
   const handleCreateNewDefinitionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newCode.trim()) {
-      toast.error('عنوان و کد الگوی ورکفلو الزامی هستند');
+      toast.error('عنوان و کد الگوی گردش کار را وارد کنید.');
       return;
     }
 
@@ -65,7 +66,7 @@ export const WorkflowManagementPage: React.FC = () => {
           },
           {
             stateKey: 'approved',
-            title: 'تایید نهایی',
+            title: 'تأیید نهایی',
             stateType: 'terminal',
             color: 'emerald',
             stepOrder: 2,
@@ -79,14 +80,14 @@ export const WorkflowManagementPage: React.FC = () => {
             fromStateKey: 'draft',
             toStateKey: 'approved',
             actionKey: 'approve',
-            title: 'تایید و تکمیل',
+            title: 'تأیید و تکمیل',
             requiredRole: '',
             approvalRuleType: 'SINGLE'
           }
         ]
       });
 
-      toast.success('الگوی جدید با موفقیت ایجاد شد');
+      toast.success('الگوی جدید ساخته شد.');
       setIsCreateModalOpen(false);
       setNewTitle('');
       setNewCode('');
@@ -98,7 +99,7 @@ export const WorkflowManagementPage: React.FC = () => {
       }
       void refetch();
     } catch (err: any) {
-      toast.error(err.message || 'خطا در ایجاد الگوی جدید');
+      toast.error(err.message || 'الگوی جدید ساخته نشد؛ دوباره تلاش کنید.');
     }
   };
 
@@ -112,10 +113,10 @@ export const WorkflowManagementPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              طراح گرافیکی ورکفلو و گزارش‌گیری SLA
+              طراحی گردش کار و گزارش مهلت انجام
             </h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              مدیریت الگوها، ترسیم حالت‌ها (States)، شروط متغیرها، تاییدات چندامضایی و سنجش زمان‌بندی فرآیندها
+              مدیریت الگوها، طراحی گام‌ها و شرط‌ها، تأیید چندامضایی و سنجش مهلت انجام
             </p>
           </div>
         </div>
@@ -132,7 +133,7 @@ export const WorkflowManagementPage: React.FC = () => {
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>الگوهای ورکفلو</span>
+              <span>الگوهای گردش کار</span>
             </button>
             <button
               onClick={() => setActiveTab('sla')}
@@ -143,7 +144,7 @@ export const WorkflowManagementPage: React.FC = () => {
               }`}
             >
               <Clock className="w-4 h-4" />
-              <span>زمان‌سنجی و SLA</span>
+              <span>مهلت انجام</span>
             </button>
             <button
               onClick={() => setActiveTab('delegations')}
@@ -154,7 +155,7 @@ export const WorkflowManagementPage: React.FC = () => {
               }`}
             >
               <UserCheck className="w-4 h-4" />
-              <span>تفویض اختیارات (Delegation)</span>
+              <span>تفویض اختیار</span>
             </button>
           </div>
         </div>
@@ -175,7 +176,7 @@ export const WorkflowManagementPage: React.FC = () => {
                 className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
               >
                 <Plus className="w-4 h-4" />
-                <span>تعریف الگوی جدید ورکفلو</span>
+                <span>تعریف الگوی جدید گردش کار</span>
               </button>
             </div>
           </div>
@@ -209,16 +210,16 @@ export const WorkflowManagementPage: React.FC = () => {
 
                   <div className="grid grid-cols-3 gap-2 text-center text-xs bg-gray-50 dark:bg-gray-700/40 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60">
                     <div>
-                      <span className="block text-gray-400 text-[10px]">حالت‌ها</span>
-                      <span className="font-bold font-mono text-gray-800 dark:text-gray-200">{def.stateCount}</span>
+                      <span className="block text-gray-400 text-[10px]">گام‌ها</span>
+                      <span className="font-bold font-mono text-gray-800 dark:text-gray-200">{formatPersianNumber(def.stateCount ?? 0)}</span>
                     </div>
                     <div>
-                      <span className="block text-gray-400 text-[10px]">انتقال‌ها</span>
-                      <span className="font-bold font-mono text-gray-800 dark:text-gray-200">{def.transitionCount}</span>
+                      <span className="block text-gray-400 text-[10px]">اقدام‌ها</span>
+                      <span className="font-bold font-mono text-gray-800 dark:text-gray-200">{formatPersianNumber(def.transitionCount ?? 0)}</span>
                     </div>
                     <div>
                       <span className="block text-gray-400 text-[10px]">در جریان</span>
-                      <span className="font-bold font-mono text-indigo-600 dark:text-indigo-400">{def.activeInstancesCount}</span>
+                      <span className="font-bold font-mono text-indigo-600 dark:text-indigo-400">{formatPersianNumber(def.activeInstancesCount ?? 0)}</span>
                     </div>
                   </div>
 
@@ -277,7 +278,7 @@ export const WorkflowManagementPage: React.FC = () => {
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
                 <Plus className="w-4 h-4 text-indigo-600" />
-                <span>تعریف الگوی ورکفلوی جدید</span>
+                <span>تعریف الگوی جدید گردش کار</span>
               </h3>
               <button 
                 onClick={() => setIsCreateModalOpen(false)}
@@ -290,7 +291,7 @@ export const WorkflowManagementPage: React.FC = () => {
             <form onSubmit={handleCreateNewDefinitionSubmit} className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  عنوان ورکفلو <span className="text-rose-500">*</span>
+                  عنوان گردش کار <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -310,7 +311,7 @@ export const WorkflowManagementPage: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="مثلاً: PURCHASE_WF"
+                    placeholder="PURCHASE_WF"
                     value={newCode}
                     onChange={(e) => setNewCode(e.target.value)}
                     className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
@@ -326,9 +327,9 @@ export const WorkflowManagementPage: React.FC = () => {
                     onChange={(e) => setNewEntityType(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="document">فاکتورها و اسناد (Document)</option>
-                    <option value="project">پروژه‌ها و سفارشات (Project)</option>
-                    <option value="raw_material">مواد اولیه و اقلام انبار (Item)</option>
+                    <option value="document">فاکتورها و اسناد</option>
+                    <option value="project">پروژه‌ها و سفارش‌ها</option>
+                    <option value="raw_material">مواد اولیه و اقلام انبار</option>
                   </select>
                 </div>
               </div>
@@ -339,7 +340,7 @@ export const WorkflowManagementPage: React.FC = () => {
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="توضیح مختصر درباره هدف این چرخه و مراحل تایید آن..."
+                  placeholder="توضیح کوتاه درباره هدف این گردش کار و گام‌های تأیید آن..."
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
