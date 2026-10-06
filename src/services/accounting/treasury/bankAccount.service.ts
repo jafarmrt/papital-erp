@@ -487,7 +487,7 @@ export class BankAccountService {
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
-      // v9.0.62 (TD-504، ت۸): تغییر مانده اول دوره در انتظار تأیید گردش‌کار رد می‌شود
+      // v9.0.71 (TD-504، ت۸): تغییر مانده اول دوره در انتظار تأیید گردش‌کار رد می‌شود
       if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
         await assertNoPendingOpeningApproval(tx, existing);
       }
@@ -629,7 +629,7 @@ export class BankAccountService {
         throw new BusinessLogicError('برای این حساب بانکی/صندوق چک ثبت شده است و امکان حذف آن وجود ندارد');
       }
 
-      // v9.0.61 (TD-503، ت۹): اسناد مانده اول دوره در همان تراکنش بی‌اثر می‌شوند؛ سند قطعی حذف را رد می‌کند
+      // v9.0.70 (TD-503، ت۹): اسناد مانده اول دوره در همان تراکنش بی‌اثر می‌شوند؛ سند قطعی حذف را رد می‌کند
       await voidBankOpeningVouchers(tx, existing, user);
       await tx.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
       // v9.0.40 (TD-447، ت۵): فرایند در جریان حساب حذف‌شده در همان تراکنش بسته می‌شود

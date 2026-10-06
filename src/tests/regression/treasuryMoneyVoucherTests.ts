@@ -85,7 +85,7 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
 
   const reversalId = 'reg_treasury_reversal_void_refused_td_499';
   if (shouldRun(reversalId, 'td499', 'treasury', 'void', 'package4')) {
-    await runCase(results, reversalId, 'v9.0.58: voiding a treasury reversal row is refused with 409, the bank keeps matching its ledger, and a legacy revived row is listed by the health check and the bank invariants (TD-499)', async () => {
+    await runCase(results, reversalId, 'v9.0.67: voiding a treasury reversal row is refused with 409, the bank keeps matching its ledger, and a legacy revived row is listed by the health check and the bank invariants (TD-499)', async () => {
       const { checkBankInvariants } = await import('../invariants/bankInvariants.js');
       const { findTreasuryEntriesWithoutVoucher } = await import('../../services/accounting/treasury/noVoucherTreasury.js');
       const problems: string[] = [];
@@ -108,7 +108,7 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
       const clean = await checkBankInvariants([bankId]);
       if (clean.length > 0) problems.push(`bank invariants on a clean bank: ${clean.map(v => v.invariant).join(', ')}`);
 
-      // legacy data written before v9.0.58: the reversal row voided and a revived row without a voucher
+      // legacy data written before v9.0.67: the reversal row voided and a revived row without a voucher
       await orm.update(treasuryTransactions).set({ status: 'voided' }).where(eq(treasuryTransactions.id, Number(voided.body.id)));
       const [legacy] = await orm.insert(treasuryTransactions).values({
         transactionNumber: `REC-LEGACY-${tagOf()}`, type: 'receipt', date: '2026-01-10', method: 'bank_transfer', amount: money(5_000_000),
@@ -135,7 +135,7 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
 
   const settledId = 'reg_invoice_settled_after_void_and_rereceipt_td_500';
   if (shouldRun(settledId, 'td500', 'treasury', 'invoice', 'settlement', 'package4')) {
-    await runCase(results, settledId, 'v9.0.59: an invoice whose receipt was voided and received again shows the new receipt as paid in its detail and in the invoice list (TD-500)', async () => {
+    await runCase(results, settledId, 'v9.0.68: an invoice whose receipt was voided and received again shows the new receipt as paid in its detail and in the invoice list (TD-500)', async () => {
       const { createTestItem, createTestCustomer } = await import('../fixtures/factories.js');
       const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
@@ -185,7 +185,7 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
 
   const chequeId = 'reg_cheque_with_permanent_voucher_not_deleted_td_502';
   if (shouldRun(chequeId, 'td502', 'treasury', 'cheque', 'package4')) {
-    await runCase(results, chequeId, 'v9.0.60: a cheque whose voucher is permanent is not deleted (409 naming the voucher) and its voucher stays; a cheque with an approved voucher is still deleted with a reversal voucher (TD-502)', async () => {
+    await runCase(results, chequeId, 'v9.0.69: a cheque whose voucher is permanent is not deleted (409 naming the voucher) and its voucher stays; a cheque with an approved voucher is still deleted with a reversal voucher (TD-502)', async () => {
       const { createTestCustomer } = await import('../fixtures/factories.js');
       const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
       const problems: string[] = [];
@@ -235,7 +235,7 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
 
   const bankDeleteId = 'reg_bank_delete_voids_opening_voucher_td_503';
   if (shouldRun(bankDeleteId, 'td503', 'treasury', 'bank', 'package4')) {
-    await runCase(results, bankDeleteId, 'v9.0.61: deleting a bank account voids its opening vouchers (approved: reversal, draft adjustment: soft delete) so its ledger nets to zero; a permanent opening voucher refuses the delete with 409 (TD-503)', async () => {
+    await runCase(results, bankDeleteId, 'v9.0.70: deleting a bank account voids its opening vouchers (approved: reversal, draft adjustment: soft delete) so its ledger nets to zero; a permanent opening voucher refuses the delete with 409 (TD-503)', async () => {
       const problems: string[] = [];
       const api = await client();
       const openingVouchersOf = async (bankId: number) => orm.select({ id: journalVouchers.id, number: journalVouchers.voucherNumber, status: journalVouchers.status, isDeleted: journalVouchers.isDeleted, type: journalVouchers.voucherType })
@@ -287,7 +287,7 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
 
   const pendingId = 'reg_opening_balance_edit_refused_while_approval_pending_td_504';
   if (shouldRun(pendingId, 'td504', 'treasury', 'bank', 'workflow', 'package4')) {
-    await runCase(results, pendingId, 'v9.0.62: while the approval workflow of a new bank account is open, editing its opening balance is refused with 409 and issues no opening voucher; other fields stay editable (TD-504)', async () => {
+    await runCase(results, pendingId, 'v9.0.71: while the approval workflow of a new bank account is open, editing its opening balance is refused with 409 and issues no opening voucher; other fields stay editable (TD-504)', async () => {
       const { createTestWorkflow } = await import('../fixtures/factories.js');
       const problems: string[] = [];
       const api = await client();

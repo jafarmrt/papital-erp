@@ -18,7 +18,7 @@ import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 
-// v9.0.60: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
+// v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
 
 export function assertChequeTransition(current: string, next: ChequeStatus): void {
@@ -751,7 +751,7 @@ export class ChequeLifecycleService {
         ))
         .for('update');
 
-      // v9.0.60 (TD-502، تصمیم مالک محصول ت۹ الف): سند قطعی باطل نمی‌شود، پس چکی که سند قطعیِ برگشت‌نخورده دارد حذف
+      // v9.0.69 (TD-502، تصمیم مالک محصول ت۹ الف): سند قطعی باطل نمی‌شود، پس چکی که سند قطعیِ برگشت‌نخورده دارد حذف
       // نمی‌شود. پیش‌تر این سند بی‌صدا کنار می‌رفت و چک حذف می‌شد؛ سند در دفتر می‌ماند و هیچ چکی آن را توضیح نمی‌داد.
       const permanentStanding: string[] = [];
       for (const v of activeChequeVouchers) {

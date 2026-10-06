@@ -16,5 +16,5 @@ export const DOMAIN_CHECKS: Array<[string, string, (wh: string) => Promise<strin
   ...ACCOUNTING_COST_CHECKS,
   ...DECISION_CHECKS,
   ...WOO_DELETED_ORDER_CHECKS,
-  ...TREASURY_BANK_CHECKS, // package 4, series 9 (v9.0.58 on)
+  ...TREASURY_BANK_CHECKS, // package 4, series 9 (v9.0.67 on)
 ];
