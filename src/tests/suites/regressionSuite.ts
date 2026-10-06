@@ -10547,6 +10547,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.93, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
   const { runItemOpeningVoucherValueTests } = await import('../regression/itemOpeningVoucherValueTests.js');
   results.push(...await runItemOpeningVoucherValueTests(shouldRun));
+  // Package 6 (v9.0.88, TD-492): the stock movement chart counts ledger rows only, within the window
+  const { runMovementTrendLedgerTests } = await import('../regression/movementTrendLedgerTests.js');
+  results.push(...await runMovementTrendLedgerTests(shouldRun));
 
   return results;
 }
