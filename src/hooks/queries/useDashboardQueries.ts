@@ -45,7 +45,7 @@ export interface BIDashboardStats {
   deadStock: BIDeadStock[];
   totalValuation: number;
   locations: Record<string, number>;
-  /** v9.0.90 (TD-496): items with stock per warehouse code; quantities of different units are never added */
+  /** v9.0.96 (TD-496): items with stock per warehouse code; quantities of different units are never added */
   locationItemCounts?: Record<string, number>;
   warehouses: { id: number; name: string; code: string; is_active: number }[];
   monthlyTrends: BITrend[];

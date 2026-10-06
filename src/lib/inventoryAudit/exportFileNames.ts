@@ -1,5 +1,5 @@
 /**
- * v9.0.90 (TD-496 / B06-17, decision t6): Persian names of the warehouse and Kardex Excel exports and the message
+ * v9.0.96 (TD-496 / B06-17, decision t6): Persian names of the warehouse and Kardex Excel exports and the message
  * shown when an export fails (a production build drops console output, so a failure has to reach the user).
  */
 export const INTEGRITY_EXPORT_FILE = 'ممیزی-سلامت-انبار.xlsx';

@@ -7,7 +7,7 @@ import { money } from '../../lib/money.js';
 /**
  * Package 6 (inventory and Kardex), TD-492 / B06-13: the «گردش کالا» chart counts the Kardex ledger (AGENTS §12): no
  * warehouse transfer (nothing entered or left the business), no voided document or its reversal, and nothing dated
- * after the current Jalali month. On v9.0.87 a transfer of 4 raised both in and out by 4, a voided receipt still counted
+ * after the current Jalali month. On v9.0.93 a transfer of 4 raised both in and out by 4, a voided receipt still counted
  * and a 2099 row brought month 1477/10 into the chart.
  */
 export async function runMovementTrendLedgerTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -15,7 +15,7 @@ export async function runMovementTrendLedgerTests(shouldRun: (id: string, ...ext
   const id = 'reg_movement_trend_ledger_td_492';
   if (!shouldRun(id, 'td492', 'trend', 'chart', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.88: the stock movement chart counts only ledger in/out rows of the window, without transfers, voids or future rows (TD-492)';
+  const name = 'v9.0.94: the stock movement chart counts only ledger in/out rows of the window, without transfers, voids or future rows (TD-492)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const futureRowIds: number[] = [];

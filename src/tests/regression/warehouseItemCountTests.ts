@@ -6,7 +6,7 @@ import { items } from '../../db/schema.js';
 
 /**
  * Package 6 (inventory and Kardex), TD-496 / B06-17 (decision t6): the «وضعیت انبار» warehouse chart shows the number of
- * items with stock in each warehouse. On v9.0.89 it had only the sum of quantities, so 10 pairs + 3 metres + 50 pieces
+ * items with stock in each warehouse. On v9.0.95 it had only the sum of quantities, so 10 pairs + 3 metres + 50 pieces
  * showed as «۶۳ قلم» for three items.
  */
 export async function runWarehouseItemCountTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -14,7 +14,7 @@ export async function runWarehouseItemCountTests(shouldRun: (id: string, ...extr
   const id = 'reg_warehouse_item_count_td_496';
   if (!shouldRun(id, 'td496', 'dashboard', 'warehouse', 'package6')) return results;
 
-  const name = 'v9.0.90: the warehouse chart counts items with stock per warehouse, never adds quantities of different units (TD-496)';
+  const name = 'v9.0.96: the warehouse chart counts items with stock per warehouse, never adds quantities of different units (TD-496)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   try {

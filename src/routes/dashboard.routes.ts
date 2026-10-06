@@ -144,7 +144,7 @@ router.get('/dashboard-bi-stats', authorize('reports.view', 'warehouse.view'), a
       .innerJoin(items, eq(items.id, itemWarehouseStocks.itemId))
       .where(eq(items.isDeleted, 0))
       .groupBy(warehouses.code);
-    // v9.0.90 (TD-496, decision t6): the warehouse chart counts the items with stock in each warehouse; quantities of
+    // v9.0.96 (TD-496, decision t6): the warehouse chart counts the items with stock in each warehouse; quantities of
     // different units (pairs, metres, pieces) are never added together
     const itemCountObj: Record<string, number> = {};
     for (const w of activeWarehouses) itemCountObj[w.code] = 0;

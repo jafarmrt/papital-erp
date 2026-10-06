@@ -7,7 +7,7 @@ import { transfers } from '../../db/schema.js';
 /**
  * Package 6 (inventory and Kardex), TD-493 / B06-14: a deleted transfer design is no longer read (404 when no product
  * uses its code), and saving its code again revives the same row under its row lock instead of failing on the unique
- * constraint. On v9.0.88 the deleted row was still returned with its image and saving it again answered 409 «مقدار وارد
+ * constraint. On v9.0.94 the deleted row was still returned with its image and saving it again answered 409 «مقدار وارد
  * شده تکراری است».
  */
 export async function runTransferCodeLifecycleTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -15,7 +15,7 @@ export async function runTransferCodeLifecycleTests(shouldRun: (id: string, ...e
   const id = 'reg_transfer_code_lifecycle_td_493';
   if (!shouldRun(id, 'td493', 'transfer', 'design', 'package6')) return results;
 
-  const name = 'v9.0.89: a deleted transfer design answers 404 and saving its code again revives the same row (TD-493)';
+  const name = 'v9.0.95: a deleted transfer design answers 404 and saving its code again revives the same row (TD-493)';
   const tStart = Date.now();
   const code = `T493${Date.now() % 1000000}`;
   try {

@@ -54,7 +54,7 @@ async function exportTransactions(filters: TransactionsExportFilters): Promise<v
 export function useTransactionsExport() {
   return useMutation<void, unknown, TransactionsExportFilters>({
     mutationFn: exportTransactions,
-    // v9.0.90 (TD-496): the production build drops console output, so a failed export is told to the user
+    // v9.0.96 (TD-496): the production build drops console output, so a failed export is told to the user
     onError: () => { toast.error(EXPORT_FAILED_MESSAGE); },
   });
 }

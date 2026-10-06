@@ -4,7 +4,7 @@ import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useTransfersQuery } from '../../hooks/queries/useTransferQueries';
 
-// Package 6 (TD-493 / B06-14): the transfer designs page asks for every code; on v9.0.88 it called /transfers without
+// Package 6 (TD-493 / B06-14): the transfer designs page asks for every code; on v9.0.94 it called /transfers without
 // a limit and saw only the server's default page of 50.
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
