@@ -1372,6 +1372,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runRecordGuardTests(shouldRunAccess));
   const { runCrmCustomerLinkTests } = await import('../security/crmCustomerLinkTests.js');
   results.push(...await runCrmCustomerLinkTests(shouldRunAccess));
+  // بسته ۹ (v9.0.21، TD-433): اطلاعات بانکی طرف حساب فقط برای customers.view / customers.manage / accounting.*
+  const { runPartyBankInfoScopeTests } = await import('../security/partyBankInfoScopeTests.js');
+  results.push(...await runPartyBankInfoScopeTests(shouldRunAccess));
 
   return results;
 }

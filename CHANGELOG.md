@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.21 — Party Bank Details Scope
+- **Party Bank Details Scope:** A party's bank details reach only admins and holders of `customers.view`, `customers.manage` or an `accounting.*` permission; the customer list, its export and «تبدیل به مشتری» drop them for other readers (owner decision ت۶; TD-433, `sec_party_bank_info_scope_td_433`).
+
 ### v9.0.20 — CRM Wording in the Persian UI
 - **CRM Wording:** Persian UI text says «ارتباط با مشتری» instead of «CRM», and package-9 text uses «پیگیری»، «پرونده فروش» and «اشاره» instead of transliterations (owner decision ت۷; TD-432, Vitest `crmWording.test.ts`).
 
