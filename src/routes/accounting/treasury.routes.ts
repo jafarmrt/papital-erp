@@ -4,7 +4,7 @@
  */
 import { Router } from 'express';
 import { authorizePermission, userHasRoleOrPermission } from '../../middleware/authorize.js';
-import { RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
+import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
 import { logActivity } from '../../lib/auditLogger.js';
@@ -37,7 +37,7 @@ const getBanksHandler = asyncHandler(async (req, res) => {
   res.json(list);
 });
 router.get('/accounting/banks', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
-router.get('/accounting/bank-accounts', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
+router.get('/accounting/bank-accounts', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
 
 // Dynamic Bank & Ledger Synchronization and Reconciliation
 const syncBanksHandler = asyncHandler(async (req, res) => {

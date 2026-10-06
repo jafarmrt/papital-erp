@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { authorizePermission } from '../middleware/authorize.js';
+import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { WORKFLOW_ENTITY_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { ForbiddenError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { getErrorMessage } from '../utils.js';
@@ -179,6 +181,12 @@ router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view
     const userId = req.user?.id;
     const userRole = req.user?.role;
     const userPermissions = req.user?.permissions || [];
+    // v9.0.38 (TD-458، ت۹ الف): داده موجودیت فقط برای دارنده مجوز خواندن همان موجودیت (پیش‌تر workflow.view بس بود و
+    // بیننده بی مجوز حسابداری شماره، وضعیت و جمع سند حسابداری و تاریخچه آن را می‌دید)
+    const entityRead = WORKFLOW_ENTITY_READ_PERMISSIONS[String(entityType)];
+    if (entityRead && !(await userHasRoleOrPermission(req.user, ...entityRead))) {
+      throw new ForbiddenError('برای دیدن گردش کار این مورد، مجوز دیدن خود آن را لازم دارید.');
+    }
 
     const instanceData = await WorkflowEngineService.getInstanceByEntity(
       entityType,

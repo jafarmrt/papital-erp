@@ -42,7 +42,28 @@ export const READ_PERMISSIONS = {
   /** فهرست کامل کاربران و نقش‌ها (فهرست ساده نام‌ها /users/list-simple برای همه باز است) */
   userDirectory: ['users.manage', 'roles.manage', 'personnel.manage', 'workflow.manage', 'settings.manage'],
   permissionCatalog: ['roles.manage', 'users.manage'],
+  /** فهرست و کارت حساب‌های خزانه (بانک و صندوق) */
+  bankAccounts: [
+    'accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view',
+    'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'
+  ],
+  /** درخواست‌های خرید (بی کد نقش؛ مدل مجوز بسته ۲) */
+  purchaseRequisitions: ['procurement.view', 'projects.view'],
 } as const satisfies Record<string, readonly string[]>;
+
+/**
+ * v9.0.38 (TD-458، تصمیم مالک محصول ت۹ الف): ویجت گردش کار (`GET /workflow/instance/:entityType/:entityId`) داده و
+ * تاریخچه موجودیت را برمی‌گرداند، پس افزون بر مجوز گردش کار مجوز خواندن همان موجودیت را می‌خواهد؛ نوع بی دامنه (طرح
+ * آزمایشی طراح) مجوز دیگری نمی‌خواهد.
+ */
+export const WORKFLOW_ENTITY_READ_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
+  document: READ_PERMISSIONS.documents,
+  journal_voucher: READ_PERMISSIONS.journalVouchers,
+  voucher: READ_PERMISSIONS.journalVouchers,
+  item: READ_PERMISSIONS.items,
+  bank_account: READ_PERMISSIONS.bankAccounts,
+  purchase_requisition: READ_PERMISSIONS.purchaseRequisitions,
+};
 
 /** مجوز خواندن رکوردهای دارای پیوست (نوع رکورد در file_attachments) */
 export const RECORD_READ_PERMISSIONS = {

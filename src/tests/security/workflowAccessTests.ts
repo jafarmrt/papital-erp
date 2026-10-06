@@ -398,5 +398,34 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     });
   }
 
+  if (shouldRun('sec_workflow_instance_entity_read_td_458', 'security', 'td458', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_instance_entity_read_td_458',
+      name: 'v9.0.38: ویجت گردش کار داده موجودیت را فقط به دارنده مجوز خواندن همان موجودیت می‌دهد (TD-458)',
+      details: 'بیننده گردش کار بی مجوز حسابداری: سند حسابداری ۴۰۳ و ویجت آن هم ۴۰۳؛ با accounting.view ۲۰۰؛ حساب خزانه و کالا هم با مجوز خواندن خودشان',
+    }, async (h, wrong) => {
+      const { createTestVoucher } = await import('../fixtures/factories.js');
+      const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+      const { voucher } = await createTestVoucher({ status: 'draft', date: await businessTodayIsoDate(), totalDebit: 7777777, totalCredit: 7777777 } as never);
+      const started = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+      if (started.status !== 200) throw new Error(`شروع گردش کار سند حسابداری ${started.status} داد`);
+
+      const viewer = await h.sessionWith(['workflow.view']);
+      const direct = await h.get(`/api/accounting/vouchers/${voucher.id}`, viewer);
+      if (direct.status !== 403) wrong.push(`خواندن مستقیم سند حسابداری ${direct.status} داد، نه ۴۰۳`);
+      const widget = await h.get(`/api/workflow/instance/journal_voucher/${voucher.id}`, viewer);
+      if (widget.status !== 403) wrong.push(`ویجت سند حسابداری برای بیننده بی مجوز حسابداری ${widget.status} داد، نه ۴۰۳`);
+      if (JSON.stringify(widget.body ?? {}).includes('7777777')) wrong.push('ویجت جمع بدهکار سند حسابداری را به بیننده بی مجوز داد');
+      for (const [type, id] of [['bank_account', '1'], ['item', '1'], ['purchase_requisition', '1']] as const) {
+        const res = await h.get(`/api/workflow/instance/${type}/${id}`, viewer);
+        if (res.status !== 403) wrong.push(`ویجت «${type}» برای بیننده بی مجوز خواندن ${res.status} داد، نه ۴۰۳`);
+      }
+
+      const reader = await h.sessionWith(['workflow.view', 'accounting.view']);
+      const allowed = await h.get(`/api/workflow/instance/journal_voucher/${voucher.id}`, reader);
+      if (allowed.status !== 200 || !allowed.body?.instance) wrong.push(`ویجت سند حسابداری برای دارنده accounting.view ${allowed.status} داد`);
+    });
+  }
+
   return results;
 }

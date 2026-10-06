@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.38 — Workflow Widget Requires the Entity's Read Permission
+- **Workflow Widget Read Scope:** `GET /workflow/instance/:entityType/:entityId` also requires the entity's own read permission (document, journal voucher, item, bank account, purchase requisition), else 403 (TD-458, `sec_workflow_instance_entity_read_td_458`).
+
 ### v9.0.37 — One Open Workflow Instance per Entity
 - **Single Open Instance:** `startInstance` serializes starts on an entity with a transaction advisory lock and the partial unique index `uq_workflow_instances_open_entity` (migration 0056, created only on clean data) backs it; duplicates are listed by the financial health check (TD-455, `sec_workflow_single_open_instance_td_455`).
 
