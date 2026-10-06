@@ -15,7 +15,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_last_admin_role_change_td_524', 'security', 'td524', 'users', 'package2')) {
     await runCase(results, {
       id: 'sec_last_admin_role_change_td_524',
-      name: 'v9.0.57: the last active system admin cannot be moved out of the admin role by an edit, also under concurrent edits (TD-524)',
+      name: 'v9.0.60: the last active system admin cannot be moved out of the admin role by an edit, also under concurrent edits (TD-524)',
       details: 'with every other admin set aside, an admin demoting themself gets 409 with a Persian message and stays admin; demoting another admin works while one remains; two admins demoting themselves at the same time leave exactly one admin',
     }, async (h, wrong) => {
       const a = await h.sessionWith('admin');
@@ -59,7 +59,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_synthetic_username_refused_td_521', 'security', 'td521', 'users', 'package2')) {
     await runCase(results, {
       id: 'sec_synthetic_username_refused_td_521',
-      name: 'v9.0.58: a username starting with test_, e2e_ or testuser_ is refused with 422, an existing one is listed and reported by the health check (TD-521)',
+      name: 'v9.0.61: a username starting with test_, e2e_ or testuser_ is refused with 422, an existing one is listed and reported by the health check (TD-521)',
       details: 'POST /api/users refuses test_x, E2E_shop and TestUser_x with a Persian 422 and creates nothing; tester-like names still work; a legacy test_ user appears in GET /api/users and list-simple and in the synthetic_test_users health check',
     }, async (h, wrong) => {
       const { findActiveSyntheticUsers, buildSyntheticUsersHealthTest } = await import('../../services/users/syntheticUserHealth.js');
@@ -99,7 +99,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_session_endpoints_same_origin_td_528', 'security', 'td528', 'csrf', 'login', 'logout', 'package2')) {
     await runCase(results, {
       id: 'sec_session_endpoints_same_origin_td_528',
-      name: 'v9.0.59: a forged cross-site form cannot log a user out of every device or log them into another account (TD-528)',
+      name: 'v9.0.62: a forged cross-site form cannot log a user out of every device or log them into another account (TD-528)',
       details: 'logout and login from Origin https://evil.example and from Origin null get 403 and the two sessions stay valid; logout with a valid session but no CSRF header gets 403; a same-host Origin and a non-browser client without Origin still log in; a logout with the session CSRF header ends both sessions',
     }, async (h, wrong) => {
       const request = (await import('supertest')).default;

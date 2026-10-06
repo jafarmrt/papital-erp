@@ -9,7 +9,7 @@ export interface SyntheticUserRow { id: number; username: string; fullName: stri
 /** بیشینه ردیف‌های فهرست‌شده در گزارش؛ شمار همیشه کامل است */
 const MAX_LISTED = 200;
 
-/** v9.0.58 (TD-521): کاربران حذف‌نشده‌ای که نام کاربری‌شان با پیشوند کاربران آزمون شروع می‌شود */
+/** v9.0.61 (TD-521): کاربران حذف‌نشده‌ای که نام کاربری‌شان با پیشوند کاربران آزمون شروع می‌شود */
 export async function findActiveSyntheticUsers(db: DbExecutor = orm): Promise<SyntheticUserRow[]> {
   return db.select({ id: users.id, username: users.username, fullName: users.fullName, role: users.role })
     .from(users)
@@ -23,7 +23,7 @@ export function buildSyntheticUsersHealthTest(rows: SyntheticUserRow[]): HealthC
     id: 'synthetic_test_users',
     category: 'system',
     title: 'کاربران فعال با پیشوند آزمون',
-    description: 'نام کاربری با test_، e2e_ یا testuser_ ویژه کاربران آزمون خودکار است و از رابط ساخته نمی‌شود؛ چنین کاربر فعالی در پایگاه‌داده عملیاتی یا جامانده آزمون است یا پیش از v9.0.58 ساخته شده و باید بازبینی شود',
+    description: 'نام کاربری با test_، e2e_ یا testuser_ ویژه کاربران آزمون خودکار است و از رابط ساخته نمی‌شود؛ چنین کاربر فعالی در پایگاه‌داده عملیاتی یا جامانده آزمون است یا پیش از v9.0.61 ساخته شده و باید بازبینی شود',
     status: count > 0 ? 'warning' : 'healthy',
     scoreImpact: -Math.min(5, count),
     count,

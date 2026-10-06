@@ -72,7 +72,7 @@ export const paramsPersonnelIdSchema = createParamsIdSchema('id', 'شناسه پ
 export const validate = (schema: ZodSchema) => {
   return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // v9.0.60 (TD-529): پیام هر issue بی پیام اسکیما از نقشه فارسی ساخته می‌شود
+      // v9.0.63 (TD-529): پیام هر issue بی پیام اسکیما از نقشه فارسی ساخته می‌شود
       const parsed = await schema.parseAsync({
         body: req.body,
         query: req.query,

@@ -6754,10 +6754,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   }
 
   // Test: v7.0.78: نام کاربری «tester…» کاربر واقعی است (الگوی test_% با escape؛ `_` در LIKE هر نویسه‌ای را تطبیق می‌دهد).
-  // از v9.0.58 (TD-521) فهرست کاربران همه کاربران را نشان می‌دهد و این شرط فقط «راه‌اندازی شده» و بررسی سلامت را می‌سازد.
+  // از v9.0.61 (TD-521) فهرست کاربران همه کاربران را نشان می‌دهد و این شرط فقط «راه‌اندازی شده» و بررسی سلامت را می‌سازد.
   if (shouldRun('reg_synthetic_username_like_escape', 'synthetic', 'tester', 'like')) {
     const tStart = Date.now();
-    const testName = 'v7.0.78: only test_ / e2e_ / testuser_ usernames are synthetic test users; tester and e2eadmin are real, and since v9.0.58 (TD-521) the user lists show both kinds';
+    const testName = 'v7.0.78: only test_ / e2e_ / testuser_ usernames are synthetic test users; tester and e2eadmin are real, and since v9.0.61 (TD-521) the user lists show both kinds';
     const { users } = await import('../../db/schema.js');
     const { notSyntheticTestUsername, syntheticTestUsername } = await import('../../lib/syntheticUsers.js');
     const suffix = Date.now().toString(36);

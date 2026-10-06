@@ -1,5 +1,5 @@
 /**
- * v9.0.56 (TD-518, B02-03): ending a session clears the React Query cache. Before, logout and a 401 only emptied the
+ * v9.0.59 (TD-518, B02-03): ending a session clears the React Query cache. Before, logout and a 401 only emptied the
  * user and permissions, so the next user of the same browser saw the previous user's data (for example the user
  * directory) for up to five minutes without any request to the server.
  */

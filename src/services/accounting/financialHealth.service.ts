@@ -1077,7 +1077,7 @@ export class FinancialHealthService {
     overallScore += workflowReferenceTest.scoreImpact;
     tests.push(workflowReferenceTest);
 
-    // آزمون ۲۰: v9.0.58 (TD-521) کاربران فعال با پیشوند کاربران آزمون (test_، e2e_، testuser_)
+    // آزمون ۲۰: v9.0.61 (TD-521) کاربران فعال با پیشوند کاربران آزمون (test_، e2e_، testuser_)
     const syntheticUsersTest = buildSyntheticUsersHealthTest(await findActiveSyntheticUsers());
     overallScore += syntheticUsersTest.scoreImpact;
     tests.push(syntheticUsersTest);

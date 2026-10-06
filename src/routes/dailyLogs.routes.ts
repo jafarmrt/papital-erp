@@ -284,7 +284,7 @@ router.get('/daily-logs/summary-report', authorizePermission('daily_logs.manage_
     .where(eq(dailyWorkLogs.isDeleted, 0))
     .orderBy(desc(dailyWorkLogs.id));
 
-  // همه کاربران سامانه برای نام نویسنده گزارش (v9.0.58، TD-521: کاربر با پیشوند آزمون دیگر کنار گذاشته نمی‌شود)
+  // همه کاربران سامانه برای نام نویسنده گزارش (v9.0.61، TD-521: کاربر با پیشوند آزمون دیگر کنار گذاشته نمی‌شود)
   const allUsersList = await orm.select({
     id: users.id,
     username: users.username,
