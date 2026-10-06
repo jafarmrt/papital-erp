@@ -19,6 +19,24 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.44 — Roleless Step Reminders Only to Workflow Approvers
+- **SLA Reminder Recipients:** a roleless (`ALL`) task's due reminder goes only to admins and holders of `workflow.approve` / `workflow.execute` (plus their active delegates) (TD-460, `sec_workflow_sla_reminder_recipients_td_460`).
+
+### v9.0.43 — Workflow SLA Analytics No Longer Fails
+- **SLA Analytics Route:** every `WorkflowEngineService` facade method is bound to its own class, so `GET /workflow/analytics/sla` answers instead of a 500 (TD-450, `sec_workflow_sla_analytics_route_td_450`).
+
+### v9.0.42 — Instances View Removed From the Approval Inbox
+- **Instances View Removed:** `GET /workflow/inbox` and the inbox «instances» view are removed; the approval inbox has only the tasks view (TD-449, `sec_workflow_instances_inbox_removed_td_449`).
+
+### v9.0.41 — Approval Inbox Tabs Show Their Own Tasks
+- **Inbox Tabs:** `GET /workflow/tasks/my-tasks` serves pending, overdue (`due_at < now()` in SQL), delegated and completed (the user's own actions from history, paginated in SQL); `/tasks/stats` counts each with the same rule; status, page and limit are validated (TD-448, `sec_workflow_inbox_tabs_td_448`).
+
+### v9.0.40 — Voiding or Deleting an Entity Closes Its Workflow
+- **Workflow Closes on Void:** voiding a document or deleting a draft voucher, item, bank account or purchase requisition terminates its running workflow in the same transaction (tasks canceled, one history row); migration 0058 closes the open workflows of entities deleted earlier (TD-447, `sec_workflow_void_closes_instance_td_447`).
+
+### v9.0.39 — Only Unfinalized Sales Documents Enter the Approval Workflow
+- **Document Approval Scope:** only an invoice or proforma in draft or proforma status starts the approval workflow, in its own create transaction; finalizing outside the workflow and migration 0057 close the open instances of final documents (TD-446, `sec_workflow_document_auto_start_td_446`).
+
 ### v9.0.38 — Workflow Widget Requires the Entity's Read Permission
 - **Workflow Widget Read Scope:** `GET /workflow/instance/:entityType/:entityId` also requires the entity's own read permission (document, journal voucher, item, bank account, purchase requisition), else 403 (TD-458, `sec_workflow_instance_entity_read_td_458`).
 

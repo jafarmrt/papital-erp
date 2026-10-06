@@ -9,6 +9,7 @@ import { logger } from '../middleware/logger.js';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { getErrorMessage } from '../utils.js';
 import { z } from 'zod';
+import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
 
 const taskIdParamSchema = z.object({
   params: z.object({
@@ -41,67 +42,40 @@ const startWorkflowSchema = z.object({
   }),
 });
 
+/** v9.0.41 (TD-448، ت۶): زبانه، صفحه و اندازه صفحه کارتابل؛ مقدار ناشناخته ۴۰۰ (پیش‌تر هر رشته‌ای پذیرفته می‌شد) */
+const myTasksQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(MY_TASK_FILTERS).default('pending'),
+    page: z.coerce.number().int().min(1).max(100000).default(1),
+    limit: z.coerce.number().int().min(1).max(1000).default(50),
+  }).passthrough(),
+});
+
 const router = Router();
 
 // Protect all workflow routes
 router.use(authenticateToken);
 
-/**
- * GET /api/workflow/inbox
- * Get approval inbox for current user's role
- */
-router.get('/inbox', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const page = parseInt(req.query.page as string || '1');
-    const limit = parseInt(req.query.limit as string || '50');
-    const userRole = req.user?.role;
-    const userId = req.user?.id;
-
-    const inbox = await WorkflowEngineService.getApprovalInbox({
-      role: userRole,
-      userId,
-      page,
-      limit
-    });
-
-    res.json(inbox);
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /inbox] Error: ${errMsg}`);
-    throw err;
-  }
-}));
+// v9.0.42 (TD-449، ت۷ الف): «نمای نمونه‌ها» (`GET /workflow/inbox`) حذف شد؛ کارتابل فقط نمای کارها (`/tasks/my-tasks`) را دارد
 
 /**
  * GET /api/workflow/tasks/my-tasks
  * Get task inbox for current user (workflow_tasks model with delegation support)
  */
-router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const page = parseInt(req.query.page as string || '1');
-    const limit = parseInt(req.query.limit as string || '50');
-    const status = (req.query.status as string) || 'pending';
-    const userId = req.user?.id;
-    const userRole = req.user?.role || '';
-
-    if (!userId) {
-      return res.status(401).json({ error: 'کاربر معتبر نیست' });
-    }
-
-    const result = await WorkflowEngineService.getMyTasks({
-      userId,
-      userRole,
-      status,
-      page,
-      limit
-    });
-
-    res.json(result);
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /tasks/my-tasks] Error: ${errMsg}`);
-    throw err;
+router.get('/tasks/my-tasks', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), validate(myTasksQuerySchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'کاربر معتبر نیست' });
   }
+  const query = req.query as unknown as z.infer<typeof myTasksQuerySchema>['query'];
+  const result = await WorkflowEngineService.getMyTasks({
+    userId,
+    userRole: req.user?.role || '',
+    status: query.status,
+    page: query.page,
+    limit: query.limit
+  });
+  res.json(result);
 }));
 
 /**

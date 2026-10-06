@@ -1,18 +1,17 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowInstances, 
-  workflowPendingApprovals, 
   workflowTasks, 
   workflowDefinitions,
-  workflowTransitions
+  workflowHistoryLogs
 } from '../../db/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
-import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { lockWorkflowEntity } from './workflowTransitionActions.js';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { snapshotTransitionsOf } from './workflowSnapshot.js';
+import { completedByUserCondition, completedTasksOf, inboxEntityFields } from './workflowInboxRows.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
 
 /** v9.0.34 (TD-444): کاربر کارتابل و مجوزهایی که موتور برای او و تفویض‌کنندگانش می‌خواند */
@@ -24,117 +23,54 @@ interface TaskSigner {
   delegatorPermissions: Map<number, string[]>;
 }
 
+/** v9.0.41 (TD-448، ت۶ الف): زبانه‌های کارتابل */
+export const MY_TASK_FILTERS = ['pending', 'overdue', 'delegated', 'completed'] as const;
+export type MyTaskFilter = typeof MY_TASK_FILTERS[number];
+
+interface PendingTaskMatch {
+  task: typeof workflowTasks.$inferSelect;
+  instance: typeof workflowInstances.$inferSelect;
+  delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null;
+  isOverdue: boolean;
+}
+
 export class WorkflowTaskService {
   // v7.0.101 (TD-085، تصمیم مالک محصول «بازگشایی با گزارش»): markExpiredTasks حذف شد؛ کار تاییدی با گذشتن مهلت
   // منقضی نمی‌شود و در کارتابل می‌ماند، و مسئولش یک بار یادآوری می‌گیرد (WorkflowSlaReminderService).
 
   /**
    * Get User's Active Tasks Inbox with Delegation Evaluation
+   *
+   * v9.0.41 (TD-448، یافته B14-06، تصمیم مالک محصول ت۶ الف): زبانه‌ها معنای خود را دارند: «در انتظار» کارهای در انتظار
+   * کاربر (خود او یا از راه تفویض)، «دارای تأخیر» همان‌ها با موعد گذشته (`due_at < now()` در پایگاه‌داده)، «دریافتی از
+   * تفویض» کارهای در انتظاری که فقط از راه تفویض به او رسیده و «تکمیل‌شده» اقدام‌هایی که خود کاربر انجام داده (از تاریخچه،
+   * صفحه‌بندی در پایگاه‌داده). پیش‌تر فیلتر برابری `status` کار بود و سه زبانه همیشه خالی می‌ماندند.
    */
   static async getMyTasks(params: {
     userId: number;
     userRole?: string;
     userPermissions?: string[];
-    status?: string;
+    status?: MyTaskFilter;
     page?: number;
     limit?: number;
   }) {
     const userId = params.userId;
     const userRole = (params.userRole || '').trim().toLowerCase();
-    const isAdmin = userRole === 'admin';
-    const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, params.userPermissions);
-
-    const targetStatus = params.status || 'pending';
-    const allTasks = await orm.select({
-      task: workflowTasks,
-      instance: workflowInstances,
-      definitionCode: workflowDefinitions.code
-    })
-    .from(workflowTasks)
-    .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
-    .leftJoin(workflowDefinitions, eq(workflowInstances.workflowDefinitionId, workflowDefinitions.id))
-    .where(eq(workflowTasks.status, targetStatus))
-    .orderBy(desc(workflowTasks.createdAt));
-
-    // Consolidate per instance: Ensure at most ONE task card is returned per workflow instance.
-    // If an instance has multiple tasks (e.g. positive approval and rejection), keep only the positive review task.
-    const seenInstances = new Set<number>();
-    const matchedItems: Array<{
-      task: typeof workflowTasks.$inferSelect;
-      instance: typeof workflowInstances.$inferSelect;
-      delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null;
-    }> = [];
-    
-    // Sort so forward tasks are processed before negative tasks
-    const sortedTasks = [...allTasks].sort((a, b) => {
-      const aNeg = WorkflowTransitionExecutor.isNegativeTransition(undefined, a.task.title);
-      const bNeg = WorkflowTransitionExecutor.isNegativeTransition(undefined, b.task.title);
-      if (aNeg && !bNeg) return 1;
-      if (!aNeg && bNeg) return -1;
-      return 0;
-    });
-
-    for (const item of sortedTasks) {
-      const task = item.task;
-      const instance = item.instance;
-
-      if (seenInstances.has(task.instanceId)) {
-        // Skip duplicate card for the same workflow instance
-        continue;
-      }
-
-      let isAssigned = false;
-      let delegationInfo: { delegatedFromUserId?: number; delegationScope?: string | null } | null = null;
-
-      if (isAdmin || WorkflowTaskService.assignedDirectly(task, instance, signer)) {
-        isAssigned = true;
-      } else {
-        const del = WorkflowTaskService.delegationForTask(task, instance, WorkflowTaskService.workflowCodeOf(instance, item.definitionCode), signer);
-        if (del) {
-          isAssigned = true;
-          delegationInfo = { delegatedFromUserId: del.fromUserId, delegationScope: del.scope };
-        }
-      }
-
-      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, instance, { userId: delegationInfo?.delegatedFromUserId ?? userId, actorId: userId, role: userRole })) {
-        isAssigned = false;
-      }
-
-      if (isAssigned) {
-        seenInstances.add(task.instanceId);
-        matchedItems.push({ task, instance, delegationInfo });
-      }
-    }
-
+    const filter = params.status || 'pending';
     const page = params.page || 1;
     const limit = params.limit || 50;
     const offset = (page - 1) * limit;
-    const total = matchedItems.length;
-    const pagedSlice = matchedItems.slice(offset, offset + limit);
+    if (filter === 'completed') return completedTasksOf(userId, page, limit);
+
+    const matched = (await WorkflowTaskService.pendingTasksOf(userId, userRole, params.userPermissions))
+      .filter(m => filter === 'overdue' ? m.isOverdue : filter === 'delegated' ? !!m.delegationInfo : true);
+    const total = matched.length;
+    const pagedSlice = matched.slice(offset, offset + limit);
 
     // V4 Phase 5.3 (A-2): بارگذاری موازی کانتکست موجودیت فقط برای ردیف‌های صفحه فعلی
     const filteredTasks = await Promise.all(
-      pagedSlice.map(async ({ task, instance, delegationInfo }) => {
-        const context = await getEntityContext(instance.entityType, instance.entityId);
-        return {
-          ...task,
-          entityType: instance.entityType,
-          entityId: instance.entityId,
-          instance: {
-            id: instance.id,
-            workflowDefinitionId: instance.workflowDefinitionId,
-            entityType: instance.entityType,
-            entityId: instance.entityId,
-            currentStateId: instance.currentStateId,
-            status: instance.status,
-            createdAt: instance.createdAt,
-            updatedAt: instance.updatedAt
-          },
-          refNumber: context.refNumber || context.code || instance.entityId,
-          buyerName: context.buyerName || '',
-          amount: context.amount || context.totalAmount || 0,
-          delegationInfo
-        };
+      pagedSlice.map(async ({ task, instance, delegationInfo, isOverdue }) => {
+        return { ...task, isOverdue, ...(await inboxEntityFields(instance)), delegationInfo };
       })
     );
 
@@ -148,28 +84,36 @@ export class WorkflowTaskService {
 
   /**
    * Get Task Stats
-   * V4 Phase 5.3 (A-2): کوئری مستقیم سبک شمارش تسک‌های منتظر و منقضی بدون فراخوانی getMyTasks و بارگذاری N+1 کانتکست موجودیت‌ها
+   * v9.0.41 (TD-448): شمار هر زبانه با همان قاعده خود زبانه؛ تأخیر با زمان پایگاه‌داده. پیش‌تر رشته موعد پایگاه‌داده
+   * («YYYY-MM-DD HH:MM:SS») با ISO مقایسه می‌شد و هر کاری که موعدش امروز بود از همان لحظه «دارای تأخیر» بود، و شمار
+   * تکمیل و تفویض اصلاً برنمی‌گشت.
    */
   static async getTaskStats(params: { userId: number; userRole?: string; userPermissions?: string[] }) {
     const userId = Number(params.userId);
     const userRole = (params.userRole || '').trim().toLowerCase();
-    const isAdmin = userRole === 'admin';
-    const nowIso = new Date().toISOString();
-    const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, params.userPermissions);
+    const pending = await WorkflowTaskService.pendingTasksOf(userId, userRole, params.userPermissions);
+    const [done] = await orm.select({ n: sql<number>`count(*)::int` }).from(workflowHistoryLogs)
+      .where(completedByUserCondition(userId));
+    return {
+      pendingCount: pending.length,
+      overdueCount: pending.filter(m => m.isOverdue).length,
+      delegatedCount: pending.filter(m => !!m.delegationInfo).length,
+      completedCount: Number(done?.n ?? 0),
+    };
+  }
 
-    const pendingTasks = await orm.select({
-      id: workflowTasks.id,
-      instanceId: workflowTasks.instanceId,
-      assignedUserId: workflowTasks.assignedUserId,
-      assignedRole: workflowTasks.assignedRole,
-      candidateUsers: workflowTasks.candidateUsers,
-      candidateRoles: workflowTasks.candidateRoles,
-      dueAt: workflowTasks.dueAt,
-      title: workflowTasks.title,
-      snapshotDsl: workflowInstances.snapshotDsl,
-      startedBy: workflowInstances.startedBy,
-      transitionId: workflowTasks.transitionId,
+  /**
+   * v9.0.41 (TD-448): کارهای در انتظاری که کاربر می‌تواند اجرا کند، یک کارت برای هر فرایند (کار پیش‌رو پیش از کار رد)،
+   * با تفویضی که کار را به او رسانده (اگر خودش مسئول نیست) و تأخیر از پایگاه‌داده
+   */
+  private static async pendingTasksOf(userId: number, userRole: string, userPermissions?: string[]): Promise<PendingTaskMatch[]> {
+    const isAdmin = userRole === 'admin';
+    const signer = await WorkflowTaskService.signerContext(orm, userId, userRole, userPermissions);
+    const allTasks = await orm.select({
+      task: workflowTasks,
+      instance: workflowInstances,
       definitionCode: workflowDefinitions.code,
+      isOverdue: sql<boolean>`(${workflowTasks.dueAt} IS NOT NULL AND ${workflowTasks.dueAt} < now())`,
     })
     .from(workflowTasks)
     .innerJoin(workflowInstances, eq(workflowTasks.instanceId, workflowInstances.id))
@@ -177,40 +121,41 @@ export class WorkflowTaskService {
     .where(eq(workflowTasks.status, 'pending'))
     .orderBy(desc(workflowTasks.createdAt));
 
+    // Consolidate per instance: Ensure at most ONE task card is returned per workflow instance.
+    // If an instance has multiple tasks (e.g. positive approval and rejection), keep only the positive review task.
+    const sortedTasks = [...allTasks].sort((a, b) => {
+      const aNeg = WorkflowTransitionExecutor.isNegativeTransition(undefined, a.task.title);
+      const bNeg = WorkflowTransitionExecutor.isNegativeTransition(undefined, b.task.title);
+      if (aNeg && !bNeg) return 1;
+      if (!aNeg && bNeg) return -1;
+      return 0;
+    });
+
     const seenInstances = new Set<number>();
-    let pendingCount = 0;
-    let overdueCount = 0;
+    const matched: PendingTaskMatch[] = [];
+    for (const { task, instance, definitionCode, isOverdue } of sortedTasks) {
+      if (seenInstances.has(task.instanceId)) continue;
 
-    for (const task of pendingTasks) {
-      if (seenInstances.has(task.instanceId)) {
-        continue;
-      }
-
-      let isAssigned = isAdmin || WorkflowTaskService.assignedDirectly(task, task, signer);
-      let signerId = userId;
-      if (!isAssigned) {
-        const del = WorkflowTaskService.delegationForTask(task, task, WorkflowTaskService.workflowCodeOf(task, task.definitionCode), signer);
-        isAssigned = !!del;
-        if (del) signerId = del.fromUserId;
-      }
-      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, task, { userId: signerId, actorId: userId, role: userRole })) {
-        isAssigned = false;
-      }
-
-      if (isAssigned) {
-        seenInstances.add(task.instanceId);
-        pendingCount++;
-        if (task.dueAt && task.dueAt < nowIso) {
-          overdueCount++;
+      let isAssigned = false;
+      let delegationInfo: PendingTaskMatch['delegationInfo'] = null;
+      if (isAdmin || WorkflowTaskService.assignedDirectly(task, instance, signer)) {
+        isAssigned = true;
+      } else {
+        const del = WorkflowTaskService.delegationForTask(task, instance, WorkflowTaskService.workflowCodeOf(instance, definitionCode), signer);
+        if (del) {
+          isAssigned = true;
+          delegationInfo = { delegatedFromUserId: del.fromUserId, delegationScope: del.scope };
         }
       }
+      if (isAssigned && !isAdmin && WorkflowTaskService.excludedAsInitiator(task, instance, { userId: delegationInfo?.delegatedFromUserId ?? userId, actorId: userId, role: userRole })) {
+        isAssigned = false;
+      }
+      if (isAssigned) {
+        seenInstances.add(task.instanceId);
+        matched.push({ task, instance, delegationInfo, isOverdue: isOverdue === true });
+      }
     }
-
-    return {
-      pendingCount,
-      overdueCount,
-      completedTodayCount: 0
-    };
+    return matched;
   }
 
   /**
@@ -478,93 +423,6 @@ export class WorkflowTaskService {
     if (allowed.length === 1) return allowed[0].id;
     if (rejects.length === 1) return rejects[0].id;
     throw new ValidationError(`این گام چند انتقال «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید (WF_TASK_REJECT_AMBIGUOUS)`);
-  }
-
-  /**
-   * Get pending approvals list for a user / role
-   */
-  static async getPendingApprovalsForUser(userId: number, roleNames: string[]) {
-    const userRoles = roleNames.map(r => r.toLowerCase());
-    const isAdmin = userRoles.includes('admin');
-
-    const rawPendingList = await orm.select({
-      approval: workflowPendingApprovals,
-      instance: workflowInstances,
-      transition: workflowTransitions
-    })
-    .from(workflowPendingApprovals)
-    .innerJoin(workflowInstances, eq(workflowPendingApprovals.instanceId, workflowInstances.id))
-    .leftJoin(workflowTransitions, eq(workflowPendingApprovals.transitionId, workflowTransitions.id));
-
-    // Consolidate per workflow instance: Ensure only ONE approval card is shown per instance in the inbox.
-    // If an instance has both forward approval and negative rejection actions, prioritize the forward action.
-    const instanceMap = new Map<number, typeof rawPendingList[0]>();
-    for (const item of rawPendingList) {
-      const instId = item.instance.id;
-      const isNeg = WorkflowTransitionExecutor.isNegativeTransition(item.transition?.actionKey, item.transition?.title);
-      const existing = instanceMap.get(instId);
-      if (!existing) {
-        instanceMap.set(instId, item);
-      } else {
-        const existingIsNeg = WorkflowTransitionExecutor.isNegativeTransition(existing.transition?.actionKey, existing.transition?.title);
-        if (existingIsNeg && !isNeg) {
-          instanceMap.set(instId, item);
-        }
-      }
-    }
-
-    const consolidatedPendingList = Array.from(instanceMap.values());
-
-    const matched: any[] = [];
-    for (const item of consolidatedPendingList) {
-      const app = item.approval;
-      const inst = item.instance;
-
-      if (isAdmin || app.assignedUserId === userId || userRoles.includes((app.assignedRole || '').toLowerCase())) {
-        const context = await getEntityContext(inst.entityType, inst.entityId);
-        matched.push({
-          ...app,
-          entityType: inst.entityType,
-          entityId: inst.entityId,
-          status: inst.status,
-          instance: {
-            id: inst.id,
-            workflowDefinitionId: inst.workflowDefinitionId,
-            entityType: inst.entityType,
-            entityId: inst.entityId,
-            currentStateId: inst.currentStateId,
-            status: inst.status,
-            createdAt: inst.createdAt,
-            updatedAt: inst.updatedAt
-          },
-          refNumber: context.refNumber || context.code || inst.entityId,
-          buyerName: context.buyerName || '',
-          amount: context.amount || context.totalAmount || 0
-        });
-      }
-    }
-
-    return matched;
-  }
-
-  /**
-   * Get Approval Inbox (delegated to getPendingApprovalsForUser)
-   */
-  static async getApprovalInbox(params: {
-    role?: string;
-    userId?: number;
-    page?: number;
-    limit?: number;
-  }) {
-    const userId = params.userId || 0;
-    const role = params.role || '';
-    const pending = await WorkflowTaskService.getPendingApprovalsForUser(userId, [role]);
-    return {
-      data: pending,
-      total: pending.length,
-      page: params.page || 1,
-      limit: params.limit || 50
-    };
   }
 
   /**

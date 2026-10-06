@@ -1386,6 +1386,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۴ (از v9.0.33، TD-443 به بعد): دسترسی و یکپارچگی موتور گردش‌کار از مسیرهای واقعی
   const { runWorkflowAccessTests } = await import('../security/workflowAccessTests.js');
   results.push(...await runWorkflowAccessTests(shouldRunAccess));
+  // بسته ۱۴، PR ب (از v9.0.39، TD-446 به بعد): چرخه عمر فرایند و کارتابل
+  const { runWorkflowLifecycleTests } = await import('../security/workflowLifecycleTests.js');
+  results.push(...await runWorkflowLifecycleTests(shouldRunAccess));
 
   return results;
 }

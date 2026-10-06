@@ -1,3 +1,4 @@
+import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { eq, and, desc, ilike, asc } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { items, itemPrices, warehouses, itemCodeCounters, documentItems, transactions, journalVouchers } from '../../db/schema.js';
@@ -821,37 +822,43 @@ export class ItemCatalogService {
   /**
    * Soft deletes an item after validating that it has no non-zero physical inventory and no active document references
    */
-  static async deleteItem(id: number, executor: DbExecutor = orm): Promise<typeof items.$inferSelect> {
-    const itemId = Number(id);
-    const [delItem] = await executor.select().from(items).where(eq(items.id, itemId));
-    if (!delItem || delItem.isDeleted === 1) {
-      throw new NotFoundError('کالا یافت نشد.');
-    }
+  static async deleteItem(id: number, outer: DbExecutor = orm): Promise<typeof items.$inferSelect> {
+    // v9.0.40 (TD-447، ت۵): حذف کالا و بستن فرایند در جریان آن در یک تراکنش، زیر قفل ردیف کالا
+    return outer.transaction(async (executor) => {
+      const itemId = Number(id);
+      const [delItem] = await executor.select().from(items).where(eq(items.id, itemId)).for('no key update');
+      if (!delItem || delItem.isDeleted === 1) {
+        throw new NotFoundError('کالا یافت نشد.');
+      }
 
-    // V9-2.2: منع حذف کالای دارای موجودی — ارزش موجودی از ارزیابی انبار حذف می‌شود اما ردیف‌های کاردکس باقی می‌مانند
-    const currentStockNum = Number(delItem.currentStock || 0);
-    if (currentStockNum > 0) {
-      throw new ConflictError(
-        `حذف کالای «${delItem.name}» مجاز نیست زیرا دارای ${currentStockNum} ${delItem.unit || 'عدد'} موجودی در انبار است. ابتدا موجودی را از طریق سند انبارگردانی یا حواله به صفر برسانید.`
-      );
-    }
+      // V9-2.2: منع حذف کالای دارای موجودی — ارزش موجودی از ارزیابی انبار حذف می‌شود اما ردیف‌های کاردکس باقی می‌مانند
+      const currentStockNum = Number(delItem.currentStock || 0);
+      if (currentStockNum > 0) {
+        throw new ConflictError(
+          `حذف کالای «${delItem.name}» مجاز نیست زیرا دارای ${currentStockNum} ${delItem.unit || 'عدد'} موجودی در انبار است. ابتدا موجودی را از طریق سند انبارگردانی یا حواله به صفر برسانید.`
+        );
+      }
 
-    // V9-2.2: منع حذف کالای دارای ارجاع در اسناد فعال (غیرحذف‌شده)
-    const [activeDocRefsResult] = await executor
-      .select({ id: documentItems.id })
-      .from(documentItems)
-      .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
-      .limit(1);
+      // V9-2.2: منع حذف کالای دارای ارجاع در اسناد فعال (غیرحذف‌شده)
+      const [activeDocRefsResult] = await executor
+        .select({ id: documentItems.id })
+        .from(documentItems)
+        .where(and(eq(documentItems.itemId, itemId), eq(documentItems.isDeleted, 0)))
+        .limit(1);
 
-    if (activeDocRefsResult) {
-      throw new ConflictError(
-        `حذف کالای «${delItem.name}» مجاز نیست زیرا در ردیف‌های اسناد فعال (فاکتور/رسید/حواله) استفاده شده است. برای حفظ یکپارچگی تاریخچه اسناد، ابتدا باید اسناد مرتبط حذف شوند.`
-      );
-    }
+      if (activeDocRefsResult) {
+        throw new ConflictError(
+          `حذف کالای «${delItem.name}» مجاز نیست زیرا در ردیف‌های اسناد فعال (فاکتور/رسید/حواله) استفاده شده است. برای حفظ یکپارچگی تاریخچه اسناد، ابتدا باید اسناد مرتبط حذف شوند.`
+        );
+      }
 
-    await executor.update(items).set({ isDeleted: 1 }).where(eq(items.id, itemId));
+      await executor.update(items).set({ isDeleted: 1 }).where(eq(items.id, itemId));
+      await terminateOpenWorkflows(executor, {
+        entityType: 'item', entityId: itemId, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف کالا', comment: 'حذف کالا',
+      });
 
-    return delItem;
+      return delItem;
+    });
   }
 
   /**

@@ -90,7 +90,8 @@ describe('CreateInvoicePage — React Query cache', () => {
     const post = fetchJson.mock.calls.find(([url, init]) => url === '/documents' && init?.method === 'POST');
     const body = JSON.parse(String(post?.[1].body));
     expect(body).toMatchObject({ docType: 'invoice', status: 'proforma', refNumber: 'INV-1001', location: 'WH1', buyer_name: 'مشتری تست', inOut: 'out' });
-    expect(fetchJson).toHaveBeenCalledWith('/workflow/start', expect.objectContaining({ method: 'POST' }));
+    // v9.0.39 (TD-446): گردش کار تأیید پیش‌فاکتور را سرور در تراکنش ثبت شروع می‌کند، نه مرورگر
+    expect(fetchJson).not.toHaveBeenCalledWith('/workflow/start', expect.anything());
 
     otherPages.forEach(key => expect(client.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true));
     // پیش‌فاکتورهای باز و شماره بعدی همین صفحه هم دوباره خوانده می‌شوند

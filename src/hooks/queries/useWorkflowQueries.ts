@@ -90,16 +90,6 @@ export interface WorkflowInstanceData {
   entityContext?: Record<string, any>;
 }
 
-export function useWorkflowInboxQuery(page = 1, limit = 50) {
-  return useQuery({
-    queryKey: QUERY_KEYS.workflow.inbox({ page, limit }),
-    queryFn: async () => {
-      return fetchJson(`/workflow/inbox?page=${page}&limit=${limit}`);
-    },
-    staleTime: 1000 * 15, // 15 seconds
-  });
-}
-
 export function useWorkflowInstanceQuery(entityType: string, entityId: string | number | undefined) {
   return useQuery<WorkflowInstanceData>({
     queryKey: QUERY_KEYS.workflow.instance(entityType, entityId ?? ''),
