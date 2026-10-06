@@ -17,6 +17,7 @@ import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal
 import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
+import { CHEQUE_TRANSITIONS, chequeHasNextStep } from '../../lib/treasury/chequeTransitions';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -114,17 +115,6 @@ export function ChequesTab({
     spent: { label: 'خرج شده / واگذار به غیر', badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
   };
 
-  // V1.4.0 & V6.0.13: ماشین وضعیت چک — فقط انتقال‌های مجاز (هماهنگ با بک‌اند)
-  const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
-    received: ['in_treasury', 'in_collection', 'passed', 'bounced', 'spent'],
-    in_treasury: ['in_collection', 'passed', 'bounced', 'spent'],
-    in_safe: ['in_collection', 'passed', 'bounced', 'spent'],
-    in_collection: ['passed', 'bounced'],
-    passed: [],
-    bounced: ['returned'],
-    returned: [],
-    spent: [],
-  };
   const STATUS_OPTIONS: Record<string, { value: ChequeStatus; label: string }[]> = {
     received: [
       { value: 'in_treasury', label: 'نگهداری نزد صندوق' },
@@ -605,7 +595,8 @@ export function ChequesTab({
                           </button>
                           <ActionMenu
                             items={[
-                              {
+                              // v9.0.57 (TD-502، ت۹): وضعیت پایانی نه تغییر وضعیت دارد نه حذف
+                              ...(chequeHasNextStep(c.status) ? [{
                                 label: 'تغییر وضعیت چک',
                                 icon: Edit3,
                                 onClick: () => {
@@ -613,7 +604,7 @@ export function ChequesTab({
                                   setStatusDescription('');
                                   setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
                                 },
-                              },
+                              }] : []),
                               {
                                 label: 'تاریخچه گردش وضعیت',
                                 icon: History,
@@ -643,12 +634,12 @@ export function ChequesTab({
                                   });
                                 },
                               },
-                              {
+                              ...(chequeHasNextStep(c.status) ? [{
                                 label: 'حذف چک',
                                 icon: Trash2,
-                                variant: 'danger',
-                                onClick: () => handleDelete(c),
-                              },
+                                variant: 'danger' as const,
+                                onClick: () => { void handleDelete(c); },
+                              }] : []),
                             ]}
                             align="left"
                           />

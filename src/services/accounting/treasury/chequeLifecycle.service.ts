@@ -6,6 +6,7 @@ import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { validateLockOrder, LockHierarchyLevel, LockableResource } from '../../../lib/lockOrder.js';
 import type { Cheque, ChequeStatus } from '../../../types.js';
+import { CHEQUE_TRANSITIONS } from '../../../lib/treasury/chequeTransitions.js';
 import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } from '../../../errors/customErrors.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
@@ -17,21 +18,8 @@ import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 
-/**
- * V1.4.0 — ماشین وضعیت چک صیادی
- * هر انتقال فقط در صورت مجاز بودن و فقط یک‌بار امکان‌پذیر است؛
- * این مانع از دوبار وصول (دوبار مانده + دوبار سند) و ناسازگاری دفتر/خزانه می‌شود.
- */
-export const CHEQUE_TRANSITIONS: Record<string, ChequeStatus[]> = {
-  received: ['in_treasury', 'in_collection', 'passed', 'bounced', 'spent'],
-  in_treasury: ['in_collection', 'passed', 'bounced', 'spent'],
-  in_safe: ['in_collection', 'passed', 'bounced', 'spent'],
-  in_collection: ['passed', 'bounced'],
-  passed: [],        // پایانی
-  bounced: ['returned'],
-  returned: [],      // پایانی
-  spent: [],         // پایانی
-};
+// v9.0.57: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
+export { CHEQUE_TRANSITIONS };
 
 export function assertChequeTransition(current: string, next: ChequeStatus): void {
   if (current === next) {
@@ -762,6 +750,22 @@ export class ChequeLifecycleService {
           numberShared ? linkedToCheque : or(linkedToCheque, legacyByNumber),
         ))
         .for('update');
+
+      // v9.0.57 (TD-502، تصمیم مالک محصول ت۹ الف): سند قطعی باطل نمی‌شود، پس چکی که سند قطعیِ برگشت‌نخورده دارد حذف
+      // نمی‌شود. پیش‌تر این سند بی‌صدا کنار می‌رفت و چک حذف می‌شد؛ سند در دفتر می‌ماند و هیچ چکی آن را توضیح نمی‌داد.
+      const permanentStanding: string[] = [];
+      for (const v of activeChequeVouchers) {
+        if (v.status !== 'permanent') continue;
+        const [reversal] = await txEngine.select({ id: journalVouchers.id }).from(journalVouchers)
+          .where(and(eq(journalVouchers.referenceId, v.id), eq(journalVouchers.referenceNumber, `REV-V${v.voucherNumber}`), eq(journalVouchers.isDeleted, 0)));
+        if (!reversal) permanentStanding.push(String(v.voucherNumber));
+      }
+      if (permanentStanding.length > 0) {
+        throw new ConflictError(
+          `چک شماره «${existing.chequeNumber}» سند قطعی ${permanentStanding.join('، ')} دارد و سند قطعی باطل نمی‌شود؛ ` +
+          'این چک حذف نمی‌شود. برای جبران، سند اصلاحی دستی ثبت کنید.'
+        );
+      }
 
       const reversedVoucherIds = new Set<number>();
       for (const v of activeChequeVouchers) {

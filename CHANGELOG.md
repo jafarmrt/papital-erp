@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.57 — Cheques With a Permanent Voucher Are Not Deleted
+- **Cheque Delete (P2):** deleting a cheque whose voucher is permanent is refused with 409 naming the voucher; before, the cheque was deleted and the permanent voucher stayed in the ledger with no cheque behind it. The cheque menu no longer offers status change or delete in a terminal status (TD-502, `reg_cheque_with_permanent_voucher_not_deleted_td_502`, Vitest `chequeTerminalActions.test.tsx`).
+
 ### v9.0.56 — Invoice Settlement After a Voided Receipt
 - **Invoice Settlement (P1):** an invoice whose receipt was voided and then received again now shows the new receipt as paid; before, the void was subtracted twice and the invoice stayed «unpaid» while the customer's ledger was settled (TD-500, `reg_invoice_settled_after_void_and_rereceipt_td_500`).
 

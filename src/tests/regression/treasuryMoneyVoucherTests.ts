@@ -2,7 +2,7 @@ import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { accounts, bankAccounts, treasuryTransactions } from '../../db/schema.js';
+import { accounts, bankAccounts, cheques, journalVouchers, treasuryTransactions } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { fin } from '../../lib/financialDecimal.js';
 
@@ -180,6 +180,56 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
       await expectPaid('after receiving again', 3_000_000, 'fully_paid');
       assertNoProblems(problems);
       return 'Invoice 3,000,000: receipt (paid 3,000,000), void (paid 0), receipt again (paid 3,000,000, fully paid) in the detail and the list';
+    });
+  }
+
+  const chequeId = 'reg_cheque_with_permanent_voucher_not_deleted_td_502';
+  if (shouldRun(chequeId, 'td502', 'treasury', 'cheque', 'package4')) {
+    await runCase(results, chequeId, 'v9.0.57: a cheque whose voucher is permanent is not deleted (409 naming the voucher) and its voucher stays; a cheque with an approved voucher is still deleted with a reversal voucher (TD-502)', async () => {
+      const { createTestCustomer } = await import('../fixtures/factories.js');
+      const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+      const problems: string[] = [];
+      const api = await client();
+      const customer = await createTestCustomer();
+      const today = await businessTodayIsoDate();
+      const newCheque = async (label: string) => {
+        const res = await api.post('/api/accounting/cheques', {
+          type: 'received', chequeNumber: `9${tagOf()}`, bankName: 'Test bank', issueDate: today, dueDate: today, amount: 6_000_000,
+          partyType: 'customer', partyId: customer.id, partyName: customer.name,
+        });
+        if (res.status !== 201) throw new Error(`${label} cheque create returned ${res.status}: ${errorText(res)}`);
+        const [row] = await orm.select({ voucherId: cheques.voucherId }).from(cheques).where(eq(cheques.id, Number(res.body.id)));
+        if (!row?.voucherId) throw new Error(`${label} cheque has no voucher`);
+        const approved = await api.put(`/api/accounting/vouchers/${row.voucherId}/status`, { status: 'approved' });
+        if (approved.status !== 200) throw new Error(`${label} voucher approve returned ${approved.status}: ${errorText(approved)}`);
+        return { id: Number(res.body.id), voucherId: row.voucherId };
+      };
+      const voucherOf = async (id: number) =>
+        (await orm.select({ number: journalVouchers.voucherNumber, isDeleted: journalVouchers.isDeleted, status: journalVouchers.status })
+          .from(journalVouchers).where(eq(journalVouchers.id, id)))[0];
+      const chequeDeleted = async (id: number) => (await orm.select({ d: cheques.isDeleted }).from(cheques).where(eq(cheques.id, id)))[0]?.d === 1;
+
+      const locked = await newCheque('permanent');
+      const finalized = await api.post(`/api/accounting/vouchers/${locked.voucherId}/finalize`);
+      if (finalized.status !== 200) throw new Error(`voucher finalize returned ${finalized.status}: ${errorText(finalized)}`);
+      const lockedVoucher = await voucherOf(locked.voucherId);
+      const refused = await api.del(`/api/accounting/cheques/${locked.id}`);
+      if (refused.status !== 409) problems.push(`deleting the cheque with a permanent voucher returned ${refused.status}, expected 409`);
+      else if (!errorText(refused).includes(String(lockedVoucher.number))) problems.push(`409 message does not name voucher ${lockedVoucher.number}: ${errorText(refused)}`);
+      if (await chequeDeleted(locked.id)) problems.push('the cheque with a permanent voucher was deleted');
+      const after = await voucherOf(locked.voucherId);
+      if (after.isDeleted !== 0 || after.status !== 'permanent') problems.push(`the permanent voucher changed: deleted ${after.isDeleted}, status ${after.status}`);
+
+      const open = await newCheque('approved');
+      const deleted = await api.del(`/api/accounting/cheques/${open.id}`);
+      if (deleted.status !== 200) problems.push(`deleting the cheque with an approved voucher returned ${deleted.status}: ${errorText(deleted)}`);
+      if (!await chequeDeleted(open.id)) problems.push('the cheque with an approved voucher was not deleted');
+      const openVoucher = await voucherOf(open.voucherId);
+      const [reversal] = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(and(eq(journalVouchers.referenceId, open.voucherId), eq(journalVouchers.referenceNumber, `REV-V${openVoucher.number}`), eq(journalVouchers.isDeleted, 0)));
+      if (!reversal) problems.push('the approved voucher of the deleted cheque got no reversal voucher');
+      assertNoProblems(problems);
+      return `Cheque 6,000,000 with permanent voucher ${lockedVoucher.number}: delete 409, cheque and voucher kept; cheque with an approved voucher: deleted and reversed`;
     });
   }
 
