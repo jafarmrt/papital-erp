@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
@@ -9,12 +9,12 @@ import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { NotFoundError, ForbiddenError, BadRequestError } from '../errors/customErrors.js';
+import { NotFoundError, ForbiddenError, BadRequestError, ValidationError } from '../errors/customErrors.js';
 import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
-import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
+import { isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 
 const router = Router();
 router.use(authenticateToken); // Protect all user routes
@@ -552,7 +552,7 @@ router.get('/users/list-simple', asyncHandler(async (req, res) => {
       avatarUrl: users.avatarUrl
     })
     .from(users)
-    .where(sql`${users.isDeleted} = 0 AND ${notSyntheticTestUsername(users.username)}`)
+    .where(eq(users.isDeleted, 0))
     .orderBy(desc(users.id));
     
     const mapped = allUsers.map(u => ({
@@ -578,7 +578,7 @@ router.get('/users', authorizePermission(...READ_PERMISSIONS.userDirectory), asy
       avatarUrl: users.avatarUrl
     })
     .from(users)
-    .where(sql`${users.isDeleted} = 0 AND ${notSyntheticTestUsername(users.username)}`)
+    .where(eq(users.isDeleted, 0))
     .orderBy(desc(users.id));
     
     const mapped = allUsers.map(u => ({
@@ -603,6 +603,10 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
       return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
     }
     const tUsername = (username || '').trim();
+    // v9.0.58 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
+    if (isSyntheticTestUsername(tUsername)) {
+      throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
+    }
     const tFullName = (full_name && String(full_name).trim()) ? String(full_name).trim() : tUsername;
 
     // ۱. بررسی تکراری نبودن نام کاربری در دیتابیس

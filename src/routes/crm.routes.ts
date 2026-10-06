@@ -16,7 +16,6 @@ import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
-import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
@@ -843,9 +842,10 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
 
     // Check description for @mentions as well
     if (description) {
+      // v9.0.58 (TD-521): همه کاربران حذف‌نشده، با پیشوند آزمون یا بی آن
       const allSysUsers = await orm.select({ id: users.id, username: users.username, fullName: users.fullName })
         .from(users)
-        .where(notSyntheticTestUsername(users.username));
+        .where(eq(users.isDeleted, 0));
       for (const u of allSysUsers) {
         if (u.username && description.includes(`@${u.username}`)) targetUserIds.add(u.id);
         if (u.fullName && description.includes(`@${u.fullName}`)) targetUserIds.add(u.id);

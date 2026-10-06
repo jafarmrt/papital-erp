@@ -1,7 +1,7 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { TestCaseResult } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { users } from '../../db/schema.js';
+import { roles, users } from '../../db/schema.js';
 import { runCase, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -52,6 +52,46 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
         if (remaining !== 1) wrong.push(`${remaining} admins remained after concurrent self-demotions, not 1`);
       } finally {
         if (otherIds.length > 0) await orm.update(users).set({ isDeleted: 0 }).where(inArray(users.id, otherIds));
+      }
+    });
+  }
+
+  if (shouldRun('sec_synthetic_username_refused_td_521', 'security', 'td521', 'users', 'package2')) {
+    await runCase(results, {
+      id: 'sec_synthetic_username_refused_td_521',
+      name: 'v9.0.58: a username starting with test_, e2e_ or testuser_ is refused with 422, an existing one is listed and reported by the health check (TD-521)',
+      details: 'POST /api/users refuses test_x, E2E_shop and TestUser_x with a Persian 422 and creates nothing; tester-like names still work; a legacy test_ user appears in GET /api/users and list-simple and in the synthetic_test_users health check',
+    }, async (h, wrong) => {
+      const { findActiveSyntheticUsers, buildSyntheticUsersHealthTest } = await import('../../services/users/syntheticUserHealth.js');
+      const { createTestRole } = await import('../fixtures/factories.js');
+      const role = await createTestRole({ permissions: ['daily_logs.view'] });
+      const created: string[] = [];
+      const legacy = `test_legacy_${h.tag}`;
+      try {
+        for (const username of [`test_x${h.tag}`, `E2E_shop${h.tag}`, `TestUser_x${h.tag}`]) {
+          const res = await h.post('/api/users', { username, password: 'Passw0rd!x', full_name: 'td521', role: role.code });
+          if (res.status === 200) created.push(username);
+          if (res.status !== 422) wrong.push(`creating ${username} returned ${res.status}, not 422`);
+          else if (!/[؀-ۿ]/.test(String(res.body?.error ?? res.body?.message ?? ''))) wrong.push(`the refusal of ${username} is not Persian`);
+          if ((await orm.select({ id: users.id }).from(users).where(eq(users.username, username))).length > 0) wrong.push(`${username} was stored although refused`);
+        }
+        const tester = `tester${h.tag}`;
+        const okRes = await h.post('/api/users', { username: tester, password: 'Passw0rd!x', full_name: 'td521', role: role.code });
+        if (okRes.status === 200) created.push(tester);
+        else wrong.push(`creating ${tester} returned ${okRes.status}, not 200`);
+
+        await orm.insert(users).values({ username: legacy, password: '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva', fullName: 'td521 legacy', role: role.code });
+        created.push(legacy);
+        for (const url of ['/api/users', '/api/users/list-simple']) {
+          const res = await h.get(url);
+          const names = (Array.isArray(res.body) ? res.body : []).map((u: { username: string }) => u.username);
+          if (!names.includes(legacy)) wrong.push(`${url} hides the active user ${legacy}`);
+        }
+        const health = buildSyntheticUsersHealthTest(await findActiveSyntheticUsers());
+        if (health.status !== 'warning' || !health.items?.some(i => i.code === legacy)) wrong.push(`the synthetic_test_users health check does not report ${legacy}`);
+      } finally {
+        if (created.length > 0) await orm.delete(users).where(inArray(users.username, created));
+        await orm.delete(roles).where(eq(roles.id, role.id));
       }
     });
   }

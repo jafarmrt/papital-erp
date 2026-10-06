@@ -20,7 +20,7 @@ import {
   lockoutMessage,
   GENERIC_LOGIN_FAILURE_MESSAGE
 } from '../services/auth/loginSecurity.service.js';
-import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
+import { notSyntheticTestUsername, isSyntheticTestUsername, SYNTHETIC_USERNAME_REFUSED } from '../lib/syntheticUsers.js';
 
 const router = Router();
 
@@ -163,6 +163,10 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
       throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
     }
     const tUsername = (username || '').trim();
+    // v9.0.58 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
+    if (isSyntheticTestUsername(tUsername)) {
+      throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
+    }
     const hash = await bcrypt.hash(password, 10);
 
     let logoPath = logo || '';
