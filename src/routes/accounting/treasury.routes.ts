@@ -127,7 +127,7 @@ router.put('/accounting/bank-accounts/:id', authorizePermission('accounting.trea
 const deleteBankHandler = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const before = (await AccountingService.getBankAccounts()).find((b) => b.id === id) || null;
-  const result = await AccountingService.deleteBankAccount(id);
+  const result = await AccountingService.deleteBankAccount(id, { userId: req.user?.id, username: req.user?.fullName || req.user?.username });
   await logActivity({
     userId: req.user?.id,
     username: req.user?.username || 'system',

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, journalVouchers, treasuryTransactions } from '../../db/schema.js';
@@ -233,5 +233,62 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
     });
   }
 
+  const bankDeleteId = 'reg_bank_delete_voids_opening_voucher_td_503';
+  if (shouldRun(bankDeleteId, 'td503', 'treasury', 'bank', 'package4')) {
+    await runCase(results, bankDeleteId, 'v9.0.58: deleting a bank account voids its opening vouchers (approved: reversal, draft adjustment: soft delete) so its ledger nets to zero; a permanent opening voucher refuses the delete with 409 (TD-503)', async () => {
+      const problems: string[] = [];
+      const api = await client();
+      const openingVouchersOf = async (bankId: number) => orm.select({ id: journalVouchers.id, number: journalVouchers.voucherNumber, status: journalVouchers.status, isDeleted: journalVouchers.isDeleted, type: journalVouchers.voucherType })
+        .from(journalVouchers).where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.referenceId, bankId), eq(journalVouchers.referenceNumber, await bankCode(bankId))));
+      const approve = async (voucherId: number) => {
+        const res = await api.put(`/api/accounting/vouchers/${voucherId}/status`, { status: 'approved' });
+        if (res.status !== 200) throw new Error(`voucher approve returned ${res.status}: ${errorText(res)}`);
+      };
+      const bankLedger = async (bankId: number) => {
+        const r = await orm.execute(sql`SELECT COALESCE(SUM(i.debit - i.credit), 0)::text AS net FROM journal_voucher_items i
+          JOIN journal_vouchers v ON v.id = i.voucher_id WHERE v.is_deleted = 0 AND i.is_deleted = 0 AND i.detailed_type = 'bank_account' AND i.detailed_id = ${bankId}`);
+        return fin(String((r.rows[0] as { net: string }).net)).toString();
+      };
+      const bankIsDeleted = async (bankId: number) => (await orm.select({ d: bankAccounts.isDeleted }).from(bankAccounts).where(eq(bankAccounts.id, bankId)))[0]?.d === 1;
+
+      // 1) opening 1,000,000 approved, then +500,000 as a draft adjustment: the ledger shows 1,000,000 (the draft too: 1,500,000)
+      const bankA = await createBank('Opening bank', 1_000_000);
+      const [opening] = await openingVouchersOf(bankA);
+      if (!opening) throw new Error('bank A has no opening voucher');
+      await approve(opening.id);
+      const edited = await api.put(`/api/accounting/bank-accounts/${bankA}`, { initialBalance: 1_500_000 });
+      if (edited.status !== 200) throw new Error(`opening balance edit returned ${edited.status}: ${errorText(edited)}`);
+      if (await bankLedger(bankA) !== '1500000') problems.push(`bank A ledger before delete ${await bankLedger(bankA)}, expected 1500000`);
+      const delA = await api.del(`/api/accounting/bank-accounts/${bankA}`);
+      if (delA.status !== 200) problems.push(`deleting bank A returned ${delA.status}: ${errorText(delA)}`);
+      if (await bankLedger(bankA) !== '0') problems.push(`bank A ledger after delete ${await bankLedger(bankA)}, expected 0`);
+      const vouchersA = await openingVouchersOf(bankA);
+      const adjustment = vouchersA.find(v => v.type === 'adjustment');
+      if (!adjustment || adjustment.isDeleted !== 1) problems.push('the draft adjustment voucher of bank A was not soft-deleted');
+      const [reversal] = await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(and(eq(journalVouchers.referenceId, opening.id), eq(journalVouchers.referenceNumber, `REV-V${opening.number}`), eq(journalVouchers.isDeleted, 0)));
+      if (!reversal) problems.push('the approved opening voucher of bank A got no reversal voucher');
+
+      // 2) opening 7,000,000 made permanent: the delete is refused and nothing changes
+      const bankB = await createBank('Locked bank', 7_000_000);
+      const [lockedOpening] = await openingVouchersOf(bankB);
+      await approve(lockedOpening.id);
+      const finalized = await api.post(`/api/accounting/vouchers/${lockedOpening.id}/finalize`);
+      if (finalized.status !== 200) throw new Error(`voucher finalize returned ${finalized.status}: ${errorText(finalized)}`);
+      const delB = await api.del(`/api/accounting/bank-accounts/${bankB}`);
+      if (delB.status !== 409) problems.push(`deleting bank B with a permanent opening voucher returned ${delB.status}, expected 409`);
+      else if (!errorText(delB).includes(String(lockedOpening.number))) problems.push(`409 message does not name voucher ${lockedOpening.number}: ${errorText(delB)}`);
+      if (await bankIsDeleted(bankB)) problems.push('bank B was deleted');
+      if (await bankLedger(bankB) !== '7000000') problems.push(`bank B ledger ${await bankLedger(bankB)}, expected 7000000`);
+      assertNoProblems(problems);
+      return 'Bank A (opening 1,000,000 approved + draft adjustment 500,000): delete reversed the opening, removed the draft, ledger 0; bank B (opening 7,000,000 permanent): delete 409, bank and ledger 7,000,000 kept';
+    });
+  }
+
   return results;
+}
+
+async function bankCode(bankId: number): Promise<string> {
+  const [row] = await orm.select({ code: bankAccounts.code }).from(bankAccounts).where(eq(bankAccounts.id, bankId));
+  return String(row?.code ?? '');
 }

@@ -10,6 +10,7 @@ import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
+import { voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
@@ -607,9 +608,9 @@ export class BankAccountService {
    * چک‌های حساب زیر همین قفل شمرده می‌شوند. پیش‌تر حذف بی‌قفل بود و حساب در میانه ثبت دریافت با تراکنش فعال حذف می‌شد،
    * و حسابی که چک وصول‌شده یا صادرشده داشت هم حذف می‌شد.
    */
-  static async deleteBankAccount(id: number): Promise<{ success: boolean }> {
+  static async deleteBankAccount(id: number, user?: { userId?: number; username?: string }): Promise<{ success: boolean }> {
     return orm.transaction(async (tx) => {
-      const [existing] = await tx.select({ id: bankAccounts.id }).from(bankAccounts)
+      const [existing] = await tx.select({ id: bankAccounts.id, code: bankAccounts.code, title: bankAccounts.title }).from(bankAccounts)
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
@@ -624,6 +625,8 @@ export class BankAccountService {
         throw new BusinessLogicError('برای این حساب بانکی/صندوق چک ثبت شده است و امکان حذف آن وجود ندارد');
       }
 
+      // v9.0.58 (TD-503، ت۹): اسناد مانده اول دوره در همان تراکنش بی‌اثر می‌شوند؛ سند قطعی حذف را رد می‌کند
+      await voidBankOpeningVouchers(tx, existing, user);
       await tx.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
       // v9.0.40 (TD-447، ت۵): فرایند در جریان حساب حذف‌شده در همان تراکنش بسته می‌شود
       await terminateOpenWorkflows(tx, {

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.58 — Deleting a Bank Account Voids Its Opening Voucher
+- **Bank Account Delete (P2):** deleting a treasury account now voids its opening and opening-adjustment vouchers in the same transaction (draft removed, approved reversed) and is refused with 409 when one is permanent; before, the opening voucher stayed and the bank ledger kept a balance no account explained (TD-503, `reg_bank_delete_voids_opening_voucher_td_503`).
+
 ### v9.0.57 — Cheques With a Permanent Voucher Are Not Deleted
 - **Cheque Delete (P2):** deleting a cheque whose voucher is permanent is refused with 409 naming the voucher; before, the cheque was deleted and the permanent voucher stayed in the ledger with no cheque behind it. The cheque menu no longer offers status change or delete in a terminal status (TD-502, `reg_cheque_with_permanent_voucher_not_deleted_td_502`, Vitest `chequeTerminalActions.test.tsx`).
 
