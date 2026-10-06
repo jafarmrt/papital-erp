@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.1 — Test Runner Security Upgrade (vitest 5)
+- **Security Gate:** `vitest` upgraded from 3.2.7 to 5.0.3 (dev-only). The CI audit gate was red on every branch because of two critical advisories in `tinypool@1.1.1` (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr) and one moderate advisory in `@vitest/mocker` (GHSA-82fw-gwwq-j7x9); the new chain has no `tinypool` and a patched mocker (TD-414).
+
 ### v9.0.0 — Closure of Version 8 & Launch of Version 9
 - **Version 8 Closure:** Concluded and archived the v8.x series (`v8.0.0` through `v8.0.128`). `V8_MASTER_ROADMAP.md` is archived with a closing report; 129 debt rows (TD-250 – TD-413) were recorded and all are resolved or closed by product-owner decision (TD-369 closed as an accepted risk); `src/data/changelogs/8.ts` is frozen.
 - **Version 9 Mission:** `V9_MASTER_ROADMAP.md` — package-by-package stability audit (architecture and layering, data integrity, concurrency, security, error handling, performance, code quality, tests, UI) of the modules V8 did not cover as areas; stability over rewrites. New debt rows start at TD-414.

@@ -292,6 +292,7 @@
 
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
+| TD-414 | زیرساخت آزمون | P2 — گیت امنیتی CI (`npm run audit:gate`) روی master و همه PRها قرمز بود: vitest@3.2.7 (وابستگی توسعه) tinypool@1.1.1 را با دو هشدار بحرانی آلودگی prototype تا اجرای کد (GHSA-5gmw-xhrv-c9v3، GHSA-85c8-ppgw-ccpr) و @vitest/mocker@3.2.7 را با هشدار متوسط خواندن فایل دلخواه (GHSA-82fw-gwwq-j7x9) می‌آورد؛ npm audit فقط vitest 5 را پیشنهاد می‌داد (اثبات‌شده: خروجی گیت روی ecf6dba و ae603f6) | package.json، package-lock.json | resolved (v9.0.1، با تأیید مالک محصول «ارتقای vitest» در گذار سری ۹) — vitest و @vitest/* از 3.2.7 به 5.0.3؛ زنجیره تازه tinypool ندارد و @vitest/mocker 5.0.3 وصله‌شده است؛ پیکربندی و تست‌های Vitest بی‌تغییر سبزند و وابستگی رانتایم عوض نشد. هشدار متوسط پیشین esbuild زیر drizzle-kit (گیت فقط High/Critical را می‌گیرد) بیرون از این ردیف است. آزمون: Vitest `devToolchainAdvisories.test.ts` (`dev_toolchain_advisories_td_414`) و `npm run audit:gate` |
 
 ## 🔬 نسخه ۸ — ارزیابی صحت منطق کاری (docs/audit/BUSINESS_LOGIC_AUDIT_V8.md) — آرشیو
 
