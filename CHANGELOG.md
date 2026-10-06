@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.22 — Package 12 Personnel Audit Documentation
+- **Stability Audit, Package 12 (Personnel):** `docs/audit/STABILITY_AUDIT_V9.md` gets the personnel section; its 7 proven findings are registered as open rows TD-434 to TD-440 (two P1 salary-data leaks). Documentation only; no behaviour change.
+
 ### v9.0.21 — Party Bank Details Scope
 - **Party Bank Details Scope:** A party's bank details reach only admins and holders of `customers.view`, `customers.manage` or an `accounting.*` permission; the customer list, its export and «تبدیل به مشتری» drop them for other readers (owner decision ت۶; TD-433, `sec_party_bank_info_scope_td_433`).
 
