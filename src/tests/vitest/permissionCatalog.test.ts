@@ -1,5 +1,5 @@
 /**
- * v9.0.79 (TD-880, permission model §4.2): the shared permission catalog and its dependency helpers, used by the
+ * v9.0.82 (TD-880, permission model §4.2): the shared permission catalog and its dependency helpers, used by the
  * server when a role is saved and by the role form when a box is ticked.
  */
 import { describe, expect, it } from 'vitest';

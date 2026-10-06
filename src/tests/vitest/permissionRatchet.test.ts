@@ -1,5 +1,5 @@
 /**
- * v9.0.80 (TD-881, permission model §4.5): two ratchets over production code in `src`, against
+ * v9.0.83 (TD-881, permission model §4.5): two ratchets over production code in `src`, against
  * permission-ratchet-baseline.json. No file gains a role-code literal (only SYSTEM_ADMIN_ROLE in the catalog names a
  * role), every permission-shaped literal is a catalog key and every catalog key is checked by server code; the known
  * exceptions may only shrink.

@@ -4,7 +4,7 @@ import ts from 'typescript';
 import { PERMISSION_KEYS, SYSTEM_ADMIN_ROLE } from '../src/lib/permissions/permissionCatalog';
 
 /**
- * v9.0.80 (TD-881; permission model §4.5): static ratchets over every production source file in `src`
+ * v9.0.83 (TD-881; permission model §4.5): static ratchets over every production source file in `src`
  * (tests and changelog data excluded), read with the TypeScript parser so comments never count.
  *
  *   npm run ratchet:permissions              check against permission-ratchet-baseline.json

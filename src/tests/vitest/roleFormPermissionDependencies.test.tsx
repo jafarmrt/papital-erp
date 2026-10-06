@@ -1,5 +1,5 @@
 /**
- * v9.0.79 (TD-880, permission model §4.2): the role form ticks a permission's requirements with it and unticks the
+ * v9.0.82 (TD-880, permission model §4.2): the role form ticks a permission's requirements with it and unticks the
  * permissions that depend on a removed one, the same rule the server applies on save. It used to toggle each box alone,
  * so a role could be saved with «edit invoices» but without «view invoices».
  */

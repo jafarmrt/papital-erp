@@ -142,7 +142,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_role_permission_dependencies_td_880', 'security', 'td880', 'roles', 'permissions', 'package2')) {
     await runCase(results, {
       id: 'sec_role_permission_dependencies_td_880',
-      name: 'v9.0.79: a saved role always holds what its permissions require, e.g. edit invoices brings view invoices (TD-880)',
+      name: 'v9.0.82: a saved role always holds what its permissions require, e.g. edit invoices brings view invoices (TD-880)',
       details: 'POST and PUT /api/roles add the catalog requirements in catalog order and audit them; an edit without a permission list leaves the stored list as it was; a legacy key outside the catalog is kept; GET /api/permissions returns requires',
     }, async (h, wrong) => {
       const ids: number[] = [];
@@ -180,7 +180,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_permission_only_checks_td_881', 'security', 'td881', 'permissions', 'package2')) {
     await runCase(results, {
       id: 'sec_permission_only_checks_td_881',
-      name: 'v9.0.80: can() and requirePermission ask catalog permissions only, never a role code (TD-881)',
+      name: 'v9.0.83: can() and requirePermission ask catalog permissions only, never a role code (TD-881)',
       details: 'requirePermission refuses a mistyped key, a role code or no key when the router is built, and authorizePermission is the same guard; can() passes the system admin and a role holding the key, refuses a role without it and a missing user, and throws on a role code',
     }, async (h, wrong) => {
       const guards = await import('../../middleware/authorize.js') as Record<string, unknown>;

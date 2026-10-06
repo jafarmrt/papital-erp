@@ -45,7 +45,7 @@ async function roleOrPermissionGranted(role: string, entries: string[]): Promise
 }
 
 /**
- * v9.0.80 (TD-881، مدل مجوز §۴.۲): تنها بررسی دسترسی بر پایه مجوز. «مدیر سیستم» همه را دارد؛ هر کاربر دیگر فقط وقتی
+ * v9.0.83 (TD-881، مدل مجوز §۴.۲): تنها بررسی دسترسی بر پایه مجوز. «مدیر سیستم» همه را دارد؛ هر کاربر دیگر فقط وقتی
  * نقشش یکی از کلیدها را دارد. کد نقش هرگز پرسیده نمی‌شود: ورودی بی‌نقطه خطای برنامه‌نویسی است و پرتاب می‌شود.
  */
 export async function can(user: { role?: string } | undefined, ...permissionKeys: string[]): Promise<boolean> {
@@ -88,7 +88,7 @@ export const authorize = (...allowedRolesOrPermissions: string[]) => {
 };
 
 /**
- * v9.0.80 (TD-881): گارد route فقط با کلیدهای کاتالوگ مجوز. کلید بیرون از کاتالوگ یا کد نقش هنگام ساختن روتر
+ * v9.0.83 (TD-881): گارد route فقط با کلیدهای کاتالوگ مجوز. کلید بیرون از کاتالوگ یا کد نقش هنگام ساختن روتر
  * (راه‌اندازی سرور) خطا می‌دهد، پس گاردی که هیچ نقشی نمی‌تواند بگیرد ساخته نمی‌شود. عبور با `can`.
  */
 export const requirePermission = (...permissionKeys: string[]) => {
