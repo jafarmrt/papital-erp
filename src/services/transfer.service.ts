@@ -4,6 +4,7 @@ import { transfers, activityLogs } from '../db/schema.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { systemNowUtcIso } from '../lib/businessClock.js';
 import { BadRequestError, NotFoundError } from '../errors/customErrors.js';
+import { logActivity } from '../lib/auditLogger.js';
 
 export interface SaveTransferInput {
   code: string;
@@ -45,25 +46,11 @@ export class TransferService {
       thumbnailUrl = imageUrl;
     }
 
-    const existing = await executor.select().from(transfers).where(and(eq(transfers.code, cleanCode), eq(transfers.isDeleted, 0))).limit(1);
-    const now = systemNowUtcIso();
-    let savedRecord: typeof transfers.$inferSelect;
-
-    if (existing.length > 0) {
-      const [updated] = await executor.update(transfers)
-        .set({
-          title: input.title !== undefined ? input.title : existing[0].title,
-          image: imageUrl,
-          thumbnail: thumbnailUrl,
-          notes: input.notes !== undefined ? input.notes : existing[0].notes,
-          updatedAt: now,
-          isDeleted: 0
-        })
-        .where(eq(transfers.code, cleanCode))
-        .returning();
-      savedRecord = updated;
-    } else {
-      const [inserted] = await executor.insert(transfers)
+    // TD-493: one row per code. A new code is inserted; an existing one (live or soft-deleted) is updated under its
+    // row lock, so saving a deleted code revives the same row instead of failing on the unique constraint.
+    const save = async (tx: DbExecutor) => {
+      const now = systemNowUtcIso();
+      const [inserted] = await tx.insert(transfers)
         .values({
           code: cleanCode,
           title: input.title || `ترنسفر کد ${cleanCode}`,
@@ -74,27 +61,46 @@ export class TransferService {
           updatedAt: now,
           isDeleted: 0
         })
+        .onConflictDoNothing({ target: transfers.code })
         .returning();
-      savedRecord = inserted;
-    }
+      let savedRecord = inserted;
+      let action: 'CREATE' | 'UPDATE' = 'CREATE';
+      let before: typeof transfers.$inferSelect | undefined;
+      if (!savedRecord) {
+        [before] = await tx.select().from(transfers).where(eq(transfers.code, cleanCode)).for('update');
+        if (!before) throw new NotFoundError('ترنسفر یافت نشد');
+        const revived = before.isDeleted !== 0;
+        const [updated] = await tx.update(transfers)
+          .set({
+            title: input.title !== undefined ? input.title : (revived ? `ترنسفر کد ${cleanCode}` : before.title),
+            image: imageUrl,
+            thumbnail: thumbnailUrl,
+            notes: input.notes !== undefined ? input.notes : (revived ? '' : before.notes),
+            updatedAt: now,
+            isDeleted: 0
+          })
+          .where(eq(transfers.id, before.id))
+          .returning();
+        savedRecord = updated;
+        action = revived ? 'CREATE' : 'UPDATE';
+      }
 
-    // Log activity if user provided
-    if (input.user) {
-      try {
-        await executor.insert(activityLogs).values({
-          userId: input.user.id || null,
+      if (input.user) {
+        await logActivity({
+          tx,
+          userId: input.user.id,
           username: input.user.username || 'سیستم',
           userFullName: input.user.full_name || '',
-          action: existing.length > 0 ? 'UPDATE' : 'CREATE',
+          action,
           entity: 'ترنسفر',
           entityId: cleanCode,
           description: `ثبت/ویرایش تصویر و اطلاعات ترنسفر کد ${cleanCode}`,
-          details: { code: cleanCode, title: savedRecord.title }
+          details: { before: before ?? null, after: savedRecord }
         });
-      } catch {
-        // Safe logging fallback
       }
-    }
+      return savedRecord;
+    };
+    const savedRecord = executor === orm ? await orm.transaction(save) : await save(executor);
 
     return savedRecord;
   }

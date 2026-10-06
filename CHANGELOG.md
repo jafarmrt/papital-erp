@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.95 — Deleted Transfer Codes Are Gone and Can Be Saved Again
+- **Transfer Codes:** a deleted design answers 404, saving its code again revives it instead of a 409, and the page lists every code (TD-493, `reg_transfer_code_lifecycle_td_493`).
+
 ### v9.0.94 — Stock Movement Chart Counts the Kardex Ledger
 - **Stock Movement Chart:** transfers between warehouses, voided documents and rows dated after the current month no longer enter the in/out chart (TD-492, `reg_movement_trend_ledger_td_492`).
 

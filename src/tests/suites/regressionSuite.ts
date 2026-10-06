@@ -10550,6 +10550,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.88, TD-492): the stock movement chart counts ledger rows only, within the window
   const { runMovementTrendLedgerTests } = await import('../regression/movementTrendLedgerTests.js');
   results.push(...await runMovementTrendLedgerTests(shouldRun));
+  // Package 6 (v9.0.89, TD-493): a deleted transfer design answers 404 and its code can be saved again
+  const { runTransferCodeLifecycleTests } = await import('../regression/transferCodeLifecycleTests.js');
+  results.push(...await runTransferCodeLifecycleTests(shouldRun));
 
   return results;
 }
