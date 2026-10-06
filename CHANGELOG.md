@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.13 — One Proforma Per Lead Under Concurrency
+- **Single Proforma Per Lead:** Issuing a proforma for a sales lead locks the lead row inside the document transaction, so concurrent requests can no longer create several proformas for one lead; the lead link and its note are written in the same transaction (`lockLeadForNewProforma`, `markLeadProforma`; TD-424, package-9 finding B09-09).
+
 ### v9.0.12 — Voiding a Lead Proforma Reopens a Won Lead
 - **Lead Proforma Void:** Voiding the proforma of a sales lead, or the invoice finalized from it, releases the lead inside the void transaction and moves a won lead back to the proposal stage (`releaseLeadOfVoidedDocument`; TD-423, package-9 finding B09-08).
 

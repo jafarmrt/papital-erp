@@ -11,10 +11,9 @@ import { logger } from '../middleware/logger.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
-import { crmLeads, crmActivities, items, documents } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
-import { crmTodayActivityDates } from '../lib/storageDate.js';
-import { releaseLeadOfVoidedDocument } from '../services/crm/leadProforma.js';
+import { items, documents } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
+import { lockLeadForNewProforma, markLeadProforma, releaseLeadOfVoidedDocument } from '../services/crm/leadProforma.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
@@ -274,49 +273,22 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
 
   const isProforma = req.body.status === 'proforma' || req.body.docType === 'proforma';
 
-  // REQUIREMENT 4: Check if a proforma already exists for this lead
-  if (isProforma && targetLeadId) {
-    const [existingLead] = await orm.select().from(crmLeads).where(and(eq(crmLeads.id, targetLeadId), eq(crmLeads.isDeleted, 0)));
-    if (existingLead && existingLead.hasProforma === 1) {
-      throw new ValidationError(`برای پرونده فروش «${existingLead.title}» قبلاً پیش‌فاکتور صادر شده است. هر پرونده فروش تنها مجاز به داشتن یک پیش‌فاکتور می‌باشد.`);
-    }
-  }
-
   // V6 Sub-phase 2.4 (TD-139): اعتبارسنجی سقف رزرو کالا اکنون به شکل متمرکز و اتمیک با قفل سطری درون DocumentService.createDocument انجام می‌گیرد.
 
   // v7.0.102 (TD-233): رزرو پروژه حواله خروج داخل همان تراکنش ثبت سند کم می‌شود (پیش‌تر بعد از ثبت، بیرون از تراکنش و با بلعیدن خطا)
   // v8.0.4 (TD-257): سند انبار با تاریخ پیش از آخرین گردش کالا فقط با مجوز «ثبت سند انبار با تاریخ گذشته»
   const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
-  const { docId: newDocId, projectReservation } = await DocumentService.createDocumentWithDetails({ ...req.body, user: sessionUserLabel(req.user) }, { userId: req.user?.id, allowBackdate });
+  // v9.0.13 (TD-424): «یک پیش‌فاکتور برای هر پرونده» زیر قفل ردیف پرونده و پیوند و علامت پرونده در همان تراکنش سند
+  // (پیش‌تر بررسی بی قفل پیش از تراکنش و علامت‌گذاری پس از commit؛ پیش‌فاکتورهای هم‌زمان همه ثبت می‌شدند)
+  const { docId: newDocId, projectReservation } = await orm.transaction(async (tx) => {
+    const lead = isProforma && targetLeadId ? await lockLeadForNewProforma(tx, targetLeadId) : null;
+    const created = await DocumentService.createDocumentWithDetails({ ...req.body, user: sessionUserLabel(req.user), externalTx: tx }, { userId: req.user?.id, allowBackdate });
+    // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
+    if (targetLeadId) await tx.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, created.docId));
+    if (lead) await markLeadProforma(tx, lead, created.docId, req.user?.full_name || 'سیستم');
+    return created;
+  });
   const title = docTypeTitles[req.body.docType] || 'سند انبار';
-
-  // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
-  if (targetLeadId) {
-    await orm.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, newDocId));
-  }
-
-  // If proforma issued for a lead, mark lead as having proforma and update stage
-  if (isProforma && targetLeadId) {
-    const nowIso = new Date().toISOString();
-    await orm.update(crmLeads).set({
-      hasProforma: 1,
-      proformaId: newDocId,
-      stage: 'proposal',
-      status: 'active',
-      updatedAt: nowIso
-    }).where(eq(crmLeads.id, targetLeadId));
-
-    await orm.insert(crmActivities).values({
-      leadId: targetLeadId,
-      type: 'quote',
-      title: `صدور پیش‌فاکتور شماره ${req.body.refNumber}`,
-      description: `پیش‌فاکتور رسمی به شماره ${req.body.refNumber} در سیستم ثبت گردید.`,
-      loggedBy: req.user?.full_name || 'سیستم',
-      assignedTo: req.user?.full_name || '',
-      // v7.0.132 (TD-232): تاریخ اقدام CRM میلادی ISO (پیش‌تر «۱۴۰۵/۷/۱۱» با ارقام فارسی)
-      ...(await crmTodayActivityDates())
-    });
-  }
 
   const hasDiscounts = (req.body.items || []).some((i: { discount?: unknown }) => Number(i.discount || 0) > 0);
   const totalLines = (req.body.items || []).length;

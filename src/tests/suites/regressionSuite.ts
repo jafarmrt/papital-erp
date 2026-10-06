@@ -10472,6 +10472,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.12، TD-423): ابطال پیش‌فاکتور «فروش موفق» را برمی‌گرداند
   const { runLeadProformaVoidTests } = await import('../regression/leadProformaVoidTests.js');
   results.push(...await runLeadProformaVoidTests(shouldRun));
+  // بسته ۹ (v9.0.13، TD-424): یک پیش‌فاکتور برای هر پرونده زیر درخواست‌های هم‌زمان
+  const { runLeadProformaConcurrencyTests } = await import('../regression/leadProformaConcurrencyTests.js');
+  results.push(...await runLeadProformaConcurrencyTests(shouldRun));
 
   return results;
 }
