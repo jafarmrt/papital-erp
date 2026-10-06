@@ -1375,6 +1375,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۹ (v9.0.21، TD-433): اطلاعات بانکی طرف حساب فقط برای customers.view / customers.manage / accounting.*
   const { runPartyBankInfoScopeTests } = await import('../security/partyBankInfoScopeTests.js');
   results.push(...await runPartyBankInfoScopeTests(shouldRunAccess));
+  // بسته ۱۲، بخش پرسنل (v9.0.23، TD-434): دامنه فیلدهای فهرست و جزئیات پرسنل
+  const { runPersonnelFieldScopeTests } = await import('../security/personnelFieldScopeTests.js');
+  results.push(...await runPersonnelFieldScopeTests(shouldRunAccess));
 
   return results;
 }

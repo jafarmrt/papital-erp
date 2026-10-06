@@ -7947,7 +7947,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (read.body?.nobitexPassword !== 'Secret#123') violations.push(`خواندن برای مدیر: «${read.body?.nobitexPassword}»`);
       const list = await request(app).get('/api/personnel').set('Cookie', session.cookie);
       const listed = (Array.isArray(list.body) ? list.body : []).find((p: { id: number }) => p.id === id);
-      if (listed?.nobitexPassword !== 'Secret#123') violations.push('فهرست پرسنل باید متن ساده (برای مدیر) بدهد نه متن رمزشده');
+      // v9.0.23 (TD-434، تصمیم D1): رمز فقط در جزئیات یک پرسنل؛ فهرست نه متن ساده می‌دهد و نه متن رمزشده
+      if (!listed || 'nobitexPassword' in listed) violations.push('فهرست پرسنل نباید رمز نوبیتکس بدهد (فقط جزئیات)');
 
       // ۲) ذخیره فرم با همان رمز ← متن رمزشده عوض نمی‌شود؛ رمز تازه ← رمزنگاری تازه
       await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189 ویرایش', nobitexPassword: 'Secret#123' });

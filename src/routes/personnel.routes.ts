@@ -15,6 +15,7 @@ import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money, moneyOr } from '../lib/money.js';
+import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 
 const router = Router();
 
@@ -383,33 +384,12 @@ router.get('/personnel', authorizePermission(...READ_PERMISSIONS.personnel), asy
       .where(eq(personnel.isDeleted, 0))
       .orderBy(desc(personnel.id));
 
-    let filtered = allPersonnel;
-
-    if (status) {
-      filtered = filtered.filter(p => p.employmentStatus === status);
-    }
-
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      filtered = filtered.filter(p => 
-        (p.fullName && p.fullName.toLowerCase().includes(q)) ||
-        (p.firstName && p.firstName.toLowerCase().includes(q)) ||
-        (p.lastName && p.lastName.toLowerCase().includes(q)) ||
-        (p.personnelCode && p.personnelCode.toLowerCase().includes(q)) ||
-        (p.phone && p.phone.includes(q)) ||
-        (p.nationalId && p.nationalId.includes(q)) ||
-        (p.jobTitle && p.jobTitle.toLowerCase().includes(q)) ||
-        (p.specializedSkills && p.specializedSkills.toLowerCase().includes(q)) ||
-        (p.otherSkills && p.otherSkills.toLowerCase().includes(q)) ||
-        (p.education && p.education.toLowerCase().includes(q)) ||
-        (p.bankName && p.bankName.toLowerCase().includes(q)) ||
-        (p.notes && p.notes.toLowerCase().includes(q)) ||
-        (p.address && p.address.toLowerCase().includes(q))
-      );
-    }
-
-    const canViewSensitive = await canAccessSensitivePersonnelData(req.user);
-    const sanitizedList = filtered.map(p => sanitizePersonnelRecord(openPersonnelSecret(p), canViewSensitive));
+    // v9.0.23 (TD-434): هر ردیف فقط با فیلدهای دامنه خواننده؛ رمز نوبیتکس هرگز در فهرست نیست و جست‌وجو فقط روی فیلدهای دیدنی است
+    const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user), personnelReadScope(req.user)]);
+    const sanitizedList = allPersonnel
+      .filter(p => !status || p.employmentStatus === status)
+      .map(p => scopePersonnelRow(withoutNobitexPassword(sanitizePersonnelRecord(p, canViewSensitive)), scope))
+      .filter(p => matchesPersonnelSearch(p, search));
 
     res.json(sanitizedList);
   } catch (err) {
@@ -432,8 +412,8 @@ router.get('/personnel/:id', authorizePermission(...READ_PERMISSIONS.personnel),
       return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
     }
 
-    const canViewSensitive = await canAccessSensitivePersonnelData(req.user, record.userId);
-    res.json(sanitizePersonnelRecord(openPersonnelSecret(record), canViewSensitive));
+    const [canViewSensitive, scope] = await Promise.all([canAccessSensitivePersonnelData(req.user, record.userId), personnelReadScope(req.user)]);
+    res.json(scopePersonnelRow(sanitizePersonnelRecord(openPersonnelSecret(record), canViewSensitive), scope));
   } catch (err) {
     throw err;
   }

@@ -2,6 +2,8 @@ import { useState, useMemo, FormEvent, useEffect } from 'react';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { Personnel } from '../types';
 import { toast as hotToast } from 'react-hot-toast';
+import { fetchJson } from '../api';
+import { errorMessageOf } from '../utils/formatters';
 import { normalizePersianText, validateIranianNationalId, validateIranianPhoneNumber, normalizeNationalId, normalizePhoneNumber } from '../utils';
 import {
   usePersonnelListQuery,
@@ -116,7 +118,17 @@ export function usePersonnel() {
     setShowFormModal(true);
   };
 
-  const handleOpenEditModal = (p: Personnel) => {
+  /** v9.0.23 (TD-434): رمز نوبیتکس فقط در جزئیات یک پرسنل می‌آید، پس فرم ویرایش و پرونده از GET /personnel/:id پر می‌شوند */
+  const loadPersonnelDetail = async (p: Personnel): Promise<Personnel | null> => {
+    try {
+      return await fetchJson<Personnel>(`/personnel/${p.id}`);
+    } catch (err) {
+      hotToast.error(errorMessageOf(err) || 'خطا در دریافت اطلاعات پرسنل');
+      return null;
+    }
+  };
+
+  const fillEditForm = (p: Personnel) => {
     setEditingId(p.id);
     setFormData({
       firstName: p.firstName || '',
@@ -149,6 +161,13 @@ export function usePersonnel() {
       notes: p.notes || ''
     });
     setShowFormModal(true);
+  };
+
+  // فرم فقط با جزئیات کامل باز می‌شود؛ فرم پرشده از ردیف فهرست رمز نوبیتکس ندارد و ذخیره آن رمز را پاک می‌کرد
+  const handleOpenEditModal = (p: Personnel) => {
+    void loadPersonnelDetail(p).then((full) => {
+      if (full) fillEditForm(full);
+    });
   };
 
   const handleSave = async (e: FormEvent) => {
@@ -209,6 +228,9 @@ export function usePersonnel() {
   const handleViewDetail = (p: Personnel) => {
     setSelectedPersonnel(p);
     setShowDetailModal(true);
+    void loadPersonnelDetail(p).then((full) => {
+      if (full) setSelectedPersonnel((current) => (current?.id === full.id ? full : current));
+    });
   };
 
   // Filtered List with robust Persian normalization and comprehensive field matching

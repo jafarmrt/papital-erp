@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.23 — Personnel List Field Scope
+- **Personnel Field Scope:** The personnel list and detail give pick-list readers (projects, CRM, accounting, warehouse, piecework) only names, code, job title and status; the dossier needs `personnel.view` / `personnel.manage`, the salary the payroll-amount permissions, and the Nobitex password appears only in the detail (owner decision D1; TD-434, `sec_personnel_field_scope_td_434`).
+
 ### v9.0.22 — Package 12 Personnel Audit Documentation
 - **Stability Audit, Package 12 (Personnel):** `docs/audit/STABILITY_AUDIT_V9.md` gets the personnel section; its 7 proven findings are registered as open rows TD-434 to TD-440 (two P1 salary-data leaks). Documentation only; no behaviour change.
 
