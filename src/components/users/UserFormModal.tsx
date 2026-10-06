@@ -18,11 +18,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   rolesList,
   onSuccess,
 }) => {
+  // v9.0.53 (TD-517): کاربر تازه نقش پیش‌گزیده ندارد؛ پیش‌تر نقش اول فهرست (مدیر سیستم) انتخاب می‌شد
   const [userForm, setUserForm] = useState({
     username: '',
     password: '',
     full_name: '',
-    role: 'viewer',
+    role: '',
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -34,22 +35,26 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         full_name: editingUser.full_name || '',
         username: editingUser.username || '',
         password: '',
-        role: editingUser.role || 'viewer',
+        role: editingUser.role || '',
       });
     } else {
       setUserForm({
         username: '',
         password: '',
         full_name: '',
-        role: rolesList[0]?.code || 'viewer',
+        role: '',
       });
     }
-  }, [editingUser, rolesList, isOpen]);
+  }, [editingUser, isOpen]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userForm.role) {
+      toast.error('نقش کاربر را انتخاب کنید');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
@@ -133,11 +138,14 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 نقش سیستم
               </label>
               <select
+                required
                 value={userForm.role}
                 onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="admin">مدیر سیستم</option>
+                <option value="" disabled>
+                  نقش را انتخاب کنید
+                </option>
                 {rolesList
                   .filter((r) => r.code !== 'admin')
                   .map((r) => (
@@ -145,7 +153,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                       {r.name}
                     </option>
                   ))}
+                <option value="admin">مدیر سیستم (دسترسی کامل)</option>
               </select>
+              {userForm.role === 'admin' && (
+                <p className="mt-1 text-xs text-amber-700">
+                  مدیر سیستم به همه بخش‌ها و تنظیمات دسترسی کامل دارد.
+                </p>
+              )}
             </div>
           </div>
 

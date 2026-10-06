@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.53 — New-User Form Preselects No Role
+- **New-User Role:** the new-user form opens with an empty «choose a role» option and sends nothing until a role is picked; the system admin is listed last with a full-access warning (TD-517, `userFormRole.test.tsx`).
+
 ### v9.0.52 — Package 2 Access and Audit Log Documentation
 - **Stability Audit, Package 2 (Authentication, Access and Audit Log):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 2 section with the approved permission model; its 27 proven findings are registered as open rows TD-516 to TD-542 (four P1: role codes in route guards, the new-user form preselecting the system admin, the browser cache surviving logout, and a deleted username reviving the old account). Documentation only; no behaviour change.
 
