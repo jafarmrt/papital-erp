@@ -7,6 +7,8 @@ import { STAGES } from '../../hooks/useCRMData';
 import { fetchJson } from '../../api';
 import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentPayable';
 import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
+import { customerDocumentsUrl, salesDocumentKindLabel } from '../../lib/customers/customerDocuments';
+import { documentStatusLabelOf } from '../../lib/invoices/invoiceListDocuments';
 import toast from 'react-hot-toast';
 
 interface CustomerDossierDrawerProps {
@@ -60,7 +62,7 @@ export function CustomerDossierDrawer({
     const controller = new AbortController();
 
     setLoadingDocs(true);
-    fetchJson(`/documents?search=${encodeURIComponent(customer.name)}&limit=50`, { signal: controller.signal })
+    fetchJson(customerDocumentsUrl(customer.id), { signal: controller.signal })
       .then((res) => {
         // V3.0.7 (TD-066): Array Safety Guard (قاعده #2 AGENTS)
         const docs = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
@@ -450,16 +452,12 @@ export function CustomerDossierDrawer({
                       <tr key={doc.id} className="hover:bg-slate-50">
                         <td className="p-2.5 font-bold font-mono text-blue-700">#{doc.refNumber || doc.ref_number || doc.id}</td>
                         <td className="p-2.5 font-bold">
-                          {doc.type === 'proforma' ? (
-                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md text-[10px]">پیش‌فاکتور</span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md text-[10px]">فاکتور نهایی</span>
-                          )}
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] ${salesDocumentKindLabel(doc) === 'پیش‌فاکتور' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>{salesDocumentKindLabel(doc)}</span>
                         </td>
                         <td className="p-2.5 font-mono">{formatPersianDate(doc.date)}</td>
                         <td className="p-2.5 font-bold font-mono text-emerald-800">{formatPersianPrice(serverPayableOf(doc), undefined, payableDecimalsOf(doc))} {formatCurrencyLabel(doc.currency)}</td>
                         <td className="p-2.5">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-[10px]">{doc.status || 'نهایی'}</span>
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded text-[10px]">{documentStatusLabelOf(doc.status)}</span>
                         </td>
                       </tr>
                     ))}

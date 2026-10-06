@@ -1,8 +1,14 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
-import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
+import { parsePartyTypeCell } from '../lib/customers/partyTypeCell.js';
+import { NotFoundError } from '../errors/customErrors.js';
+import { phoneMatchKey } from './woocommerce/phoneMatchKey.js';
+import {
+  assertCustomerNameAvailable, assertCustomerPhoneAvailable, customerNameKey, guardCustomerName, isCustomerNameUniqueViolation, CUSTOMER_NAME_TAKEN_MESSAGE,
+} from './customers/customerIdentity.js';
+import { assertCustomerDeletable } from './customers/customerDeleteGuard.js';
 
 export interface ContactPerson {
   id?: string;
@@ -113,28 +119,14 @@ export class CustomerService {
       }
     }
 
-    if (name) {
-      const existingName = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
-      if (existingName.length > 0) {
-        throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.8 (TD-420): نام با کلید ایندکس یکتای uq_customers_name_active؛ نقض ایندکس در رقابت همان پیام را می‌دهد
+    if (name) await assertCustomerNameAvailable(name, executor);
 
-    if (phone) {
-      const existingPhone = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
-      if (existingPhone.length > 0) {
-        throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.7 (TD-419): تلفن با کلید تطبیق (همان شماره با نگارش دیگر تکراری است)
+    await assertCustomerPhoneAvailable(phone, executor);
 
     const createdAt = new Date().toISOString();
-    const [created] = await executor
+    const [created] = await guardCustomerName(() => executor
       .insert(customers)
       .values({
         name,
@@ -153,7 +145,7 @@ export class CustomerService {
         isDeleted: 0,
         version: 1
       })
-      .returning();
+      .returning());
 
     return created;
   }
@@ -205,25 +197,11 @@ export class CustomerService {
       }
     }
 
-    if (name) {
-      const existingName = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.name, name), eq(customers.isDeleted, 0)));
-      if (existingName.length > 0 && existingName[0].id !== customerId) {
-        throw new BadRequestError('طرف حساب با این نام قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.8 (TD-420): فقط نام تازه سنجیده می‌شود (هم‌نام‌های قدیمی ویرایش را نمی‌بندند)
+    if (name && customerNameKey(name) !== customerNameKey(prevCust.name)) await assertCustomerNameAvailable(name, executor, customerId);
 
-    if (phone) {
-      const existingPhone = await executor
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.phone, phone), eq(customers.isDeleted, 0)));
-      if (existingPhone.length > 0 && existingPhone[0].id !== customerId) {
-        throw new BadRequestError('طرف حساب با این شماره تلفن قبلاً ثبت شده است.');
-      }
-    }
+    // v9.0.7 (TD-419): فقط شماره تازه سنجیده می‌شود؛ نگه داشتن شماره قبلی (با هر نگارشی) ویرایش را رد نمی‌کند
+    if (phoneMatchKey(phone) !== phoneMatchKey(prevCust.phone)) await assertCustomerPhoneAvailable(phone, executor, customerId);
 
     const updatedData: Partial<typeof customers.$inferInsert> = {
       name,
@@ -242,11 +220,11 @@ export class CustomerService {
     };
 
     // ویرایش هم‌زمانی که میان خواندن و نوشتن نسخه را جلو برده باشد ردیفی را تغییر نمی‌دهد و تداخل گزارش می‌شود
-    const [current] = await executor
+    const [current] = await guardCustomerName(() => executor
       .update(customers)
       .set(updatedData)
       .where(and(eq(customers.id, customerId), eq(customers.version, prevCust.version), eq(customers.isDeleted, 0)))
-      .returning();
+      .returning());
     if (!current) {
       throw new OptimisticLockError({ entityType: 'Customer', entityId: customerId, expectedVersion });
     }
@@ -262,21 +240,27 @@ export class CustomerService {
     executor: DbExecutor = orm
   ): Promise<typeof customers.$inferSelect> {
     const customerId = Number(id);
-    const [delCust] = await executor
-      .select()
-      .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.isDeleted, 0)));
+    // v9.0.10 (TD-431): زیر قفل ردیف طرف حساب؛ مانده، سند پیش‌نویس یا پیش‌فاکتور، پرونده فعال، پروژه یا چک باز حذف را رد می‌کند
+    const remove = async (tx: DbExecutor) => {
+      const [delCust] = await tx
+        .select()
+        .from(customers)
+        .where(and(eq(customers.id, customerId), eq(customers.isDeleted, 0)))
+        .for('update');
 
-    if (!delCust) {
-      throw new NotFoundError('مشتری یافت نشد.');
-    }
+      if (!delCust) {
+        throw new NotFoundError('مشتری یافت نشد.');
+      }
+      await assertCustomerDeletable(delCust, tx);
 
-    await executor
-      .update(customers)
-      .set({ isDeleted: 1 })
-      .where(sql`${customers.id} = ${customerId}`);
+      await tx
+        .update(customers)
+        .set({ isDeleted: 1 })
+        .where(sql`${customers.id} = ${customerId}`);
 
-    return delCust;
+      return delCust;
+    };
+    return executor === orm ? orm.transaction(remove) : remove(executor);
   }
 
   /**
@@ -293,7 +277,7 @@ export class CustomerService {
     const createdRecords: Array<{ id: number; name: string; partyType: string; phone?: string }> = [];
     const updatedRecords: Array<{ id: number; name: string; partyType: string; updatedData: Partial<typeof customers.$inferInsert> }> = [];
 
-    const existingList = await executor.select().from(customers).where(eq(customers.isDeleted, 0));
+    const existingList = await executor.select().from(customers).where(eq(customers.isDeleted, 0)).orderBy(asc(customers.id));
 
     const idMap = new Map<number, typeof customers.$inferSelect>();
     const nameMap = new Map<string, typeof customers.$inferSelect>();
@@ -304,8 +288,9 @@ export class CustomerService {
       if (c.name && c.name.trim()) {
         nameMap.set(c.name.trim().toLowerCase(), c);
       }
-      if (c.phone && c.phone.trim()) {
-        phoneMap.set(c.phone.trim(), c);
+      // v9.0.7 (TD-419): نقشه تلفن با کلید تطبیق؛ شماره‌ای که اکسل صفر اولش را انداخته هم همان شماره است
+      if (phoneMatchKey(c.phone) && !phoneMap.has(phoneMatchKey(c.phone))) {
+        phoneMap.set(phoneMatchKey(c.phone), c);
       }
     });
 
@@ -323,15 +308,8 @@ export class CustomerService {
         const id = item.id ? Number(item.id) : undefined;
         const contactName = String(item.contactName || '').trim();
         const phone = String(item.phone || '').trim();
-        const rawType = String(item.partyType || '').trim().toLowerCase();
-        let partyType: 'customer' | 'supplier' | 'both' = 'customer';
-        if (rawType.includes('تامین') || rawType === 'supplier') {
-          partyType = 'supplier';
-        } else if (rawType.includes('هر دو') || rawType.includes('مشتری و تامین') || rawType === 'both') {
-          partyType = 'both';
-        } else {
-          partyType = 'customer';
-        }
+        // v9.0.9 (TD-421): نوع خالی undefined است؛ رکورد موجود نوعش را نگه می‌دارد و رکورد تازه «مشتری» می‌شود
+        const cellType = parsePartyTypeCell(item.partyType);
 
         const supplierCategory = String(item.supplierCategory || '').trim();
         const country = String(item.country || 'ایران').trim();
@@ -353,8 +331,8 @@ export class CustomerService {
           matchedCust = idMap.get(id);
         } else if (nameMap.has(name.toLowerCase())) {
           matchedCust = nameMap.get(name.toLowerCase());
-        } else if (phone && phoneMap.has(phone)) {
-          matchedCust = phoneMap.get(phone);
+        } else if (phoneMatchKey(phone) && phoneMap.has(phoneMatchKey(phone))) {
+          matchedCust = phoneMap.get(phoneMatchKey(phone));
         }
 
         if (matchedCust) {
@@ -381,7 +359,7 @@ export class CustomerService {
               phone: phone || matchedCust.phone,
               address: address || matchedCust.address,
               notes: notes || matchedCust.notes,
-              partyType,
+              partyType: cellType ?? matchedCust.partyType,
               supplierCategory: supplierCategory || matchedCust.supplierCategory,
               bankInfo: {
                 ...((matchedCust.bankInfo as Record<string, unknown>) || {}),
@@ -401,9 +379,9 @@ export class CustomerService {
             }
             idMap.set(saved.id, saved);
             nameMap.set(name.toLowerCase(), saved);
-            if (saved.phone) phoneMap.set(saved.phone.trim(), saved);
+            if (phoneMatchKey(saved.phone)) phoneMap.set(phoneMatchKey(saved.phone), saved);
 
-            updatedRecords.push({ id: matchedCust.id, name, partyType, updatedData });
+            updatedRecords.push({ id: matchedCust.id, name, partyType: saved.partyType ?? 'customer', updatedData });
             updatedCount++;
           } else {
             errors.push({
@@ -413,6 +391,7 @@ export class CustomerService {
             });
           }
         } else {
+          const partyType = cellType ?? 'customer';
           const [newCust] = await executor
             .insert(customers)
             .values({
@@ -436,13 +415,13 @@ export class CustomerService {
 
           idMap.set(newCust.id, newCust);
           nameMap.set(name.toLowerCase(), newCust);
-          if (phone) phoneMap.set(phone, newCust);
+          if (phoneMatchKey(phone)) phoneMap.set(phoneMatchKey(phone), newCust);
 
           createdRecords.push({ id: newCust.id, name, partyType, phone });
           createdCount++;
         }
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : 'خطای ناشناخته در پردازش سطر';
+        const errorMsg = isCustomerNameUniqueViolation(err) ? CUSTOMER_NAME_TAKEN_MESSAGE : (err instanceof Error ? err.message : 'خطای ناشناخته در پردازش سطر');
         errors.push({
           row: rowIndex,
           name: rows[i]?.name,

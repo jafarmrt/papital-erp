@@ -13,6 +13,10 @@ export interface GetDocumentsFilter {
   offset?: number;
   isExport?: boolean;
   projectId?: number | string;
+  /** v9.0.6 (TD-417): نام خریدار با برابری دقیق (پس از حذف فاصله ابتدا و انتها)، نه جست‌وجوی «شامل» */
+  buyerName?: string;
+  /** v9.0.6 (TD-417): چند نوع سند با هم (مثلاً نوع‌های فروش پرونده مشتری) */
+  types?: string[];
 }
 
 export interface DocumentLineItemInput {

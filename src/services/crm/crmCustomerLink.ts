@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { customers } from '../../db/schema.js';
 import { systemNowUtcIso } from '../../lib/businessClock.js';
 import { toPersianDigits } from '../../utils/persianNumber.js';
+import { findActiveCustomerByName, findActiveCustomerByPhone, isCustomerNameUniqueViolation, samePhone } from '../customers/customerIdentity.js';
 
 /**
  * v9.0.5 (TD-418، تصمیم مالک محصول ت۲ الف): پرونده فروش فقط به طرف حساب پیوند می‌دهد یا طرف حساب تازه می‌سازد و هرگز
@@ -31,7 +32,8 @@ const keep = 'طرف حساب تغییر نکرد.';
 
 function phoneDifference(customer: CustomerRow, leadPhone: string): string | null {
   const current = (customer.phone ?? '').trim();
-  if (!leadPhone || leadPhone === current) return null;
+  // v9.0.7 (TD-419): همان شماره با نگارش دیگر اختلاف نیست
+  if (!leadPhone || leadPhone === current || samePhone(leadPhone, current)) return null;
   const theirs = current ? `تلفن طرف حساب ${toPersianDigits(current)} است` : 'طرف حساب تلفن ندارد';
   return `اختلاف با طرف حساب «${customer.name}»: تلفن پرونده ${toPersianDigits(leadPhone)} و ${theirs}. ${keep}`;
 }
@@ -66,12 +68,12 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
     if (byId) return linkTo(byId, [nameDifference(byId, cCompany), phoneDifference(byId, cPhone)]);
   }
 
-  if (cPhone) {
-    const [byPhone] = await active(eq(customers.phone, cPhone));
-    if (byPhone) return linkTo(byPhone, [nameDifference(byPhone, cCompany)]);
-  }
+  // v9.0.7 (TD-419): طرف حساب با کلید تطبیق تلفن پیدا می‌شود، نه برابری دقیق رشته
+  const byPhone = await findActiveCustomerByPhone(cPhone, db);
+  if (byPhone) return linkTo(byPhone, [nameDifference(byPhone, cCompany)]);
 
-  const [byName] = await active(eq(customers.name, primaryCustomerName));
+  // v9.0.8 (TD-420): نام با کلید ایندکس یکتای نام طرف حساب فعال
+  const byName = await findActiveCustomerByName(primaryCustomerName, db);
   if (byName) return linkTo(byName, [phoneDifference(byName, cPhone)]);
 
   const [created] = await db.insert(customers).values({
@@ -81,7 +83,12 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
     notes: 'ثبت شده اتوماتیک از طریق سیستم CRM',
     createdAt: systemNowUtcIso(),
     isDeleted: 0,
-  }).returning({ id: customers.id });
+  }).returning({ id: customers.id }).catch(async (err: unknown) => {
+    // درخواست هم‌زمان همین نام را ساخت: به همان طرف حساب پیوند می‌دهد
+    const winner = isCustomerNameUniqueViolation(err) ? await findActiveCustomerByName(primaryCustomerName, db) : undefined;
+    if (!winner) throw err;
+    return [{ id: winner.id }];
+  });
   return { customerId: created ? created.id : null, differences: [] };
 }
 

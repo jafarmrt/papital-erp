@@ -10451,6 +10451,21 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.4، TD-416): کارت حساب طرف حساب با شناسه او
   const { runPartyAccountCardTests } = await import('../regression/partyAccountCardTests.js');
   results.push(...await runPartyAccountCardTests(shouldRun));
+  // بسته ۹ (v9.0.6، TD-417): اسناد پرونده مشتری با نام خریدار برابر و فقط نوع‌های فروش
+  const { runCustomerDossierDocumentsTests } = await import('../regression/customerDossierDocumentsTests.js');
+  results.push(...await runCustomerDossierDocumentsTests(shouldRun));
+  // بسته ۹ (v9.0.7، TD-419): تلفن طرف حساب با کلید تطبیق
+  const { runCustomerPhoneKeyTests } = await import('../regression/customerPhoneKeyTests.js');
+  results.push(...await runCustomerPhoneKeyTests(shouldRun));
+  // بسته ۹ (v9.0.8، TD-420): یکتایی نام طرف حساب فعال
+  const { runCustomerUniqueNameTests } = await import('../regression/customerUniqueNameTests.js');
+  results.push(...await runCustomerUniqueNameTests(shouldRun));
+  // بسته ۹ (v9.0.9، TD-421): نوع خالی در درون‌ریزی اکسل طرف حساب‌ها
+  const { runCustomerImportPartyTypeTests } = await import('../regression/customerImportPartyTypeTests.js');
+  results.push(...await runCustomerImportPartyTypeTests(shouldRun));
+  // بسته ۹ (v9.0.10، TD-431): رد حذف طرف حساب دارای مانده یا کار باز
+  const { runCustomerDeleteGuardTests } = await import('../regression/customerDeleteGuardTests.js');
+  results.push(...await runCustomerDeleteGuardTests(shouldRun));
 
   return results;
 }

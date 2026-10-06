@@ -30,6 +30,12 @@ export class DocumentQueryService {
     if (filter.type && filter.type !== 'all') {
       conditions.push(eq(documents.type, filter.type));
     }
+    if (filter.types && filter.types.length > 0) {
+      conditions.push(inArray(documents.type, filter.types));
+    }
+    if (filter.buyerName !== undefined) {
+      conditions.push(sql`btrim(${documents.buyerName}) = ${filter.buyerName.trim()}::text`);
+    }
     if (filter.status && filter.status !== 'all') {
       conditions.push(eq(documents.status, filter.status));
     }

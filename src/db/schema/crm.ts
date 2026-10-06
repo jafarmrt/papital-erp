@@ -24,6 +24,8 @@ export const customers = pgTable('customers', {
   nameTrgmIdx: index('customers_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`),
   idx_customers_party_type: index('idx_customers_party_type').on(table.partyType),
   idx_customers_is_deleted: index('idx_customers_is_deleted').on(table.isDeleted),
+  // v9.0.8 (TD-420): ایندکس یکتای جزئی uq_customers_name_active روی lower(btrim(name)) برای طرف حساب‌های فعال را مهاجرت 0052
+  // فقط روی داده بدون نام تکراری می‌سازد (src/services/customers/customerIdentity.ts)
 }));
 registerColumnRef('customers.id', () => customers.id);
 
