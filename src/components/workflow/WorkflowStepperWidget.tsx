@@ -343,11 +343,20 @@ export const WorkflowStepperWidget: React.FC<WorkflowStepperWidgetProps> = ({
                     <span className="text-gray-400 text-[10px]">خریدار: </span>
                     <span className="font-bold text-gray-800 dark:text-gray-200 truncate">{wfData.entityContext.buyerName || '-'}</span>
                   </div>
-                  {wfData.entityContext.amount ? (
+                  {/* TD-466 (یافته B14-24): مبلغ زمینه ریالی است (workflowDocumentAmount)؛ پیش‌تر با واحد ارز سند نشان داده می‌شد */}
+                  {Number(wfData.entityContext.amount) > 0 ? (
                     <div className="col-span-2">
                       <span className="text-gray-400 text-[10px]">مبلغ سند: </span>
+                      {wfData.entityContext.currency && wfData.entityContext.currency !== 'IRR' && Number(wfData.entityContext.amountInCurrency) > 0 ? (
+                        <>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {formatPersianPrice(Number(wfData.entityContext.amountInCurrency), wfData.entityContext.currency)}
+                          </span>
+                          <span className="text-gray-400 text-[10px]"> برابر </span>
+                        </>
+                      ) : null}
                       <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatPersianPrice(Number(wfData.entityContext.amount), wfData.entityContext.currency)}
+                        {formatPersianPrice(Number(wfData.entityContext.amount), 'IRR')}
                       </span>
                     </div>
                   ) : null}
