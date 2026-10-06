@@ -32,6 +32,23 @@ export function useTreasuryTransactionsQuery() {
   });
 }
 
+/** v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» پرسنل؛ فقط وقتی فرم آن را لازم دارد خوانده می‌شود */
+export interface ContraAccountOption {
+  id: number;
+  code: string;
+  name: string;
+  accountType: string;
+}
+
+export function useContraAccountsQuery(enabled: boolean) {
+  return useQuery<ContraAccountOption[]>({
+    queryKey: QUERY_KEYS.accounting.contraAccounts(),
+    queryFn: ({ signal }) => fetchAccountingList<ContraAccountOption>('/accounting/treasury/contra-accounts', signal, 'contra accounts'),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled,
+  });
+}
+
 export interface ReconcileVariables {
   bankAccountId: number;
   txIds: number[];

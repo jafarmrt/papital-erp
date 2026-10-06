@@ -7,6 +7,7 @@ import { authorizePermission, userHasRoleOrPermission } from '../../middleware/a
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
+import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
 import { idempotency } from '../../middleware/idempotency.js';
@@ -180,6 +181,11 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
   res.status(201).json(tx);
 }));
 
+// v9.0.82 (TD-507، ت۴ الف): سرفصل‌هایی که فرم خزانه و دفتر چک برای «متفرقه» و «سایر» پرسنل پیشنهاد می‌دهند
+router.get('/accounting/treasury/contra-accounts', authorizePermission('accounting.treasury', 'accounting.cheques'), asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await choosableContraAccounts() });
+}));
+
 router.post('/accounting/treasury/preview-voucher', authorizePermission('accounting.treasury'), validate(previewTreasurySchema), asyncHandler(async (req, res) => {
   const preview = await AccountingService.previewTreasuryVoucher(req.body);
   res.json(preview);
@@ -298,7 +304,6 @@ const updateChequeStatusHandler = asyncHandler(async (req, res) => {
     actionDate: req.body.actionDate,
     bankAccountId: req.body.bankAccountId,
     transfereePartyId: req.body.transfereePartyId,
-    transfereePartyName: req.body.transfereePartyName,
     notes,
     description: req.body.description,
     userId: req.user?.id,
