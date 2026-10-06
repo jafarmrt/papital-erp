@@ -8,6 +8,7 @@ import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './vouc
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
+import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
@@ -1069,6 +1070,11 @@ export class FinancialHealthService {
     const openInstanceTest = buildOpenInstanceHealthTest(duplicateOpenInstances, openInstanceIndexPresent);
     overallScore += openInstanceTest.scoreImpact;
     tests.push(openInstanceTest);
+
+    // آزمون ۱۹: v9.0.51 (TD-461) کلیدهای خارجی گردش کار و یکتایی شماره نسخه تعریف (مهاجرت 0059)
+    const workflowReferenceTest = buildWorkflowReferenceHealthTest(await findWorkflowReferenceGaps());
+    overallScore += workflowReferenceTest.scoreImpact;
+    tests.push(workflowReferenceTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

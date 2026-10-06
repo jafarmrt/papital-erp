@@ -19,6 +19,27 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.51 — Workflow Tables Get Foreign Keys and Indexes
+- **Workflow Referential Integrity:** migration 0059 adds foreign keys between the workflow tables (NOT VALID, validated only on clean data; instance children cascade), the instance-by-entity and by-instance indexes and a unique definition version; the health check lists gaps as `workflow_reference_integrity` (TD-461, `sec_workflow_db_constraints_td_461`).
+
+### v9.0.50 — Workflow Write Routes Validate Their Bodies
+- **Workflow Route Bodies:** `/transition`, `/definitions`, `/positions` and `/delegations` validate their bodies with Zod (400, Persian); `/positions` needs the definition id and moves only that definition's steps in one transaction with an audit row (TD-459, `sec_workflow_route_bodies_td_459`).
+
+### v9.0.49 — SLA Analytics Read Each Instance's Own Snapshot
+- **SLA Analytics from the Snapshot:** a running instance's step title and SLA come from its own definition snapshot and it is counted under the current step with the same key, so re-saving a design no longer marks it unknown and overdue (TD-457, `sec_workflow_sla_from_snapshot_td_457`).
+
+### v9.0.48 — Invalid Workflow Rules Are Refused and Fail Closed
+- **Workflow Rule Validation:** a transition rule is validated on save (422), and a stored node that is neither a rule nor a group evaluates closed with a Persian reason; an empty expression still means no condition (TD-456, `sec_workflow_rule_validation_td_456`).
+
+### v9.0.47 — Designer Saves Keep the Step Order
+- **Workflow Step Order:** saving a design keeps each step's `stepOrder` (a missing one takes the step's list position) and the designer reads, assigns and edits it (TD-454, `sec_workflow_step_order_td_454`).
+
+### v9.0.46 — Default Workflows Are Seeded Only When Missing, at Startup
+- **Workflow Seed:** default definitions are created only when their code is missing and only at startup; listing definitions, starting an instance and creating a requisition no longer seed, and the manual sync route is removed (TD-453, `sec_workflow_seed_keeps_edited_definition_td_453`).
+
+### v9.0.45 — Workflow Designs Are Validated Before Saving
+- **Workflow Design Validation:** a definition is saved only with exactly one initial step, at least one terminal step, unique keys and resolvable actions, no exit from a terminal step except `rejected` (422 otherwise); renaming a step key in the designer keeps its actions (TD-452, `sec_workflow_design_validation_td_452`).
+
 ### v9.0.44 — Roleless Step Reminders Only to Workflow Approvers
 - **SLA Reminder Recipients:** a roleless (`ALL`) task's due reminder goes only to admins and holders of `workflow.approve` / `workflow.execute` (plus their active delegates) (TD-460, `sec_workflow_sla_reminder_recipients_td_460`).
 

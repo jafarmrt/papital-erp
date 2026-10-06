@@ -6,6 +6,38 @@ import {
   workflowTaskReopenLog
 } from '../../db/schema';
 import { desc } from 'drizzle-orm';
+import { isUsableSnapshot } from './workflowSnapshot.js';
+import type { WorkflowSnapshotDsl } from './workflowTransitionExecutor.js';
+
+type StateRow = typeof workflowStates.$inferSelect;
+interface ResolvedState { rowId: number; title: string; color: string; slaHours: number }
+
+/**
+ * v9.0.49 (TD-457، B14-15): گام هر فرایند از تصویر نسخه خودش خوانده می‌شود (عنوان و مهلت)، و در گزارش گام‌ها زیر گامِ
+ * جاری با همان کلید در همان تعریف شمرده می‌شود؛ ذخیره طرح گام‌ها را با شناسه تازه می‌سازد و پیش‌تر فرایند در جریان
+ * «نامشخص، مهلت ۲۴» می‌شد و از شمار فعال گامش بیرون می‌افتاد. گامی که از طرح حذف شده ردیف خودش را می‌گیرد.
+ */
+function createStateResolver(states: StateRow[]) {
+  const currentById = new Map(states.map(s => [s.id, s]));
+  const currentByKey = new Map(states.map(s => [`${s.workflowDefinitionId}:${s.stateKey}`, s]));
+  const resolve = (definitionId: number, snapshot: unknown, stateId: number | null | undefined): ResolvedState | undefined => {
+    if (!stateId) return undefined;
+    const dsl = snapshot as WorkflowSnapshotDsl | null;
+    const own = isUsableSnapshot(dsl) ? dsl.states?.find(s => s.id === stateId) : undefined;
+    const live = currentById.get(stateId);
+    const key = own?.stateKey ?? live?.stateKey;
+    const row = live ?? (key !== undefined ? currentByKey.get(`${definitionId}:${key}`) : undefined);
+    const source = own ?? live;
+    if (!source) return undefined;
+    return {
+      rowId: row?.id ?? source.id,
+      title: source.title,
+      color: (own as { color?: string | null } | undefined)?.color ?? row?.color ?? 'gray',
+      slaHours: Number(source.slaHours) || 24,
+    };
+  };
+  return resolve;
+}
 
 export interface OverdueInstance {
   instanceId: number;
@@ -56,9 +88,10 @@ export class WorkflowSlaEvaluator {
     const allInstances = await orm.select().from(workflowInstances);
     const activeInstances = allInstances.filter(i => i.status === 'IN_PROGRESS');
     const completedInstances = allInstances.filter(i => i.status === 'COMPLETED');
+    const instanceById = new Map(allInstances.map(i => [i.id, i]));
 
     const states = await orm.select().from(workflowStates);
-    const stateById = new Map(states.map(s => [s.id, s]));
+    const resolve = createStateResolver(states);
     const historyLogs = await orm.select().from(workflowHistoryLogs).orderBy(workflowHistoryLogs.createdAt);
 
     const now = new Date().getTime();
@@ -68,13 +101,40 @@ export class WorkflowSlaEvaluator {
     let totalSlaViolations = 0;
     let totalTransitionsChecked = 0;
 
+    // 2. Bottlenecks per State
+    const stateStatsMap: Record<number, {
+      stateId: number;
+      stateTitle: string;
+      color: string;
+      slaHours: number;
+      activeCount: number;
+      overdueCount: number;
+      totalCompletedTransitions: number;
+      totalDurationHours: number;
+      avgDurationHours: number;
+    }> = {};
+    const addStateRow = (id: number, title: string, color: string, slaHours: number) => {
+      stateStatsMap[id] = {
+        stateId: id, stateTitle: title, color, slaHours,
+        activeCount: 0, overdueCount: 0, totalCompletedTransitions: 0, totalDurationHours: 0, avgDurationHours: 0
+      };
+    };
+    for (const s of states) addStateRow(s.id, s.title, s.color || 'gray', s.slaHours || 24);
+
     for (const inst of activeInstances) {
-      const state = stateById.get(inst.currentStateId);
-      const slaHours = state?.slaHours || 24;
+      const state = resolve(inst.workflowDefinitionId, inst.snapshotDsl, inst.currentStateId);
+      const slaHours = state?.slaHours ?? 24;
       const lastUpdate = inst.updatedAt ? new Date(inst.updatedAt).getTime() : new Date(inst.createdAt || '').getTime();
       const hoursInState = Math.round(((now - lastUpdate) / (1000 * 60 * 60)) * 10) / 10;
+      const isOverdue = hoursInState > slaHours;
 
-      if (hoursInState > slaHours) {
+      if (state) {
+        if (!stateStatsMap[state.rowId]) addStateRow(state.rowId, state.title, state.color, state.slaHours);
+        stateStatsMap[state.rowId].activeCount++;
+        if (isOverdue) stateStatsMap[state.rowId].overdueCount++;
+      }
+
+      if (isOverdue) {
         totalSlaViolations++;
         overdueInstances.push({
           instanceId: inst.id,
@@ -90,47 +150,6 @@ export class WorkflowSlaEvaluator {
       }
     }
 
-    // 2. Bottlenecks per State
-    const stateStatsMap: Record<number, {
-      stateId: number;
-      stateTitle: string;
-      color: string;
-      slaHours: number;
-      activeCount: number;
-      overdueCount: number;
-      totalCompletedTransitions: number;
-      totalDurationHours: number;
-      avgDurationHours: number;
-    }> = {};
-
-    for (const s of states) {
-      stateStatsMap[s.id] = {
-        stateId: s.id,
-        stateTitle: s.title,
-        color: s.color || 'gray',
-        slaHours: s.slaHours || 24,
-        activeCount: 0,
-        overdueCount: 0,
-        totalCompletedTransitions: 0,
-        totalDurationHours: 0,
-        avgDurationHours: 0
-      };
-    }
-
-    // Populate active and overdue counts
-    for (const inst of activeInstances) {
-      if (stateStatsMap[inst.currentStateId]) {
-        stateStatsMap[inst.currentStateId].activeCount++;
-        const state = stateById.get(inst.currentStateId);
-        const slaHours = state?.slaHours || 24;
-        const lastUpdate = inst.updatedAt ? new Date(inst.updatedAt).getTime() : new Date(inst.createdAt || '').getTime();
-        const hoursInState = (now - lastUpdate) / (1000 * 60 * 60);
-        if (hoursInState > slaHours) {
-          stateStatsMap[inst.currentStateId].overdueCount++;
-        }
-      }
-    }
-
     // Calculate historical durations from logs
     const instanceLogsMap: Record<number, (typeof workflowHistoryLogs.$inferSelect)[]> = {};
     for (const log of historyLogs) {
@@ -140,19 +159,22 @@ export class WorkflowSlaEvaluator {
 
     for (const instId in instanceLogsMap) {
       const logs = instanceLogsMap[instId];
+      const inst = instanceById.get(Number(instId));
       for (let i = 0; i < logs.length - 1; i++) {
         const currentLog = logs[i];
         const nextLog = logs[i + 1];
-        if (currentLog.toStateId && stateStatsMap[currentLog.toStateId]) {
+        const state = inst ? resolve(inst.workflowDefinitionId, inst.snapshotDsl, currentLog.toStateId) : undefined;
+        if (state) {
+          if (!stateStatsMap[state.rowId]) addStateRow(state.rowId, state.title, state.color, state.slaHours);
           const t1 = new Date(currentLog.createdAt || '').getTime();
           const t2 = new Date(nextLog.createdAt || '').getTime();
           const durationHours = (t2 - t1) / (1000 * 60 * 60);
-          
-          stateStatsMap[currentLog.toStateId].totalCompletedTransitions++;
-          stateStatsMap[currentLog.toStateId].totalDurationHours += durationHours;
+
+          stateStatsMap[state.rowId].totalCompletedTransitions++;
+          stateStatsMap[state.rowId].totalDurationHours += durationHours;
           totalTransitionsChecked++;
 
-          if (durationHours > stateStatsMap[currentLog.toStateId].slaHours) {
+          if (durationHours > state.slaHours) {
             totalSlaViolations++;
           }
         }

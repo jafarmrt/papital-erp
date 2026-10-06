@@ -54,14 +54,18 @@ export async function buildDefinitionSnapshot(tx: DbClient, definitionId: number
   };
 }
 
-/** نسخه تازه پس از ذخیره تعریف: شماره بعدی، تصویر جدول‌ها و به‌روزرسانی نسخه جاری تعریف (داخل همان تراکنش ذخیره). */
+/**
+ * نسخه تازه پس از ذخیره تعریف: شماره بعدی، تصویر جدول‌ها و به‌روزرسانی نسخه جاری تعریف (داخل همان تراکنش ذخیره).
+ * v9.0.51 (TD-461): شماره زیر قفل ردیف تعریف حساب می‌شود و شاخص یکتای `uq_wdv_definition_version` (مهاجرت 0059)
+ * پشتوانه است. قفل `FOR NO KEY UPDATE` است تا با قفل کلید خارجی شروع فرایند (`FOR KEY SHARE`) تداخل نکند.
+ */
 export async function recordDefinitionVersion(
   tx: DbClient,
   definitionId: number,
   options: { title: string; description: string; userId?: number | null },
 ): Promise<number> {
   const [def] = await tx.select({ version: workflowDefinitions.version })
-    .from(workflowDefinitions).where(eq(workflowDefinitions.id, definitionId));
+    .from(workflowDefinitions).where(eq(workflowDefinitions.id, definitionId)).for('no key update');
   const [maxRow] = await tx.select({ v: max(workflowDefinitionVersions.version) })
     .from(workflowDefinitionVersions).where(eq(workflowDefinitionVersions.definitionId, definitionId));
   const lastVersion = Math.max(Number(def?.version) || 0, Number(maxRow?.v) || 0);

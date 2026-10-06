@@ -414,6 +414,13 @@
       "when": 1792780000000,
       "tag": "0058_terminate_deleted_entity_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792790000000,
+      "tag": "0059_workflow_foreign_keys",
+      "breakpoints": true
     }
   ]
 }

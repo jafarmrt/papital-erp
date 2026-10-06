@@ -9,6 +9,7 @@ import {
 } from '../../hooks/queries/useWorkflowQueries';
 import { toast } from 'react-hot-toast';
 import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
+import { designStepOrder, nextDesignStepOrder, renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
 interface WorkflowDesignerCanvasProps {
   definitionId: number;
@@ -22,6 +23,8 @@ interface CanvasNode {
   stateType: 'initial' | 'intermediate' | 'terminal';
   color: string;
   slaHours: number;
+  /** v9.0.47 (TD-454): ترتیب نمایش گام در ویجت مراحل؛ با ذخیره طراح حفظ می‌شود */
+  stepOrder: number;
   positionX: number;
   positionY: number;
 }
@@ -101,6 +104,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
         stateType: s.stateType || 'intermediate',
         color: s.color || 'gray',
         slaHours: Number(s.slaHours) || 24,
+        stepOrder: designStepOrder(s.stepOrder, idx),
         positionX: Number(s.positionX) || (100 + (idx % 3) * 220),
         positionY: Number(s.positionY) || (100 + Math.floor(idx / 3) * 180)
       }));
@@ -164,7 +168,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       // Auto update positions on backend
       const posArray = nodes.map(n => ({ id: n.id || 0, positionX: n.positionX, positionY: n.positionY })).filter(p => p.id > 0);
       if (posArray.length > 0) {
-        updatePositionsMutation.mutate(posArray);
+        updatePositionsMutation.mutate({ definitionId, positions: posArray });
       }
     }
   };
@@ -177,6 +181,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
       stateType: 'intermediate',
       color: 'sky',
       slaHours: 24,
+      stepOrder: nextDesignStepOrder(nodes),
       positionX: 150 + (nodes.length * 40) % 400,
       positionY: 150 + (nodes.length * 30) % 300
     };
@@ -220,6 +225,13 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const handleSaveAll = () => {
     if (!defTitle) {
       toast.error('عنوان ورکفلو الزامی است');
+      return;
+    }
+
+    // v9.0.45 (TD-452): همان قواعد ساختاری سرور پیش از ذخیره
+    const designErrors = workflowDesignErrors(nodes, edges);
+    if (designErrors.length > 0) {
+      toast.error(designErrors.join('\n'));
       return;
     }
 
@@ -453,7 +465,10 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   value={selectedNode.stateKey}
                   onChange={(e) => {
                     const newKey = e.target.value;
-                    setNodes(prev => prev.map(n => n.stateKey === selectedNodeKey ? { ...n, stateKey: newKey } : n));
+                    // v9.0.45 (TD-452): اقدام‌های گام با کلید تازه همراهش می‌مانند
+                    const renamed = renameDesignStateKey(nodes, edges, selectedNode.stateKey, newKey);
+                    setNodes(renamed.nodes);
+                    setEdges(renamed.edges);
                     setSelectedNodeKey(newKey);
                   }}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
@@ -511,6 +526,20 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   onChange={(e) => {
                     const val = Number(e.target.value) || 1;
                     setNodes(prev => prev.map(n => n.stateKey === selectedNodeKey ? { ...n, slaHours: val } : n));
+                  }}
+                  className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ترتیب گام در نمایش مراحل</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={selectedNode.stepOrder}
+                  onChange={(e) => {
+                    const val = Math.max(1, Math.floor(Number(e.target.value)) || 1);
+                    setNodes(prev => prev.map(n => n.stateKey === selectedNodeKey ? { ...n, stepOrder: val } : n));
                   }}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
