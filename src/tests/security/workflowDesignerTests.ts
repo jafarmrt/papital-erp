@@ -1,4 +1,5 @@
 import { TestCaseResult } from '../types.js';
+import { WorkflowDefinitionService, type SaveWorkflowDefinitionPayload } from '../../services/workflow/workflowDefinitionService.js';
 import { runCase, type Harness, type Row, type ShouldRun } from './workflowTestHarness.js';
 
 /**
@@ -25,6 +26,23 @@ const validStates = [
   { stateKey: 'review', title: 'بررسی', stateType: 'intermediate' },
   { stateKey: 'done', title: 'تأیید', stateType: 'terminal' },
 ];
+
+/** طرح فعلی یک تعریف به شکل بدنه طراح (گام‌ها با شناسه، اقدام‌ها با شناسه گام) برای ویرایش و بازگرداندن */
+async function designOf(code: string): Promise<SaveWorkflowDefinitionPayload> {
+  const def = await WorkflowDefinitionService.getDefinitionByCode(code);
+  const details = def ? await WorkflowDefinitionService.getDefinitionById(Number(def.id)) : null;
+  if (!details) throw new Error(`تعریف ${code} پیدا نشد`);
+  const d = details.definition;
+  return {
+    id: d.id, code: d.code, title: d.title, entityType: d.entityType, description: d.description ?? '',
+    states: details.states.map(s => ({ id: s.id, stateKey: s.stateKey, title: s.title, stateType: s.stateType ?? undefined, stepOrder: s.stepOrder ?? undefined, slaHours: s.slaHours ?? undefined, color: s.color ?? undefined, positionX: s.positionX ?? undefined, positionY: s.positionY ?? undefined })),
+    transitions: details.transitions.map(t => ({
+      fromStateId: t.fromStateId, toStateId: t.toStateId, actionKey: t.actionKey, title: t.title, requiredRole: t.requiredRole ?? '',
+      requiredPermission: t.requiredPermission ?? '', approvalRuleType: t.approvalRuleType ?? 'SINGLE', kValue: t.kValue ?? 1,
+      ruleConditionsJson: t.ruleConditionsJson, autoActionKey: t.autoActionKey ?? '', isInitiatorExcluded: t.isInitiatorExcluded,
+    })),
+  };
+}
 
 export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
@@ -81,5 +99,48 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_workflow_seed_keeps_edited_definition_td_453', 'security', 'td453', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_seed_keeps_edited_definition_td_453',
+      name: 'v9.0.46: خواندن فهرست تعریف‌ها و seed راه‌اندازی، گردش کار خرید ویرایش‌شده را بازنویسی نمی‌کنند (TD-453، ت۸)',
+      details: 'گردش خرید با عنوان «…استعلام…» و نقش manager روی تأیید: پس از GET /workflow/definitions و seed راه‌اندازی همان می‌ماند و نسخه تازه نمی‌گیرد؛ همگام‌سازی دستی الگوها دیگر route ندارد',
+    }, async (h, wrong) => {
+      const code = 'PURCHASE_REQUISITION_WORKFLOW';
+      const original = await designOf(code);
+      try {
+        const edited = await designOf(code);
+        edited.title = `خرید با استعلام سه‌گانه قیمت ${h.tag}`;
+        edited.transitions = (edited.transitions ?? []).map(t => (t.actionKey === 'approve_request' ? { ...t, requiredRole: 'manager' } : t));
+        await WorkflowDefinitionService.saveWorkflowDefinition(edited);
+        const [{ version: before }] = await h.q(`SELECT version FROM workflow_definitions WHERE code = $1`, [code]);
+
+        const list = await h.get('/api/workflow/definitions');
+        if (list.status !== 200) wrong.push(`فهرست تعریف‌ها ${list.status} داد`);
+        await WorkflowDefinitionService.seedDefaultWorkflows();
+
+        const [after] = await h.q(`SELECT id, title, version FROM workflow_definitions WHERE code = $1`, [code]);
+        if (after?.title !== edited.title) wrong.push(`عنوان گردش خرید به «${String(after?.title)}» برگشت`);
+        if (Number(after?.version) !== Number(before)) wrong.push(`خواندن فهرست و seed نسخه را از ${String(before)} به ${String(after?.version)} برد`);
+        const [approve] = await h.q(`SELECT required_role FROM workflow_transitions WHERE workflow_definition_id = $1 AND action_key = 'approve_request'`, [after?.id]);
+        if (approve?.required_role !== 'manager') wrong.push(`نقش لازم تأیید درخواست خرید «${String(approve?.required_role)}» شد، نه manager`);
+
+        const sync = await h.post('/api/workflow/definitions/seed-default', {});
+        if (sync.status !== 404) wrong.push(`همگام‌سازی دستی الگوها ${sync.status} داد، نه ۴۰۴`);
+      } finally {
+        await WorkflowDefinitionService.saveWorkflowDefinition(await restorable(original));
+      }
+    });
+  }
+
   return results;
+}
+
+/** بازگرداندن طرح اصلی روی گام‌های تازه (ذخیره ویرایش، شناسه گام‌ها را عوض کرده است) */
+async function restorable(original: SaveWorkflowDefinitionPayload): Promise<SaveWorkflowDefinitionPayload> {
+  const keyOf = new Map((original.states ?? []).map(s => [s.id, s.stateKey]));
+  return {
+    ...original,
+    states: (original.states ?? []).map(({ id: _id, ...s }) => s),
+    transitions: (original.transitions ?? []).map(({ fromStateId, toStateId, ...t }) => ({ ...t, fromStateKey: keyOf.get(fromStateId as number), toStateKey: keyOf.get(toStateId as number) })),
+  };
 }

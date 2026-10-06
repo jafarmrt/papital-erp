@@ -101,8 +101,7 @@ export class WorkflowDefinitionService {
    * List workflow definitions with optional filters
    */
   static async getDefinitions(filter?: { isActive?: boolean; entityType?: string }): Promise<WorkflowDefinitionWithStats[]> {
-    await this.seedDefaultWorkflows();
-
+    // v9.0.46 (TD-453، ت۸): خواندن فهرست دیگر seed اجرا نمی‌کند؛ seed فقط هنگام راه‌اندازی است
     const conditions: SQL[] = [];
 
     if (filter?.isActive !== undefined) {
@@ -420,17 +419,19 @@ export class WorkflowDefinitionService {
 
   /**
    * Seed default system workflow definitions
+   *
+   * v9.0.46 (TD-453، تصمیم ت۸ الف): فقط تعریفی را می‌سازد که با این کد وجود ندارد و فقط هنگام راه‌اندازی صدا زده
+   * می‌شود (server.ts، seed، آماده‌سازی آزمون)؛ تعریف موجود هرگز بازنویسی نمی‌شود. پیش‌تر هر خواندن فهرست تعریف‌ها و
+   * هر شروع فرایند بی تراکنش آن را اجرا می‌کرد و گردش خرید ویرایش‌شده (عنوان «…استعلام…» یا ≤ ۱ گام) و گردش اسناد
+   * حسابداری با ≤ ۱ گام به پیش‌فرض برمی‌گشتند. خطا دیگر بلعیده نمی‌شود.
    */
   static async seedDefaultWorkflows(): Promise<void> {
     try {
-      const existingDocWf = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, 'DOC_APPROVAL_WORKFLOW'));
-      const statesCount = existingDocWf.length > 0
-        ? await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existingDocWf[0].id))
-        : [{ count: 0 }];
+      const missing = async (code: string) =>
+        (await orm.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(eq(workflowDefinitions.code, code))).length === 0;
 
-      if (existingDocWf.length === 0 || Number(statesCount[0]?.count || 0) === 0) {
+      if (await missing('DOC_APPROVAL_WORKFLOW')) {
         await this.saveWorkflowDefinition({
-          id: existingDocWf[0]?.id,
           code: 'DOC_APPROVAL_WORKFLOW',
           title: 'چرخه تایید سه‌مرحله‌ای اسناد و فاکتورها (فروش -> انبار -> مالی)',
           entityType: 'document',
@@ -500,16 +501,8 @@ export class WorkflowDefinitionService {
       }
 
       // Seed PURCHASE_REQUISITION_WORKFLOW (سیستم ساده‌سازی شده ۳ مرحله‌ای خرید و تدارکات کارگاه)
-      const existingPrWf = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, 'PURCHASE_REQUISITION_WORKFLOW'));
-      const prStatesCount = existingPrWf.length > 0
-        ? await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existingPrWf[0].id))
-        : [{ count: 0 }];
-
-      const needsPrUpdate = existingPrWf.length === 0 || Number(prStatesCount[0]?.count || 0) <= 1 || (existingPrWf[0]?.title?.includes('استعلام'));
-
-      if (needsPrUpdate) {
+      if (await missing('PURCHASE_REQUISITION_WORKFLOW')) {
         await this.saveWorkflowDefinition({
-          id: existingPrWf[0]?.id,
           code: 'PURCHASE_REQUISITION_WORKFLOW',
           title: 'گردش کار تدارکات و خرید کارگاه (بررسی و تایید -> در حال خرید -> تحویل انبار)',
           entityType: 'purchase_requisition',
@@ -605,16 +598,8 @@ export class WorkflowDefinitionService {
       }
 
       // Seed JOURNAL_VOUCHER_WORKFLOW (گردش‌کار تایید و ثبت اسناد حسابداری کارگاه)
-      const existingJvWf = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, 'JOURNAL_VOUCHER_WORKFLOW'));
-      const jvStatesCount = existingJvWf.length > 0
-        ? await orm.select({ count: sql<number>`count(*)` }).from(workflowStates).where(eq(workflowStates.workflowDefinitionId, existingJvWf[0].id))
-        : [{ count: 0 }];
-
-      const needsJvUpdate = existingJvWf.length === 0 || Number(jvStatesCount[0]?.count || 0) <= 1;
-
-      if (needsJvUpdate) {
+      if (await missing('JOURNAL_VOUCHER_WORKFLOW')) {
         await this.saveWorkflowDefinition({
-          id: existingJvWf[0]?.id,
           code: 'JOURNAL_VOUCHER_WORKFLOW',
           title: 'گردش کار تایید اسناد حسابداری کارگاه (پیش‌نویس -> تایید و ثبت دفاتر -> قطعی‌سازی)',
           entityType: 'journal_voucher',
@@ -710,7 +695,8 @@ export class WorkflowDefinitionService {
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      logger.warn(`[WorkflowDefinitionService] Seed default workflows warning: ${errMsg}`);
+      logger.error(`[WorkflowDefinitionService] Seed default workflows failed: ${errMsg}`);
+      throw err;
     }
   }
 }

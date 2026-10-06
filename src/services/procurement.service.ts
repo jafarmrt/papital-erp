@@ -10,7 +10,6 @@ import { logger } from '../middleware/logger.js';
 import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
 import { hasWorkflowTransitionAction } from './workflow/workflowTransitionActions.js';
-import { WorkflowDefinitionService } from './workflow/workflowDefinitionService.js';
 import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
@@ -219,10 +218,6 @@ export class ProcurementService {
         projectName = proj.title || '';
       }
     }
-
-    // v8.0.77 (TD-324): تعریف‌های پیش‌فرض گردش‌کار پیش از تراکنش (seed روی اتصال جدا) تا شروع گردش‌کار درون تراکنش
-    // اتصال دومی نخواهد
-    await WorkflowDefinitionService.seedDefaultWorkflows();
 
     const createdReq = await orm.transaction(async (tx) => {
       const code = await this.generateRequisitionCode(tx);

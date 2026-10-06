@@ -337,22 +337,8 @@ router.post('/positions', authorizePermission('workflow.manage', 'workflow.admin
   }
 }));
 
-/**
- * POST /api/workflow/definitions/seed-default
- * Force re-seed / sync standard default workflow definitions
- */
-router.post('/definitions/seed-default', authorizePermission('workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    // Delete existing standard definitions if forced
-    await WorkflowEngineService.seedDefaultWorkflows();
-    const definitions = await WorkflowEngineService.getWorkflowDefinitions();
-    res.json({ success: true, message: 'الگوهای پیش‌فرض با موفقیت همگام‌سازی شدند', data: definitions });
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /seed-default] Error: ${errMsg}`);
-    throw err;
-  }
-}));
+// v9.0.46 (TD-453، ت۸ الف): «همگام‌سازی الگوهای پیش‌فرض» (`POST /definitions/seed-default`) حذف شد؛ seed فقط تعریفِ
+// نبود را و فقط هنگام راه‌اندازی می‌سازد
 
 /**
  * GET /api/workflow/analytics/sla

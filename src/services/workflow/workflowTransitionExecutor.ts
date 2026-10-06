@@ -20,7 +20,6 @@ import { updateRequestContext } from '../../lib/requestContext.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
-import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { ROW_ADVISORY_LOCK_NAMESPACES } from '../../lib/advisoryLock.js';
 import { lockWorkflowEntity, runWorkflowTransitionAction, workflowActionPermissions, workflowEntityExists } from './workflowTransitionActions.js';
@@ -447,23 +446,7 @@ export class WorkflowTransitionExecutor {
         ));
       }
 
-      // Fallback: auto-seed default workflows if missing — v8.0.77 (TD-324): نه درون تراکنش فراخواننده (seed روی اتصال
-      // جدای استخر اجرا می‌شود)؛ فراخواننده‌ای که tx می‌دهد پیش از تراکنش seed می‌کند
-      if (!def && !params.tx) {
-        await WorkflowDefinitionService.seedDefaultWorkflows();
-        if (params.workflowCode) {
-          [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, params.workflowCode));
-        } else if (params.workflowDefinitionId) {
-          [def] = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, params.workflowDefinitionId));
-        }
-        if (!def) {
-          [def] = await tx.select().from(workflowDefinitions).where(and(
-            eq(workflowDefinitions.entityType, params.entityType),
-            eq(workflowDefinitions.isActive, 1)
-          ));
-        }
-      }
-
+      // v9.0.46 (TD-453، ت۸): شروع فرایند seed اجرا نمی‌کند؛ تعریف‌های پیش‌فرض هنگام راه‌اندازی ساخته می‌شوند
       if (!def) {
         throw new NotFoundError(`هیچ فرآیند کاری فعال برای موجودیت '${params.entityType}' پیدا نشد.`);
       }

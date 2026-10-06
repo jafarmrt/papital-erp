@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.46 — Default Workflows Are Seeded Only When Missing, at Startup
+- **Workflow Seed:** default definitions are created only when their code is missing and only at startup; listing definitions, starting an instance and creating a requisition no longer seed, and the manual sync route is removed (TD-453, `sec_workflow_seed_keeps_edited_definition_td_453`).
+
 ### v9.0.45 — Workflow Designs Are Validated Before Saving
 - **Workflow Design Validation:** a definition is saved only with exactly one initial step, at least one terminal step, unique keys and resolvable actions, no exit from a terminal step except `rejected` (422 otherwise); renaming a step key in the designer keeps its actions (TD-452, `sec_workflow_design_validation_td_452`).
 

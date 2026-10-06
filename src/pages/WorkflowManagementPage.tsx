@@ -6,7 +6,6 @@ import {
   Layers, 
   Edit3, 
   Boxes,
-  RefreshCw,
   X,
   UserCheck,
   History
@@ -16,7 +15,6 @@ import { WorkflowDesignerCanvas } from '../components/workflow/WorkflowDesignerC
 import { WorkflowSlaAnalyticsTab } from '../components/workflow/WorkflowSlaAnalyticsTab';
 import { WorkflowDelegationTab } from '../components/workflow/WorkflowDelegationTab';
 import { WorkflowVersionHistoryModal } from '../components/workflow/WorkflowVersionHistoryModal';
-import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
 
 export const WorkflowManagementPage: React.FC = () => {
@@ -29,7 +27,6 @@ export const WorkflowManagementPage: React.FC = () => {
 
   // New Template Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCode, setNewCode] = useState('');
   const [newEntityType, setNewEntityType] = useState('document');
@@ -38,19 +35,6 @@ export const WorkflowManagementPage: React.FC = () => {
   const handleEditDefinition = (id: number) => {
     setSelectedDefinitionId(id);
     setActiveTab('designer');
-  };
-
-  const handleSyncDefaults = async () => {
-    try {
-      setIsSyncing(true);
-      await fetchJson('/workflow/definitions/seed-default', { method: 'POST' });
-      toast.success('الگوهای استاندارد ورکفلو با موفقیت همگام‌سازی شدند');
-      void refetch();
-    } catch (err: any) {
-      toast.error(err.message || 'خطا در همگام‌سازی الگوها');
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   const handleCreateNewDefinitionSubmit = async (e: React.FormEvent) => {
@@ -186,16 +170,6 @@ export const WorkflowManagementPage: React.FC = () => {
             </h2>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleSyncDefaults}
-                disabled={isSyncing}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 rounded-xl transition-colors"
-                title="همگام‌سازی چرخه‌های پیش‌فرض مثل چرخه سه‌مرحله‌ای فاکتور"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>همگام‌سازی الگوهای پیش‌فرض</span>
-              </button>
-
               <button
                 onClick={() => setIsCreateModalOpen(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
