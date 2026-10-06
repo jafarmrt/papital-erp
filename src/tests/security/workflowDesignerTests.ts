@@ -317,6 +317,102 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_workflow_db_constraints_td_461', 'security', 'td461', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_db_constraints_td_461',
+      name: 'v9.0.51: workflow tables carry their foreign keys, lookup indexes and a unique version number (TD-461)',
+      details: 'a step of a missing workflow, an action from a missing step, a duplicate definition version and deleting a workflow that has instances are refused by the database; deleting an instance removes its history, tasks and pending approvals; instance-by-entity and by-instance lookups have indexes; the financial health check lists an unvalidated key or duplicate version',
+    }, async (h, wrong) => {
+      const code = designCode(h, 'FK');
+      let definitionId = 0;
+      try {
+        const saved = await WorkflowDefinitionService.saveWorkflowDefinition({
+          code, title: 'قیدهای پایگاه‌داده', entityType: `wf14c_fk_${h.tag}`, states: [validStates[0], validStates[2]],
+          transitions: [{ fromStateKey: 'draft', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }],
+        });
+        definitionId = Number(saved?.definition.id);
+        if (!(definitionId > 0)) throw new Error('test definition was not created');
+        const missingId = -definitionId;
+        const [state] = await h.q(`SELECT id FROM workflow_states WHERE workflow_definition_id = $1 ORDER BY id LIMIT 1`, [definitionId]);
+        const [transition] = await h.q(`SELECT id FROM workflow_transitions WHERE workflow_definition_id = $1 LIMIT 1`, [definitionId]);
+
+        const expectRefused = async (label: string, text: string, params: unknown[], sqlState: string) => {
+          try {
+            await h.q(text, params);
+            wrong.push(`${label} was accepted, expected SQLSTATE ${sqlState}`);
+          } catch (err) {
+            const got = (err as { code?: string }).code;
+            if (got !== sqlState) wrong.push(`${label} failed with ${got ?? String(err)}, expected ${sqlState}`);
+          }
+        };
+        await expectRefused('a step of a missing workflow',
+          `INSERT INTO workflow_states (workflow_definition_id, state_key, title) VALUES ($1, 'orphan', 'orphan')`, [missingId], '23503');
+        await expectRefused('an action from a missing step',
+          `INSERT INTO workflow_transitions (workflow_definition_id, from_state_id, to_state_id, action_key, title) VALUES ($1, $2, $3, 'orphan', 'orphan')`,
+          [definitionId, missingId, state?.id], '23503');
+        await expectRefused('a duplicate definition version',
+          `INSERT INTO workflow_definition_versions (definition_id, version, title)
+           SELECT definition_id, version, title FROM workflow_definition_versions WHERE definition_id = $1 ORDER BY version DESC LIMIT 1`,
+          [definitionId], '23505');
+
+        const { WorkflowTransitionExecutor } = await import('../../services/workflow/workflowTransitionExecutor.js');
+        const start = (entityId: string) => WorkflowTransitionExecutor.startInstance({ workflowDefinitionId: definitionId, entityType: `wf14c_fk_${h.tag}`, entityId });
+        const first = await start('1');
+        await h.q(`INSERT INTO workflow_history_logs (instance_id, to_state_id, action_key) VALUES ($1, $2, 'test')`, [first.id, state?.id]);
+        await h.q(`INSERT INTO workflow_tasks (instance_id, transition_id, title, status) VALUES ($1, $2, 'test', 'pending')`, [first.id, transition?.id]);
+        await h.q(`INSERT INTO workflow_pending_approvals (instance_id, transition_id, status) VALUES ($1, $2, 'PENDING')`, [first.id, transition?.id]);
+        await h.q(`DELETE FROM workflow_instances WHERE id = $1`, [first.id]);
+        for (const table of ['workflow_history_logs', 'workflow_tasks', 'workflow_pending_approvals']) {
+          const [left] = await h.q(`SELECT count(*)::int AS n FROM ${table} WHERE instance_id = $1`, [first.id]);
+          if (Number(left?.n) !== 0) wrong.push(`${String(left?.n)} rows of ${table} were left after their instance was deleted`);
+        }
+
+        await start('2');
+        await expectRefused('deleting a workflow that has an instance', `DELETE FROM workflow_definitions WHERE id = $1`, [definitionId], '23503');
+
+        const indexed = async (table: string, columns: string[]) => {
+          const [row] = await h.q(
+            `SELECT EXISTS (
+               SELECT 1 FROM pg_index ix
+               WHERE ix.indrelid = to_regclass($1) AND ix.indpred IS NULL
+                 AND (SELECT array_agg(a.attname::text ORDER BY k.ord)
+                      FROM unnest(ix.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+                      JOIN pg_attribute a ON a.attrelid = ix.indrelid AND a.attnum = k.attnum
+                      WHERE k.ord <= cardinality($2::text[])) = $2::text[]
+             ) AS present`,
+            [table, columns],
+          );
+          if (!row?.present) wrong.push(`${table}(${columns.join(', ')}) has no index`);
+        };
+        await indexed('workflow_instances', ['entity_type', 'entity_id']);
+        await indexed('workflow_history_logs', ['instance_id']);
+        await indexed('workflow_pending_approvals', ['instance_id']);
+
+        const { findWorkflowReferenceGaps, buildWorkflowReferenceHealthTest } = await import('../../services/workflow/workflowReferenceIntegrity.js');
+        const health = buildWorkflowReferenceHealthTest(await findWorkflowReferenceGaps());
+        if (health.status !== 'healthy') wrong.push(`workflow reference health check is ${health.status}: ${health.items?.map(i => i.code).join(', ')}`);
+        const gap = buildWorkflowReferenceHealthTest({
+          foreignKeyGaps: [{ name: 'fk_wf_history_instance', table: 'workflow_history_logs', column: 'instance_id', ref: 'workflow_instances', state: 'not_valid', orphanRows: 3 }],
+          duplicateVersions: [{ definitionId: 7, version: 2, rows: 2 }],
+          versionIndexPresent: false,
+        });
+        if (gap.status !== 'warning' || gap.count !== 2) wrong.push(`health check with an unvalidated key and a duplicate version is ${gap.status} with count ${gap.count}, not warning with 2`);
+      } finally {
+        if (definitionId > 0) {
+          const instances = `SELECT id FROM workflow_instances WHERE workflow_definition_id = $1`;
+          for (const table of ['workflow_history_logs', 'workflow_tasks', 'workflow_pending_approvals']) {
+            await h.q(`DELETE FROM ${table} WHERE instance_id IN (${instances}) OR instance_id NOT IN (SELECT id FROM workflow_instances)`, [definitionId]);
+          }
+          await h.q(`DELETE FROM workflow_instances WHERE workflow_definition_id = $1`, [definitionId]);
+          await h.q(`DELETE FROM workflow_transitions WHERE workflow_definition_id = ANY($1::int[])`, [[definitionId, -definitionId]]);
+          await h.q(`DELETE FROM workflow_states WHERE workflow_definition_id = ANY($1::int[])`, [[definitionId, -definitionId]]);
+          await h.q(`DELETE FROM workflow_definition_versions WHERE definition_id = $1`, [definitionId]);
+          await h.q(`DELETE FROM workflow_definitions WHERE id = $1`, [definitionId]);
+        }
+      }
+    });
+  }
+
   return results;
 }
 
