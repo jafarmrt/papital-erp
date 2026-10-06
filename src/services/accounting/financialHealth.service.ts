@@ -11,6 +11,7 @@ import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanc
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
 import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
+import { buildSyntheticUsersHealthTest, findActiveSyntheticUsers } from '../users/syntheticUserHealth.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
   findDuplicatePieceworkTaskCodes,
@@ -1075,6 +1076,11 @@ export class FinancialHealthService {
     const workflowReferenceTest = buildWorkflowReferenceHealthTest(await findWorkflowReferenceGaps());
     overallScore += workflowReferenceTest.scoreImpact;
     tests.push(workflowReferenceTest);
+
+    // آزمون ۲۰: v9.0.76 (TD-521) کاربران فعال با پیشوند کاربران آزمون (test_، e2e_، testuser_)
+    const syntheticUsersTest = buildSyntheticUsersHealthTest(await findActiveSyntheticUsers());
+    overallScore += syntheticUsersTest.scoreImpact;
+    tests.push(syntheticUsersTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
