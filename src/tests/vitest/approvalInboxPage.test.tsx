@@ -89,3 +89,36 @@ describe('TD-462 a cancelled decision does not carry over to the next task', () 
     expect(screen.getByText('تایید و ثبت نهایی وظیفه')).toBeTruthy();
   });
 });
+
+describe('TD-463 a step with several reject actions asks which one', () => {
+  const rejectTransitions = [{ id: 31, title: 'رد و بازگشت به انبار' }, { id: 32, title: 'رد نهایی' }];
+
+  it('the chosen reject action goes out as transitionId and reject waits for the choice', async () => {
+    routeFetch(inboxRoutes([taskRow(1, '1', { rejectTransitions })]));
+    renderPage();
+    await screen.findAllByText('تأیید سند 1');
+    fireEvent.click(openButtons()[0]);
+    fireEvent.click(await screen.findByText('رد و مخالفت با درخواست'));
+    fireEvent.change(screen.getByPlaceholderText(/دلیل رد/), { target: { value: 'کالا ناقص است' } });
+    const submit = screen.getByText('رد و عودت وظیفه').closest('button')!;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText('رد نهایی'));
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() => expect(executeBody(1)).toBeDefined());
+    expect(executeBody(1)).toMatchObject({ taskId: 1, action: 'reject', comment: 'کالا ناقص است', transitionId: 32 });
+  });
+
+  it('a step with one reject action needs no choice and sends no transitionId', async () => {
+    routeFetch(inboxRoutes([taskRow(1, '1', { rejectTransitions: [rejectTransitions[0]] })]));
+    renderPage();
+    await screen.findAllByText('تأیید سند 1');
+    fireEvent.click(openButtons()[0]);
+    fireEvent.click(await screen.findByText('رد و مخالفت با درخواست'));
+    expect(screen.queryByLabelText('رد نهایی')).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText(/دلیل رد/), { target: { value: 'کالا ناقص است' } });
+    fireEvent.click(screen.getByText('رد و عودت وظیفه'));
+    await waitFor(() => expect(executeBody(1)).toBeDefined());
+    expect(executeBody(1).transitionId).toBeUndefined();
+  });
+});

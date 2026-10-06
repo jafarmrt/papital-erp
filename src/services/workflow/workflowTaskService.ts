@@ -70,7 +70,13 @@ export class WorkflowTaskService {
     // V4 Phase 5.3 (A-2): بارگذاری موازی کانتکست موجودیت فقط برای ردیف‌های صفحه فعلی
     const filteredTasks = await Promise.all(
       pagedSlice.map(async ({ task, instance, delegationInfo, isOverdue }) => {
-        return { ...task, isOverdue, ...(await inboxEntityFields(instance)), delegationInfo };
+        return {
+          ...task,
+          isOverdue,
+          ...(await inboxEntityFields(instance)),
+          delegationInfo,
+          rejectTransitions: await WorkflowTaskService.rejectTransitionsOf(instance),
+        };
       })
     );
 
@@ -80,6 +86,17 @@ export class WorkflowTaskService {
       page,
       limit
     };
+  }
+
+  /**
+   * TD-463 (یافته B14-21): اقدام‌های «رد» گام جاری از تصویر فرایند، تا کارتابل وقتی گام بیش از یکی دارد انتخاب را بخواهد و
+   * `transitionId` بفرستد؛ پیش‌تر کارتابل هرگز انتخاب نمی‌کرد و رد چنین گامی همیشه با WF_TASK_REJECT_AMBIGUOUS رد می‌شد.
+   */
+  private static async rejectTransitionsOf(instance: typeof workflowInstances.$inferSelect): Promise<Array<{ id: number; title: string }>> {
+    const transitions = await WorkflowTransitionExecutor.transitionsFromState(instance, instance.currentStateId);
+    return transitions
+      .filter(t => WorkflowTransitionExecutor.isNegativeTransition(t.actionKey, t.title))
+      .map(t => ({ id: t.id, title: t.title }));
   }
 
   /**

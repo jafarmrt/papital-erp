@@ -281,7 +281,7 @@ export function useExecuteTaskMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { taskId: number; action?: 'approve' | 'reject'; comment?: string; snapshotData?: Record<string, any> }) => {
+    mutationFn: async (payload: { taskId: number; action?: 'approve' | 'reject'; transitionId?: number; comment?: string; snapshotData?: Record<string, unknown> }) => {
       return fetchJson(`/workflow/tasks/${payload.taskId}/execute`, {
         method: 'POST',
         body: JSON.stringify(payload)

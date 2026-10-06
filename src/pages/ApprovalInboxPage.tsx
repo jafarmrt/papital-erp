@@ -27,7 +27,7 @@ import { formatPersianDate, formatPersianPrice, formatPersianNumber } from '../u
 import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
-import TaskExecuteModal from '../components/approval/TaskExecuteModal';
+import TaskExecuteModal, { type ApprovalRejectOption } from '../components/approval/TaskExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
 import { PurchaseRequisition } from '../types';
@@ -77,6 +77,8 @@ interface TaskItem {
   totalAmount?: number;
   currency?: string;
   notes?: string;
+  /** TD-463: اقدام‌های «رد» گام جاری */
+  rejectTransitions?: ApprovalRejectOption[];
 }
 
 
@@ -103,6 +105,7 @@ export function ApprovalInboxPage() {
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [taskAction, setTaskAction] = useState<'approve' | 'reject'>('approve');
   const [comment, setComment] = useState<string>('');
+  const [rejectTransitionId, setRejectTransitionId] = useState<number | null>(null);
   
   // Document details state for rich preview in modal
   const [docDetails, setDocDetails] = useState<DocumentDetails | null>(null);
@@ -252,6 +255,7 @@ export function ApprovalInboxPage() {
   const resetDecision = () => {
     setTaskAction('approve');
     setComment('');
+    setRejectTransitionId(null);
   };
   const openTask = (task: TaskItem) => {
     resetDecision();
@@ -268,7 +272,9 @@ export function ApprovalInboxPage() {
       {
         taskId: selectedTask.id,
         action: taskAction,
-        comment
+        comment,
+        // TD-463 (یافته B14-21): اقدام «رد» انتخابی وقتی گام بیش از یکی دارد
+        ...(taskAction === 'reject' && rejectTransitionId !== null ? { transitionId: rejectTransitionId } : {})
       },
       {
         onSuccess: () => {
@@ -599,6 +605,9 @@ export function ApprovalInboxPage() {
           onTaskActionChange={setTaskAction}
           comment={comment}
           onCommentChange={setComment}
+          rejectOptions={selectedTask.rejectTransitions ?? []}
+          rejectTransitionId={rejectTransitionId}
+          onRejectTransitionChange={setRejectTransitionId}
           onExecute={handleExecuteTask}
           isExecuting={executeTaskMutation.isPending}
         />

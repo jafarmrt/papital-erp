@@ -8,6 +8,7 @@ import { PurchaseRequisition } from '../../types';
 import { fetchJson } from '../../api';
 
 export type ApprovalTaskAction = 'approve' | 'reject';
+export interface ApprovalRejectOption { id: number; title: string }
 
 interface TaskExecuteModalProps {
   selectedTask: { id: number; title: string; instance?: { entityType?: string; entityId?: string | number }; entityType?: string; entity_id?: string | number; entityId?: string | number } | null;
@@ -23,6 +24,10 @@ interface TaskExecuteModalProps {
   isExecuting: boolean;
   requisitionDetails?: PurchaseRequisition | null;
   isLoadingRequisition?: boolean;
+  /** TD-463: اقدام‌های «رد» گام جاری؛ با بیش از یکی، رد فقط پس از انتخاب ثبت می‌شود */
+  rejectOptions?: ApprovalRejectOption[];
+  rejectTransitionId?: number | null;
+  onRejectTransitionChange?: (id: number | null) => void;
 }
 
 /**
@@ -41,8 +46,13 @@ export function TaskExecuteModal({
   onExecute,
   isExecuting,
   requisitionDetails: propRequisitionDetails,
-  isLoadingRequisition: propIsLoadingRequisition
+  isLoadingRequisition: propIsLoadingRequisition,
+  rejectOptions = [],
+  rejectTransitionId = null,
+  onRejectTransitionChange
 }: TaskExecuteModalProps) {
+  const needsRejectChoice = taskAction === 'reject' && rejectOptions.length > 1;
+  const rejectBlocked = taskAction === 'reject' && (!comment.trim() || (needsRejectChoice && rejectTransitionId === null));
   const [internalReq, setInternalReq] = useState<PurchaseRequisition | null>(null);
   const [internalLoading, setInternalLoading] = useState(false);
 
@@ -172,6 +182,25 @@ export function TaskExecuteModal({
             </div>
           </div>
 
+          {needsRejectChoice && (
+            <fieldset>
+              <legend className="block text-xs font-bold text-gray-800 dark:text-gray-200 mb-1.5">این گام چند اقدام «رد» دارد؛ یکی را انتخاب کنید:</legend>
+              <div className="flex flex-wrap gap-2">
+                {rejectOptions.map((option) => (
+                  <label key={option.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 text-xs text-gray-800 dark:text-gray-200 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="reject-transition"
+                      checked={rejectTransitionId === option.id}
+                      onChange={() => onRejectTransitionChange?.(option.id)}
+                    />
+                    <span>{option.title}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
@@ -196,8 +225,10 @@ export function TaskExecuteModal({
           </button>
           <button
             onClick={onExecute}
-            disabled={isExecuting || (taskAction === 'reject' && !comment.trim())}
-            title={taskAction === 'reject' && !comment.trim() ? 'برای رد، درج دلیل الزامی است' : undefined}
+            disabled={isExecuting || rejectBlocked}
+            title={taskAction === 'reject' && !comment.trim()
+              ? 'برای رد، دلیل را بنویسید'
+              : needsRejectChoice && rejectTransitionId === null ? 'اقدام «رد» را انتخاب کنید' : undefined}
             className={`px-6 py-2.5 text-xs font-bold text-white rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer ${
               taskAction === 'approve'
                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
