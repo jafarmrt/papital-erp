@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.31 — Persian Wording in the Personnel UI
+- **Personnel Wording:** The personnel pages no longer show «(Update Existing)», «(IBAN)», «اکانت» or «کلیپ‌بورد»; a Vitest check keeps English words out of the Persian personnel UI (TD-440, `personnelWording.test.ts`).
+
 ### v9.0.30 — Personnel Edit Optimistic Lock
 - **Personnel Edit Lock:** Saving a personnel form opened before someone else's save is refused with a conflict message instead of silently erasing the other change (owner decision D5; TD-442, `reg_personnel_edit_occ_td_442`).
 

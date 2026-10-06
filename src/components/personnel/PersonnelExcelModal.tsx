@@ -604,7 +604,7 @@ export function PersonnelExcelModal({
                   className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                 />
                 <label htmlFor="update-if-exists" className="text-xs font-bold text-blue-900 cursor-pointer">
-                  در صورت وجود کد پرسنلی یکسان در سیستم، اطلاعات فرد به‌روزرسانی شود (Update Existing)
+                  اگر کد پرسنلی در سامانه هست، اطلاعات همان پرسنل به‌روزرسانی شود
                 </label>
               </div>
 
