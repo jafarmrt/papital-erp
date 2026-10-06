@@ -41,6 +41,7 @@ import draftsRoutes from './routes/drafts.routes.js';
 import procurementRoutes from './routes/procurement.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
 import { authenticateToken, getJwtSecret, csrfProtection, shouldExposeTokenInBody } from './middleware/auth.js';
+import { sessionEndpointOriginGuard } from './middleware/sessionOrigin.js';
 import { orm } from './db/drizzle.js';
 import { sql } from 'drizzle-orm';
 import { BUILD_INFO } from './lib/version.js';
@@ -261,6 +262,8 @@ export async function createApp(): Promise<express.Express> {
   activeLoginLimiter = loginLimiter;
 
   app.use('/api', generalLimiter);
+  // v9.0.59 (TD-528): ورود، خروج و راه‌اندازی فقط از مبدأ خود سامانه (این سه از CSRF معاف‌اند)
+  app.use('/api', sessionEndpointOriginGuard);
   app.use('/api', csrfProtection);
   app.post(['/api/login', '/api/auth/login'], loginLimiter);
 

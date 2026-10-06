@@ -96,5 +96,48 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_session_endpoints_same_origin_td_528', 'security', 'td528', 'csrf', 'login', 'logout', 'package2')) {
+    await runCase(results, {
+      id: 'sec_session_endpoints_same_origin_td_528',
+      name: 'v9.0.59: a forged cross-site form cannot log a user out of every device or log them into another account (TD-528)',
+      details: 'logout and login from Origin https://evil.example and from Origin null get 403 and the two sessions stay valid; logout with a valid session but no CSRF header gets 403; a same-host Origin and a non-browser client without Origin still log in; a logout with the session CSRF header ends both sessions',
+    }, async (h, wrong) => {
+      const request = (await import('supertest')).default;
+      const { loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
+      const { TEST_PASSWORD } = await import('../fixtures/factories.js');
+      const app = h.app as Parameters<typeof request>[0];
+      const victim = await h.sessionWith(['daily_logs.view']);
+      const [row] = await orm.select({ username: users.username }).from(users).where(eq(users.id, victim.userId));
+      const phone = await loginTestUserWithSession(app, row.username);
+      const alive = async (cookie: string) => (await request(app).get('/api/auth/me').set('Cookie', cookie)).body?.authenticated === true;
+      const form = (url: string) => request(app).post(url).type('form');
+
+      for (const url of ['/api/logout', '/api/auth/logout']) {
+        for (const origin of ['https://evil.example', 'null']) {
+          const res = await form(url).set('Cookie', victim.cookie).set('Origin', origin).send({});
+          if (res.status !== 403) wrong.push(`forged ${url} from Origin ${origin} returned ${res.status}, not 403`);
+        }
+        const refererOnly = await form(url).set('Cookie', victim.cookie).set('Referer', 'https://evil.example/page').send({});
+        if (refererOnly.status !== 403) wrong.push(`forged ${url} with only a cross-site Referer returned ${refererOnly.status}, not 403`);
+        const noCsrf = await request(app).post(url).set('Cookie', victim.cookie).send({});
+        if (noCsrf.status !== 403) wrong.push(`${url} with a valid session and no CSRF header returned ${noCsrf.status}, not 403`);
+      }
+      if (!(await alive(victim.cookie)) || !(await alive(phone.cookie))) wrong.push('a refused logout still ended a session');
+
+      const creds = { username: row.username, password: TEST_PASSWORD };
+      const forgedLogin = await form('/api/login').set('Origin', 'https://evil.example').send(creds);
+      if (forgedLogin.status !== 403) wrong.push(`forged login from another site returned ${forgedLogin.status}, not 403`);
+      if (forgedLogin.headers['set-cookie']) wrong.push('the forged login set a session cookie');
+      const sameHost = await request(app).post('/api/login').set('Host', 'erp.example.ir').set('Origin', 'https://erp.example.ir').send(creds);
+      if (sameHost.status !== 200) wrong.push(`login from the same host returned ${sameHost.status}, not 200`);
+      const forgedSetup = await form('/api/setup').set('Origin', 'https://evil.example').send({});
+      if (forgedSetup.status !== 403) wrong.push(`forged setup from another site returned ${forgedSetup.status}, not 403`);
+
+      const legit = await request(app).post('/api/auth/logout').set('Cookie', victim.cookie).set('x-csrf-token', victim.csrfToken).send({});
+      if (legit.status !== 200) wrong.push(`logout with the session CSRF header returned ${legit.status}, not 200`);
+      if (await alive(phone.cookie)) wrong.push('a real logout did not end the other session');
+    });
+  }
+
   return results;
 }

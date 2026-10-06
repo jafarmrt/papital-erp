@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.59 — Login and Logout Only From the Application Itself
+- **Session Endpoints:** login, logout and setup accept only the application's own origin, and logout of a valid session needs its CSRF header, so a forged form on another site can no longer log a user out or into another account (TD-528, `sec_session_endpoints_same_origin_td_528`).
+
 ### v9.0.58 — Test-Prefixed Usernames Are Refused and Listed
 - **Synthetic Usernames:** `POST /users` and `/setup` refuse usernames starting with `test_`, `e2e_` or `testuser_` (422); user lists show every active user and the financial health check lists existing ones (TD-521, `sec_synthetic_username_refused_td_521`).
 

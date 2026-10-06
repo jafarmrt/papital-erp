@@ -342,10 +342,27 @@ const logoutHandler = asyncHandler(async (req, res) => {
   // authenticateToken روی آن اجرا نمی‌شود، بنابراین توکن را مستقیم از کوکی
   // راستی‌آزمایی و tokenVersion کاربر افزایش می‌دهیم تا توکن سرقت‌شده/کپی‌شده
   // حتی تا پایان اعتبار ۲۴ ساعته خود نیز پذیرفته نشود.
+  // v9.0.59 (TD-528): نشست معتبر فقط با سرآیند CSRF همان نشست بسته می‌شود؛ پیش‌تر فرمی از سایت دیگر همه نشست‌های کاربر
+  // را باطل می‌کرد. کوکی نامعتبر یا منقضی فقط پاک می‌شود.
+  const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
+  type LogoutTokenPayload = { id?: number; username?: string; role?: string; csrfToken?: string };
+  let payload: LogoutTokenPayload | null = null;
+  if (rawToken) {
+    try {
+      payload = jwt.verify(rawToken, getJwtSecret(), JWT_VERIFY_OPTIONS) as LogoutTokenPayload;
+    } catch (err) {
+      logger.debug(`[Logout] Session cookie not verified: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (payload?.csrfToken) {
+    const provided = String(req.headers['x-csrf-token'] || req.headers['x-xsrf-token'] || '');
+    if (!provided || !safeCompareTokens(provided, payload.csrfToken)) {
+      return res.status(403).json({ error: 'CSRF token invalid', message: 'توکن امنیتی CSRF نامعتبر است یا ارسال نشده است' });
+    }
+  }
+
   try {
-    const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
-    if (rawToken) {
-      const payload = jwt.verify(rawToken, getJwtSecret(), JWT_VERIFY_OPTIONS) as { id?: number; username?: string; role?: string };
+    if (payload) {
       targetUserId = targetUserId || payload?.id;
       targetUsername = targetUsername || payload?.username;
 
