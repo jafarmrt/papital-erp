@@ -10469,6 +10469,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.11، TD-422): آمار پرونده‌های فروش به تفکیک ارز
   const { runCrmStatsCurrencyTests } = await import('../regression/crmStatsCurrencyTests.js');
   results.push(...await runCrmStatsCurrencyTests(shouldRun));
+  // بسته ۹ (v9.0.12، TD-423): ابطال پیش‌فاکتور «فروش موفق» را برمی‌گرداند
+  const { runLeadProformaVoidTests } = await import('../regression/leadProformaVoidTests.js');
+  results.push(...await runLeadProformaVoidTests(shouldRun));
 
   return results;
 }

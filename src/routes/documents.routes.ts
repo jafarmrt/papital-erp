@@ -14,6 +14,7 @@ import { orm } from '../db/drizzle.js';
 import { crmLeads, crmActivities, items, documents } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { crmTodayActivityDates } from '../lib/storageDate.js';
+import { releaseLeadOfVoidedDocument } from '../services/crm/leadProforma.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
@@ -528,46 +529,22 @@ router.delete('/documents/:id', authorizePermission('documents.delete'), validat
     throw new NotFoundError('سند یافت نشد.');
   }
 
-  // V10-4.3: حذف پیش‌فاکتور → رفع گره یک‌طرفه از پرونده CRM (hasProforma=0، proformaId=null)
-  const wasProforma = beforeDoc.type === 'proforma' || beforeDoc.status === 'proforma';
-  let releasedLeadId: number | null = null;
-  if (wasProforma) {
-    const [linkedLead] = await orm.select().from(crmLeads)
-      .where(and(eq(crmLeads.proformaId, docId), eq(crmLeads.hasProforma, 1), eq(crmLeads.isDeleted, 0)));
-    if (linkedLead) {
-      await orm.update(crmLeads).set({
-        hasProforma: 0,
-        proformaId: null,
-        updatedAt: new Date().toISOString()
-      }).where(eq(crmLeads.id, linkedLead.id));
-      releasedLeadId = linkedLead.id;
-
-      await orm.insert(crmActivities).values({
-        leadId: linkedLead.id,
-        customerId: linkedLead.customerId,
-        type: 'note',
-        title: 'حذف پیش‌فاکتور',
-        description: `پیش‌فاکتور شماره "${beforeDoc.ref_number || docId}" حذف شد؛ پرونده فروش جهت صدور مجدد پیش‌فاکتور بازگشایی گردید.`,
-        loggedBy: req.user?.full_name || req.user?.username || 'سیستم',
-        assignedTo: linkedLead.assignedTo || '',
-        ...(await crmTodayActivityDates()),
-        createdAt: new Date().toISOString(),
-        isDeleted: 0
-      });
-    }
-  }
-
   // فیلد قدیمی `name` در payload توکن‌های فعلی وجود ندارد؛ برای حفظ رفتار fallback نگه داشته شده است
   const sessionUser: (AuthUserPayload & { name?: string }) | undefined = req.user;
   const currentUser = sessionUser?.username || sessionUser?.name || 'system';
-  await DocumentService.deleteDocument(docId, currentUser);
+  // v9.0.12 (TD-423): پرونده فروش سند در همان تراکنش ابطال، پیش از قفل کالاها و سند، آزاد می‌شود و «فروش موفق» برمی‌گردد
+  const released = await orm.transaction(async (tx) => {
+    const lead = await releaseLeadOfVoidedDocument(tx, { id: docId, refNumber: beforeDoc.ref_number ?? null }, req.user?.full_name || req.user?.username || 'سیستم');
+    await DocumentService.deleteDocument(docId, currentUser, tx);
+    return lead;
+  });
 
   await logActivity({
     req,
     action: 'DELETE',
     entity: 'اسناد انبار',
     entityId: docId,
-    description: `حذف سند انبار شماره "${beforeDoc.ref_number || docId}" (نوع: ${beforeDoc.type || ''}، خریدار: ${beforeDoc.buyer_name || '—'})${releasedLeadId ? ` — پرونده CRM #${releasedLeadId} از حالت gated خارج شد` : ''}`,
+    description: `حذف سند انبار شماره "${beforeDoc.ref_number || docId}" (نوع: ${beforeDoc.type || ''}، خریدار: ${beforeDoc.buyer_name || '—'})${released ? ` — پرونده فروش #${released.leadId} برای پیش‌فاکتور تازه باز شد${released.reopenedFromWon ? ' و از «فروش موفق» برگشت' : ''}` : ''}`,
     details: {
       before: {
         id: beforeDoc.id,

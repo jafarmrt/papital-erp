@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.12 — Voiding a Lead Proforma Reopens a Won Lead
+- **Lead Proforma Void:** Voiding the proforma of a sales lead, or the invoice finalized from it, releases the lead inside the void transaction and moves a won lead back to the proposal stage (`releaseLeadOfVoidedDocument`; TD-423, package-9 finding B09-08).
+
 ### v9.0.11 — CRM Lead Values Per Currency
 - **CRM Stats Per Currency:** The CRM stats card and the customer dossier show the pipeline, won and per-stage lead values per currency; amounts of different currencies are no longer added together (`getCrmStats`, `sumByCurrency`; TD-422, package-9 finding B09-07, product-owner decision).
 
