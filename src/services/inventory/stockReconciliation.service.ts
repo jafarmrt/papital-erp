@@ -2,68 +2,17 @@ import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and, sql, asc, inArray } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
-import { NegativeStockPolicyService, type NegativeStockPolicyType } from './negativeStockPolicy.service.js';
+import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { replayKardexWac, wacDiffersFromReplay, type KardexReplayRow } from './kardexReplay.js';
 
-export type DiscrepancyType =
-  | 'scalar_vs_wh_sum'
-  | 'scalar_vs_kardex'
-  | 'wh_sum_vs_kardex'
-  | 'location_vs_kardex_mismatch'
-  | 'kardex_negative'
-  | 'kardex_wac_mismatch'
-  | 'none';
-
-export interface ItemIntegrityAuditResult {
-  itemId: number;
-  itemCode: string;
-  itemName: string;
-  category: string;
-  unit: string;
-  scalarCurrentStock: number;
-  whStocksSum: number;
-  kardexNetBalance: number;
-  recordedWac: number;
-  computedWac: number;
-  discrepancies: DiscrepancyType[];
-  whBreakdown: Record<string, number>;
-  kardexLocBreakdown: Record<string, number>;
-  kardexTotalIn: number;
-  kardexTotalOut: number;
-  hasKardexAnomalies: boolean;
-  anomalyDetails: string[];
-}
-
-export interface WarehouseReconciliationSummary {
-  code: string;
-  name: string;
-  totalStockJsonb: number;
-  totalStockLedger: number;
-  variance: number;
-  isBalanced: boolean;
-}
-
-export interface InventoryIntegrityReport {
-  summary: {
-    totalItems: number;
-    totalItemsChecked: number;
-    synchronizedItems: number;
-    healthyItemsCount: number;
-    discrepancyItems: number;
-    discrepantItemsCount: number;
-    negativeStockItems: number;
-    healthScorePercentage: number;
-    totalScalarStock: number;
-    totalKardexStock: number;
-    totalScalarStockValue: number;
-    totalKardexStockValue: number;
-    totalInventoryValuationStored: number;
-    policy: NegativeStockPolicyType;
-  };
-  audits: ItemIntegrityAuditResult[];
-  warehouses: WarehouseReconciliationSummary[];
-}
+// v9.0.76 (TD-485): شکل پاسخ گزارش در `src/types/inventory.types.ts` مشترک سرور و صفحه است
+export type {
+  DiscrepancyType, ItemIntegrityAuditResult, WarehouseReconciliationSummary, InventoryIntegrityReport,
+} from '../../types/inventory.types.js';
+import type {
+  DiscrepancyType, ItemIntegrityAuditResult, WarehouseReconciliationSummary, InventoryIntegrityReport,
+} from '../../types/inventory.types.js';
 
 // v8.0.7 (TD-266): کاردکس تفصیلی کالا به runningKardex.service.ts منتقل شد؛ نوع‌ها برای سازگاری بازصادر می‌شوند
 export type { RunningKardexEntry, RunningKardexResponse } from './runningKardex.service.js';

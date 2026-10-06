@@ -29,7 +29,7 @@ import {
 import { useAuditSheet } from '../hooks/inventoryAudit/useAuditSheet';
 import { invalidateAfterStockAdjustment } from '../hooks/inventoryAudit/useInventoryAuditSave';
 import { useTransferVoid } from '../hooks/inventoryAudit/useTransferVoid';
-import { exportIntegrityExcel, filterIntegrityItems } from '../lib/inventoryAudit/auditSheet';
+import { exportIntegrityExcel, filterIntegrityItems } from '../lib/inventoryAudit/integrityReport';
 
 const NO_WAREHOUSES: WarehouseItem[] = [];
 

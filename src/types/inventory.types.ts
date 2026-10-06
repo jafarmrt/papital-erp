@@ -96,3 +96,68 @@ export interface ItemPrice {
   price: number;
   currency: string;
 }
+
+/**
+ * v9.0.76 (TD-485): پاسخ `GET /inventory/integrity-audit` (StockReconciliationService.getIntegrityReport)؛ همین نوع را
+ * زبانه «بررسی سلامت و تطبیق موجودی» می‌خواند. پیش‌تر صفحه `report.items` و نام فیلدهای دیگری را می‌خواند که سرور
+ * نمی‌فرستاد و جدول همیشه خالی بود.
+ */
+export type DiscrepancyType =
+  | 'scalar_vs_wh_sum'
+  | 'scalar_vs_kardex'
+  | 'wh_sum_vs_kardex'
+  | 'location_vs_kardex_mismatch'
+  | 'kardex_negative'
+  | 'kardex_wac_mismatch'
+  | 'none';
+
+export interface ItemIntegrityAuditResult {
+  itemId: number;
+  itemCode: string;
+  itemName: string;
+  category: string;
+  unit: string;
+  scalarCurrentStock: number;
+  whStocksSum: number;
+  kardexNetBalance: number;
+  recordedWac: number;
+  computedWac: number;
+  discrepancies: DiscrepancyType[];
+  whBreakdown: Record<string, number>;
+  kardexLocBreakdown: Record<string, number>;
+  kardexTotalIn: number;
+  kardexTotalOut: number;
+  hasKardexAnomalies: boolean;
+  anomalyDetails: string[];
+}
+
+export interface WarehouseReconciliationSummary {
+  code: string;
+  name: string;
+  totalStockJsonb: number;
+  totalStockLedger: number;
+  variance: number;
+  isBalanced: boolean;
+}
+
+export interface InventoryIntegrityReport {
+  summary: {
+    totalItems: number;
+    totalItemsChecked: number;
+    synchronizedItems: number;
+    healthyItemsCount: number;
+    discrepancyItems: number;
+    discrepantItemsCount: number;
+    negativeStockItems: number;
+    healthScorePercentage: number;
+    totalScalarStock: number;
+    totalKardexStock: number;
+    totalScalarStockValue: number;
+    totalKardexStockValue: number;
+    totalInventoryValuationStored: number;
+    /** سیاست موجودی منفی؛ همیشه `forbidden` (TD-180) */
+    policy: string;
+  };
+  audits: ItemIntegrityAuditResult[];
+  warehouses: WarehouseReconciliationSummary[];
+}
