@@ -1321,7 +1321,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }).returning();
 
     // Execute Kardex Rebuild on item
-    await KardexWacRecalculatorService.rebuildItemFromLedger(testItem.id);
+    const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(testItem.id);
 
     // Fetch updated item from DB
     const [refreshedItem] = await orm.select().from(items).where(eq(items.id, testItem.id));
@@ -1330,9 +1330,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`موجودی کالا پس از خروج کامل باید صفر باشد، اما مقدار ${refreshedItem.currentStock} است.`);
     }
 
-    // TD-136 assertion: WAC must NOT be reset to 0; it must preserve 750000
-    if (Number(refreshedItem.weightedAverageCost) !== 750000) {
-      throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
+    // TD-136 assertion: the Kardex replay must NOT reset WAC to 0 after depletion; it keeps 750000. Since v9.0.84 (TD-487,
+    // decision t3) the rebuild reports that replay WAC and keeps the item's WAC; «اصلاح بها» is the separate action.
+    if (rebuilt.replayWac !== 750000) {
+      throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${rebuilt.replayWac} ثبت شد.`);
+    }
+    if (Number(refreshedItem.weightedAverageCost) !== 500000) {
+      throw new Error(`بازسازی کاردکس نباید WAC کالا را تغییر دهد (v9.0.84، TD-487)، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
     }
 
     // Clean up test data
