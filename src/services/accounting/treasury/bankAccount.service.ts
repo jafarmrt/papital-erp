@@ -10,7 +10,7 @@ import { businessTodayJalaliDash } from '../../../lib/businessClock.js';
 import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
-import { voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
@@ -487,6 +487,10 @@ export class BankAccountService {
         .where(and(eq(bankAccounts.id, id), eq(bankAccounts.isDeleted, 0)))
         .for('update');
       if (!existing) throw new NotFoundError('حساب بانکی یا صندوق یافت نشد');
+      // v9.0.59 (TD-504، ت۸): تغییر مانده اول دوره در انتظار تأیید گردش‌کار رد می‌شود
+      if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
+        await assertNoPendingOpeningApproval(tx, existing);
+      }
       const newCode = data.code?.trim();
       if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
         await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);

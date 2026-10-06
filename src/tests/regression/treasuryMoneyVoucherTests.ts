@@ -2,7 +2,7 @@ import request from 'supertest';
 import { and, eq, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { accounts, bankAccounts, cheques, journalVouchers, treasuryTransactions } from '../../db/schema.js';
+import { accounts, bankAccounts, cheques, journalVouchers, treasuryTransactions, workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { fin } from '../../lib/financialDecimal.js';
 
@@ -282,6 +282,46 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
       if (await bankLedger(bankB) !== '7000000') problems.push(`bank B ledger ${await bankLedger(bankB)}, expected 7000000`);
       assertNoProblems(problems);
       return 'Bank A (opening 1,000,000 approved + draft adjustment 500,000): delete reversed the opening, removed the draft, ledger 0; bank B (opening 7,000,000 permanent): delete 409, bank and ledger 7,000,000 kept';
+    });
+  }
+
+  const pendingId = 'reg_opening_balance_edit_refused_while_approval_pending_td_504';
+  if (shouldRun(pendingId, 'td504', 'treasury', 'bank', 'workflow', 'package4')) {
+    await runCase(results, pendingId, 'v9.0.59: while the approval workflow of a new bank account is open, editing its opening balance is refused with 409 and issues no opening voucher; other fields stay editable (TD-504)', async () => {
+      const { createTestWorkflow } = await import('../fixtures/factories.js');
+      const problems: string[] = [];
+      const api = await client();
+      const wf = await createTestWorkflow({
+        definition: { entityType: 'bank_account' },
+        states: [{ key: 'draft', title: 'Draft', type: 'initial' }, { key: 'approved', title: 'Approved', type: 'terminal' }],
+        transitions: [{ fromKey: 'draft', toKey: 'approved', actionKey: 'approve_td504', title: 'Approve' }],
+      });
+      let bankId = 0;
+      try {
+        bankId = await createBank('Pending bank', 5_000_000);
+      } finally {
+        // only this bank starts under the test definition; later tests create banks without a workflow
+        await orm.update(workflowDefinitions).set({ isActive: 0 }).where(eq(workflowDefinitions.id, wf.definition.id));
+      }
+      const [instance] = await orm.select({ id: workflowInstances.id, status: workflowInstances.status }).from(workflowInstances)
+        .where(and(eq(workflowInstances.entityType, 'bank_account'), eq(workflowInstances.entityId, String(bankId))));
+      if (instance?.status !== 'IN_PROGRESS') throw new Error(`bank workflow instance is ${instance?.status ?? 'missing'}, expected IN_PROGRESS`);
+      const openings = async () => (await orm.select({ id: journalVouchers.id }).from(journalVouchers)
+        .where(and(eq(journalVouchers.referenceModule, 'treasury_opening'), eq(journalVouchers.referenceId, bankId), eq(journalVouchers.isDeleted, 0),
+          eq(journalVouchers.referenceNumber, await bankCode(bankId))))).length;
+      if (await openings() !== 0) problems.push('the bank has an opening voucher before approval');
+
+      const edit = await api.put(`/api/accounting/bank-accounts/${bankId}`, { initialBalance: 5_500_000 });
+      if (edit.status !== 409) problems.push(`opening balance edit while pending returned ${edit.status}, expected 409`);
+      if (await openings() !== 0) problems.push('the opening balance edit issued an opening voucher before approval');
+      const [bank] = await orm.select({ initial: bankAccounts.initialBalance, current: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.id, bankId));
+      if (fin(bank.initial).toString() !== '5000000' || fin(bank.current).toString() !== '5000000') {
+        problems.push(`bank balances changed to initial ${fin(bank.initial).toString()} / current ${fin(bank.current).toString()}, expected 5000000`);
+      }
+      const rename = await api.put(`/api/accounting/bank-accounts/${bankId}`, { title: `Pending bank renamed ${tagOf()}`, initialBalance: 5_000_000 });
+      if (rename.status !== 200) problems.push(`editing the title (same opening balance) while pending returned ${rename.status}: ${errorText(rename)}`);
+      assertNoProblems(problems);
+      return 'Bank 5,000,000 waiting for approval: opening balance edit to 5,500,000 gave 409, no opening voucher, balances 5,000,000; a title edit was accepted';
     });
   }
 

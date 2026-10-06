@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbExecutor } from '../../../db/drizzle.js';
-import { journalVouchers } from '../../../db/schema.js';
+import { journalVouchers, workflowInstances } from '../../../db/schema.js';
 import { ConflictError } from '../../../errors/customErrors.js';
 import { VoucherService } from '../voucher.service.js';
 
@@ -62,5 +62,26 @@ export async function voidBankOpeningVouchers(
       username: user?.username,
       externalTx: tx,
     });
+  }
+}
+
+/**
+ * v9.0.59 (TD-504، B04-08، تصمیم مالک محصول ت۸ الف): تا گردش‌کار تأیید حساب خزانه باز است، مانده اول دوره ویرایش نمی‌شود.
+ * پیش‌تر ویرایش، چون سند افتتاحیه هنوز نبود، `issueTreasuryOpeningVoucher` را مستقیم صدا می‌زد و سند بی تأیید صادر می‌شد؛
+ * تأیید بعدی همان سند را برمی‌گرداند. فراخواننده ردیف حساب را FOR UPDATE قفل کرده است.
+ */
+export async function assertNoPendingOpeningApproval(tx: DbExecutor, bank: { id: number; title: string }): Promise<void> {
+  const [open] = await tx.select({ id: workflowInstances.id }).from(workflowInstances)
+    .where(and(
+      eq(workflowInstances.entityType, 'bank_account'),
+      eq(workflowInstances.entityId, String(bank.id)),
+      eq(workflowInstances.status, 'IN_PROGRESS'),
+    ))
+    .limit(1);
+  if (open) {
+    throw new ConflictError(
+      `مانده اول دوره حساب «${bank.title}» در انتظار تأیید گردش‌کار است و تا پایان آن ویرایش نمی‌شود؛ ` +
+      'پس از تأیید یا رد، دوباره ویرایش کنید.'
+    );
   }
 }
