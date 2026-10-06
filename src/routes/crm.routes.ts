@@ -25,6 +25,7 @@ import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
+import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -622,10 +623,11 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   }).where(eq(crmLeads.id, id)).returning();
 
   // Fetch customer details if exists
-  let customerObj: typeof customers.$inferSelect | null = null;
+  // v9.0.21 (TD-433، ت۶): اطلاعات بانکی طرف حساب فقط برای customers.view / customers.manage / accounting.*
+  let customerObj: typeof customers.$inferSelect | Omit<typeof customers.$inferSelect, 'bankInfo'> | null = null;
   if (resolvedCustomerId) {
     const [c] = await orm.select().from(customers).where(eq(customers.id, resolvedCustomerId));
-    customerObj = c || null;
+    customerObj = c ? ((await canSeePartyBankInfo(req.user)) ? c : withoutBankInfo(c)) : null;
   }
 
   // Log activity

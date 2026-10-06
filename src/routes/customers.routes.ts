@@ -14,6 +14,7 @@ import { getCustomerAccountCard } from '../services/customers/customerAccountCar
 import { getCustomerSalesDocuments } from '../services/customers/customerDocuments.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { partyRowsForUser } from '../services/customers/partyBankInfoAccess.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -152,7 +153,8 @@ router.get('/customers', authorizePermission(...READ_PERMISSIONS.customers), asy
     query = query.limit(limit).offset(offset) as any;
   }
 
-  const allCustomers = await query;
+  // v9.0.21 (TD-433، ت۶): اطلاعات بانکی فقط برای customers.view / customers.manage / accounting.*
+  const allCustomers = await partyRowsForUser(req.user, await query);
 
   if (isExport) {
     return res.json(allCustomers);
