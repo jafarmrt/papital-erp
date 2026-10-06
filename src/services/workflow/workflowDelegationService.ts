@@ -1,6 +1,7 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowDelegations, 
+  workflowDefinitions,
   users 
 } from '../../db/schema.js';
 import { eq, or, and, desc, sql, inArray, type SQL } from 'drizzle-orm';
@@ -93,6 +94,15 @@ export class WorkflowDelegationService {
     }
 
     const scope = (params.scope || 'ALL').trim();
+    // TD-467 (یافته B14-25، تصمیم ت۶ الف): حوزه «همه» یا کد یکی از گردش‌کارهای تعریف‌شده است؛ پیش‌تر هر متنی (مانند invoice،
+    // transfer یا project که فرم پیشنهاد می‌داد) ذخیره می‌شد و چون با هیچ گردش کاری جور نمی‌شد، تفویض اثری نداشت
+    if (!['all', '*'].includes(scope.toLowerCase())) {
+      const [definition] = await orm.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
+        .where(sql`lower(btrim(${workflowDefinitions.code})) = ${scope.toLowerCase()}`).limit(1);
+      if (!definition) {
+        throw new ValidationError('حوزه تفویض باید «همه» یا یکی از گردش‌کارهای تعریف‌شده باشد؛ از فهرست حوزه انتخاب کنید.');
+      }
+    }
 
     const [inserted] = await orm.insert(workflowDelegations).values({
       fromUserId: params.fromUserId,

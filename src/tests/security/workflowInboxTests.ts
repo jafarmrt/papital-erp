@@ -110,5 +110,32 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  if (shouldRun('sec_workflow_delegation_scope_td_467', 'security', 'td467', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_delegation_scope_td_467',
+      name: 'A delegation scope is ALL or the code of a defined workflow; any other scope is refused with 422 (TD-467)',
+      details: 'scopes invoice, transfer and project (offered by the old form, matching no workflow) get 422 and are not stored; ALL and an existing workflow code (any case) are stored',
+    }, async (h, wrong) => {
+      const deputy = await h.sessionWith(['workflow.view', 'workflow.approve']);
+      const start = new Date(Date.now() - 3600_000).toISOString();
+      const end = new Date(Date.now() + 86_400_000).toISOString();
+      const create = (scope: string) => h.post('/api/workflow/delegations', { toUserId: deputy.userId, scope, startDate: start, endDate: end, reason: `td467 ${scope}` });
+      try {
+        for (const scope of ['invoice', 'transfer', 'project', 'NO_SUCH_WORKFLOW']) {
+          const res = await create(scope);
+          if (res.status !== 422) wrong.push(`scope ${scope} returned ${res.status}, not 422`);
+        }
+        const stored = await h.q(`SELECT scope FROM workflow_delegations WHERE to_user_id = $1 ORDER BY id`, [deputy.userId]);
+        if (stored.length > 0) wrong.push(`refused scopes were stored: ${stored.map(r => String(r.scope)).join(', ')}`);
+        for (const scope of ['ALL', 'DOC_APPROVAL_WORKFLOW', 'doc_approval_workflow']) {
+          const res = await create(scope);
+          if (res.status !== 200) wrong.push(`scope ${scope} returned ${res.status}: ${JSON.stringify(res.body).slice(0, 160)}`);
+        }
+      } finally {
+        await h.q(`DELETE FROM workflow_delegations WHERE to_user_id = $1`, [deputy.userId]);
+      }
+    });
+  }
+
   return results;
 }

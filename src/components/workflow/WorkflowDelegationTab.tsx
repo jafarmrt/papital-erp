@@ -353,15 +353,14 @@ export function WorkflowDelegationTab() {
                   onChange={(e) => setScope(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-hidden focus:border-indigo-500 dark:text-white"
                 >
-                  <option value="ALL">تمامی فرآیندها و کارتابل‌ها (ALL)</option>
+                  {/* TD-467 (یافته B14-25، تصمیم ت۶ الف): فقط «همه» و گردش‌کارهای تعریف‌شده؛ گزینه‌های فاکتور، حواله و پروژه با
+                      هیچ گردش کاری جور نمی‌شدند و تفویض اثری نداشت */}
+                  <option value="ALL">همه گردش‌کارها</option>
                   {definitions.map((def: any) => (
                     <option key={def.id} value={def.code}>
-                      ورکفلو: {def.title} ({def.code})
+                      گردش کار: {def.title}
                     </option>
                   ))}
-                  <option value="invoice">فقط فاکتورهای فروش و خرید</option>
-                  <option value="transfer">فقط حواله‌های انبار</option>
-                  <option value="project">فقط پروژه‌های تولیدی</option>
                 </select>
               </div>
 
