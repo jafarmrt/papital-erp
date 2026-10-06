@@ -13,7 +13,7 @@ const row = (fields: Record<string, unknown>) => ({
   attachments: [], ...fields,
 });
 
-// v9.0.55 (TD-499, decision t1 «الف»): a reversal row (the void of another transaction) has no void button; the server refuses it too.
+// v9.0.58 (TD-499, decision t1 «الف»): a reversal row (the void of another transaction) has no void button; the server refuses it too.
 describe('treasury reversal rows cannot be voided (TD-499)', () => {
   it('only the live original row offers the void button', () => {
     const rows = [

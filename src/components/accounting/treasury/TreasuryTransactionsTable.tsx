@@ -369,7 +369,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     </td>
 
                     {/* Actions */}
-                    {/* v9.0.55 (TD-499، ت۱): ردیف معکوس (ابطال تراکنش دیگر) دکمه ابطال ندارد؛ سرور هم آن را رد می‌کند */}
+                    {/* v9.0.58 (TD-499، ت۱): ردیف معکوس (ابطال تراکنش دیگر) دکمه ابطال ندارد؛ سرور هم آن را رد می‌کند */}
                     <td className="py-3 px-3 text-center">
                       {!isVoided && !(tx.reversalOfId ?? tx.reversal_of_id) ? (
                         <button

@@ -10498,7 +10498,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.19، TD-430): «انجام» و «بازگشایی» صریح پیگیری
   const { runCrmFollowupActionTests } = await import('../regression/crmFollowupActionTests.js');
   results.push(...await runCrmFollowupActionTests(shouldRun));
-  // Package 4 (v9.0.55 on): treasury money and vouchers (TD-499..TD-504)
+  // Package 4 (v9.0.58 on): treasury money and vouchers (TD-499..TD-504)
   const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
   results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
 

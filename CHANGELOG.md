@@ -19,22 +19,22 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.59 — Opening Balance Edit Waits for Approval
+### v9.0.62 — Opening Balance Edit Waits for Approval
 - **Opening Balance Approval (P2):** editing the opening balance of a treasury account whose approval workflow is still open is refused with 409; before, the edit issued the opening voucher at once, bypassing the approval (TD-504, `reg_opening_balance_edit_refused_while_approval_pending_td_504`).
 
-### v9.0.58 — Deleting a Bank Account Voids Its Opening Voucher
+### v9.0.61 — Deleting a Bank Account Voids Its Opening Voucher
 - **Bank Account Delete (P2):** deleting a treasury account now voids its opening and opening-adjustment vouchers in the same transaction (draft removed, approved reversed) and is refused with 409 when one is permanent; before, the opening voucher stayed and the bank ledger kept a balance no account explained (TD-503, `reg_bank_delete_voids_opening_voucher_td_503`).
 
-### v9.0.57 — Cheques With a Permanent Voucher Are Not Deleted
+### v9.0.60 — Cheques With a Permanent Voucher Are Not Deleted
 - **Cheque Delete (P2):** deleting a cheque whose voucher is permanent is refused with 409 naming the voucher; before, the cheque was deleted and the permanent voucher stayed in the ledger with no cheque behind it. The cheque menu no longer offers status change or delete in a terminal status (TD-502, `reg_cheque_with_permanent_voucher_not_deleted_td_502`, Vitest `chequeTerminalActions.test.tsx`).
 
-### v9.0.56 — Invoice Settlement After a Voided Receipt
+### v9.0.59 — Invoice Settlement After a Voided Receipt
 - **Invoice Settlement (P1):** an invoice whose receipt was voided and then received again now shows the new receipt as paid; before, the void was subtracted twice and the invoice stayed «unpaid» while the customer's ledger was settled (TD-500, `reg_invoice_settled_after_void_and_rereceipt_td_500`).
 
-### v9.0.55 — Treasury Reversal Rows Can No Longer Be Voided
+### v9.0.58 — Treasury Reversal Rows Can No Longer Be Voided
 - **Treasury Void (P0):** voiding the reversal row of a voided receipt or payment is refused with 409 and the button is gone; before, it put the money back in the bank with no voucher and without the no-voucher permission. Legacy revived rows are listed by the financial health check, and new bank invariants I15/I16 compare each bank with its ledger (TD-499, `reg_treasury_reversal_void_refused_td_499`, `inv_td_499_bank_invariants_hold`).
 
-### v9.0.54 — Package 4 Treasury and Cheques Audit Documentation
+### v9.0.57 — Package 4 Treasury and Cheques Audit Documentation
 - **Stability Audit, Package 4 (Treasury and Cheques):** `docs/audit/STABILITY_AUDIT_V9.md` gets the treasury section; its 19 proven findings are registered as open rows TD-497 to TD-515 (one P0: voiding the reversal row of a voided receipt put the money back in the bank with no voucher). Documentation only; no behaviour change.
 
 ### v9.0.53 — node_modules No Longer Tracked by Git

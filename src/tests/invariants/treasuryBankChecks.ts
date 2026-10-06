@@ -24,7 +24,7 @@ async function bankWithOwnLedger(title: string, initialBalance = 0) {
 }
 
 /**
- * v9.0.55 (TD-499, decision t1 «الف»): everyday treasury flows keep the bank invariants I15 / I16 — receipt, payment,
+ * v9.0.58 (TD-499, decision t1 «الف»): everyday treasury flows keep the bank invariants I15 / I16 — receipt, payment,
  * transfer, void, a cleared received cheque and an opening balance (draft vouchers count, TD-252) — and voiding a reversal
  * row is refused, so a receipt voided with its draft voucher never comes back to the bank without a voucher.
  */
@@ -58,6 +58,6 @@ export async function checkTreasuryFlowsKeepBankInvariants(): Promise<string[]> 
 }
 
 export const TREASURY_BANK_CHECKS: Array<[string, string, (wh: string) => Promise<string[]>, string]> = [
-  ['inv_td_499_bank_invariants_hold', 'v9.0.55: receipts, payments, transfers, voids, a cleared cheque and an opening balance keep every bank equal to its ledger rows (I15) with no revived row without a voucher (I16); voiding a reversal row is refused (TD-499)',
+  ['inv_td_499_bank_invariants_hold', 'v9.0.58: receipts, payments, transfers, voids, a cleared cheque and an opening balance keep every bank equal to its ledger rows (I15) with no revived row without a voucher (I16); voiding a reversal row is refused (TD-499)',
     () => checkTreasuryFlowsKeepBankInvariants(), 'bank invariants I15 and I16 held on three banks; the reversal row could not be voided'],
 ];

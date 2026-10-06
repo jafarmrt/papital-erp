@@ -595,7 +595,7 @@ export function ChequesTab({
                           </button>
                           <ActionMenu
                             items={[
-                              // v9.0.57 (TD-502، ت۹): وضعیت پایانی نه تغییر وضعیت دارد نه حذف
+                              // v9.0.60 (TD-502، ت۹): وضعیت پایانی نه تغییر وضعیت دارد نه حذف
                               ...(chequeHasNextStep(c.status) ? [{
                                 label: 'تغییر وضعیت چک',
                                 icon: Edit3,

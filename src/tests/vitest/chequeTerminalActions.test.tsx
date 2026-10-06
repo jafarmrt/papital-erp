@@ -23,7 +23,7 @@ const menuOf = (chequeNumber: string): string[] => {
   return labels;
 };
 
-// v9.0.57 (TD-502، B04-06، تصمیم ت۹): چک در وضعیت پایانی (وصول‌شده، عودت‌شده، خرج‌شده) در منوی ردیف «تغییر وضعیت» و
+// v9.0.60 (TD-502، B04-06، تصمیم ت۹): چک در وضعیت پایانی (وصول‌شده، عودت‌شده، خرج‌شده) در منوی ردیف «تغییر وضعیت» و
 // «حذف» ندارد؛ پیش‌تر منوی چک وصول‌شده هر دو را پیشنهاد می‌داد و سرور رد می‌کرد.
 describe('cheque row menu in terminal statuses (TD-502)', () => {
   it('offers status change and delete only while the cheque has a next step', () => {

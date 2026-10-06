@@ -252,7 +252,7 @@ export class DocumentQueryService {
       eq(treasuryTransactions.isDeleted, 0),
       eq(treasuryTransactions.status, 'completed')
     ));
-    // v9.0.56 (TD-500): جمع تسویه ردیف باطلِ معکوس‌شده را هم می‌خواند؛ فهرست نمایش همان ردیف‌های کامل است
+    // v9.0.59 (TD-500): جمع تسویه ردیف باطلِ معکوس‌شده را هم می‌خواند؛ فهرست نمایش همان ردیف‌های کامل است
     const settlementRows = await fetchSettlementRows([doc.id]);
 
     const isPurchase = ['receipt', 'production_receipt', 'purchase'].includes(doc.type);
