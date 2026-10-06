@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.9 — Excel Import Keeps the Party Type
+- **Party Type in Customer Excel Import:** An empty type cell leaves an existing party's type unchanged and makes a new party a customer; supplier is read with or without hamza and «هر دو (مشتری و تامین‌کننده)» as both (`parsePartyTypeCell`, shared by the server and the preview) (TD-421, package-9 finding B09-06).
+
 ### v9.0.8 — Unique Active Customer Names
 - **Customer Name Uniqueness:** Migration 0052 adds the partial unique index `uq_customers_name_active` on `lower(btrim(name))` of active parties, created only when existing data has no duplicate (old rows are never renamed or merged; the financial health check lists duplicates as `customer_name_uniqueness`). The form, the sales lead link and the Excel import check the same key, and a race ends in the same Persian duplicate-name error (TD-420, package-9 finding B09-05).
 

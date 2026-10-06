@@ -10460,6 +10460,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.8، TD-420): یکتایی نام طرف حساب فعال
   const { runCustomerUniqueNameTests } = await import('../regression/customerUniqueNameTests.js');
   results.push(...await runCustomerUniqueNameTests(shouldRun));
+  // بسته ۹ (v9.0.9، TD-421): نوع خالی در درون‌ریزی اکسل طرف حساب‌ها
+  const { runCustomerImportPartyTypeTests } = await import('../regression/customerImportPartyTypeTests.js');
+  results.push(...await runCustomerImportPartyTypeTests(shouldRun));
 
   return results;
 }

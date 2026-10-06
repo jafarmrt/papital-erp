@@ -6,6 +6,7 @@ import { fetchJson } from '../../api';
 import { formatPersianNumber } from '../../utils';
 import { Customer } from '../../types';
 import { excelRowVersion } from '../../lib/customers/customerVersion';
+import { parsePartyTypeCell, partyTypeCellLabel, type PartyType } from '../../lib/customers/partyTypeCell';
 
 interface CustomerExcelModalProps {
   isOpen: boolean;
@@ -24,7 +25,8 @@ interface CounterpartyPreviewRow {
   name: string;
   contactName: string;
   phone: string;
-  partyType: 'customer' | 'supplier' | 'both';
+  /** خالی یعنی نوع رکورد موجود عوض نمی‌شود و رکورد تازه «مشتری» است (TD-421) */
+  partyType?: PartyType;
   partyTypeLabel: string;
   supplierCategory: string;
   province: string;
@@ -221,17 +223,7 @@ export function CustomerExcelModal({
           const contactName = getField(row, ['شخص رابط', 'مدیر', 'نام رابط', 'رابط', 'contact', 'contactname']);
           const phone = getField(row, ['شماره تماس', 'تلفن', 'موبایل', 'تلفن همراه', 'phone', 'mobile']);
 
-          const rawType = getField(row, ['نوع طرف حساب', 'نوع', 'نقش', 'نوع شخص', 'partytype', 'type']).toLowerCase();
-          let partyType: 'customer' | 'supplier' | 'both' = 'customer';
-          let partyTypeLabel = 'مشتری';
-
-          if (rawType.includes('تامین') || rawType === 'supplier') {
-            partyType = 'supplier';
-            partyTypeLabel = 'تامین‌کننده';
-          } else if (rawType.includes('هر دو') || rawType.includes('مشتری و تامین') || rawType === 'both') {
-            partyType = 'both';
-            partyTypeLabel = 'هر دو (مشتری و تامین‌کننده)';
-          }
+          const partyType = parsePartyTypeCell(getField(row, ['نوع طرف حساب', 'نوع', 'نقش', 'نوع شخص', 'partytype', 'type']));
 
           const supplierCategory = getField(row, ['دسته تامین', 'دسته تامین متریال', 'دسته', 'رسته', 'suppliercategory']);
           const province = getField(row, ['استان', 'province']);
@@ -276,7 +268,7 @@ export function CustomerExcelModal({
             contactName,
             phone,
             partyType,
-            partyTypeLabel,
+            partyTypeLabel: partyTypeCellLabel(partyType, isExistingMatch),
             supplierCategory,
             province,
             city,
@@ -648,6 +640,8 @@ export function CustomerExcelModal({
                                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                     : r.partyType === 'both'
                                     ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                    : r.partyType === undefined && r.isExistingMatch
+                                    ? 'bg-slate-50 text-slate-600 border border-slate-200'
                                     : 'bg-blue-50 text-blue-700 border border-blue-200'
                                 }`}>
                                   {r.partyType === 'supplier' ? <Truck size={10} /> : <Building2 size={10} />}

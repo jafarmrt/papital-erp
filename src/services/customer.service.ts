@@ -2,6 +2,7 @@ import { eq, and, asc, sql } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { customers } from '../db/schema.js';
 import { checkOccVersion, nextVersion, OptimisticLockError } from '../lib/occHelper.js';
+import { parsePartyTypeCell } from '../lib/customers/partyTypeCell.js';
 import { NotFoundError } from '../errors/customErrors.js';
 import { phoneMatchKey } from './woocommerce/phoneMatchKey.js';
 import {
@@ -300,15 +301,8 @@ export class CustomerService {
         const id = item.id ? Number(item.id) : undefined;
         const contactName = String(item.contactName || '').trim();
         const phone = String(item.phone || '').trim();
-        const rawType = String(item.partyType || '').trim().toLowerCase();
-        let partyType: 'customer' | 'supplier' | 'both' = 'customer';
-        if (rawType.includes('تامین') || rawType === 'supplier') {
-          partyType = 'supplier';
-        } else if (rawType.includes('هر دو') || rawType.includes('مشتری و تامین') || rawType === 'both') {
-          partyType = 'both';
-        } else {
-          partyType = 'customer';
-        }
+        // v9.0.9 (TD-421): نوع خالی undefined است؛ رکورد موجود نوعش را نگه می‌دارد و رکورد تازه «مشتری» می‌شود
+        const cellType = parsePartyTypeCell(item.partyType);
 
         const supplierCategory = String(item.supplierCategory || '').trim();
         const country = String(item.country || 'ایران').trim();
@@ -358,7 +352,7 @@ export class CustomerService {
               phone: phone || matchedCust.phone,
               address: address || matchedCust.address,
               notes: notes || matchedCust.notes,
-              partyType,
+              partyType: cellType ?? matchedCust.partyType,
               supplierCategory: supplierCategory || matchedCust.supplierCategory,
               bankInfo: {
                 ...((matchedCust.bankInfo as Record<string, unknown>) || {}),
@@ -380,7 +374,7 @@ export class CustomerService {
             nameMap.set(name.toLowerCase(), saved);
             if (phoneMatchKey(saved.phone)) phoneMap.set(phoneMatchKey(saved.phone), saved);
 
-            updatedRecords.push({ id: matchedCust.id, name, partyType, updatedData });
+            updatedRecords.push({ id: matchedCust.id, name, partyType: saved.partyType ?? 'customer', updatedData });
             updatedCount++;
           } else {
             errors.push({
@@ -390,6 +384,7 @@ export class CustomerService {
             });
           }
         } else {
+          const partyType = cellType ?? 'customer';
           const [newCust] = await executor
             .insert(customers)
             .values({
