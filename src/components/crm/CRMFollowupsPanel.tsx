@@ -47,7 +47,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
               لیست کارهای پیگیری و تماس‌های معوقه ({formatPersianNumber(total)} مورد)
             </h4>
             <p className="text-[11px] text-amber-700 mt-0.5">
-              تمام تسک‌ها و یادآوری‌های پیگیری همراه با تاریخ سررسید. پس از تماس، دکمه «تکمیل پیگیری» را جهت ثبت نتیجه فشار دهید.
+              همه پیگیری‌ها و یادآوری‌ها همراه با تاریخ سررسید. پس از تماس، دکمه «تکمیل پیگیری» را جهت ثبت نتیجه فشار دهید.
             </p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
               }}
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-500 cursor-pointer"
             >
-              <option value="all">همه مسئولین تسک</option>
+              <option value="all">همه مسئولان پیگیری</option>
               {personnelList.map((p) => (
                 <option key={p.id} value={String(p.id)}>
                   {p.fullName}
@@ -121,7 +121,7 @@ export function CRMFollowupsPanel({ leads = [], onToggleFollowup, personnelList 
         <div className="relative w-full sm:w-64">
           <input
             type="text"
-            placeholder="جستجو در تسک‌ها و عنوان..."
+            placeholder="جست‌وجو در پیگیری‌ها و عنوان…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);

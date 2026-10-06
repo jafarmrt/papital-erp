@@ -98,7 +98,7 @@ export function CRMTasksWidget({
           </div>
           <div>
             <h2 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
-              <span>تسک‌ها و پیگیری‌های CRM و فروش</span>
+              <span>پیگیری‌های ارتباط با مشتری و فروش</span>
               {dueTotal > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
                   {toPersianDigits(dueTotal)} نیازمند اقدام
@@ -114,7 +114,7 @@ export function CRMTasksWidget({
             onClick={() => navigate('/crm')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold transition-colors"
           >
-            <span>ورود به CRM</span>
+            <span>ورود به ارتباط با مشتری</span>
             <ArrowLeft size={13} />
           </button>
         </div>
@@ -213,11 +213,11 @@ export function CRMTasksWidget({
               <CheckCircle2 size={20} />
             </div>
             <p className="text-xs font-bold text-emerald-800">هیچ پیگیری معوق یا فوری برای امروز ندارید!</p>
-            <p className="text-[11px] text-emerald-600 mt-1">همه تماس‌ها و وظایف CRM به‌موقع انجام شده‌اند. خدا قوت! 🌟</p>
+            <p className="text-[11px] text-emerald-600 mt-1">همه تماس‌ها و پیگیری‌ها به‌موقع انجام شده‌اند. خدا قوت! 🌟</p>
           </div>
         ) : activeFilter === 'all_pending' && pendingFollowups.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-xs bg-slate-50 rounded-2xl">
-            هیچ پیگیری فعالی در صف CRM ثبت نشده است.
+            هیچ پیگیری بازی ثبت نشده است.
           </div>
         ) : activeFilter === 'won_deals' && wonLeads.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-xs bg-slate-50 rounded-2xl">
@@ -321,7 +321,7 @@ export function CRMTasksWidget({
             onClick={() => navigate('/crm')}
             className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1"
           >
-            <span>مدیریت کامل در CRM</span>
+            <span>مدیریت کامل در ارتباط با مشتری</span>
             <ArrowLeft size={12} />
           </button>
         </div>

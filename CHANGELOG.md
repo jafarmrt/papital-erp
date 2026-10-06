@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.20 — CRM Wording in the Persian UI
+- **CRM Wording:** Persian UI text says «ارتباط با مشتری» instead of «CRM», and package-9 text uses «پیگیری»، «پرونده فروش» and «اشاره» instead of transliterations (owner decision ت۷; TD-432, Vitest `crmWording.test.ts`).
+
 ### v9.0.19 — CRM Follow-up Explicit Actions
 - **CRM Follow-up Actions:** The two-way `toggle-followup` is replaced by `complete-followup` and `reopen-followup` with a target state, under the activity row lock and with an audit row per change (`setFollowupCompleted`; TD-430, package-9 finding B09-15).
 

@@ -633,8 +633,8 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
     leadId: id,
     customerId: resolvedCustomerId,
     type: 'task',
-    title: 'تبدیل لید به مشتری و صدور پیش‌فاکتور',
-    description: `پرونده فروش CRM "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
+    title: 'تبدیل پرونده فروش به مشتری و صدور پیش‌فاکتور',
+    description: `پرونده فروش "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
     loggedBy: authorName,
     ...(await crmTodayActivityDates()),
     createdAt: nowIso,
@@ -642,7 +642,7 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   });
 
   res.json({
-    message: 'لید با موفقیت به مشتری رسمی تبدیل شد',
+    message: 'پرونده فروش به مشتری رسمی تبدیل شد',
     lead: formatLead(updated),
     customer: customerObj
   });
@@ -857,8 +857,8 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'mention',
-          title: 'منشن در فعالیت CRM',
-          message: `${authorName} شما را در فعالیت CRM ("${title}") منشن کرد.`,
+          title: 'اشاره به شما در اقدام ارتباط با مشتری',
+          message: `${authorName} در اقدام «${title}» به شما اشاره کرد.`,
           link: `/crm?activityId=${newAct.id}`,
           isRead: 0
         });
@@ -892,8 +892,8 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'task',
-          title: 'تسک / پیگیری جدید CRM',
-          message: `${authorName} تسک پیگیری جدید برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
+          title: 'پیگیری تازه ارتباط با مشتری',
+          message: `${authorName} پیگیری تازه‌ای برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
           link: `/crm?activityId=${newAct.id}`,
           isRead: 0
         });

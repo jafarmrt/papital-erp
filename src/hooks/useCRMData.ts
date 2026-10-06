@@ -122,7 +122,7 @@ export function useCRMData(user: any) {
       } catch (e: any) {
         if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM leads:', e);
-        toast.error('خطا در دریافت سرنخ‌های CRM');
+        toast.error('خطا در دریافت پرونده‌های فروش');
       }
 
       const actParams = buildActivityQueryParams(fromDate, toDate);
@@ -134,7 +134,7 @@ export function useCRMData(user: any) {
       } catch (e: any) {
         if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM activities:', e);
-        toast.error('خطا در دریافت فعالیت‌های CRM');
+        toast.error('خطا در دریافت اقدام‌های ارتباط با مشتری');
       }
 
       // Load customers
@@ -180,7 +180,7 @@ export function useCRMData(user: any) {
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return;
       console.error('Error loading CRM data:', err);
-      toast.error('خطا در دریافت اطلاعات CRM');
+      toast.error('خطا در دریافت اطلاعات ارتباط با مشتری');
     } finally {
       if (!signal?.aborted) {
         setLoading(false);

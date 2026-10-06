@@ -142,7 +142,7 @@ export function CustomerFormModal({
                   />
                   <Building2 size={18} className={form.partyType === 'customer' ? 'text-blue-600 mb-1' : 'text-slate-400 mb-1'} />
                   <span className="font-bold text-xs">مشتری و خریدار</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">صدور فاکتور و CRM</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">صدور فاکتور و ارتباط با مشتری</span>
                 </label>
 
                 <label 

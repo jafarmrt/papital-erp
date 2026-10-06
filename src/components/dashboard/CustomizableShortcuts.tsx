@@ -18,7 +18,7 @@ export interface ShortcutItemDef {
 export const ALL_SHORTCUTS: ShortcutItemDef[] = [
   {
     id: 'crm',
-    title: 'مدیریت CRM و فروش',
+    title: 'ارتباط با مشتری و فروش',
     description: 'پیگیری فرصت‌ها و ارتباط با مشتریان',
     path: '/crm',
     icon: Target,

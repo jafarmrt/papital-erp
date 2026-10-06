@@ -68,10 +68,10 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
         await orm.insert(notifications).values({
           userId: userId,
           senderId: null,
-          senderName: 'سیستم CRM',
+          senderName: 'سامانه ارتباط با مشتری',
           type: 'crm_due_task',
-          title: '⏰ سررسید تسک پیگیری CRM',
-          message: `سررسید تسک: "${act.nextFollowUpTask || act.title}" (تاریخ: ${dueDate})`,
+          title: '⏰ سررسید پیگیری ارتباط با مشتری',
+          message: `سررسید پیگیری: "${act.nextFollowUpTask || act.title}" (تاریخ: ${dueDate})`,
           link: notifLink,
           isRead: 0
         });

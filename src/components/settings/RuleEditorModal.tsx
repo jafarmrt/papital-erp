@@ -40,7 +40,7 @@ const EVENT_TYPE_OPTIONS = [
   { value: 'ChequeStatusChanged', label: 'ChequeStatusChanged (تغییر وضعیت چک صیادی)', category: 'مالی و خزانه‌داری' },
   { value: 'WorkflowTransitioned', label: 'WorkflowTransitioned (تغییر وضعیت یا تایید گام گردش کار)', category: 'گردش کار' },
   { value: 'ProjectStageCompleted', label: 'ProjectStageCompleted (تکمیل مرحله پروژه تولید)', category: 'تولید' },
-  { value: 'CustomerCreated', label: 'CustomerCreated (تعریف طرف‌حساب/مشتری جدید)', category: 'مشتریان و CRM' },
+  { value: 'CustomerCreated', label: 'CustomerCreated (تعریف طرف‌حساب/مشتری جدید)', category: 'مشتریان و ارتباط با مشتری' },
   { value: '*', label: '* (کلیه رویدادهای سامانه)', category: 'عمومی' }
 ];
 

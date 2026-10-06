@@ -297,7 +297,7 @@ export function CRMLeadDrawer({
                       <span>ثبت توسط: {act.loggedBy || 'فروشنده'}</span>
                       {act.assignedTo && (
                         <span className="font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded-md">
-                          مسئول تسک: {act.assignedTo}
+                          مسئول پیگیری: {act.assignedTo}
                         </span>
                       )}
                       {act.result && <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md">{act.result}</span>}

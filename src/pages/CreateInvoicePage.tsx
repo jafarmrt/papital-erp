@@ -195,7 +195,7 @@ export default function CreateInvoicePage({ user: currentUser }: { user: User })
       if (s.type) { setDocType(str(s.type)); setStatus('proforma'); }
       if (s.status) setStatus(str(s.status));
       if (s.currency) setCurrency(str(s.currency));
-      toast.success('اطلاعات خریدار و پرونده فروش CRM با موفقیت منتقل شد.');
+      toast.success('اطلاعات خریدار و پرونده فروش منتقل شد.');
     }
   }, [locationState.state, setBuyerName, setBuyerPhone, setBuyerAddress, setBuyerCity]);
 

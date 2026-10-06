@@ -53,7 +53,7 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
   const cPhone = input.phone?.trim() || '';
 
   // نام شرکت، اگر باشد، نام طرف حساب است و نام مخاطب رابط او
-  const primaryCustomerName = cCompany || cName || input.title?.trim() || 'مشتری جدید CRM';
+  const primaryCustomerName = cCompany || cName || input.title?.trim() || 'مشتری تازه';
   const contactPersonName = cCompany ? cName : (cName !== primaryCustomerName ? cName : '');
 
   if (!cName && !cCompany && !cPhone && !input.customerId) {
@@ -80,7 +80,7 @@ export async function linkCustomerForLead(input: CrmLeadPartyInput, db: DbExecut
     name: primaryCustomerName,
     contactName: contactPersonName || cName,
     phone: cPhone,
-    notes: 'ثبت شده اتوماتیک از طریق سیستم CRM',
+    notes: 'ثبت خودکار از پرونده فروش',
     createdAt: systemNowUtcIso(),
     isDeleted: 0,
   }).returning({ id: customers.id }).catch(async (err: unknown) => {

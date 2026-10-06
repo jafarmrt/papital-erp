@@ -58,7 +58,7 @@ export default function Dashboard() {
         if (act.nextFollowUpDate) {
           items.push({
             id: `crm-act-${act.id}`,
-            title: act.title || 'پیگیری CRM',
+            title: act.title || 'پیگیری ارتباط با مشتری',
             // v7.0.132 (TD-232): سررسید میلادی ISO ذخیره می‌شود؛ تقویم داشبورد شمسی YYYY/MM/DD می‌خواهد
             date: isoToJalaliDate(act.nextFollowUpDate),
             type: 'crm_followup',
