@@ -36,7 +36,8 @@ export function useTransfersQuery() {
   return useQuery<TransferItem[]>({
     queryKey: QUERY_KEYS.transfers.list(),
     queryFn: async () => {
-      const res = await fetchJson('/transfers');
+      // TD-493: the page lists every code, not the server's default page of 50
+      const res = await fetchJson('/transfers?all=true');
       return Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
     },
     staleTime: 1000 * 30,

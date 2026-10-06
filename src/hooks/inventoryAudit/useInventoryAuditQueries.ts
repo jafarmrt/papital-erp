@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { listFromResponse } from '../../lib/invoices/invoiceForm';
-import { normalizeAuditItems, type AuditItemRow, type IntegrityReport } from '../../lib/inventoryAudit/auditSheet';
+import { normalizeAuditItems, type AuditItemRow } from '../../lib/inventoryAudit/auditSheet';
+import type { InventoryIntegrityReport } from '../../types';
 
 /**
  * صفحه انبارگردانی: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -55,12 +56,12 @@ function useTypedDocumentsQuery(filter: { type: string }, enabled: boolean, logL
 export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedLocation: string) {
   const queryClient = useQueryClient();
 
-  const integrityQuery = useQuery<IntegrityReport | null>({
+  const integrityQuery = useQuery<InventoryIntegrityReport | null>({
     queryKey: INTEGRITY_KEY,
     queryFn: async ({ signal }) => {
       try {
-        const res = await fetchJson<(IntegrityReport & { report?: IntegrityReport }) | null>('/inventory/integrity-audit', { signal });
-        return res?.report || res || null;
+        // v9.0.89 (TD-485): پاسخ سرور خودِ گزارش است ({ summary, audits, warehouses })
+        return (await fetchJson<InventoryIntegrityReport | null>('/inventory/integrity-audit', { signal })) ?? null;
       } catch (err: unknown) {
         logUnlessAborted(signal, 'Error loading integrity report:', err);
         throw err;

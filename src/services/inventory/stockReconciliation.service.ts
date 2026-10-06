@@ -1,68 +1,18 @@
 import { orm } from '../../db/drizzle.js';
 import { items, warehouses, transactions } from '../../db/schema.js';
-import { eq, and, sql, asc } from 'drizzle-orm';
+import { eq, and, sql, asc, inArray } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
-import { NegativeStockPolicyService, type NegativeStockPolicyType } from './negativeStockPolicy.service.js';
+import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
+import { replayKardexWac, wacDiffersFromReplay, type KardexReplayRow } from './kardexReplay.js';
 
-export type DiscrepancyType =
-  | 'scalar_vs_wh_sum'
-  | 'scalar_vs_kardex'
-  | 'wh_sum_vs_kardex'
-  | 'location_vs_kardex_mismatch'
-  | 'kardex_negative'
-  | 'kardex_wac_mismatch'
-  | 'none';
-
-export interface ItemIntegrityAuditResult {
-  itemId: number;
-  itemCode: string;
-  itemName: string;
-  category: string;
-  unit: string;
-  scalarCurrentStock: number;
-  whStocksSum: number;
-  kardexNetBalance: number;
-  recordedWac: number;
-  computedWac: number;
-  discrepancies: DiscrepancyType[];
-  whBreakdown: Record<string, number>;
-  kardexLocBreakdown: Record<string, number>;
-  kardexTotalIn: number;
-  kardexTotalOut: number;
-  hasKardexAnomalies: boolean;
-  anomalyDetails: string[];
-}
-
-export interface WarehouseReconciliationSummary {
-  code: string;
-  name: string;
-  totalStockJsonb: number;
-  totalStockLedger: number;
-  variance: number;
-  isBalanced: boolean;
-}
-
-export interface InventoryIntegrityReport {
-  summary: {
-    totalItems: number;
-    totalItemsChecked: number;
-    synchronizedItems: number;
-    healthyItemsCount: number;
-    discrepancyItems: number;
-    discrepantItemsCount: number;
-    negativeStockItems: number;
-    healthScorePercentage: number;
-    totalScalarStock: number;
-    totalKardexStock: number;
-    totalScalarStockValue: number;
-    totalKardexStockValue: number;
-    totalInventoryValuationStored: number;
-    policy: NegativeStockPolicyType;
-  };
-  audits: ItemIntegrityAuditResult[];
-  warehouses: WarehouseReconciliationSummary[];
-}
+// v9.0.89 (TD-485): شکل پاسخ گزارش در `src/types/inventory.types.ts` مشترک سرور و صفحه است
+export type {
+  DiscrepancyType, ItemIntegrityAuditResult, WarehouseReconciliationSummary, InventoryIntegrityReport,
+} from '../../types/inventory.types.js';
+import type {
+  DiscrepancyType, ItemIntegrityAuditResult, WarehouseReconciliationSummary, InventoryIntegrityReport,
+} from '../../types/inventory.types.js';
 
 // v8.0.7 (TD-266): کاردکس تفصیلی کالا به runningKardex.service.ts منتقل شد؛ نوع‌ها برای سازگاری بازصادر می‌شوند
 export type { RunningKardexEntry, RunningKardexResponse } from './runningKardex.service.js';
@@ -134,6 +84,25 @@ export class StockReconciliationService {
         kardexBalance: fin(Number(r.kardex_balance) || 0).toNumber(),
         totalInValue: fin(Number(r.total_in_value) || 0).toNumber(),
       });
+    }
+
+    // v9.0.88 (TD-486): همه ردیف‌های کاردکس کالاها (حذف‌شده‌ها هم) به ترتیب ثبت، برای بازپخش WAC با قاعده موتور زنده
+    const replayRowsByItem = new Map<number, KardexReplayRow[]>();
+    if (activeItems.length > 0) {
+      const replayRows = await orm
+        .select({
+          id: transactions.id, itemId: transactions.itemId, type: transactions.type, quantity: transactions.quantity,
+          unitPrice: transactions.unitPrice, documentType: transactions.documentType, documentRef: transactions.documentRef,
+          reversalOfId: transactions.reversalOfId, isDeleted: transactions.isDeleted,
+        })
+        .from(transactions)
+        .where(inArray(transactions.itemId, activeItems.map(i => i.id)))
+        .orderBy(asc(transactions.id));
+      for (const row of replayRows) {
+        const list = replayRowsByItem.get(row.itemId) ?? [];
+        list.push(row);
+        replayRowsByItem.set(row.itemId, list);
+      }
     }
 
     // Per-location Kardex breakdown per item
@@ -237,18 +206,18 @@ export class StockReconciliationService {
 
       if (kardexBalance < 0 || scalarStock < 0) {
         discrepancies.push('kardex_negative');
-        anomalyDetails.push(`مانده کالا منفی می‌باشد (موجودی اسمی: ${scalarStock}، کاردکس: ${kardexBalance}).`);
+        anomalyDetails.push(`مانده کالا منفی می‌باشد (موجودی دفتری: ${scalarStock}، کاردکس: ${kardexBalance}).`);
         negativeStockItemsCount++;
       }
 
-      // P1-07 & M-08 (INV-02): محاسبه بهای تمام‌شده واقعی میانگین از گردش کاردکس و ثبت مغایرت
-      const computedWac = kardexData.totalIn > 0 
-        ? fin(kardexData.totalInValue).divide(kardexData.totalIn, 4).toNumber() 
-        : recordedWac;
+      // v9.0.88 (TD-486): WAC محاسباتی همان بازپخش کاردکس بازسازی و ناوردایی I13 است (replayKardexWac، به ترتیب ثبت و با
+      // قاعده «موجودی ≤ ۰ ← WAC = بهای ورود تازه»)؛ پیش‌تر میانگین همه ورودهای تاریخ بود و WAC درست کالایی که یک بار
+      // به صفر رسیده و دوباره با قیمت دیگری خریده شده بود، همیشه «مغایر» شمرده می‌شد.
+      const computedWac = replayKardexWac(replayRowsByItem.get(item.id) ?? [], recordedWac).wac.round(4).toNumber();
 
-      if (recordedWac > 0 && computedWac > 0 && Math.abs(recordedWac - computedWac) > 1) {
+      if (wacDiffersFromReplay(recordedWac, computedWac, scalarStock)) {
         discrepancies.push('kardex_wac_mismatch');
-        anomalyDetails.push(`نرخ میانگین موزون ثبتی (${recordedWac}) با بهای محاسباتی کاردکس (${computedWac}) مغایرت دارد.`);
+        anomalyDetails.push(`نرخ میانگین موزون ثبتی (${recordedWac}) با بهای بازپخش کاردکس (${computedWac}) مغایرت دارد.`);
       }
 
       totalScalarStock = FinancialMath.add(totalScalarStock, scalarStock);

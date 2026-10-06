@@ -3,6 +3,7 @@ import { Scale, RefreshCw, FlaskConical, Wrench, AlertTriangle } from 'lucide-re
 import { toast } from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
+import { confirmAction } from '../ConfirmDialogHost';
 import { invalidateAfterStockAdjustment } from '../../hooks/inventoryAudit/useInventoryAuditSave';
 import { formatPersianNumber } from '../../utils';
 
@@ -77,7 +78,12 @@ export function WarehouseStockReconciliationPanel() {
   }, [loadReport]);
 
   const runRepair = async (dryRun: boolean) => {
-    if (!dryRun && !window.confirm('موجودی انبارهای دارای مغایرت از روی کاردکس اصلاح می‌شود (مانده‌های منفی تغییر نمی‌کنند). ادامه می‌دهید؟')) return;
+    if (!dryRun && !(await confirmAction({
+      title: 'موجودی انبارها از روی کاردکس اصلاح شود؟',
+      message: 'موجودی انبارهای دارای مغایرت برابر مانده کاردکس می‌شود. مانده‌های منفی تغییر نمی‌کنند.',
+      confirmText: 'اصلاح موجودی',
+      cancelText: 'انصراف',
+    }))) return;
     setIsSaving(true);
     try {
       const res = await fetchJson<RepairResponse>('/inventory/warehouse-stock-reconciliation/repair', {

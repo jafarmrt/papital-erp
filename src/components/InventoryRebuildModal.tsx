@@ -3,6 +3,8 @@ import { fetchJson } from '../api';
 import { X, RefreshCw, ShieldCheck, AlertTriangle, CheckCircle2, Wrench, RotateCcw } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 import { formatPersianNumber, errorMessageOf } from '../utils';
+import { KardexWacDifferencesPanel } from './inventory/KardexWacDifferencesPanel';
+import { wacDifferencesOf } from '../lib/inventoryAudit/wacCorrection';
 
 interface InventoryRebuildModalProps {
   isOpen: boolean;
@@ -21,7 +23,6 @@ export default function InventoryRebuildModal({
 }: InventoryRebuildModalProps) {
   const [mode, setMode] = useState<'all' | 'single'>(defaultItemId ? 'single' : 'all');
   const [selectedItemId, setSelectedItemId] = useState<number | null>(defaultItemId || null);
-  const [fixWAC, setFixWAC] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resultData, setResultData] = useState<any | null>(null);
@@ -43,7 +44,6 @@ export default function InventoryRebuildModal({
         method: 'POST',
         body: JSON.stringify({
           itemId: mode === 'single' ? selectedItemId : undefined,
-          fixWAC
         })
       });
 
@@ -70,7 +70,7 @@ export default function InventoryRebuildModal({
                 همگام‌سازی و بازسازی موجودی از روی کاردکس
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                محاسبه مجدد مانده کالاها در انبارها و میانگین بهای خرید بر مبنای اسناد و فاکتورها
+                محاسبه مجدد مانده کالاها در انبارها بر مبنای کاردکس؛ بهای میانگین تغییر نمی‌کند
               </p>
             </div>
           </div>
@@ -118,9 +118,9 @@ export default function InventoryRebuildModal({
                   </div>
                 </div>
                 <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
-                  <div className="text-[11px] text-blue-700">بهای میانگین اصلاح‌شده</div>
+                  <div className="text-[11px] text-blue-700">بهای میانگین ناهمخوان با کاردکس</div>
                   <div className="text-base font-bold text-blue-900 font-mono mt-1">
-                    {formatPersianNumber(resultData.wacRepairedCount || 0)}
+                    {formatPersianNumber(wacDifferencesOf(resultData).length)}
                   </div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded-xl border border-purple-200">
@@ -130,6 +130,8 @@ export default function InventoryRebuildModal({
                   </div>
                 </div>
               </div>
+
+              <KardexWacDifferencesPanel rows={wacDifferencesOf(resultData)} onCorrected={onSuccess} />
 
               {/* Fixed Items List */}
               {resultData.details && resultData.details.length > 0 && (
@@ -227,23 +229,9 @@ export default function InventoryRebuildModal({
                 </div>
               )}
 
-              {/* Options */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={fixWAC}
-                    onChange={(e) => setFixWAC(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span className="font-bold text-slate-800">
-                    محاسبه مجدد میانگین بهای خرید از روی فاکتورها و رسیدهای انبار
-                  </span>
-                </label>
-                <p className="text-[11px] text-slate-500 mr-6">
-                  میانگین بهای خرید کالا را بر اساس مبالغ ریالی ثبت‌شده در فاکتورهای خرید بازسازی می‌کند.
-                </p>
-              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                بازسازی فقط موجودی انبارها را از کاردکس می‌سازد و بهای میانگین را تغییر نمی‌دهد؛ کالاهایی که بهای میانگینشان با کاردکس نمی‌خواند پس از اجرا فهرست می‌شوند.
+              </p>
             </>
           )}
         </div>

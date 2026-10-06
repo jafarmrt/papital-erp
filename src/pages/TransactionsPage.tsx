@@ -136,7 +136,7 @@ export default function TransactionsPage() {
                   onClick={() => { setStartDate(''); setEndDate(''); clearSearch(); setFilterType('all'); }} 
                   className="text-xs text-rose-600 hover:text-rose-800 font-medium px-2 py-1 cursor-pointer"
                 >
-                  پاک کردن فیلترها
+                  پاک کردن پالایش
                 </button>
              )}
           </div>
@@ -206,7 +206,7 @@ export default function TransactionsPage() {
               ))}
               {!loading && safeTxs.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-12 text-center text-slate-400 text-sm">موردی مطابق فیلترهای انتخابی یافت نشد.</td>
+                  <td colSpan={7} className="p-12 text-center text-slate-400 text-sm">موردی با پالایش انتخابی یافت نشد.</td>
                 </tr>
               )}
             </tbody>
