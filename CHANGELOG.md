@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.110 — Notification Recipients by Permission
+- **Notification Recipients:** event-rule notifications and the won-lead notice go to the holders of a catalog permission instead of fixed role codes; the rule editor picks the permission from the catalog (TD-883).
+
 ### v9.0.109 — Personnel Bank Details by Permission
 - **Personnel Bank Details:** unmasked card, Sheba and account numbers of personnel and payslips need a catalog permission; the role code manager and «*» no longer open them, and migration 0064 grants the keys to the roles that saw them before (TD-882).
 
