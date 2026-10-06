@@ -93,7 +93,7 @@ export const QUERY_KEYS = {
     treasury: () => ['accounting', 'treasury'] as const,
     bankAccounts: () => ['accounting', 'treasury', 'bank-accounts'] as const,
     treasuryTransactions: () => ['accounting', 'treasury', 'transactions'] as const,
-    // v9.0.72 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» (زیر پیشوند خزانه، چون سرفصل بانک‌ها کنار می‌رود)
+    // v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» (زیر پیشوند خزانه، چون سرفصل بانک‌ها کنار می‌رود)
     contraAccounts: () => ['accounting', 'treasury', 'contra-accounts'] as const,
     // گزارش‌های مالی (تراز آزمایشی، دفتر کل، صورت‌ها، جریان نقد، ...): پارامترها بخشی از کلیدند
     reports: () => ['accounting', 'reports'] as const,

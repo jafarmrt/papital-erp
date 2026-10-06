@@ -173,7 +173,7 @@ export const cheques = pgTable('cheques', {
   partyType: text('party_type').default('customer'), // 'customer', 'personnel', 'supplier', 'other'
   partyId: integer('party_id'),
   partyName: text('party_name').notNull(),
-  // v9.0.74 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف حسابی که سند ثبت چک با آن صادر شد (مهاجرت 0061)؛ برگشت و عودت
+  // v9.0.84 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف حسابی که سند ثبت چک با آن صادر شد (مهاجرت 0061)؛ برگشت و عودت
   // همین سرفصل را می‌گیرند. چک‌های پیشین NULL دارند و قاعده پیشین را ادامه می‌دهند.
   purpose: text('purpose'),
   partyAccountId: integer('party_account_id').references(() => accounts.id),
@@ -220,7 +220,7 @@ export const treasuryTransactions = pgTable('treasury_transactions', {
   payrollId: integer('payroll_id').references(baseRelations.pieceworkPayrollsId),
   // V1.4.0: ابطال با سند معکوس (DB-009) — تراکنش معکوس به اصل اشاره می‌کند
   reversalOfId: integer('reversal_of_id'),
-  // v9.0.72 (TD-507، ت۴ الف): هدف دریافت و پرداخت پرسنل ('settlement' | 'advance' | 'other'، مهاجرت 0060) و سرفصل طرف
+  // v9.0.82 (TD-507، ت۴ الف): هدف دریافت و پرداخت پرسنل ('settlement' | 'advance' | 'other'، مهاجرت 0060) و سرفصل طرف
   // مقابلی که کاربر برای «متفرقه» و «سایر» انتخاب کرده است
   purpose: text('purpose'),
   contraAccountId: integer('contra_account_id').references(() => accounts.id),

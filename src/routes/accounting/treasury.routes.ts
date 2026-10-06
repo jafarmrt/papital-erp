@@ -181,7 +181,7 @@ router.post('/accounting/treasury', authorizePermission('accounting.treasury'), 
   res.status(201).json(tx);
 }));
 
-// v9.0.72 (TD-507، ت۴ الف): سرفصل‌هایی که فرم خزانه و دفتر چک برای «متفرقه» و «سایر» پرسنل پیشنهاد می‌دهند
+// v9.0.82 (TD-507، ت۴ الف): سرفصل‌هایی که فرم خزانه و دفتر چک برای «متفرقه» و «سایر» پرسنل پیشنهاد می‌دهند
 router.get('/accounting/treasury/contra-accounts', authorizePermission('accounting.treasury', 'accounting.cheques'), asyncHandler(async (_req, res) => {
   res.json({ success: true, data: await choosableContraAccounts() });
 }));

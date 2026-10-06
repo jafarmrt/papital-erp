@@ -63,7 +63,7 @@ export function ChequesTab({
       const pt = c.partyType || (c as any).party_type;
       return pt === 'supplier' || pt === 'both';
     });
-    // v9.0.74 (TD-497): سرور فقط تأمین‌کننده (یا «هر دو») را می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
+    // v9.0.84 (TD-497): سرور فقط تأمین‌کننده (یا «هر دو») را می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
     return list;
   }, [safeCustomers]);
 
@@ -90,7 +90,7 @@ export function ChequesTab({
     partyType: 'customer' as 'customer' | 'personnel' | 'supplier' | 'other',
     partyId: null as number | null,
     partyName: '',
-    // v9.0.74 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
+    // v9.0.84 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
     purpose: '' as PersonnelPurpose | '',
     contraAccountId: null as number | null,
     drawerName: '',
@@ -213,7 +213,7 @@ export function ChequesTab({
       toast.error('وضعیت انتخابی برای این چک مجاز نیست');
       return;
     }
-    // v9.0.75 (TD-498، تصمیم ت۳ الف): خرج چک بی تأمین‌کننده انتخاب‌شده فرستاده نمی‌شود
+    // v9.0.85 (TD-498، تصمیم ت۳ الف): خرج چک بی تأمین‌کننده انتخاب‌شده فرستاده نمی‌شود
     if (targetStatus === 'spent' && !transfereePartyId) {
       toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
       return;

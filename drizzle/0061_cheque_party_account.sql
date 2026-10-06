@@ -1,4 +1,4 @@
--- Drizzle Migration 0061: party account and purpose of cheques (v9.0.74 / TD-497, finding B04-01, product-owner decision t2 option A)
+-- Drizzle Migration 0061: party account and purpose of cheques (v9.0.84 / TD-497, finding B04-01, product-owner decision t2 option A)
 --
 -- A cheque voucher ignored the cheque's party type: a received cheque always credited trade receivables with a customer
 -- detail and a paid cheque always debited trade payables with a supplier detail, so a personnel cheque landed on the

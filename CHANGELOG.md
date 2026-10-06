@@ -19,16 +19,16 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.75 — Spent Cheques Need a Supplier
+### v9.0.85 — Spent Cheques Need a Supplier
 - **Spent Cheque Supplier (P1):** spending a cheque needs a supplier picked from the list and posts to that supplier's detail; before, the form sent only a typed name and the voucher missed the supplier's account card (TD-498, `reg_cheque_spent_needs_supplier_td_498`).
 
-### v9.0.74 — Cheque Vouchers Follow the Party Type
+### v9.0.84 — Cheque Vouchers Follow the Party Type
 - **Cheque Party Account (P1):** a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to a chosen account) and its bounce and return follow it; before, a personnel cheque landed on the customer with the same id (TD-497, `reg_cheque_voucher_follows_party_type_td_497`).
 
-### v9.0.73 — Treasury Links Are Checked
+### v9.0.83 — Treasury Links Are Checked
 - **Treasury Links (P2):** a receipt or payment is refused when its document is missing, voided, of the other direction or of another party, or its party id is not in the table of its type; before, a receipt from one customer settled another customer's invoice (TD-501, `reg_treasury_document_and_party_links_td_501`).
 
-### v9.0.72 — Misc Receipts and Payments Take a Chosen Account
+### v9.0.82 — Misc Receipts and Payments Take a Chosen Account
 - **Misc Counter Account (P2):** a misc receipt or payment and a personnel «other» payment post to the counter account the user chooses, and a personnel payment requires its purpose; before, they went to trade receivables and wages payable (TD-507, `reg_treasury_misc_contra_account_td_507`).
 
 ### v9.0.71 — Opening Balance Edit Waits for Approval

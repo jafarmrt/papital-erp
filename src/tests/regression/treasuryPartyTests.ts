@@ -85,7 +85,7 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
 
   const contraId = 'reg_treasury_misc_contra_account_td_507';
   if (shouldRun(contraId, 'td507', 'treasury', 'contra', 'package4')) {
-    await runCase(results, contraId, 'v9.0.72: a misc receipt or payment and a personnel «other» payment post to the counter account the user chose, the personnel purpose is required and stored, and trade receivables / payables / wages are refused as a chosen account (TD-507)', async () => {
+    await runCase(results, contraId, 'v9.0.82: a misc receipt or payment and a personnel «other» payment post to the counter account the user chose, the personnel purpose is required and stored, and trade receivables / payables / wages are refused as a chosen account (TD-507)', async () => {
       const api = await client();
       const problems: string[] = [];
       const bank = await createBank('Misc contra bank');
@@ -121,7 +121,7 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
       if (rentPaid.status !== 201) throw new Error(`rent payment returned ${rentPaid.status}: ${JSON.stringify(rentPaid.body).slice(0, 200)}`);
       const rentRows = await voucherRows(Number(rentPaid.body.voucherId));
       const rentDebit = rentRows.find(r => r.debit.toNumber() > 0);
-      if (rentDebit?.accountId !== rent) problems.push(`rent payment debited account ${rentDebit?.accountId}, expected 7002 (${rent}); before v9.0.72 it went to 1201`);
+      if (rentDebit?.accountId !== rent) problems.push(`rent payment debited account ${rentDebit?.accountId}, expected 7002 (${rent}); before v9.0.82 it went to 1201`);
       const [rentRow] = await orm.select({ contra: treasuryTransactions.contraAccountId, purpose: treasuryTransactions.purpose })
         .from(treasuryTransactions).where(eq(treasuryTransactions.id, Number(rentPaid.body.id)));
       if (rentRow?.contra !== rent) problems.push(`rent treasury row keeps contra account ${rentRow?.contra}, expected ${rent}`);
@@ -168,7 +168,7 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
 
   const linkId = 'reg_treasury_document_and_party_links_td_501';
   if (shouldRun(linkId, 'td501', 'treasury', 'invoice', 'party', 'package4')) {
-    await runCase(results, linkId, 'v9.0.73: a treasury receipt or payment links only to an active document of its own direction and party, and its party id must exist in the table of its party type (TD-501)', async () => {
+    await runCase(results, linkId, 'v9.0.83: a treasury receipt or payment links only to an active document of its own direction and party, and its party id must exist in the table of its party type (TD-501)', async () => {
       const { createTestCustomer, createTestDocument } = await import('../fixtures/factories.js');
       const api = await client();
       const problems: string[] = [];
@@ -210,7 +210,7 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
 
   const chequeId = 'reg_cheque_voucher_follows_party_type_td_497';
   if (shouldRun(chequeId, 'td497', 'cheque', 'party', 'package4')) {
-    await runCase(results, chequeId, 'v9.0.74: a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to the chosen account), its bounce and return use the same party, and legacy mismatches are listed by the health check (TD-497)', async () => {
+    await runCase(results, chequeId, 'v9.0.84: a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to the chosen account), its bounce and return use the same party, and legacy mismatches are listed by the health check (TD-497)', async () => {
       const { findLegacyChequePartyMismatches } = await import('../../services/accounting/treasury/chequePartyAccount.js');
       const api = await client();
       const problems: string[] = [];
@@ -271,7 +271,7 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
       const paidBack = (await chequeVoucherRows(paid)).find(r => r.credit.toNumber() > 0 && r.accountId === wagesAcc);
       if (!paidBack || paidBack.detailedType !== 'personnel') problems.push('paid personnel cheque bounce did not credit 3201 with the personnel detail (before: 3001 supplier)');
 
-      // legacy: a cheque written before v9.0.74 (no party account) from personnel is listed by the health check
+      // legacy: a cheque written before v9.0.84 (no party account) from personnel is listed by the health check
       await orm.update(cheques).set({ partyAccountId: null, purpose: null }).where(eq(cheques.id, misc));
       try {
         const listed = (await findLegacyChequePartyMismatches()).map(e => e.id);
@@ -287,7 +287,7 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
 
   const spentId = 'reg_cheque_spent_needs_supplier_td_498';
   if (shouldRun(spentId, 'td498', 'cheque', 'spent', 'party', 'package4')) {
-    await runCase(results, spentId, 'v9.0.75: spending a received cheque needs a supplier id, the voucher debits trade payables with that supplier\'s detail and the payee name comes from the supplier row (TD-498)', async () => {
+    await runCase(results, spentId, 'v9.0.85: spending a received cheque needs a supplier id, the voucher debits trade payables with that supplier\'s detail and the payee name comes from the supplier row (TD-498)', async () => {
       const { createTestCustomer } = await import('../fixtures/factories.js');
       const api = await client();
       const problems: string[] = [];

@@ -2190,7 +2190,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // 2. Transition received cheque to 'spent' (واگذاری و خرج چک به تامین‌کننده)
-      // v9.0.75 (TD-498): spending a cheque needs the supplier's id; the payee name comes from the supplier row
+      // v9.0.85 (TD-498): spending a cheque needs the supplier's id; the payee name comes from the supplier row
       const { createTestCustomer: createSpendSupplier } = await import('../fixtures/factories.js');
       const spendSupplier = await createSpendSupplier({ name: `بازرگانی فلزات البرز ${Date.now()}`, partyType: 'supplier' });
       const spentChq = await AccountingService.updateChequeStatus(recChq.id, {
@@ -10508,7 +10508,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
   const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
   results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
-  // Package 4 (v9.0.72 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
+  // Package 4 (v9.0.82 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
   const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
   results.push(...await runTreasuryPartyTests(shouldRun));
 

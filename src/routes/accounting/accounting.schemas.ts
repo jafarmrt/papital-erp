@@ -282,7 +282,7 @@ export const createTreasuryTxSchema = z.object({
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
     purpose: z.enum(['settlement', 'advance', 'other']).optional(),
-    // v9.0.72 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
+    // v9.0.82 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
@@ -376,7 +376,7 @@ export const createChequeSchema = z.object({
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
-    // v9.0.74 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
+    // v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
     purpose: z.enum(['settlement', 'advance', 'other']).optional(),
     contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })

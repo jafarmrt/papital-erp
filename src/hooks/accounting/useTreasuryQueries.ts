@@ -32,7 +32,7 @@ export function useTreasuryTransactionsQuery() {
   });
 }
 
-/** v9.0.72 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» پرسنل؛ فقط وقتی فرم آن را لازم دارد خوانده می‌شود */
+/** v9.0.82 (TD-507): سرفصل‌های مجاز طرف مقابل «متفرقه» و «سایر» پرسنل؛ فقط وقتی فرم آن را لازم دارد خوانده می‌شود */
 export interface ContraAccountOption {
   id: number;
   code: string;

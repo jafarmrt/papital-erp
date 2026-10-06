@@ -11,7 +11,7 @@ interface PartyPurposeFieldsProps {
 }
 
 /**
- * v9.0.72 / v9.0.74 (TD-507 / TD-497، تصمیم‌های مالک محصول ت۴ و ت۲ الف): نوع دریافت یا پرداخت پرسنل (الزامی، بی پیش‌فرض)
+ * v9.0.82 / v9.0.84 (TD-507 / TD-497، تصمیم‌های مالک محصول ت۴ و ت۲ الف): نوع دریافت یا پرداخت پرسنل (الزامی، بی پیش‌فرض)
  * و سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل؛ فرم خزانه و فرم ثبت چک هر دو همین را دارند.
  */
 export const PartyPurposeFields: React.FC<PartyPurposeFieldsProps> = ({ partyType, purpose, contraAccountId, isReceipt, onChange }) => (

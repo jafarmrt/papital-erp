@@ -154,15 +154,15 @@ export class ChequeLifecycleService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
-    /** v9.0.74 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر» (همان قاعده فرم خزانه، TD-507) */
+    /** v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر» (همان قاعده فرم خزانه، TD-507) */
     purpose?: string;
     contraAccountId?: number | null;
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, 'چک');
-    // v9.0.74 (TD-497، ت۲ الف): نوع طرف حساب سرفصل سند چک را تعیین می‌کند؛ پرسنل هدف و «متفرقه» سرفصل انتخابی می‌خواهند
-    // بی نوع: دریافتی از مشتری و پرداختی به تأمین‌کننده (همان سندی که پیش از v9.0.74 برای هر چک صادر می‌شد)
+    // v9.0.84 (TD-497، ت۲ الف): نوع طرف حساب سرفصل سند چک را تعیین می‌کند؛ پرسنل هدف و «متفرقه» سرفصل انتخابی می‌خواهند
+    // بی نوع: دریافتی از مشتری و پرداختی به تأمین‌کننده (همان سندی که پیش از v9.0.84 برای هر چک صادر می‌شد)
     const partyType = data.partyType || (data.type === 'paid' ? 'supplier' : 'customer');
     const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
     // v8.0.23 (TD-275، تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود. جدول چک نرخ تسعیر ندارد و اسناد چک ارزی
@@ -221,7 +221,7 @@ export class ChequeLifecycleService {
         // V1.7.0: کدینگ از مپینگ قابل‌تنظیم (تنظیمات حسابداری) — نه هاردکد
         const chequeReceivableAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
         const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-        // v9.0.74 (TD-497): ردیف طرف حساب از سرفصل و نوع خود چک (نه همیشه مشتری یا تأمین‌کننده)
+        // v9.0.84 (TD-497): ردیف طرف حساب از سرفصل و نوع خود چک (نه همیشه مشتری یا تأمین‌کننده)
         requireChequePartyAccount(partyAccountId, data.partyName);
         const posting = await chequePartyPosting(txEngine, row);
         if (!posting) throw new ValidationError('سرفصل طرف حساب چک یافت نشد');
@@ -387,7 +387,7 @@ export class ChequeLifecycleService {
       if (data.status === 'spent' && existing.type !== 'received') {
         throw new ValidationError('تنها چک‌های دریافتی از مشتریان قابل واگذاری و خرج کردن به غیر هستند');
       }
-      // v9.0.75 (TD-498، B04-02، تصمیم مالک محصول ت۳ الف): خرج چک بدهی ما به یک تأمین‌کننده مشخص را کم می‌کند، پس
+      // v9.0.85 (TD-498، B04-02، تصمیم مالک محصول ت۳ الف): خرج چک بدهی ما به یک تأمین‌کننده مشخص را کم می‌کند، پس
       // شناسه تأمین‌کننده الزامی است و نام او از جدول طرف حساب خوانده می‌شود. پیش‌تر رابط فقط نام می‌فرستاد و سند «بدهکار
       // پرداختنی تجاری» با تفصیلی «سایر» و بی شناسه صادر می‌شد که به کارت حساب تأمین‌کننده نمی‌رسید.
       let transfereeName: string | null = null;
@@ -529,7 +529,7 @@ export class ChequeLifecycleService {
           }, txEngine);
         }
       } else if (data.status === 'bounced') {
-        // v9.0.74 (TD-497، ت۲ الف): برگشت همان طرف حساب و نوع ثبت چک را می‌گیرد (چک پیشین: قاعده پیشین)
+        // v9.0.84 (TD-497، ت۲ الف): برگشت همان طرف حساب و نوع ثبت چک را می‌گیرد (چک پیشین: قاعده پیشین)
         const posting = await chequePartyPosting(txEngine, existing);
         const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
         const bouncedAccId = protestAcc?.id ?? posting?.accountId ?? null;
@@ -612,7 +612,7 @@ export class ChequeLifecycleService {
         // حساب جاری مشتری برمی‌گرداند (بدهکار مشتری، بستانکار اسناد واخواستی) تا دریافت بعدی از مشتری درست تسویه شود.
         // پیش‌تر سندی صادر نمی‌شد و مطالبه برای همیشه در اسناد واخواستی می‌ماند. اگر برگشت به خود حساب مشتری ثبت شده
         // باشد (نبود حساب اسناد واخواستی در کدینگ) سندی لازم نیست.
-        // v9.0.74 (TD-497): مطالبه به حساب همان طرف حساب و نوع ثبت چک برمی‌گردد (چک پیشین: حساب مشتری)
+        // v9.0.84 (TD-497): مطالبه به حساب همان طرف حساب و نوع ثبت چک برمی‌گردد (چک پیشین: حساب مشتری)
         const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
         const posting = await chequePartyPosting(txEngine, existing);
         if (protestAcc && posting && protestAcc.id !== posting.accountId) {

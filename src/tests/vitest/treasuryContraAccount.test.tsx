@@ -28,7 +28,7 @@ function partyTypeSelect(container: HTMLElement): HTMLSelectElement {
   return select as HTMLSelectElement;
 }
 
-// v9.0.72 (TD-507، تصمیم مالک محصول ت۴ الف): «متفرقه» و «سایر» پرسنل سرفصل طرف مقابل را از کاربر می‌گیرند و هدف پرسنل الزامی است
+// v9.0.82 (TD-507، تصمیم مالک محصول ت۴ الف): «متفرقه» و «سایر» پرسنل سرفصل طرف مقابل را از کاربر می‌گیرند و هدف پرسنل الزامی است
 describe('treasury form asks the counter account (TD-507)', () => {
   it('a misc payment shows the counter account field and is not saved until an account is chosen', async () => {
     const onSave = vi.fn(async (_data: Record<string, unknown>) => undefined);

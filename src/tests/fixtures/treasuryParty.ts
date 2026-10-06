@@ -3,7 +3,7 @@ import { orm } from '../../db/drizzle.js';
 import { accounts } from '../../db/schema.js';
 
 /**
- * v9.0.72 (TD-507): a receipt or payment of party type «other» (or personnel «other») needs a counter account the user
+ * v9.0.82 (TD-507): a receipt or payment of party type «other» (or personnel «other») needs a counter account the user
  * chose. Tests that only need a bank movement use 7009 «other workshop expenses», a standard subsidiary account that the
  * rule accepts.
  */

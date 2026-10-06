@@ -25,7 +25,7 @@ export interface ChequeStatusVariables {
   status: string;
   description?: string;
   bankAccountId?: number;
-  /** v9.0.75 (TD-498): خرج چک فقط با شناسه تأمین‌کننده */
+  /** v9.0.85 (TD-498): خرج چک فقط با شناسه تأمین‌کننده */
   transfereePartyId?: number;
 }
 

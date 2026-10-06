@@ -19,7 +19,7 @@ const parties = [
   { id: 7, name: 'مشتری فقط', partyType: 'customer' },
 ] as unknown as Customer[];
 
-// v9.0.75 (TD-498، B04-02، تصمیم ت۳ الف): خرج چک تأمین‌کننده را با شناسه از فهرست می‌گیرد؛ پیش‌تر پنجره فقط کادر نام داشت
+// v9.0.85 (TD-498، B04-02، تصمیم ت۳ الف): خرج چک تأمین‌کننده را با شناسه از فهرست می‌گیرد؛ پیش‌تر پنجره فقط کادر نام داشت
 // و `onUpdateStatus(4, 'spent', '', undefined, 'شرکت بازرگانی پارس')` بی شناسه صدا زده می‌شد.
 describe('spending a cheque asks for a supplier (TD-498)', () => {
   it('is not sent without a supplier and sends the chosen supplier id', async () => {

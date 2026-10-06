@@ -45,7 +45,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     partyType: 'customer' as 'customer' | 'supplier' | 'personnel' | 'other',
     partyId: null as number | null,
     partyName: '',
-    // v9.0.72 (TD-507، ت۴ الف): هدف پرسنل پیش‌فرض ندارد و الزامی است؛ «متفرقه» و «سایر» سرفصل طرف مقابل می‌خواهند
+    // v9.0.82 (TD-507، ت۴ الف): هدف پرسنل پیش‌فرض ندارد و الزامی است؛ «متفرقه» و «سایر» سرفصل طرف مقابل می‌خواهند
     purpose: '' as PersonnelPurpose | '',
     contraAccountId: null as number | null,
     // v8.0.26 (TD-278، تصمیم مالک محصول): روش «چک» حذف شد؛ چک فقط از «مدیریت چک‌های صیادی» ثبت می‌شود
@@ -200,7 +200,7 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
     const pt = c.partyType || (c as any).party_type;
     return pt === 'supplier' || pt === 'both';
   });
-  // v9.0.73 (TD-501): سرور فقط تأمین‌کننده (یا «هر دو») را برای این نوع می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
+  // v9.0.83 (TD-501): سرور فقط تأمین‌کننده (یا «هر دو») را برای این نوع می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
   const actualSupplierList = supplierList;
 
   const isReceipt = formData.type === 'receipt';

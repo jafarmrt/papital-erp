@@ -1,5 +1,5 @@
 -- Drizzle Migration 0060: purpose and chosen counter account of treasury receipts and payments
--- (v9.0.72 / TD-507, finding B04-11, product-owner decision t4 option A)
+-- (v9.0.82 / TD-507, finding B04-11, product-owner decision t4 option A)
 --
 -- A receipt or payment of party type «other» was posted to trade receivables (1201) and a personnel payment with purpose
 -- «other» to wages payable (3201); the purpose of a personnel payment was not stored at all. The form now asks the counter
