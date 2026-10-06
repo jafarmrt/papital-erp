@@ -1,20 +1,25 @@
 import { Router } from 'express';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { personnel, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity } from '../lib/auditLogger.js';
+import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { normalizePhoneNumber, normalizeNationalId, isoToJalaliDate } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
-import { money, moneyOr } from '../lib/money.js';
+import { money } from '../lib/money.js';
+import { fin } from '../lib/financialDecimal.js';
+import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
+import { assertPersonnelDeletable } from '../services/personnel/personnelDeleteGuard.js';
+import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 
@@ -91,6 +96,13 @@ async function nextNobitexPassword(
 
 router.use(authenticateToken);
 
+// v9.0.27 (TD-438، TD-385): حقوق ماهانه با decimalInput (ارقام فارسی و جداکننده هزارگان پذیرفته، متن خطا) و نامنفی؛
+// خانه خالی فرم یعنی صفر، نیامدن فیلد در ویرایش یعنی حقوق فعلی. پیش‌تر «abc» صفر و «-5000000» منفی ذخیره می‌شد.
+const monthlySalaryInput = z.preprocess(
+  v => (typeof v === 'string' && v.trim() === '' ? '0' : v),
+  decimalInput('حقوق ماهانه'),
+).refine(v => v === undefined || !fin(v).isNegative(), 'حقوق ماهانه نمی‌تواند منفی باشد');
+
 // v7.0.140: بدنه ثبت و ویرایش پرسنل یکی است (پیش‌تر دو بار تکرار شده بود)
 const personnelBodySchema = z.object({
   firstName: z.string().optional(),
@@ -105,7 +117,7 @@ const personnelBodySchema = z.object({
   phone: z.string().optional(),
   employmentStatus: z.string().optional(),
   salaryType: z.enum(['none', 'piecework', 'monthly_fixed', 'mixed']).optional(),
-  monthlySalary: z.union([z.number(), z.string()]).optional(),
+  monthlySalary: monthlySalaryInput.optional(),
   jobTitle: z.string().optional(),
   education: z.string().optional(),
   endDate: z.string().optional(),
@@ -220,9 +232,9 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
 
     const codeMap = new Map<string, typeof personnel.$inferSelect>();
     existingPersonnel.forEach((p) => {
-      if (p.personnelCode && p.personnelCode.trim()) {
-        codeMap.set(p.personnelCode.trim(), p);
-      }
+      // v9.0.28 (TD-439): کد با همان کلید یکتایی (بی حساسیت به حروف و فاصله)؛ با تکرار قدیمی نخستین پرسنل می‌ماند
+      const key = personnelCodeKey(p.personnelCode);
+      if (key && !codeMap.has(key)) codeMap.set(key, p);
     });
 
     const nowIso = new Date().toISOString();
@@ -249,13 +261,12 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
         const phone = normalizePhoneNumber(item.phone || '');
         const nationalId = normalizeNationalId(item.nationalId || '');
         const jobTitle = String(item.jobTitle || '').trim();
-        const gender = item.gender === 'زن' ? 'زن' : 'مرد';
-        const employmentStatus = ['فعال', 'قطع همکاری', 'مرخصی', 'تعلیق'].includes(item.employmentStatus)
-          ? item.employmentStatus
-          : 'فعال';
+        // v9.0.25 (TD-436، تصمیم D3): خانه خالی جنسیت، وضعیت همکاری و ملیت در به‌روزرسانی یعنی «بی تغییر»؛ پیش‌فرض فقط برای پرسنل تازه
+        const gender = parseGenderCell(item.gender);
+        const employmentStatus = parseEmploymentStatusCell(item.employmentStatus);
         // v7.0.135 (TD-232): تاریخ تولد میلادی ISO ذخیره می‌شود؛ تاریخ نامعتبر خطای همان ردیف است
         const birthDate = requireStorageDate(String(item.birthDate || '').trim(), 'تاریخ تولد');
-        const nationality = String(item.nationality || 'ایرانی').trim();
+        const nationality = parseNationalityCell(item.nationality);
         const education = String(item.education || '').trim();
         const cardNumber = String(item.cardNumber || '').trim();
         const accountNumber = String(item.accountNumber || '').trim();
@@ -268,11 +279,11 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
         const notes = String(item.notes || '').trim();
 
         // Check if existing by personnelCode
-        const existing = personnelCode ? codeMap.get(personnelCode) : null;
+        const existing = personnelCode ? codeMap.get(personnelCodeKey(personnelCode)) : null;
 
         if (existing) {
           if (updateIfExists) {
-            await orm
+            const [updated] = await orm
               .update(personnel)
               .set({
                 firstName: firstName || existing.firstName,
@@ -281,10 +292,10 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
                 phone: phone || existing.phone,
                 nationalId: nationalId || existing.nationalId,
                 jobTitle: jobTitle || existing.jobTitle,
-                gender: gender || existing.gender,
-                employmentStatus: employmentStatus || existing.employmentStatus,
+                gender: gender ?? existing.gender,
+                employmentStatus: employmentStatus ?? existing.employmentStatus,
                 birthDate: birthDate || existing.birthDate,
-                nationality: nationality || existing.nationality,
+                nationality: nationality ?? existing.nationality,
                 education: education || existing.education,
                 cardNumber: cardNumber || existing.cardNumber,
                 accountNumber: accountNumber || existing.accountNumber,
@@ -297,8 +308,16 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
                 notes: notes || existing.notes,
                 updatedAt: nowIso
               })
-              .where(eq(personnel.id, existing.id));
+              .where(eq(personnel.id, existing.id))
+              .returning();
 
+            // v9.0.26 (TD-437): یک ردیف ممیزی برای هر پرسنل، با مقدار قبل و بعد فیلدهای تغییرکرده
+            await logActivity({
+              req, action: 'UPDATE', entity: 'پرسنل', entityId: existing.id,
+              description: `به‌روزرسانی پرسنل «${updated.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
+              details: personnelAuditChanges(existing, updated)
+            });
+            codeMap.set(personnelCodeKey(personnelCode), updated);
             updatedCount++;
           } else {
             errors.push({
@@ -316,12 +335,12 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
               lastName,
               fullName,
               personnelCode,
-              gender,
+              gender: gender ?? PERSONNEL_IMPORT_DEFAULTS.gender,
               birthDate,
-              nationality,
+              nationality: nationality ?? PERSONNEL_IMPORT_DEFAULTS.nationality,
               nationalId,
               phone,
-              employmentStatus,
+              employmentStatus: employmentStatus ?? PERSONNEL_IMPORT_DEFAULTS.employmentStatus,
               jobTitle,
               education,
               cardNumber,
@@ -338,20 +357,28 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
             })
             .returning();
 
+          await logActivity({
+            req, action: 'CREATE', entity: 'پرسنل', entityId: newRecord.id,
+            description: `ثبت پرسنل «${newRecord.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
+            details: { after: personnelAuditSnapshot(newRecord) }
+          });
           if (personnelCode) {
-            codeMap.set(personnelCode, newRecord);
+            codeMap.set(personnelCodeKey(personnelCode), newRecord);
           }
           createdCount++;
         }
       } catch (rowErr) {
         errors.push({
           row: rowIndex,
-          message: rowErr instanceof Error ? rowErr.message : (typeof rowErr === 'string' ? rowErr : 'خطا در ثبت ردیف')
+          message: isPersonnelCodeUniqueViolation(rowErr)
+            ? personnelCodeTakenMessage(String(item.personnelCode ?? ''))
+            : rowErr instanceof Error ? rowErr.message : (typeof rowErr === 'string' ? rowErr : 'خطا در ثبت ردیف')
         });
       }
     }
 
     await logActivity({
+      req,
       userId: req.user?.id,
       username: req.user?.username || 'سیستم',
       action: 'CREATE',
@@ -458,21 +485,12 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
       ? reqFullName.trim() 
       : `${firstName} ${lastName}`.trim() || 'بدون نام';
 
-    // Uniqueness check for personnelCode if provided
-    if (personnelCode.trim()) {
-      const [existing] = await orm
-        .select()
-        .from(personnel)
-        .where(and(eq(personnel.personnelCode, personnelCode.trim()), eq(personnel.isDeleted, 0)));
-      if (existing) {
-        return res.status(400).json({ error: `کد پرسنلی «${personnelCode}» قبلاً برای پرسنل دیگری ثبت شده است.` });
-      }
-    }
-
     const nowIso = new Date().toISOString();
 
     // v9.0.24 (TD-435): کاربر متصل زیر قفل ردیف کاربر سنجیده می‌شود (ناموجود ۴۲۲، وصل به پرسنل فعال دیگر ۴۰۹)
-    const inserted = await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+    // v9.0.28 (TD-439): کد پرسنلی با کلید lower(btrim) میان پرسنل فعال یکتاست؛ نقض ایندکس 0054 همان پیام فارسی ۴۰۰ است
+    const inserted = await guardPersonnelCode(personnelCode, () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+      await assertPersonnelCodeAvailable(personnelCode, tx);
       const linkedUserId = await resolvePersonnelUserLink(tx, userId);
       const [row] = await tx
         .insert(personnel)
@@ -489,7 +507,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
           phone: normalizePhoneNumber(phone),
           employmentStatus,
           salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-          monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
+          monthlySalary: money(monthlySalary ?? 0),
           jobTitle: jobTitle.trim(),
           education: education.trim(),
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
@@ -517,10 +535,12 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         entity: 'پرسنل',
         entityId: row.id,
         description: `ثبت پرسنل جدید «${computedFullName}» (کد پرسنلی: ${personnelCode || '---'})`,
+        details: { after: personnelAuditSnapshot(row) },
+        req,
         tx
       });
       return row;
-    }));
+    })));
 
     res.status(201).json(openPersonnelSecret(inserted));
   } catch (err) {
@@ -578,29 +598,16 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
       ? reqFullName.trim() 
       : `${firstName} ${lastName}`.trim() || existing.fullName;
 
-    // Check code uniqueness if changed
-    if (personnelCode && personnelCode.trim() !== existing.personnelCode) {
-      const [other] = await orm
-        .select()
-        .from(personnel)
-        .where(and(
-          eq(personnel.personnelCode, personnelCode.trim()),
-          eq(personnel.isDeleted, 0),
-          sql`${personnel.id} != ${id}`
-        ));
-      if (other) {
-        return res.status(400).json({ error: `کد پرسنلی «${personnelCode}» قبلاً برای پرسنل دیگری ثبت شده است.` });
-      }
-    }
-
     const nowIso = new Date().toISOString();
     const nextNobitex = await nextNobitexPassword(nobitexPassword, existing, req.user);
 
     // v9.0.24 (TD-435): پیوند تازه یا عوض‌شده کاربر زیر قفل ردیف کاربر سنجیده می‌شود؛ پیوند فعلی دست نمی‌خورد
-    await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+    const codeChanged = personnelCodeKey(personnelCode) !== personnelCodeKey(existing.personnelCode);
+    await guardPersonnelCode(personnelCode ?? '', () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+      if (codeChanged) await assertPersonnelCodeAvailable(personnelCode ?? '', tx, id);
       const requestedUserId = parsePersonnelUserId(userId);
       const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
-      await tx
+      const [updated] = await tx
         .update(personnel)
         .set({
           firstName: firstName ? firstName.trim() : '',
@@ -616,7 +623,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
           employmentStatus,
           // V10-4.4: مدل حقوق ثابت/ترکیبی
           salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-          monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
+          monthlySalary: money(monthlySalary ?? 0),
           jobTitle: jobTitle ? jobTitle.trim() : '',
           education: education ? education.trim() : '',
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
@@ -634,7 +641,8 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
           notes: notes ? notes.trim() : '',
           updatedAt: nowIso
         })
-        .where(eq(personnel.id, id));
+        .where(eq(personnel.id, id))
+        .returning();
 
       await logActivity({
         userId: req.user?.id,
@@ -643,9 +651,11 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         entity: 'پرسنل',
         entityId: id,
         description: `ویرایش اطلاعات پرسنل «${computedFullName}» (کد ${id})`,
+        details: personnelAuditChanges(existing, updated),
+        req,
         tx
       });
-    }));
+    })));
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت ویرایش شد' });
   } catch (err) {
@@ -656,19 +666,21 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
 
 // DELETE /api/personnel/:id - Soft delete
 router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = Number(req.params.id);
+  const id = Number(req.params.id);
 
-    const [existing] = await orm
+  // v9.0.29 (TD-441، تصمیم D4 الف): زیر قفل ردیف پرسنل، فیش تسویه‌نشده، کارکرد بی فیش، مانده حساب دائم یا سند پیش‌نویس
+  // حذف را با ۴۰۹ و دلیل فارسی رد می‌کند؛ راه جایگزین «قطع همکاری» است
+  const deleted = await orm.transaction(async (tx) => {
+    const [existing] = await tx
       .select()
       .from(personnel)
-      .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)));
+      .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)))
+      .for('update');
+    if (!existing) return null;
 
-    if (!existing) {
-      return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
-    }
+    await assertPersonnelDeletable(existing, tx);
 
-    await orm
+    await tx
       .update(personnel)
       .set({
         isDeleted: 1,
@@ -682,13 +694,18 @@ router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'
       action: 'DELETE',
       entity: 'پرسنل',
       entityId: id,
-      description: `حذف پرسنل «${existing.fullName}» (کد ${id})`
+      description: `حذف پرسنل «${existing.fullName}» (کد ${id})`,
+      details: { before: personnelAuditSnapshot(existing) },
+      req,
+      tx
     });
+    return existing;
+  });
 
-    res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });
-  } catch (err) {
-    throw err;
+  if (!deleted) {
+    return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
   }
+  res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });
 }));
 
 // Asynchronous background remediation: Ensure existing records have leading zeros for phone and nationalId

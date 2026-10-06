@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.29 — Personnel With Open Business Is Not Deleted
+- **Personnel Delete Guard:** A personnel with an unsettled payroll, a work log without a payroll, an account balance or a draft voucher is no longer deleted; the refusal lists the reasons and suggests «قطع همکاری» (owner decision D4; TD-441, `reg_personnel_delete_guard_td_441`).
+
+### v9.0.28 — Unique Personnel Code
+- **Personnel Code:** A personnel code is unique among active personnel regardless of letter case and surrounding spaces, now also under concurrent saves (partial unique index, migration 0054); old duplicates are listed by the financial health check (owner decision D6; TD-439, `reg_personnel_code_unique_td_439`).
+
+### v9.0.27 — Personnel Monthly Salary Validated
+- **Personnel Salary:** The monthly salary on the personnel form now rejects text and negative values instead of saving 0 or a negative salary; Persian digits and thousands separators are accepted (TD-438, `reg_personnel_salary_decimal_input_td_438`).
+
+### v9.0.26 — Personnel Audit Rows Carry Before and After
+- **Personnel Audit:** Creating, editing, deleting and importing personnel now records the changed values (before/after) and the user's IP in the activity log, one row per person; the Nobitex password is never logged (TD-437, `reg_personnel_audit_snapshot_td_437`).
+
+### v9.0.25 — Personnel Excel Import Keeps Empty Cells
+- **Personnel Excel Import:** With «به‌روزرسانی», an empty gender, employment-status or nationality cell no longer resets an existing employee to «مرد», «فعال» and «ایرانی»; defaults apply only to new personnel (owner decision D3; TD-436, `reg_personnel_import_keeps_status_td_436`).
+
 ### v9.0.24 — One Active Personnel per User
 - **Personnel User Link:** A system user is linked to at most one active personnel and only when the user exists; a second link is refused under the user's row lock and by the partial unique index of migration 0053, so «فیش‌های من» never shows another employee's payslip; legacy duplicates are only listed by the health check (owner decision D2; TD-435, `sec_personnel_user_link_unique_td_435`).
 

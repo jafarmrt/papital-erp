@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { formatPersianNumber, formatPersianPhone, formatPersianNationalId, normalizePhoneNumber, normalizeNationalId, errorMessageOf } from '../../utils';
 import { Personnel } from '../../types';
+import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell, personnelCellLabel } from '../../lib/personnel/personnelImportCells';
 
 interface PersonnelExcelModalProps {
   isOpen: boolean;
@@ -23,8 +24,10 @@ interface PersonnelPreviewRow {
   phone: string;
   nationalId: string;
   jobTitle: string;
-  gender: string;
-  employmentStatus: string;
+  /** خانه خالی undefined: پرسنل موجود بی تغییر، پرسنل تازه پیش‌فرض (v9.0.25، TD-436) */
+  gender?: string;
+  employmentStatus?: string;
+  nationality?: string;
   birthDate: string;
   education: string;
   cardNumber: string;
@@ -221,15 +224,9 @@ export function PersonnelExcelModal({
           const nationalId = normalizeNationalId(rawNationalId);
           const jobTitle = getField(row, ['عنوان شغلی', 'عنوانشغلی', 'شغل', 'سمت', 'سمت سازمانی', 'jobtitle', 'job_title', 'position', 'role']);
           const genderRaw = getField(row, ['جنسیت', 'gender', 'sex']);
-          const gender = genderRaw === 'زن' || genderRaw.toLowerCase() === 'female' ? 'زن' : 'مرد';
-          
-          const statusRaw = getField(row, ['وضعیت همکاری', 'وضعیت', 'status', 'employmentstatus', 'employment_status']);
-          let employmentStatus = 'فعال';
-          if (statusRaw) {
-            if (statusRaw.includes('قطع') || statusRaw.includes('اخراج') || statusRaw.includes('استعفا')) employmentStatus = 'قطع همکاری';
-            else if (statusRaw.includes('مرخص')) employmentStatus = 'مرخصی';
-            else if (statusRaw.includes('تعلیق')) employmentStatus = 'تعلیق';
-          }
+          const gender = parseGenderCell(genderRaw);
+          const employmentStatus = parseEmploymentStatusCell(getField(row, ['وضعیت همکاری', 'وضعیت', 'status', 'employmentstatus', 'employment_status']));
+          const nationality = parseNationalityCell(getField(row, ['ملیت', 'تابعیت', 'nationality']));
 
           const birthDate = getField(row, ['تاریخ تولد', 'تولد', 'birthdate', 'birth_date', 'dob']);
           const education = getField(row, ['تحصیلات', 'مدرک', 'مدرک تحصیلی', 'education', 'degree']);
@@ -276,6 +273,7 @@ export function PersonnelExcelModal({
             jobTitle,
             gender,
             employmentStatus,
+            nationality,
             birthDate,
             education,
             cardNumber,
@@ -347,6 +345,7 @@ export function PersonnelExcelModal({
         jobTitle: r.jobTitle,
         gender: r.gender,
         employmentStatus: r.employmentStatus,
+        nationality: r.nationality,
         birthDate: r.birthDate,
         education: r.education,
         cardNumber: r.cardNumber,
@@ -645,14 +644,14 @@ export function PersonnelExcelModal({
                           <td className="p-3">
                             <span
                               className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                row.employmentStatus === 'فعال'
+                                (row.employmentStatus ?? (row.isDuplicateInDb ? '' : 'فعال')) === 'فعال'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : row.employmentStatus === 'قطع همکاری'
                                   ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                   : 'bg-amber-50 text-amber-700 border border-amber-200'
                               }`}
                             >
-                              {row.employmentStatus}
+                              {personnelCellLabel(row.employmentStatus, row.isDuplicateInDb, PERSONNEL_IMPORT_DEFAULTS.employmentStatus)}
                             </span>
                           </td>
                           <td className="p-3">
