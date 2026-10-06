@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
 import { errorMessageOf } from '../../utils';
-import type { BankAccount, BankReconciliationReport, TreasuryTransaction } from '../../types';
+import type { BankAccount, BankAccountOption, BankReconciliationReport, TreasuryTransaction } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterReconciliation, invalidateAfterTreasuryChange } from './accountingInvalidation';
 import { useOnDemandReport, type OnDemandReportSpec } from './useOnDemandReport';
@@ -20,6 +20,15 @@ export function useBankAccountsQuery() {
   return useQuery<BankAccount[]>({
     queryKey: QUERY_KEYS.accounting.bankAccounts(),
     queryFn: ({ signal }) => fetchAccountingList<BankAccount>('/accounting/bank-accounts', signal, 'bank accounts'),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+  });
+}
+
+/** v9.0.97 (TD-505، ت۷): فهرست انتخاب حساب‌های خزانه (بی شماره حساب و مانده) برای دفتر چک */
+export function useBankAccountOptionsQuery() {
+  return useQuery<BankAccountOption[]>({
+    queryKey: QUERY_KEYS.accounting.bankAccountOptions(),
+    queryFn: ({ signal }) => fetchAccountingList<BankAccountOption>('/accounting/bank-accounts/options', signal, 'bank account options'),
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
   });
 }

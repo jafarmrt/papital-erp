@@ -19,15 +19,10 @@
 | TD-482 | انبار و کاردکس (بسته ۶) | P1 (B06-03) — انبار با کد `default` ساخته می‌شود ولی `createLedgerLocationResolver` این کد را انبار پیش‌فرض می‌خواند: آشتی مغایرت دروغین نشان داد، «اصلاح از روی کاردکس» و بازسازی موجودی را به `main` بردند و فروش از انبار واقعی ۴۲۲ گرفت | warehouse.service.ts، warehouseResolver.ts، documentLifecycle.service.ts | open (P1) |
 | TD-490 | انبار و کاردکس (بسته ۶) | P2 (B06-11) — غیرفعال کردن انبار بی قفل ردیف انبار است و با رسید هم‌زمان ۷ واحد را در انبار غیرفعال گذاشت؛ آخرین انبار فعال هم غیرفعال می‌شود و فعال‌سازی دوباره نیست | warehouse.service.ts، warehouses.routes.ts | open (P2، تصمیم ت۵ الف) |
 | TD-495 | انبار و کاردکس (بسته ۶) | P3 (B06-16) — بررسی سلامت سامانه لایه انبار را با `status: 'ok'` ثابت گزارش می‌کند، حتی با مغایرت در گزارش سلامت انبار | systemReconciliation.service.ts | open (P3) |
-| TD-505 | خزانه و چک (بسته ۴)؛ اثر روی ۲ | P2 (B04-09) — `GET /accounting/bank-accounts` با گارد درون‌خطی `warehouse.in` / `warehouse.out` / `documents.view` / `documents.create` همه ستون‌ها (شماره حساب، کارت، شبا) و مانده خزانه، مانده دفتر و مغایرت را می‌دهد، در حالی که همان کاربر `GET /accounting/treasury` را ۴۰۳ می‌گیرد | treasury.routes.ts، InvoiceSettlementModal.tsx، PayrollPaymentModal.tsx | open (P2، تصمیم ت۷ الف) |
-| TD-506 | خزانه و چک (بسته ۴) | P2 (B04-10) — چک با `issueDate` پنج ماه آینده (۲۰۱) و وصول با `actionDate` آینده (۲۰۰، مانده بانک همین امروز زیاد شد) پذیرفته می‌شود؛ پنجره وضعیت چک کادر تاریخ ندارد و چک دیروز پاس‌شده امروز در دفتر می‌نشیند | chequeLifecycle.service.ts، ChequesTab.tsx | open (P2، تصمیم ت۶ الف؛ با TD-669 (B16-05)) |
-| TD-508 | خزانه و چک (بسته ۴) | P2 (B04-12) — فرم حساب بانکی کادر ارز ندارد و `PUT currency USD` ۲۰۰ می‌گیرد ولی ارز `IRR` می‌ماند؛ پس مسیر ارزی خزانه (TD-274) فقط از API باز است | BankAccountModal.tsx، bankAccount.service.ts | open (P2، تصمیم ت۵ الف) |
 | TD-509 | خزانه و چک (بسته ۴) | P2 (B04-13) — `computeBankBalances` همه ردیف‌های تأییدشده دفتر کل را در هر درخواست می‌خواند (۲۰۰٬۰۰۰ ردیف ← ۱٬۶۳۹ ms برای ۱۵ بانک) و `GET /accounting/treasury` `page` / `limit` را نادیده می‌گیرد (۲۰٬۰۰۰ ردیف، ۱۵٫۸۸ MB) | bankAccount.service.ts، treasuryTransaction.service.ts | open (P2) |
-| TD-510 | خزانه و چک (بسته ۴) | P3 (B04-14) — حساب بانکی با `accountId 999999` یا روی سرفصل ۱۲۰۱ و چک با `bankAccountId 999999` ۲۰۱ می‌گیرند؛ ۱۰ FK اعلام‌شده سه جدول خزانه در پایگاه‌داده نیست | bankAccount.service.ts، chequeLifecycle.service.ts | open (P3) |
 | TD-511 | خزانه و چک (بسته ۴) | P3 (B04-15) — تطبیق با سه شناسه (بانک الف، بانک ب، ردیف باطل‌شده) `{"updated": 2}` داد، ردیف باطل‌شده «تطبیق‌یافته» شد، ممیزی هر سه را نوشت و `reconciled_at` تاریخ کسب‌وکار است نه زمان UTC | treasuryTransaction.service.ts | open (P3) |
 | TD-512 | خزانه و چک (بسته ۴) | P3 (B04-16) — ممیزی تغییر وضعیت چک فقط `{"status":"in_collection"}` با شرح «… به in_collection» و حذف فقط `{"chequeId":6}` است؛ نه وضعیت قبلی، نه حساب بانکی، نه سند صادر یا باطل‌شده (AGENTS §۵) | treasury.routes.ts | open (P3) |
 | TD-513 | خزانه و چک (بسته ۴) | P3 (B04-17) — پنجره تاریخچه `description` می‌خواند و سرور `notes` می‌نویسد؛ پیام‌ها «in_collection» / «passed» / «bounced» دارند؛ فیلتر وضعیت `in_treasury` ندارد؛ «کلیپ‌بورد» در دو پیام | ChequesTab.tsx، chequeLifecycle.service.ts | open (P3) |
-| TD-514 | خزانه و چک (بسته ۴) | P3 (B04-18) — `amount`، `initialBalance` و `exchangeRate` با `z.coerce.number()`: «۲۵۰۰۰۰۰» و «2,500,000» ← ۴۰۰ «Invalid input: expected number, received NaN» (AGENTS §۶، TD-385)؛ ارز آزاد است | accounting.schemas.ts | open (P3) |
 | TD-515 | خزانه و چک (بسته ۴) | P3 (B04-19) — فرم برای حساب بی سرفصل «سند دوبل صادر نخواهد شد» می‌گوید و سرور ۴۲۲ می‌دهد؛ سرعنوان «… / چک …»؛ اکسل خزانه `customer` و `bank_transfer` خام و نام فایل با تاریخ UTC؛ `react-multi-date-picker` به‌جای `JalaliDateInput` | TreasuryTransactionModal.tsx، BankAndTreasuryTab.tsx | open (P3) |
 | TD-516 | دسترسی (بسته ۲)؛ اثر روی همه بسته‌ها | P1 (B02-01) — کد نقش در ۴۹ گارد route (۳۸ تغییردهنده؛ `manager` در هر ۴۹) پیش از هر مجوزی عبور می‌دهد: «مدیر فروش» پس از برداشتن همه `customers.*` طرف حساب را حذف کرد، «مدیر» بی `settings.manage` تنظیمات را عوض کرد و نقش سفارشی با کد `accountant` و فقط `accounting.view` سند انبار را قطعی کرد؛ صفحه نقش‌ها این دسترسی را نه نشان می‌دهد و نه می‌گیرد | authorize.ts، routeهای بسته‌های ۴ تا ۱۶ | open (P1، تصمیم ت۱ الف و مدل مجوز) |
 | TD-519 | دسترسی (بسته ۲)؛ اثر روی ۱۲ | P1 (B02-04) — ساخت کاربر با نام کاربری کاربر حذف‌شده همان شناسه را زنده می‌کند: فرد تازه اعلان محرمانه و فیش ۱۸۲٬۵۰۰٬۰۰۰ ریالی با کارت و شبای فرد قبلی را دید و سجل دو نفر یکی شد | users.routes.ts | open (P1، تصمیم ت۲ الف) |
@@ -55,8 +50,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۳۴ ردیف
-- **آرشیو شده (resolved):** ۴۵۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۲۹ ردیف
+- **آرشیو شده (resolved):** ۴۶۱ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -65,4 +60,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.96 — TD-496 (واژه‌ها، نام فایل‌ها و نمودار انبارهای رابط انبار، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.101 — TD-514 (ورودی عددی و ارز خزانه، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

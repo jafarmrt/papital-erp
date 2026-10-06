@@ -7,6 +7,7 @@ import { authorizePermission, userHasRoleOrPermission } from '../../middleware/a
 import { READ_PERMISSIONS, RECORD_READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
 import { AccountingService } from '../../services/accounting.service.js';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../services/accounting/treasury/noVoucherTreasury.js';
+import { getBankAccountOptions } from '../../services/accounting/treasury/bankAccountOptions.js';
 import { choosableContraAccounts } from '../../services/accounting/treasury/partyContraAccount.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { validate, paramsIdSchema } from '../../middleware/validate.js';
@@ -37,8 +38,12 @@ const getBanksHandler = asyncHandler(async (req, res) => {
   const list = await AccountingService.getBankAccounts();
   res.json(list);
 });
-router.get('/accounting/banks', authorizePermission('accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view', 'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'), getBanksHandler);
+router.get('/accounting/banks', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
 router.get('/accounting/bank-accounts', authorizePermission(...READ_PERMISSIONS.bankAccounts), getBanksHandler);
+// v9.0.97 (TD-505، ت۷): فهرست انتخاب کمینه برای فرم‌ها؛ فهرست کامل با شماره‌ها و مانده‌ها فقط برای خوانندگان خزانه
+router.get('/accounting/bank-accounts/options', authorizePermission(...READ_PERMISSIONS.bankAccountOptions), asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: await getBankAccountOptions() });
+}));
 
 // Dynamic Bank & Ledger Synchronization and Reconciliation
 const syncBanksHandler = asyncHandler(async (req, res) => {
@@ -206,7 +211,7 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
     action: 'CREATE',
     entity: 'treasury_transfer',
     entityId: `${result.payment.id}/${result.receipt.id}`,
-    description: `انتقال وجه ${req.body.amount.toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
+    description: `انتقال وجه ${Number(req.body.amount).toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
     details: { paymentId: result.payment.id, receiptId: result.receipt.id, voucherId: result.voucherId },
     ipAddress: req.ip || '',
   });

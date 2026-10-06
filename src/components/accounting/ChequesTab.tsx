@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { confirmAction } from '../ConfirmDialogHost';
 import { CreditCard, Plus, Search, ArrowDownLeft, ArrowUpRight, Trash2, X, History, Download, ShieldCheck, Copy, Edit3 } from 'lucide-react';
 import * as xlsx from 'xlsx';
-import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
+import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, getTodayIsoDate, formatPersianDate, extractDateString, formatCurrencyLabel, errorMessageOf, toStorageDate, isoToJalaliDate, toEnglishDigits } from '../../utils';
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import type { Cheque, ChequeType, ChequeStatus, BankAccount, Customer, Personnel, FinancialAttachment } from '../../types';
+import type { Cheque, ChequeType, ChequeStatus, BankAccountOption, Customer, Personnel, FinancialAttachment } from '../../types';
 import toast from 'react-hot-toast';
+import { JalaliDateInput } from '../common/JalaliDateInput';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -23,13 +24,14 @@ import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
 interface ChequesTabProps {
   cheques: Cheque[];
-  bankAccounts: BankAccount[];
+  /** v9.0.97 (TD-505): فهرست انتخاب حساب‌های خزانه، بی شماره حساب و مانده */
+  bankAccounts: BankAccountOption[];
   customers: Customer[];
   personnelList: Personnel[];
   loading: boolean;
   onRefresh: () => void;
   onCreateCheque: (data: any) => Promise<void>;
-  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyId?: number) => Promise<void>;
+  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyId?: number, actionDate?: string) => Promise<void>;
   onDeleteCheque: (id: number) => Promise<void>;
 }
 
@@ -104,6 +106,8 @@ export function ChequesTab({
   const [statusModalCheque, setStatusModalCheque] = useState<Cheque | null>(null);
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
+  // v9.0.98 (TD-506، ت۶ الف): تاریخ اقدام (ISO)؛ پیش‌فرض امروز، سند گام چک به همین تاریخ صادر می‌شود
+  const [statusActionDate, setStatusActionDate] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
   const [transfereePartyId, setTransfereePartyId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -218,6 +222,14 @@ export function ChequesTab({
       toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
       return;
     }
+    if (!statusActionDate) {
+      toast.error('تاریخ اقدام را وارد کنید');
+      return;
+    }
+    if (statusActionDate > getTodayIsoDate()) {
+      toast.error('تاریخ اقدام نمی‌تواند پس از امروز باشد');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -226,7 +238,8 @@ export function ChequesTab({
         targetStatus, 
         statusDescription, 
         targetBankAccountId || undefined,
-        targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined
+        targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined,
+        statusActionDate
       );
       toast.success('وضعیت چک به‌روزرسانی شد');
       setStatusModalCheque(null);
@@ -598,6 +611,7 @@ export function ChequesTab({
                             setStatusModalCheque(c);
                             // وضعیت هدف توسط useEffect بر اساس اولین گزینه مجاز ریست می‌شود
                             setStatusDescription('');
+                            setStatusActionDate(getTodayIsoDate());
                             setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
                           }}
                           className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition hover:opacity-80 ${statusInfo.badge}`}
@@ -624,6 +638,7 @@ export function ChequesTab({
                                 onClick: () => {
                                   setStatusModalCheque(c);
                                   setStatusDescription('');
+                                  setStatusActionDate(getTodayIsoDate());
                                   setTargetBankAccountId(c.bankAccountId || bankAccounts[0]?.id || null);
                                 },
                               }] : []),
@@ -1031,6 +1046,18 @@ export function ChequesTab({
                   />
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  تاریخ اقدام *
+                </label>
+                <JalaliDateInput
+                  value={statusActionDate}
+                  onChange={setStatusActionDate}
+                  placeholder="تاریخ اقدام"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-mono"
+                />
+              </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">

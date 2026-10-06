@@ -19,6 +19,7 @@ import {
 } from './accounting/useVoucherQueries';
 import {
   useBankAccountsQuery,
+  useBankAccountOptionsQuery,
   useTreasuryTransactionsQuery,
   useTreasuryMutations,
   type TreasuryPayload,
@@ -30,6 +31,7 @@ import { useAccountingCustomersQuery, useAccountingPersonnelQuery } from './acco
 const NO_ACCOUNTS: never[] = [];
 const NO_VOUCHERS: never[] = [];
 const NO_BANK_ACCOUNTS: never[] = [];
+const NO_BANK_ACCOUNT_OPTIONS: never[] = [];
 const NO_CHEQUES: never[] = [];
 const NO_TREASURY_TRANSACTIONS: never[] = [];
 const NO_CUSTOMERS: never[] = [];
@@ -51,6 +53,8 @@ export function useAccounting() {
   const treeQuery = useAccountsTreeQuery();
   const vouchersQuery = useVouchersQuery();
   const bankAccountsQuery = useBankAccountsQuery();
+  // v9.0.97 (TD-505، ت۷): دفتر چک فقط فهرست انتخاب را می‌خواند؛ فهرست کامل فقط برای خوانندگان خزانه
+  const bankAccountOptionsQuery = useBankAccountOptionsQuery();
   const treasuryQuery = useTreasuryTransactionsQuery();
   const chequesQuery = useChequesQuery();
   const customersQuery = useAccountingCustomersQuery();
@@ -196,9 +200,10 @@ export function useAccounting() {
     status: string,
     description?: string,
     bankAccountId?: number,
-    transfereePartyId?: number
+    transfereePartyId?: number,
+    actionDate?: string
   ) => {
-    await chequeMutations.updateChequeStatus.mutateAsync({ id, status, description, bankAccountId, transfereePartyId });
+    await chequeMutations.updateChequeStatus.mutateAsync({ id, status, description, bankAccountId, transfereePartyId, actionDate });
   };
 
   const handleDeleteCheque = async (id: number) => {
@@ -221,6 +226,7 @@ export function useAccounting() {
     treeAccounts: treeQuery.data ?? NO_ACCOUNTS,
     vouchers: vouchersQuery.data ?? NO_VOUCHERS,
     bankAccounts: bankAccountsQuery.data ?? NO_BANK_ACCOUNTS,
+    bankAccountOptions: bankAccountOptionsQuery.data ?? NO_BANK_ACCOUNT_OPTIONS,
     cheques: chequesQuery.data ?? NO_CHEQUES,
     treasuryTransactions: treasuryQuery.data ?? NO_TREASURY_TRANSACTIONS,
     customers: customersQuery.data ?? NO_CUSTOMERS,
