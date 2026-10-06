@@ -5,6 +5,7 @@ import { formatCurrencyLabel, getIranianBankFromCard, getIranianBankFromSheba } 
 import { BankCardInput, ShebaInput, FinancialAmountInput } from '../../common';
 import { fetchJson } from '../../../api';
 import type { BankAccount, Account } from '../../../types';
+import { TREASURY_CURRENCIES } from '../../../lib/treasury/treasuryCurrency';
 
 interface BankAccountModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     cardNumber: '',
     shebaNumber: '',
     initialBalance: 0,
+    currency: 'IRR' as string,
     accountId: null as number | null,
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -74,6 +76,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         cardNumber: editingBank.cardNumber || '',
         shebaNumber: editingBank.shebaNumber || '',
         initialBalance: editingBank.initialBalance || 0,
+        currency: (editingBank.currency || 'IRR').toUpperCase(),
         accountId: editingBank.accountId || null,
       });
       setAutoCodeGenerated(false);
@@ -89,6 +92,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         cardNumber: '',
         shebaNumber: '',
         initialBalance: 0,
+        currency: 'IRR',
         accountId: null,
       });
       setAutoCodeGenerated(false);
@@ -122,7 +126,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   };
 
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const curLbl = formatCurrencyLabel(formData.currency || appCurrency);
 
   // فیلتر هوشمند سرفصل‌های معین حسابداری متناسب با نوع حساب خزانه
   const treasuryAccountFilter = (acc: Account): boolean => {
@@ -328,6 +332,25 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
               </div>
             </>
           )}
+
+          {/* v9.0.88 (TD-508، ت۵ الف): ارز حساب؛ پس از نخستین گردش ثابت است و سرور تغییرش را با پیام فارسی رد می‌کند */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              ارز حساب
+            </label>
+            <select
+              value={formData.currency}
+              onChange={e => setFormData({ ...formData, currency: e.target.value })}
+              className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+            >
+              {TREASURY_CURRENCIES.map(code => (
+                <option key={code} value={code}>{formatCurrencyLabel(code)}</option>
+              ))}
+            </select>
+            {editingBank && (
+              <p className="text-[10px] text-slate-500 mt-1">ارز حساب پس از نخستین تراکنش، چک یا مانده اول دوره تغییر نمی‌کند.</p>
+            )}
+          </div>
 
           <div>
             <FinancialAmountInput

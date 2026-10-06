@@ -11,6 +11,7 @@ import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { assertBankCurrencyChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
 /** گزارش تطبیق مانده حساب‌های خزانه با دفاتر (sync-reconcile و reconciliation-report) */
@@ -315,6 +316,8 @@ export class BankAccountService {
   }, externalTx?: DbExecutor): Promise<BankAccount> {
     const initialBal = money(data.initialBalance);
     const isStrict = data.strict !== false;
+    // v9.0.88 (TD-508، ت۵ الف): ارز از فهرست پشتیبانی‌شده (خالی ← ریال)
+    const currency = requireTreasuryCurrency(data.currency);
 
     // V4.0.5 (F-3 / TD-093): قانون صریح — اگر موجودی اولیه غیرصفر باشد، انتساب به سرفصل معین حسابداری برای صدور سند افتتاحیه الزامی است
     if (!initialBal.isZero() && !data.accountId && isStrict) {
@@ -336,7 +339,7 @@ export class BankAccountService {
         branch: data.branch?.trim() || '',
         initialBalance: initialBal,
         currentBalance: initialBal,
-        currency: data.currency || 'IRR',
+        currency,
         accountId: data.accountId || null,
         isActive: 1,
         notes: data.notes?.trim() || '',
@@ -471,6 +474,7 @@ export class BankAccountService {
     cardNumber: string;
     branch: string;
     initialBalance: number;
+    currency: string;
     accountId: number | null;
     isActive: number;
     notes: string;
@@ -491,6 +495,9 @@ export class BankAccountService {
       if (data.initialBalance !== undefined && !fin(data.initialBalance).round(4).equals(fin(existing.initialBalance))) {
         await assertNoPendingOpeningApproval(tx, existing);
       }
+      // v9.0.88 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
+      const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
+      if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
       const newCode = data.code?.trim();
       if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
         await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);
@@ -505,6 +512,7 @@ export class BankAccountService {
         ...(data.shebaNumber !== undefined ? { shebaNumber: data.shebaNumber.trim() } : {}),
         ...(data.cardNumber !== undefined ? { cardNumber: data.cardNumber.trim() } : {}),
         ...(data.branch !== undefined ? { branch: data.branch.trim() } : {}),
+        ...(newCurrency && newCurrency !== (existing.currency || 'IRR').toUpperCase() ? { currency: newCurrency } : {}),
         ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),

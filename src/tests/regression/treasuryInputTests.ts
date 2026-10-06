@@ -159,5 +159,42 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  const currencyId = 'reg_bank_account_currency_td_508';
+  if (shouldRun(currencyId, 'td508', 'bank', 'currency', 'package4')) {
+    await runCase(results, currencyId, 'v9.0.88: a bank account takes its currency from the supported list on create and edit, and the currency is fixed after its first treasury row, cheque or opening balance (422 instead of a silently ignored edit) (TD-508)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const lower = await admin.post('/api/accounting/bank-accounts', { title: `Dollar bank ${tagOf()}`, type: 'bank', currency: 'usd', initialBalance: 0 });
+      if (lower.status !== 201 || lower.body?.currency !== 'USD') problems.push(`create with currency usd returned ${lower.status} ${lower.body?.currency}, expected 201 USD`);
+      const unknown = await admin.post('/api/accounting/bank-accounts', { title: `Odd bank ${tagOf()}`, type: 'bank', currency: 'XYZ', initialBalance: 0 });
+      if (unknown.status !== 422) problems.push(`create with currency XYZ returned ${unknown.status}, expected 422 (before: 201)`);
+
+      // a fresh rial account becomes a dollar account (before: 200 and the currency stayed IRR)
+      const bank = await createBank('Currency bank');
+      const toUsd = await admin.put(`/api/accounting/bank-accounts/${bank.id}`, { currency: 'USD' });
+      if (toUsd.status !== 200 || toUsd.body?.currency !== 'USD') problems.push(`fresh account PUT currency USD returned ${toUsd.status} ${toUsd.body?.currency}, expected 200 USD`);
+      const receipt = await admin.post('/api/accounting/treasury', {
+        type: 'receipt', method: 'bank_transfer', bankAccountId: bank.id, amount: 100, currency: 'USD', exchangeRate: 1_000_000,
+        partyType: 'other', partyName: 'dollar deposit', contraAccountId: await accountId('4101'),
+      });
+      if (receipt.status !== 201) problems.push(`USD receipt on the dollar account returned ${receipt.status}: ${JSON.stringify(receipt.body).slice(0, 200)}`);
+      const same = await admin.put(`/api/accounting/bank-accounts/${bank.id}`, { currency: 'USD', title: `Currency bank renamed ${tagOf()}` });
+      if (same.status !== 200) problems.push(`PUT with the same currency after a receipt returned ${same.status}`);
+      const toEur = await admin.put(`/api/accounting/bank-accounts/${bank.id}`, { currency: 'EUR' });
+      if (toEur.status !== 422 || errorCode(toEur) !== 'BANK_ACCOUNT_CURRENCY_LOCKED') problems.push(`PUT currency EUR after a receipt returned ${toEur.status} ${errorCode(toEur)}, expected 422 BANK_ACCOUNT_CURRENCY_LOCKED`);
+
+      // an opening balance fixes the currency too (its opening voucher is in that currency)
+      const opened = await admin.post('/api/accounting/bank-accounts', { title: `Opened bank ${tagOf()}`, type: 'bank', initialBalance: 5_000_000, accountId: bank.ledgerId });
+      if (opened.status !== 201) throw new Error(`opened bank create returned ${opened.status}: ${JSON.stringify(opened.body).slice(0, 200)}`);
+      const openedToUsd = await admin.put(`/api/accounting/bank-accounts/${opened.body.id}`, { currency: 'USD' });
+      if (openedToUsd.status !== 422 || errorCode(openedToUsd) !== 'BANK_ACCOUNT_CURRENCY_LOCKED') problems.push(`PUT currency USD on an account with an opening balance returned ${openedToUsd.status} ${errorCode(openedToUsd)}, expected 422`);
+      const list = await admin.get('/api/accounting/bank-accounts');
+      const stored = (Array.isArray(list.body) ? list.body : []).find((b: { id: number }) => b.id === bank.id);
+      if (stored?.currency !== 'USD') problems.push(`dollar account currency is ${stored?.currency} after the refused edit, expected USD`);
+      assertNoProblems(problems);
+      return 'create usd: 201 USD; create XYZ: 422; fresh IRR account → USD: 200; USD receipt 100 at 1,000,000: 201; → EUR: 422 BANK_ACCOUNT_CURRENCY_LOCKED; account with opening balance 5,000,000 → USD: 422';
+    });
+  }
+
   return results;
 }
