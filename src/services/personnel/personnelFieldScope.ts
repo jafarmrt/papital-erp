@@ -12,7 +12,7 @@ import { READ_PERMISSIONS } from '../../lib/recordReadPermissions.js';
  */
 export const PERSONNEL_DOSSIER_PERMISSIONS = ['personnel.view', 'personnel.manage'] as const;
 
-export const PERSONNEL_PICK_KEYS = ['id', 'firstName', 'lastName', 'fullName', 'personnelCode', 'jobTitle', 'employmentStatus', 'userId'] as const;
+export const PERSONNEL_PICK_KEYS = ['id', 'firstName', 'lastName', 'fullName', 'personnelCode', 'jobTitle', 'employmentStatus', 'userId', 'version'] as const;
 export const PERSONNEL_SALARY_KEYS = ['salaryType', 'monthlySalary'] as const;
 
 export interface PersonnelReadScope {

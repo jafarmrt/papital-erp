@@ -19,6 +19,12 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.31 — Persian Wording in the Personnel UI
+- **Personnel Wording:** The personnel pages no longer show «(Update Existing)», «(IBAN)», «اکانت» or «کلیپ‌بورد»; a Vitest check keeps English words out of the Persian personnel UI (TD-440, `personnelWording.test.ts`).
+
+### v9.0.30 — Personnel Edit Optimistic Lock
+- **Personnel Edit Lock:** Saving a personnel form opened before someone else's save is refused with a conflict message instead of silently erasing the other change (owner decision D5; TD-442, `reg_personnel_edit_occ_td_442`).
+
 ### v9.0.29 — Personnel With Open Business Is Not Deleted
 - **Personnel Delete Guard:** A personnel with an unsettled payroll, a work log without a payroll, an account balance or a draft voucher is no longer deleted; the refusal lists the reasons and suggests «قطع همکاری» (owner decision D4; TD-441, `reg_personnel_delete_guard_td_441`).
 

@@ -257,7 +257,7 @@ export function PersonnelFormModal({
                   onChange={(e) => setFormData((prev) => ({ ...prev, userId: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
                 >
-                  <option value="">-- غیرکاربر (بدون اکانت ورودی به سامانه) --</option>
+                  <option value="">-- بدون حساب کاربری در سامانه --</option>
                   {usersList.map((u) => {
                     const linkedTo = linkedUsers?.get(Number(u.id));
                     return (
@@ -434,7 +434,7 @@ export function PersonnelFormModal({
 
               <div>
                 <ShebaInput
-                  label="شماره شبا (IBAN)"
+                  label="شماره شبا"
                   value={formData.shebaNumber}
                   onChange={(val) => {
                     setFormData((prev) => {

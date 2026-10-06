@@ -40,6 +40,8 @@ export const personnel = pgTable('personnel', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow(),
   isDeleted: integer('is_deleted').default(0),
+  // v9.0.30 (TD-442، تصمیم D5 الف): نسخه قفل خوش‌بینانه ویرایش پرسنل (مهاجرت 0055)
+  version: integer('version').notNull().default(1),
 }, (table) => ({
   // v9.0.28 (TD-439): ایندکس یکتای جزئی uq_personnel_code_active روی lower(btrim(personnel_code)) پرسنل فعال با کد غیرخالی
   // را مهاجرت 0054 فقط روی داده بی کد تکراری می‌سازد (src/services/personnel/personnelCode.ts)

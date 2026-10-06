@@ -303,7 +303,7 @@ export function PersonnelTable({
                                         const clean = normalizePhoneNumber(p.phone) || p.phone || '';
                                         void copyToClipboard(clean).then(ok => {
                                           if (ok) toast.success('شماره تماس کپی شد');
-                                          else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                          else toast.error('رونوشت ممکن نشد؛ دوباره تلاش کنید');
                                         });
                                       },
                                     },
@@ -317,7 +317,7 @@ export function PersonnelTable({
                                       onClick: () => {
                                         void copyToClipboard(p.personnelCode || '').then(ok => {
                                           if (ok) toast.success('کد پرسنلی کپی شد');
-                                          else toast.error('کپی در کلیپ‌بورد ممکن نشد');
+                                          else toast.error('رونوشت ممکن نشد؛ دوباره تلاش کنید');
                                         });
                                       },
                                     },

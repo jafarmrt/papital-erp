@@ -1,3 +1,4 @@
+import { personnelVersion } from '../fixtures/personnelVersion.js';
 import request from 'supertest';
 import { inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -52,10 +53,10 @@ export async function runPersonnelUserLinkTests(shouldRun: (id: string, ...extra
     const c = await newPersonnel('ج');
     if (c.status !== 201) throw new Error(`ثبت پرسنل ج ${c.status} داد`);
     const cId = Number(c.body.id);
-    const linkC = await send('put', `/api/personnel/${cId}`, { firstName: 'ج', lastName: `پیوند ${tag}`, userId: employee.id });
+    const linkC = await send('put', `/api/personnel/${cId}`, { version: await personnelVersion(cId), firstName: 'ج', lastName: `پیوند ${tag}`, userId: employee.id });
     if (linkC.status !== 409) wrong.push(`پیوند دوم همان کاربر در ویرایش ${linkC.status} داد، نه ۴۰۹`);
     // ویرایش خود پرسنل الف با همان کاربر آزاد است
-    const keepA = await send('put', `/api/personnel/${a.body.id}`, { firstName: 'الف', lastName: `پیوند ${tag}`, userId: employee.id, jobTitle: 'زرگر' });
+    const keepA = await send('put', `/api/personnel/${a.body.id}`, { version: await personnelVersion(a.body.id), firstName: 'الف', lastName: `پیوند ${tag}`, userId: employee.id, jobTitle: 'زرگر' });
     if (keepA.status !== 200) wrong.push(`ویرایش پرسنل الف با کاربر خودش ${keepA.status} داد`);
 
     // ۲) «فیش‌های من» فیش پرسنل دیگری را نمی‌دهد (فیش تأییدشده پرسنل ج)

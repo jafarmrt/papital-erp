@@ -168,7 +168,7 @@ export function PersonnelDetailModal({
                 </span>
               </div>
               <div className="sm:col-span-2">
-                <span className="text-[10px] text-slate-500 block">شماره شبا (IBAN):</span>
+                <span className="text-[10px] text-slate-500 block">شماره شبا:</span>
                 <span className="font-bold font-mono text-slate-800 mt-0.5 block text-left" dir="ltr">
                   {personnel.shebaNumber || '---'}
                 </span>

@@ -1,3 +1,4 @@
+import { personnelVersion } from '../fixtures/personnelVersion.js';
 import { money } from '../../lib/money.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
@@ -7951,9 +7952,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       if (!listed || 'nobitexPassword' in listed) violations.push('فهرست پرسنل نباید رمز نوبیتکس بدهد (فقط جزئیات)');
 
       // ۲) ذخیره فرم با همان رمز ← متن رمزشده عوض نمی‌شود؛ رمز تازه ← رمزنگاری تازه
-      await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189 ویرایش', nobitexPassword: 'Secret#123' });
+      await send('put', `/api/personnel/${id}`, { version: await personnelVersion(id), firstName: 'ERP-TEST-MARKER', lastName: 'TD-189 ویرایش', nobitexPassword: 'Secret#123' });
       if (await stored(id) !== first) violations.push('ذخیره با همان رمز متن رمزشده را عوض کرد');
-      await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'New#456' });
+      await send('put', `/api/personnel/${id}`, { version: await personnelVersion(id), firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'New#456' });
       const second = await stored(id);
       if (!second.startsWith('enc:v1:') || decryptSecret(second) !== 'New#456') violations.push('رمز تازه درست رمزنگاری نشد');
 
@@ -7965,9 +7966,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       delete process.env.ERP_SECRETS_KEY;
       const noKeyRead = await request(app).get(`/api/personnel/${id}`).set('Cookie', session.cookie);
       if (noKeyRead.body?.nobitexPassword !== '') violations.push(`بدون کلید پاسخ باید خالی باشد: «${String(noKeyRead.body?.nobitexPassword).slice(0, 20)}»`);
-      await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: '' });
+      await send('put', `/api/personnel/${id}`, { version: await personnelVersion(id), firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: '' });
       if (await stored(id) !== second) violations.push('ذخیره فرم بدون کلید رمز ذخیره‌شده را پاک کرد');
-      const noKeySave = await send('put', `/api/personnel/${id}`, { firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'Plain#789' });
+      const noKeySave = await send('put', `/api/personnel/${id}`, { version: await personnelVersion(id), firstName: 'ERP-TEST-MARKER', lastName: 'TD-189', nobitexPassword: 'Plain#789' });
       if (noKeySave.status !== 503) violations.push(`رمز تازه بدون کلید باید 503 بگیرد: ${noKeySave.status}`);
       if (await stored(id) !== second) violations.push('رمز تازه بدون کلید ذخیره شد');
       try { encryptSecret('x'); violations.push('encryptSecret بدون کلید خطا نداد'); } catch { /* انتظار */ }
