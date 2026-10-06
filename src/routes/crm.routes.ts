@@ -10,7 +10,7 @@ import { isoToJalaliDate, toPersianDigits } from '../utils.js';
 import { requireStorageDate, optionalStorageDate, crmTodayActivityDates } from '../lib/storageDate.js';
 import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
@@ -19,11 +19,25 @@ import { money } from '../lib/money.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
-import { listFollowups, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { deleteLead } from '../services/crm/crmLeadDelete.js';
+import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
+import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
+import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 
 const router = Router();
 router.use(authenticateToken);
+
+// v9.0.18 (TD-427): مبلغ و احتمال با `decimalInput` (متن = خطای اعتبارسنجی، نه صفر بی‌صدا یا ۵۰۰)؛ مبلغ نامنفی، احتمال عدد
+// صحیح ۰ تا ۱۰۰، و مرحله، وضعیت و ارز فقط از فهرست‌های `src/lib/crm/leadFields.ts`
+const leadEstimatedValueInput = decimalInput('ارزش تخمینی معامله')
+  .refine(v => v === undefined || Number(v) >= 0, { message: 'ارزش تخمینی معامله نمی‌تواند منفی باشد' });
+const leadProbabilityInput = decimalInput('احتمال موفقیت')
+  .refine(v => v === undefined || isLeadProbability(v), { message: 'احتمال موفقیت باید عدد صحیح بین ۰ تا ۱۰۰ باشد' });
+const leadStageInput = z.enum(CRM_LEAD_STAGES, { message: 'مرحله پرونده فروش نامعتبر است' });
+const leadStatusInput = z.enum(CRM_LEAD_STATUSES, { message: 'وضعیت پرونده فروش نامعتبر است' });
+const leadCurrencyInput = z.preprocess(normalizeLeadCurrency, z.enum(CRM_LEAD_CURRENCIES, { message: 'ارز پرونده فروش پشتیبانی نمی‌شود (ریال، دلار، یورو، درهم یا پوند)' }));
 
 const createCrmLeadSchema = z.object({
   body: z.object({
@@ -34,10 +48,10 @@ const createCrmLeadSchema = z.object({
     company: z.string().optional(),
     contacts: z.array(z.any()).optional(),
     source: z.string().optional(),
-    stage: z.string().optional(),
-    estimatedValue: z.union([z.number(), z.string()]).optional(),
-    currency: z.string().optional(),
-    probability: z.union([z.number(), z.string()]).optional(),
+    stage: leadStageInput.optional(),
+    estimatedValue: leadEstimatedValueInput.optional(),
+    currency: leadCurrencyInput.optional(),
+    probability: leadProbabilityInput.optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
     expectedCloseDate: z.string().optional(),
@@ -54,15 +68,15 @@ const updateCrmLeadSchema = z.object({
     company: z.string().optional(),
     contacts: z.array(z.any()).optional(),
     source: z.string().optional(),
-    stage: z.string().optional(),
-    estimatedValue: z.union([z.number(), z.string()]).optional(),
-    currency: z.string().optional(),
-    probability: z.union([z.number(), z.string()]).optional(),
+    stage: leadStageInput.optional(),
+    estimatedValue: leadEstimatedValueInput.optional(),
+    currency: leadCurrencyInput.optional(),
+    probability: leadProbabilityInput.optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
     expectedCloseDate: z.string().optional(),
     notes: z.string().optional(),
-    status: z.string().optional(),
+    status: leadStatusInput.optional(),
   }),
   params: z.object({
     id: numericIdString
@@ -86,10 +100,10 @@ const createCrmActivitySchema = z.object({
   })
 });
 
-const toggleFollowupSchema = z.object({
+const followupActionSchema = z.object({
   body: z.object({
-    result: z.string().optional(),
-    resultNote: z.string().optional()
+    result: z.string().max(500).optional(),
+    resultNote: z.string().max(2000).optional()
   }).optional(),
   params: z.object({
     id: numericIdString
@@ -619,8 +633,8 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
     leadId: id,
     customerId: resolvedCustomerId,
     type: 'task',
-    title: 'تبدیل لید به مشتری و صدور پیش‌فاکتور',
-    description: `پرونده فروش CRM "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
+    title: 'تبدیل پرونده فروش به مشتری و صدور پیش‌فاکتور',
+    description: `پرونده فروش "${lead.title}" توسط ${authorName} به مشتری رسمی تبدیل شد و جهت صدور پیش‌فاکتور هدایت شد.`,
     loggedBy: authorName,
     ...(await crmTodayActivityDates()),
     createdAt: nowIso,
@@ -628,28 +642,32 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
   });
 
   res.json({
-    message: 'لید با موفقیت به مشتری رسمی تبدیل شد',
+    message: 'پرونده فروش به مشتری رسمی تبدیل شد',
     lead: formatLead(updated),
     customer: customerObj
   });
 }));
 
 // DELETE /api/crm/leads/:id
+// v9.0.16 (TD-425): زیر قفل پرونده؛ پرونده ناموجود ۴۰۴ و پرونده دارای سند فعال ۴۰۹ (`deleteLead`)، لاگ ممیزی در همان تراکنش
 router.delete('/crm/leads/:id', authorizePermission('crm.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const currentUser = req.user;
 
-  await orm.update(crmLeads).set({ isDeleted: 1 }).where(eq(crmLeads.id, id));
-
-  await logActivity({
-    userId: currentUser?.id,
-    username: currentUser?.username || 'user',
-    userFullName: currentUser?.full_name || currentUser?.username || '',
-    action: 'DELETE',
-    entity: 'فرصت فروش CRM',
-    entityId: String(id),
-    description: `حذف فرصت فروش کد ${id}`,
-    ipAddress: req.ip || ''
+  await orm.transaction(async (tx) => {
+    const lead = await deleteLead(tx, id);
+    await logActivity({
+      userId: currentUser?.id,
+      username: currentUser?.username || 'user',
+      userFullName: currentUser?.full_name || currentUser?.username || '',
+      action: 'DELETE',
+      entity: 'فرصت فروش CRM',
+      entityId: String(id),
+      description: `حذف پرونده فروش «${lead.title}» (کد ${id})`,
+      details: { before: lead },
+      ipAddress: req.ip || '',
+      tx,
+    });
   });
 
   res.json({ message: 'فرصت فروش با موفقیت حذف شد' });
@@ -659,7 +677,8 @@ router.delete('/crm/leads/:id', authorizePermission('crm.delete'), validate(para
 router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
   const { leadId, customerId, type, pendingFollowupsOnly, fromDate, toDate } = req.query;
 
-  const conditions = [eq(crmActivities.isDeleted, 0)];
+  // v9.0.16 (TD-425): اقدام‌های پرونده حذف‌شده فهرست نمی‌شوند
+  const conditions = [eq(crmActivities.isDeleted, 0), liveLeadActivityCondition()];
 
   if (leadId) {
     conditions.push(eq(crmActivities.leadId, Number(leadId)));
@@ -781,10 +800,12 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     personnelId: assignedPersonnelId
   });
   const mentionsList = Array.isArray(mentions) ? mentions : [];
+  // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
+  const parents = await resolveActivityParents(orm, { leadId, customerId });
 
   const [newAct] = await orm.insert(crmActivities).values({
-    leadId: leadId ? Number(leadId) : null,
-    customerId: customerId ? Number(customerId) : null,
+    leadId: parents.leadId,
+    customerId: parents.customerId,
     type: type || 'call',
     title: title.trim(),
     description: description || '',
@@ -836,8 +857,8 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'mention',
-          title: 'منشن در فعالیت CRM',
-          message: `${authorName} شما را در فعالیت CRM ("${title}") منشن کرد.`,
+          title: 'اشاره به شما در اقدام ارتباط با مشتری',
+          message: `${authorName} در اقدام «${title}» به شما اشاره کرد.`,
           link: `/crm?activityId=${newAct.id}`,
           isRead: 0
         });
@@ -871,8 +892,8 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
           senderId: currentUser?.id,
           senderName: authorName,
           type: 'task',
-          title: 'تسک / پیگیری جدید CRM',
-          message: `${authorName} تسک پیگیری جدید برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
+          title: 'پیگیری تازه ارتباط با مشتری',
+          message: `${authorName} پیگیری تازه‌ای برای شما ثبت کرد: "${nextFollowUpTask || title}" (تاریخ سررسید: ${toPersianDigits(isoToJalaliDate(nextFollowIso || actDateIso))})`,
           link: `/crm?activityId=${newAct.id}`,
           isRead: 0
         });
@@ -883,10 +904,10 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   }
 
   // Update lead's updatedAt timestamp
-  if (leadId) {
+  if (parents.leadId) {
     await orm.update(crmLeads)
       .set({ updatedAt: nowIso })
-      .where(eq(crmLeads.id, Number(leadId)));
+      .where(eq(crmLeads.id, parents.leadId));
   }
 
   await logActivity({
@@ -903,36 +924,38 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   res.status(201).json(formatActivity(newAct));
 }));
 
-// PUT /api/crm/activities/:id/toggle-followup
-router.put('/crm/activities/:id/toggle-followup', authorizePermission('crm.manage'), validate(toggleFollowupSchema), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { result, resultNote } = req.body || {};
-  const [act] = await orm.select().from(crmActivities).where(and(eq(crmActivities.id, id), eq(crmActivities.isDeleted, 0)));
+// v9.0.19 (TD-430): «انجام» و «بازگشایی» پیگیری دو عمل صریح با وضعیت هدف (`setFollowupCompleted`، زیر قفل ردیف اقدام)؛
+// تکرار درخواست چیزی را عوض نمی‌کند و هر تغییر یک لاگ ممیزی با «قبل و بعد» در همان تراکنش دارد. کلید دوطرفه
+// `toggle-followup` حذف شد: دو درخواست پشت‌سرهم پیگیری انجام‌شده را دوباره باز می‌کرد و ممیزی نداشت.
+function followupStatusHandler(completed: boolean) {
+  return asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { result, resultNote } = req.body || {};
+    const currentUser = req.user;
+    const change = await orm.transaction(async (tx) => {
+      const outcome = await setFollowupCompleted(tx, id, completed, { result, resultNote });
+      if (outcome.changed) {
+        const pick = (a: typeof outcome.before) => ({ isFollowUpCompleted: a.isFollowUpCompleted, result: a.result, description: a.description });
+        await logActivity({
+          userId: currentUser?.id,
+          username: currentUser?.username || 'user',
+          userFullName: currentUser?.full_name || currentUser?.username || '',
+          action: 'UPDATE',
+          entity: 'اقدام و تماس CRM',
+          entityId: String(id),
+          description: `${completed ? 'انجام' : 'بازگشایی'} پیگیری «${outcome.after.nextFollowUpTask || outcome.after.title}»`,
+          details: { before: pick(outcome.before), after: pick(outcome.after) },
+          ipAddress: req.ip || '',
+          tx,
+        });
+      }
+      return outcome;
+    });
+    res.json({ ...formatActivity(change.after), changed: change.changed });
+  });
+}
 
-  if (!act) {
-    throw new NotFoundError('اقدام یافت نشد');
-  }
-
-  const newCompleted = act.isFollowUpCompleted === 1 ? 0 : 1;
-  const updateData: Partial<typeof crmActivities.$inferInsert> = { isFollowUpCompleted: newCompleted };
-
-  if (result && typeof result === 'string' && result.trim()) {
-    updateData.result = result.trim();
-  }
-
-  if (resultNote && typeof resultNote === 'string' && resultNote.trim()) {
-    const currentDesc = act.description || '';
-    const todayJalali = isoToJalaliDate(await businessTodayIsoDate());
-    const noteAppend = `\n[نتیجه پیگیری (${todayJalali})]: ${resultNote.trim()}`;
-    updateData.description = currentDesc ? `${currentDesc}${noteAppend}` : `[نتیجه پیگیری (${todayJalali})]: ${resultNote.trim()}`;
-  }
-
-  const [updated] = await orm.update(crmActivities)
-    .set(updateData)
-    .where(eq(crmActivities.id, id))
-    .returning();
-
-  res.json(formatActivity(updated));
-}));
+router.put('/crm/activities/:id/complete-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(true));
+router.put('/crm/activities/:id/reopen-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(false));
 
 export default router;

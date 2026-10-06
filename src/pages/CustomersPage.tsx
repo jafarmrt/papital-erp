@@ -77,7 +77,7 @@ export default function CustomersPage({ user }: { user: User }) {
     }).catch(err => {
       if (err?.name === 'AbortError') return;
       console.error('Failed to load CRM leads:', err);
-      toast.error('خطا در دریافت سرنخ‌های CRM');
+      toast.error('خطا در دریافت پرونده‌های فروش');
     });
 
     fetchJson('/crm/activities', { signal: controller.signal }).then((res) => {
@@ -86,7 +86,7 @@ export default function CustomersPage({ user }: { user: User }) {
     }).catch(err => {
       if (err?.name === 'AbortError') return;
       console.error('Failed to load CRM activities:', err);
-      toast.error('خطا در دریافت فعالیت‌های CRM');
+      toast.error('خطا در دریافت اقدام‌های ارتباط با مشتری');
     });
 
     return () => controller.abort();

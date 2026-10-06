@@ -164,7 +164,7 @@ export function CustomerDossierDrawer({
         {/* Quick KPI Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5 shrink-0">
           <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
-            <span className="text-[10px] font-bold text-slate-500 block mb-1">فرصت‌های فروش (CRM)</span>
+            <span className="text-[10px] font-bold text-slate-500 block mb-1">پرونده‌های فروش</span>
             <div className="flex items-center gap-1.5">
               <Briefcase size={16} className="text-blue-600" />
               <span className="text-base font-black text-slate-900">{formatPersianNumber(totalLeadsCount)} پرونده</span>

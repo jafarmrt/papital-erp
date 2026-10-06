@@ -64,9 +64,9 @@ export const ROLE_PRESETS = [
     ]
   },
   {
-    name: 'کارشناس فروش و CRM',
+    name: 'کارشناس فروش و ارتباط با مشتری',
     code: 'sales_agent',
-    description: 'مدیریت مشتریان، فرصت‌های فروش CRM، پیش‌فاکتورها و مشاهده سفارشات ووکامرس',
+    description: 'مدیریت مشتریان، پرونده‌های فروش، پیش‌فاکتورها و مشاهده سفارشات ووکامرس',
     permissions: [
       'crm.view', 'crm.manage', 'customers.view', 'customers.manage', 
       'documents.view', 'documents.create', 'woocommerce.view'

@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.20 — CRM Wording in the Persian UI
+- **CRM Wording:** Persian UI text says «ارتباط با مشتری» instead of «CRM», and package-9 text uses «پیگیری»، «پرونده فروش» and «اشاره» instead of transliterations (owner decision ت۷; TD-432, Vitest `crmWording.test.ts`).
+
+### v9.0.19 — CRM Follow-up Explicit Actions
+- **CRM Follow-up Actions:** The two-way `toggle-followup` is replaced by `complete-followup` and `reopen-followup` with a target state, under the activity row lock and with an audit row per change (`setFollowupCompleted`; TD-430, package-9 finding B09-15).
+
+### v9.0.18 — Sales Lead Input Validation
+- **Sales Lead Input:** Lead amounts and probabilities go through `decimalInput`; the amount is non-negative, the probability an integer 0 to 100, and stage, status and currency come from fixed lists (`src/lib/crm/leadFields.ts`; TD-427, package-9 finding B09-12).
+
+### v9.0.17 — CRM Activity Parents Exist
+- **CRM Activity Parents:** A CRM activity is saved only when its sales lead and party exist and are not deleted; otherwise 422 (`resolveActivityParents`; TD-426, package-9 finding B09-11).
+
+### v9.0.16 — Sales Lead Delete Guards
+- **Sales Lead Delete:** Deleting a sales lead runs under its row lock: a missing lead is 404, a lead with an active document is refused with 409, and activities of deleted leads leave the stats, lists and due reminders (`deleteLead`, `liveLeadActivityCondition`; TD-425, package-9 finding B09-10).
+
 ### v9.0.15 — CRM Customer Filter by Party Id
 - **CRM Customer Filter:** The CRM customer filter sends the party id; the server returns that party's leads and legacy leads without an id whose customer or company name equals the party name exactly (`leadCustomerCondition`; TD-429, package-9 finding B09-14).
 

@@ -92,7 +92,7 @@ export function CRMInteractionModal({
               ) : (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    اتصال به پرونده فروش (CRM Lead)
+                    اتصال به پرونده فروش
                     {(activityForm?.customerName || activityForm?.customerId) && (
                       <span className="text-[11px] font-normal text-blue-600 font-farsi mr-1">
                         (مربوط به مشتری: {activityForm.customerName || `کد #${activityForm.customerId}`})
@@ -222,7 +222,7 @@ export function CRMInteractionModal({
                 <label className="block text-xs font-bold text-slate-700 mb-1">شرح مذاکرات و جزئیات تماس</label>
                 <MentionTextarea
                   rows={3}
-                  placeholder="مشتری چه مواردی مطرح کرد و فروشنده چه پاسخی داد... (تایپ @ جهت منشن همکاران)"
+                  placeholder="مشتری چه مواردی مطرح کرد و فروشنده چه پاسخی داد... (برای اشاره به همکار، @ را تایپ کنید)"
                   value={activityForm.description}
                   onChange={(newVal) => setActivityForm({ ...activityForm, description: newVal })}
                   users={mentionUsers}
@@ -268,7 +268,7 @@ export function CRMInteractionModal({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-amber-800 mb-1">مسئول پیگیری / تسک (پرسنل)</label>
+                  <label className="block text-[11px] font-semibold text-amber-800 mb-1">مسئول پیگیری (پرسنل)</label>
                   <select
                     value={activityForm.assignedPersonnelId ? String(activityForm.assignedPersonnelId) : ''}
                     onChange={(e) => {
@@ -278,7 +278,7 @@ export function CRMInteractionModal({
                     }}
                     className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg text-xs outline-none focus:border-amber-500 font-bold text-slate-800"
                   >
-                    <option value="">-- انتخاب مسئول تسک --</option>
+                    <option value="">-- انتخاب مسئول پیگیری --</option>
                     {personnelList.map((p: any) => (
                       <option key={p.id} value={String(p.id)}>
                         {p.fullName}{p.jobTitle ? ` — ${p.jobTitle}` : ''}
@@ -317,7 +317,7 @@ export function CRMInteractionModal({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
                 <CheckCircle2 className="text-emerald-600" size={20} />
-                ثبت نتیجه پیگیری و تکمیل تسک
+                ثبت نتیجه و تکمیل پیگیری
               </h3>
               <button
                 type="button"
@@ -382,7 +382,7 @@ export function CRMInteractionModal({
                   disabled={isSubmittingFollowupResult}
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmittingFollowupResult ? 'در حال ثبت...' : 'ثبت و تکمیل تسک'}
+                  {isSubmittingFollowupResult ? 'در حال ثبت...' : 'ثبت و تکمیل پیگیری'}
                 </button>
               </div>
             </form>

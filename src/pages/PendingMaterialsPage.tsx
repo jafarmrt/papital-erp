@@ -530,7 +530,7 @@ export default function PendingMaterialsPage({ user }: { user: User }) {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 space-y-2">
                 <div className="text-xs font-black text-slate-700 flex items-center gap-1.5 border-b border-slate-200 pb-2">
                   <Building2 className="w-4 h-4 text-amber-600" />
-                  اطلاعات منشاء ثبت درخواست (بخش CRM / کنترل موجودی پروژه)
+                  اطلاعات منشاء ثبت درخواست (ارتباط با مشتری / کنترل موجودی پروژه)
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs pt-1">
                   <div>

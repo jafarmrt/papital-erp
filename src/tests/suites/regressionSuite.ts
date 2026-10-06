@@ -10481,6 +10481,18 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.15، TD-429): فیلتر مشتری پرونده‌های فروش با شناسه طرف حساب
   const { runCrmLeadCustomerFilterTests } = await import('../regression/crmLeadCustomerFilterTests.js');
   results.push(...await runCrmLeadCustomerFilterTests(shouldRun));
+  // بسته ۹ (v9.0.16، TD-425): حذف پرونده فروش (ناموجود، سند فعال، پیگیری‌های پرونده حذف‌شده)
+  const { runCrmLeadDeleteTests } = await import('../regression/crmLeadDeleteTests.js');
+  results.push(...await runCrmLeadDeleteTests(shouldRun));
+  // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
+  const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
+  results.push(...await runCrmActivityParentsTests(shouldRun));
+  // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
+  const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
+  results.push(...await runCrmLeadInputTests(shouldRun));
+  // بسته ۹ (v9.0.19، TD-430): «انجام» و «بازگشایی» صریح پیگیری
+  const { runCrmFollowupActionTests } = await import('../regression/crmFollowupActionTests.js');
+  results.push(...await runCrmFollowupActionTests(shouldRun));
 
   return results;
 }

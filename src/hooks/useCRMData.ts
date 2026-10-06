@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
@@ -122,7 +122,7 @@ export function useCRMData(user: any) {
       } catch (e: any) {
         if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM leads:', e);
-        toast.error('خطا در دریافت سرنخ‌های CRM');
+        toast.error('خطا در دریافت پرونده‌های فروش');
       }
 
       const actParams = buildActivityQueryParams(fromDate, toDate);
@@ -134,7 +134,7 @@ export function useCRMData(user: any) {
       } catch (e: any) {
         if (isAbortError(e) || signal?.aborted) return;
         console.error('Could not load CRM activities:', e);
-        toast.error('خطا در دریافت فعالیت‌های CRM');
+        toast.error('خطا در دریافت اقدام‌های ارتباط با مشتری');
       }
 
       // Load customers
@@ -180,7 +180,7 @@ export function useCRMData(user: any) {
     } catch (err: any) {
       if (isAbortError(err) || signal?.aborted) return;
       console.error('Error loading CRM data:', err);
-      toast.error('خطا در دریافت اطلاعات CRM');
+      toast.error('خطا در دریافت اطلاعات ارتباط با مشتری');
     } finally {
       if (!signal?.aborted) {
         setLoading(false);
@@ -329,7 +329,8 @@ export function useCRMData(user: any) {
       if (selectedLeadDrawer?.id === leadId) setSelectedLeadDrawer(null);
       void loadAllData();
     } catch (err) {
-      toast.error('خطا در حذف فرصت فروش');
+      // v9.0.16 (TD-425): پیام سرور (پرونده دارای سند فعال، پرونده ناموجود)
+      toast.error(errorMessageOf(err) || 'خطا در حذف فرصت فروش');
     }
   };
 
@@ -416,6 +417,7 @@ export function useCRMData(user: any) {
     }
   };
 
+  const reopeningFollowupIds = useRef(new Set<number>());
   const handleToggleFollowup = async (actInput: number | CRMActivity) => {
     const act = typeof actInput === 'number'
       ? activities.find((a) => a.id === actInput) || drawerActivities.find((a) => a.id === actInput)
@@ -431,13 +433,18 @@ export function useCRMData(user: any) {
       });
       setIsFollowupResultModalOpen(true);
     } else {
+      // v9.0.19 (TD-430): «بازگشایی» عمل صریح است و تا پاسخ درخواست قبلی همان پیگیری دوباره فرستاده نمی‌شود
+      if (reopeningFollowupIds.current.has(act.id)) return;
+      reopeningFollowupIds.current.add(act.id);
       try {
-        await fetchJson(`/crm/activities/${act.id}/toggle-followup`, { method: 'PUT' });
-        toast.success('وضعیت پیگیری به حالت معوق تغییر کرد');
+        await fetchJson(`/crm/activities/${act.id}/reopen-followup`, { method: 'PUT' });
+        toast.success('پیگیری دوباره باز شد');
         void loadAllData();
         if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
       } catch (err) {
-        toast.error('خطا در به‌روزرسانی پیگیری');
+        toast.error(errorMessageOf(err) || 'خطا در بازگشایی پیگیری');
+      } finally {
+        reopeningFollowupIds.current.delete(act.id);
       }
     }
   };
@@ -448,7 +455,7 @@ export function useCRMData(user: any) {
 
     setIsSubmittingFollowupResult(true);
     try {
-      await fetchJson(`/crm/activities/${selectedFollowupAct.id}/toggle-followup`, {
+      await fetchJson(`/crm/activities/${selectedFollowupAct.id}/complete-followup`, {
         method: 'PUT',
         body: JSON.stringify({
           result: followupResultForm.result,

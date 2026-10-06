@@ -37,7 +37,7 @@ export default function CRMPage({ user }: { user: any }) {
         city: '',
         phone: '',
         address: '',
-        notes: 'حساب ثبت‌شده در CRM'
+        notes: 'حساب ثبت‌شده در ارتباط با مشتری'
       });
     }
   };
@@ -49,7 +49,7 @@ export default function CRMPage({ user }: { user: any }) {
     }
 
     if (lead.stage !== 'proposal') {
-      toast.error('صدور پیش‌فاکتور تنها برای لیدهایی که در مرحله "پیش‌فاکتور و پیشنهاد" هستند امکان‌پذیر است.');
+      toast.error('صدور پیش‌فاکتور تنها برای پرونده‌هایی که در مرحله "پیش‌فاکتور و پیشنهاد" هستند امکان‌پذیر است.');
       return;
     }
 
@@ -69,14 +69,14 @@ export default function CRMPage({ user }: { user: any }) {
           buyerName: res.customer?.name || lead.customerName || lead.company || lead.title,
           buyerPhone: res.customer?.phone || lead.phone || '',
           buyerAddress: res.customer?.address || lead.notes || '',
-          notes: `صادره از پرونده فروش CRM #${lead.id} - ${lead.title}`,
+          notes: `صادره از پرونده فروش #${lead.id} - ${lead.title}`,
           status: 'proforma',
           currency: lead.currency || 'IRR'
         }
       });
     } catch (err: any) {
       toast.dismiss('convert-lead');
-      toast.error(err.message || 'خطا در تبدیل لید به مشتری');
+      toast.error(err.message || 'خطا در تبدیل پرونده فروش به مشتری');
     }
   };
 
@@ -156,7 +156,7 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <Briefcase size={15} />
-              قیف فروش (Kanban)
+              قیف فروش
             </button>
 
             <button

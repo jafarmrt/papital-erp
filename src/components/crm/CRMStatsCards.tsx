@@ -21,7 +21,7 @@ export function CRMStatsCards({ stats, onOpenLeadModal }: CRMStatsCardsProps) {
           </div>
           <div>
             <h1 className="text-xl font-black text-white flex items-center gap-2">
-              مدیریت ارتباط با مشتریان و قیف فروش (CRM)
+              ارتباط با مشتری و قیف فروش
             </h1>
             <p className="text-xs text-slate-300 mt-1">
               ثبت کلیه پیگیری‌ها، تماس‌های تلفنی و مراحل مذاکرات فروش در پرونده مشتریان و فرصت‌ها

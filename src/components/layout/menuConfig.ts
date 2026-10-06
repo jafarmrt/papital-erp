@@ -97,7 +97,7 @@ export function getMenuGroups(
       title: 'فروش و مشتریان',
       groupIcon: Target,
       items: [
-        { name: 'مدیریت CRM و فروش', path: '/crm', icon: Target, visible: hasPerm('crm.view') },
+        { name: 'ارتباط با مشتری و فروش', path: '/crm', icon: Target, visible: hasPerm('crm.view') },
         { name: 'طرفین حساب', path: '/customers', icon: UsersRound, visible: hasPerm('customers.view') },
         { name: 'صدور فاکتور و پیش‌فاکتور', path: '/invoices/create', icon: FileOutput, visible: hasPerm('documents.create') },
       ]
