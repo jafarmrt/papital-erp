@@ -10498,6 +10498,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.19، TD-430): «انجام» و «بازگشایی» صریح پیگیری
   const { runCrmFollowupActionTests } = await import('../regression/crmFollowupActionTests.js');
   results.push(...await runCrmFollowupActionTests(shouldRun));
+  // Package 6 (v9.0.55, TD-480): stock-count sheet book stock by warehouse code or name, stale book stock 409
+  const { runStockCountSheetTests } = await import('../regression/stockCountSheetTests.js');
+  results.push(...await runStockCountSheetTests(shouldRun));
 
   return results;
 }

@@ -12,12 +12,12 @@ import { needsApprovalWorkflow } from '../services/documents/documentApprovalSco
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
-import { items, documents } from '../db/schema.js';
+import { documents } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { lockLeadForNewProforma, markLeadProforma, releaseLeadOfVoidedDocument } from '../services/crm/leadProforma.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
-import { ItemWarehouseStockService } from '../services/inventory/itemWarehouseStock.service.js';
+import { getStockCountSheetItems } from '../services/inventory/stockCountSheet.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import type { AuthUserPayload } from '../types.js';
 
@@ -377,32 +377,9 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
 }));
 
 router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.documents), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
-  const location = (req.query.location as string) || 'main';
-  const allItems = await orm
-    .select()
-    .from(items)
-    .where(eq(items.isDeleted, 0))
-    .orderBy(items.code);
-  // v7.0.48 (TD-214): موجودی ثبت‌شده همین انبار از جدول نرمال؛ انبار بدون ردیف یعنی صفر (پیش‌تر اگر کلید JSONB
-  // این انبار وجود نداشت موجودی کل کالا نمایش داده می‌شد — همان خطای انبارگردانی v7.0.45)
-  const auditStockMap = await ItemWarehouseStockService.getStocksForItems(orm, allItems.map(i => i.id));
-
-  const formatted = allItems.map((item) => {
-    const locStock = location ? (auditStockMap.get(item.id)?.byCode[location] ?? 0) : Number(item.currentStock || 0);
-    return {
-      id: item.id,
-      code: item.code,
-      name: item.name,
-      unit: item.unit,
-      category: item.category,
-      type: item.type,
-      system_stock: locStock,
-      physical_stock: '',
-      location
-    };
-  });
-
-  res.json(formatted);
+  // v9.0.55 (TD-480): موقعیت با کد یا نام انبار (خالی = انبار پیش‌فرض)؛ موقعیت ناشناخته ۴۲۲. پیش‌تر موجودی با کلید خام
+  // خوانده می‌شد و نام انبار (که برگه می‌فرستاد) ستون موجودی را برای همه کالاها ۰ می‌کرد
+  res.json(await getStockCountSheetItems(orm, req.query.location));
 }));
 
 router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {

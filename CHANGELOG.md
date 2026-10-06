@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.55 — The Stock-Count Sheet Reads the Real Book Stock
+- **Stock-Count Sheet:** the sheet selects warehouses by code and reads each item's book stock of that warehouse (code or name accepted, unknown 422), so «copy + submit» can no longer zero a warehouse; a count whose shown book stock changed before posting is refused with 409 and the sheet reloads (TD-480, `reg_stock_count_sheet_book_stock_td_480`).
+
 ### v9.0.54 — Package 6 Inventory and Kardex Audit Documentation
 - **Stability Audit, Package 6 (Inventory and Kardex):** `docs/audit/STABILITY_AUDIT_V9.md` gets the inventory section; its 17 proven findings are registered as open rows TD-480 to TD-496 (one P0: the stock-count sheet can zero the whole stock of a warehouse). Documentation only; no behaviour change.
 

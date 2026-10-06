@@ -13,18 +13,26 @@ import {
 } from '../../lib/inventoryAudit/auditSheet';
 import { useInventoryAuditSave } from './useInventoryAuditSave';
 
+/** کد خطای ۴۰۹ سرور وقتی موجودی دفتری برگه پس از بارگذاری تغییر کرده است (TD-480، ت۷ الف) */
+const STALE_BOOK_STOCK_CODE = 'AUDIT_BOOK_STOCK_CHANGED';
+
 /**
  * برگه شمارش انبارگردانی: مقادیر شمارش‌شده، خلاصه تایید و ثبت نهایی.
  * اقلام از کش React Query می‌آیند و مقدار شمارش‌شده هر کالا روی آن‌ها سوار می‌شود؛ تایپ در برگه دیگر درخواستی به سرور نمی‌فرستد.
  */
 interface AuditSheetDeps {
   serverItems: AuditItemRow[];
+  /** کد انبار شمارش */
   selectedLocation: string;
+  /** نام انبار شمارش برای متن‌ها */
+  locationLabel: string;
   nextRef: string;
   user: User | null | undefined;
+  onLocationChange: (code: string) => void;
+  reloadItems: () => void;
 }
 
-export function useAuditSheet({ serverItems, selectedLocation, nextRef, user }: AuditSheetDeps) {
+export function useAuditSheet({ serverItems, selectedLocation, locationLabel, nextRef, user, onLocationChange, reloadItems }: AuditSheetDeps) {
   const [notes, setNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -76,7 +84,7 @@ export function useAuditSheet({ serverItems, selectedLocation, nextRef, user }: 
     if (!pendingAuditSummary || pendingAuditSummary.list.length === 0) return;
     setErrorMsg(null);
     setSuccessMsg(null);
-    const payload = buildAuditPayload(pendingAuditSummary.list, { nextRef, location: selectedLocation, notes, user });
+    const payload = buildAuditPayload(pendingAuditSummary.list, { nextRef, location: selectedLocation, locationLabel, notes, user });
     saveMutation.mutate(payload, {
       onSuccess: () => {
         setSuccessMsg(`سند انبارگردانی با شماره ${nextRef} با موفقیت ثبت و موجودی انبار به‌روزرسانی شد.`);
@@ -86,6 +94,12 @@ export function useAuditSheet({ serverItems, selectedLocation, nextRef, user }: 
       },
       onError: (err) => {
         setErrorMsg(errorMessageOf(err) || 'خطا در ثبت سند انبارگردانی');
+        // ت۷ الف: موجودی دفتری پس از بارگذاری تغییر کرده؛ مودال بسته و برگه با موجودی تازه دوباره خوانده می‌شود
+        // (شمارش‌های واردشده می‌مانند تا کاربر آن‌ها را با موجودی تازه بسنجد)
+        if ((err as { code?: unknown } | null)?.code === STALE_BOOK_STOCK_CODE) {
+          setPendingAuditSummary(null);
+          reloadItems();
+        }
       },
     });
   };
@@ -105,6 +119,7 @@ export function useAuditSheet({ serverItems, selectedLocation, nextRef, user }: 
     successMsg,
     pendingAuditSummary,
     cancelPendingAudit: () => setPendingAuditSummary(null),
+    requestLocationChange: onLocationChange,
     handlePhysicalChange,
     handleApplyCurrentStockAsPhysical,
     handleSubmitAudit,
