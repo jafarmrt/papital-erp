@@ -2,16 +2,16 @@ import { sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { startsWithLikePattern } from './sqlLike.js';
 
 /**
- * پیشوند نام کاربری کاربران ساختگی آزمون‌ها. از v9.0.70 (TD-521) فقط تشخیص «راه‌اندازی شده» (`check-setup` و `setup`) آن‌ها
+ * پیشوند نام کاربری کاربران ساختگی آزمون‌ها. از v9.0.76 (TD-521) فقط تشخیص «راه‌اندازی شده» (`check-setup` و `setup`) آن‌ها
  * را نمی‌شمارد؛ فهرست‌های کاربران همه کاربران حذف‌نشده را نشان می‌دهند و API کاربر تازه با این پیشوندها نمی‌سازد.
  */
 export const SYNTHETIC_TEST_USERNAME_PREFIXES = ['testuser_', 'test_', 'e2e_'] as const;
 
-/** v9.0.70 (TD-521): پیام رد نام کاربری با پیشوند کاربران آزمون */
+/** v9.0.76 (TD-521): پیام رد نام کاربری با پیشوند کاربران آزمون */
 export const SYNTHETIC_USERNAME_REFUSED =
   'نام کاربری نباید با test_، e2e_ یا testuser_ شروع شود؛ این پیشوندها ویژه کاربران آزمون خودکار است. نام کاربری دیگری انتخاب کنید.';
 
-/** v9.0.70 (TD-521): نام کاربری با یکی از پیشوندهای کاربران آزمون شروع می‌شود (بی حساسیت به حروف، مثل شرط ILIKE) */
+/** v9.0.76 (TD-521): نام کاربری با یکی از پیشوندهای کاربران آزمون شروع می‌شود (بی حساسیت به حروف، مثل شرط ILIKE) */
 export function isSyntheticTestUsername(username: string): boolean {
   const name = String(username ?? '').trim().toLowerCase();
   return SYNTHETIC_TEST_USERNAME_PREFIXES.some(prefix => name.startsWith(prefix));
@@ -30,7 +30,7 @@ export function notSyntheticTestUsername(column: AnyColumn): SQL {
   );
 }
 
-/** v9.0.70 (TD-521): شرط وارون، برای فهرست بررسی سلامت کاربران فعال با پیشوند آزمون */
+/** v9.0.76 (TD-521): شرط وارون، برای فهرست بررسی سلامت کاربران فعال با پیشوند آزمون */
 export function syntheticTestUsername(column: AnyColumn): SQL {
   return sql`(${sql.join(
     SYNTHETIC_TEST_USERNAME_PREFIXES.map(prefix => sql`${column} ILIKE ${startsWithLikePattern(prefix)}`),

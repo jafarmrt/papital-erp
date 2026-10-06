@@ -18,7 +18,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   rolesList,
   onSuccess,
 }) => {
-  // v9.0.67 (TD-517): کاربر تازه نقش پیش‌گزیده ندارد؛ پیش‌تر نقش اول فهرست (مدیر سیستم) انتخاب می‌شد
+  // v9.0.73 (TD-517): کاربر تازه نقش پیش‌گزیده ندارد؛ پیش‌تر نقش اول فهرست (مدیر سیستم) انتخاب می‌شد
   const [userForm, setUserForm] = useState({
     username: '',
     password: '',

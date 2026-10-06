@@ -842,7 +842,7 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
 
     // Check description for @mentions as well
     if (description) {
-      // v9.0.70 (TD-521): همه کاربران حذف‌نشده، با پیشوند آزمون یا بی آن
+      // v9.0.76 (TD-521): همه کاربران حذف‌نشده، با پیشوند آزمون یا بی آن
       const allSysUsers = await orm.select({ id: users.id, username: users.username, fullName: users.fullName })
         .from(users)
         .where(eq(users.isDeleted, 0));

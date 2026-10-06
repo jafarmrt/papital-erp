@@ -1,5 +1,5 @@
 /**
- * v9.0.71 (TD-528, B02-13): login, logout and setup accept only the application's own origin.
+ * v9.0.77 (TD-528, B02-13): login, logout and setup accept only the application's own origin.
  */
 import { describe, expect, it } from 'vitest';
 import { browserSourceOrigin, sessionOriginAllowed } from '../../middleware/sessionOrigin';

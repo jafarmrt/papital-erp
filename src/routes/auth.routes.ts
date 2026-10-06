@@ -163,7 +163,7 @@ router.post('/setup', validate(setupSchema), asyncHandler(async (req, res) => {
       throw new ValidationError('رمز عبور مدیر در محیط عملیاتی باید حداقل ۸ کاراکتر بوده و نمی‌تواند رمزهای پیش‌فرض باشد');
     }
     const tUsername = (username || '').trim();
-    // v9.0.70 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
+    // v9.0.76 (TD-521): مدیر نخست با پیشوند کاربران آزمون شمرده نمی‌شد و راه‌اندازی دوباره باز می‌ماند
     if (isSyntheticTestUsername(tUsername)) {
       throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
     }
@@ -342,7 +342,7 @@ const logoutHandler = asyncHandler(async (req, res) => {
   // authenticateToken روی آن اجرا نمی‌شود، بنابراین توکن را مستقیم از کوکی
   // راستی‌آزمایی و tokenVersion کاربر افزایش می‌دهیم تا توکن سرقت‌شده/کپی‌شده
   // حتی تا پایان اعتبار ۲۴ ساعته خود نیز پذیرفته نشود.
-  // v9.0.71 (TD-528): نشست معتبر فقط با سرآیند CSRF همان نشست بسته می‌شود؛ پیش‌تر فرمی از سایت دیگر همه نشست‌های کاربر
+  // v9.0.77 (TD-528): نشست معتبر فقط با سرآیند CSRF همان نشست بسته می‌شود؛ پیش‌تر فرمی از سایت دیگر همه نشست‌های کاربر
   // را باطل می‌کرد. کوکی نامعتبر یا منقضی فقط پاک می‌شود.
   const rawToken = req.cookies?.[AUTH_COOKIE_NAME] || req.cookies?.['token'];
   type LogoutTokenPayload = { id?: number; username?: string; role?: string; csrfToken?: string };
