@@ -445,12 +445,19 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     // Save event to Outbox in DB
     await OutboxService.recordEvent(orm, testEvent);
 
-    // Run Outbox batch processing worker
-    const processResult = await OutboxService.processPendingBatch(50);
+    // Run Outbox batch processing worker until this event is claimed. Earlier suites of the same run leave their own
+    // events pending and one batch takes the oldest 50 (v9.0.2, TD-415: workflow events of those suites, including
+    // WorkflowCompleted / WorkflowRejected, now go only through the outbox).
+    let processed = 0;
+    let outboxRow: typeof outboxEvents.$inferSelect | undefined;
+    for (let round = 0; round < 20; round++) {
+      const batch = await OutboxService.processPendingBatch(50);
+      processed += batch.processed;
+      [outboxRow] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, eventId));
+      if (batch.processed === 0 || (outboxRow && outboxRow.status !== 'pending')) break;
+    }
 
-    const [outboxRow] = await orm.select().from(outboxEvents).where(eq(outboxEvents.eventId, eventId));
-
-    if (processResult.processed >= 1 && outboxRow && (outboxRow.status === 'completed' || outboxRow.status === 'processed')) {
+    if (processed >= 1 && outboxRow && (outboxRow.status === 'completed' || outboxRow.status === 'processed')) {
       results.push(makeTestCase({
         id: 'int_outbox_processing_retries',
         scenarioId: 'outbox_processing_retries',
@@ -462,7 +469,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
         details: `رویداد Outbox [${eventId}] با موفقیت پردازش شد و وضعیت آن در دیتابیس به 'processed' تغییر یافت.`
       }));
     } else {
-      throw new Error(`پردازش Outbox ناموفق بود: پردازش شده=${processResult.processed}, وضعیت در DB=${outboxRow?.status}`);
+      throw new Error(`پردازش Outbox ناموفق بود: پردازش شده=${processed}, وضعیت در DB=${outboxRow?.status}`);
     }
   } catch (err: any) {
     results.push(makeTestCase({
