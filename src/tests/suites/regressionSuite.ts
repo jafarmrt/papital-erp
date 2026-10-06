@@ -6757,28 +6757,36 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     }
   }
 
-  // Test: v7.0.78: نام کاربری «tester…» کاربر واقعی است (الگوی test_% با escape؛ `_` در LIKE هر نویسه‌ای را تطبیق می‌دهد)
+  // Test: v7.0.78: نام کاربری «tester…» کاربر واقعی است (الگوی test_% با escape؛ `_` در LIKE هر نویسه‌ای را تطبیق می‌دهد).
+  // از v9.0.76 (TD-521) فهرست کاربران همه کاربران را نشان می‌دهد و این شرط فقط «راه‌اندازی شده» و بررسی سلامت را می‌سازد.
   if (shouldRun('reg_synthetic_username_like_escape', 'synthetic', 'tester', 'like')) {
     const tStart = Date.now();
-    const testName = 'v7.0.78: کاربر tester و e2eadmin در فهرست کاربران دیده می‌شوند و فقط test_ / e2e_ / testuser_ کاربر ساختگی تست است';
+    const testName = 'v7.0.78: only test_ / e2e_ / testuser_ usernames are synthetic test users; tester and e2eadmin are real, and since v9.0.76 (TD-521) the user lists show both kinds';
     const { users } = await import('../../db/schema.js');
+    const { notSyntheticTestUsername, syntheticTestUsername } = await import('../../lib/syntheticUsers.js');
     const suffix = Date.now().toString(36);
     const realNames = [`tester${suffix}`, `e2eadmin${suffix}`];
     const syntheticNames = [`test_${suffix}`, `e2e_${suffix}`];
+    const allNames = [...realNames, ...syntheticNames];
     try {
       const request = (await import('supertest')).default;
       const { getTestApp, getAdminSession } = await import('../fixtures/httpTestHelper.js');
       const app = await getTestApp();
       const session = await getAdminSession();
-      await orm.insert(users).values([...realNames, ...syntheticNames].map(username => ({
+      await orm.insert(users).values(allNames.map(username => ({
         username, password: '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva', fullName: `کاربر آزمون ${username}`, role: 'viewer',
       })));
+      const namesWhere = async (cond: ReturnType<typeof notSyntheticTestUsername>) => new Set((await orm.select({ username: users.username }).from(users)
+        .where(and(inArray(users.username, allNames), cond))).map(r => r.username));
+      const real = await namesWhere(notSyntheticTestUsername(users.username));
+      const synthetic = await namesWhere(syntheticTestUsername(users.username));
       const res = await request(app).get('/api/users/list-simple').set('Cookie', session.cookie);
       const listed = new Set((Array.isArray(res.body) ? res.body : []).map((u: { username: string }) => u.username));
       const violations: string[] = [];
-      if (res.status !== 200) violations.push(`HTTP ${res.status}`);
-      for (const n of realNames) if (!listed.has(n)) violations.push(`«${n}» در فهرست نیست`);
-      for (const n of syntheticNames) if (listed.has(n)) violations.push(`«${n}» (ساختگی) در فهرست است`);
+      if (res.status !== 200) violations.push(`list-simple HTTP ${res.status}`);
+      for (const n of realNames) if (!real.has(n) || synthetic.has(n)) violations.push(`${n} is classified as synthetic`);
+      for (const n of syntheticNames) if (real.has(n) || !synthetic.has(n)) violations.push(`${n} is not classified as synthetic`);
+      for (const n of allNames) if (!listed.has(n)) violations.push(`${n} is missing from list-simple`);
       if (violations.length > 0) throw new Error(violations.join(' | '));
       results.push(makeTestCase({
         id: 'reg_synthetic_username_like_escape',
@@ -6788,7 +6796,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         executionType: 'real_api',
         passed: true,
         durationMs: Date.now() - tStart,
-        details: 'tester و e2eadmin فهرست شدند؛ test_ و e2e_ کنار گذاشته شدند.'
+        details: 'tester and e2eadmin are real, test_ and e2e_ are synthetic; list-simple shows all four.'
       }));
     } catch (err) {
       results.push(makeTestCase({
@@ -6802,7 +6810,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         error: err instanceof Error ? err.message : String(err)
       }));
     } finally {
-      await orm.delete(users).where(inArray(users.username, [...realNames, ...syntheticNames]));
+      await orm.delete(users).where(inArray(users.username, allNames));
     }
   }
 
@@ -10511,6 +10519,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 (v9.0.82 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
   const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
   results.push(...await runTreasuryPartyTests(shouldRun));
+  // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
+  const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
+  results.push(...await runStockMovementFutureDateTests(shouldRun));
+  // Package 6 (v9.0.80, TD-489): a warehouse transfer is a numbered transfer document, voidable without changing WAC
+  const { runWarehouseTransferDocumentTests } = await import('../regression/warehouseTransferDocumentTests.js');
+  results.push(...await runWarehouseTransferDocumentTests(shouldRun));
+  // Package 6 (v9.0.81, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
+  const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
+  results.push(...await runInventoryBusinessErrorsTests(shouldRun));
 
   return results;
 }
