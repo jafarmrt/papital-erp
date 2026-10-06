@@ -25,6 +25,15 @@ going forward.
 ### v9.0.82 — Role Permissions Carry Their Requirements
 - **Permission Dependencies:** the permission catalog is one shared file where every action requires its section's view; saving a role adds the missing requirements and the role form ticks them (TD-880).
 
+### v9.0.81 — Clear Errors for Transfers and Kardex Rebuild
+- **Inventory Errors:** a transfer accepts a warehouse code or name in any case, and transfer and Kardex rebuild errors answer 422 or 404 with Persian messages instead of 500; the running Kardex of a missing item is 404 (TD-494, `reg_inventory_business_errors_td_494`).
+
+### v9.0.80 — Warehouse Transfers Are Documents
+- **Transfer Document:** every warehouse transfer is a numbered «حواله انتقال» document with its lines and linked Kardex rows, listed with source and destination, printable and voidable without changing WAC (TD-489, `reg_warehouse_transfer_document_td_489`).
+
+### v9.0.79 — No Future-Dated Stock Movements
+- **Future Stock Dates:** a stock movement dated after the business today is refused for every user, a transfer date is normalized (Jalali accepted, text 422), and earlier future-dated Kardex rows are listed by the financial health check (TD-483, `reg_stock_movement_future_date_td_483`).
+
 ### v9.0.78 — Persian Validation Messages
 - **Validation Messages:** every 400 validation message is a Persian sentence naming the field and what to change, with Persian digits; schema-written messages are kept (TD-529, `persianValidationMessages.test.ts`).
 

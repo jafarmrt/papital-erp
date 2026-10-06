@@ -4,6 +4,7 @@ import { eq, asc, sql } from 'drizzle-orm';
 import { fin, FinancialMath } from '../../lib/financialDecimal.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
 import { createKardexReplayer } from './kardexReplay.js';
+import { NotFoundError } from '../../errors/customErrors.js';
 
 export interface RunningKardexEntry {
   transactionId: number;
@@ -81,6 +82,8 @@ export async function buildItemRunningKardex(itemId: number): Promise<RunningKar
     })
     .from(items)
     .where(eq(items.id, itemId));
+  // v9.0.81 (TD-494): کاردکس کالای ناموجود ۴۰۴ است؛ پیش‌تر کالایی ساختگی («کالای <شناسه>»، کد «-») برمی‌گشت
+  if (!item) throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
   const defaultWac = fin(item?.weightedAverageCost || 0).toNumber();
 
   const allTxs = await orm
