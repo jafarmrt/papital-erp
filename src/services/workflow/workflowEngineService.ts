@@ -32,68 +32,70 @@ export type {
  * Guarantees 100% backward compatibility for routes, test suites, and internal caller modules.
  */
 export class WorkflowEngineService {
+  // v9.0.43 (TD-450، یافته B14-08): هر متد نما به کلاس خودش bind می‌شود؛ پیش‌تر متد ایستا بی bind کپی می‌شد و `this`
+  // درون آن نما بود: «تحلیل مهلت انجام» همیشه ۵۰۰ «this.getReopenedTasksReport is not a function» می‌داد.
   // --- DSL & Rule Engine Delegation ---
   static getEntityContext = getEntityContext;
-  static evaluateConditions = WorkflowRuleEngine.evaluateConditions;
+  static evaluateConditions = WorkflowRuleEngine.evaluateConditions.bind(WorkflowRuleEngine);
 
   // --- Authorization & Policy Delegation ---
-  static checkUserRoleMatch = WorkflowAuthorizationPolicy.checkUserRoleMatch;
-  static getEquivalentRoles = WorkflowAuthorizationPolicy.getEquivalentRoles;
-  static authorizeAction = WorkflowAuthorizationPolicy.authorizeAction;
+  static checkUserRoleMatch = WorkflowAuthorizationPolicy.checkUserRoleMatch.bind(WorkflowAuthorizationPolicy);
+  static getEquivalentRoles = WorkflowAuthorizationPolicy.getEquivalentRoles.bind(WorkflowAuthorizationPolicy);
+  static authorizeAction = WorkflowAuthorizationPolicy.authorizeAction.bind(WorkflowAuthorizationPolicy);
 
   // --- Definition & Structure Management ---
-  static getDefinitions = WorkflowDefinitionService.getDefinitions;
-  static getWorkflowDefinitions = WorkflowDefinitionService.getDefinitions;
-  static getDefinitionById = WorkflowDefinitionService.getDefinitionById;
-  static getDefinitionByCode = WorkflowDefinitionService.getDefinitionByCode;
-  static getWorkflowDefinitionDetail = WorkflowDefinitionService.getDefinitionById;
-  static createDefinition = WorkflowDefinitionService.createDefinition;
-  static updateDefinition = WorkflowDefinitionService.updateDefinition;
-  static saveWorkflowDefinition = WorkflowDefinitionService.saveWorkflowDefinition;
-  static updateCanvasPositions = WorkflowDefinitionService.updateCanvasPositions;
-  static addState = WorkflowDefinitionService.addState;
-  static addTransition = WorkflowDefinitionService.addTransition;
-  static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows;
+  static getDefinitions = WorkflowDefinitionService.getDefinitions.bind(WorkflowDefinitionService);
+  static getWorkflowDefinitions = WorkflowDefinitionService.getDefinitions.bind(WorkflowDefinitionService);
+  static getDefinitionById = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
+  static getDefinitionByCode = WorkflowDefinitionService.getDefinitionByCode.bind(WorkflowDefinitionService);
+  static getWorkflowDefinitionDetail = WorkflowDefinitionService.getDefinitionById.bind(WorkflowDefinitionService);
+  static createDefinition = WorkflowDefinitionService.createDefinition.bind(WorkflowDefinitionService);
+  static updateDefinition = WorkflowDefinitionService.updateDefinition.bind(WorkflowDefinitionService);
+  static saveWorkflowDefinition = WorkflowDefinitionService.saveWorkflowDefinition.bind(WorkflowDefinitionService);
+  static updateCanvasPositions = WorkflowDefinitionService.updateCanvasPositions.bind(WorkflowDefinitionService);
+  static addState = WorkflowDefinitionService.addState.bind(WorkflowDefinitionService);
+  static addTransition = WorkflowDefinitionService.addTransition.bind(WorkflowDefinitionService);
+  static seedDefaultWorkflows = WorkflowDefinitionService.seedDefaultWorkflows.bind(WorkflowDefinitionService);
 
   // --- Version History (read-only, TD-112) ---
-  static getDefinitionVersions = WorkflowVersionService.getDefinitionVersions;
-  static getDefinitionVersionDetail = WorkflowVersionService.getDefinitionVersionDetail;
+  static getDefinitionVersions = WorkflowVersionService.getDefinitionVersions.bind(WorkflowVersionService);
+  static getDefinitionVersionDetail = WorkflowVersionService.getDefinitionVersionDetail.bind(WorkflowVersionService);
 
   // --- SLA & Analytics Delegation ---
-  static getSlaAnalytics = WorkflowSlaEvaluator.getSlaAnalytics;
-  static evaluateSlaStatus = WorkflowSlaEvaluator.evaluateSlaStatus;
-  static getWorkflowAnalytics = WorkflowSlaEvaluator.getWorkflowAnalytics;
+  static getSlaAnalytics = WorkflowSlaEvaluator.getSlaAnalytics.bind(WorkflowSlaEvaluator);
+  static evaluateSlaStatus = WorkflowSlaEvaluator.evaluateSlaStatus.bind(WorkflowSlaEvaluator);
+  static getWorkflowAnalytics = WorkflowSlaEvaluator.getWorkflowAnalytics.bind(WorkflowSlaEvaluator);
 
   // --- Task & Approval Inbox Management ---
-  static getMyTasks = WorkflowTaskService.getMyTasks;
-  static getTaskStats = WorkflowTaskService.getTaskStats;
-  static getTasksForInstance = WorkflowTaskService.getTasksForInstance;
-  static executeTaskById = WorkflowTaskService.executeTaskById;
-  static delegateTask = WorkflowTaskService.delegateTask;
-  static processMultiSignApproval = WorkflowApprovalRules.processMultiSignApproval;
-  static evaluateAndAddSignature = WorkflowQuorumService.evaluateAndAddSignature;
-  static getRequiredSignaturesCount = WorkflowQuorumService.getRequiredSignaturesCount;
+  static getMyTasks = WorkflowTaskService.getMyTasks.bind(WorkflowTaskService);
+  static getTaskStats = WorkflowTaskService.getTaskStats.bind(WorkflowTaskService);
+  static getTasksForInstance = WorkflowTaskService.getTasksForInstance.bind(WorkflowTaskService);
+  static executeTaskById = WorkflowTaskService.executeTaskById.bind(WorkflowTaskService);
+  static delegateTask = WorkflowTaskService.delegateTask.bind(WorkflowTaskService);
+  static processMultiSignApproval = WorkflowApprovalRules.processMultiSignApproval.bind(WorkflowApprovalRules);
+  static evaluateAndAddSignature = WorkflowQuorumService.evaluateAndAddSignature.bind(WorkflowQuorumService);
+  static getRequiredSignaturesCount = WorkflowQuorumService.getRequiredSignaturesCount.bind(WorkflowQuorumService);
 
   // --- Delegation Management ---
-  static createDelegation = WorkflowDelegationService.createDelegation;
-  static getDelegations = WorkflowDelegationService.getDelegations;
-  static revokeDelegation = WorkflowDelegationService.revokeDelegation;
+  static createDelegation = WorkflowDelegationService.createDelegation.bind(WorkflowDelegationService);
+  static getDelegations = WorkflowDelegationService.getDelegations.bind(WorkflowDelegationService);
+  static revokeDelegation = WorkflowDelegationService.revokeDelegation.bind(WorkflowDelegationService);
 
   // --- Transition Execution Delegation ---
-  static getAvailableTransitions = WorkflowTransitionExecutor.getAvailableTransitions;
-  static refreshPendingApprovals = WorkflowTransitionExecutor.refreshPendingApprovals;
-  static startInstance = WorkflowTransitionExecutor.startInstance;
-  static startWorkflow = WorkflowTransitionExecutor.startInstance; // Alias
-  static executeTransition = WorkflowTransitionExecutor.executeTransition;
-  static checkCanTransition = WorkflowTransitionExecutor.checkCanTransition;
-  static getInstanceById = WorkflowTransitionExecutor.getInstanceById;
-  static getInstanceByEntity = WorkflowTransitionExecutor.getInstanceByEntity;
-  static getWorkflowHistory = WorkflowTransitionExecutor.getWorkflowHistory;
+  static getAvailableTransitions = WorkflowTransitionExecutor.getAvailableTransitions.bind(WorkflowTransitionExecutor);
+  static refreshPendingApprovals = WorkflowTransitionExecutor.refreshPendingApprovals.bind(WorkflowTransitionExecutor);
+  static startInstance = WorkflowTransitionExecutor.startInstance.bind(WorkflowTransitionExecutor);
+  static startWorkflow = WorkflowTransitionExecutor.startInstance.bind(WorkflowTransitionExecutor); // Alias
+  static executeTransition = WorkflowTransitionExecutor.executeTransition.bind(WorkflowTransitionExecutor);
+  static checkCanTransition = WorkflowTransitionExecutor.checkCanTransition.bind(WorkflowTransitionExecutor);
+  static getInstanceById = WorkflowTransitionExecutor.getInstanceById.bind(WorkflowTransitionExecutor);
+  static getInstanceByEntity = WorkflowTransitionExecutor.getInstanceByEntity.bind(WorkflowTransitionExecutor);
+  static getWorkflowHistory = WorkflowTransitionExecutor.getWorkflowHistory.bind(WorkflowTransitionExecutor);
 
   // --- Event Publishing Delegation ---
-  static publishTransitionCompleted = WorkflowEventPublisher.publishTransitionCompleted;
-  static publishWorkflowCompleted = WorkflowEventPublisher.publishWorkflowCompleted;
-  static publishWorkflowRejected = WorkflowEventPublisher.publishWorkflowRejected;
+  static publishTransitionCompleted = WorkflowEventPublisher.publishTransitionCompleted.bind(WorkflowEventPublisher);
+  static publishWorkflowCompleted = WorkflowEventPublisher.publishWorkflowCompleted.bind(WorkflowEventPublisher);
+  static publishWorkflowRejected = WorkflowEventPublisher.publishWorkflowRejected.bind(WorkflowEventPublisher);
 
   /**
    * V2.0.0: شروع شرطی workflow — اگر تعریف فعالی برای entityType وجود داشته باشد instance ساخته می‌شود؛ در غیر این صورت

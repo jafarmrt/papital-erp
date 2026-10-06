@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.43 — Workflow SLA Analytics No Longer Fails
+- **SLA Analytics Route:** every `WorkflowEngineService` facade method is bound to its own class, so `GET /workflow/analytics/sla` answers instead of a 500 (TD-450, `sec_workflow_sla_analytics_route_td_450`).
+
 ### v9.0.42 — Instances View Removed From the Approval Inbox
 - **Instances View Removed:** `GET /workflow/inbox` and the inbox «instances» view are removed; the approval inbox has only the tasks view (TD-449, `sec_workflow_instances_inbox_removed_td_449`).
 

@@ -280,5 +280,31 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     });
   }
 
+  if (shouldRun('sec_workflow_sla_analytics_route_td_450', 'security', 'td450', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_sla_analytics_route_td_450',
+      name: 'v9.0.43: «تحلیل مهلت انجام» از مسیر خود پاسخ می‌دهد و گزارش کارهای بازگشایی‌شده را دارد؛ متدهای نمای موتور گردش کار با کلاس خود اجرا می‌شوند (TD-450)',
+      details: '`GET /api/workflow/analytics/sla` ۲۰۰ با `reopenedTasks`؛ `WorkflowEngineService.checkUserRoleMatch` و `getWorkflowAnalytics` بی TypeError',
+    }, async (h, wrong) => {
+      const res = await h.get('/api/workflow/analytics/sla');
+      if (res.status !== 200) wrong.push(`GET /api/workflow/analytics/sla ${res.status} داد: ${JSON.stringify(res.body).slice(0, 160)}`);
+      else {
+        const data = (res.body?.data ?? res.body) as Row;
+        if (!data || typeof data !== 'object' || !('reopenedTasks' in data)) wrong.push(`پاسخ تحلیل مهلت انجام گزارش کارهای بازگشایی‌شده ندارد: ${Object.keys(data ?? {}).join(',')}`);
+      }
+      const { WorkflowEngineService } = await import('../../services/workflow/workflowEngineService.js');
+      try {
+        if (WorkflowEngineService.checkUserRoleMatch('admin', 'accountant') !== true) wrong.push('checkUserRoleMatch نما برای مدیر سیستم true نداد');
+      } catch (err) {
+        wrong.push(`checkUserRoleMatch نما خطا داد: ${String(err)}`);
+      }
+      try {
+        await WorkflowEngineService.getWorkflowAnalytics();
+      } catch (err) {
+        wrong.push(`getWorkflowAnalytics نما خطا داد: ${String(err)}`);
+      }
+    });
+  }
+
   return results;
 }
