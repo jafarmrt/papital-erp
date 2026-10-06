@@ -5,6 +5,7 @@ import { orm } from '../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, journalVouchers, treasuryTransactions, workflowDefinitions, workflowInstances } from '../../db/schema.js';
 import { money } from '../../lib/money.js';
 import { fin } from '../../lib/financialDecimal.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 /**
  * Package 4 (treasury and cheques), PR «الف» money and vouchers: real Express routes on PostgreSQL. Each test is red on
@@ -93,7 +94,8 @@ export async function runTreasuryMoneyVoucherTests(shouldRun: ShouldRun): Promis
       // a treasurer with accounting.treasury only, not the no-voucher permission (TD-409)
       const treasurer = await client(await sessionWith(['accounting.treasury']));
       const receipt = await treasurer.post('/api/accounting/treasury', {
-        type: 'receipt', method: 'bank_transfer', amount: 5_000_000, bankAccountId: bankId, partyType: 'other', partyName: 'test deposit',
+        type: 'receipt', method: 'bank_transfer', amount: 5_000_000, bankAccountId: bankId, partyType: 'other',
+        contraAccountId: await miscContraAccountId(), partyName: 'test deposit',
       });
       if (receipt.status !== 201) throw new Error(`receipt returned ${receipt.status}: ${errorText(receipt)}`);
       const voided = await treasurer.post(`/api/accounting/treasury/${receipt.body.id}/void`, { reason: 'wrong entry' });

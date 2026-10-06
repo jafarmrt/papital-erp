@@ -39,6 +39,7 @@ import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../
 import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -2189,9 +2190,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // 2. Transition received cheque to 'spent' (واگذاری و خرج چک به تامین‌کننده)
+      // v9.0.85 (TD-498): spending a cheque needs the supplier's id; the payee name comes from the supplier row
+      const { createTestCustomer: createSpendSupplier } = await import('../fixtures/factories.js');
+      const spendSupplier = await createSpendSupplier({ name: `بازرگانی فلزات البرز ${Date.now()}`, partyType: 'supplier' });
       const spentChq = await AccountingService.updateChequeStatus(recChq.id, {
         status: 'spent',
-        transfereePartyName: 'بازرگانی فلزات البرز',
+        transfereePartyId: spendSupplier.id,
         notes: 'واگذاری به تامین‌کننده بابت تسویه شمش طلا'
       });
 
@@ -2199,7 +2203,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`وضعیت چک پس از واگذاری باید spent باشد اما ${spentChq.status} است`);
       }
 
-      if (spentChq.payeeName !== 'بازرگانی فلزات البرز') {
+      if (spentChq.payeeName !== spendSupplier.name) {
         throw new Error(`نام تحویل‌گیرنده در payeeName چک درج نشد: ${spentChq.payeeName}`);
       }
 
@@ -2253,7 +2257,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       try {
         await AccountingService.updateChequeStatus(paidChq.id, {
           status: 'spent',
-          transfereePartyName: 'شخص ثالث'
+          transfereePartyId: spendSupplier.id
         });
       } catch (err: any) {
         if (err.message?.includes('تنها چک‌های دریافتی') || err.message?.includes('مجاز نیست')) {
@@ -6140,7 +6144,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }).returning();
       createdBankId = bank.id;
       const receipt = await TreasuryTransactionService.createTreasuryTransaction({
-        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id,
+        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id, contraAccountId: await miscContraAccountId(),
         partyName: 'ERP-TEST-MARKER', createVoucher: false, allowNoVoucher: true,
       });
       createdTxIds.push(receipt.id);
@@ -10512,6 +10516,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
   const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
   results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
+  // Package 4 (v9.0.82 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
+  const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
+  results.push(...await runTreasuryPartyTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));

@@ -18,6 +18,8 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
 import { CHEQUE_TRANSITIONS, chequeHasNextStep } from '../../lib/treasury/chequeTransitions';
+import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
+import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -27,7 +29,7 @@ interface ChequesTabProps {
   loading: boolean;
   onRefresh: () => void;
   onCreateCheque: (data: any) => Promise<void>;
-  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyName?: string) => Promise<void>;
+  onUpdateStatus: (id: number, status: ChequeStatus, description?: string, bankAccountId?: number, transfereePartyId?: number) => Promise<void>;
   onDeleteCheque: (id: number) => Promise<void>;
 }
 
@@ -61,7 +63,8 @@ export function ChequesTab({
       const pt = c.partyType || (c as any).party_type;
       return pt === 'supplier' || pt === 'both';
     });
-    return list.length > 0 ? list : safeCustomers;
+    // v9.0.84 (TD-497): سرور فقط تأمین‌کننده (یا «هر دو») را می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
+    return list;
   }, [safeCustomers]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,6 +90,9 @@ export function ChequesTab({
     partyType: 'customer' as 'customer' | 'personnel' | 'supplier' | 'other',
     partyId: null as number | null,
     partyName: '',
+    // v9.0.84 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
+    purpose: '' as PersonnelPurpose | '',
+    contraAccountId: null as number | null,
     drawerName: '',
     payeeName: '',
     bankAccountId: null as number | null,
@@ -99,7 +105,7 @@ export function ChequesTab({
   const [targetStatus, setTargetStatus] = useState<ChequeStatus>('passed');
   const [statusDescription, setStatusDescription] = useState('');
   const [targetBankAccountId, setTargetBankAccountId] = useState<number | null>(null);
-  const [transfereePartyName, setTransfereePartyName] = useState('');
+  const [transfereePartyId, setTransfereePartyId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const [historyModalCheque, setHistoryModalCheque] = useState<Cheque | null>(null);
@@ -158,7 +164,7 @@ export function ChequesTab({
     if (statusModalCheque) {
       const opts = CHEQUE_TRANSITIONS[String(statusModalCheque.status)] || [];
       setTargetStatus(opts[0] || ('passed' as ChequeStatus));
-      setTransfereePartyName('');
+      setTransfereePartyId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusModalCheque?.id]);
@@ -177,10 +183,19 @@ export function ChequesTab({
       toast.error('مبلغ چک باید بزرگتر از صفر باشد');
       return;
     }
+    const needsContra = needsChosenContraAccount(newFormData.partyType, newFormData.purpose);
+    if (needsContra && !newFormData.contraAccountId) {
+      toast.error('سرفصل طرف مقابل را انتخاب کنید.');
+      return;
+    }
 
     setIsSaving(true);
     try {
-      await onCreateCheque(newFormData);
+      await onCreateCheque({
+        ...newFormData,
+        purpose: newFormData.partyType === 'personnel' ? newFormData.purpose : undefined,
+        contraAccountId: needsContra ? newFormData.contraAccountId : null,
+      });
       toast.success('چک با موفقیت در سیستم ثبت شد');
       setIsNewModalOpen(false);
     } catch (err) {
@@ -198,6 +213,11 @@ export function ChequesTab({
       toast.error('وضعیت انتخابی برای این چک مجاز نیست');
       return;
     }
+    // v9.0.85 (TD-498، تصمیم ت۳ الف): خرج چک بی تأمین‌کننده انتخاب‌شده فرستاده نمی‌شود
+    if (targetStatus === 'spent' && !transfereePartyId) {
+      toast.error('تأمین‌کننده‌ای را که چک به او واگذار می‌شود انتخاب کنید');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -206,7 +226,7 @@ export function ChequesTab({
         targetStatus, 
         statusDescription, 
         targetBankAccountId || undefined,
-        targetStatus === 'spent' ? transfereePartyName : undefined
+        targetStatus === 'spent' ? transfereePartyId ?? undefined : undefined
       );
       toast.success('وضعیت چک به‌روزرسانی شد');
       setStatusModalCheque(null);
@@ -355,6 +375,8 @@ export function ChequesTab({
               partyType: 'customer',
               partyId: null,
               partyName: '',
+              purpose: '',
+              contraAccountId: null,
               drawerName: '',
               payeeName: '',
               bankAccountId: null,
@@ -809,7 +831,7 @@ export function ChequesTab({
                     </label>
                     <select
                       value={newFormData.partyType}
-                      onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '' })}
+                      onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '', purpose: '', contraAccountId: null })}
                       className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
                     >
                       <option value="customer">مشتری</option>
@@ -874,6 +896,14 @@ export function ChequesTab({
                     )}
                   </div>
                 </div>
+
+                <PartyPurposeFields
+                  partyType={newFormData.partyType}
+                  purpose={newFormData.purpose}
+                  contraAccountId={newFormData.contraAccountId}
+                  isReceipt={newFormData.type === 'received'}
+                  onChange={patch => setNewFormData(prev => ({ ...prev, ...patch }))}
+                />
 
                 <div>
                   <FinancialAmountInput
@@ -991,14 +1021,13 @@ export function ChequesTab({
               {targetStatus === 'spent' && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    نام تحویل‌گیرنده / تأمین‌کننده (طرف حساب واگذاری)
+                    تأمین‌کننده گیرنده چک *
                   </label>
-                  <input
-                    type="text"
-                    value={transfereePartyName}
-                    onChange={e => setTransfereePartyName(e.target.value)}
-                    placeholder="مثال: شرکت بازرگانی پارس (تأمین‌کننده)..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl"
+                  <SearchableSelect
+                    value={String(transfereePartyId || '')}
+                    onChange={(val) => setTransfereePartyId(Number(val) || null)}
+                    placeholder="جستجو و انتخاب تأمین‌کننده..."
+                    options={supplierList.map(s => ({ value: String(s.id), label: `${s.name}${s.phone ? ` - ${s.phone}` : ''}` }))}
                   />
                 </div>
               )}
