@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { journalVouchers } from '../../db/schema.js';
+import { accounts, journalVouchers } from '../../db/schema.js';
 import { accountId, createBank } from './treasuryPartyTests.js';
 import { TestCaseResult, makeTestCase } from '../types.js';
 
@@ -193,6 +193,46 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
       if (stored?.currency !== 'USD') problems.push(`dollar account currency is ${stored?.currency} after the refused edit, expected USD`);
       assertNoProblems(problems);
       return 'create usd: 201 USD; create XYZ: 422; fresh IRR account → USD: 200; USD receipt 100 at 1,000,000: 201; → EUR: 422 BANK_ACCOUNT_CURRENCY_LOCKED; account with opening balance 5,000,000 → USD: 422';
+    });
+  }
+
+  const linksId = 'reg_bank_ledger_and_cheque_bank_td_510';
+  if (shouldRun(linksId, 'td510', 'bank', 'cheque', 'ledger', 'package4')) {
+    await runCase(results, linksId, 'v9.0.89: a bank account links only to an active subsidiary ledger account under general account 10 (cash and bank), and a cheque only to an active bank account (TD-510)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const [inactive] = await orm.insert(accounts).values({
+        code: `1003${tagOf()}`, name: 'inactive test bank ledger', level: 'subsidiary', parentId: await accountId('1003'),
+        accountType: 'asset', nature: 'debit', isSystem: 0, isActive: 0, isDeleted: 0,
+      }).returning({ id: accounts.id });
+      const refused: Array<[string, number]> = [
+        ['missing account 999999', 999_999],
+        ['1201 trade receivables', await accountId('1201')],
+        ['general account 10', await accountId('10')],
+        ['inactive subsidiary under 1003', inactive.id],
+      ];
+      for (const [label, ledgerId] of refused) {
+        const res = await admin.post('/api/accounting/bank-accounts', { title: `Link bank ${tagOf()}`, type: 'bank', accountId: ledgerId, initialBalance: 0 });
+        if (res.status !== 422 || errorCode(res) !== 'BANK_LEDGER_ACCOUNT_INVALID') problems.push(`bank on ${label} returned ${res.status} ${errorCode(res)}, expected 422 BANK_LEDGER_ACCOUNT_INVALID (before: 201)`);
+      }
+      const ok = await admin.post('/api/accounting/bank-accounts', { title: `Link bank ${tagOf()}`, type: 'bank', accountId: await accountId('1003'), initialBalance: 0 });
+      if (ok.status !== 201) problems.push(`bank on 1003 returned ${ok.status}: ${JSON.stringify(ok.body).slice(0, 200)}`);
+      else {
+        const moved = await admin.put(`/api/accounting/bank-accounts/${ok.body.id}`, { accountId: await accountId('1201') });
+        if (moved.status !== 422) problems.push(`moving the bank to 1201 returned ${moved.status}, expected 422`);
+        const renamed = await admin.put(`/api/accounting/bank-accounts/${ok.body.id}`, { title: `Link bank renamed ${tagOf()}`, accountId: await accountId('1003') });
+        if (renamed.status !== 200) problems.push(`editing the bank with its own ledger account returned ${renamed.status}`);
+      }
+
+      const cheque = { type: 'received', bankName: 'ملت', amount: 1_000_000, issueDate: '1405/07/01', dueDate: '1405/09/01', partyType: 'other', partyName: 'misc drawer', contraAccountId: await accountId('4101') };
+      const ghost = await admin.post('/api/accounting/cheques', { ...cheque, chequeNumber: `L${tagOf()}`, bankAccountId: 999_999 });
+      if (ghost.status !== 422 || errorCode(ghost) !== 'CHEQUE_BANK_ACCOUNT_INVALID') problems.push(`cheque on bank 999999 returned ${ghost.status} ${errorCode(ghost)}, expected 422 CHEQUE_BANK_ACCOUNT_INVALID (before: 201)`);
+      if (ok.status === 201) {
+        const real = await admin.post('/api/accounting/cheques', { ...cheque, chequeNumber: `L${tagOf()}`, bankAccountId: ok.body.id });
+        if (real.status !== 201 || Number(real.body?.bankAccountId ?? real.body?.bank_account_id) !== Number(ok.body.id)) problems.push(`cheque on an active bank returned ${real.status} bank ${real.body?.bankAccountId}`);
+      }
+      assertNoProblems(problems);
+      return 'bank on 999999, 1201, 10 and an inactive 1003 child: 422 BANK_LEDGER_ACCOUNT_INVALID; bank on 1003: 201; moved to 1201: 422; cheque on bank 999999: 422 CHEQUE_BANK_ACCOUNT_INVALID; on an active bank: 201';
     });
   }
 

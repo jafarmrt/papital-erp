@@ -17,6 +17,7 @@ import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { requireChequeBankAccount } from './bankLinks.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
@@ -190,6 +191,8 @@ export class ChequeLifecycleService {
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
+      // v9.0.89 (TD-510): حساب بانکی چک فعال و موجود (قفل اشتراکی سطح ۱۰ پیش از درج چک، سطح ۲۰)
+      const chequeBankAccountId = await requireChequeBankAccount(txEngine, data.bankAccountId);
       if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
       // شناسه طرف حساب در جدول همان نوع (B04-05)
       await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
@@ -213,7 +216,7 @@ export class ChequeLifecycleService {
         status: (data.type === 'received' ? 'received' : 'in_treasury'),
         drawerName: data.drawerName?.trim() || '',
         payeeName: data.payeeName?.trim() || '',
-        bankAccountId: data.bankAccountId || null,
+        bankAccountId: chequeBankAccountId,
         voucherId: null,
         description: data.description?.trim() || '',
         statusHistory: initialHistory,

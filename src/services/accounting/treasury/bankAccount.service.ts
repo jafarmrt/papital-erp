@@ -11,6 +11,7 @@ import type { JournalVoucher } from '../../../types.js';
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 import { assertNoPendingOpeningApproval, voidBankOpeningVouchers } from './bankOpeningVoucher.js';
+import { requireBankLedgerAccount } from './bankLinks.js';
 import { assertBankCurrencyChangeAllowed, requireTreasuryCurrency } from './bankAccountCurrency.js';
 import { assignTreasuryAccountCode, peekNextTreasuryAccountCode, type TreasuryAccountType } from './bankAccountCode.js';
 
@@ -328,6 +329,8 @@ export class BankAccountService {
       // v8.0.78 (TD-325): کد از شمارنده اتمی پیشوند، یا کد دستی یکتا زیر قفل همان شمارنده
       const finalCode = await assignTreasuryAccountCode(tx, data.type, data.code);
 
+      // v9.0.89 (TD-510): سرفصل معین فعال زیر کل ۱۰
+      const ledgerAccountId = await requireBankLedgerAccount(tx, data.accountId);
       const [inserted] = await tx.insert(bankAccounts).values({
         code: finalCode,
         title: data.title.trim(),
@@ -340,7 +343,7 @@ export class BankAccountService {
         initialBalance: initialBal,
         currentBalance: initialBal,
         currency,
-        accountId: data.accountId || null,
+        accountId: ledgerAccountId,
         isActive: 1,
         notes: data.notes?.trim() || '',
       }).returning();
@@ -498,6 +501,10 @@ export class BankAccountService {
       // v9.0.88 (TD-508، ت۵ الف): ارز ویرایش می‌شود تا نخستین گردش حساب؛ پس از آن 422 (پیش‌تر بی‌صدا نادیده گرفته می‌شد)
       const newCurrency = data.currency !== undefined ? requireTreasuryCurrency(data.currency) : undefined;
       if (newCurrency) await assertBankCurrencyChangeAllowed(tx, existing, newCurrency);
+      // v9.0.89 (TD-510): سرفصل تازه معین فعال زیر کل ۱۰ باشد (سرفصل بی‌تغییر حساب‌های قدیمی دوباره سنجیده نمی‌شود)
+      const ledgerAccountId = data.accountId !== undefined && (data.accountId || null) !== (existing.accountId || null)
+        ? await requireBankLedgerAccount(tx, data.accountId)
+        : undefined;
       const newCode = data.code?.trim();
       if (newCode && newCode.toLowerCase() !== String(existing.code || '').trim().toLowerCase()) {
         await assignTreasuryAccountCode(tx, (data.type || existing.type) as TreasuryAccountType, newCode, id);
@@ -513,7 +520,7 @@ export class BankAccountService {
         ...(data.cardNumber !== undefined ? { cardNumber: data.cardNumber.trim() } : {}),
         ...(data.branch !== undefined ? { branch: data.branch.trim() } : {}),
         ...(newCurrency && newCurrency !== (existing.currency || 'IRR').toUpperCase() ? { currency: newCurrency } : {}),
-        ...(data.accountId !== undefined ? { accountId: data.accountId } : {}),
+        ...(ledgerAccountId !== undefined ? { accountId: ledgerAccountId } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.notes !== undefined ? { notes: data.notes.trim() } : {}),
       };

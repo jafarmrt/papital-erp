@@ -29,7 +29,6 @@
 | TD-495 | انبار و کاردکس (بسته ۶) | P3 (B06-16) — بررسی سلامت سامانه لایه انبار را با `status: 'ok'` ثابت گزارش می‌کند، حتی با مغایرت در گزارش سلامت انبار | systemReconciliation.service.ts | open (P3) |
 | TD-496 | انبار و کاردکس (بسته ۶) | P3 (B06-17) — رابط انبار: اصطلاح انگلیسی و آوانویسی (داشبورد، آلارم، متریال، فیلتر، WAC، کارتکس)، «بروزرسانی»، رقم لاتین، برچسب «کسری سیستمی» برای اضافی و «قلم» برای جمع مقدار، نام انگلیسی فایل‌های خروجی، پیام‌های کلی و `window.confirm` | InventoryStatusPage.tsx، InventoryAuditPage.tsx، PhysicalAuditSheetTab.tsx، WarehouseStockReconciliationPanel.tsx، auditSheet.ts، RunningKardexModal.tsx، useTransactionsExport.ts | open (P3، تصمیم ت۶) |
 | TD-509 | خزانه و چک (بسته ۴) | P2 (B04-13) — `computeBankBalances` همه ردیف‌های تأییدشده دفتر کل را در هر درخواست می‌خواند (۲۰۰٬۰۰۰ ردیف ← ۱٬۶۳۹ ms برای ۱۵ بانک) و `GET /accounting/treasury` `page` / `limit` را نادیده می‌گیرد (۲۰٬۰۰۰ ردیف، ۱۵٫۸۸ MB) | bankAccount.service.ts، treasuryTransaction.service.ts | open (P2) |
-| TD-510 | خزانه و چک (بسته ۴) | P3 (B04-14) — حساب بانکی با `accountId 999999` یا روی سرفصل ۱۲۰۱ و چک با `bankAccountId 999999` ۲۰۱ می‌گیرند؛ ۱۰ FK اعلام‌شده سه جدول خزانه در پایگاه‌داده نیست | bankAccount.service.ts، chequeLifecycle.service.ts | open (P3) |
 | TD-511 | خزانه و چک (بسته ۴) | P3 (B04-15) — تطبیق با سه شناسه (بانک الف، بانک ب، ردیف باطل‌شده) `{"updated": 2}` داد، ردیف باطل‌شده «تطبیق‌یافته» شد، ممیزی هر سه را نوشت و `reconciled_at` تاریخ کسب‌وکار است نه زمان UTC | treasuryTransaction.service.ts | open (P3) |
 | TD-512 | خزانه و چک (بسته ۴) | P3 (B04-16) — ممیزی تغییر وضعیت چک فقط `{"status":"in_collection"}` با شرح «… به in_collection» و حذف فقط `{"chequeId":6}` است؛ نه وضعیت قبلی، نه حساب بانکی، نه سند صادر یا باطل‌شده (AGENTS §۵) | treasury.routes.ts | open (P3) |
 | TD-513 | خزانه و چک (بسته ۴) | P3 (B04-17) — پنجره تاریخچه `description` می‌خواند و سرور `notes` می‌نویسد؛ پیام‌ها «in_collection» / «passed» / «bounced» دارند؛ فیلتر وضعیت `in_treasury` ندارد؛ «کلیپ‌بورد» در دو پیام | ChequesTab.tsx، chequeLifecycle.service.ts | open (P3) |
@@ -61,8 +60,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۴۰ ردیف
-- **آرشیو شده (resolved):** ۴۴۸ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۳۹ ردیف
+- **آرشیو شده (resolved):** ۴۴۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -71,4 +70,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.88 — TD-508 (ارز حساب بانکی، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.89 — TD-510 (سرفصل حساب بانکی و حساب بانکی چک، P3) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
