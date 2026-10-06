@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.5 — Sales Leads No Longer Change an Existing Customer
+- **CRM ↔ Customer Master:** Creating, editing or converting a sales lead only links a customer (by id, then exact phone, then exact name) or creates a new one; it never rewrites an existing customer's name, phone or contact person, so the customer's optimistic lock and the `customers.manage` permission can no longer be bypassed. A differing phone or company name is noted once in the lead's notes (TD-418, package-9 finding B09-03).
+
+### v9.0.4 — Party Account Card by Id
+- **Party Balance:** The customers page «تراز مالی» card and the customer dossier load the account card from `GET /customers/:id/account-card`, which selects customer and supplier voucher rows by the party's detailed id; legacy rows without an id match the current name exactly. A similarly named party is no longer added in, and renaming a party no longer empties its card (TD-416, package-9 finding B09-01).
+
+### v9.0.3 — Package 9 Audit Documentation (Customers & CRM)
+- **Stability Audit, Package 9:** `docs/audit/STABILITY_AUDIT_V9.md` opens with the customers and CRM section; its 16 proven findings are registered as open rows TD-416 to TD-431 (two P1). The phase-1 baseline and the series targets the product owner confirmed are recorded in the roadmap. Documentation only; no behaviour change.
+
 ### v9.0.2 — Workflow Auto-Actions Inside the Approval Transaction
 - **Workflow Approval Atomicity:** What a workflow transition does to its entity (invoice finalize, item and treasury opening vouchers, journal voucher status, purchase requisition status and goods receipt) now runs in the transition's own transaction; a failing action refuses the approval with its real error. The in-process `workflowEventBus` and its duplicate `publishEvent` bridge are removed; workflow events go through the outbox only (TD-415, phase-2 finding A02-01).
 

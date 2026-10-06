@@ -1370,6 +1370,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   results.push(...await runRouteAccessPolicyTests(shouldRunAccess));
   const { runRecordGuardTests } = await import('../security/recordGuardTests.js');
   results.push(...await runRecordGuardTests(shouldRunAccess));
+  const { runCrmCustomerLinkTests } = await import('../security/crmCustomerLinkTests.js');
+  results.push(...await runCrmCustomerLinkTests(shouldRunAccess));
 
   return results;
 }

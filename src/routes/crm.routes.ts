@@ -17,6 +17,7 @@ import { logger } from '../middleware/logger.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
+import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -372,159 +373,6 @@ router.get('/crm/leads/:id', authorizePermission('crm.view'), validate(paramsIdS
   });
 }));
 
-// V10-4.3: ثبت لاگ حسابرسی برای تغییرات بی‌سروصدای مشتری هنگام sync از CRM (قبل/بعد)
-interface CrmAuditContext {
-  userId?: number | null;
-  username?: string;
-  userFullName?: string;
-}
-
-async function logCustomerSyncDiff(
-  customerId: number,
-  changes: Array<{ field: string; before: unknown; after: unknown }>,
-  auditCtx?: CrmAuditContext
-): Promise<void> {
-  if (!changes.length) return;
-  try {
-    await logActivity({
-      userId: auditCtx?.userId ?? undefined,
-      username: auditCtx?.username || 'user',
-      userFullName: auditCtx?.userFullName || '',
-      action: 'UPDATE',
-      entity: 'طرفین حساب',
-      entityId: String(customerId),
-      description: `همگام‌سازی خودکار از CRM: ${changes.length} فیلد مشتری «#${customerId}» به‌روزرسانی شد (${changes.map(c => c.field).join('، ')})`,
-      details: {
-        source: 'syncCustomerFromCRMLead',
-        changes
-      }
-    });
-  } catch (e) {
-    logger.error({ message: 'Failed to write customer sync audit diff', error: e });
-  }
-}
-
-async function syncCustomerFromCRMLead(
-  customerIdInput: number | string | null | undefined,
-  customerName: string | undefined,
-  phone: string | undefined,
-  company: string | undefined,
-  title: string | undefined,
-  auditCtx?: CrmAuditContext
-): Promise<number | null> {
-  const cName = customerName?.trim() || '';
-  const cCompany = company?.trim() || '';
-  const cPhone = phone?.trim() || '';
-
-  // Company Name takes precedence as Customer Name in parties database if available
-  const primaryCustomerName = cCompany || cName || title?.trim() || 'مشتری جدید CRM';
-  const contactPersonName = cCompany ? cName : (cName !== primaryCustomerName ? cName : '');
-
-  if (!cName && !cCompany && !cPhone && !customerIdInput) {
-    return null;
-  }
-
-  let existingCustomerId = customerIdInput ? Number(customerIdInput) : null;
-
-  // 1. If explicit customerId provided
-  if (existingCustomerId) {
-    const [cust] = await orm.select().from(customers).where(and(eq(customers.id, existingCustomerId), eq(customers.isDeleted, 0)));
-    if (cust) {
-      // V10-4.3: هیچ overwrite بی‌سروصدایی بدون گزارش اختلاف قبل-بعد انجام نشود
-      const pendingChanges: Array<{ field: string; before: unknown; after: unknown }> = [];
-      const queueChange = (field: 'phone' | 'contactName' | 'name', afterVal: string | null) => {
-        const beforeVal = (cust as Record<string, unknown>)[field] ?? null;
-        if ((afterVal ?? '') !== '' && String(beforeVal ?? '') !== String(afterVal)) {
-          pendingChanges.push({ field, before: beforeVal, after: afterVal });
-          (cust as Record<string, unknown>)[field] = afterVal;
-        }
-      };
-
-      if (cPhone && cust.phone !== cPhone) queueChange('phone', cPhone);
-      if (contactPersonName && !cust.contactName) queueChange('contactName', contactPersonName);
-      if (cCompany && cust.name !== cCompany && (!cust.name || cust.name === cName)) {
-        queueChange('name', cCompany);
-        if (cName) queueChange('contactName', cName);
-      }
-
-      if (pendingChanges.length > 0) {
-        const updates: Record<string, unknown> = {};
-        for (const ch of pendingChanges) updates[ch.field] = ch.after;
-        await orm.update(customers).set(updates).where(eq(customers.id, existingCustomerId));
-        await logCustomerSyncDiff(existingCustomerId, pendingChanges, auditCtx);
-      }
-      return existingCustomerId;
-    }
-  }
-
-  // 2. If no valid customerId provided, search by phone or company/name in customers table
-  if (cPhone) {
-    const [foundByPhone] = await orm.select().from(customers).where(and(eq(customers.phone, cPhone), eq(customers.isDeleted, 0)));
-    if (foundByPhone) {
-      const pendingChanges: Array<{ field: string; before: unknown; after: unknown }> = [];
-      const queueChange = (field: 'contactName' | 'name', afterVal: string | null) => {
-        const beforeVal = (foundByPhone as Record<string, unknown>)[field] ?? null;
-        if ((afterVal ?? '') !== '' && String(beforeVal ?? '') !== String(afterVal)) {
-          pendingChanges.push({ field, before: beforeVal, after: afterVal });
-          (foundByPhone as Record<string, unknown>)[field] = afterVal;
-        }
-      };
-
-      if (cCompany && foundByPhone.name !== cCompany) {
-        queueChange('name', cCompany);
-        if (cName) queueChange('contactName', cName);
-      } else if (cName && !foundByPhone.contactName) {
-        queueChange('contactName', cName);
-      }
-      if (Object.keys(pendingChanges).length > 0) {
-        const updates: Record<string, unknown> = {};
-        for (const ch of pendingChanges) updates[ch.field] = ch.after;
-        await orm.update(customers).set(updates).where(eq(customers.id, foundByPhone.id));
-        await logCustomerSyncDiff(foundByPhone.id, pendingChanges, auditCtx);
-      }
-      return foundByPhone.id;
-    }
-  }
-
-  if (primaryCustomerName) {
-    const [foundByName] = await orm.select().from(customers).where(and(eq(customers.name, primaryCustomerName), eq(customers.isDeleted, 0)));
-    if (foundByName) {
-      const pendingChanges: Array<{ field: string; before: unknown; after: unknown }> = [];
-      const queueChange = (field: 'phone' | 'contactName', afterVal: string | null) => {
-        const beforeVal = (foundByName as Record<string, unknown>)[field] ?? null;
-        if ((afterVal ?? '') !== '' && String(beforeVal ?? '') !== String(afterVal)) {
-          pendingChanges.push({ field, before: beforeVal, after: afterVal });
-          (foundByName as Record<string, unknown>)[field] = afterVal;
-        }
-      };
-
-      if (cPhone && !foundByName.phone) queueChange('phone', cPhone);
-      if (contactPersonName && !foundByName.contactName) queueChange('contactName', contactPersonName);
-
-      if (pendingChanges.length > 0) {
-        const updates: Record<string, unknown> = {};
-        for (const ch of pendingChanges) updates[ch.field] = ch.after;
-        await orm.update(customers).set(updates).where(eq(customers.id, foundByName.id));
-        await logCustomerSyncDiff(foundByName.id, pendingChanges, auditCtx);
-      }
-      return foundByName.id;
-    }
-  }
-
-  // 3. Otherwise, create a new customer record in customers (طرفین حساب)
-  const createdAt = systemNowUtcIso();
-  const [newCust] = await orm.insert(customers).values({
-    name: primaryCustomerName,
-    contactName: contactPersonName || cName,
-    phone: cPhone,
-    notes: 'ثبت شده اتوماتیک از طریق سیستم CRM',
-    createdAt,
-    isDeleted: 0
-  }).returning({ id: customers.id });
-
-  return newCust ? newCust.id : null;
-}
-
 async function notifyWarehouseOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>), authorName: string, senderId?: number) {
   try {
     const targetUsers = await orm.select({ id: users.id, role: users.role }).from(users).where(
@@ -586,21 +434,14 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   // V10-4.1: فروشنده مسئول = پرسنل (id) + snapshot نام
   const assignee = await resolveAssignee({ name: assignedTo, personnelId: assignedPersonnelId });
 
-  // Auto register or update customer in customers (طرفین حساب)
-  const resolvedCustomerId = await syncCustomerFromCRMLead(
-    customerId,
-    customerName,
-    phone,
-    company,
-    title,
-    { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
-  );
+  // v9.0.5 (TD-418): پیوند به طرف حساب یا ساخت طرف حساب تازه؛ طرف حساب موجود عوض نمی‌شود و اختلاف به یادداشت می‌رود
+  const party = await linkCustomerForLead({ customerId, customerName, phone, company, title });
 
   const nowIso = systemNowUtcIso();
 
   const [newLead] = await orm.insert(crmLeads).values({
     title: title.trim(),
-    customerId: resolvedCustomerId,
+    customerId: party.customerId,
     customerName: customerName || '',
     phone: phone || '',
     company: company || '',
@@ -613,7 +454,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
     assignedTo: assignee.name || authorName,
     assignedPersonnelId: assignee.id,
     expectedCloseDate: requireStorageDate(expectedCloseDate, 'تاریخ پیش‌بینی بستن فرصت فروش'),
-    notes: notes || '',
+    notes: notesWithPartyDifferences(notes || '', party.differences),
     status: stage === 'won' ? 'won' : stage === 'lost' ? 'lost' : 'active',
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -699,14 +540,13 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   const targetCompany = company !== undefined ? company : existing.company;
   const targetTitle = title !== undefined ? title : existing.title;
 
-  const resolvedCustomerId = await syncCustomerFromCRMLead(
-    targetCustId,
-    targetCustName,
-    targetPhone,
-    targetCompany,
-    targetTitle,
-    { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
-  );
+  const party = await linkCustomerForLead({
+    customerId: targetCustId,
+    customerName: targetCustName,
+    phone: targetPhone,
+    company: targetCompany,
+    title: targetTitle,
+  });
 
   const nowIso = systemNowUtcIso();
   
@@ -724,7 +564,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
 
   const [updated] = await orm.update(crmLeads).set({
     title: title !== undefined ? title.trim() : existing.title,
-    customerId: resolvedCustomerId,
+    customerId: party.customerId,
     customerName: customerName !== undefined ? customerName : existing.customerName,
     phone: phone !== undefined ? phone : existing.phone,
     company: company !== undefined ? company : existing.company,
@@ -737,7 +577,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
     assignedTo: targetAssignee ? (targetAssignee.name || authorName) : existing.assignedTo,
     assignedPersonnelId: targetAssignee ? targetAssignee.id : existing.assignedPersonnelId,
     expectedCloseDate: optionalStorageDate(expectedCloseDate, 'تاریخ پیش‌بینی بستن فرصت فروش') ?? existing.expectedCloseDate,
-    notes: notes !== undefined ? notes : existing.notes,
+    notes: notesWithPartyDifferences(notes !== undefined ? notes : existing.notes, party.differences),
     status: newStatus,
     updatedAt: nowIso
   }).where(eq(crmLeads.id, id)).returning();
@@ -793,21 +633,22 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
     throw new NotFoundError('پرونده فروش یافت نشد');
   }
 
-  // Convert lead to formal customer in customers table
-  const resolvedCustomerId = await syncCustomerFromCRMLead(
-    lead.customerId,
-    lead.customerName || undefined,
-    lead.phone || undefined,
-    lead.company || undefined,
-    lead.title || undefined,
-    { userId: currentUser?.id, username: currentUser?.username, userFullName: authorName }
-  );
+  // پیوند پرونده به طرف حساب یا ساخت طرف حساب تازه (v9.0.5، TD-418: طرف حساب موجود عوض نمی‌شود)
+  const party = await linkCustomerForLead({
+    customerId: lead.customerId,
+    customerName: lead.customerName,
+    phone: lead.phone,
+    company: lead.company,
+    title: lead.title,
+  });
+  const resolvedCustomerId = party.customerId;
 
   const nowIso = systemNowUtcIso();
   // V10-4.3: قانون نرم — تبدیل به مشتری هرگز وضعیت «موفق» را از بین نمی‌برد (بدون تقدم اجباری proposal/active)
   const preserveWonState = lead.stage === 'won' || lead.status === 'won';
   const [updated] = await orm.update(crmLeads).set({
     customerId: resolvedCustomerId,
+    notes: notesWithPartyDifferences(lead.notes, party.differences),
     stage: preserveWonState ? lead.stage : 'proposal',
     status: preserveWonState ? lead.status : 'active',
     updatedAt: nowIso

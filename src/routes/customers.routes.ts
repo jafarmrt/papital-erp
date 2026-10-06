@@ -6,10 +6,11 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authorize, authorizePermission } from '../middleware/authorize.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
+import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
@@ -212,6 +213,22 @@ router.get('/customers/export-excel', authorizePermission(...READ_PERMISSIONS.cu
   });
 
   res.json({ rows: exportRows, total: exportRows.length });
+}));
+
+const customerAccountCardValidation = z.object({
+  params: z.object({ id: numericIdString }),
+  query: z.object({
+    startDate: storageDateParam,
+    endDate: storageDateParam,
+    currency: z.string().max(10).optional(),
+  }).optional(),
+});
+
+// v9.0.4 (TD-416): کارت حساب و مانده طرف حساب با شناسه او (صفحه طرف حساب‌ها و پرونده مشتری)
+router.get('/customers/:id/account-card', authorizePermission(...READ_PERMISSIONS.partyAccountCard), validate(customerAccountCardValidation), asyncHandler(async (req, res) => {
+  const { startDate, endDate, currency } = (req.query as { startDate?: string; endDate?: string; currency?: string }) || {};
+  const data = await getCustomerAccountCard(Number(req.params.id), { startDate, endDate, currency });
+  res.json({ report: data, ...data });
 }));
 
 // POST /api/customers/bulk-import - Bulk import and update counterparties from Excel

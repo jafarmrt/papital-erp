@@ -19,6 +19,7 @@ import type {
   PartyOption
 } from '../../types.js';
 import { isAllCurrenciesView, voucherItemCurrencyCondition, voucherItemCurrencySql, voucherItemRateSql, voucherItemReportAmountSql } from './voucherItemAmount.js';
+import { partyDetailedRowsCondition, type PartyDetailedFilter } from './partyDetailedRows.js';
 
 /** v8.0.16 (TD-260): ارز، مبلغ و نرخ اصلی ردیف ارزی که در نمای همه ارزها به ریال تبدیل شده است */
 function foreignOrigin(allCurrencies: boolean, row: {
@@ -579,6 +580,8 @@ export class AccountingReportService {
     detailedType?: 'customer' | 'supplier' | 'personnel' | 'project' | 'bank_account' | 'other' | string;
     detailedId?: number;
     detailedName?: string;
+    /** v9.0.4 (TD-416): کارت یک طرف حساب با شناسه او (کارت صفحه طرف حساب‌ها و پرونده مشتری)؛ به‌جای فیلترهای تفصیلی بالا */
+    party?: PartyDetailedFilter;
     startDate?: string;
     endDate?: string;
     currency?: string;
@@ -624,6 +627,9 @@ export class AccountingReportService {
     }
     if (params.detailedName) {
       periodConditions.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
+    }
+    if (params.party) {
+      periodConditions.push(partyDetailedRowsCondition(params.party));
     }
     if (params.startDate) {
       periodConditions.push(gte(journalVouchers.date, params.startDate));
@@ -676,6 +682,7 @@ export class AccountingReportService {
       if (params.detailedType && params.detailedType !== 'all') priorConds.push(eq(journalVoucherItems.detailedType, params.detailedType));
       if (params.detailedId) priorConds.push(eq(journalVoucherItems.detailedId, params.detailedId));
       if (params.detailedName) priorConds.push(like(journalVoucherItems.detailedName, containsLikePattern(params.detailedName.trim())));
+      if (params.party) priorConds.push(partyDetailedRowsCondition(params.party));
       priorConds.push(currencyCondition);
       if (params.startDate) priorConds.push(lt(journalVouchers.date, params.startDate));
 

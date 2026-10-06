@@ -12,6 +12,7 @@ import { CustomerExcelModal } from '../components/customers/CustomerExcelModal';
 import { useCRMData } from '../hooks/useCRMData';
 import { useCustomersQuery, useSaveCustomerMutation, useDeleteCustomerMutation } from '../hooks/queries';
 import { customerSaveBody } from '../lib/customers/customerVersion';
+import { customerAccountCardUrl } from '../lib/customers/customerAccountCard';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '../lib/queryKeys';
 import { formatPersianPrice, formatCurrencyLabel, formatPersianPhone, normalizePhoneNumber, validateIranianPhoneNumber, formatPersianDate } from '../utils';
@@ -285,8 +286,7 @@ export default function CustomersPage({ user }: { user: User }) {
     setLoadingLedger(true);
     setLedgerData(null);
     try {
-      const pType = c.partyType === 'supplier' ? 'supplier' : 'customer';
-      const res = await fetchJson(`/accounting/reports/account-card?detailedType=${pType}&detailedName=${encodeURIComponent(c.name)}`);
+      const res = await fetchJson(customerAccountCardUrl(c.id));
       setLedgerData(res?.report || res);
     } catch (e) {
       toast.error('خطا در دریافت کاردکس حساب شخص');

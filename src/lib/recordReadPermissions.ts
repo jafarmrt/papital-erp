@@ -16,6 +16,8 @@ export const READ_PERMISSIONS = {
   // documents.view و warehouse.in: صفحه «ورود و خروج انبار» فهرست تأمین‌کنندگان را می‌خواند
   customers: ['customers.view', 'documents.view', 'documents.create', 'warehouse.in', 'crm.view', 'projects.view', 'procurement.view'],
   customersExport: ['customers.view'],
+  /** کارت حساب و مانده طرف حساب (همان مجوزهای کارت حساب گزارش‌های مالی؛ v9.0.4، TD-416) */
+  partyAccountCard: ['accounting.reports', 'accounting.view', 'customers.view', 'customers.manage', 'documents.view'],
   documents: [
     'documents.view', 'documents.create', 'documents.edit', 'warehouse.view', 'warehouse.in', 'warehouse.out',
     'audit.view', 'crm.view', 'workflow.view'

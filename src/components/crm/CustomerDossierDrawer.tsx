@@ -6,6 +6,7 @@ import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { STAGES } from '../../hooks/useCRMData';
 import { fetchJson } from '../../api';
 import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentPayable';
+import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
 import toast from 'react-hot-toast';
 
 interface CustomerDossierDrawerProps {
@@ -75,7 +76,7 @@ export function CustomerDossierDrawer({
 
     // Load double-entry accounting read model (Subphase 11.2)
     setLoadingFinancials(true);
-    fetchJson(`/accounting/reports/account-card?detailedType=customer&detailedId=${customer.id}&detailedName=${encodeURIComponent(customer.name)}`, { signal: controller.signal })
+    fetchJson(customerAccountCardUrl(customer.id), { signal: controller.signal })
       .then((rep) => {
         setFinancialReport(rep || null);
       })
