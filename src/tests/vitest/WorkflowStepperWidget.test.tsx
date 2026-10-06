@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkflowStepperWidget } from '../../components/workflow/WorkflowStepperWidget';
+import { formatPersianPrice } from '../../utils';
 
 const fetchJson = vi.fn();
 vi.mock('../../api', () => ({ fetchJson: (...args: unknown[]) => fetchJson(...args) }));
@@ -42,7 +43,7 @@ describe('WorkflowStepperWidget (TD-085)', () => {
     fetchJson.mockResolvedValue(instanceResponse);
     renderWidget();
     expect(await screen.findByText('تایید شده')).toBeTruthy();
-    expect(screen.queryByText('شروع چرخه ورکفلو')).toBeNull();
+    expect(screen.queryByText('آغاز گردش کار')).toBeNull();
     expect(screen.getByText('تایید مالی نهایی')).toBeTruthy();
     expect(fetchJson).toHaveBeenCalledWith('/workflow/instance/document/9');
   });
@@ -50,8 +51,8 @@ describe('WorkflowStepperWidget (TD-085)', () => {
   it('shows signature progress against the required count recorded by the server', async () => {
     fetchJson.mockResolvedValue(instanceResponse);
     renderWidget();
-    expect(await screen.findByText(/امضاهای ثبت‌شده \(1 از 3\)/)).toBeTruthy();
-    expect(screen.getByText('1/3 امضا')).toBeTruthy();
+    expect(await screen.findByText(/امضاهای ثبت‌شده \(۱ از ۳\)/)).toBeTruthy();
+    expect(screen.getByText('۱ از ۳ امضا')).toBeTruthy();
   });
 
   it('shows why an action is blocked and the conditions of the chosen action (TD-085 part 1)', async () => {
@@ -67,6 +68,31 @@ describe('WorkflowStepperWidget (TD-085)', () => {
   it('offers to start the workflow when the document has none', async () => {
     fetchJson.mockResolvedValue({ instance: null });
     renderWidget();
-    expect(await screen.findByText('شروع چرخه ورکفلو')).toBeTruthy();
+    expect(await screen.findByText('آغاز گردش کار')).toBeTruthy();
+  });
+});
+
+describe('TD-466 the stepper shows the document amount in rials', () => {
+  it('a foreign document shows its rial amount as IRR and its own amount in its currency', async () => {
+    // 100 USD at 600,000 IRR: entityContext.amount is the rial amount (workflowDocumentAmount)
+    fetchJson.mockResolvedValue({
+      ...instanceResponse,
+      entityContext: { amount: 60_000_000, amountInCurrency: 100, exchangeRate: 600_000, currency: 'USD', refNumber: 'INV-9', buyerName: 'مشتری' },
+    });
+    renderWidget();
+    fireEvent.click(await screen.findByText('تایید مالی نهایی'));
+    expect(screen.queryByText(formatPersianPrice(60_000_000, 'USD'))).toBeNull();
+    expect(screen.getByText(formatPersianPrice(60_000_000, 'IRR'))).toBeTruthy();
+    expect(screen.getByText(formatPersianPrice(100, 'USD'))).toBeTruthy();
+  });
+
+  it('a rial document shows one rial amount', async () => {
+    fetchJson.mockResolvedValue({
+      ...instanceResponse,
+      entityContext: { amount: 5_000_000, amountInCurrency: 5_000_000, exchangeRate: 1, currency: 'IRR', refNumber: 'INV-9', buyerName: 'مشتری' },
+    });
+    renderWidget();
+    fireEvent.click(await screen.findByText('تایید مالی نهایی'));
+    expect(screen.getAllByText(formatPersianPrice(5_000_000, 'IRR'))).toHaveLength(1);
   });
 });

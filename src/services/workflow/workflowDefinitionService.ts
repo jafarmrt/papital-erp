@@ -209,7 +209,7 @@ export class WorkflowDefinitionService {
     return await orm.transaction(async (tx) => {
       const existing = await tx.select().from(workflowDefinitions).where(eq(workflowDefinitions.code, input.code));
       if (existing.length > 0) {
-        throw new ConflictError(`کد فرآیند کاری '${input.code}' قبلاً ثبت شده است (WF_DEF_CODE_EXISTS)`);
+        throw new ConflictError(`کد فرآیند کاری '${input.code}' قبلاً ثبت شده است`, undefined, 'WF_DEF_CODE_EXISTS');
       }
 
       const [def] = await tx.insert(workflowDefinitions).values({
@@ -234,7 +234,7 @@ export class WorkflowDefinitionService {
   static async updateDefinition(id: number, input: UpdateWorkflowDefinitionInput): Promise<WorkflowDefinitionDTO> {
     const [existing] = await orm.select().from(workflowDefinitions).where(eq(workflowDefinitions.id, id));
     if (!existing) {
-      throw new Error('تعریف فرآیند کاری یافت نشد (WF_DEF_NOT_FOUND)');
+      throw new NotFoundError('گردش کار یافت نشد.', undefined, 'WF_DEF_NOT_FOUND');
     }
 
     const [updated] = await orm.update(workflowDefinitions)
@@ -262,7 +262,7 @@ export class WorkflowDefinitionService {
         const [duplicate] = await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions)
           .where(eq(workflowDefinitions.code, payload.code));
         if (duplicate) {
-          throw new ConflictError(`کد فرآیند کاری '${payload.code}' قبلاً ثبت شده است (WF_DEF_CODE_EXISTS)`);
+          throw new ConflictError(`کد فرآیند کاری '${payload.code}' قبلاً ثبت شده است`, undefined, 'WF_DEF_CODE_EXISTS');
         }
         const [created] = await tx.insert(workflowDefinitions).values({
           code: payload.code,
@@ -278,7 +278,7 @@ export class WorkflowDefinitionService {
         const [existing] = await tx.select().from(workflowDefinitions)
           .where(eq(workflowDefinitions.id, finalDefId)).for('update');
         if (!existing) {
-          throw new NotFoundError('تعریف فرآیند کاری یافت نشد (WF_DEF_NOT_FOUND)');
+          throw new NotFoundError('تعریف فرآیند کاری یافت نشد', undefined, 'WF_DEF_NOT_FOUND');
         }
         await tx.update(workflowDefinitions).set({
           title: payload.title,
@@ -333,7 +333,7 @@ export class WorkflowDefinitionService {
               fromStateId: fromId,
               toStateId: toId,
               actionKey: tr.actionKey || tr.key || 'action',
-              title: tr.title || 'انتقال',
+              title: tr.title || 'اقدام',
               requiredRole: tr.requiredRole || '',
               requiredPermission: tr.requiredPermission || '',
               approvalRuleType: tr.approvalRuleType || tr.parallelApprovalRule || 'SINGLE',
@@ -372,7 +372,7 @@ export class WorkflowDefinitionService {
     return await orm.transaction(async (tx) => {
       const [def] = await tx.select({ id: workflowDefinitions.id, title: workflowDefinitions.title })
         .from(workflowDefinitions).where(eq(workflowDefinitions.id, definitionId)).for('update');
-      if (!def) throw new NotFoundError('گردش کار یافت نشد (WF_DEF_NOT_FOUND)');
+      if (!def) throw new NotFoundError('گردش کار یافت نشد', undefined, 'WF_DEF_NOT_FOUND');
       const ids = [...new Set(positions.map(p => p.id))];
       const own = await tx.select({ id: workflowStates.id }).from(workflowStates)
         .where(and(eq(workflowStates.workflowDefinitionId, definitionId), inArray(workflowStates.id, ids)));

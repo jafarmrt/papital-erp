@@ -116,10 +116,10 @@ export function useStartWorkflowMutation() {
       void queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
       });
-      toast.success('چرخه تایید ورکفلو با موفقیت فعال گردید');
+      toast.success('گردش کار آغاز شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در فعال‌سازی چرخه کاری');
+      toast.error(err.message || 'گردش کار آغاز نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -148,17 +148,17 @@ export function useExecuteTransitionMutation() {
           queryKey: QUERY_KEYS.workflow.instance(variables.entityType, variables.entityId)
         });
       }
-      toast.success('اقدام ورکفلو با موفقیت ثبت شد');
+      toast.success('اقدام ثبت شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در ثبت اقدام ورکفلو');
+      toast.error(err.message || 'اقدام ثبت نشد؛ دوباره تلاش کنید.');
     }
   });
 }
 
 export function useWorkflowDefinitionsQuery() {
   return useQuery({
-    queryKey: ['workflow', 'definitions'],
+    queryKey: QUERY_KEYS.workflow.definitions(),
     queryFn: async () => {
       return fetchJson('/workflow/definitions');
     }
@@ -167,7 +167,7 @@ export function useWorkflowDefinitionsQuery() {
 
 export function useWorkflowDefinitionDetailQuery(id?: number) {
   return useQuery({
-    queryKey: ['workflow', 'definition', id],
+    queryKey: QUERY_KEYS.workflow.definition(id),
     queryFn: async () => {
       if (!id) return null;
       return fetchJson(`/workflow/definitions/${id}`);
@@ -207,7 +207,7 @@ export interface WorkflowDefinitionVersion {
 /** v7.0.87 (TD-112): تاریخچه فقط‌خواندنی نسخه‌های یک تعریف؛ ذخیره تعریف آن را تازه می‌کند (پیشوند کلید definitions) */
 export function useWorkflowDefinitionVersionsQuery(id?: number) {
   return useQuery({
-    queryKey: ['workflow', 'definitions', id, 'versions'],
+    queryKey: QUERY_KEYS.workflow.definitionVersions(id),
     queryFn: async (): Promise<WorkflowDefinitionVersion[]> => {
       const res = await fetchJson(`/workflow/definitions/${id}/versions`);
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
@@ -227,22 +227,28 @@ export function useSaveWorkflowDefinitionMutation() {
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workflow', 'definitions'] });
-      toast.success('تعریف ورکفلو با موفقیت ذخیره گردید');
+      // TD-469: پیشوند definitions جزئیات و نسخه‌ها را هم دربرمی‌گیرد (پیش‌تر کلید جزئیات ['workflow','definition',id] بود)
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definitions() });
+      toast.success('طرح گردش کار ذخیره شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در ذخیره‌سازی ورکفلو');
+      toast.error(err.message || 'طرح گردش کار ذخیره نشد؛ دوباره تلاش کنید.');
     }
   });
 }
 
 export function useUpdateCanvasPositionsMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ definitionId, positions }: { definitionId: number; positions: Array<{ id: number; positionX: number; positionY: number }> }) => {
       return fetchJson('/workflow/positions', {
         method: 'POST',
         body: JSON.stringify({ definitionId, positions })
       });
+    },
+    // TD-469: پیش‌تر کش جزئیات تازه نمی‌شد و باز کردن دوباره طراح مختصات قدیم را نشان می‌داد و ذخیره آن را برمی‌گرداند
+    onSuccess: (_res, variables) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definition(variables.definitionId) });
     }
   });
 }
@@ -281,7 +287,7 @@ export function useExecuteTaskMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { taskId: number; action?: 'approve' | 'reject'; comment?: string; snapshotData?: Record<string, any> }) => {
+    mutationFn: async (payload: { taskId: number; action?: 'approve' | 'reject'; transitionId?: number; comment?: string; snapshotData?: Record<string, unknown> }) => {
       return fetchJson(`/workflow/tasks/${payload.taskId}/execute`, {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -291,10 +297,10 @@ export function useExecuteTaskMutation() {
       void invalidatePreset(queryClient, 'workflowChange');
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
       // v8.0.91 (TD-371): امضای ناقص حدنصاب کار را باز می‌گذارد؛ پیام سرور شمار امضاها را می‌گوید
-      toast.success(res?.data?.task?.status === 'pending' && res.message ? res.message : 'وظیفه با موفقیت تعیین تکلیف و اجرا گردید');
+      toast.success(res?.data?.task?.status === 'pending' && res.message ? res.message : 'کار انجام شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در اجرای وظیفه');
+      toast.error(err.message || 'کار انجام نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -330,10 +336,10 @@ export function useCreateDelegationMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
-      toast.success('تفویض اختیار جدید با موفقیت ایجاد گردید');
+      toast.success('تفویض اختیار ثبت شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در ثبت تفویض اختیار');
+      toast.error(err.message || 'تفویض اختیار ثبت نشد؛ دوباره تلاش کنید.');
     }
   });
 }
@@ -350,10 +356,10 @@ export function useRevokeDelegationMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'delegations'] });
       void queryClient.invalidateQueries({ queryKey: ['workflow', 'tasks'] });
-      toast.success('تفویض اختیار با موفقیت لغو گردید');
+      toast.success('تفویض اختیار لغو شد.');
     },
     onError: (err: any) => {
-      toast.error(err.message || 'خطا در لغو تفویض اختیار');
+      toast.error(err.message || 'تفویض اختیار لغو نشد؛ دوباره تلاش کنید.');
     }
   });
 }

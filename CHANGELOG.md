@@ -37,6 +37,33 @@ going forward.
 ### v9.0.66 — Package 4 Treasury and Cheques Audit Documentation
 - **Stability Audit, Package 4 (Treasury and Cheques):** `docs/audit/STABILITY_AUDIT_V9.md` gets the treasury section; its 19 proven findings are registered as open rows TD-497 to TD-515 (one P0: voiding the reversal row of a voided receipt put the money back in the bank with no voucher). Documentation only; no behaviour change.
 
+### v9.0.65 — Workflow UI and Messages Fully Persian
+- **Workflow Wording:** workflow UI and messages follow the owner glossary (decision t10), with Persian role and entity names and digits; `WF_*` codes go only into the error `code` field (TD-470, Vitest `workflowWording.test.ts`, `sec_workflow_error_code_td_470`).
+
+### v9.0.64 — Workflow Approvals Refresh Domain Lists
+- **Workflow Cache Refresh:** an approval invalidates documents, procurement, accounting and inventory queries, and design and position saves refetch the definition detail (TD-469, Vitest `workflowQueryInvalidation.test.tsx`).
+
+### v9.0.63 — Workflow Times in UTC, Delegations Cover Whole Days
+- **Workflow Timestamps and Delegation Days:** workflow API responses send server timestamps with `Z` (`withUtcTimestamps`), and a day-only delegation covers whole business days (TD-468, `sec_workflow_utc_timestamps_td_468`).
+
+### v9.0.62 — Delegation Scope Is All or a Defined Workflow
+- **Delegation Scope:** a delegation scope is `ALL` / `*` or a defined workflow code, else 422; the form offers only these (TD-467, decision t6, `sec_workflow_delegation_scope_td_467`).
+
+### v9.0.61 — Workflow Stepper Shows the Rial Amount
+- **Stepper Amount Currency:** the workflow stepper shows the context amount in IRR and a foreign document's own amount beside it (TD-466, Vitest `WorkflowStepperWidget.test.tsx`).
+
+### v9.0.60 — Inbox Card Shows Amount, Delegation, Step and Starter
+- **Inbox Card Fields:** inbox rows carry `currentStepTitle` from the instance snapshot, `instance.startedByName` and a numeric IRR `amount`; the card reads them and `delegationInfo` (TD-465, `sec_workflow_inbox_card_fields_td_465`).
+
+### v9.0.59 — Inbox Ignores Late Responses of Another Task
+- **Task Preview Belongs to Its Task:** the inbox reads the task's document or requisition through `useApprovalTaskEntity`, aborting the previous request and ignoring late responses (TD-464, Vitest `approvalInboxPage.test.tsx`).
+
+### v9.0.58 — Inbox Chooses Among Several Reject Actions
+- **Reject Choice in the Inbox:** inbox rows carry the reject actions of the current step and the task modal sends the chosen `transitionId` when there are several (TD-463, `sec_workflow_inbox_reject_choice_td_463`).
+
+### v9.0.57 — Inbox Clears a Cancelled Decision
+- **Approval Inbox Decision Reset:** closing the task modal or opening another task resets the decision, comment and chosen reject action (TD-462, Vitest `approvalInboxPage.test.tsx`).
+
 ### v9.0.56 — Changing the Stock-Count Warehouse Clears the Counts
 - **Stock-Count Warehouse Change:** switching the warehouse after entering counts asks first and clears the counts on confirmation, so counts of one warehouse are never posted for another (TD-484, Vitest `stockCountSheet.test.tsx`).
 

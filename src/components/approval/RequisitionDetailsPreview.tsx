@@ -99,7 +99,7 @@ export function RequisitionDetailsPreview({ requisition, isLoading }: Requisitio
           <thead className="bg-slate-50 dark:bg-gray-700/60 text-slate-700 dark:text-gray-300 font-bold border-b border-slate-200 dark:border-gray-700">
             <tr>
               <th className="p-2.5 w-10 text-center">#</th>
-              <th className="p-2.5">نام کالا / متریال مورد نیاز</th>
+              <th className="p-2.5">نام کالا / مواد اولیه مورد نیاز</th>
               <th className="p-2.5 text-center">تعداد / مقدار</th>
               <th className="p-2.5 text-center">موجودی فعلی انبار</th>
               <th className="p-2.5 text-left">برآورد قیمت واحد</th>
