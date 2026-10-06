@@ -11,6 +11,7 @@ import { OutboxService } from '../events/outboxService.js';
 import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
+import { assertBookStocksUnchanged } from '../inventory/stockCountSheet.js';
 import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
@@ -409,6 +410,8 @@ export class DocumentCreationService {
         const lockedAuditItems = await tx
           .select({
             id: items.id,
+            code: items.code,
+            name: items.name,
             weightedAverageCost: items.weightedAverageCost,
             currentStock: items.currentStock,
           })
@@ -421,6 +424,20 @@ export class DocumentCreationService {
 
         // TD-164: حذف کوئری‌های تکراری N+1 انبار در حلقه انبارگردانی
         const resolveWh = await createWarehouseResolver(tx);
+
+        // v9.0.55 (TD-480، تصمیم ت۷ الف): موجودی دفتری‌ای که برگه نشان داده (`system_stock`) زیر قفل کالاها با موجودی
+        // همین لحظه سنجیده می‌شود؛ اگر فرق کند ثبت ۴۰۹ می‌گیرد و هیچ گردشی ثبت نمی‌شود
+        assertBookStocksUnchanged(docLines.map(line => {
+          const target = auditItemMap.get(Number(line.itemId));
+          const loc = resolveWh(line.location || docLocation || '');
+          return {
+            itemId: Number(line.itemId),
+            code: target?.code ?? String(line.itemId),
+            name: target?.name ?? String(line.itemId),
+            shown: line.system_stock,
+            current: auditStockMap.get(Number(line.itemId))?.byCode[loc] ?? 0,
+          };
+        }));
 
         const auditLineRows: DocumentLineRow[] = [];
         for (const item of docLines) {

@@ -117,16 +117,17 @@ export function summarizeAudit(list: AuditSheetItem[]): AuditSummary {
 /** بدنه POST /documents برای سند انبارگردانی نهایی */
 export function buildAuditPayload(
   list: AuditSheetItem[],
-  opts: { nextRef: string; location: string; notes: string; user: User | null | undefined },
+  opts: { nextRef: string; location: string; locationLabel?: string; notes: string; user: User | null | undefined },
 ): AuditSavePayload {
-  const { nextRef, location, notes, user } = opts;
+  // location کد انبار است (TD-480)؛ نام انبار فقط در توضیح پیش‌فرض سند
+  const { nextRef, location, locationLabel, notes, user } = opts;
   return {
     docType: 'audit',
     refNumber: nextRef,
     date: getTodayIsoDate(), // v8.0.49 (TD-312): روز تهران، نه روز UTC
     location,
     user: user?.full_name || user?.username || 'انباردار',
-    notes: notes || `ثبت انبارگردانی در موقعیت ${location}`,
+    notes: notes || `ثبت انبارگردانی در موقعیت ${locationLabel || location}`,
     status: 'final',
     items: list.map(i => {
       const phys = parseCleanNumber(i.physical_stock, 0);

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '../types';
+import { useWarehousesQuery, type WarehouseItem } from '../hooks/queries/useSettingsQueries';
+import ConfirmModal from '../components/ConfirmModal';
 
 // Subcomponents
 import { Inventory3WayIntegrityTab } from '../components/inventory/Inventory3WayIntegrityTab';
@@ -28,6 +30,8 @@ import { useAuditSheet } from '../hooks/inventoryAudit/useAuditSheet';
 import { invalidateAfterStockAdjustment } from '../hooks/inventoryAudit/useInventoryAuditSave';
 import { exportIntegrityExcel, filterIntegrityItems } from '../lib/inventoryAudit/auditSheet';
 
+const NO_WAREHOUSES: WarehouseItem[] = [];
+
 interface InventoryAuditPageProps {
   user: User | null;
 }
@@ -49,11 +53,24 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
   const [integritySearch, setIntegritySearch] = useState('');
   const [integrityDiscrepancyOnly, setIntegrityDiscrepancyOnly] = useState(false);
 
-  // Physical Audit location
-  const [selectedLocation, setSelectedLocation] = useState('انبار مرکزی');
+  // Physical Audit location: کد انبار (TD-480)؛ تا کاربر انباری برنگزیده، انبار پیش‌فرض (فعال با کمترین شناسه، اول فهرست)
+  const warehousesQuery = useWarehousesQuery();
+  const warehouses = Array.isArray(warehousesQuery.data) ? warehousesQuery.data : NO_WAREHOUSES;
+  const [chosenLocation, setChosenLocation] = useState('');
+  const selectedLocation = chosenLocation || warehouses[0]?.code || '';
+  const warehouseName = (code: string) => warehouses.find(w => w.code === code)?.name || code;
+  const locationLabel = warehouseName(selectedLocation);
 
   const data = useInventoryAuditQueries(activeTab, selectedLocation);
-  const sheet = useAuditSheet({ serverItems: data.auditItems, selectedLocation, nextRef: data.nextRef, user });
+  const sheet = useAuditSheet({
+    serverItems: data.auditItems,
+    selectedLocation,
+    locationLabel,
+    nextRef: data.nextRef,
+    user,
+    onLocationChange: setChosenLocation,
+    reloadItems: data.refreshAuditItems,
+  });
   const auditDetail = useInventoryDocumentDetail(viewAuditId, 'خطا در دریافت جزئیات سند انبارگردانی', 'audit');
   const transferDetail = useInventoryDocumentDetail(viewTransferId, 'خطا در دریافت جزئیات حواله بین‌انباری', 'transfer');
 
@@ -103,7 +120,10 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
       {activeTab === 'new_audit' && (
         <PhysicalAuditSheetTab
           selectedLocation={selectedLocation}
-          setSelectedLocation={setSelectedLocation}
+          locationLabel={locationLabel}
+          warehouses={warehouses}
+          warehousesFailed={warehousesQuery.isError}
+          onRequestLocationChange={sheet.requestLocationChange}
           nextRef={data.nextRef}
           notes={sheet.notes}
           setNotes={sheet.setNotes}
@@ -198,13 +218,24 @@ export function InventoryAuditPage({ user }: InventoryAuditPageProps) {
         <AuditConfirmSummaryModal
           summary={sheet.pendingAuditSummary}
           nextRef={data.nextRef}
-          selectedLocation={selectedLocation}
+          selectedLocation={locationLabel}
           notes={sheet.notes}
           submitting={sheet.submitting}
           onCancel={sheet.cancelPendingAudit}
           onConfirm={sheet.confirmSubmitAudit}
         />
       )}
+
+      {/* v9.0.56 (TD-484): عوض کردن انبار پس از شمارش، شمارش‌ها را پاک می‌کند */}
+      <ConfirmModal
+        isOpen={sheet.pendingLocation !== null}
+        title="تغییر انبار شمارش"
+        message={`شمارش‌های واردشده برای «${locationLabel}» پاک می‌شوند و برگه «${warehouseName(sheet.pendingLocation ?? '')}» بارگذاری می‌شود. ادامه می‌دهید؟`}
+        confirmText="پاک کردن و تغییر انبار"
+        cancelText="ماندن در همین انبار"
+        onConfirm={sheet.confirmLocationChange}
+        onCancel={sheet.cancelLocationChange}
+      />
     </div>
   );
 }

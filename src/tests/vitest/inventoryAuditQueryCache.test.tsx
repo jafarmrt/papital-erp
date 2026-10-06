@@ -22,16 +22,18 @@ interface RequestInitLike { method?: string; body?: string; signal?: AbortSignal
 
 const keeper: User = { id: 2, username: 'keeper', full_name: 'انباردار تست', role: 'admin' };
 const LOCATION = 'انبار مرکزی';
-const AUDIT_ITEMS_URL = `/documents/audit-items?location=${encodeURIComponent(LOCATION)}`;
-const auditItem = { id: 7, code: 'R-7', name: 'سیم نقره', category: 'سیم', unit: 'متر', system_stock: 10 };
+// v9.0.55 (TD-480): برگه انبار را با کد می‌خواند و می‌فرستد؛ نام فقط در متن‌ها
+const LOCATION_CODE = 'WH1';
+const AUDIT_ITEMS_URL = `/documents/audit-items?location=${LOCATION_CODE}`;
+const auditItem = { id: 7, code: 'R-7', name: 'سیم نقره', category: 'سیم', unit: 'متر', system_stock: 10, location: 'WH1' };
 
 function baseResponse(url: string, init?: RequestInitLike): unknown {
   const method = init?.method ?? 'GET';
-  if (url === '/inventory/integrity-audit') return { report: { summary: { discrepancyItems: 0 }, items: [] } };
+  if (url === '/inventory/integrity-audit') return { summary: { discrepancyItems: 0 }, audits: [], warehouses: [] };
   if (url === '/items?limit=1000') return { data: [] };
   if (url === '/documents/next-ref?type=audit') return { nextRef: 'AUD-2001' };
   if (url === AUDIT_ITEMS_URL) return [auditItem];
-  if (url === '/warehouses') return [{ id: 1, name: LOCATION, code: 'WH1', is_active: 1 }];
+  if (url === '/warehouses') return [{ id: 1, name: LOCATION, code: LOCATION_CODE, is_active: 1 }];
   if (url === '/documents' && method === 'POST') return { success: true, docId: 50 };
   return [];
 }
@@ -87,9 +89,9 @@ describe('InventoryAuditPage — React Query cache', () => {
 
     const post = fetchJson.mock.calls.find(([url, init]) => url === '/documents' && init?.method === 'POST');
     expect(JSON.parse(String(post?.[1].body))).toMatchObject({
-      docType: 'audit', refNumber: 'AUD-2001', location: LOCATION, user: 'انباردار تست', status: 'final',
+      docType: 'audit', refNumber: 'AUD-2001', location: LOCATION_CODE, user: 'انباردار تست', status: 'final',
       notes: `ثبت انبارگردانی در موقعیت ${LOCATION}`,
-      items: [{ itemId: 7, system_stock: 10, physical_stock: 8, quantity: 8, location: LOCATION }],
+      items: [{ itemId: 7, system_stock: 10, physical_stock: 8, quantity: 8, location: LOCATION_CODE }],
     });
 
     otherPages.forEach(key => expect(client.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true));
