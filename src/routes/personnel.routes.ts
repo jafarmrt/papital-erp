@@ -16,6 +16,7 @@ import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money } from '../lib/money.js';
+import { OptimisticLockError, checkOccVersion, nextVersion } from '../lib/occHelper.js';
 import { fin } from '../lib/financialDecimal.js';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
 import { assertPersonnelDeletable } from '../services/personnel/personnelDeleteGuard.js';
@@ -60,7 +61,8 @@ const PERSONNEL_DETAIL_COLUMNS = {
   address: personnel.address,
   notes: personnel.notes,
   createdAt: personnel.createdAt,
-  updatedAt: personnel.updatedAt
+  updatedAt: personnel.updatedAt,
+  version: personnel.version
 };
 
 /**
@@ -139,8 +141,15 @@ const createPersonnelSchema = z.object({
   body: personnelBodySchema
 });
 
+/**
+ * v9.0.30 (TD-442، تصمیم D5 الف): ویرایش پرسنل نسخه رکوردی را که فرم از آن ساخته شده می‌فرستد (مثل TD-403)؛
+ * نسخه کهنه ۴۰۹ OCC_CONFLICT است. پیش‌تر ذخیره دوم دو مدیر تغییر اول را بی صدا پاک می‌کرد.
+ */
 const updatePersonnelSchema = z.object({
-  body: personnelBodySchema,
+  body: personnelBodySchema.extend({
+    version: z.coerce.number({ message: 'نسخه رکورد پرسنل ارسال نشده است؛ صفحه را بازخوانی کنید و دوباره ویرایش کنید.' })
+      .int('نسخه رکورد باید عدد صحیح باشد').positive('نسخه رکورد باید مثبت باشد'),
+  }),
   params: z.object({
     id: numericIdString
   })
@@ -306,10 +315,13 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
                 referralSource: referralSource || existing.referralSource,
                 address: address || existing.address,
                 notes: notes || existing.notes,
-                updatedAt: nowIso
+                updatedAt: nowIso,
+                version: nextVersion(existing.version)
               })
-              .where(eq(personnel.id, existing.id))
+              .where(and(eq(personnel.id, existing.id), eq(personnel.version, existing.version), eq(personnel.isDeleted, 0)))
               .returning();
+            // v9.0.30 (TD-442): پرسنلی که از خواندن فهرست تا این ردیف ویرایش یا حذف شده بازنویسی نمی‌شود
+            if (!updated) throw new Error(`پرسنل «${existing.fullName}» هم‌زمان ویرایش یا حذف شده است؛ این ردیف به‌روز نشد.`);
 
             // v9.0.26 (TD-437): یک ردیف ممیزی برای هر پرسنل، با مقدار قبل و بعد فیلدهای تغییرکرده
             await logActivity({
@@ -563,6 +575,10 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
       return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
     }
 
+    // v9.0.30 (TD-442): نسخه فرم باید نسخه فعلی باشد؛ نوشتن هم فقط با همان نسخه (ویرایش هم‌زمان میان خواندن و نوشتن)
+    const expectedVersion = Number(req.body.version);
+    checkOccVersion(existing, { entityType: 'Personnel', entityId: id, expectedVersion });
+
     const {
       firstName = existing.firstName,
       lastName = existing.lastName,
@@ -639,10 +655,12 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
           nobitexPassword: nextNobitex,
           address: address ? address.trim() : '',
           notes: notes ? notes.trim() : '',
-          updatedAt: nowIso
+          updatedAt: nowIso,
+          version: nextVersion(existing.version)
         })
-        .where(eq(personnel.id, id))
+        .where(and(eq(personnel.id, id), eq(personnel.version, existing.version), eq(personnel.isDeleted, 0)))
         .returning();
+      if (!updated) throw new OptimisticLockError({ entityType: 'Personnel', entityId: id, expectedVersion });
 
       await logActivity({
         userId: req.user?.id,

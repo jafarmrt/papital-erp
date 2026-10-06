@@ -33,6 +33,8 @@ export interface Personnel {
   createdAt?: string;
   updatedAt?: string;
   isDeleted?: number;
+  /** نسخه قفل خوش‌بینانه؛ فرم ویرایش همان را برمی‌گرداند (TD-442) */
+  version?: number;
 }
 
 export interface PieceworkTask {

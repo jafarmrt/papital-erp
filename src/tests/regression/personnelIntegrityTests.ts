@@ -1,3 +1,4 @@
+import { personnelVersion } from '../fixtures/personnelVersion.js';
 import request from 'supertest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
@@ -102,6 +103,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         const pid = Number(created.body.id);
         ids.push(pid);
         const put = await send('put', `/api/personnel/${pid}`, {
+          version: await personnelVersion(pid),
           firstName: 'زهرا', lastName: `ممیزی ${tag}`, salaryType: 'monthly_fixed', monthlySalary: 60000000,
           shebaNumber: 'IR550560000000009876543210', nobitexPassword: 'New#437',
         });
@@ -176,12 +178,12 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       if (fa.status === 201) {
         const pid = Number(fa.body.id);
         for (const value of ['abc', '-5000000']) {
-          const res = await send('put', `/api/personnel/${pid}`, { ...base('فارسی'), monthlySalary: value });
+          const res = await send('put', `/api/personnel/${pid}`, { version: await personnelVersion(pid), ...base('فارسی'), monthlySalary: value });
           if (res.status !== 400 || await salaryOf(pid) !== 45000000) wrong.push(`ویرایش با «${value}»: ${res.status} و حقوق ${await salaryOf(pid)}`);
         }
-        const keep = await send('put', `/api/personnel/${pid}`, { ...base('فارسی'), jobTitle: 'زرگر' });
+        const keep = await send('put', `/api/personnel/${pid}`, { version: await personnelVersion(pid), ...base('فارسی'), jobTitle: 'زرگر' });
         if (keep.status !== 200 || await salaryOf(pid) !== 45000000) wrong.push(`ویرایش بی فیلد حقوق: ${keep.status} و حقوق ${await salaryOf(pid)}`);
-        const clear = await send('put', `/api/personnel/${pid}`, { ...base('فارسی'), monthlySalary: '' });
+        const clear = await send('put', `/api/personnel/${pid}`, { version: await personnelVersion(pid), ...base('فارسی'), monthlySalary: '' });
         if (clear.status !== 200 || await salaryOf(pid) !== 0) wrong.push(`ویرایش با خانه خالی: ${clear.status} و حقوق ${await salaryOf(pid)}`);
       }
       if (wrong.length > 0) throw new Error(wrong.join('؛ '));
@@ -211,7 +213,7 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       // ۲) ویرایش پرسنل دیگر به همین کد با حروف کوچک رد می‌شود
       const other = await send('post', '/api/personnel', { firstName: 'دیگر', lastName: tag, personnelCode: `${code}-B` });
       if (other.status === 201) ids.push(Number(other.body.id));
-      const put = await send('put', `/api/personnel/${other.body.id}`, { firstName: 'دیگر', lastName: tag, personnelCode: ` ${code.toLowerCase()}` });
+      const put = await send('put', `/api/personnel/${other.body.id}`, { version: await personnelVersion(other.body.id), firstName: 'دیگر', lastName: tag, personnelCode: ` ${code.toLowerCase()}` });
       if (put.status !== 400) wrong.push(`ویرایش به کد تکراری ${put.status} داد`);
 
       // ۳) ورود اکسل همان کد را با حروف دیگر پرسنل موجود می‌شناسد، نه پرسنل تازه
@@ -353,6 +355,57 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
         if (payrollIds.length > 0) await orm.delete(pieceworkPayrolls).where(inArray(pieceworkPayrolls.id, payrollIds)).catch(() => undefined);
         if (taskId !== null) await orm.delete(pieceworkTasks).where(eq(pieceworkTasks.id, taskId)).catch(() => undefined);
       }
+    });
+  }
+
+  const occId = 'reg_personnel_edit_occ_td_442';
+  if (shouldRun(occId, 'td442', 'personnel', 'occ', 'concurrency', 'package12')) {
+    await runCase(results, occId, 'v9.0.30: ویرایش پرسنل نسخه فرم را می‌فرستد؛ نسخه کهنه یا ویرایش هم‌زمان ۴۰۹ OCC_CONFLICT است و تغییر نخست پاک نمی‌شود؛ ویرایش بی نسخه ۴۰۰ (TD-442)', async (ids) => {
+      const { send, app, admin } = await adminClient();
+      const tag = tagOf();
+      const wrong: string[] = [];
+      const created = await send('post', '/api/personnel', {
+        firstName: 'نرگس', lastName: `نسخه ${tag}`, personnelCode: `OCC-${tag}`, salaryType: 'monthly_fixed', monthlySalary: 40000000, phone: '09121110000',
+      });
+      if (created.status !== 201) throw new Error(`ثبت پرسنل ${created.status} داد`);
+      const pid = Number(created.body.id);
+      ids.push(pid);
+      const detail = async () => (await request(app).get(`/api/personnel/${pid}`).set('Cookie', admin.cookie)).body as Record<string, unknown>;
+      const form = (extra: object) => ({ firstName: 'نرگس', lastName: `نسخه ${tag}`, personnelCode: `OCC-${tag}`, salaryType: 'monthly_fixed', ...extra });
+      const row = async () => (await orm.select().from(personnel).where(eq(personnel.id, pid)))[0];
+
+      // ۱) بی نسخه ۴۰۰ و بی تغییر
+      const noVersion = await send('put', `/api/personnel/${pid}`, form({ monthlySalary: 1 }));
+      if (noVersion.status !== 400 || Number((await row()).monthlySalary) !== 40000000) wrong.push(`ویرایش بی نسخه ${noVersion.status} داد`);
+
+      // ۲) دو مدیر فرم را با یک نسخه باز می‌کنند؛ ذخیره دوم تغییر حقوق اولی را پاک نمی‌کند
+      const v1 = Number((await detail()).version);
+      if (!Number.isInteger(v1) || v1 < 1) wrong.push(`جزئیات نسخه ندارد: ${v1}`);
+      const first = await send('put', `/api/personnel/${pid}`, form({ version: v1, monthlySalary: 52000000, phone: '09121110000' }));
+      const second = await send('put', `/api/personnel/${pid}`, form({ version: v1, monthlySalary: 40000000, phone: '09129990000' }));
+      const afterTwo = await row();
+      if (first.status !== 200) wrong.push(`ذخیره نخست ${first.status} داد`);
+      if (second.status !== 409 || second.body?.code !== 'OCC_CONFLICT') wrong.push(`ذخیره با نسخه کهنه ${second.status} ${JSON.stringify(second.body).slice(0, 120)}`);
+      if (Number(afterTwo.monthlySalary) !== 52000000 || afterTwo.phone !== '09121110000') wrong.push(`تغییر نخست پاک شد: حقوق ${afterTwo.monthlySalary}، تلفن ${afterTwo.phone}`);
+      const v2 = Number((await detail()).version);
+      if (v2 !== v1 + 1) wrong.push(`نسخه پس از ذخیره ${v2} است، نه ${v1 + 1}`);
+
+      // ۳) دو ذخیره هم‌زمان با یک نسخه: یکی ۲۰۰، دیگری ۴۰۹
+      const race = await Promise.all([
+        send('put', `/api/personnel/${pid}`, form({ version: v2, monthlySalary: 61000000 })),
+        send('put', `/api/personnel/${pid}`, form({ version: v2, monthlySalary: 62000000 })),
+      ]);
+      const statuses = race.map(r => r.status).sort().join(',');
+      if (statuses !== '200,409') wrong.push(`دو ذخیره هم‌زمان ${statuses} دادند`);
+
+      // ۴) ورود اکسل نسخه را جلو می‌برد، پس فرم بازشده پیش از آن کهنه است
+      const v3 = Number((await detail()).version);
+      await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: `OCC-${tag}`, firstName: 'نرگس', jobTitle: 'مونتاژکار' }] });
+      const staleAfterImport = await send('put', `/api/personnel/${pid}`, form({ version: v3, monthlySalary: 1000 }));
+      if (staleAfterImport.status !== 409) wrong.push(`فرم کهنه پس از ورود اکسل ${staleAfterImport.status} داد`);
+
+      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      return 'بی نسخه ۴۰۰؛ ذخیره با نسخه کهنه ۴۰۹ OCC_CONFLICT و حقوق ذخیره نخست ماند؛ نسخه یکی جلو رفت؛ دو ذخیره هم‌زمان ۲۰۰ و ۴۰۹؛ ورود اکسل فرم پیشین را کهنه کرد';
     });
   }
 

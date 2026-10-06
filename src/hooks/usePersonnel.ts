@@ -100,6 +100,8 @@ export function usePersonnel() {
   // Modal states
   const [showFormModal, setShowFormModal] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  // v9.0.30 (TD-442): نسخه رکوردی که فرم ویرایش از آن ساخته شده؛ سرور نسخه کهنه را با ۴۰۹ رد می‌کند
+  const [editingVersion, setEditingVersion] = useState<number | undefined>(undefined);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<Personnel | null>(null);
   const [showNobitexPass, setShowNobitexPass] = useState<boolean>(false);
@@ -110,6 +112,7 @@ export function usePersonnel() {
   const resetForm = () => {
     setFormData(INITIAL_FORM_DATA);
     setEditingId(null);
+    setEditingVersion(undefined);
     setShowNobitexPass(false);
   };
 
@@ -130,6 +133,7 @@ export function usePersonnel() {
 
   const fillEditForm = (p: Personnel) => {
     setEditingId(p.id);
+    setEditingVersion(p.version);
     setFormData({
       firstName: p.firstName || '',
       lastName: p.lastName || '',
@@ -203,7 +207,8 @@ export function usePersonnel() {
       nationalId: cleanNationalId,
       phone: cleanPhone,
       fullName: computedFullName,
-      userId: formData.userId ? Number(formData.userId) : null
+      userId: formData.userId ? Number(formData.userId) : null,
+      ...(editingId !== null ? { version: editingVersion } : {})
     };
 
     await saveMutation.mutateAsync({
