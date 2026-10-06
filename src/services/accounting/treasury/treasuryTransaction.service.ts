@@ -17,44 +17,15 @@ import type { TreasuryTransaction, Account } from '../../../types.js';
 import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } from '../../../errors/customErrors.js';
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
-import { jalaliToIsoDate } from '../../../utils.js';
-
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const JALALI_DATE_PATTERN = /^(1[345]\d{2})[-/](\d{1,2})[-/](\d{1,2})$/;
+import { resolveTreasuryWriteDate } from './treasuryDate.js';
 
 /**
- * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است.
- * - مقدار خالی → پیش‌فرض businessTodayIsoDate (ساعت توافقی، نه ساعت مرورگر کلاینت)
- * - ورودی جلالی → نرمال‌سازی به ISO ذخیره‌سازی
- * - فرمت/روز نامعتبر یا تاریخ آینده → ValidationError (بازه مجاز: گذشته تا امروز کسب‌وکار)
+ * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
+ * v9.0.87 (TD-669، B16-05): ورودی با `requireStorageDate` خوانده می‌شود (`resolveTreasuryWriteDate`)؛ روز ناموجود دیگر به
+ * روز بعد نمی‌رود.
  */
 export async function resolveTreasuryBusinessDate(rawDate?: string | null): Promise<string> {
-  const trimmed = String(rawDate || '').trim();
-  if (!trimmed) {
-    return await businessTodayIsoDate();
-  }
-
-  let isoDate = trimmed;
-  const jalaliMatch = trimmed.match(JALALI_DATE_PATTERN);
-  if (jalaliMatch) {
-    isoDate = jalaliToIsoDate(trimmed);
-    if (!isoDate) {
-      throw new ValidationError(`تاریخ جلالی «${trimmed}» قابل تبدیل به تقویم معتبر نیست`);
-    }
-  } else if (ISO_DATE_PATTERN.test(trimmed)) {
-    const parsed = new Date(`${trimmed}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== trimmed) {
-      throw new ValidationError(`تاریخ «${trimmed}» یک روز تقویمی معتبر نیست`);
-    }
-  } else {
-    throw new ValidationError(`فرمت تاریخ تراکنش نامعتبر است («${trimmed}»). فرمت‌های مجاز: YYYY-MM-DD میلادی یا 14xx/xx/xx جلالی`);
-  }
-
-  const businessToday = await businessTodayIsoDate();
-  if (isoDate > businessToday) {
-    throw new ValidationError(`تاریخ تراکنش («${trimmed}») نمی‌تواند در آینده باشد؛ تاریخ امروز کسب‌وکار «${businessToday}» است`);
-  }
-  return isoDate;
+  return resolveTreasuryWriteDate(rawDate, 'تاریخ تراکنش');
 }
 
 export class TreasuryTransactionService {

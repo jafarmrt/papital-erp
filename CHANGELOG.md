@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.87 — Cheque and Treasury Dates
+- **Cheque and Treasury Dates (P2):** a cheque issue or action date after today and a non-existent day such as 1404/12/30 in a receipt, payment, transfer or cheque action are refused; the cheque status form sends the action date. Before, 1404/12/30 was posted on 1 Farvardin 1405 in the next fiscal year (TD-506, TD-669, `reg_cheque_and_treasury_dates_td_506`).
+
 ### v9.0.86 — Bank Pick List for Forms
 - **Bank Account Readers (P2):** forms that only pick a bank account read a pick list without account, card or Sheba numbers or balances; the full list goes only to treasury readers. Before, warehouse and document users read every number and balance (TD-505, `reg_bank_account_options_td_505`).
 

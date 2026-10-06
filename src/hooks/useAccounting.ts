@@ -200,9 +200,10 @@ export function useAccounting() {
     status: string,
     description?: string,
     bankAccountId?: number,
-    transfereePartyId?: number
+    transfereePartyId?: number,
+    actionDate?: string
   ) => {
-    await chequeMutations.updateChequeStatus.mutateAsync({ id, status, description, bankAccountId, transfereePartyId });
+    await chequeMutations.updateChequeStatus.mutateAsync({ id, status, description, bankAccountId, transfereePartyId, actionDate });
   };
 
   const handleDeleteCheque = async (id: number) => {

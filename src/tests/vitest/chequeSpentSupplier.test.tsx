@@ -37,7 +37,8 @@ describe('spending a cheque asks for a supplier (TD-498)', () => {
     fireEvent.change(statusSelect, { target: { value: 'spent' } });
     expect(screen.getByText('تأمین‌کننده گیرنده چک *')).toBeTruthy();
     const form = statusSelect.closest('form') as HTMLFormElement;
-    expect(form.querySelector('input[type="text"]')).toBeNull();
+    // no free-text payee name field (the only text input is the action date picker, v9.0.87)
+    expect(Array.from(form.querySelectorAll('input')).filter(i => i.getAttribute('placeholder') !== 'تاریخ اقدام' && i.type === 'text')).toEqual([]);
 
     fireEvent.submit(form);
     await waitFor(() => expect(onUpdateStatus).not.toHaveBeenCalled());

@@ -11,12 +11,12 @@ import { NotFoundError, ValidationError, BusinessLogicError, ConflictError } fro
 import { fin } from '../../../lib/financialDecimal.js';
 import { money } from '../../../lib/money.js';
 
-import { businessTodayIsoDate, normalizeDateToIso } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { containsLikePattern } from '../../../lib/sqlLike.js';
 import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
+import { resolveTreasuryWriteDate } from './treasuryDate.js';
 import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
 import { resolveTreasuryPartyName } from './treasuryLinks.js';
 import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
@@ -171,9 +171,13 @@ export class ChequeLifecycleService {
       throw new ValidationError('چک ارزی پذیرفته نمی‌شود؛ چک فقط به ریال ثبت می‌شود. دریافت یا پرداخت ارزی را از فرم خزانه با نرخ تسعیر ثبت کنید.');
     }
     // v7.0.133 (TD-232): تاریخ صدور و سررسید چک میلادی ISO ذخیره می‌شوند (ورودی شمسی تبدیل، نامعتبر 422)
-    const issueDate = requireStorageDate(data.issueDate, 'تاریخ صدور چک');
+    if (!String(data.issueDate ?? '').trim() || !String(data.dueDate ?? '').trim()) {
+      throw new ValidationError('تاریخ صدور و تاریخ سررسید چک الزامی است');
+    }
+    // v9.0.87 (TD-506، B04-10، ت۶ الف): سند ثبت چک به تاریخ صدور است، پس صدور پس از امروز کسب‌وکار پذیرفته نیست
+    // (مانند فرم خزانه). سررسید آینده همچنان مجاز است.
+    const issueDate = await resolveTreasuryWriteDate(data.issueDate, 'تاریخ صدور چک');
     const dueDate = requireStorageDate(data.dueDate, 'تاریخ سررسید چک');
-    if (!issueDate || !dueDate) throw new ValidationError('تاریخ صدور و تاریخ سررسید چک الزامی است');
     const dueJalali = isoToJalaliDate(dueDate);
 
     const initialHistory = [{
@@ -399,7 +403,9 @@ export class ChequeLifecycleService {
       }
 
       const history = Array.isArray(existing.statusHistory) ? [...existing.statusHistory] : [];
-      const voucherIsoDate = normalizeDateToIso(data.actionDate) || (await businessTodayIsoDate());
+      // v9.0.87 (TD-506 / TD-669، B04-10 / B16-05، ت۶ الف): تاریخ اقدام سند همه گام‌های چک است؛ خالی ← امروز کسب‌وکار،
+      // روز ناموجود یا پس از امروز ← 422. پیش‌تر `normalizeDateToIso` روز ناموجود را جابه‌جا و تاریخ آینده را بی‌سقف می‌پذیرفت.
+      const voucherIsoDate = await resolveTreasuryWriteDate(data.actionDate, 'تاریخ اقدام چک');
 
       // V1.7.0: کدینگ از مپینگ قابل‌تنظیم
       await ChartOfAccountsService.getAllAccounts(txEngine);
