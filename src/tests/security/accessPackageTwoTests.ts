@@ -177,5 +177,35 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_permission_only_checks_td_881', 'security', 'td881', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_permission_only_checks_td_881',
+      name: 'v9.0.80: can() and requirePermission ask catalog permissions only, never a role code (TD-881)',
+      details: 'requirePermission refuses a mistyped key, a role code or no key when the router is built, and authorizePermission is the same guard; can() passes the system admin and a role holding the key, refuses a role without it and a missing user, and throws on a role code',
+    }, async (h, wrong) => {
+      const guards = await import('../../middleware/authorize.js') as Record<string, unknown>;
+      const requirePermission = guards.requirePermission as ((...keys: string[]) => unknown) | undefined;
+      const can = guards.can as ((user: { role?: string } | undefined, ...keys: string[]) => Promise<boolean>) | undefined;
+      if (typeof requirePermission !== 'function' || typeof can !== 'function') throw new Error('can() or requirePermission() is missing');
+      if (guards.authorizePermission !== requirePermission) wrong.push('authorizePermission is not the strict guard');
+      for (const bad of [['customers.mange'], ['manager'], ['customers.view', 'sales_manager'], []]) {
+        let threw = false;
+        try { requirePermission(...bad); } catch { threw = true; }
+        if (!threw) wrong.push(`requirePermission(${bad.join(', ')}) built a guard`);
+      }
+      try { requirePermission('customers.view', 'crm.view'); } catch { wrong.push('requirePermission refused catalog keys'); }
+
+      const s = await h.sessionWith(['customers.view']);
+      if (!(await can({ role: s.role }, 'customers.view'))) wrong.push('can() refused a role holding the key');
+      if (!(await can({ role: s.role }, 'crm.view', 'customers.view'))) wrong.push('can() refused a role holding one of the keys');
+      if (await can({ role: s.role }, 'customers.manage')) wrong.push('can() passed a role without the key');
+      if (!(await can({ role: 'admin' }, 'settings.manage'))) wrong.push('can() refused the system admin');
+      if (await can(undefined, 'customers.view')) wrong.push('can() passed a missing user');
+      let threw = false;
+      try { await can({ role: s.role }, s.role); } catch { threw = true; }
+      if (!threw) wrong.push('can() accepted a role code');
+    });
+  }
+
   return results;
 }

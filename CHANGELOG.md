@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.80 — One Permission Check and Permission Ratchets
+- **Permission Check:** `can()` and `requirePermission` ask catalog permission keys only (an unknown key or a role code fails when the router is built); `npm run ratchet:permissions` keeps role-code literals and stray permission keys from growing (TD-881).
+
 ### v9.0.79 — Role Permissions Carry Their Requirements
 - **Permission Dependencies:** the permission catalog is one shared file where every action requires its section's view; saving a role adds the missing requirements and the role form ticks them (TD-880).
 

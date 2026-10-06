@@ -4,6 +4,7 @@ import { roles } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { rolePermissionsCache } from '../lib/memoryCache.js';
 import { asyncHandler } from './asyncHandler.js';
+import { isCatalogPermission, SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 
 async function getCachedRoleData(roleCode: string) {
   return rolePermissionsCache.getOrSet(roleCode, async () => {
@@ -28,15 +29,33 @@ export function isPermissionKey(entry: string): boolean {
   return entry.includes('.');
 }
 
-async function roleOrPermissionGranted(role: string, entries: string[]): Promise<boolean> {
-  // Admin always has full access
-  if (role === 'admin') return true;
-  const roleCodes = entries.filter(e => !isPermissionKey(e));
-  if (roleCodes.includes(role)) return true;
+/** مجوزهای نقش (از کش ۶۰ ثانیه‌ای)؛ `*` قدیمی تا حذفش در ۲-M2 همه را می‌دهد */
+async function roleHoldsAny(role: string, permissionKeys: readonly string[]): Promise<boolean> {
   const roleData = await getCachedRoleData(role);
   const perms: string[] = roleData?.permissions || [];
-  const permissionKeys = entries.filter(isPermissionKey);
   return perms.includes('*') || permissionKeys.some(k => perms.includes(k));
+}
+
+async function roleOrPermissionGranted(role: string, entries: string[]): Promise<boolean> {
+  // Admin always has full access
+  if (role === SYSTEM_ADMIN_ROLE) return true;
+  const roleCodes = entries.filter(e => !isPermissionKey(e));
+  if (roleCodes.includes(role)) return true;
+  return roleHoldsAny(role, entries.filter(isPermissionKey));
+}
+
+/**
+ * v9.0.80 (TD-881، مدل مجوز §۴.۲): تنها بررسی دسترسی بر پایه مجوز. «مدیر سیستم» همه را دارد؛ هر کاربر دیگر فقط وقتی
+ * نقشش یکی از کلیدها را دارد. کد نقش هرگز پرسیده نمی‌شود: ورودی بی‌نقطه خطای برنامه‌نویسی است و پرتاب می‌شود.
+ */
+export async function can(user: { role?: string } | undefined, ...permissionKeys: string[]): Promise<boolean> {
+  const notKeys = permissionKeys.filter(k => !isPermissionKey(k));
+  if (permissionKeys.length === 0 || notKeys.length > 0) {
+    throw new TypeError(`can() accepts permission keys only, got: ${notKeys.join(', ') || '(none)'}`);
+  }
+  if (!user?.role) return false;
+  if (user.role === SYSTEM_ADMIN_ROLE) return true;
+  return roleHoldsAny(user.role, permissionKeys);
 }
 
 /**
@@ -68,7 +87,15 @@ export const authorize = (...allowedRolesOrPermissions: string[]) => {
   }));
 };
 
-export const authorizePermission = (...permissionKeys: string[]) => {
+/**
+ * v9.0.80 (TD-881): گارد route فقط با کلیدهای کاتالوگ مجوز. کلید بیرون از کاتالوگ یا کد نقش هنگام ساختن روتر
+ * (راه‌اندازی سرور) خطا می‌دهد، پس گاردی که هیچ نقشی نمی‌تواند بگیرد ساخته نمی‌شود. عبور با `can`.
+ */
+export const requirePermission = (...permissionKeys: string[]) => {
+  const invalid = permissionKeys.filter(k => !isCatalogPermission(k));
+  if (permissionKeys.length === 0 || invalid.length > 0) {
+    throw new TypeError(`requirePermission() accepts permission catalog keys only, got: ${invalid.join(', ') || '(none)'}`);
+  }
   return tagGuard(permissionKeys, asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) {
@@ -76,7 +103,7 @@ export const authorizePermission = (...permissionKeys: string[]) => {
     }
 
     try {
-      if (await roleOrPermissionGranted(user.role, permissionKeys)) {
+      if (await can(user, ...permissionKeys)) {
         return next();
       }
 
@@ -86,6 +113,9 @@ export const authorizePermission = (...permissionKeys: string[]) => {
     }
   }));
 };
+
+/** نام قدیمی همان گارد `requirePermission` (۲۰۵ route)؛ گارد تازه `requirePermission` را به کار ببرد */
+export const authorizePermission = requirePermission;
 
 /**
  * v7.0.26 (TD-184): بررسی برنامه‌ای «نقش یا مجوز» برای منطق سرویس‌ها (مثلاً مجوز سطح کلید در تنظیمات)
