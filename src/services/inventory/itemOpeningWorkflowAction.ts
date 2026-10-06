@@ -28,5 +28,10 @@ async function itemExists(tx: DbExecutor, entityId: string): Promise<boolean> {
 }
 
 export function registerItemOpeningWorkflowAction(): void {
-  registerWorkflowTransitionAction(['item'], { run: issueApprovedItemOpening, entityExists: itemExists });
+  registerWorkflowTransitionAction(['item'], {
+    run: issueApprovedItemOpening,
+    entityExists: itemExists,
+    // v9.0.35 (TD-445، ت۳): سند افتتاحیه کالا همان مجوز ساخت کالا (`POST /items`) را می‌خواهد
+    requiredPermissions: (t) => (t.toStateKey === 'approved' ? ['products.create'] : []),
+  });
 }

@@ -32,5 +32,10 @@ async function voucherExists(tx: DbExecutor, entityId: string): Promise<boolean>
 }
 
 export function registerVoucherWorkflowAction(): void {
-  registerWorkflowTransitionAction(['journal_voucher', 'voucher'], { run: applyVoucherWorkflowStep, entityExists: voucherExists });
+  registerWorkflowTransitionAction(['journal_voucher', 'voucher'], {
+    run: applyVoucherWorkflowStep,
+    entityExists: voucherExists,
+    // v9.0.35 (TD-445، ت۳): تغییر وضعیت سند حسابداری همان مجوز `PUT /accounting/vouchers/:id/status` را می‌خواهد
+    requiredPermissions: (t) => (VOUCHER_STATUS_OF_STEP.has(t.toStateKey) ? ['accounting.vouchers'] : []),
+  });
 }

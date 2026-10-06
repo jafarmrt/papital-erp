@@ -7,6 +7,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildUnguardedDocumentApprovalHealthTest, findUnguardedDocumentApprovals } from '../workflow/docApprovalGuards.js';
 import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
@@ -1056,6 +1057,11 @@ export class FinancialHealthService {
     const personnelCodeTest = buildPersonnelCodeHealthTest(duplicatePersonnelCodes, personnelCodeIndexPresent);
     overallScore += personnelCodeTest.scoreImpact;
     tests.push(personnelCodeTest);
+
+    // آزمون ۱۷: v9.0.35 (TD-445) اقدام قطعی‌سازی بی نقش و بی مجوز در گردش کار فعال اسناد
+    const unguardedApprovalTest = buildUnguardedDocumentApprovalHealthTest(await findUnguardedDocumentApprovals());
+    overallScore += unguardedApprovalTest.scoreImpact;
+    tests.push(unguardedApprovalTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

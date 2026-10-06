@@ -26,5 +26,10 @@ async function documentExists(tx: DbExecutor, entityId: string): Promise<boolean
 }
 
 export function registerDocumentWorkflowAction(): void {
-  registerWorkflowTransitionAction(['document'], { run: finalizeApprovedDocument, entityExists: documentExists });
+  registerWorkflowTransitionAction(['document'], {
+    run: finalizeApprovedDocument,
+    entityExists: documentExists,
+    // v9.0.35 (TD-445، ت۳): قطعی‌سازی از گردش‌کار همان مجوزهای `PUT /documents/:id/finalize` را می‌خواهد
+    requiredPermissions: (t) => (t.toStateKey === 'approved' || t.autoActionKey === 'POST_INVOICE' ? ['documents.edit', 'warehouse.in', 'warehouse.out'] : []),
+  });
 }

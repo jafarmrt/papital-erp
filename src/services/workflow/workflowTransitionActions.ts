@@ -26,6 +26,12 @@ export interface WorkflowTransitionEvent {
   allowBackdate: boolean;
 }
 
+/** گام مقصد یک انتقال، پیش از اجرای آن */
+export interface WorkflowActionTarget {
+  toStateKey: string;
+  autoActionKey: string;
+}
+
 export interface WorkflowTransitionAction {
   /**
    * ردیف موجودیت را پیش از ردیف فرایند قفل می‌کند، به همان ترتیب مسیر خود دامنه (موجودیت ← فرایند)؛ بی آن، انتقال از
@@ -37,6 +43,12 @@ export interface WorkflowTransitionAction {
    * فرایند را روی شناسه ناموجود هم می‌ساخت)
    */
   entityExists?: (tx: DbExecutor, entityId: string) => Promise<boolean>;
+  /**
+   * v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): مجوزهای موجودیت (هر یک بس است) که امضاکننده گامی با این مقصد باید داشته
+   * باشد، همان مجوزی که مسیر خود دامنه می‌خواهد؛ آرایه خالی یعنی این گام اقدام دامنه ندارد. گردش‌کار راه دور زدن مجوز
+   * موجودیت نیست (لایه دوم B14-01).
+   */
+  requiredPermissions?: (target: WorkflowActionTarget) => string[];
   /** پس از جابه‌جایی گام، درون همان تراکنش؛ خطای آن انتقال را رد می‌کند */
   run: (tx: DbExecutor, event: WorkflowTransitionEvent) => Promise<void>;
 }
@@ -65,6 +77,11 @@ export async function lockWorkflowEntity(tx: DbExecutor, instanceId: number): Pr
 export async function workflowEntityExists(tx: DbExecutor, entityType: string, entityId: string): Promise<boolean> {
   const exists = actions.get(entityType)?.entityExists;
   return exists ? exists(tx, entityId) : true;
+}
+
+/** v9.0.35 (TD-445): مجوزهای موجودیتِ اقدام دامنه این گام؛ نوع بی دامنه یا گام بی اقدام: خالی */
+export function workflowActionPermissions(entityType: string, target: WorkflowActionTarget): string[] {
+  return actions.get(entityType)?.requiredPermissions?.(target) ?? [];
 }
 
 /** شناسه عددی مثبت موجودیت، یا undefined */

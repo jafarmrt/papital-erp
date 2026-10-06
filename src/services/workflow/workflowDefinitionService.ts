@@ -9,6 +9,7 @@ import { eq, and, sql, inArray, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
 import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
+import { DOC_APPROVAL_STEP_GUARDS, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
 import { 
   CreateWorkflowDefinitionInput, 
   UpdateWorkflowDefinitionInput, 
@@ -469,65 +470,13 @@ export class WorkflowDefinitionService {
             }
           ],
           transitions: [
-            {
-              from: 'draft',
-              to: 'warehouse_review',
-              actionKey: 'submit_to_warehouse',
-              title: 'ارسال به انبار جهت تایید اقلام',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'warehouse_review',
-              to: 'accounting_review',
-              actionKey: 'approve_warehouse',
-              title: 'تایید انبارداری و تحویل کالا',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'accounting_review',
-              to: 'approved',
-              actionKey: 'approve_accounting',
-              title: 'تایید نهایی واحد مالی و صدور سند',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'warehouse_review',
-              to: 'rejected',
-              actionKey: 'reject',
-              title: 'رد پیش‌فاکتور توسط انبار',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'accounting_review',
-              to: 'rejected',
-              actionKey: 'reject',
-              title: 'رد پیش‌فاکتور توسط مالی',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'rejected',
-              to: 'draft',
-              actionKey: 'reopen',
-              title: 'بازگشایی مجدد جهت اصلاح',
-              requiredRole: '',
-              requiredPermission: ''
-            },
-            {
-              from: 'draft',
-              to: 'approved',
-              actionKey: 'direct_approve',
-              title: 'تایید مستقیم مدیریتی',
-              requiredRole: 'admin',
-              requiredPermission: 'workflow.approve'
-            }
+            // v9.0.35 (TD-445، تصمیم ت۲ «فقط مجوز»): نگهبان هر اقدام از DOC_APPROVAL_STEP_GUARDS
+            ...DOC_APPROVAL_STEP_GUARDS.map(g => ({ ...g }))
           ]
         });
         logger.info('[WorkflowDefinitionService] Seeded default DOC_APPROVAL_WORKFLOW successfully.');
+      } else if (await upgradeLegacyDocApprovalGuards()) {
+        logger.info('[WorkflowDefinitionService] DOC_APPROVAL_WORKFLOW step permissions upgraded (TD-445).');
       }
 
       // Seed PURCHASE_REQUISITION_WORKFLOW (سیستم ساده‌سازی شده ۳ مرحله‌ای خرید و تدارکات کارگاه)

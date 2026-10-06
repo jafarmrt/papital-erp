@@ -244,5 +244,75 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     });
   }
 
+  if (shouldRun('sec_workflow_document_steps_permission_td_445', 'security', 'td445', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_document_steps_permission_td_445',
+      name: 'v9.0.35: گام‌های انبار و مالی گردش کار اسناد با مجوز بسته‌اند و قطعی‌سازی از گردش کار مجوز سند را می‌خواهد؛ تعریف دست‌نخورده نصب موجود به‌روز می‌شود (TD-445)',
+      details: 'فروشنده و خزانه‌دار از گام انبار ۴۰۳؛ گردش کار ویرایش‌شده بی نگهبان: خزانه‌دار قطعی نمی‌کند و بررسی سلامت آن را فهرست می‌کند؛ انباردار و مدیر مالی سند را قطعی می‌کنند',
+    }, async (h, wrong) => {
+      const { createTestWorkflow } = await import('../fixtures/factories.js');
+      const { WorkflowDefinitionService } = await import('../../services/workflow/workflowDefinitionService.js');
+      const { findUnguardedDocumentApprovals } = await import('../../services/workflow/docApprovalGuards.js');
+      const docStatus = async (id: number) => (await h.q(`SELECT type, status FROM documents WHERE id = $1`, [id]))[0];
+      const startDoc = async (code: string, docId: number, s: Session = h.admin) => {
+        const res = await h.post('/api/workflow/start', { workflowCode: code, entityType: 'document', entityId: docId }, s);
+        const id = Number(res.body?.data?.id);
+        if (!(id > 0)) throw new Error(`شروع ${code} روی سند ${docId}: ${res.status} ${JSON.stringify(res.body).slice(0, 160)}`);
+        return id;
+      };
+
+      // ۰) تعریف پیش‌فرض به حالت seed پیشین برمی‌گردد و به‌روزرسانی نصب موجود اجرا می‌شود
+      const [docDef] = await h.q(`SELECT id, version FROM workflow_definitions WHERE code = 'DOC_APPROVAL_WORKFLOW'`);
+      const legacyGuards = `UPDATE workflow_transitions SET required_role = CASE WHEN action_key = 'direct_approve' THEN 'admin' ELSE '' END,
+        required_permission = CASE WHEN action_key = 'direct_approve' THEN 'workflow.approve' ELSE '' END WHERE workflow_definition_id = $1`;
+      await h.q(legacyGuards, [docDef?.id]);
+      await h.q(`UPDATE workflow_transitions SET title = title || ' (ویرایش)' WHERE workflow_definition_id = $1 AND action_key = 'approve_accounting'`, [docDef?.id]);
+      await WorkflowDefinitionService.seedDefaultWorkflows();
+      const edited = await h.q(`SELECT required_permission FROM workflow_transitions WHERE workflow_definition_id = $1 AND action_key = 'approve_accounting'`, [docDef?.id]);
+      if (edited[0]?.required_permission !== '') wrong.push('گردش کار ویرایش‌شده خودکار تغییر کرد');
+      const listed = await findUnguardedDocumentApprovals();
+      if (!listed.some(r => r.definitionId === Number(docDef?.id))) wrong.push('بررسی سلامت گام تأیید بی‌نگهبان گردش کار ویرایش‌شده را فهرست نکرد');
+      await h.q(`UPDATE workflow_transitions SET title = replace(title, ' (ویرایش)', '') WHERE workflow_definition_id = $1`, [docDef?.id]);
+      await WorkflowDefinitionService.seedDefaultWorkflows();
+      const guards = await h.q(`SELECT action_key, required_role, required_permission FROM workflow_transitions WHERE workflow_definition_id = $1 ORDER BY id`, [docDef?.id]);
+      const guardOf = (key: string) => guards.filter(g => g.action_key === key).map(g => `${String(g.required_role)}|${String(g.required_permission)}`).join(',');
+      if (guardOf('approve_warehouse') !== '|warehouse.out') wrong.push(`نگهبان بررسی انبار ${guardOf('approve_warehouse')}`);
+      if (guardOf('approve_accounting') !== '|accounting.vouchers') wrong.push(`نگهبان بررسی مالی ${guardOf('approve_accounting')}`);
+      if (guardOf('direct_approve') !== '|workflow.admin') wrong.push(`نگهبان تأیید مستقیم ${guardOf('direct_approve')}`);
+      const [defAfter] = await h.q(`SELECT version FROM workflow_definitions WHERE id = $1`, [docDef?.id]);
+      if (!(Number(defAfter?.version) > Number(docDef?.version))) wrong.push('به‌روزرسانی نسخه تازه تعریف نساخت');
+      if ((await findUnguardedDocumentApprovals()).some(r => r.definitionId === Number(docDef?.id))) wrong.push('گردش کار پیش‌فرض پس از به‌روزرسانی هنوز بی‌نگهبان فهرست شد');
+
+      // ۱) فروشنده پیش‌فاکتور خودش را از گام انبار نمی‌گذراند
+      const seller = await h.sessionWith('sales_manager');
+      const proforma = await draftSalesDocument(h, 'proforma');
+      const sellerWalk = await h.walk(await startDoc('DOC_APPROVAL_WORKFLOW', proforma, seller), ['submit_to_warehouse', 'approve_warehouse', 'approve_accounting'], seller);
+      if (sellerWalk[1] !== 403) wrong.push(`فروشنده گام انبار را ${sellerWalk.join(',')} رفت`);
+      if ((await docStatus(proforma))?.status !== 'proforma') wrong.push(`پیش‌فاکتور فروشنده ${JSON.stringify(await docStatus(proforma))} شد`);
+
+      // ۲) خزانه‌دار: گام انبار ۴۰۳؛ در گردش کار ویرایش‌شده بی نگهبان هم قطعی‌سازی مجوز سند را می‌خواهد (ت۳)
+      const treasurer = await h.sessionWith('treasurer');
+      const draftA = await draftSalesDocument(h);
+      const treasurerWalk = await h.walk(await startDoc('DOC_APPROVAL_WORKFLOW', draftA), ['submit_to_warehouse', 'approve_warehouse'], treasurer);
+      if (treasurerWalk[1] !== 403) wrong.push(`خزانه‌دار گام انبار را ${treasurerWalk.join(',')} رفت`);
+      const { definition: open } = await createTestWorkflow({ definition: { entityType: 'document', code: `WF445_${h.tag}` } });
+      const draftB = await draftSalesDocument(h);
+      const openWalk = await h.walk(await startDoc(open.code, draftB), ['submit', 'approve'], treasurer);
+      if (openWalk[0] !== 200 || openWalk[1] !== 403) wrong.push(`خزانه‌دار در گردش کار بی‌نگهبان ${openWalk.join(',')} گرفت، نه ۲۰۰,۴۰۳`);
+      if ((await docStatus(draftB))?.status !== 'draft') wrong.push(`سند خزانه‌دار ${JSON.stringify(await docStatus(draftB))} شد`);
+      await h.q(`UPDATE workflow_definitions SET is_active = 0 WHERE id = $1`, [open.id]);
+
+      // ۳) مسیر درست: انباردار گام انبار، مدیر مالی گام مالی؛ سند قطعی می‌شود
+      const keeper = await h.sessionWith('warehouse_keeper');
+      const cfo = await h.sessionWith('cfo_accountant');
+      const draftC = await draftSalesDocument(h);
+      const instanceC = await startDoc('DOC_APPROVAL_WORKFLOW', draftC);
+      const okWalk = [...await h.walk(instanceC, ['submit_to_warehouse', 'approve_warehouse'], keeper), ...await h.walk(instanceC, ['approve_accounting'], cfo)];
+      if (okWalk.join(',') !== '200,200,200') wrong.push(`مسیر انباردار و مدیر مالی ${okWalk.join(',')} داد`);
+      const finalC = await docStatus(draftC);
+      if (finalC?.status !== 'final') wrong.push(`سند پس از تأیید مالی ${JSON.stringify(finalC)} است`);
+    });
+  }
+
   return results;
 }

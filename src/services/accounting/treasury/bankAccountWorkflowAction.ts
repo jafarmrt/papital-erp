@@ -28,5 +28,10 @@ async function bankAccountExists(tx: DbExecutor, entityId: string): Promise<bool
 }
 
 export function registerBankAccountWorkflowAction(): void {
-  registerWorkflowTransitionAction(['bank_account'], { run: issueApprovedTreasuryOpening, entityExists: bankAccountExists });
+  registerWorkflowTransitionAction(['bank_account'], {
+    run: issueApprovedTreasuryOpening,
+    entityExists: bankAccountExists,
+    // v9.0.35 (TD-445، ت۳): سند افتتاحیه حساب خزانه همان مجوز ساخت حساب (`POST /accounting/bank-accounts`) را می‌خواهد
+    requiredPermissions: (t) => (t.toStateKey === 'approved' ? ['accounting.treasury'] : []),
+  });
 }

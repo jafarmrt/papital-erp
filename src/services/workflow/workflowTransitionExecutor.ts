@@ -22,7 +22,7 @@ import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
-import { lockWorkflowEntity, runWorkflowTransitionAction, workflowEntityExists } from './workflowTransitionActions.js';
+import { lockWorkflowEntity, runWorkflowTransitionAction, workflowActionPermissions, workflowEntityExists } from './workflowTransitionActions.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -677,6 +677,16 @@ export class WorkflowTransitionExecutor {
         userId: actingFor ? actingFor.fromUserId : params.userId, actorId: params.userId, role: params.userRole,
       })) {
         throw new ForbiddenError(`آغازکننده فرایند گام «${transition.title}» را برای سند خودش اجرا نمی‌کند (WF_INITIATOR_EXCLUDED).`);
+      }
+      // v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): گامی که اقدام دامنه دارد مجوز همان موجودیت را از امضاکننده (یا نقش
+      // تفویض‌کننده) می‌خواهد؛ پیش‌تر نقش گام بس بود و خزانه‌دار بی مجوز قطعی‌سازی، سند را از گردش‌کار قطعی می‌کرد
+      const entityPermissions = workflowActionPermissions(instance.entityType, { toStateKey: toState.stateKey, autoActionKey: transition.autoActionKey || '' });
+      if (entityPermissions.length > 0) {
+        const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
+        const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;
+        if (signerRole !== 'admin' && !signerHeld.includes('*') && !entityPermissions.some(p => signerHeld.includes(p))) {
+          throw new ForbiddenError(`اقدام «${transition.title}» یکی از مجوزهای «${entityPermissions.join('، ')}» را می‌خواهد (WF_ENTITY_PERMISSION_REQUIRED).`);
+        }
       }
 
       // Authoritative Server-side Entity Context & Rule Evaluation (Subphase 1.3: Never trust client snapshotData for rule conditions)
