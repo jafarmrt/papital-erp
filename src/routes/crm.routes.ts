@@ -19,7 +19,8 @@ import { money } from '../lib/money.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
-import { listFollowups, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { deleteLead } from '../services/crm/crmLeadDelete.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 
 const router = Router();
@@ -635,21 +636,25 @@ router.post('/crm/leads/:id/convert-to-customer', authorizePermission('crm.manag
 }));
 
 // DELETE /api/crm/leads/:id
+// v9.0.16 (TD-425): زیر قفل پرونده؛ پرونده ناموجود ۴۰۴ و پرونده دارای سند فعال ۴۰۹ (`deleteLead`)، لاگ ممیزی در همان تراکنش
 router.delete('/crm/leads/:id', authorizePermission('crm.delete'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const currentUser = req.user;
 
-  await orm.update(crmLeads).set({ isDeleted: 1 }).where(eq(crmLeads.id, id));
-
-  await logActivity({
-    userId: currentUser?.id,
-    username: currentUser?.username || 'user',
-    userFullName: currentUser?.full_name || currentUser?.username || '',
-    action: 'DELETE',
-    entity: 'فرصت فروش CRM',
-    entityId: String(id),
-    description: `حذف فرصت فروش کد ${id}`,
-    ipAddress: req.ip || ''
+  await orm.transaction(async (tx) => {
+    const lead = await deleteLead(tx, id);
+    await logActivity({
+      userId: currentUser?.id,
+      username: currentUser?.username || 'user',
+      userFullName: currentUser?.full_name || currentUser?.username || '',
+      action: 'DELETE',
+      entity: 'فرصت فروش CRM',
+      entityId: String(id),
+      description: `حذف پرونده فروش «${lead.title}» (کد ${id})`,
+      details: { before: lead },
+      ipAddress: req.ip || '',
+      tx,
+    });
   });
 
   res.json({ message: 'فرصت فروش با موفقیت حذف شد' });
@@ -659,7 +664,8 @@ router.delete('/crm/leads/:id', authorizePermission('crm.delete'), validate(para
 router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
   const { leadId, customerId, type, pendingFollowupsOnly, fromDate, toDate } = req.query;
 
-  const conditions = [eq(crmActivities.isDeleted, 0)];
+  // v9.0.16 (TD-425): اقدام‌های پرونده حذف‌شده فهرست نمی‌شوند
+  const conditions = [eq(crmActivities.isDeleted, 0), liveLeadActivityCondition()];
 
   if (leadId) {
     conditions.push(eq(crmActivities.leadId, Number(leadId)));

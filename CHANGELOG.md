@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.16 — Sales Lead Delete Guards
+- **Sales Lead Delete:** Deleting a sales lead runs under its row lock: a missing lead is 404, a lead with an active document is refused with 409, and activities of deleted leads leave the stats, lists and due reminders (`deleteLead`, `liveLeadActivityCondition`; TD-425, package-9 finding B09-10).
+
 ### v9.0.15 — CRM Customer Filter by Party Id
 - **CRM Customer Filter:** The CRM customer filter sends the party id; the server returns that party's leads and legacy leads without an id whose customer or company name equals the party name exactly (`leadCustomerCondition`; TD-429, package-9 finding B09-14).
 

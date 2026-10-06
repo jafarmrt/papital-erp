@@ -329,7 +329,8 @@ export function useCRMData(user: any) {
       if (selectedLeadDrawer?.id === leadId) setSelectedLeadDrawer(null);
       void loadAllData();
     } catch (err) {
-      toast.error('خطا در حذف فرصت فروش');
+      // v9.0.16 (TD-425): پیام سرور (پرونده دارای سند فعال، پرونده ناموجود)
+      toast.error(errorMessageOf(err) || 'خطا در حذف فرصت فروش');
     }
   };
 

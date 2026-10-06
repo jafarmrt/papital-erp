@@ -30,9 +30,17 @@ function statusCondition(status: FollowupStatus): SQL | undefined {
   return undefined;
 }
 
-/** پیگیری باز: حذف‌نشده، انجام‌نشده، با تاریخ سررسید */
+/**
+ * v9.0.16 (TD-425): اقدام بی پرونده، یا اقدامِ پرونده‌ای که هست و حذف نشده. اقدام‌های پرونده حذف‌شده (یا شناسه پرونده ناموجود)
+ * در آمار، فهرست اقدام‌ها و پیگیری‌ها و یادآور سررسید نمی‌آیند؛ ردیف‌ها دست نمی‌خورند و تاریخچه می‌ماند.
+ */
+export function liveLeadActivityCondition(): SQL {
+  return sql`(${crmActivities.leadId} IS NULL OR EXISTS (SELECT 1 FROM crm_leads live_lead WHERE live_lead.id = ${crmActivities.leadId} AND live_lead.is_deleted = 0))`;
+}
+
+/** پیگیری باز: حذف‌نشده، انجام‌نشده، با تاریخ سررسید، از پرونده‌ای که حذف نشده */
 export function openFollowupCondition(): SQL {
-  return and(eq(crmActivities.isDeleted, 0), eq(crmActivities.isFollowUpCompleted, 0), hasFollowup) as SQL;
+  return and(eq(crmActivities.isDeleted, 0), eq(crmActivities.isFollowUpCompleted, 0), hasFollowup, liveLeadActivityCondition()) as SQL;
 }
 
 /** پیگیری باز با سررسید امروز یا گذشته (سررسید میلادی ISO، v7.0.132) */
@@ -62,7 +70,7 @@ async function assigneeCondition(personnelId: number): Promise<SQL> {
 
 export async function listFollowups(filter: FollowupFilter) {
   const todayIso = await businessTodayIsoDate();
-  const conditions: Array<SQL | undefined> = [eq(crmActivities.isDeleted, 0), hasFollowup, statusCondition(filter.status ?? 'pending')];
+  const conditions: Array<SQL | undefined> = [eq(crmActivities.isDeleted, 0), hasFollowup, liveLeadActivityCondition(), statusCondition(filter.status ?? 'pending')];
   if (filter.dueOnly) conditions.push(sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`);
   if (filter.assignedPersonnelId) conditions.push(await assigneeCondition(filter.assignedPersonnelId));
   const q = filter.search?.trim();

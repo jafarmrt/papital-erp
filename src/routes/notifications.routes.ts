@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { notifications, crmActivities, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -10,6 +10,7 @@ import { validate, numericIdString } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { UnauthorizedError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
+import { dueFollowupCondition } from '../services/crm/crmFollowups.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -32,17 +33,11 @@ async function checkAndGenerateCrmTaskDueNotifications(userId: number) {
     // پیش‌تر «1405/08/01» (آینده) با «2026-10-03» مقایسه متنی می‌شد و همان روز ثبت، سررسیدشده اعلام می‌شد.
     const todayIso = await businessTodayIsoDate();
 
+    // v9.0.16 (TD-425): همان شرط آمار و فهرست «امروز و معوق»؛ پیگیری پرونده حذف‌شده یادآوری نمی‌شود
     const pendingActs = await orm
       .select()
       .from(crmActivities)
-      .where(
-        and(
-          eq(crmActivities.isDeleted, 0),
-          eq(crmActivities.isFollowUpCompleted, 0),
-          sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <> ''`,
-          sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`
-        )
-      );
+      .where(dueFollowupCondition(todayIso));
 
     for (const act of pendingActs) {
       const assignee = (act.assignedTo || act.loggedBy || '').trim();

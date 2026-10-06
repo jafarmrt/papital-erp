@@ -10481,6 +10481,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.15، TD-429): فیلتر مشتری پرونده‌های فروش با شناسه طرف حساب
   const { runCrmLeadCustomerFilterTests } = await import('../regression/crmLeadCustomerFilterTests.js');
   results.push(...await runCrmLeadCustomerFilterTests(shouldRun));
+  // بسته ۹ (v9.0.16، TD-425): حذف پرونده فروش (ناموجود، سند فعال، پیگیری‌های پرونده حذف‌شده)
+  const { runCrmLeadDeleteTests } = await import('../regression/crmLeadDeleteTests.js');
+  results.push(...await runCrmLeadDeleteTests(shouldRun));
 
   return results;
 }
