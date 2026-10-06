@@ -1,3 +1,4 @@
+import { terminateOpenWorkflows } from '../workflow/workflowTermination.js';
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { accounts, journalVouchers, journalVoucherItems } from '../../db/schema.js';
 import { eq, desc, asc, and, or, sql, like, inArray, gte, lte } from 'drizzle-orm';
@@ -23,6 +24,13 @@ const VOUCHER_ITEM_INSERT_CHUNK = 500;
 async function insertVoucherItems(tx: DbExecutor, rows: Array<typeof journalVoucherItems.$inferInsert>): Promise<void> {
   for (let i = 0; i < rows.length; i += VOUCHER_ITEM_INSERT_CHUNK) {
     await tx.insert(journalVoucherItems).values(rows.slice(i, i + VOUCHER_ITEM_INSERT_CHUNK));
+  }
+}
+
+/** v9.0.40 (TD-447، ت۵): فرایندهای در جریان سند حسابداری (هر دو نام نوع) با حذف یا ابطال آن بسته می‌شوند */
+async function terminateVoucherWorkflows(tx: DbExecutor, voucherId: number, comment: string, userId?: number, userName?: string): Promise<void> {
+  for (const entityType of ['journal_voucher', 'voucher']) {
+    await terminateOpenWorkflows(tx, { entityType, entityId: voucherId, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف سند حسابداری', comment, userId, userName });
   }
 }
 
@@ -464,6 +472,8 @@ export class VoucherService {
       // V6.0.21 (TD-157): Cascade soft-delete journal voucher and its line items (RULE 09)
       await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, id));
       await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
+      // v9.0.40 (TD-447، ت۵): فرایند در جریان سند حذف‌شده در همان تراکنش بسته می‌شود
+      await terminateVoucherWorkflows(tx, id, 'حذف سند حسابداری');
       return { success: true };
     });
   }
@@ -495,6 +505,7 @@ export class VoucherService {
       await tx.update(journalVouchers).set({ isDeleted: 1 }).where(eq(journalVouchers.id, existing.id));
       await tx.update(journalVoucherItems).set({ isDeleted: 1 })
         .where(and(eq(journalVoucherItems.voucherId, existing.id), eq(journalVoucherItems.isDeleted, 0)));
+      await terminateVoucherWorkflows(tx, existing.id, 'ابطال سند منشأ', params.userId, params.username);
       return { action: 'deleted', reversalVoucherId: null };
     }
 

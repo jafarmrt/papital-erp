@@ -1,3 +1,4 @@
+import { terminateOpenWorkflows } from '../../workflow/workflowTermination.js';
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
 import { accounts, bankAccounts, cheques, treasuryTransactions, journalVouchers, journalVoucherItems } from '../../../db/schema.js';
 import { eq, asc, and, or, ne } from 'drizzle-orm';
@@ -624,6 +625,10 @@ export class BankAccountService {
       }
 
       await tx.update(bankAccounts).set({ isDeleted: 1 }).where(eq(bankAccounts.id, id));
+      // v9.0.40 (TD-447، ت۵): فرایند در جریان حساب حذف‌شده در همان تراکنش بسته می‌شود
+      await terminateOpenWorkflows(tx, {
+        entityType: 'bank_account', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف حساب خزانه', comment: 'حذف حساب خزانه',
+      });
       return { success: true };
     });
   }

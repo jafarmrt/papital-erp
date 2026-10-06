@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.40 — Voiding or Deleting an Entity Closes Its Workflow
+- **Workflow Closes on Void:** voiding a document or deleting a draft voucher, item, bank account or purchase requisition terminates its running workflow in the same transaction (tasks canceled, one history row); migration 0058 closes the open workflows of entities deleted earlier (TD-447, `sec_workflow_void_closes_instance_td_447`).
+
 ### v9.0.39 — Only Unfinalized Sales Documents Enter the Approval Workflow
 - **Document Approval Scope:** only an invoice or proforma in draft or proforma status starts the approval workflow, in its own create transaction; finalizing outside the workflow and migration 0057 close the open instances of final documents (TD-446, `sec_workflow_document_auto_start_td_446`).
 

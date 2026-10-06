@@ -1,3 +1,4 @@
+import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
 import { purchaseRequisitions, productionProjects, documentRefCounters, items, documents, documentItems, workflowInstances, workflowStates, workflowTransitions, workflowPendingApprovals, workflowTasks } from '../db/schema.js';
@@ -433,23 +434,35 @@ export class ProcurementService {
    */
   static async deleteRequisition(id: number, user: { id?: number; username?: string }): Promise<void> {
     const existing = await this.getRequisitionById(id);
-    if (existing.status === 'ordered' || existing.status === 'received') {
-      throw new ValidationError('درخواست‌های خریدی که سفارش آنها صادر شده یا کالا تحویل شده قابل حذف نیستند.');
-    }
+    // v9.0.40 (TD-447، ت۵): حذف و بستن فرایند در جریان درخواست در یک تراکنش، زیر قفل ردیف درخواست (وضعیت زیر قفل دوباره خوانده می‌شود)
+    await orm.transaction(async (tx) => {
+      const [locked] = await tx.select({ status: purchaseRequisitions.status }).from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
+        .for('update');
+      if (!locked) throw new NotFoundError('درخواست خرید یافت نشد.');
+      if (locked.status === 'ordered' || locked.status === 'received') {
+        throw new ValidationError('درخواست‌های خریدی که سفارش آنها صادر شده یا کالا تحویل شده قابل حذف نیستند.');
+      }
 
-    await orm.update(purchaseRequisitions).set({
-      isDeleted: 1,
-      updatedAt: new Date().toISOString()
-    }).where(eq(purchaseRequisitions.id, id));
+      await tx.update(purchaseRequisitions).set({
+        isDeleted: 1,
+        updatedAt: new Date().toISOString()
+      }).where(eq(purchaseRequisitions.id, id));
+      await terminateOpenWorkflows(tx, {
+        entityType: 'purchase_requisition', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با حذف درخواست خرید',
+        comment: 'حذف درخواست خرید', userId: user.id, userName: user.username,
+      });
 
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم',
-      action: 'DELETE',
-      entity: 'درخواست خرید',
-      entityId: id,
-      description: `حذف درخواست خرید ${existing.code}`,
-      details: { code: existing.code, title: existing.title }
+      await logActivity({
+        userId: user.id,
+        username: user.username || 'سیستم',
+        action: 'DELETE',
+        entity: 'درخواست خرید',
+        entityId: id,
+        description: `حذف درخواست خرید ${existing.code}`,
+        details: { code: existing.code, title: existing.title },
+        tx,
+      });
     });
   }
 

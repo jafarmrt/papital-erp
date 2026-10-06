@@ -19,6 +19,7 @@ export interface Harness {
   get(url: string, s?: Session): Promise<request.Response>;
   post(url: string, body: unknown, s?: Session): Promise<request.Response>;
   put(url: string, body: unknown, s?: Session): Promise<request.Response>;
+  del(url: string, s?: Session): Promise<request.Response>;
   /** نشست کاربر تازه با نقش seed‌شده (کد) یا نقش تازه با این مجوزها */
   sessionWith(roleOrPermissions: string | string[]): Promise<Session & { userId: number; role: string }>;
   q(text: string, params?: unknown[]): Promise<Row[]>;
@@ -41,6 +42,7 @@ export async function createHarness(): Promise<Harness> {
     get: (url, s = admin) => request(app).get(url).set('Cookie', s.cookie),
     post: (url, body, s = admin) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body as object),
     put: (url, body, s = admin) => request(app).put(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body as object),
+    del: (url, s = admin) => request(app).delete(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken),
     async sessionWith(roleOrPermissions) {
       let role: string;
       if (typeof roleOrPermissions === 'string') {
