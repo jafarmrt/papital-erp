@@ -12,6 +12,16 @@ import {
   Info,
 } from 'lucide-react';
 import { errorMessageOf } from '../../utils';
+import {
+  missingRequiredPermissions,
+  permissionDefinition,
+  SYSTEM_ADMIN_ROLE,
+  withRequiredPermissions,
+  withoutPermission,
+} from '../../lib/permissions/permissionCatalog';
+
+/** عنوان فارسی یک کلید مجوز از کاتالوگ مشترک، وگرنه خود کلید */
+const permissionTitle = (key: string) => permissionDefinition(key)?.title ?? key;
 
 export const ROLE_PRESETS = [
   {
@@ -115,19 +125,25 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const [permCategoryFilter, setPermCategoryFilter] = useState<string>('ALL');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
+  // v9.0.79 (TD-880): مجوزهای لازمی که نقش ذخیره‌شده ندارد و ذخیره بعدی می‌افزاید
+  const [addedOnOpen, setAddedOnOpen] = useState<string[]>([]);
 
   const isEditing = editingRole !== null;
 
   useEffect(() => {
     if (editingRole) {
+      const stored = Array.isArray(editingRole.permissions) ? editingRole.permissions : [];
+      const isSystemAdminRole = editingRole.code === SYSTEM_ADMIN_ROLE;
+      setAddedOnOpen(isSystemAdminRole ? [] : missingRequiredPermissions(stored));
       setRoleForm({
         name: editingRole.name || '',
         code: editingRole.code || '',
         description: editingRole.description || '',
-        permissions: Array.isArray(editingRole.permissions) ? editingRole.permissions : [],
+        permissions: isSystemAdminRole ? stored : withRequiredPermissions(stored),
         isSystem: editingRole.isSystem || 0,
       });
     } else {
+      setAddedOnOpen([]);
       setRoleForm({
         name: '',
         code: '',
@@ -198,18 +214,19 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       name: prev.name || preset.name,
       code: prev.code || preset.code,
       description: prev.description || preset.description,
-      permissions: preset.permissions,
+      permissions: withRequiredPermissions(preset.permissions),
     }));
     toast.success(`قالب نقش "${preset.name}" با موفقیت جاگذاری شد`);
   };
 
+  // v9.0.79 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند
   const togglePermission = (permKey: string) => {
     setRoleForm((prev) => {
       const exists = prev.permissions.includes(permKey);
       if (exists) {
-        return { ...prev, permissions: prev.permissions.filter((k) => k !== permKey) };
+        return { ...prev, permissions: withoutPermission(prev.permissions, permKey) };
       } else {
-        return { ...prev, permissions: [...prev.permissions, permKey] };
+        return { ...prev, permissions: withRequiredPermissions([...prev.permissions, permKey]) };
       }
     });
   };
@@ -218,10 +235,9 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     setRoleForm((prev) => {
       const allSelected = categoryPerms.every((k) => prev.permissions.includes(k));
       if (allSelected) {
-        return { ...prev, permissions: prev.permissions.filter((k) => !categoryPerms.includes(k)) };
+        return { ...prev, permissions: categoryPerms.reduce((acc, k) => withoutPermission(acc, k), prev.permissions) };
       } else {
-        const set = new Set([...prev.permissions, ...categoryPerms]);
-        return { ...prev, permissions: Array.from(set) };
+        return { ...prev, permissions: withRequiredPermissions([...prev.permissions, ...categoryPerms]) };
       }
     });
   };
@@ -392,6 +408,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
 
           {/* PERMISSION MATRIX AREA */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {addedOnOpen.length > 0 && (
+              <div role="status" className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                با ذخیره، این مجوزهای لازم هم به نقش افزوده می‌شوند: {addedOnOpen.map((k) => `«${permissionTitle(k)}»`).join('، ')}
+              </div>
+            )}
             {roleForm.code === 'admin' ? (
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-xs text-purple-800 flex items-center gap-2">
                 <Info size={18} className="shrink-0 text-purple-600" />
@@ -466,6 +487,11 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
                                 <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                                   {p.description}
                                 </div>
+                                {p.requires && p.requires.length > 0 && (
+                                  <div className="text-[10px] text-amber-700 mt-0.5">
+                                    همراه این مجوز، {p.requires.map((k) => `«${permissionTitle(k)}»`).join('، ')} هم داده می‌شود.
+                                  </div>
+                                )}
                               </div>
                             </label>
                           );

@@ -139,5 +139,43 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_role_permission_dependencies_td_880', 'security', 'td880', 'roles', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_role_permission_dependencies_td_880',
+      name: 'v9.0.79: a saved role always holds what its permissions require, e.g. edit invoices brings view invoices (TD-880)',
+      details: 'POST and PUT /api/roles add the catalog requirements in catalog order and audit them; an edit without a permission list leaves the stored list as it was; a legacy key outside the catalog is kept; GET /api/permissions returns requires',
+    }, async (h, wrong) => {
+      const ids: number[] = [];
+      const stored = async (id: number) => (await orm.select({ p: roles.permissions }).from(roles).where(eq(roles.id, id)))[0]?.p as string[] | undefined;
+      const same = (a: string[] | undefined, b: string[]) => JSON.stringify(a) === JSON.stringify(b);
+      try {
+        const created = await h.post('/api/roles', { name: `نقش آزمون ${h.tag}`, code: `td880_${h.tag}`, permissions: ['documents.edit', 'accounting.treasury_no_voucher'] });
+        if (created.status !== 200) throw new Error(`creating the role returned ${created.status}`);
+        const id = Number(created.body?.id);
+        ids.push(id);
+        const expected = ['documents.edit', 'accounting.treasury_no_voucher', 'documents.view', 'accounting.view', 'accounting.treasury'];
+        if (!same(await stored(id), expected)) wrong.push(`create stored ${JSON.stringify(await stored(id))}, not ${JSON.stringify(expected)}`);
+
+        const edited = await h.put(`/api/roles/${id}`, { name: `نقش آزمون ${h.tag}`, permissions: ['customers.manage'] });
+        if (edited.status !== 200) wrong.push(`editing the role returned ${edited.status}`);
+        if (!same(await stored(id), ['customers.manage', 'customers.view'])) wrong.push(`edit stored ${JSON.stringify(await stored(id))}, not customers.manage with customers.view`);
+
+        await orm.update(roles).set({ permissions: ['crm.manage', 'legacy.key'] }).where(eq(roles.id, id));
+        await h.put(`/api/roles/${id}`, { name: `نام تازه ${h.tag}` });
+        if (!same(await stored(id), ['crm.manage', 'legacy.key'])) wrong.push(`an edit without permissions changed the list to ${JSON.stringify(await stored(id))}`);
+        await h.put(`/api/roles/${id}`, { name: `نام تازه ${h.tag}`, permissions: ['crm.manage', 'legacy.key'] });
+        if (!same(await stored(id), ['crm.manage', 'legacy.key', 'crm.view'])) wrong.push(`an edit with a legacy key stored ${JSON.stringify(await stored(id))}`);
+        const [log] = await h.q(`SELECT details FROM activity_logs WHERE entity = 'نقش و دسترسی' AND entity_id = $1 AND action = 'UPDATE' ORDER BY id DESC LIMIT 1`, [String(id)]);
+        if (!same((log?.details as { addedByRequirement?: string[] } | undefined)?.addedByRequirement, ['crm.view'])) wrong.push('the audit row does not list the permission added by requirement');
+
+        const catalog = await h.get('/api/permissions');
+        const editKey = (Array.isArray(catalog.body) ? catalog.body : []).flatMap((g: { permissions: Array<{ key: string; requires?: string[] }> }) => g.permissions).find((p: { key: string }) => p.key === 'documents.edit');
+        if (!same(editKey?.requires, ['documents.view'])) wrong.push('GET /api/permissions does not say documents.edit requires documents.view');
+      } finally {
+        if (ids.length > 0) await orm.delete(roles).where(inArray(roles.id, ids));
+      }
+    });
+  }
+
   return results;
 }

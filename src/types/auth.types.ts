@@ -26,11 +26,12 @@ export interface PermissionItem {
   key: string;
   title: string;
   description: string;
+  requires?: readonly string[];
 }
 
 export interface PermissionCategory {
   category: string;
-  permissions: PermissionItem[];
+  permissions: readonly PermissionItem[];
 }
 
 export interface Role {
