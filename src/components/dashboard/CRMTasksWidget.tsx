@@ -6,7 +6,12 @@ import { CRMLead, CRMActivity } from '../../types';
 
 interface CRMTasksWidgetProps {
   leads: CRMLead[];
+  /** v9.0.14 (TD-428): پیگیری‌های باز از `GET /crm/followups` (به ترتیب سررسید)، نه اقدام‌های ۳۰ روز اخیر */
   activities: CRMActivity[];
+  /** شمار همه پیگیری‌های باز با سررسید امروز یا گذشته (سرور) */
+  dueCount?: number;
+  /** شمار همه پیگیری‌های باز (سرور) */
+  openCount?: number;
   loading?: boolean;
   onRefresh?: () => void;
   onSelectLead?: (lead: CRMLead) => void;
@@ -15,6 +20,8 @@ interface CRMTasksWidgetProps {
 export function CRMTasksWidget({
   leads = [],
   activities = [],
+  dueCount,
+  openCount,
   loading = false,
   onRefresh,
   onSelectLead
@@ -71,11 +78,14 @@ export function CRMTasksWidget({
     );
   }, [activeFilter, wonLeads, todayAndOverdueFollowups, pendingFollowups, searchQuery]);
 
+  // v9.0.14 (TD-428): شمارها از سرور؛ فهرست فقط صفحه اول پیگیری‌های باز است
+  const dueTotal = Math.max(dueCount ?? 0, todayAndOverdueFollowups.length);
+  const openTotal = Math.max(openCount ?? 0, pendingFollowups.length);
   const totalCountForTab =
     activeFilter === 'today_overdue'
-      ? todayAndOverdueFollowups.length
+      ? dueTotal
       : activeFilter === 'all_pending'
-      ? pendingFollowups.length
+      ? openTotal
       : wonLeads.length;
 
   return (
@@ -89,9 +99,9 @@ export function CRMTasksWidget({
           <div>
             <h2 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
               <span>تسک‌ها و پیگیری‌های CRM و فروش</span>
-              {todayAndOverdueFollowups.length > 0 && (
+              {dueTotal > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-                  {toPersianDigits(todayAndOverdueFollowups.length)} نیازمند اقدام
+                  {toPersianDigits(dueTotal)} نیازمند اقدام
                 </span>
               )}
             </h2>
@@ -126,7 +136,7 @@ export function CRMTasksWidget({
           <Clock size={13} className={activeFilter === 'today_overdue' ? 'text-rose-500' : ''} />
           <span>امروز و معوق</span>
           <span className="text-[10px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
-            {toPersianDigits(todayAndOverdueFollowups.length)}
+            {toPersianDigits(dueTotal)}
           </span>
         </button>
 
@@ -144,7 +154,7 @@ export function CRMTasksWidget({
           <Target size={13} className={activeFilter === 'all_pending' ? 'text-blue-500' : ''} />
           <span>همه پیگیری‌ها</span>
           <span className="text-[10px] px-1.5 py-0.2 bg-slate-200/80 rounded-full">
-            {toPersianDigits(pendingFollowups.length)}
+            {toPersianDigits(openTotal)}
           </span>
         </button>
 

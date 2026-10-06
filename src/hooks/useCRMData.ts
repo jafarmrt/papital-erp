@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
 import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf, isoToJalaliDate } from '../utils';
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
+import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
+import { CRM_FOLLOWUPS_QUERY_KEY } from '../lib/crm/crmFollowupsQuery';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -21,7 +24,7 @@ export function useCRMData(user: any) {
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups'>('kanban');
-  const [stats, setStats] = useState<any>({});
+  const [stats, setStats] = useState<Partial<CrmStats>>({});
   const [leads, setLeads] = useState<CRMLead[]>([]);
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [customersList, setCustomersList] = useState<any[]>([]);
@@ -91,8 +94,11 @@ export function useCRMData(user: any) {
   const [isSavingLead, setIsSavingLead] = useState<boolean>(false);
   const [isSavingActivity, setIsSavingActivity] = useState<boolean>(false);
 
+  const queryClient = useQueryClient();
   const loadAllData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
+    // v9.0.14 (TD-428): فهرست پیگیری‌ها (`useCrmFollowups`) با هر بارگذاری دوباره تازه می‌شود
+    void queryClient.invalidateQueries({ queryKey: CRM_FOLLOWUPS_QUERY_KEY });
     try {
       // Fetch stats
       try {
@@ -180,7 +186,7 @@ export function useCRMData(user: any) {
         setLoading(false);
       }
     }
-  }, [searchTerm, filterSeller, filterStage, filterCustomer, fromDate, toDate]);
+  }, [searchTerm, filterSeller, filterStage, filterCustomer, fromDate, toDate, queryClient]);
 
   useEffect(() => {
     const controller = new AbortController();

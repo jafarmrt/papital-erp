@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { PhoneCall, Plus, Check, Clock, Calendar, Video, MessageSquare, Mail, FileText, Search, ChevronRight, ChevronLeft, UserCheck, User, Briefcase } from 'lucide-react';
+import { PhoneCall, Plus, Check, Video, MessageSquare, Mail, FileText, Search, ChevronRight, ChevronLeft } from 'lucide-react';
 import { CRMActivity, CRMLead } from '../../types';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
+import { CRMFollowupsPanel } from './CRMFollowupsPanel';
 
 interface CRMFollowupsViewProps {
   activeTab: 'activities' | 'followups';
@@ -47,13 +48,6 @@ export function CRMFollowupsView({
   const [actPage, setActPage] = useState(1);
   const actPageSize = 20;
 
-  // Search & Filters for Followups
-  const [folSearch, setFolSearch] = useState('');
-  const [folStatusFilter, setFolStatusFilter] = useState<'pending' | 'completed' | 'all'>('pending');
-  const [folSellerFilter, setFolSellerFilter] = useState<string>('all');
-  const [folPage, setFolPage] = useState(1);
-  const folPageSize = 12;
-
   // Filter Activities tab
   const filteredActivities = activities.filter((act) => {
     if (actTypeFilter !== 'all' && act.type !== actTypeFilter) return false;
@@ -73,38 +67,6 @@ export function CRMFollowupsView({
   const paginatedActivities = filteredActivities.slice(
     (currentActPage - 1) * actPageSize,
     currentActPage * actPageSize
-  );
-
-  // Filter Followups tab
-  const allFollowups = activities.filter((a) => a.nextFollowUpDate && a.nextFollowUpDate.trim().length > 0);
-  const filteredFollowups = allFollowups.filter((act) => {
-    if (folStatusFilter === 'pending' && act.isFollowUpCompleted) return false;
-    if (folStatusFilter === 'completed' && !act.isFollowUpCompleted) return false;
-    // V10-4.1: فیلتر مسئول روی id پرسنل (با fallback به snapshot متنی برای رکوردهای قدیمی)
-    if (folSellerFilter !== 'all') {
-      const selectedPerson = personnelList.find((p: any) => String(p.id) === folSellerFilter);
-      const matchesId = act.assignedPersonnelId != null && String(act.assignedPersonnelId) === folSellerFilter;
-      const matchesLegacyName = !matchesId && !!selectedPerson && act.assignedTo === selectedPerson.fullName;
-      if (!matchesId && !matchesLegacyName) return false;
-    }
-
-    if (folSearch.trim()) {
-      const q = folSearch.trim().toLowerCase();
-      const matchTask = (act.nextFollowUpTask || '').toLowerCase().includes(q);
-      const matchTitle = (act.title || '').toLowerCase().includes(q);
-      const matchDesc = (act.description || '').toLowerCase().includes(q);
-      const matchLogged = (act.loggedBy || '').toLowerCase().includes(q);
-      const matchAssign = (act.assignedTo || '').toLowerCase().includes(q);
-      if (!matchTask && !matchTitle && !matchDesc && !matchLogged && !matchAssign) return false;
-    }
-    return true;
-  });
-
-  const folTotalPages = Math.ceil(filteredFollowups.length / folPageSize) || 1;
-  const currentFolPage = Math.min(folPage, folTotalPages);
-  const paginatedFollowups = filteredFollowups.slice(
-    (currentFolPage - 1) * folPageSize,
-    currentFolPage * folPageSize
   );
 
   if (activeTab === 'activities') {
@@ -289,219 +251,8 @@ export function CRMFollowupsView({
     );
   }
 
-  // Followups Tab
-  return (
-    <div className="space-y-4">
-      {/* Followups Header Banner */}
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <Clock className="w-6 h-6 text-amber-600 shrink-0" />
-          <div>
-            <h4 className="font-bold text-xs text-amber-900">
-              لیست کارهای پیگیری و تماس‌های معوقه ({formatPersianNumber(filteredFollowups.length)} مورد)
-            </h4>
-            <p className="text-[11px] text-amber-700 mt-0.5">
-              تمام تسک‌ها و یادآوری‌های پیگیری همراه با تاریخ سررسید. پس از تماس، دکمه «تکمیل پیگیری» را جهت ثبت نتیجه فشار دهید.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Controls for Followups */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status filter buttons */}
-          <button
-            onClick={() => {
-              setFolStatusFilter('pending');
-              setFolPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-              folStatusFilter === 'pending'
-                ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            معوق و نیازمند پیگیری
-          </button>
-          <button
-            onClick={() => {
-              setFolStatusFilter('completed');
-              setFolPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-              folStatusFilter === 'completed'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            تکمیل شده
-          </button>
-          <button
-            onClick={() => {
-              setFolStatusFilter('all');
-              setFolPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-              folStatusFilter === 'all'
-                ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            همه موارد
-          </button>
-
-          {/* Seller / Assignee filter — V10-4.1: منبع پرسنل */}
-          {personnelList.length > 0 && (
-            <select
-              value={folSellerFilter}
-              onChange={(e) => {
-                setFolSellerFilter(e.target.value);
-                setFolPage(1);
-              }}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-500 cursor-pointer"
-            >
-              <option value="all">همه مسئولین تسک</option>
-              {personnelList.map((p: any) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.fullName}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {/* Search input for followups */}
-        <div className="relative w-full sm:w-64">
-          <input
-            type="text"
-            placeholder="جستجو در تسک‌ها و عنوان..."
-            value={folSearch}
-            onChange={(e) => {
-              setFolSearch(e.target.value);
-              setFolPage(1);
-            }}
-            className="w-full pr-9 pl-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-amber-500 transition-all"
-          />
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2" />
-        </div>
-      </div>
-
-      {/* Followups Cards Grid */}
-      {paginatedFollowups.length === 0 ? (
-        <div className="p-12 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-1">
-          <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <p className="font-bold text-slate-600">هیچ کارهای پیگیری با این فیلتر یا مشخصات یافت نشد.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginatedFollowups.map((act) => {
-            const leadObj = leads?.find((l) => l.id === act.leadId);
-            const displayCustomerName = act.customerName || (act as any).customer_name || leadObj?.customerName || leadObj?.company || '';
-            const displayLeadTitle = act.leadTitle || (act as any).lead_title || leadObj?.title || act.title;
-
-            return (
-              <div
-                key={act.id}
-                className={`bg-white rounded-2xl border p-4 shadow-2xs transition-all relative space-y-2.5 ${
-                  act.isFollowUpCompleted ? 'border-slate-200 bg-slate-50/50 opacity-70' : 'border-amber-300 shadow-xs'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="px-2.5 py-1 bg-amber-100 text-amber-900 text-[11px] font-mono font-bold rounded-lg flex items-center gap-1 border border-amber-200">
-                    <Calendar size={13} />
-                    {formatPersianDate(act.nextFollowUpDate)}
-                  </span>
-
-                  <button
-                    onClick={() => onToggleFollowup(act)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                      act.isFollowUpCompleted
-                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs'
-                    }`}
-                  >
-                    <Check size={14} />
-                    {act.isFollowUpCompleted ? 'انجام شده' : 'تکمیل پیگیری'}
-                  </button>
-                </div>
-
-                {/* Customer and Lead Badges */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  {displayCustomerName ? (
-                    <span className="px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200/80 text-[10px] font-bold rounded-md flex items-center gap-1" title="نام مشتری">
-                      <User size={11} className="text-blue-600" />
-                      مشتری: {displayCustomerName}
-                    </span>
-                  ) : null}
-                  {displayLeadTitle ? (
-                    <span className="px-2 py-0.5 bg-purple-50 text-purple-800 border border-purple-200/80 text-[10px] font-bold rounded-md flex items-center gap-1" title="نام پرونده فروش">
-                      <Briefcase size={11} className="text-purple-600" />
-                      پرونده: {displayLeadTitle}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div>
-                  <h4 className="font-black text-xs text-slate-900 mb-0.5">
-                    {act.nextFollowUpTask || act.title}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    اقدام مربوطه: <span className="font-bold text-slate-700">{act.title}</span>
-                  </p>
-                </div>
-
-                {act.description && (
-                  <div className="p-2.5 bg-slate-50 rounded-xl text-[11px] text-slate-600 border border-slate-100 leading-relaxed">
-                    {act.description}
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>ثبت: {act.loggedBy || 'فروشنده'}</span>
-                  {act.assignedTo && (
-                    <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
-                      <UserCheck size={11} />
-                      مسئول: {act.assignedTo}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Followups Pagination */}
-      {folTotalPages > 1 && (
-        <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 text-xs mt-4">
-          <span className="text-slate-500">
-            نمایش {formatPersianNumber((currentFolPage - 1) * folPageSize + 1)} تا {formatPersianNumber(Math.min(currentFolPage * folPageSize, filteredFollowups.length))} از {formatPersianNumber(filteredFollowups.length)} مورد
-          </span>
-
-          <div className="flex items-center gap-1">
-            <button
-              disabled={currentFolPage === 1}
-              onClick={() => setFolPage((p) => Math.max(1, p - 1))}
-              className="p-1.5 border rounded-lg bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <span className="px-3 font-bold text-slate-800">
-              صفحه {formatPersianNumber(currentFolPage)} از {formatPersianNumber(folTotalPages)}
-            </span>
-            <button
-              disabled={currentFolPage === folTotalPages}
-              onClick={() => setFolPage((p) => Math.min(folTotalPages, p + 1))}
-              className="p-1.5 border rounded-lg bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 cursor-pointer"
-            >
-              <ChevronLeft size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  // v9.0.14 (TD-428): زبانه پیگیری‌ها از سرور (`CRMFollowupsPanel`)
+  return <CRMFollowupsPanel leads={leads} onToggleFollowup={onToggleFollowup} personnelList={personnelList} />;
 }
 
 export default CRMFollowupsView;

@@ -4,6 +4,7 @@ import { Search, Filter, Calendar, Briefcase, PhoneCall, Clock, Building2 } from
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../api';
 import { CRMLead, Customer } from '../types';
+import { formatPersianNumber } from '../utils';
 import { useCRMData, STAGES } from '../hooks/useCRMData';
 import { CRMStatsCards } from '../components/crm/CRMStatsCards';
 import { CRMKanbanPipeline } from '../components/crm/CRMKanbanPipeline';
@@ -191,7 +192,8 @@ export default function CRMPage({ user }: { user: any }) {
               }`}
             >
               <Clock size={15} />
-              پیگیری‌های من ({crm.activities.filter((a) => a.nextFollowUpDate).length})
+              {/* v9.0.14 (TD-428): شمار پیگیری‌های باز از سرور، بی بازه تاریخ اقدام */}
+              پیگیری‌های من ({formatPersianNumber(crm.stats.openFollowupsCount ?? 0)})
             </button>
           </div>
 
@@ -229,12 +231,16 @@ export default function CRMPage({ user }: { user: any }) {
                 placeholder="همه مشتریان"
                 options={(() => {
                   const list = Array.isArray(crm.customersList) ? crm.customersList : [];
-                  return [{ value: '', label: 'همه مشتریان' }, ...list.map((c: any) => ({ value: c.name, label: c.name }))];
+                  // v9.0.15 (TD-429): مقدار گزینه شناسه طرف حساب است، نه نام
+                  return [{ value: '', label: 'همه مشتریان' }, ...list.map((c) => ({ value: String(c.id), label: c.name }))];
                 })()}
               />
               {crm.filterCustomer && (
                 <button
-                  onClick={() => handleOpenCustomerDossierByName(crm.filterCustomer)}
+                  onClick={() => {
+                    const party = crm.customersList.find((c) => String(c.id) === crm.filterCustomer);
+                    if (party) setSelectedCustomerDossier(party);
+                  }}
                   className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
                   title="مشاهده پرونده جامع این مشتری"
                 >

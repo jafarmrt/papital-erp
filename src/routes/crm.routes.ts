@@ -18,6 +18,9 @@ import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
+import { getCrmStats } from '../services/crm/crmStats.js';
+import { listFollowups, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -204,60 +207,9 @@ function formatActivity(act: (Partial<typeof crmActivities.$inferSelect> & Recor
 }
 
 // GET /api/crm/stats - CRM KPI summary and stage totals
-router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
-  // Total active leads
-  const [allActiveLeads] = await orm.select({
-    count: sql<number>`count(*)`,
-    totalValue: sql<number>`COALESCE(sum(estimated_value), 0)`
-  })
-  .from(crmLeads)
-  .where(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.status, 'active')));
-
-  // Won leads
-  const [wonLeads] = await orm.select({
-    count: sql<number>`count(*)`,
-    totalValue: sql<number>`COALESCE(sum(estimated_value), 0)`
-  })
-  .from(crmLeads)
-  .where(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.stage, 'won')));
-
-  // Followups due today or overdue
-  const todayIso = await businessTodayIsoDate();
-  const pendingFollowups = await orm.select({
-    count: sql<number>`count(*)`
-  })
-  .from(crmActivities)
-  .where(and(
-    eq(crmActivities.isDeleted, 0),
-    eq(crmActivities.isFollowUpCompleted, 0),
-    // v7.0.132 (TD-232): سررسید میلادی ISO است و با «امروز» میلادی مقایسه می‌شود
-    sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <> ''`,
-    sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`
-  ));
-
-  // Stage counts
-  const stageCounts = await orm.select({
-    stage: crmLeads.stage,
-    count: sql<number>`count(*)`,
-    totalValue: sql<number>`COALESCE(sum(estimated_value), 0)`
-  })
-  .from(crmLeads)
-  .where(eq(crmLeads.isDeleted, 0))
-  .groupBy(crmLeads.stage);
-
-  res.json({
-    activeLeadsCount: Number(allActiveLeads?.count || 0),
-    totalPipelineValue: Number(allActiveLeads?.totalValue || 0),
-    wonLeadsCount: Number(wonLeads?.count || 0),
-    wonTotalValue: Number(wonLeads?.totalValue || 0),
-    pendingFollowupsCount: Number(pendingFollowups[0]?.count || 0),
-    stageCounts: stageCounts.reduce((acc: Record<string, { count: number; value: number }>, row: { stage: string | null; count: number | string; totalValue: number | string }) => {
-      if (row.stage) {
-        acc[row.stage] = { count: Number(row.count), value: Number(row.totalValue) };
-      }
-      return acc;
-    }, {})
-  });
+// v9.0.11 (TD-422): ارزش پرونده‌ها به تفکیک ارز (`getCrmStats`)
+router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (_req, res) => {
+  res.json(await getCrmStats());
 }));
 
 // GET /api/crm/leads - Get list of leads
@@ -268,8 +220,9 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
 
   const conditions = [eq(crmLeads.isDeleted, 0)];
 
-  if (customerId && !isNaN(Number(customerId))) {
-    conditions.push(eq(crmLeads.customerId, Number(customerId)));
+  // v9.0.15 (TD-429): مشتری با شناسه طرف حساب؛ پرونده قدیمی بی شناسه با نام برابر (`leadCustomerCondition`)
+  if (customerId && !isNaN(Number(customerId)) && Number(customerId) > 0) {
+    conditions.push(await leadCustomerCondition(Number(customerId)));
   } else if (customerName && typeof customerName === 'string' && customerName.trim() !== '') {
     conditions.push(eq(crmLeads.customerName, customerName.trim()));
   }
@@ -768,6 +721,34 @@ router.get('/crm/activities', authorizePermission('crm.view', 'customers.view', 
     .limit(Math.min(Number(req.query.limit) || 200, 500));
 
   res.json(activities.map(formatActivity));
+}));
+
+// v9.0.14 (TD-428، تصمیم مالک محصول ت۵ الف): پیگیری‌ها بی بازه تاریخ اقدام و با صفحه‌بندی (`listFollowups`)؛
+// پیش‌تر فهرست پیگیری‌ها از اقدام‌های ۳۰ روز اخیر با سقف ۲۰۰ ردیف ساخته می‌شد
+const followupsQuerySchema = z.object({
+  query: z.object({
+    status: z.enum(['pending', 'completed', 'all']).optional(),
+    due: z.enum(['all', 'due']).optional(),
+    assignedPersonnelId: numericIdString.optional(),
+    search: z.string().max(200).optional(),
+    page: numericIdString.optional(),
+    limit: numericIdString.optional(),
+  }).passthrough(),
+}).passthrough();
+
+router.get('/crm/followups', authorizePermission('crm.view', 'customers.view', 'customers.manage'), validate(followupsQuerySchema), asyncHandler(async (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  const { page } = parsePagination(q, { page: 1, limit: 50 });
+  const limit = Math.min(Math.max(Number(q.limit) || 50, 1), 200);
+  const { rows, ...meta } = await listFollowups({
+    status: (q.status as FollowupStatus | undefined) ?? 'pending',
+    dueOnly: q.due === 'due',
+    assignedPersonnelId: q.assignedPersonnelId ? Number(q.assignedPersonnelId) : undefined,
+    search: q.search,
+    page,
+    limit,
+  });
+  res.json({ ...meta, data: rows.map(formatActivity) });
 }));
 
 // POST /api/crm/activities - Add call log/action

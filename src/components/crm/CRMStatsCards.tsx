@@ -1,14 +1,16 @@
 import { Target, Plus, Briefcase, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
-import { formatPersianPrice, formatPersianNumber, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatPersianNumber } from '../../utils';
+import type { CrmStats } from '../../lib/crm/leadCurrencyTotals';
+import { CurrencyTotalsLines } from './CurrencyTotals';
 
 interface CRMStatsCardsProps {
-  stats: any;
+  stats: Partial<CrmStats>;
   onOpenLeadModal: () => void;
 }
 
 export function CRMStatsCards({ stats, onOpenLeadModal }: CRMStatsCardsProps) {
-  const appCurrency = useAppCurrency();
+  // v9.0.11 (TD-422): ارزش قیف به تفکیک ارز؛ مبلغ ارزی هرگز با ریال جمع نمی‌شود
+  const pipeline = Array.isArray(stats?.pipelineByCurrency) ? stats.pipelineByCurrency : [];
   return (
     <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-lg relative overflow-hidden">
       <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -55,9 +57,7 @@ export function CRMStatsCards({ stats, onOpenLeadModal }: CRMStatsCardsProps) {
           </div>
           <div>
             <p className="text-[11px] text-slate-400">ارزش کل قیف فروش</p>
-            <p className="text-lg font-black text-amber-300">
-              {formatPersianPrice(stats?.totalPipelineValue || 0)} <span className="text-[10px] text-slate-400 font-normal">{formatCurrencyLabel(appCurrency)}</span>
-            </p>
+            <CurrencyTotalsLines totals={pipeline} className="text-lg font-black text-amber-300" labelClassName="text-[10px] text-slate-400 font-normal" />
           </div>
         </div>
 

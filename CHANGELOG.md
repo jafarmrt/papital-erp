@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.15 — CRM Customer Filter by Party Id
+- **CRM Customer Filter:** The CRM customer filter sends the party id; the server returns that party's leads and legacy leads without an id whose customer or company name equals the party name exactly (`leadCustomerCondition`; TD-429, package-9 finding B09-14).
+
+### v9.0.14 — Open CRM Follow-Ups From the Server
+- **Open Follow-Ups:** The follow-ups tab, the dashboard «today and overdue» widget and the tab badge read open follow-ups from `GET /crm/followups` with no activity-date range and with pagination; the stats counter uses the same condition (`listFollowups`, `countDueFollowups`; TD-428, package-9 finding B09-13, product-owner decision).
+
+### v9.0.13 — One Proforma Per Lead Under Concurrency
+- **Single Proforma Per Lead:** Issuing a proforma for a sales lead locks the lead row inside the document transaction, so concurrent requests can no longer create several proformas for one lead; the lead link and its note are written in the same transaction (`lockLeadForNewProforma`, `markLeadProforma`; TD-424, package-9 finding B09-09).
+
+### v9.0.12 — Voiding a Lead Proforma Reopens a Won Lead
+- **Lead Proforma Void:** Voiding the proforma of a sales lead, or the invoice finalized from it, releases the lead inside the void transaction and moves a won lead back to the proposal stage (`releaseLeadOfVoidedDocument`; TD-423, package-9 finding B09-08).
+
+### v9.0.11 — CRM Lead Values Per Currency
+- **CRM Stats Per Currency:** The CRM stats card and the customer dossier show the pipeline, won and per-stage lead values per currency; amounts of different currencies are no longer added together (`getCrmStats`, `sumByCurrency`; TD-422, package-9 finding B09-07, product-owner decision).
+
 ### v9.0.10 — Customer Delete Refused With Open Items
 - **Customer Delete Guard:** Deleting a party is refused (409, Persian reasons) while it has a nonzero approved balance in any currency, draft voucher rows, a draft or proforma document under its name, an active sales lead, an open project or an open cheque; the check runs under the customer row lock (`assertCustomerDeletable`; TD-431, package-9 finding B09-16, product-owner decision).
 

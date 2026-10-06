@@ -7,6 +7,7 @@ import { PersonalBanner } from '../components/dashboard/PersonalBanner';
 import { CustomizableShortcuts } from '../components/dashboard/CustomizableShortcuts';
 import { InteractiveJalaliCalendar, CalendarEventItem } from '../components/dashboard/InteractiveJalaliCalendar';
 import { CRMTasksWidget } from '../components/dashboard/CRMTasksWidget';
+import { useCrmFollowups } from '../hooks/useCrmFollowups';
 import { DailyLogsMentionsWidget } from '../components/dashboard/DailyLogsMentionsWidget';
 import { Warehouse, ArrowLeft, Sparkles } from 'lucide-react';
 import { isoToJalaliDate } from '../utils';
@@ -35,6 +36,9 @@ export default function Dashboard() {
     user?.role === 'admin' ||
     Array.isArray(userPermissions?.permissions) && userPermissions.permissions.includes('crm.view')
   );
+
+  // v9.0.14 (TD-428): ویجت «امروز و معوق» از پیگیری‌های باز سرور، بی بازه تاریخ اقدام
+  const openFollowups = useCrmFollowups({ status: 'pending', page: 1, limit: 200 }, hasCrmPermission);
 
   // v7.0.53 / v7.0.55 (audit P2-10): کارت «وضعیت انبار» برای دارندگان reports.view یا warehouse.view (مجوز آمار داشبورد انبار)
   const canViewWarehouseStatus = Boolean(
@@ -132,7 +136,9 @@ export default function Dashboard() {
           {hasCrmPermission && (
             <CRMTasksWidget
               leads={leads}
-              activities={activities}
+              activities={openFollowups.data}
+              dueCount={openFollowups.dueCount}
+              openCount={openFollowups.openCount}
               loading={crmLoading}
               onRefresh={fetchCRMData}
             />

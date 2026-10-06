@@ -10466,6 +10466,21 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.10، TD-431): رد حذف طرف حساب دارای مانده یا کار باز
   const { runCustomerDeleteGuardTests } = await import('../regression/customerDeleteGuardTests.js');
   results.push(...await runCustomerDeleteGuardTests(shouldRun));
+  // بسته ۹ (v9.0.11، TD-422): آمار پرونده‌های فروش به تفکیک ارز
+  const { runCrmStatsCurrencyTests } = await import('../regression/crmStatsCurrencyTests.js');
+  results.push(...await runCrmStatsCurrencyTests(shouldRun));
+  // بسته ۹ (v9.0.12، TD-423): ابطال پیش‌فاکتور «فروش موفق» را برمی‌گرداند
+  const { runLeadProformaVoidTests } = await import('../regression/leadProformaVoidTests.js');
+  results.push(...await runLeadProformaVoidTests(shouldRun));
+  // بسته ۹ (v9.0.13، TD-424): یک پیش‌فاکتور برای هر پرونده زیر درخواست‌های هم‌زمان
+  const { runLeadProformaConcurrencyTests } = await import('../regression/leadProformaConcurrencyTests.js');
+  results.push(...await runLeadProformaConcurrencyTests(shouldRun));
+  // بسته ۹ (v9.0.14، TD-428): پیگیری‌های باز بی بازه تاریخ اقدام
+  const { runCrmFollowupsTests } = await import('../regression/crmFollowupsTests.js');
+  results.push(...await runCrmFollowupsTests(shouldRun));
+  // بسته ۹ (v9.0.15، TD-429): فیلتر مشتری پرونده‌های فروش با شناسه طرف حساب
+  const { runCrmLeadCustomerFilterTests } = await import('../regression/crmLeadCustomerFilterTests.js');
+  results.push(...await runCrmLeadCustomerFilterTests(shouldRun));
 
   return results;
 }
