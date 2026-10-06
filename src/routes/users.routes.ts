@@ -61,7 +61,7 @@ const updateRoleSchema = z.object({
   })
 });
 
-// v9.0.82 (TD-880): کاتالوگ مجوز در فایل مشترک سرور و مرورگر است؛ این بازصادر برای مصرف‌کنندگان قدیمی می‌ماند
+// v9.0.86 (TD-880): کاتالوگ مجوز در فایل مشترک سرور و مرورگر است؛ این بازصادر برای مصرف‌کنندگان قدیمی می‌ماند
 export { PERMISSION_CATALOG };
 
 /**
@@ -220,7 +220,7 @@ router.post('/roles', authorizePermission('roles.manage'), validate(createRoleSc
     if (unknownKeys.length > 0) {
       return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
     }
-    // v9.0.82 (TD-880): هر مجوز با نیازهایش ذخیره می‌شود (مثلاً «ویرایش فاکتورها» با «مشاهده فاکتورها»)
+    // v9.0.86 (TD-880): هر مجوز با نیازهایش ذخیره می‌شود (مثلاً «ویرایش فاکتورها» با «مشاهده فاکتورها»)
     const addedByRequirement = missingRequiredPermissions(requested);
 
     const slugCode = code.trim().toLowerCase().replace(/\s+/g, '_');
@@ -285,7 +285,7 @@ router.put('/roles/:id', authorizePermission('roles.manage'), validate(updateRol
     if (unknownKeys.length > 0) {
       return res.status(400).json({ error: UNKNOWN_PERMISSIONS_ERROR(unknownKeys) });
     }
-    // v9.0.82 (TD-880): فهرست تازه با نیازهایش ذخیره می‌شود؛ ویرایش بی فهرست مجوز، فهرست قبلی را دست نمی‌زند
+    // v9.0.86 (TD-880): فهرست تازه با نیازهایش ذخیره می‌شود؛ ویرایش بی فهرست مجوز، فهرست قبلی را دست نمی‌زند
     const addedByRequirement = Array.isArray(permissions) ? missingRequiredPermissions(requested) : [];
     const newPermissions: string[] = Array.isArray(permissions) ? withRequiredPermissions(requested) : prevPermissions;
 

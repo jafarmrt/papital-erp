@@ -19,10 +19,10 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.83 — One Permission Check and Permission Ratchets
+### v9.0.87 — One Permission Check and Permission Ratchets
 - **Permission Check:** `can()` and `requirePermission` ask catalog permission keys only (an unknown key or a role code fails when the router is built); `npm run ratchet:permissions` keeps role-code literals and stray permission keys from growing (TD-881).
 
-### v9.0.82 — Role Permissions Carry Their Requirements
+### v9.0.86 — Role Permissions Carry Their Requirements
 - **Permission Dependencies:** the permission catalog is one shared file where every action requires its section's view; saving a role adds the missing requirements and the role form ticks them (TD-880).
 
 ### v9.0.81 — Clear Errors for Transfers and Kardex Rebuild

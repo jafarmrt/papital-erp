@@ -125,7 +125,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   const [permCategoryFilter, setPermCategoryFilter] = useState<string>('ALL');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
-  // v9.0.82 (TD-880): مجوزهای لازمی که نقش ذخیره‌شده ندارد و ذخیره بعدی می‌افزاید
+  // v9.0.86 (TD-880): مجوزهای لازمی که نقش ذخیره‌شده ندارد و ذخیره بعدی می‌افزاید
   const [addedOnOpen, setAddedOnOpen] = useState<string[]>([]);
 
   const isEditing = editingRole !== null;
@@ -219,7 +219,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
     toast.success(`قالب نقش "${preset.name}" با موفقیت جاگذاری شد`);
   };
 
-  // v9.0.82 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند
+  // v9.0.86 (TD-880): تیک یک مجوز نیازهایش را هم می‌زند و برداشتن آن مجوزهای وابسته را هم برمی‌دارد، همان قاعده‌ای که سرور در ذخیره اعمال می‌کند
   const togglePermission = (permKey: string) => {
     setRoleForm((prev) => {
       const exists = prev.permissions.includes(permKey);
