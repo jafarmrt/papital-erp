@@ -10504,6 +10504,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.57, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
+  // Package 6 (v9.0.58, TD-489): a warehouse transfer is a numbered transfer document, voidable without changing WAC
+  const { runWarehouseTransferDocumentTests } = await import('../regression/warehouseTransferDocumentTests.js');
+  results.push(...await runWarehouseTransferDocumentTests(shouldRun));
 
   return results;
 }

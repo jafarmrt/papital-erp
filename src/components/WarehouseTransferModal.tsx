@@ -108,7 +108,7 @@ export default function WarehouseTransferModal({
     setSubmitting(true);
     setErrorMsg(null);
     try {
-      await fetchJson('/inventory/transfer', {
+      const res = await fetchJson<{ data?: { refNumber?: string } }>('/inventory/transfer', {
         method: 'POST',
         body: JSON.stringify({
           itemId: selectedItemId,
@@ -121,7 +121,9 @@ export default function WarehouseTransferModal({
         })
       });
 
-      setSuccessMsg('حواله انتقال بین انبارها با موفقیت صادر و موجودی به‌روزرسانی شد.');
+      // v9.0.58 (TD-489): انتقال سند «حواله انتقال» با شماره خودش می‌سازد
+      const issuedRef = res?.data?.refNumber;
+      setSuccessMsg(`حواله انتقال${issuedRef ? ` شماره «${issuedRef}»` : ''} صادر و موجودی انبارها به‌روزرسانی شد.`);
       setTimeout(() => {
         onSuccess();
         onClose();

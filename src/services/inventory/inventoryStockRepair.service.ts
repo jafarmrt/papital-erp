@@ -1,5 +1,5 @@
 import { orm } from '../../db/drizzle.js';
-import { items, warehouses, transactions } from '../../db/schema.js';
+import { documentItems, documents, items, warehouses, transactions } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
@@ -10,6 +10,10 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { money } from '../../lib/money.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { assertStockMovementDate } from './stockMovementDate.js';
+import { DocumentRefNumberService } from '../documents/documentRefNumber.service.js';
+
+/** نوع سند حواله انتقال بین انبارها (documents.type و transactions.document_type) */
+export const TRANSFER_DOCUMENT_TYPE = 'transfer';
 
 export class InventoryStockRepairService {
   /**
@@ -22,13 +26,17 @@ export class InventoryStockRepairService {
     quantity: number;
     date?: string;
     notes?: string;
+    /** شماره حواله دلخواه کاربر؛ خالی یا تکراری = شماره بعدی سری حواله انتقال (v9.0.58، TD-489) */
+    refNumber?: string;
     createdBy?: string;
     user?: string;
     /** v8.0.4 (TD-257): کاربر مجوز «ثبت سند انبار با تاریخ گذشته» دارد (بررسی در مسیر) */
     allowBackdate?: boolean;
   }): Promise<{
     success: boolean;
+    /** شناسه سند حواله انتقال (documents.id)؛ پیش از v9.0.58 شناسه ردیف خروج کاردکس بود */
     transferDocId: number;
+    refNumber: string;
     quantity: number;
     fromLocation: string;
     toLocation: string;
@@ -114,41 +122,72 @@ export class InventoryStockRepairService {
       const itemUnitPrice = money(item.weightedAverageCost);
       const itemTotalPrice = money(itemUnitPrice.multiply(qty));
 
-      // 1. Transaction log out from source
-      const [outTx] = await txEngine.insert(transactions).values({
+      // v9.0.58 (TD-489، تصمیم ت۲ الف): هر انتقال یک سند «حواله انتقال» است — نوع transfer با شماره سری خودش (همان
+      // قاعده شماره دستی و تکراری اسناد)، یک ردیف با بهای کاردکس و انبار مبدأ، و دو ردیف کاردکس با document_id؛ با
+      // ابطال سند (deleteDocument) هر دو ردیف فقط از نظر مقدار برمی‌گردند. پیش‌تر دو ردیف کاردکس بی سند ثبت می‌شد و
+      // شماره مرجع و توضیح فرم دور ریخته می‌شد. قفل‌ها: کالا (بالا) ← شمارنده شماره سند ← ردیف سند.
+      const { refNumber, refFiscalYear } = await DocumentRefNumberService.assignDocumentRefNumber(
+        txEngine, TRANSFER_DOCUMENT_TYPE, txDate, params.refNumber
+      );
+      const notes = params.notes?.trim() || `انتقال از «${fromWh.name || fromWh.code}» به «${toWh.name || toWh.code}»`;
+      const [doc] = await txEngine.insert(documents).values({
+        type: TRANSFER_DOCUMENT_TYPE,
+        refNumber,
+        refFiscalYear,
+        date: txDate,
+        user: operatorName,
+        notes,
+        status: 'final',
+        currency: 'IRR',
+        attachments: [],
+        isDeleted: 0,
+      }).returning({ id: documents.id });
+      await txEngine.insert(documentItems).values({
+        documentId: doc.id,
         itemId: params.itemId,
-        type: 'out',
         quantity: qty,
         unitPrice: itemUnitPrice,
-        totalPrice: itemTotalPrice,
-        date: txDate,
-        documentType: 'transfer',
-        documentRef: `انتقال انبار: ${params.fromLocation} به ${params.toLocation}`,
-        location: params.fromLocation,
-        notes: params.notes || `انتقال از ${params.fromLocation} به ${params.toLocation}`,
-        createdBy: operatorName,
-        isDeleted: 0,
-      }).returning({ id: transactions.id });
-
-      // 2. Transaction log in to destination
-      await txEngine.insert(transactions).values({
-        itemId: params.itemId,
-        type: 'in',
-        quantity: qty,
-        unitPrice: itemUnitPrice,
-        totalPrice: itemTotalPrice,
-        date: txDate,
-        documentType: 'transfer',
-        documentRef: `انتقال انبار: ${params.fromLocation} به ${params.toLocation}`,
-        location: params.toLocation,
-        notes: params.notes || `دریافت از ${params.fromLocation}`,
-        createdBy: operatorName,
-        isDeleted: 0,
+        discount: money(0),
+        location: fromWh.code,
       });
+
+      await txEngine.insert(transactions).values([
+        {
+          itemId: params.itemId,
+          documentId: doc.id,
+          type: 'out',
+          quantity: qty,
+          unitPrice: itemUnitPrice,
+          totalPrice: itemTotalPrice,
+          date: txDate,
+          documentType: TRANSFER_DOCUMENT_TYPE,
+          documentRef: refNumber,
+          location: fromWh.code,
+          notes,
+          createdBy: operatorName,
+          isDeleted: 0,
+        },
+        {
+          itemId: params.itemId,
+          documentId: doc.id,
+          type: 'in',
+          quantity: qty,
+          unitPrice: itemUnitPrice,
+          totalPrice: itemTotalPrice,
+          date: txDate,
+          documentType: TRANSFER_DOCUMENT_TYPE,
+          documentRef: refNumber,
+          location: toWh.code,
+          notes,
+          createdBy: operatorName,
+          isDeleted: 0,
+        },
+      ]);
 
       return {
         success: true,
-        transferDocId: outTx?.id || 0,
+        transferDocId: doc.id,
+        refNumber,
         quantity: qty,
         fromLocation: params.fromLocation,
         toLocation: params.toLocation,

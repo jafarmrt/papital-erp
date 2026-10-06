@@ -7,6 +7,7 @@ import type { DecimalValue, FinancialDecimal } from '../../lib/financialDecimal.
 import { MAX_PAGE_LIMIT } from '../../lib/pagination.js';
 import { NotFoundError } from '../../errors/customErrors.js';
 import { containsLikePattern } from '../../lib/sqlLike.js';
+import { transferLocationsByDocument } from '../inventory/transferDocumentLocations.js';
 import type { 
   GetDocumentsFilter, 
   FormattedDocument, 
@@ -180,6 +181,13 @@ export class DocumentQueryService {
       };
     });
 
+    // v9.0.58 (TD-489): انبار مبدأ و مقصد حواله‌های انتقال
+    const transferLocations = await transferLocationsByDocument(docs.filter(d => d.type === 'transfer').map(d => d.id));
+    for (const d of formattedDocs) {
+      const loc = transferLocations.get(d.id);
+      if (loc) Object.assign(d, loc);
+    }
+
     if (filter.isExport || (filter.limit === undefined && filter.page === undefined && typeof typeOrFilter === 'string')) {
       return formattedDocs;
     }
@@ -312,6 +320,8 @@ export class DocumentQueryService {
       settlementStatus: amounts.settlementStatus,
       // قرارداد API: مبلغ عدد (P2-6)
       settlements: settlements.map(t => ({ ...t, amount: t.amount.toNumber() })),
+      // v9.0.58 (TD-489): انبار مبدأ و مقصد حواله انتقال
+      ...(doc.type === 'transfer' ? (await transferLocationsByDocument([doc.id])).get(doc.id) : {}),
       items: formattedItems
     };
   }

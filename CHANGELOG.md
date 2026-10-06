@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.58 — Warehouse Transfers Are Documents
+- **Transfer Document:** every warehouse transfer is a numbered «حواله انتقال» document with its lines and linked Kardex rows, listed with source and destination, printable and voidable without changing WAC (TD-489, `reg_warehouse_transfer_document_td_489`).
+
 ### v9.0.57 — No Future-Dated Stock Movements
 - **Future Stock Dates:** a stock movement dated after the business today is refused for every user, a transfer date is normalized (Jalali accepted, text 422), and earlier future-dated Kardex rows are listed by the financial health check (TD-483, `reg_stock_movement_future_date_td_483`).
 

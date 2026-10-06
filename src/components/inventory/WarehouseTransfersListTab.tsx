@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Eye } from 'lucide-react';
+import { ArrowLeftRight, Ban, Eye } from 'lucide-react';
 import { formatPersianNumber, formatPersianDate } from '../../utils';
 
 interface WarehouseTransfersListTabProps {
@@ -6,13 +6,18 @@ interface WarehouseTransfersListTabProps {
   transfers: any[];
   handleViewTransfer: (docId: number) => void;
   onOpenTransferModal: () => void;
+  /** v9.0.58 (TD-489): ابطال حواله با مسیر ابطال اسناد */
+  onVoidTransfer: (transfer: { id: number; refNumber?: string }) => void;
+  voidingId: number | null;
 }
 
 export function WarehouseTransfersListTab({
   transfersLoading,
   transfers,
   handleViewTransfer,
-  onOpenTransferModal
+  onOpenTransferModal,
+  onVoidTransfer,
+  voidingId
 }: WarehouseTransfersListTabProps) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -40,7 +45,7 @@ export function WarehouseTransfersListTab({
               <th className="py-3 px-3">انبار مقصد</th>
               <th className="py-3 px-3">کاربر ثبت‌کننده</th>
               <th className="py-3 px-4">توضیحات</th>
-              <th className="py-3 px-3 text-center">مشاهده</th>
+              <th className="py-3 px-3 text-center">عملیات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -62,8 +67,8 @@ export function WarehouseTransfersListTab({
                   <td className="py-3 px-3 text-center font-mono text-slate-400">{formatPersianNumber(idx + 1)}</td>
                   <td className="py-3 px-3 font-mono font-bold text-blue-600">{t.refNumber || `#${t.id}`}</td>
                   <td className="py-3 px-3 font-mono">{formatPersianDate(t.date)}</td>
-                  <td className="py-3 px-3 font-bold text-slate-700">{t.sourceLocation || 'انبار مرکزی'}</td>
-                  <td className="py-3 px-3 font-bold text-slate-700">{t.destinationLocation || t.location || '-'}</td>
+                  <td className="py-3 px-3 font-bold text-slate-700">{t.sourceLocation || '-'}</td>
+                  <td className="py-3 px-3 font-bold text-slate-700">{t.destinationLocation || '-'}</td>
                   <td className="py-3 px-3 text-slate-600">{t.user || 'انباردار'}</td>
                   <td className="py-3 px-4 text-slate-600">{t.notes || '-'}</td>
                   <td className="py-3 px-3 text-center">
@@ -73,6 +78,14 @@ export function WarehouseTransfersListTab({
                     >
                       <Eye size={14} />
                       <span>مشاهده</span>
+                    </button>
+                    <button
+                      onClick={() => onVoidTransfer({ id: t.id, refNumber: t.refNumber })}
+                      disabled={voidingId !== null}
+                      className="mr-1.5 p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Ban size={14} />
+                      <span>{voidingId === t.id ? 'در حال ابطال...' : 'ابطال'}</span>
                     </button>
                   </td>
                 </tr>

@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
-import { ArrowLeftRight, ClipboardCheck, RefreshCw, X, type LucideIcon } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ArrowLeftRight, ClipboardCheck, Printer, RefreshCw, X, type LucideIcon } from 'lucide-react';
+import { TransferDocumentPrint } from './TransferDocumentPrint';
 import { formatPersianDate } from '../../utils';
 import type { InventoryDocumentDetail } from '../../hooks/inventoryAudit/useInventoryAuditQueries';
 
@@ -13,9 +14,10 @@ interface ShellProps {
   loadingText: string;
   onClose: () => void;
   children: ReactNode;
+  footerActions?: ReactNode;
 }
 
-function DocumentDetailShell({ title, icon: Icon, maxWidthClass, loading, loadingText, onClose, children }: ShellProps) {
+function DocumentDetailShell({ title, icon: Icon, maxWidthClass, loading, loadingText, onClose, children, footerActions }: ShellProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in" style={{ direction: 'rtl' }}>
       <div className={`w-full ${maxWidthClass} bg-white rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200`}>
@@ -41,7 +43,8 @@ function DocumentDetailShell({ title, icon: Icon, maxWidthClass, loading, loadin
           ) : children}
         </div>
 
-        <div className="p-4 border-t bg-slate-50 flex justify-end">
+        <div className="p-4 border-t bg-slate-50 flex justify-end gap-2">
+          {footerActions}
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-xl font-medium text-xs transition-colors"
@@ -153,6 +156,8 @@ export function AuditDocumentDetailModal({ doc, loading, onClose }: DetailModalP
 }
 
 export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailModalProps) {
+  // v9.0.58 (TD-489): حواله انتقال سند است؛ مبدأ و مقصد از ردیف‌های کاردکس همان سند و چاپ با قالب یکدست اسناد
+  const [printing, setPrinting] = useState(false);
   return (
     <DocumentDetailShell
       title={`جزئیات حواله انتقال ${doc ? `شماره ${refOf(doc)}` : ''}`}
@@ -161,6 +166,15 @@ export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailMod
       loading={loading}
       loadingText="در حال بارگذاری اطلاعات حواله..."
       onClose={onClose}
+      footerActions={doc ? (
+        <button
+          onClick={() => setPrinting(true)}
+          className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-medium text-xs transition-colors inline-flex items-center gap-1.5"
+        >
+          <Printer size={14} />
+          چاپ حواله
+        </button>
+      ) : null}
     >
       {doc ? (
         <>
@@ -170,12 +184,24 @@ export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailMod
               <strong className="text-slate-800 font-mono text-sm">{refOf(doc)}</strong>
             </div>
             <div>
-              <span className="text-slate-500 block mb-1">تاریخ ثبت:</span>
+              <span className="text-slate-500 block mb-1">تاریخ انتقال:</span>
               <strong className="text-slate-800 font-mono">{formatPersianDate(doc.date)}</strong>
             </div>
             <div>
               <span className="text-slate-500 block mb-1">صادرکننده:</span>
               <strong className="text-slate-800">{doc.user || '-'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block mb-1">انبار مبدأ:</span>
+              <strong className="text-blue-700">{doc.sourceLocation || '-'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block mb-1">انبار مقصد:</span>
+              <strong className="text-emerald-700">{doc.destinationLocation || '-'}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block mb-1">توضیحات:</span>
+              <strong className="text-slate-800">{doc.notes || '-'}</strong>
             </div>
           </div>
 
@@ -187,7 +213,6 @@ export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailMod
                   <th className="p-3 text-slate-600">کد کالا</th>
                   <th className="p-3 text-slate-600">نام کالا</th>
                   <th className="p-3 text-center text-slate-600">مقدار انتقال</th>
-                  <th className="p-3 text-center text-slate-600">انبار مبدا</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -197,12 +222,12 @@ export function TransferDocumentDetailModal({ doc, loading, onClose }: DetailMod
                     <td className="p-3 text-slate-600 font-mono">{line.code}</td>
                     <td className="p-3 text-slate-800 font-bold">{line.name}</td>
                     <td className="p-3 text-center text-blue-900 font-mono font-bold">{line.quantity} {line.unit}</td>
-                    <td className="p-3 text-center font-mono text-slate-700">{line.location || doc.location || 'اصلی'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <TransferDocumentPrint doc={doc} isOpen={printing} onClose={() => setPrinting(false)} />
         </>
       ) : null}
     </DocumentDetailShell>
