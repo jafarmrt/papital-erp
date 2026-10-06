@@ -100,7 +100,7 @@ INSERT INTO tmp_role_code_guards (role_code, guard_keys, grant_key, route) VALUE
 CREATE TEMP TABLE tmp_catalog_keys ON COMMIT DROP AS
 SELECT c.key, c.ord FROM unnest(ARRAY[
   'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete', 'warehouse.view', 'warehouse.manage', 'warehouse.in',
-  'warehouse.out', 'warehouse.transfer', 'warehouse.backdate', 'inventory.reconcile', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+  'warehouse.out', 'warehouse.transfer', 'warehouse.backdate', 'inventory.reconcile', 'inventory.wac_correct', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
   'audit.view', 'audit.create', 'audit.apply', 'customers.view', 'customers.manage', 'projects.view', 'projects.create', 'projects.edit',
   'projects.delete', 'workflow.view', 'workflow.execute', 'workflow.approve', 'workflow.manage', 'workflow.admin', 'events.view', 'events.manage',
   'daily_logs.view', 'daily_logs.create', 'daily_logs.manage_all', 'crm.view', 'crm.manage', 'crm.delete', 'personnel.view', 'personnel.manage',
