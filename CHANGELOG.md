@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.54 — Session End Clears the Browser Cache
+- **Session Cache:** logout and a 401 clear the React Query cache, so the next user of the same browser never sees the previous user's cached data (TD-518, `sessionCacheClear.test.tsx`).
+
 ### v9.0.53 — New-User Form Preselects No Role
 - **New-User Role:** the new-user form opens with an empty «choose a role» option and sends nothing until a role is picked; the system admin is listed last with a full-access warning (TD-517, `userFormRole.test.tsx`).
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User } from '../types';
 import { fetchJson, setAuthToken, setCsrfToken } from '../api';
+import { queryClient } from '../lib/queryClient';
 
 export interface UserPermissions {
   permissions: string[];
@@ -65,6 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setCsrfToken(null);
       setAuthToken(null);
+      // v9.0.54 (TD-518): داده کاربر قبلی در کش نمی‌ماند تا کاربر بعدی همین مرورگر آن را بی درخواست به سرور نبیند
+      queryClient.clear();
       setUser(null);
       setUserPermissions({ permissions: [], isAdmin: false });
       setPermissionsLoaded(false);
@@ -126,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleUnauthorized = () => {
+      queryClient.clear();
       setUser(null);
       setUserPermissions({ permissions: [], isAdmin: false });
     };
