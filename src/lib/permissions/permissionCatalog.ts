@@ -44,6 +44,8 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
       // v8.0.4 (TD-257، تصمیم مالک محصول): استثنای قاعده تاریخ سند انبار؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
       { key: 'warehouse.backdate', title: 'ثبت سند انبار با تاریخ گذشته', description: 'ثبت گردش با تاریخی پیش از آخرین گردش کالا، فقط وقتی موجودی انبار در آن تاریخ و پس از آن منفی نشود', requires: ['warehouse.view'] },
       { key: 'inventory.reconcile', title: 'ممیزی کاردکس و بازسازی انبار', description: 'اجرای بازسازی انبار و تطبیق تراکنش‌ها با لاگ کاردکس', requires: ['warehouse.view'] },
+      // v9.0.90 (TD-487، تصمیم ت۳): اصلاح WAC از بازپخش کاردکس با سند پیش‌نویس اختلاف ارزش؛ پیش‌فرض به هیچ نقشی داده نمی‌شود
+      { key: 'inventory.wac_correct', title: 'اصلاح میانگین بها از کاردکس', description: 'برابر کردن میانگین بهای کالا با بازپخش کاردکس، همراه با سند پیش‌نویس اختلاف ارزش در برابر «کسری و اضافات انبار»', requires: ['warehouse.view'] },
     ]
   },
   {

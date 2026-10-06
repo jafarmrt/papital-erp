@@ -16,18 +16,9 @@
 
 | ID | حوزه | شرح | منبع (فایل) | وضعیت |
 |----|------|-----|--------------|-------|
-| TD-481 | انبار و کاردکس (بسته ۶) | P1 (B06-02) — سند افتتاحیه کالای تأییدشده از گردش کار با «موجودی جاری × WAC جاری» صادر می‌شود و ردیف افتتاحیه کاردکس با WAC روز بازنویسی می‌شود: رسید میانه دو بار در دفتر نشست (۱٬۹۹۹٫۹۹۹۵ به‌جای ۱٬۰۰۰) و I3 و I13 شکستند | itemOpening.service.ts، itemOpeningWorkflowAction.ts، items.crud.routes.ts | open (P1، تصمیم ت۴ الف) |
 | TD-482 | انبار و کاردکس (بسته ۶) | P1 (B06-03) — انبار با کد `default` ساخته می‌شود ولی `createLedgerLocationResolver` این کد را انبار پیش‌فرض می‌خواند: آشتی مغایرت دروغین نشان داد، «اصلاح از روی کاردکس» و بازسازی موجودی را به `main` بردند و فروش از انبار واقعی ۴۲۲ گرفت | warehouse.service.ts، warehouseResolver.ts، documentLifecycle.service.ts | open (P1) |
-| TD-485 | انبار و کاردکس (بسته ۶) | P2 (B06-06) — جدول و خروجی اکسل «بررسی سلامت و تطبیق موجودی» `report.items` و نام فیلدهایی را می‌خوانند که سرور نمی‌فرستد (`{summary, audits, warehouses}`)؛ جدول همیشه خالی است | auditSheet.ts، Inventory3WayIntegrityTab.tsx، stockReconciliation.service.ts | open (P2) |
-| TD-486 | انبار و کاردکس (بسته ۶) | P2 (B06-07) — گزارش سلامت WAC را با میانگین همه ورودهای تاریخ می‌سنجد، نه با قاعده موتور زنده: WAC درست ۲۰۰ «مغایر با ۱۵۰» شمرده شد و بازسازی آن را پاک نکرد | stockReconciliation.service.ts | open (P2) |
-| TD-487 | انبار و کاردکس (بسته ۶) | P2 (B06-08) — «بازسازی کاردکس» `fixWAC` را نمی‌خواند و WAC را بی سند حسابداری عوض می‌کند (۶۶٫۶۶۶۷ به ۸۸٫۸۸۸۹، I3)؛ انباردار و ناظر انبارگردانی آن را اجرا می‌کنند | kardexWacRecalculator.service.ts، InventoryRebuildModal.tsx، inventory.routes.ts | open (P2، تصمیم ت۳ الف) |
-| TD-488 | انبار و کاردکس (بسته ۶) | P2 (B06-09) — «ثبت موجودی اولیه کاردکس» در اجرای دوباره ردیف‌های پیشین خودش با بهای ۰ را با WAC روز بازنویسی می‌کند (I13) | kardexBackfill.service.ts | open (P2، تصمیم ت۳ الف) |
 | TD-490 | انبار و کاردکس (بسته ۶) | P2 (B06-11) — غیرفعال کردن انبار بی قفل ردیف انبار است و با رسید هم‌زمان ۷ واحد را در انبار غیرفعال گذاشت؛ آخرین انبار فعال هم غیرفعال می‌شود و فعال‌سازی دوباره نیست | warehouse.service.ts، warehouses.routes.ts | open (P2، تصمیم ت۵ الف) |
-| TD-491 | انبار و کاردکس (بسته ۶) | P2 (B06-12) — «بازسازی همه کالاها» برای هر کالا، حتی بی‌تغییر، رویداد outbox، ردیف ممیزی و افزایش نسخه می‌نویسد (۳۰ کالا ← ۳۰ رویداد و ۳۱ ردیف در هر اجرا) | kardexWacRecalculator.service.ts | open (P2) |
-| TD-492 | انبار و کاردکس (بسته ۶) | P2 (B06-13) — نمودار «گردش کالا» ردیف‌های انتقال بین انبارها را ورود و خروج می‌شمارد و مرز بالای بازه ندارد (ماه 1477/10 در نمودار) | monthlyMovementTrend.ts | open (P2) |
-| TD-493 | انبار و کاردکس (بسته ۶) | P2 (B06-14) — کد ترنسفر طرح: کد حذف‌شده با `GET` خوانده می‌شود، ذخیره دوباره‌اش ۴۰۹ با پیام کلی می‌گیرد و صفحه فقط ۵۰ کد اول را می‌بیند | transfers.routes.ts، transfer.service.ts، useTransferQueries.ts | open (P2) |
 | TD-495 | انبار و کاردکس (بسته ۶) | P3 (B06-16) — بررسی سلامت سامانه لایه انبار را با `status: 'ok'` ثابت گزارش می‌کند، حتی با مغایرت در گزارش سلامت انبار | systemReconciliation.service.ts | open (P3) |
-| TD-496 | انبار و کاردکس (بسته ۶) | P3 (B06-17) — رابط انبار: اصطلاح انگلیسی و آوانویسی (داشبورد، آلارم، متریال، فیلتر، WAC، کارتکس)، «بروزرسانی»، رقم لاتین، برچسب «کسری سیستمی» برای اضافی و «قلم» برای جمع مقدار، نام انگلیسی فایل‌های خروجی، پیام‌های کلی و `window.confirm` | InventoryStatusPage.tsx، InventoryAuditPage.tsx، PhysicalAuditSheetTab.tsx، WarehouseStockReconciliationPanel.tsx، auditSheet.ts، RunningKardexModal.tsx، useTransactionsExport.ts | open (P3، تصمیم ت۶) |
 | TD-505 | خزانه و چک (بسته ۴)؛ اثر روی ۲ | P2 (B04-09) — `GET /accounting/bank-accounts` با گارد درون‌خطی `warehouse.in` / `warehouse.out` / `documents.view` / `documents.create` همه ستون‌ها (شماره حساب، کارت، شبا) و مانده خزانه، مانده دفتر و مغایرت را می‌دهد، در حالی که همان کاربر `GET /accounting/treasury` را ۴۰۳ می‌گیرد | treasury.routes.ts، InvoiceSettlementModal.tsx، PayrollPaymentModal.tsx | open (P2، تصمیم ت۷ الف) |
 | TD-506 | خزانه و چک (بسته ۴) | P2 (B04-10) — چک با `issueDate` پنج ماه آینده (۲۰۱) و وصول با `actionDate` آینده (۲۰۰، مانده بانک همین امروز زیاد شد) پذیرفته می‌شود؛ پنجره وضعیت چک کادر تاریخ ندارد و چک دیروز پاس‌شده امروز در دفتر می‌نشیند | chequeLifecycle.service.ts، ChequesTab.tsx | open (P2، تصمیم ت۶ الف؛ با TD-669 (B16-05)) |
 | TD-508 | خزانه و چک (بسته ۴) | P2 (B04-12) — فرم حساب بانکی کادر ارز ندارد و `PUT currency USD` ۲۰۰ می‌گیرد ولی ارز `IRR` می‌ماند؛ پس مسیر ارزی خزانه (TD-274) فقط از API باز است | BankAccountModal.tsx، bankAccount.service.ts | open (P2، تصمیم ت۵ الف) |
@@ -63,8 +54,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۴۲ ردیف
-- **آرشیو شده (resolved):** ۴۴۷ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۳۳ ردیف
+- **آرشیو شده (resolved):** ۴۵۶ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

@@ -12,6 +12,7 @@ import { validate } from '../middleware/validate.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { TransferService } from '../services/transfer.service.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { NotFoundError } from '../errors/customErrors.js';
 
 const router = Router();
 
@@ -132,7 +133,7 @@ router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSI
     const total = resultList.length;
     const effectiveLimit = limit || 50;
     const totalPages = Math.ceil(total / effectiveLimit) || 1;
-    const pagedList = isAll ? resultList.slice(0, 1000) : resultList.slice(offset, offset + effectiveLimit);
+    const pagedList = isAll ? resultList : resultList.slice(offset, offset + effectiveLimit);
 
     res.json({
       data: pagedList,
@@ -151,7 +152,7 @@ router.get('/transfers', authenticateToken, authorizePermission(...READ_PERMISSI
 router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PERMISSIONS.transfers), validate(deleteTransferSchema), asyncHandler(async (req: Request, res: Response) => {
   try {
     const code = req.params.code;
-    const [saved] = await orm.select().from(transfers).where(eq(transfers.code, code)).limit(1);
+    const [saved] = await orm.select().from(transfers).where(and(eq(transfers.code, code), eq(transfers.isDeleted, 0))).limit(1);
 
     // Fetch linked products with light projection
     const allProducts = await orm.select({
@@ -174,6 +175,8 @@ router.get('/transfers/:code', authenticateToken, authorizePermission(...READ_PE
     .where(and(eq(items.type, 'product'), eq(items.isDeleted, 0)));
 
     const linkedProds = allProducts.filter(p => extractTransferCode(p.code) === code);
+    // TD-493: a deleted design with no product using its code is gone
+    if (!saved && linkedProds.length === 0) throw new NotFoundError('ترنسفر یافت نشد');
 
     res.json({
       data: {

@@ -13,7 +13,6 @@ export const KARDEX_BACKFILL_REF = 'موجودی اولیه (تطبیق سیست
 export interface KardexBackfillSummary {
   candidateItems: number;
   insertedRows: number;
-  repairedRows: number;
   zeroWacItems: number;
 }
 
@@ -45,7 +44,6 @@ export class KardexBackfillService {
     const todayStr = await businessTodayIsoDate();
     let insertedRows = 0;
     let zeroWacItems = 0;
-    let repairedRows = 0;
 
     await orm.transaction(async (tx) => {
       for (const row of candidateRows) {
@@ -100,41 +98,19 @@ export class KardexBackfillService {
           }
         }
       }
-
-      const poisoned = await tx
-        .select({ id: transactions.id, quantity: transactions.quantity, wac: items.weightedAverageCost })
-        .from(transactions)
-        .innerJoin(items, eq(transactions.itemId, items.id))
-        .where(and(
-          eq(transactions.documentRef, KARDEX_BACKFILL_REF),
-          eq(transactions.unitPrice, money(0)),
-          eq(transactions.isDeleted, 0)
-        ));
-
-      for (const row of poisoned) {
-        const wac = fin(row.wac);
-        if (wac.isPositive()) {
-          await tx
-            .update(transactions)
-            .set({
-              unitPrice: money(wac.round(4)),
-              totalPrice: money(wac.multiply(Number(row.quantity) || 0).round(4))
-            })
-            .where(eq(transactions.id, row.id));
-          repairedRows++;
-        }
-      }
+      // v9.0.92 (TD-488، تصمیم ت۳): ردیف کاردکس تغییرناپذیر است. پیش‌تر ردیف‌های پیشین همین ابزار با بهای ۰ در هر اجرا
+      // با WAC روز بازقیمت‌گذاری می‌شدند و بازپخش کاردکس دیگر به WAC زنده نمی‌رسید (I13). اختلاف بها از «اصلاح بهای
+      // میانگین» (TD-487) با سند پیش‌نویس می‌رود.
     });
 
     const summary: KardexBackfillSummary = {
       candidateItems: candidateRows.length,
       insertedRows,
-      repairedRows,
       zeroWacItems
     };
 
-    if (insertedRows > 0 || repairedRows > 0) {
-      logger.info(`[Kardex Backfill] candidates=${summary.candidateItems} inserted=${insertedRows} repaired=${repairedRows} zeroWacItems=${zeroWacItems}`);
+    if (insertedRows > 0) {
+      logger.info(`[Kardex Backfill] candidates=${summary.candidateItems} inserted=${insertedRows} zeroWacItems=${zeroWacItems}`);
     }
 
     return summary;

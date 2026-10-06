@@ -93,7 +93,7 @@ describe('stock-count sheet (TD-480)', () => {
     expect(values).toEqual(['main', 'shop']);
     expect(locationSelect().value).toBe('main');
 
-    fireEvent.click(screen.getByRole('button', { name: 'کپی موجودی اسمی به موجودی فیزیکی برای تمام اقلام' }));
+    fireEvent.click(screen.getByRole('button', { name: 'کپی موجودی دفتری به موجودی فیزیکی برای همه اقلام' }));
     fireEvent.click(screen.getByRole('button', { name: /ثبت نهایی سند انبارگردانی/ }));
     expect(await screen.findByText(/در موقعیت «انبار مرکزی»/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'ثبت قطعی انبارگردانی' }));
