@@ -2,6 +2,8 @@ import React from 'react';
 import { Clock, AlertTriangle, CheckCircle2, Activity, TrendingDown, ShieldAlert } from 'lucide-react';
 import { useWorkflowSlaAnalyticsQuery } from '../../hooks/queries/useWorkflowQueries';
 import { ReopenedTasksReportCard } from './ReopenedTasksReportCard';
+import { formatPersianNumber, toPersianDigits } from '../../utils/persianNumber';
+import { workflowEntityTypeLabel } from '../../lib/workflow/workflowEntityLabels';
 
 export const WorkflowSlaAnalyticsTab: React.FC = () => {
   const { data, isLoading, refetch } = useWorkflowSlaAnalyticsQuery();
@@ -9,7 +11,7 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
   if (isLoading) {
     return (
       <div className="p-12 text-center text-gray-500 dark:text-gray-400">
-        در حال محاسبه شاخص‌های SLA و تحلیل زمان‌سنجی فرآیندها...
+        در حال محاسبه شاخص‌های مهلت انجام...
       </div>
     );
   }
@@ -35,12 +37,12 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
         {/* KPI 1: SLA Compliance */}
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
-            <span>نرخ رعایت SLA</span>
+            <span>نرخ رعایت مهلت انجام</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold font-mono text-gray-900 dark:text-white">
-              {kpi.slaComplianceRate}%
+              {formatPersianNumber(kpi.slaComplianceRate)}٪
             </span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
               kpi.slaComplianceRate >= 90 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
@@ -64,9 +66,9 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold font-mono text-gray-900 dark:text-white">
-              {kpi.activeInstances}
+              {formatPersianNumber(kpi.activeInstances)}
             </span>
-            <span className="text-xs text-gray-500">از مجموع {kpi.totalInstances}</span>
+            <span className="text-xs text-gray-500">از مجموع {formatPersianNumber(kpi.totalInstances)}</span>
           </div>
           <p className="text-[11px] text-gray-500 dark:text-gray-400">تعداد کارهای فعال در کارتابل‌ها</p>
         </div>
@@ -74,18 +76,18 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
         {/* KPI 3: Overdue Instances */}
         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
-            <span>اسناد دارای تاخیر SLA</span>
+            <span>اسناد دارای تأخیر</span>
             <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400">
-              {kpi.overdueInstancesCount}
+              {formatPersianNumber(kpi.overdueInstancesCount)}
             </span>
             <span className="text-xs bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 px-2 py-0.5 rounded">
               عبور از مهلت
             </span>
           </div>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400">اسنادی که زمان توقف بیشتر از SLA دارند</p>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">اسنادی که بیش از مهلت انجام در یک گام مانده‌اند</p>
         </div>
 
         {/* KPI 4: Top Bottleneck */}
@@ -106,7 +108,7 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
         <div className="flex items-center justify-between border-b pb-3 border-gray-200 dark:border-gray-700">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
             <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>تحلیل میانگین زمان توقف و وضعیت گلوگاه‌ها (State Analytics)</span>
+            <span>میانگین زمان توقف در هر گام و گلوگاه‌ها</span>
           </h3>
           <button 
             onClick={() => refetch()}
@@ -135,7 +137,7 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
                     ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200' 
                     : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200'
                 }`}>
-                  {st.isBottleneck ? 'گلوگاه (Bottleneck)' : 'روان و استاندارد'}
+                  {st.isBottleneck ? 'گلوگاه' : 'روان و استاندارد'}
                 </span>
               </div>
 
@@ -143,23 +145,23 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
                 <div className="flex justify-between">
                   <span>میانگین زمان توقف:</span>
                   <span className="font-mono font-bold text-gray-900 dark:text-white">
-                    {st.avgDurationHours} ساعت
+                    {formatPersianNumber(st.avgDurationHours)} ساعت
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-500">
-                  <span>سقف مجاز SLA:</span>
-                  <span className="font-mono">{st.slaHours} ساعت</span>
+                  <span>مهلت انجام:</span>
+                  <span className="font-mono">{formatPersianNumber(st.slaHours)} ساعت</span>
                 </div>
                 <div className="flex justify-between pt-1">
                   <span>کارهای فعال فعلی:</span>
                   <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">
-                    {st.activeCount} مورد
+                    {formatPersianNumber(st.activeCount)} مورد
                   </span>
                 </div>
                 {st.overdueCount > 0 && (
                   <div className="flex justify-between text-rose-600 dark:text-rose-400 font-bold">
-                    <span>موارد معوقه (Overdue):</span>
-                    <span className="font-mono">{st.overdueCount} مورد</span>
+                    <span>دارای تأخیر:</span>
+                    <span className="font-mono">{formatPersianNumber(st.overdueCount)} مورد</span>
                   </div>
                 )}
               </div>
@@ -173,16 +175,16 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
         <div className="flex items-center justify-between border-b pb-3 border-gray-200 dark:border-gray-700">
           <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-rose-600" />
-            <span>فهرست اسناد در حال جریان با تاخیر غیرمجاز SLA</span>
+            <span>اسناد در جریانی که از مهلت انجام گذشته‌اند</span>
           </h3>
           <span className="text-xs bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 px-2.5 py-0.5 rounded-full font-mono">
-            {overdueList.length} مورد معوقه
+            {formatPersianNumber(overdueList.length)} مورد دارای تأخیر
           </span>
         </div>
 
         {overdueList.length === 0 ? (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-xs">
-            🎉 عالی است! تمامی اسناد در جریان طبق زمان‌بندی مجاز SLA مدیریت شده‌اند و هیچ سند معوقه‌ای وجود ندارد.
+            هیچ سند در جریانی از مهلت انجام نگذشته است.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -190,10 +192,10 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
               <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                 <tr>
                   <th className="p-3">نوع و کد موجودیت</th>
-                  <th className="p-3">وضعیت فعلی</th>
+                  <th className="p-3">گام فعلی</th>
                   <th className="p-3">زمان توقف فعلی</th>
-                  <th className="p-3">سقف SLA</th>
-                  <th className="p-3">میزان تاخیر (مازاد)</th>
+                  <th className="p-3">مهلت انجام</th>
+                  <th className="p-3">میزان تأخیر</th>
                   <th className="p-3">ایجادکننده</th>
                 </tr>
               </thead>
@@ -201,7 +203,7 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
                 {overdueList.map((item: any, idx: number) => (
                   <tr key={idx} className="hover:bg-rose-50/20 dark:hover:bg-rose-950/10">
                     <td className="p-3 font-medium font-mono text-gray-900 dark:text-white">
-                      {item.entityType === 'document' ? 'فاکتور / سند' : item.entityType === 'project' ? 'پروژه تولید' : 'ماده اولیه'}: #{item.entityId}
+                      {workflowEntityTypeLabel(item.entityType)}: #{toPersianDigits(item.entityId)}
                     </td>
                     <td className="p-3">
                       <span className="bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 px-2 py-0.5 rounded">
@@ -209,13 +211,13 @@ export const WorkflowSlaAnalyticsTab: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3 font-mono font-bold text-rose-600 dark:text-rose-400">
-                      {item.hoursInState} ساعت
+                      {formatPersianNumber(item.hoursInState)} ساعت
                     </td>
                     <td className="p-3 font-mono text-gray-500">
-                      {item.slaHours} ساعت
+                      {formatPersianNumber(item.slaHours)} ساعت
                     </td>
                     <td className="p-3 font-mono font-bold text-rose-600">
-                      +{item.excessHours} ساعت
+                      +{formatPersianNumber(item.excessHours)} ساعت
                     </td>
                     <td className="p-3 text-gray-600 dark:text-gray-400">
                       {item.startedByName || 'کاربر سیستم'}

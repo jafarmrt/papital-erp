@@ -120,7 +120,7 @@ export function DocumentDetailsPreview({ docDetails, isLoadingDoc }: DocumentDet
         </div>
       ) : (
         <div className="text-center p-3 text-xs text-gray-500 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-          اطلاعات اقلام به صورت خلاصه از زمینه سند لود شده است.
+          اقلام به‌صورت خلاصه از اطلاعات سند نشان داده شده‌اند.
         </div>
       )}
 
