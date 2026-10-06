@@ -3,8 +3,9 @@ import type { DbTransaction } from '../../db/drizzle.js';
 import { users } from '../../db/schema.js';
 import { ADVISORY_LOCK_KEYS } from '../../lib/advisoryLock.js';
 import { ConflictError } from '../../errors/customErrors.js';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
-export const SYSTEM_ADMIN_ROLE = 'admin';
+export { SYSTEM_ADMIN_ROLE };
 
 /**
  * v9.0.75 (TD-524, B02-09): ویرایش و حذف کاربر مجموعه مدیران سیستم را زیر یک قفل تراکنشی تغییر می‌دهند. پیش‌تر حذف آخرین
