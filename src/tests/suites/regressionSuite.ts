@@ -10507,6 +10507,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.58, TD-489): a warehouse transfer is a numbered transfer document, voidable without changing WAC
   const { runWarehouseTransferDocumentTests } = await import('../regression/warehouseTransferDocumentTests.js');
   results.push(...await runWarehouseTransferDocumentTests(shouldRun));
+  // Package 6 (v9.0.59, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
+  const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
+  results.push(...await runInventoryBusinessErrorsTests(shouldRun));
 
   return results;
 }

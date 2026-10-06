@@ -9,7 +9,7 @@ import { NegativeStockPolicyService } from './negativeStockPolicy.service.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { logActivity } from '../../lib/auditLogger.js';
 import { logger } from '../../middleware/logger.js';
-import { ValidationError } from '../../errors/customErrors.js';
+import { NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { nextVersion } from '../../lib/occHelper.js';
 import { createLedgerLocationResolver } from './warehouseResolver.js';
 import { replayKardexWac } from './kardexReplay.js';
@@ -50,7 +50,8 @@ export class KardexWacRecalculatorService {
         .for('update');
 
       if (!item) {
-        throw new Error(`کالا با شناسه ${itemId} یافت نشد.`);
+        // v9.0.59 (TD-494): کالای ناموجود ۴۰۴، نه ۵۰۰
+        throw new NotFoundError(`کالا با شناسه ${itemId} یافت نشد.`);
       }
 
       // v7.0.45 (audit P2-1): محل هر ردیف کاردکس با همان قاعده تطبیق موجودی انبارها (TD-200) روی همه انبارها نگاشت می‌شود
@@ -96,7 +97,12 @@ export class KardexWacRecalculatorService {
       // v8.0.13 (TD-269): بازپخش از WAC صفر شروع می‌شود؛ WAC کنونی فقط جایگزین نتیجه غیرمثبت است
       const replay = replayKardexWac(allItemTxs, item.weightedAverageCost);
       if (replay.firstNegativeRowId !== null && policy === 'forbidden') {
-        throw new Error(`Negative stock detected during rebuild for item ${itemId} (${item.name}): balance=${replay.minimumBalance.toNumber()} (transaction #${replay.firstNegativeRowId})`);
+        // v9.0.59 (TD-494): خطای کاری با پیام فارسی و ۴۲۲ (پیش‌تر Error انگلیسی و ۵۰۰)
+        throw new ValidationError(
+          `بازسازی کاردکس کالای «${item.name}» (${item.code}) انجام نشد: مانده کاردکس به ترتیب ثبت در ردیف #${replay.firstNegativeRowId} ` +
+          `به ${replay.minimumBalance.toNumber()} می‌رسد و موجودی منفی مجاز نیست.`,
+          { code: 'KARDEX_REBUILD_NEGATIVE_BALANCE', itemId, transactionId: replay.firstNegativeRowId, balance: replay.minimumBalance.toNumber() }
+        );
       }
       let runningWac = replay.wac;
 

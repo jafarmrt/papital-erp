@@ -1,9 +1,9 @@
-import { orm } from '../../db/drizzle.js';
-import { documentItems, documents, items, warehouses, transactions } from '../../db/schema.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
+import { documentItems, documents, items, transactions } from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { fin } from '../../lib/financialDecimal.js';
 import { nextVersion } from '../../lib/occHelper.js';
-import { InsufficientStockError } from '../../errors/customErrors.js';
+import { AppError, InsufficientStockError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import { ItemWarehouseStockService } from './itemWarehouseStock.service.js';
 import { withOrderedLocks } from '../../lib/lockOrder.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -14,6 +14,18 @@ import { DocumentRefNumberService } from '../documents/documentRefNumber.service
 
 /** نوع سند حواله انتقال بین انبارها (documents.type و transactions.document_type) */
 export const TRANSFER_DOCUMENT_TYPE = 'transfer';
+
+/** انبار فعال انتقال (کد، نام یا شناسه)؛ ناشناخته یا غیرفعال ۴۲۲ با نام طرف انتقال (v9.0.59، TD-494) */
+async function resolveTransferWarehouse(tx: DbExecutor, raw: string, side: 'مبدأ' | 'مقصد') {
+  try {
+    return await ItemWarehouseStockService.resolveWarehouse(tx, raw);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 422) {
+      throw new ValidationError(`انبار ${side} انتقال («${raw}») تعریف نشده یا غیرفعال است.`, { field: side === 'مبدأ' ? 'fromLocation' : 'toLocation', value: raw });
+    }
+    throw err;
+  }
+}
 
 export class InventoryStockRepairService {
   /**
@@ -44,10 +56,10 @@ export class InventoryStockRepairService {
   }> {
     const qty = fin(params.quantity).toNumber();
     if (qty <= 0) {
-      throw new Error('مقدار انتقال باید بزرگتر از صفر باشد.');
+      throw new ValidationError('مقدار انتقال باید بزرگتر از صفر باشد.');
     }
     if (params.fromLocation === params.toLocation) {
-      throw new Error('مبداء و مقصد انتقال نمی‌توانند یکسان باشند.');
+      throw new ValidationError('مبدأ و مقصد انتقال نمی‌توانند یکسان باشند.');
     }
 
     // v9.0.57 (TD-483): تاریخ شمسی یا میلادی به ISO؛ نامعتبر ۴۲۲ (پیش‌تر متن غیرتاریخ خطای ۵۰۰ پایگاه‌داده می‌داد)
@@ -66,33 +78,22 @@ export class InventoryStockRepairService {
         .for('no key update'); // v8.0.67 (TD-320): هم‌حالت lockStockItems
 
       if (!item) {
-        throw new Error(`کالا با شناسه ${params.itemId} یافت نشد.`);
+        throw new NotFoundError(`کالا با شناسه ${params.itemId} یافت نشد.`);
       }
 
-      const activeWHs = await txEngine
-        .select({ code: warehouses.code })
-        .from(warehouses)
-        .where(eq(warehouses.isActive, 1));
-
-      const whCodes = new Set(activeWHs.map(w => w.code));
-      if (!whCodes.has(params.fromLocation)) {
-        throw new Error(`انبار مبداء معتبر نیست (${params.fromLocation}).`);
+      // v9.0.59 (TD-494): انبار مبدأ و مقصد با resolver مشترک (کد یا نام، بی‌توجه به حروف بزرگ و کوچک، فقط انبار فعال)؛
+      // ناشناخته ۴۲۲ و نه ۵۰۰. پیش‌تر فقط کد دقیق پذیرفته می‌شد و خطای کاری ۵۰۰ می‌داد.
+      const fromWh = await resolveTransferWarehouse(txEngine, params.fromLocation, 'مبدأ');
+      const toWh = await resolveTransferWarehouse(txEngine, params.toLocation, 'مقصد');
+      if (fromWh.id === toWh.id) {
+        throw new ValidationError(`مبدأ و مقصد انتقال یک انبار است («${fromWh.name || fromWh.code}»).`);
       }
-      if (!whCodes.has(params.toLocation)) {
-        throw new Error(`انبار مقصد معتبر نیست (${params.toLocation}).`);
-      }
-
-      // v7.0.45 (audit P2-1): انتقال روی جدول موجودی انبارها (منبع حقیقت) و سپس بازسازی کش از آن. پیش‌تر فقط
-      // JSONB تغییر می‌کرد؛ جدول، موجودی کهنه انبار مبداء را نگه می‌داشت و گردش بعدی همان مقدار کهنه را دوباره در
-      // JSONB می‌نوشت (بازتولید: رسید ۱۰، انتقال ۴، فروش ۵ ← موجودی ۹ به‌جای ۵).
-      const fromWh = await ItemWarehouseStockService.resolveWarehouse(txEngine, params.fromLocation);
-      const toWh = await ItemWarehouseStockService.resolveWarehouse(txEngine, params.toLocation);
       const before = await ItemWarehouseStockService.getStockSnapshot(txEngine, params.itemId);
       const currentFromQty = before.byCode[fromWh.code] ?? 0;
 
       if (currentFromQty < qty) {
         throw new InsufficientStockError(
-          `موجودی انبار مبداء (${params.fromLocation}) برای کالا کافی نیست. موجودی فعلی: ${currentFromQty}، درخواست: ${qty}`
+          `موجودی انبار مبدأ («${fromWh.name || fromWh.code}») برای کالا کافی نیست. موجودی فعلی: ${currentFromQty}، درخواست: ${qty}`
         );
       }
 
@@ -189,8 +190,8 @@ export class InventoryStockRepairService {
         transferDocId: doc.id,
         refNumber,
         quantity: qty,
-        fromLocation: params.fromLocation,
-        toLocation: params.toLocation,
+        fromLocation: fromWh.code,
+        toLocation: toWh.code,
         updatedStocks,
       };
     });
