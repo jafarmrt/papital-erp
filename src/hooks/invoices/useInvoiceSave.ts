@@ -69,23 +69,8 @@ export function useInvoiceSave({ loadDocument, discardDraft }: InvoiceSaveDeps) 
         // سند در سرور ثبت شده است؛ حتی اگر گام‌های بعدی (گردش‌کار، بارگذاری چاپ) خطا بدهند کش باید تازه شود
         void invalidateAfterInvoiceSave(queryClient);
         toast.success(payload.status === 'final' ? 'فاکتور و سند حسابداری دوبل آن با موفقیت ثبت شدند!' : 'پیش‌فاکتور با موفقیت ثبت شد و وارد چرخه تاییدات گردید!');
-
-        // Auto-start Document Approval Workflow for newly created proforma
-        if (payload.status === 'proforma' && res?.docId) {
-          try {
-            await fetchJson('/workflow/start', {
-              method: 'POST',
-              body: JSON.stringify({
-                workflowCode: 'DOC_APPROVAL_WORKFLOW',
-                entityType: 'document',
-                entityId: res.docId
-              })
-            });
-            void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.all });
-          } catch (wfErr) {
-            console.warn('Could not auto-start workflow for proforma:', wfErr);
-          }
-        }
+        // v9.0.39 (TD-446): گردش کار تأیید پیش‌فاکتور را خود سرور در تراکنش ثبت شروع می‌کند
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.all });
       }
 
       const targetDocId = editingDocId || res?.docId;

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.39 — Only Unfinalized Sales Documents Enter the Approval Workflow
+- **Document Approval Scope:** only an invoice or proforma in draft or proforma status starts the approval workflow, in its own create transaction; finalizing outside the workflow and migration 0057 close the open instances of final documents (TD-446, `sec_workflow_document_auto_start_td_446`).
+
 ### v9.0.38 — Workflow Widget Requires the Entity's Read Permission
 - **Workflow Widget Read Scope:** `GET /workflow/instance/:entityType/:entityId` also requires the entity's own read permission (document, journal voucher, item, bank account, purchase requisition), else 403 (TD-458, `sec_workflow_instance_entity_read_td_458`).
 

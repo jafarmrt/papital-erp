@@ -7,7 +7,8 @@ import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../
 import { idempotency } from '../middleware/idempotency.js';
 import { DocumentService } from '../services/document.service.js';
 import { WorkflowEngineService } from '../services/workflow/workflowEngineService.js';
-import { logger } from '../middleware/logger.js';
+import { terminateOpenWorkflows } from '../services/workflow/workflowTermination.js';
+import { needsApprovalWorkflow } from '../services/documents/documentApprovalScope.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
 import { logActivity } from '../lib/auditLogger.js';
 import { orm } from '../db/drizzle.js';
@@ -286,6 +287,17 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
     // V10-4.3: لینک رسمی سند به پرونده CRM (صدور خودکار و دستی، هر دو مسیر از همین نقطه ست می‌کنند)
     if (targetLeadId) await tx.update(documents).set({ crmLeadId: targetLeadId }).where(eq(documents.id, created.docId));
     if (lead) await markLeadProforma(tx, lead, created.docId, req.user?.full_name || 'سیستم');
+    // v9.0.39 (TD-446، ت۴): فقط سند فروش پیش‌نویس یا پیش‌فاکتور، در همین تراکنش، وارد گردش کار تأیید می‌شود و خطای شروع
+    // ثبت سند را رد می‌کند. پیش‌تر هر سند، حتی رسید و فاکتور قطعی، پس از commit و با خطای بلعیده فرایند می‌گرفت
+    if (await needsApprovalWorkflow(tx, created.docId)) {
+      await WorkflowEngineService.maybeStartWorkflow({
+        entityType: 'document',
+        entityId: created.docId,
+        userId: req.user?.id,
+        userName: req.user?.full_name || req.user?.username || 'فروشنده',
+        tx,
+      });
+    }
     return created;
   });
   const title = docTypeTitles[req.body.docType] || 'سند انبار';
@@ -320,20 +332,6 @@ router.post('/documents', authorize('admin', 'manager', 'sales_manager', 'accoun
       }
     }
   });
-
-  // Automatically start/attach DOC_APPROVAL_WORKFLOW for documents
-  try {
-    await WorkflowEngineService.startWorkflow({
-      workflowCode: 'DOC_APPROVAL_WORKFLOW',
-      entityType: 'document',
-      entityId: String(newDocId),
-      userId: req.user?.id,
-      userName: req.user?.fullName || req.user?.username || 'فروشنده'
-    });
-  } catch (wfErr) {
-    const errMsg = wfErr instanceof Error ? wfErr.message : String(wfErr);
-    logger.warn(`[DocumentRoute] Workflow auto-start for doc ${newDocId}: ${errMsg}`);
-  }
 
   res.json({ success: true, docId: newDocId, projectReservation });
 }));
@@ -426,12 +424,21 @@ router.put('/documents/:id/finalize', authorize('admin', 'manager', 'warehouse_k
   const parsedVatAmount = vatAmount !== undefined && vatAmount !== null ? Number(vatAmount) : undefined;
   const parsedVatPercent = vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined;
 
-  await DocumentService.finalizeDocument(docId, user, undefined, {
-    vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
-    vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
-    exchangeRate: exchangeRate !== undefined && exchangeRate !== null ? Number(exchangeRate) : undefined,
-    // v8.0.4 (TD-257): نهایی‌سازی پیش‌نویسِ با تاریخ پیش از آخرین گردش کالا فقط با مجوز
-    allowBackdate: await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION),
+  const allowBackdate = await userHasRoleOrPermission(req.user, BACKDATE_PERMISSION);
+  // v9.0.39 (TD-446، ت۴): سندی که بیرون از گردش کار قطعی می‌شود، فرایند تأیید در جریانش در همان تراکنش بسته می‌شود
+  // (پیش‌تر ویجت سندِ قطعی «پیش‌نویس اولیه» نشان می‌داد و کارهایش در کارتابل می‌ماند)
+  await orm.transaction(async (tx) => {
+    await DocumentService.finalizeDocument(docId, user, tx, {
+      vatAmount: !isNaN(Number(parsedVatAmount)) ? parsedVatAmount : undefined,
+      vatPercent: !isNaN(Number(parsedVatPercent)) ? parsedVatPercent : undefined,
+      exchangeRate: exchangeRate !== undefined && exchangeRate !== null ? Number(exchangeRate) : undefined,
+      // v8.0.4 (TD-257): نهایی‌سازی پیش‌نویسِ با تاریخ پیش از آخرین گردش کالا فقط با مجوز
+      allowBackdate,
+    });
+    await terminateOpenWorkflows(tx, {
+      entityType: 'document', entityId: docId, actionKey: 'terminate', actionTitle: 'بستن فرایند سند قطعی',
+      comment: 'سند بیرون از گردش کار قطعی شد', userId: req.user?.id, userName: req.user?.full_name || req.user?.username,
+    });
   });
 
   // V10-2.2 (TD-020): سند دوبل حسابداری به صورت اتمیک درون تراکنش DocumentService.finalizeDocument صادر/به‌روزرسانی می‌شود
