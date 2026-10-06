@@ -110,7 +110,7 @@ export async function runSeed(
       permissions: [
         'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete',
         'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'warehouse.backdate', 'inventory.reconcile',
-        'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+        'documents.view', 'documents.create', 'documents.finalize', 'documents.edit', 'documents.delete',
         'audit.view', 'audit.create', 'audit.apply',
         'customers.view', 'customers.manage',
         'crm.view', 'crm.manage', 'crm.delete',
@@ -135,7 +135,7 @@ export async function runSeed(
       permissions: [
         'products.view', 'products.create', 'products.edit', 'products.edit_price', 'products.delete',
         'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile',
-        'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+        'documents.view', 'documents.create', 'documents.finalize', 'documents.edit', 'documents.delete',
         'audit.view', 'audit.create', 'audit.apply',
         'customers.view', 'customers.manage',
         'crm.view', 'crm.manage', 'crm.delete',
@@ -162,6 +162,8 @@ export async function runSeed(
         'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
         'products.view', 'products.edit_price',
         'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+        // v9.0.108 (TD-541، تصمیم ت۱ بسته ۸): ثبت قطعی و نهایی کردن سند فروش (همان مهاجرت 0063)
+        'documents.finalize',
         'customers.view', 'customers.manage',
         'workflow.view', 'workflow.approve',
         'events.view',
@@ -180,6 +182,8 @@ export async function runSeed(
         'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile',
         // v9.0.107 (TD-516): ویرایش سند را تا v9.0.87 فقط با کد خود در گارد داشت (همان مهاجرت 0062)
         'documents.edit',
+        // v9.0.108 (TD-541): فاکتور فروش قطعی را تا v9.0.107 فقط با کد خود ثبت می‌کرد (همان مهاجرت 0063)
+        'documents.finalize',
         'audit.view', 'audit.create', 'audit.apply',
         'pending_materials.view', 'pending_materials.approve',
         'workflow.view', 'workflow.approve', 'workflow.execute',
@@ -197,6 +201,8 @@ export async function runSeed(
         'products.view', 'products.edit_price',
         'warehouse.view',
         'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+        // v9.0.108 (TD-541): فاکتور فروش قطعی را تا v9.0.107 فقط با کد خود ثبت می‌کرد (همان مهاجرت 0063)
+        'documents.finalize',
         'customers.view', 'customers.manage',
         'workflow.view', 'workflow.approve',
         'crm.view',

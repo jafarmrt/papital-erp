@@ -27,6 +27,7 @@ import { releaseReservationsForDocument, restoreReservationsForDocument } from '
 import { assertVoidKeepsStockHistory } from '../inventory/voidStockHistory.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { proformaInvoiceTarget } from './proformaInvoice.js';
+import { finalizedStockDirection } from './documentRecordRule.js';
 
 export class DocumentLifecycleService {
   /**
@@ -133,7 +134,7 @@ export class DocumentLifecycleService {
           const finalDate = proformaTarget?.date ?? doc.date;
           const finalRefNumber = proformaTarget?.refNumber ?? doc.refNumber;
           // v8.0.10 (TD-267): سند خرید (purchase) هم ورودی است، همان قاعده ثبت سند (documentCreation)
-          const inOut: 'in' | 'out' = (targetType === 'receipt' || targetType === 'purchase' || targetType === 'production_receipt' || targetType === 'return') ? 'in' : 'out';
+          const inOut = finalizedStockDirection(targetType);
 
           // Pre-flight stock availability & reservation check for exit documents (TD-118)
           if (inOut === 'out') {

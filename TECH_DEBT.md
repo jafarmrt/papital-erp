@@ -37,15 +37,14 @@
 | TD-538 | دسترسی (بسته ۲) | P3 (B02-23) — خروجی Excel سجل تاریخ میلادی UTC در نام فایل (۰۰:۱۵ تهران ۱۴ مهر ← `2026-10-05`) و کد انگلیسی اقدام (`LOGIN_FAILED`) دارد | auditExportUtils.ts | open (P3) |
 | TD-539 | دسترسی (بسته ۲) | P3 (B02-24) — پنل قفل ورود ارقام لاتین، «(Lockout)» و «۵ تلاش» ثابت دارد و قفل را از متن پیام می‌شناسد؛ ۴۲۹ محدودکننده عمومی هم شمارش ۱۵ دقیقه‌ای ساختگی می‌سازد | LoginPage.tsx، api.ts | open (P3) |
 | TD-540 | دسترسی (بسته ۲) | P3 (B02-25) — واژه انگلیسی و آوانویسی در رابط بسته ۲: «(RBAC)»، «(Audit Trail)»، «Snapshot»، کدهای `LOGIN`، «داشبورد»، «پروفایل»، «ماژول»، «آواتار»، «سایدبار»، «لاگ»، «کلاینت»، «ویزارد»، «کانبان» و ارقام لاتین | UsersPage.tsx، ActivityLogsPage.tsx، AuditDiffViewer.tsx، SystemOperationsTab.tsx، UserProfileModal.tsx، RoleFormModal.tsx، MenuVisibilityPanel.tsx، LoginPage.tsx، ProtectedRoute.tsx | open (P3، تصمیم ت۸ الف) |
-| TD-541 | دسترسی (بسته ۲)؛ اثر روی ۸ | P2 (B02-26) — ثبت سند هر نقشی جز `admin`، `manager`، `warehouse_keeper` و `accountant` را «کاربر فروش» می‌داند و برای هر نوع سند فقط پیش‌فاکتور می‌پذیرد: نقش سفارشی با `warehouse.in` رسید قطعی را ۴۰۳ گرفت و «مدیر ارشد مالی» هم | documents.routes.ts، CreateInvoicePage.tsx | open (P2، مدل مجوز) |
 | TD-542 | دسترسی (بسته ۲)؛ اثر روی ۱۴ | P2 (B02-27) — گردش‌کار تأییدکننده را با کد نقش و جدول هم‌ارزی ثابت کدها می‌سنجد (پیاده‌سازی دوم در `workflowAuthorizationPolicy.ts`، گردش اسناد حسابداری با کد `accountant`، پنج کد ثابت در طراح): نقش سفارشی با `accounting.vouchers` سند حسابداری را تأیید نمی‌کند | workflowTransitionExecutor.ts، workflowAuthorizationPolicy.ts، workflowDefinitionService.ts، WorkflowDesignerCanvas.tsx | open (P2، مدل مجوز) |
 
 ---
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۲۳ ردیف
-- **آرشیو شده (resolved):** ۴۶۷ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۲۲ ردیف
+- **آرشیو شده (resolved):** ۴۶۹ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -54,4 +53,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.107 — TD-516 رفع و بایگانی شد. شناسه‌های بسته ۲: TD-516 تا TD-542؛ اجرای مدل مجوز: TD-880 به بعد*
+*آخرین بازبینی: v9.0.108 — TD-541 و TD-771 رفع و بایگانی شد. شناسه‌های بسته ۲: TD-516 تا TD-542؛ اجرای مدل مجوز: TD-880 به بعد*

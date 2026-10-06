@@ -126,11 +126,11 @@
 | GET | `/api/daily-logs/summary-report` | daily_logs.manage_all |
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |
 | GET | `/api/documents` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
-| POST | `/api/documents` | documents.create \| warehouse.in \| warehouse.out |
+| POST | `/api/documents` | documents.create \| documents.finalize \| warehouse.in \| warehouse.out \| audit.apply |
 | DELETE | `/api/documents/:id` | documents.delete |
 | GET | `/api/documents/:id` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
 | PUT | `/api/documents/:id` | documents.edit |
-| PUT | `/api/documents/:id/finalize` | documents.edit \| warehouse.in \| warehouse.out |
+| PUT | `/api/documents/:id/finalize` | documents.finalize \| warehouse.in \| warehouse.out |
 | PUT | `/api/documents/:id/notes` | documents.edit |
 | GET | `/api/documents/audit-items` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |
 | GET | `/api/documents/by-ref/:ref` | documents.view \| documents.create \| documents.edit \| warehouse.view \| warehouse.in \| warehouse.out \| audit.view \| crm.view \| workflow.view |

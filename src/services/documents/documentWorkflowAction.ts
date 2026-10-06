@@ -1,7 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documents } from '../../db/schema.js';
-import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
+import {
+  registerWorkflowTransitionAction, workflowEntityNumericId,
+  type WorkflowActionEntity, type WorkflowActionTarget, type WorkflowTransitionEvent,
+} from '../workflow/workflowTransitionActions.js';
+import { SALES_FINALIZE_PERMISSION } from '../../lib/permissions/documentPermissions.js';
+import { permissionToFinalizeDocument } from './documentRecordRule.js';
 import { DocumentLifecycleService } from './documentLifecycle.service.js';
 
 /**
@@ -25,11 +30,20 @@ async function documentExists(tx: DbExecutor, entityId: string): Promise<boolean
   return !!row;
 }
 
+/** v9.0.108 (TD-541 / TD-771): گام قطعی‌سازی مجوز نهایی کردن همین نوع سند را می‌خواهد؛ سند ناپیدا مانند سند فروش */
+async function finalizePermissionsOfStep(target: WorkflowActionTarget, entity: WorkflowActionEntity): Promise<string[]> {
+  if (target.toStateKey !== 'approved' && target.autoActionKey !== 'POST_INVOICE') return [];
+  const id = workflowEntityNumericId(entity.entityId);
+  const [doc] = id === undefined ? [] : await entity.tx.select({ type: documents.type }).from(documents).where(eq(documents.id, id));
+  return [doc ? permissionToFinalizeDocument(doc.type) : SALES_FINALIZE_PERMISSION];
+}
+
 export function registerDocumentWorkflowAction(): void {
   registerWorkflowTransitionAction(['document'], {
     run: finalizeApprovedDocument,
     entityExists: documentExists,
-    // v9.0.35 (TD-445، ت۳): قطعی‌سازی از گردش‌کار همان مجوزهای `PUT /documents/:id/finalize` را می‌خواهد
-    requiredPermissions: (t) => (t.toStateKey === 'approved' || t.autoActionKey === 'POST_INVOICE' ? ['documents.edit', 'warehouse.in', 'warehouse.out'] : []),
+    // v9.0.35 (TD-445، ت۳): قطعی‌سازی از گردش‌کار همان مجوز `PUT /documents/:id/finalize` را می‌خواهد؛ از v9.0.108
+    // (TD-541 / TD-771) همان مجوز جدول برای نوع همین سند (سند فروش: «قطعی کردن سند فروش»)، نه هر یک از سه مجوز
+    requiredPermissions: finalizePermissionsOfStep,
   });
 }

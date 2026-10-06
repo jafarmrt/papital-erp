@@ -669,7 +669,7 @@ export class WorkflowTransitionExecutor {
       }
       // v9.0.35 (TD-445، تصمیم مالک محصول ت۳ الف): گامی که اقدام دامنه دارد مجوز همان موجودیت را از امضاکننده (یا نقش
       // تفویض‌کننده) می‌خواهد؛ پیش‌تر نقش گام بس بود و خزانه‌دار بی مجوز قطعی‌سازی، سند را از گردش‌کار قطعی می‌کرد
-      const entityPermissions = workflowActionPermissions(instance.entityType, { toStateKey: toState.stateKey, autoActionKey: transition.autoActionKey || '' });
+      const entityPermissions = await workflowActionPermissions(instance.entityType, { toStateKey: toState.stateKey, autoActionKey: transition.autoActionKey || '' }, { tx, entityId: instance.entityId });
       if (entityPermissions.length > 0) {
         const signerRole = (actingFor ? actingFor.fromRole : params.userRole || '').trim().toLowerCase();
         const signerHeld = actingFor ? await WorkflowTransitionExecutor.signerPermissions(actingFor.fromRole, [], tx) : userPermissions;

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.108 — Document Permissions by Type
+- **Document Permissions:** a document is recorded and finalized with the permission of its type and status, never the role code; the new documents.finalize finalizes sales documents, and migration 0063 grants it to the roles that finalized before (TD-541, TD-771).
+
 ### v9.0.107 — Route Guards Ask Permissions Only
 - **Route Guards:** no route guard takes a role code any more; system maintenance is for the system admin only, warehouses and the fiscal-year close get their own permissions, and migration 0062 turns access seed roles had only by their code into logged ticks (TD-516).
 

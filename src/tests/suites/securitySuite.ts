@@ -1395,6 +1395,8 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۲ (از v9.0.75، TD-524 به بعد): کاربران، دسترسی و سجل
   const { runAccessPackageTwoTests } = await import('../security/accessPackageTwoTests.js');
   results.push(...await runAccessPackageTwoTests(shouldRunAccess));
+  const { runAccessPackageTwoDocumentTests } = await import('../security/accessPackageTwoDocumentTests.js');
+  results.push(...await runAccessPackageTwoDocumentTests(shouldRunAccess));
   // Package 14, PR د (from TD-462): approval inbox rows
   const { runWorkflowInboxTests } = await import('../security/workflowInboxTests.js');
   results.push(...await runWorkflowInboxTests(shouldRunAccess));

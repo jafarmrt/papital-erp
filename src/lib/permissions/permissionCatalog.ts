@@ -52,7 +52,9 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
     category: 'اسناد و فاکتورها',
     permissions: [
       { key: 'documents.view', title: 'مشاهده فاکتورها', description: 'مشاهده لیست فاکتورهای فروش و پیش‌فاکتورها' },
-      { key: 'documents.create', title: 'صدور فاکتور و پیش‌فاکتور', description: 'ایجاد فاکتور جدید و صدور قبض', requires: ['documents.view'] },
+      { key: 'documents.create', title: 'صدور فاکتور و پیش‌فاکتور', description: 'ثبت پیش‌نویس و پیش‌فاکتور فروش و برگشت از فروش', requires: ['documents.view'] },
+      // v9.0.108 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): جای قاعده «کاربر فروش فقط پیش‌فاکتور» که با کد نقش نوشته شده بود
+      { key: 'documents.finalize', title: 'قطعی کردن سند فروش', description: 'ثبت قطعی یا نهایی کردن فاکتور، پیش‌فاکتور و برگشت از فروش، با کسر یا افزایش موجودی و صدور سند حسابداری', requires: ['documents.view'] },
       { key: 'documents.edit', title: 'ویرایش فاکتورها', description: 'اصلاح اقلام و مشخصات فاکتورهای صادرشده', requires: ['documents.view'] },
       { key: 'documents.delete', title: 'حذف فاکتور', description: 'حذف فاکتور و برگشت خودکار موجودی کالاها', requires: ['documents.view'] },
     ]

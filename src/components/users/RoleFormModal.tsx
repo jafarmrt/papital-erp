@@ -30,7 +30,7 @@ export const ROLE_PRESETS = [
     description: 'دسترسی کامل به تمامی بخش‌های مالی و حسابداری، کدینگ حساب‌ها، اسناد دوبل، خزانه‌داری، چک صیادی و صورت‌های مالی',
     permissions: [
       'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
-      'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
+      'products.view', 'products.edit_price', 'documents.view', 'documents.create', 'documents.finalize', 'documents.edit', 'documents.delete',
       'customers.view', 'customers.manage', 'personnel.view', 'piecework.view', 'piecework.payroll', 'reports.view', 'audit_logs.view'
     ]
   },
@@ -40,7 +40,7 @@ export const ROLE_PRESETS = [
     description: 'مدیریت اسناد دوبل حسابداری، ثبت دفاتر، کدینگ، فاکتورهای خرید/فروش و تراز آزمایشی',
     permissions: [
       'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.reports',
-      'documents.view', 'documents.create', 'documents.edit', 'products.view', 'products.edit_price',
+      'documents.view', 'documents.create', 'documents.finalize', 'documents.edit', 'products.view', 'products.edit_price',
       'customers.view', 'reports.view'
     ]
   },
@@ -70,7 +70,7 @@ export const ROLE_PRESETS = [
     permissions: [
       'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer',
       'products.view', 'products.create', 'products.edit', 'audit.view', 'audit.create', 'audit.apply',
-      'pending_materials.view', 'pending_materials.approve'
+      'pending_materials.view', 'pending_materials.approve', 'documents.view', 'documents.finalize'
     ]
   },
   {

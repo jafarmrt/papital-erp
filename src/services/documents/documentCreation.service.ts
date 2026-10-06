@@ -28,6 +28,7 @@ import { releaseReservationsForDocument, type ProjectReservationRelease } from '
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
+import { createdStockDirection } from './documentRecordRule.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -501,7 +502,8 @@ export class DocumentCreationService {
           await assertReturnableInvoice(tx, returnOfDocumentId);
         }
 
-        const stockDirection: 'in' | 'out' = docType === 'return' ? 'in' : (inOut || (docType === 'purchase' || docType === 'receipt' ? 'in' : 'out'));
+        // v9.0.108 (TD-541): همان قاعده‌ای که مجوز ثبت سند از آن خوانده می‌شود (documentRecordRule.ts)
+        const stockDirection = createdStockDirection(docType, inOut);
         const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;

@@ -9,6 +9,9 @@ import { runCase, type ShouldRun } from './workflowTestHarness.js';
  * هر آزمون روی کد پیشین قرمز است.
  */
 
+/** کلیدهایی که پس از مهاجرت 0062 (v9.0.107) به کاتالوگ آمدند */
+const KEYS_ADDED_AFTER_0062: ReadonlySet<string> = new Set(['documents.finalize']);
+
 export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
   const results: TestCaseResult[] = [];
 
@@ -299,7 +302,9 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
       if (!same(permsOf('warehouse_keeper'), [...keeperBefore, 'documents.edit'])) wrong.push(`warehouse_keeper after 0062: ${JSON.stringify(permsOf('warehouse_keeper'))}`);
       if (!same(permsOf('sales_manager'), ['customers.view', 'customers.manage', 'documents.view', 'documents.create', 'documents.edit'])) wrong.push('sales_manager, which holds every guard key, was changed');
       if (!same(permsOf('accountant'), [])) wrong.push('a custom role coded accountant was changed');
-      if (!same(permsOf(starCode), ['legacy.key', ...PERMISSION_KEYS])) wrong.push(`the «*» role after 0062: ${JSON.stringify(permsOf(starCode))}`);
+      // 0062 lists the catalog of v9.0.107; keys added to the catalog later are not part of its «*» expansion
+      const keysOf0062 = PERMISSION_KEYS.filter(k => !KEYS_ADDED_AFTER_0062.has(k));
+      if (!same(permsOf(starCode), ['legacy.key', ...keysOf0062])) wrong.push(`the «*» role after 0062: ${JSON.stringify(permsOf(starCode))}`);
 
       const idOf = (code: string) => String(outcome.ids.find(r => r.code === code)?.id);
       const logged = outcome.logs.map(l => l.entity_id as string).sort();
