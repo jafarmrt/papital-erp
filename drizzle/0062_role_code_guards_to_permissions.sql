@@ -1,10 +1,10 @@
 -- Drizzle Migration 0062: role codes leave the route guards; access a seed role had only through its code becomes ticks
--- (v9.0.88 / TD-516, finding B02-01, product-owner decision ت۱ «الف» and the approved permission model §4.4)
+-- (v9.0.97 / TD-516, finding B02-01, product-owner decision ت۱ «الف» and the approved permission model §4.4)
 --
 -- Until v9.0.87 a guard such as authorize('admin', 'manager', 'customers.manage') let a user through by role code
 -- before any permission: 49 routes named a role code other than admin, so «مدیر عمومی» saved settings without
 -- settings.manage and «انباردار» edited documents without documents.edit, and taking a tick off a role on the roles
--- page did not take the access away. From v9.0.88 every guard asks permission keys only (or is one of the system
+-- page did not take the access away. From v9.0.97 every guard asks permission keys only (or is one of the system
 -- maintenance routes that only the system admin runs). So that no role gains or loses anything on the day of release:
 --
 -- 1) Seed roles (is_system = 1) get, for every guard that named their code and none of whose keys they hold, the
@@ -12,7 +12,7 @@
 --    pending_materials.delete). The guard list below is the v9.0.87 route guard table (buildRouteGuardTable).
 --    Custom roles are not touched, even when their code equals a seed role code.
 -- 2) A role other than admin whose permissions hold the legacy «*» (all permissions) gets every catalog key of
---    v9.0.88 explicitly and loses «*», which no check reads any more. Other keys are kept as they are.
+--    v9.0.97 explicitly and loses «*», which no check reads any more. Other keys are kept as they are.
 --
 -- Every changed role gets one activity_logs row (entity «نقش و دسترسی», username system) with the permissions before
 -- and after, the added keys and the routes. Nothing is removed except «*». Runs inside the migrator transaction.

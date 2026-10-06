@@ -210,7 +210,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_route_guards_permission_only_td_516', 'security', 'td516', 'permissions', 'package2')) {
     await runCase(results, {
       id: 'sec_route_guards_permission_only_td_516',
-      name: 'v9.0.88: no route guard lets a role code through; taking a tick off a seed role takes the access away (TD-516)',
+      name: 'v9.0.97: no route guard lets a role code through; taking a tick off a seed role takes the access away (TD-516)',
       details: 'the route table names no role code except the system-admin-only maintenance routes; seed roles without the ticks get 403 where their code used to pass (customer delete, settings save); the new keys open warehouses, fiscal closing and pending-material delete; the legacy «*» opens nothing; a role with every catalog key gets 403 on a maintenance route',
     }, async (h, wrong) => {
       const { buildRouteGuardTable } = await import('../../lib/routeGuardTable.js');
@@ -274,7 +274,7 @@ export async function runAccessPackageTwoTests(shouldRun: ShouldRun): Promise<Te
   if (shouldRun('sec_role_code_access_migration_td_516', 'security', 'td516', 'permissions', 'package2', 'migration')) {
     await runCase(results, {
       id: 'sec_role_code_access_migration_td_516',
-      name: 'v9.0.88: migration 0062 turns what a seed role passed only by its code into ticks, expands «*» and logs every change (TD-516)',
+      name: 'v9.0.97: migration 0062 turns what a seed role passed only by its code into ticks, expands «*» and logs every change (TD-516)',
       details: 'manager missing settings.manage gets it and the new pending_materials.delete; warehouse_keeper missing documents.edit gets it; a seed role that already holds a guard key and a custom role with a seed code are untouched; a «*» role gets every catalog key and loses «*»; one activity_logs row per changed role with before, after, added keys and routes',
     }, async (h, wrong) => {
       const { runMigrationRolledBack } = await import('./workflowLifecycleTests.js');

@@ -4547,7 +4547,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`userHasRoleOrPermission نقشی با کد «${dotted}» را دارنده همان مجوز دانست`);
       }
 
-      // ب) کنترل: دارنده واقعی مجوز و مدیر سیستم مجازند و نقش بی مجوز رد می‌شود. از v9.0.88 (TD-516) هیچ گاردی کد نقش
+      // ب) کنترل: دارنده واقعی مجوز و مدیر سیستم مجازند و نقش بی مجوز رد می‌شود. از v9.0.97 (TD-516) هیچ گاردی کد نقش
       // نمی‌پذیرد، پس «نقش نام‌برده در گارد» دیگر حالتی نیست (آزمون sec_route_guards_permission_only_td_516)
       const holder = await createTestRole({ permissions: ['customers.manage'] });
       createdRoleIds.push(holder.id);

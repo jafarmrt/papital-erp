@@ -149,7 +149,7 @@ export async function runSeed(
         'procurement.view', 'procurement.create', 'procurement.manage', 'procurement.order', 'procurement.approve',
         'accounting.view', 'accounting.vouchers', 'accounting.coa', 'accounting.treasury', 'accounting.cheques', 'accounting.reports',
         'woocommerce.view', 'woocommerce.manage', 'audit_logs.view',
-        // v9.0.88 (TD-516): دسترسی‌ای که این نقش تا v9.0.87 فقط با کد خود در گارد داشت (همان مهاجرت 0062)
+        // v9.0.97 (TD-516): دسترسی‌ای که این نقش تا v9.0.87 فقط با کد خود در گارد داشت (همان مهاجرت 0062)
         'settings.manage'
       ],
       isSystem: 1
@@ -178,7 +178,7 @@ export async function runSeed(
       permissions: [
         'products.view', 'products.create', 'products.edit',
         'warehouse.view', 'warehouse.in', 'warehouse.out', 'warehouse.transfer', 'inventory.reconcile',
-        // v9.0.88 (TD-516): ویرایش سند را تا v9.0.87 فقط با کد خود در گارد داشت (همان مهاجرت 0062)
+        // v9.0.97 (TD-516): ویرایش سند را تا v9.0.87 فقط با کد خود در گارد داشت (همان مهاجرت 0062)
         'documents.edit',
         'audit.view', 'audit.create', 'audit.apply',
         'pending_materials.view', 'pending_materials.approve',
