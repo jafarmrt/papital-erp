@@ -50,6 +50,17 @@ export interface KardexRebuildItemResult {
   beforeStock: number;
   afterStock: number;
   whBreakdown: Record<string, number>;
+  /** v9.0.78 (TD-491): موجودی انبارها با بازسازی تغییر کرد (فقط آن‌گاه نسخه، رویداد و ردیف ممیزی) */
+  changed: boolean;
+}
+
+/** v9.0.78 (TD-491): دو نقشه موجودی انبار (کد → مقدار) برابرند؛ انبار بی ردیف یعنی صفر */
+function sameWarehouseStocks(a: Record<string, number>, b: Record<string, number>): boolean {
+  const codes = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const code of codes) {
+    if (!fin(a[code] ?? 0).subtract(fin(b[code] ?? 0)).abs().lessThan(fin(0.0001))) return false;
+  }
+  return true;
 }
 
 export interface KardexWacCorrectionResult {
@@ -175,16 +186,34 @@ export class KardexWacRecalculatorService {
       const whBreakdown = snapshot.byCode;
       const newStock = snapshot.total;
 
+      // v9.0.78 (TD-491): کالای بی‌تغییر فقط زمان آخرین بازسازی را می‌گیرد؛ نسخه، رویداد outbox و ردیف ممیزی فقط برای
+      // کالایی که موجودی انبارهایش واقعاً عوض شد (پیش‌تر هر اجرای «بازسازی همه کالاها» برای همه کالاها می‌نوشت)
+      const changed = !sameWarehouseStocks(stockBefore.byCode, whBreakdown);
       await txEngine
         .update(items)
-        .set({
-          lastKardexRebuildAt: nowIso,
-          version: nextVersion(item.version),
-        })
+        .set(changed ? { lastKardexRebuildAt: nowIso, version: nextVersion(item.version) } : { lastKardexRebuildAt: nowIso })
         .where(eq(items.id, itemId));
 
       const wacDiffers = wacDiffersFromReplay(oldWac, replayWac, newStock);
       const valueDifference = wacDiffers ? fin(newStock).multiply(replayWac.subtract(fin(oldWac))).round(4).toNumber() : 0;
+
+      const result: KardexRebuildItemResult = {
+        itemId,
+        itemCode: item.code,
+        itemName: item.name,
+        oldStock,
+        newStock,
+        oldWac,
+        newWac,
+        replayWac: replayWac.toNumber(),
+        wacDiffers,
+        valueDifference,
+        beforeStock: oldStock,
+        afterStock: newStock,
+        whBreakdown,
+        changed,
+      };
+      if (!changed) return result;
 
       logger.info(`[Kardex Rebuild] Item ${itemId}: stock ${oldStock} -> ${newStock}, WAC ${oldWac} kept (Kardex replay ${replayWac.toString()}), processed ${itemTxs.length} transactions`);
 
@@ -233,21 +262,7 @@ export class KardexWacRecalculatorService {
         }
       });
 
-      return {
-        itemId,
-        itemCode: item.code,
-        itemName: item.name,
-        oldStock,
-        newStock,
-        oldWac,
-        newWac,
-        replayWac: replayWac.toNumber(),
-        wacDiffers,
-        valueDifference,
-        beforeStock: oldStock,
-        afterStock: newStock,
-        whBreakdown,
-      };
+      return result;
     });
   }
 
@@ -288,7 +303,7 @@ export class KardexWacRecalculatorService {
         failedItems.push({ itemId: item.id, error: message });
         continue;
       }
-      if (res.oldStock !== res.newStock) fixedCount++;
+      if (res.changed) fixedCount++;
       if (res.wacDiffers) {
         wacDifferences.push({
           itemId: res.itemId, itemCode: res.itemCode, itemName: res.itemName, stock: res.newStock,

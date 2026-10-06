@@ -10519,6 +10519,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.77, TD-487): the Kardex rebuild keeps WAC; WAC correction is a separate permission with a draft voucher
   const { runKardexWacCorrectionTests } = await import('../regression/kardexWacCorrectionTests.js');
   results.push(...await runKardexWacCorrectionTests(shouldRun));
+  // Package 6 (v9.0.78, TD-491): an unchanged item gets no version bump, outbox event or audit row from the rebuild
+  const { runKardexRebuildQuietTests } = await import('../regression/kardexRebuildQuietTests.js');
+  results.push(...await runKardexRebuildQuietTests(shouldRun));
 
   return results;
 }
