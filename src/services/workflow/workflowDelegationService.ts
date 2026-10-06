@@ -7,6 +7,28 @@ import {
 import { eq, or, and, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { getDisplayTimezone } from '../../lib/businessClock.js';
+import { zonedDayStartUtc } from '../../lib/serverTimestamp.js';
+
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** بازه تفویض: روز تنها به آغاز روز اول و آخرین لحظه روز آخر در منطقه زمانی توافقی (زمان سرور UTC) */
+async function delegationWindow(startDate: string, endDate: string): Promise<{ startDate: string; endDate: string }> {
+  if (!DAY_ONLY.test(startDate) && !DAY_ONLY.test(endDate)) return { startDate, endDate };
+  const tz = await getDisplayTimezone();
+  const dayAfter = (day: string) => {
+    const [y, m, d] = day.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  };
+  const endOfDay = (day: string) => {
+    const next = new Date(`${zonedDayStartUtc(dayAfter(day), tz).replace(' ', 'T')}Z`).getTime() - 1;
+    return new Date(next).toISOString().replace('T', ' ').replace('Z', '');
+  };
+  return {
+    startDate: DAY_ONLY.test(startDate) ? zonedDayStartUtc(startDate, tz) : startDate,
+    endDate: DAY_ONLY.test(endDate) ? endOfDay(endDate) : endDate,
+  };
+}
 
 /** v8.0.97 (TD-377): تفویض فعالی که کاربر به‌واسطه آن به جای تفویض‌کننده کار می‌کند */
 export interface ActingDelegation {
@@ -77,8 +99,11 @@ export class WorkflowDelegationService {
       throw new ValidationError('کاربر تفویض‌کننده و دریافت‌کننده نمی‌تواند یکسان باشد (WF_DELEGATION_SELF_NOT_ALLOWED)');
     }
 
-    const start = new Date(params.startDate).getTime();
-    const end = new Date(params.endDate).getTime();
+    // TD-468 (یافته B14-26): تفویضی که با روز فرستاده شود (YYYY-MM-DD، فرم تفویض) از ۰۰:۰۰ روز اول تا پایان روز آخر در منطقه
+    // زمانی توافقی است؛ پیش‌تر فرم نیمه‌شب UTC (۰۳:۳۰ تهران) را می‌فرستاد و پایانش ۰۳:۲۹ روز بعد بود
+    const { startDate, endDate } = await delegationWindow(params.startDate, params.endDate);
+    const start = new Date(`${startDate.replace(' ', 'T')}${DAY_ONLY.test(params.startDate) ? 'Z' : ''}`).getTime();
+    const end = new Date(`${endDate.replace(' ', 'T')}${DAY_ONLY.test(params.endDate) ? 'Z' : ''}`).getTime();
     if (Number.isNaN(start) || Number.isNaN(end)) {
       throw new ValidationError('تاریخ شروع یا پایان تفویض معتبر نیست (WF_DELEGATION_INVALID_TIME)');
     }
@@ -108,8 +133,8 @@ export class WorkflowDelegationService {
       fromUserId: params.fromUserId,
       toUserId: params.toUserId,
       scope,
-      startDate: params.startDate,
-      endDate: params.endDate,
+      startDate,
+      endDate,
       reason: params.reason || '',
       isActive: 1
     }).returning();

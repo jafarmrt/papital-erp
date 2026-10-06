@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '../../api';
 import { UserCheck, Plus, Search, Clock, CheckCircle2, XCircle, Trash2, Calendar, Layers, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate } from '../../utils';
+import { toStorageDate, getTodayJalaliDate, getFutureJalaliDate, formatPersianDate } from '../../utils';
 import { JalaliDateInput } from '../common/JalaliDateInput';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -88,8 +88,9 @@ export function WorkflowDelegationTab() {
       await createMutation.mutateAsync({
         toUserId: Number(toUserId),
         scope,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(`${endDate}T23:59:59.999Z`).toISOString(),
+        // TD-468 (یافته B14-26): روزهای انتخابی؛ سرور آغاز روز اول و پایان روز آخر را در منطقه زمانی توافقی می‌گیرد
+        startDate,
+        endDate,
         reason
       });
       setIsModalOpen(false);
@@ -255,8 +256,8 @@ export function WorkflowDelegationTab() {
                         </span>
                       </td>
                       <td className="p-3.5 text-gray-600 dark:text-gray-300 text-[11px]">
-                        <div>از: {new Date(item.startDate).toLocaleDateString('fa-IR')}</div>
-                        <div>تا: {new Date(item.endDate).toLocaleDateString('fa-IR')}</div>
+                        <div>از: {formatPersianDate(item.startDate)}</div>
+                        <div>تا: {formatPersianDate(item.endDate)}</div>
                       </td>
                       <td className="p-3.5">
                         {item.status === 'active' && (

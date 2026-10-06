@@ -10,6 +10,7 @@ import { validate, paramsIdSchema, numericIdString } from '../middleware/validat
 import { getErrorMessage } from '../utils.js';
 import { z } from 'zod';
 import { MY_TASK_FILTERS } from '../services/workflow/workflowTaskService.js';
+import { withUtcTimestamps } from '../services/workflow/workflowTimestamps.js';
 import { canvasPositionsSchema, createDelegationSchema, executeTransitionSchema, saveDefinitionSchema } from './workflowRouteSchemas.js';
 
 const taskIdParamSchema = z.object({
@@ -56,6 +57,12 @@ const router = Router();
 
 // Protect all workflow routes
 router.use(authenticateToken);
+// TD-468 (یافته B14-26): زمان‌های سرور در هر پاسخ گردش کار با Z (AGENTS §1.10)
+router.use((_req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = (body: unknown) => json(withUtcTimestamps(body));
+  next();
+});
 
 // v9.0.42 (TD-449، ت۷ الف): «نمای نمونه‌ها» (`GET /workflow/inbox`) حذف شد؛ کارتابل فقط نمای کارها (`/tasks/my-tasks`) را دارد
 

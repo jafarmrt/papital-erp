@@ -137,5 +137,58 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  if (shouldRun('sec_workflow_utc_timestamps_td_468', 'security', 'td468', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_utc_timestamps_td_468',
+      name: 'Workflow API timestamps carry Z and a delegation by days covers whole business-time-zone days (TD-468)',
+      details: 'inbox rows, instance history, definition versions and delegations return server timestamps as UTC ISO with Z; a delegation sent as days starts at 00:00 of the first day and ends at the end of the last day in the display time zone',
+    }, async (h, wrong) => {
+      const { getDisplayTimezone } = await import('../../lib/businessClock.js');
+      const { zonedDayStartUtc } = await import('../../lib/serverTimestamp.js');
+      const zoneless = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+      const check = (label: string, value: unknown) => {
+        if (typeof value !== 'string' || zoneless.test(value) || !value.endsWith('Z')) wrong.push(`${label} is ${JSON.stringify(value)}, not UTC ISO with Z`);
+      };
+      const code = inboxCode(h, 'UTC');
+      const deputy = await h.sessionWith(['workflow.view', 'workflow.approve']);
+      try {
+        const { instanceId } = await startTwoRejectWorkflow(h, code);
+        const row = await inboxRowOf(h, instanceId);
+        check('inbox row createdAt', row?.createdAt);
+        check('inbox row dueAt', row?.dueAt);
+        check('inbox row instance.createdAt', (row?.instance as Row | undefined)?.createdAt);
+
+        const [inst] = await h.q(`SELECT entity_type, entity_id, workflow_definition_id FROM workflow_instances WHERE id = $1`, [instanceId]);
+        const detail = await h.get(`/api/workflow/instance/${String(inst?.entity_type)}/${String(inst?.entity_id)}`);
+        const data = (detail.body?.data ?? detail.body) as Row;
+        check('instance createdAt', (data?.instance as Row | undefined)?.createdAt);
+        const history = Array.isArray(data?.history) ? (data.history as Row[]) : [];
+        if (history.length === 0) wrong.push('instance history is empty');
+        else check('history createdAt', history[0].createdAt);
+        const versions = await h.get(`/api/workflow/definitions/${String(inst?.workflow_definition_id)}/versions`);
+        const versionRows = (Array.isArray(versions.body) ? versions.body : versions.body?.data) as Row[] | undefined;
+        check('definition version createdAt', versionRows?.[0]?.createdAt);
+
+        const tz = await getDisplayTimezone();
+        const created = await h.post('/api/workflow/delegations', { toUserId: deputy.userId, scope: 'ALL', startDate: '2026-10-06', endDate: '2026-10-07', reason: 'td468 days' });
+        if (created.status !== 200) wrong.push(`delegation by days returned ${created.status}: ${JSON.stringify(created.body).slice(0, 160)}`);
+        const [stored] = await h.q(`SELECT to_char(start_date, 'YYYY-MM-DD HH24:MI:SS.MS') AS s, to_char(end_date, 'YYYY-MM-DD HH24:MI:SS.MS') AS e FROM workflow_delegations WHERE to_user_id = $1`, [deputy.userId]);
+        const expectedStart = `${zonedDayStartUtc('2026-10-06', tz)}.000`;
+        const nextDayStart = new Date(`${zonedDayStartUtc('2026-10-08', tz).replace(' ', 'T')}Z`).getTime();
+        const expectedEnd = new Date(nextDayStart - 1).toISOString().replace('T', ' ').replace('Z', '');
+        if (stored?.s !== expectedStart) wrong.push(`delegation start stored ${String(stored?.s)}, expected ${expectedStart} (00:00 of the first day in ${tz})`);
+        if (stored?.e !== expectedEnd) wrong.push(`delegation end stored ${String(stored?.e)}, expected ${expectedEnd} (end of the last day in ${tz})`);
+        const list = await h.get('/api/workflow/delegations');
+        const mine = (Array.isArray(list.body?.data) ? (list.body.data as Row[]) : []).find(d => Number(d.toUserId) === deputy.userId);
+        check('delegation startDate', mine?.startDate);
+        check('delegation endDate', mine?.endDate);
+        check('delegation createdAt', mine?.createdAt);
+      } finally {
+        await h.q(`DELETE FROM workflow_delegations WHERE to_user_id = $1`, [deputy.userId]);
+        await dropDefinition(h, code);
+      }
+    });
+  }
+
   return results;
 }

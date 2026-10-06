@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { History, X } from 'lucide-react';
 import { useWorkflowDefinitionVersionsQuery, type WorkflowDefinitionVersion } from '../../hooks/queries/useWorkflowQueries';
 import { toPersianDigits } from '../../utils/persianNumber';
+import { formatPersianDateTime } from '../../utils';
 
 /**
  * v7.0.87 (TD-112): تاریخچه فقط‌خواندنی نسخه‌های یک الگوی ورکفلو. هر ذخیره طرح یک نسخه می‌سازد؛
@@ -9,12 +10,8 @@ import { toPersianDigits } from '../../utils/persianNumber';
  */
 const STATE_TYPE_LABELS: Record<string, string> = { initial: 'شروع', terminal: 'پایان' };
 
-const dateFormatter = new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' });
-
-function formatVersionDate(value: string): string {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : dateFormatter.format(d);
-}
+// TD-468 (یافته B14-26): زمان ذخیره نسخه در منطقه زمانی توافقی، نه منطقه مرورگر
+const formatVersionDate = (value: string): string => formatPersianDateTime(value);
 
 function VersionDetail({ version }: { version: WorkflowDefinitionVersion }) {
   const states = Array.isArray(version.dslJson?.states) ? version.dslJson.states : [];
