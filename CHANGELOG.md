@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.45 — CI Actions on Node 24 and a Pinned Ubuntu Runner
+- **CI Maintenance:** `actions/checkout`, `actions/setup-node` and `actions/upload-artifact` move from v4 (Node 20) to v7 (Node 24) and every job runs on `ubuntu-24.04` instead of the moving `ubuntu-latest` label (TD-471, `ci_actions_node24_runner_pinned_td_471`).
+
 ### v9.0.44 — Roleless Step Reminders Only to Workflow Approvers
 - **SLA Reminder Recipients:** a roleless (`ALL`) task's due reminder goes only to admins and holders of `workflow.approve` / `workflow.execute` (plus their active delegates) (TD-460, `sec_workflow_sla_reminder_recipients_td_460`).
 
