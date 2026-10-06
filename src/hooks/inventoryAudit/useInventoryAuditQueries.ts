@@ -101,7 +101,8 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
 
   const auditItemsQuery = useQuery<AuditItemRow[]>({
     queryKey: QUERY_KEYS.inventory.auditItems(selectedLocation),
-    enabled: activeTab === 'new_audit',
+    // selectedLocation کد انبار است (TD-480)؛ تا فهرست انبارها نرسیده، برگه درخواستی نمی‌فرستد
+    enabled: activeTab === 'new_audit' && selectedLocation !== '',
     queryFn: async ({ signal }) => {
       try {
         const res = await fetchJson<unknown>(`/documents/audit-items?location=${encodeURIComponent(selectedLocation)}`, { signal });
@@ -140,6 +141,8 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
 
   const { refetch: refetchIntegrity } = integrityQuery;
   const refreshIntegrity = useCallback(() => { void refetchIntegrity(); }, [refetchIntegrity]);
+  const { refetch: refetchAuditItems } = auditItemsQuery;
+  const refreshAuditItems = useCallback(() => { void refetchAuditItems(); }, [refetchAuditItems]);
 
   const auditDocs = useMemo(() => listFromResponse<Record<string, unknown>>(auditDocsQuery.data), [auditDocsQuery.data]);
   const transfers = useMemo(() => listFromResponse<Record<string, unknown>>(transfersQuery.data), [transfersQuery.data]);
@@ -151,6 +154,7 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     rebuildItems: rebuildItemsQuery.data ?? NO_ITEMS,
     nextRef: nextRefQuery.data ?? DEFAULT_NEXT_REF,
     auditItems: auditItemsQuery.data ?? NO_ROWS,
+    refreshAuditItems,
     auditDocs,
     auditDocsLoading: auditDocsQuery.isFetching,
     transfers,
