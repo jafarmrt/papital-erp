@@ -15,6 +15,7 @@ import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money, moneyOr } from '../lib/money.js';
+import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 
@@ -249,13 +250,12 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
         const phone = normalizePhoneNumber(item.phone || '');
         const nationalId = normalizeNationalId(item.nationalId || '');
         const jobTitle = String(item.jobTitle || '').trim();
-        const gender = item.gender === 'زن' ? 'زن' : 'مرد';
-        const employmentStatus = ['فعال', 'قطع همکاری', 'مرخصی', 'تعلیق'].includes(item.employmentStatus)
-          ? item.employmentStatus
-          : 'فعال';
+        // v9.0.25 (TD-436، تصمیم D3): خانه خالی جنسیت، وضعیت همکاری و ملیت در به‌روزرسانی یعنی «بی تغییر»؛ پیش‌فرض فقط برای پرسنل تازه
+        const gender = parseGenderCell(item.gender);
+        const employmentStatus = parseEmploymentStatusCell(item.employmentStatus);
         // v7.0.135 (TD-232): تاریخ تولد میلادی ISO ذخیره می‌شود؛ تاریخ نامعتبر خطای همان ردیف است
         const birthDate = requireStorageDate(String(item.birthDate || '').trim(), 'تاریخ تولد');
-        const nationality = String(item.nationality || 'ایرانی').trim();
+        const nationality = parseNationalityCell(item.nationality);
         const education = String(item.education || '').trim();
         const cardNumber = String(item.cardNumber || '').trim();
         const accountNumber = String(item.accountNumber || '').trim();
@@ -281,10 +281,10 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
                 phone: phone || existing.phone,
                 nationalId: nationalId || existing.nationalId,
                 jobTitle: jobTitle || existing.jobTitle,
-                gender: gender || existing.gender,
-                employmentStatus: employmentStatus || existing.employmentStatus,
+                gender: gender ?? existing.gender,
+                employmentStatus: employmentStatus ?? existing.employmentStatus,
                 birthDate: birthDate || existing.birthDate,
-                nationality: nationality || existing.nationality,
+                nationality: nationality ?? existing.nationality,
                 education: education || existing.education,
                 cardNumber: cardNumber || existing.cardNumber,
                 accountNumber: accountNumber || existing.accountNumber,
@@ -316,12 +316,12 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
               lastName,
               fullName,
               personnelCode,
-              gender,
+              gender: gender ?? PERSONNEL_IMPORT_DEFAULTS.gender,
               birthDate,
-              nationality,
+              nationality: nationality ?? PERSONNEL_IMPORT_DEFAULTS.nationality,
               nationalId,
               phone,
-              employmentStatus,
+              employmentStatus: employmentStatus ?? PERSONNEL_IMPORT_DEFAULTS.employmentStatus,
               jobTitle,
               education,
               cardNumber,

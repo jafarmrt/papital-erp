@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.25 — Personnel Excel Import Keeps Empty Cells
+- **Personnel Excel Import:** With «به‌روزرسانی», an empty gender, employment-status or nationality cell no longer resets an existing employee to «مرد», «فعال» and «ایرانی»; defaults apply only to new personnel (owner decision D3; TD-436, `reg_personnel_import_keeps_status_td_436`).
+
 ### v9.0.24 — One Active Personnel per User
 - **Personnel User Link:** A system user is linked to at most one active personnel and only when the user exists; a second link is refused under the user's row lock and by the partial unique index of migration 0053, so «فیش‌های من» never shows another employee's payslip; legacy duplicates are only listed by the health check (owner decision D2; TD-435, `sec_personnel_user_link_unique_td_435`).
 
