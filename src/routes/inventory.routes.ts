@@ -225,12 +225,13 @@ router.post(
       action: 'CREATE',
       entity: 'انبارداری و موجودی',
       entityId: 'KARDEX_INITIAL_BACKFILL',
-      description: `ثبت موجودی اولیه کاردکس: ${outcome.insertedRows} ردیف جدید، ${outcome.repairedRows} ردیف اصلاح بها (کالاهای بررسی‌شده: ${outcome.candidateItems})`,
+      description: `ثبت موجودی اولیه کاردکس: ${outcome.insertedRows} ردیف جدید (کالاهای بررسی‌شده: ${outcome.candidateItems})`,
       details: outcome
     });
     res.json({
       success: true,
-      message: `${outcome.insertedRows} ردیف موجودی اولیه در کاردکس ثبت و ${outcome.repairedRows} ردیف بدون بها اصلاح شد.`,
+      message: `${outcome.insertedRows} ردیف موجودی اولیه در کاردکس ثبت شد.` +
+        (outcome.zeroWacItems > 0 ? ` ${outcome.zeroWacItems} کالا بهای میانگین نداشت و ردیف آن با بهای ۰ ثبت شد.` : ''),
       data: outcome
     });
   })

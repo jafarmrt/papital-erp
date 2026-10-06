@@ -10522,6 +10522,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.78, TD-491): an unchanged item gets no version bump, outbox event or audit row from the rebuild
   const { runKardexRebuildQuietTests } = await import('../regression/kardexRebuildQuietTests.js');
   results.push(...await runKardexRebuildQuietTests(shouldRun));
+  // Package 6 (v9.0.79, TD-488): the initial Kardex backfill never reprices its earlier rows
+  const { runKardexBackfillNoRewriteTests } = await import('../regression/kardexBackfillNoRewriteTests.js');
+  results.push(...await runKardexBackfillNoRewriteTests(shouldRun));
 
   return results;
 }
