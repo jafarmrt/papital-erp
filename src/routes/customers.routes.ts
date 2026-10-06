@@ -11,6 +11,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { CustomerService } from '../services/customer.service.js';
 import { getCustomerAccountCard } from '../services/customers/customerAccountCard.js';
+import { getCustomerSalesDocuments } from '../services/customers/customerDocuments.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 
@@ -229,6 +230,17 @@ router.get('/customers/:id/account-card', authorizePermission(...READ_PERMISSION
   const { startDate, endDate, currency } = (req.query as { startDate?: string; endDate?: string; currency?: string }) || {};
   const data = await getCustomerAccountCard(Number(req.params.id), { startDate, endDate, currency });
   res.json({ report: data, ...data });
+}));
+
+const customerDocumentsValidation = z.object({
+  params: z.object({ id: numericIdString }),
+  query: z.object({ page: z.union([z.string(), z.number()]).optional(), limit: z.union([z.string(), z.number()]).optional() }).optional(),
+});
+
+// v9.0.6 (TD-417): اسناد فروش پرونده مشتری با نام خریدار برابر، نه جست‌وجوی متنی (همان مجوزهای فهرست اسناد)
+router.get('/customers/:id/documents', authorizePermission(...READ_PERMISSIONS.documents), validate(customerDocumentsValidation), asyncHandler(async (req, res) => {
+  const { page, limit } = parsePagination(req.query as Record<string, unknown>, { page: 1, limit: 50 });
+  res.json(await getCustomerSalesDocuments(Number(req.params.id), page, limit));
 }));
 
 // POST /api/customers/bulk-import - Bulk import and update counterparties from Excel

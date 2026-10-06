@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.6 — Customer Dossier Documents by Exact Buyer
+- **Customer Dossier:** The «پیش‌فاکتورها و اسناد» tab loads `GET /customers/:id/documents`: only sales documents (invoice, proforma, return) whose buyer name equals the party's current name exactly, instead of a text search over number, buyer, notes, user, phone and city. Each row shows its own type and status (TD-417, package-9 finding B09-02).
+
 ### v9.0.5 — Sales Leads No Longer Change an Existing Customer
 - **CRM ↔ Customer Master:** Creating, editing or converting a sales lead only links a customer (by id, then exact phone, then exact name) or creates a new one; it never rewrites an existing customer's name, phone or contact person, so the customer's optimistic lock and the `customers.manage` permission can no longer be bypassed. A differing phone or company name is noted once in the lead's notes (TD-418, package-9 finding B09-03).
 

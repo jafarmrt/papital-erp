@@ -10451,6 +10451,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.4، TD-416): کارت حساب طرف حساب با شناسه او
   const { runPartyAccountCardTests } = await import('../regression/partyAccountCardTests.js');
   results.push(...await runPartyAccountCardTests(shouldRun));
+  // بسته ۹ (v9.0.6، TD-417): اسناد پرونده مشتری با نام خریدار برابر و فقط نوع‌های فروش
+  const { runCustomerDossierDocumentsTests } = await import('../regression/customerDossierDocumentsTests.js');
+  results.push(...await runCustomerDossierDocumentsTests(shouldRun));
 
   return results;
 }
