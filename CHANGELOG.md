@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.15 — CRM Customer Filter by Party Id
+- **CRM Customer Filter:** The CRM customer filter sends the party id; the server returns that party's leads and legacy leads without an id whose customer or company name equals the party name exactly (`leadCustomerCondition`; TD-429, package-9 finding B09-14).
+
 ### v9.0.14 — Open CRM Follow-Ups From the Server
 - **Open Follow-Ups:** The follow-ups tab, the dashboard «today and overdue» widget and the tab badge read open follow-ups from `GET /crm/followups` with no activity-date range and with pagination; the stats counter uses the same condition (`listFollowups`, `countDueFollowups`; TD-428, package-9 finding B09-13, product-owner decision).
 

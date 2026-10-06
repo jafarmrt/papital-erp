@@ -14,13 +14,15 @@ export function buildLeadQueryParams(filters: {
   searchTerm?: string;
   filterSeller?: string;
   filterStage?: string;
+  /** شناسه طرف حساب (v9.0.15، TD-429) */
   filterCustomer?: string;
 }): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.searchTerm) params.append('search', filters.searchTerm);
   if (filters.filterSeller) params.append('assignedPersonnelId', filters.filterSeller);
   if (filters.filterStage) params.append('stage', filters.filterStage);
-  if (filters.filterCustomer) params.append('customerName', filters.filterCustomer);
+  // v9.0.15 (TD-429): مشتری با شناسه طرف حساب؛ پیش‌تر نام طرف حساب با نام رابط پرونده سنجیده می‌شد
+  if (filters.filterCustomer) params.append('customerId', filters.filterCustomer);
   return params;
 }
 

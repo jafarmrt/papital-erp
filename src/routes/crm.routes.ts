@@ -20,6 +20,7 @@ import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
 import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, type FollowupStatus } from '../services/crm/crmFollowups.js';
+import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -219,8 +220,9 @@ router.get('/crm/leads', authorizePermission('crm.view', 'customers.view', 'cust
 
   const conditions = [eq(crmLeads.isDeleted, 0)];
 
-  if (customerId && !isNaN(Number(customerId))) {
-    conditions.push(eq(crmLeads.customerId, Number(customerId)));
+  // v9.0.15 (TD-429): مشتری با شناسه طرف حساب؛ پرونده قدیمی بی شناسه با نام برابر (`leadCustomerCondition`)
+  if (customerId && !isNaN(Number(customerId)) && Number(customerId) > 0) {
+    conditions.push(await leadCustomerCondition(Number(customerId)));
   } else if (customerName && typeof customerName === 'string' && customerName.trim() !== '') {
     conditions.push(eq(crmLeads.customerName, customerName.trim()));
   }

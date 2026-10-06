@@ -10478,6 +10478,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.14، TD-428): پیگیری‌های باز بی بازه تاریخ اقدام
   const { runCrmFollowupsTests } = await import('../regression/crmFollowupsTests.js');
   results.push(...await runCrmFollowupsTests(shouldRun));
+  // بسته ۹ (v9.0.15، TD-429): فیلتر مشتری پرونده‌های فروش با شناسه طرف حساب
+  const { runCrmLeadCustomerFilterTests } = await import('../regression/crmLeadCustomerFilterTests.js');
+  results.push(...await runCrmLeadCustomerFilterTests(shouldRun));
 
   return results;
 }
