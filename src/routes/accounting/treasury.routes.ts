@@ -153,14 +153,21 @@ router.delete('/accounting/bank-accounts/:id', authorizePermission('accounting.t
 // Treasury Transactions (دریافت و پرداخت)
 
 router.get('/accounting/treasury', authorizePermission(...RECORD_READ_PERMISSIONS.treasury_transaction), validate(treasuryQuerySchema), asyncHandler(async (req, res) => {
-  const { type, bankAccountId, startDate, endDate } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
-  const list = await AccountingService.getTreasuryTransactions({
+  const { type, bankAccountId, startDate, endDate, method, q, page, limit } = (req.query as ValidatedQuery<typeof treasuryQuerySchema>) || {};
+  const filters = {
     type,
     bankAccountId: bankAccountId ? Number(bankAccountId) : undefined,
     startDate: startDate as string,
     endDate: endDate as string,
-  });
-  res.json(list);
+    method,
+    q,
+  };
+  // v9.0.102 (TD-509، B04-13): با page یا limit فقط همان صفحه و شمار کل برمی‌گردد (`{ data, total, page, limit }`)
+  if (page !== undefined || limit !== undefined) {
+    res.json(await AccountingService.getTreasuryTransactionPage(filters, page ?? 1, limit ?? 20));
+    return;
+  }
+  res.json(await AccountingService.getTreasuryTransactions(filters));
 }));
 
 // V1.4.0: Idempotency — retry همین درخواست هرگز دوبار وجه ثبت نمی‌کند

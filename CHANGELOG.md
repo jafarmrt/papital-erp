@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.102 — Paged Treasury List
+- **Paged Treasury List (P2):** bank balances are summed in SQL and the treasury page reads one server page with its total and running balance. Before, every request read all approved ledger rows (200,000 rows, 1,639 ms for 15 banks) and the page loaded all 20,000 transactions (15.88 MB) (TD-509, `reg_treasury_list_paging_and_bank_balances_td_509`).
+
 ### v9.0.101 — Treasury Amount Input
 - **Treasury Amount Input (P3):** treasury, transfer and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text gets a Persian message, and the currency must be a supported one. Before, «۲۵۰۰۰۰۰» and «2,500,000» were refused with an English NaN message (TD-514, `reg_treasury_decimal_inputs_td_514`).
 

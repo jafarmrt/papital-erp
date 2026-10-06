@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { fetchJson } from '../../api';
 import { QUERY_KEYS } from '../../lib/queryKeys';
-import { errorMessageOf } from '../../utils';
+import { errorMessageOf, safeExtractArray } from '../../utils';
 import type { BankAccount, BankAccountOption, BankReconciliationReport, TreasuryTransaction } from '../../types';
 import { ACCOUNTING_LIST_QUERY_OPTIONS, fetchAccountingList, silentMutationError } from './accountingQueryConfig';
 import { invalidateAfterReconciliation, invalidateAfterTreasuryChange } from './accountingInvalidation';
@@ -33,11 +33,68 @@ export function useBankAccountOptionsQuery() {
   });
 }
 
-export function useTreasuryTransactionsQuery() {
-  return useQuery<TreasuryTransaction[]>({
-    queryKey: QUERY_KEYS.accounting.treasuryTransactions(),
-    queryFn: ({ signal }) => fetchAccountingList<TreasuryTransaction>('/accounting/treasury', signal, 'treasury transactions'),
+/** فیلترهای جدول خزانه؛ مقدار «all» یا خالی یعنی بی‌فیلتر */
+export interface TreasuryListFilters {
+  type: string;
+  method: string;
+  bankAccountId: string;
+  startDate: string;
+  endDate: string;
+  q: string;
+}
+
+export interface TreasuryTransactionPage {
+  data: TreasuryTransaction[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+function treasuryListParams(filters: TreasuryListFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.type && filters.type !== 'all') params.set('type', filters.type);
+  if (filters.method && filters.method !== 'all') params.set('method', filters.method);
+  if (filters.bankAccountId && filters.bankAccountId !== 'all') params.set('bankAccountId', filters.bankAccountId);
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+  if (filters.q.trim()) params.set('q', filters.q.trim());
+  return params;
+}
+
+/**
+ * v9.0.102 (TD-509، B04-13): جدول خزانه فقط صفحه جاری را از سرور می‌خواند (فیلتر، شمار کل و مانده جاری در سرور)؛ پیش‌تر
+ * با هر باز شدن صفحه کل فهرست (۲۰٬۰۰۰ ردیف، ۱۵٫۸۸ MB) خوانده و در مرورگر فیلتر می‌شد.
+ */
+export function useTreasuryTransactionPageQuery(filters: TreasuryListFilters, page: number, limit: number) {
+  return useQuery<TreasuryTransactionPage>({
+    queryKey: [...QUERY_KEYS.accounting.treasuryTransactions(), 'page', filters, page, limit],
+    queryFn: async ({ signal }) => {
+      const params = treasuryListParams(filters);
+      params.set('page', String(page));
+      params.set('limit', String(limit));
+      const res = await fetchJson<unknown>(`/accounting/treasury?${params.toString()}`, { signal });
+      const body = res as Partial<TreasuryTransactionPage> | null;
+      const data = Array.isArray(body?.data) ? body.data : (Array.isArray(res) ? res as TreasuryTransaction[] : []);
+      return { data, total: Number(body?.total ?? data.length) || 0, page, limit };
+    },
     ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** همه تراکنش‌های منطبق با فیلترها (خروجی اکسل جدول خزانه) */
+export async function fetchTreasuryTransactions(filters: TreasuryListFilters): Promise<TreasuryTransaction[]> {
+  const params = treasuryListParams(filters).toString();
+  return safeExtractArray<TreasuryTransaction>(await fetchJson<unknown>(`/accounting/treasury${params ? `?${params}` : ''}`));
+}
+
+/** تراکنش‌های یک حساب برای تطبیق صورت‌حساب بانک (فقط وقتی پنجره تطبیق باز است) */
+export function useBankTreasuryTransactionsQuery(bankAccountId: number | null) {
+  return useQuery<TreasuryTransaction[]>({
+    queryKey: [...QUERY_KEYS.accounting.treasuryTransactions(), 'bank', bankAccountId],
+    queryFn: ({ signal }) => fetchAccountingList<TreasuryTransaction>(`/accounting/treasury?bankAccountId=${bankAccountId}`, signal, 'bank treasury transactions'),
+    ...ACCOUNTING_LIST_QUERY_OPTIONS,
+    enabled: bankAccountId !== null,
   });
 }
 

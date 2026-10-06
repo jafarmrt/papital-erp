@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { 
   Building2, 
   ArrowDownLeft, 
@@ -13,6 +13,7 @@ import { confirmAction } from '../ConfirmDialogHost';
 import { formatPersianDate } from '../../utils';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { useDebounce } from '../../hooks/useDebounce';
+import { fetchTreasuryTransactions, useTreasuryTransactionPageQuery, type TreasuryListFilters } from '../../hooks/accounting/useTreasuryQueries';
 import { BankReconciliationModal } from './reconciliation/BankReconciliationModal';
 import { FinancialAttachmentViewerModal } from './FinancialAttachmentViewerModal';
 
@@ -39,7 +40,6 @@ import { copyToClipboard } from '../../utils/clipboard';
 
 export interface BankAndTreasuryTabProps {
   bankAccounts: BankAccount[];
-  transactions: TreasuryTransaction[];
   customers: Customer[];
   personnelList: Personnel[];
   accounts: Account[];
@@ -58,7 +58,6 @@ export interface BankAndTreasuryTabProps {
 
 export function BankAndTreasuryTab({
   bankAccounts,
-  transactions,
   customers,
   personnelList,
   accounts,
@@ -108,24 +107,27 @@ export function BankAndTreasuryTab({
   const [txPage, setTxPage] = useState(1);
   const pageSize = 20;
 
-  // Extracted and memoized financial calculations hook (V4 Phase 6.2: debounced calculation)
-  const {
-    safeBankAccounts,
-    safeTransactions,
-    summary,
-    filteredTransactions,
-    runningBalanceMap,
-  } = useTreasuryCalculations({
-    bankAccounts,
-    transactions,
-    customers,
-    searchQuery: debouncedSearchQuery,
-    selectedTypeFilter,
-    selectedMethodFilter,
-    dateFromFilter,
-    dateToFilter,
-    txAccountFilter,
-  });
+  const { safeBankAccounts, summary } = useTreasuryCalculations({ bankAccounts });
+
+  // v9.0.102 (TD-509، B04-13): فقط صفحه جاری با فیلترها از سرور خوانده می‌شود؛ شمار کل و مانده جاری هم از سرور می‌آید
+  const listFilters = useMemo<TreasuryListFilters>(() => ({
+    type: selectedTypeFilter,
+    method: selectedMethodFilter,
+    bankAccountId: txAccountFilter,
+    startDate: dateFromFilter,
+    endDate: dateToFilter,
+    q: debouncedSearchQuery,
+  }), [selectedTypeFilter, selectedMethodFilter, txAccountFilter, dateFromFilter, dateToFilter, debouncedSearchQuery]);
+  const transactionPageQuery = useTreasuryTransactionPageQuery(listFilters, txPage, pageSize);
+  const pageTransactions = useMemo(() => transactionPageQuery.data?.data ?? [], [transactionPageQuery.data]);
+  const totalFilteredCount = transactionPageQuery.data?.total ?? 0;
+  const runningBalanceMap = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const tx of pageTransactions) {
+      if (tx.runningBalance !== undefined && tx.runningBalance !== null) map.set(tx.id, Number(tx.runningBalance));
+    }
+    return map;
+  }, [pageTransactions]);
 
   // Action Handlers
   const handleSaveBank = async (data: any, editingId?: number) => {
@@ -192,8 +194,15 @@ export function BankAndTreasuryTab({
     }
   };
 
-  const handleExportExcel = useCallback(() => {
-    const exportData = filteredTransactions.map((tx, idx) => ({
+  const handleExportExcel = useCallback(async () => {
+    let rows: TreasuryTransaction[];
+    try {
+      rows = await fetchTreasuryTransactions(listFilters);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error && err.message ? err.message : 'خواندن تراکنش‌ها برای خروجی اکسل ممکن نشد');
+      return;
+    }
+    const exportData = rows.map((tx, idx) => ({
       'ردیف': idx + 1,
       'شماره رسید': tx.transactionNumber,
       'تاریخ': formatPersianDate(tx.date),
@@ -213,7 +222,7 @@ export function BankAndTreasuryTab({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'گردش خزانه');
     XLSX.writeFile(wb, `treasury-transactions-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  }, [filteredTransactions]);
+  }, [listFilters]);
 
   return (
     <div className="space-y-6">
@@ -300,8 +309,8 @@ export function BankAndTreasuryTab({
 
       {/* Treasury Transactions Ledger Table */}
       <TreasuryTransactionsTable
-        transactions={filteredTransactions}
-        totalFilteredCount={filteredTransactions.length}
+        transactions={pageTransactions}
+        totalFilteredCount={totalFilteredCount}
         bankAccounts={safeBankAccounts}
         runningBalanceMap={runningBalanceMap}
         appCurrency={appCurrency}
@@ -322,7 +331,7 @@ export function BankAndTreasuryTab({
         pageSize={pageSize}
         copiedId={copiedId}
         onCopy={handleCopy}
-        onExportExcel={handleExportExcel}
+        onExportExcel={() => { void handleExportExcel(); }}
         onViewAttachments={(info) => setViewingAttachments(info)}
         onVoidTransaction={(tx) => setVoidTarget(tx)}
       />
@@ -333,7 +342,6 @@ export function BankAndTreasuryTab({
           isOpen={!!reconciliationBankId}
           onClose={() => setReconciliationBankId(null)}
           bankAccounts={safeBankAccounts}
-          transactions={safeTransactions as any}
           initialBankAccountId={reconciliationBankId}
           onReconcileTransactions={onReconcileTransactions}
         />

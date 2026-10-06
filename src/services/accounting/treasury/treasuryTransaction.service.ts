@@ -1,6 +1,6 @@
 import { orm, type DbExecutor } from '../../../db/drizzle.js';
-import { bankAccounts, treasuryTransactions, users, accounts } from '../../../db/schema.js';
-import { eq, desc, and, sql, gte, lte, inArray, asc } from 'drizzle-orm';
+import { bankAccounts, treasuryTransactions, accounts } from '../../../db/schema.js';
+import { eq, and, sql, inArray, asc } from 'drizzle-orm';
 import { AccountMappingService } from '../accountMapping.service.js';
 import { VoucherService } from '../voucher.service.js';
 import { resolveTreasuryExchangeRate } from './treasuryExchangeRate.js';
@@ -18,6 +18,7 @@ import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } fro
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 
 /**
  * TD-105 (v4.0.31): تاریخ تراکنش‌های خزانه «سرور authoritative» است: خالی ← امروز کسب‌وکار، تاریخ آینده ← 422.
@@ -191,88 +192,13 @@ export class TreasuryTransactionService {
     return { debit, credit, warnings, contraConceptLabel: contra.conceptLabel };
   }
 
-  static async getTreasuryTransactions(params: {
-    // v7.0.110 (TD-240): «all» یعنی بدون فیلتر نوع (مانند فهرست اسناد حسابداری)
-    type?: 'receipt' | 'payment' | 'all';
-    bankAccountId?: number;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<TreasuryTransaction[]> {
-    const conditions = [eq(treasuryTransactions.isDeleted, 0)];
+  static async getTreasuryTransactions(params: TreasuryListFilters): Promise<TreasuryTransaction[]> {
+    return listTreasuryTransactions(params);
+  }
 
-    if (params.type && params.type !== 'all') {
-      conditions.push(eq(treasuryTransactions.type, params.type));
-    }
-    if (params.bankAccountId) {
-      conditions.push(eq(treasuryTransactions.bankAccountId, params.bankAccountId));
-    }
-    if (params.startDate) {
-      conditions.push(gte(treasuryTransactions.date, params.startDate));
-    }
-    if (params.endDate) {
-      conditions.push(lte(treasuryTransactions.date, params.endDate));
-    }
-
-    const rawList = await orm.select({
-      id: treasuryTransactions.id,
-      transactionNumber: treasuryTransactions.transactionNumber,
-      type: treasuryTransactions.type,
-      date: treasuryTransactions.date,
-      method: treasuryTransactions.method,
-      amount: treasuryTransactions.amount,
-      currency: treasuryTransactions.currency,
-      exchangeRate: treasuryTransactions.exchangeRate,
-      bankAccountId: treasuryTransactions.bankAccountId,
-      bankAccountTitle: bankAccounts.title,
-      partyType: treasuryTransactions.partyType,
-      partyId: treasuryTransactions.partyId,
-      partyName: treasuryTransactions.partyName,
-      trackingNumber: treasuryTransactions.trackingNumber,
-      voucherId: treasuryTransactions.voucherId,
-      chequeId: treasuryTransactions.chequeId,
-      documentId: treasuryTransactions.documentId,
-      payrollId: treasuryTransactions.payrollId,
-      reversalOfId: treasuryTransactions.reversalOfId,
-      purpose: treasuryTransactions.purpose,
-      contraAccountId: treasuryTransactions.contraAccountId,
-      contraAccountName: accounts.name,
-      // V1.6.0: وضعیت آشتی‌سنجی بانکی
-      reconciled: treasuryTransactions.reconciled,
-      reconciledAt: treasuryTransactions.reconciledAt,
-      reconciledBatch: treasuryTransactions.reconciledBatch,
-      // V1.5.0: هویت ثبت‌کننده (یک موجودیت کاربر)
-      createdById: treasuryTransactions.createdById,
-      creatorName: users.fullName,
-      description: treasuryTransactions.description,
-      status: treasuryTransactions.status,
-      attachments: treasuryTransactions.attachments,
-      createdAt: treasuryTransactions.createdAt,
-    })
-    .from(treasuryTransactions)
-    .leftJoin(bankAccounts, eq(bankAccounts.id, treasuryTransactions.bankAccountId))
-    .leftJoin(users, eq(users.id, treasuryTransactions.createdById))
-    .leftJoin(accounts, eq(accounts.id, treasuryTransactions.contraAccountId))
-    .where(and(...conditions))
-    .orderBy(desc(treasuryTransactions.date), desc(treasuryTransactions.id));
-
-    return rawList.map(t => ({
-      ...t,
-      amount: t.amount.toNumber(), // قرارداد API: مبلغ عدد (P2-6)
-      exchangeRate: t.exchangeRate?.toNumber() ?? null,
-      type: t.type as 'receipt' | 'payment',
-      method: t.method as TreasuryTransaction['method'],
-      partyType: t.partyType as TreasuryTransaction['partyType'],
-      status: t.status as TreasuryTransaction['status'],
-      transaction_number: t.transactionNumber,
-      bank_account_id: t.bankAccountId || undefined,
-      party_type: t.partyType as TreasuryTransaction['partyType'],
-      party_id: t.partyId,
-      party_name: t.partyName,
-      tracking_number: t.trackingNumber || '',
-      voucher_id: t.voucherId,
-      cheque_id: t.chequeId,
-      document_id: t.documentId,
-    } as TreasuryTransaction));
+  /** v9.0.102 (TD-509): صفحه‌ای از فهرست خزانه با شمار کل و مانده جاری (صفحه خزانه) */
+  static async getTreasuryTransactionPage(params: TreasuryListFilters, page: number, limit: number): Promise<TreasuryTransactionPage> {
+    return pageTreasuryTransactions(params, page, limit);
   }
 
   static async createTreasuryTransaction(data: {

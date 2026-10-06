@@ -76,7 +76,8 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onVoidTransaction,
 }) => {
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
-  const pagedTransactions = transactions.slice((txPage - 1) * pageSize, txPage * pageSize);
+  // v9.0.102 (TD-509): `transactions` همان صفحه جاری است که سرور برگردانده (شمار کل در totalFilteredCount)
+  const pagedTransactions = transactions;
 
   const getMethodLabel = (m: string) => {
     switch (m) {

@@ -274,6 +274,9 @@ export const treasuryQuerySchema = z.object({
     bankAccountId: z.coerce.number().int().positive().optional(),
     startDate: storageDateParam,
     endDate: storageDateParam,
+    // v9.0.102 (TD-509): فیلترهای جدول صفحه خزانه در سرور؛ با page یا limit پاسخ یک صفحه است
+    method: z.enum(['cash', 'bank_transfer', 'pos', 'cheque', 'all']).optional(),
+    q: z.string().max(200).optional(),
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(1000).optional(),
   }).optional()
