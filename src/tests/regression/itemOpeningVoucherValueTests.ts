@@ -6,7 +6,7 @@ import { items, journalVoucherItems, journalVouchers, transactions, workflowDefi
 /**
  * Package 6 (inventory and Kardex), TD-481 / B06-02 (decision t4): the item opening voucher is worth the item's opening
  * Kardex rows (quantity x cost recorded at creation), with or without the item workflow, and never rewrites a Kardex row.
- * Opening vouchers that do not match their opening rows are listed by the financial health check. On v9.0.86 an opening
+ * Opening vouchers that do not match their opening rows are listed by the financial health check. On v9.0.92 an opening
  * approved after a receipt 5 x 200 was valued at current stock x current WAC (15 x 133.3333 = 1999.9995 instead of 1000)
  * and the opening Kardex row was repriced to 133.3333, so the Kardex replay reached 155.5555 (I3 and I13).
  */
@@ -15,7 +15,7 @@ export async function runItemOpeningVoucherValueTests(shouldRun: (id: string, ..
   const id = 'reg_item_opening_voucher_value_td_481';
   if (!shouldRun(id, 'td481', 'opening', 'voucher', 'kardex', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.87: the item opening voucher is worth its opening Kardex rows, with or without the workflow, and rewrites no row (TD-481)';
+  const name = 'v9.0.93: the item opening voucher is worth its opening Kardex rows, with or without the workflow, and rewrites no row (TD-481)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   let workflowId: number | null = null;

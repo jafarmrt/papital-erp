@@ -60,7 +60,7 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     queryKey: INTEGRITY_KEY,
     queryFn: async ({ signal }) => {
       try {
-        // v9.0.83 (TD-485): پاسخ سرور خودِ گزارش است ({ summary, audits, warehouses })
+        // v9.0.89 (TD-485): پاسخ سرور خودِ گزارش است ({ summary, audits, warehouses })
         return (await fetchJson<InventoryIntegrityReport | null>('/inventory/integrity-audit', { signal })) ?? null;
       } catch (err: unknown) {
         logUnlessAborted(signal, 'Error loading integrity report:', err);

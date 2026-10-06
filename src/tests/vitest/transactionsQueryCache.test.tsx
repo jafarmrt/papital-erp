@@ -187,7 +187,7 @@ describe('RunningKardexModal on the stock-count page', () => {
   it('opens from the integrity tab, loads with a signal and is refreshed by a stock adjustment', async () => {
     fetchJson.mockImplementation((url: string) => {
       if (url === '/inventory/integrity-audit') {
-        // v9.0.83 (TD-485): the server's response shape ({ summary, audits, warehouses })
+        // v9.0.89 (TD-485): the server's response shape ({ summary, audits, warehouses })
         return Promise.resolve({
           summary: {
             totalItems: 1, totalItemsChecked: 1, synchronizedItems: 1, healthyItemsCount: 1, discrepancyItems: 0, discrepantItemsCount: 0,

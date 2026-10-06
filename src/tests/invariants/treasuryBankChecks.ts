@@ -7,6 +7,7 @@ import { ChequeLifecycleService } from '../../services/accounting/treasury/chequ
 import { TreasuryTransactionService } from '../../services/accounting/treasury/treasuryTransaction.service.js';
 import { getErrorMessage } from '../../utils/formatters.js';
 import { checkBankInvariants } from './bankInvariants.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 /** Package 4 (series 9) strict checks for the business_invariants suite: [id, name, check, success text] */
 
@@ -33,7 +34,7 @@ export async function checkTreasuryFlowsKeepBankInvariants(): Promise<string[]> 
   const main = await bankWithOwnLedger('Bank invariant main');
   const other = await bankWithOwnLedger('Bank invariant other');
   const opening = await bankWithOwnLedger('Bank invariant opening', 2000000);
-  const base = { method: 'bank_transfer' as const, partyType: 'other' as const, partyName: 'bank invariant test', date: '2026-04-01', username: 'inv' };
+  const base = { method: 'bank_transfer' as const, partyType: 'other' as const, contraAccountId: await miscContraAccountId(), partyName: 'bank invariant test', date: '2026-04-01', username: 'inv' };
   const receipt = await TreasuryTransactionService.createTreasuryTransaction({ ...base, type: 'receipt', amount: 3000000, bankAccountId: main.id });
   const payment = await TreasuryTransactionService.createTreasuryTransaction({ ...base, type: 'payment', amount: 1000000, bankAccountId: main.id });
   await TreasuryTransactionService.createTreasuryTransfer({ amount: 500000, fromBankAccountId: main.id, toBankAccountId: other.id, date: '2026-04-02', username: 'inv' });

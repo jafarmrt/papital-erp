@@ -6,7 +6,7 @@ import { activityLogs, items, itemWarehouseStocks, outboxEvents } from '../../db
 /**
  * Package 6 (inventory and Kardex), TD-491 / B06-12: rebuilding an item whose warehouse stock already matches its Kardex
  * writes no version bump, no outbox event and no audit row; only an item whose stock really changes gets them. On
- * v9.0.84 every rebuilt item got all three on every run (30 items -> 30 events and 31 audit rows, again on a run with
+ * v9.0.90 every rebuilt item got all three on every run (30 items -> 30 events and 31 audit rows, again on a run with
  * nothing to change).
  */
 export async function runKardexRebuildQuietTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -14,7 +14,7 @@ export async function runKardexRebuildQuietTests(shouldRun: (id: string, ...extr
   const id = 'reg_kardex_rebuild_quiet_td_491';
   if (!shouldRun(id, 'td491', 'rebuild', 'kardex', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.85: the Kardex rebuild writes version, outbox event and audit row only for items whose stock changed (TD-491)';
+  const name = 'v9.0.91: the Kardex rebuild writes version, outbox event and audit row only for items whose stock changed (TD-491)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   try {

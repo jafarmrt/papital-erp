@@ -106,7 +106,7 @@ export async function checkVoidOutflowRestoresCost(wh: string): Promise<string[]
     if (state.stock !== 15 || fin(state.wac).subtract(fin('166666.6667')).abs().greaterThan(fin(0.01))) {
       problems.push(`${label}: پس از ابطال خروج موجودی ${state.stock} و WAC ${state.wac}، انتظار ۱۵ و ۱۶۶٬۶۶۶٫۶۶۶۷`);
     }
-    // v9.0.84 (TD-487): بازسازی WAC را تغییر نمی‌دهد؛ WAC بازپخش کاردکس که گزارش می‌کند باید همان WAC زنده باشد
+    // v9.0.90 (TD-487): بازسازی WAC را تغییر نمی‌دهد؛ WAC بازپخش کاردکس که گزارش می‌کند باید همان WAC زنده باشد
     const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(item.id, { user: 'inv' });
     if (fin(rebuilt.replayWac).subtract(fin(state.wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازپخش کاردکس WAC را ${rebuilt.replayWac} داد، WAC زنده ${state.wac}`);
   }

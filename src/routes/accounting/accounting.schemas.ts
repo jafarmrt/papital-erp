@@ -282,6 +282,8 @@ export const createTreasuryTxSchema = z.object({
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
     purpose: z.enum(['settlement', 'advance', 'other']).optional(),
+    // v9.0.82 (TD-507): سرفصل طرف مقابل «متفرقه» و «سایر» پرسنل
+    contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
 
@@ -296,6 +298,7 @@ export const previewTreasurySchema = z.object({
     purpose: z.string().optional(),
     partyId: z.coerce.number().int().positive().nullable().optional(),
     partyName: z.string().optional(),
+    contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
 
@@ -373,6 +376,9 @@ export const createChequeSchema = z.object({
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
+    // v9.0.84 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
+    purpose: z.enum(['settlement', 'advance', 'other']).optional(),
+    contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
 
@@ -399,7 +405,6 @@ export const updateChequeStatusSchema = z.object({
     actionDate: z.string().optional(),
     bankAccountId: z.coerce.number().int().positive().optional(),
     transfereePartyId: z.coerce.number().int().positive().optional(),
-    transfereePartyName: z.string().optional(),
     notes: z.string().optional(),
     description: z.string().optional()
   })

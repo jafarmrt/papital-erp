@@ -9,7 +9,7 @@ import { money } from '../../lib/money.js';
  * Package 6 (inventory and Kardex), TD-487 / B06-08 (decision t3): the Kardex rebuild only rebuilds quantities and
  * reports a WAC that differs from the Kardex replay; it never changes the WAC. «اصلاح بهای میانگین» is a separate action
  * with its own permission (inventory.wac_correct, granted to no role; admin always) that sets the WAC to the replay and, in
- * the same transaction, issues a draft voucher for the value difference against 7012. On v9.0.83 the rebuild changed the
+ * the same transaction, issues a draft voucher for the value difference against 7012. On v9.0.89 the rebuild changed the
  * WAC (150 -> 100 on 10 units) without any voucher, ignored fixWAC:false, and anyone with inventory.reconcile ran it.
  */
 export async function runKardexWacCorrectionTests(shouldRun: (id: string, ...extra: string[]) => boolean): Promise<TestCaseResult[]> {
@@ -17,7 +17,7 @@ export async function runKardexWacCorrectionTests(shouldRun: (id: string, ...ext
   const id = 'reg_kardex_wac_correction_td_487';
   if (!shouldRun(id, 'td487', 'rebuild', 'wac', 'kardex', 'inventory', 'package6')) return results;
 
-  const name = 'v9.0.84: the Kardex rebuild keeps WAC and reports the difference; WAC correction is a separate permission with a draft voucher against 7012 (TD-487)';
+  const name = 'v9.0.90: the Kardex rebuild keeps WAC and reports the difference; WAC correction is a separate permission with a draft voucher against 7012 (TD-487)';
   const tStart = Date.now();
   const itemIds: number[] = [];
   const userIds: number[] = [];

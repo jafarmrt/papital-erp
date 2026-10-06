@@ -98,7 +98,7 @@ export interface ItemPrice {
 }
 
 /**
- * v9.0.83 (TD-485): پاسخ `GET /inventory/integrity-audit` (StockReconciliationService.getIntegrityReport)؛ همین نوع را
+ * v9.0.89 (TD-485): پاسخ `GET /inventory/integrity-audit` (StockReconciliationService.getIntegrityReport)؛ همین نوع را
  * زبانه «بررسی سلامت و تطبیق موجودی» می‌خواند. پیش‌تر صفحه `report.items` و نام فیلدهای دیگری را می‌خواند که سرور
  * نمی‌فرستاد و جدول همیشه خالی بود.
  */

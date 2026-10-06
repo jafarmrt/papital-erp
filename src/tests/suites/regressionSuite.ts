@@ -39,6 +39,7 @@ import { LockHierarchyLevel, sortIdsForLocking, validateLockOrder } from '../../
 import { seedFixtureItemStocks } from '../fixtures/factories.js';
 import { ItemWarehouseStockService } from '../../services/inventory/itemWarehouseStock.service.js';
 import type { CreateDocumentInput } from '../../services/documents/types.js';
+import { miscContraAccountId } from '../fixtures/treasuryParty.js';
 
 export async function runRegressionTests(filter?: string): Promise<TestCaseResult[]> {
   const normalizedFilter = filter?.toLowerCase().replace(/[-_]/g, "").trim();
@@ -1330,13 +1331,13 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       throw new Error(`موجودی کالا پس از خروج کامل باید صفر باشد، اما مقدار ${refreshedItem.currentStock} است.`);
     }
 
-    // TD-136 assertion: the Kardex replay must NOT reset WAC to 0 after depletion; it keeps 750000. Since v9.0.84 (TD-487,
+    // TD-136 assertion: the Kardex replay must NOT reset WAC to 0 after depletion; it keeps 750000. Since v9.0.90 (TD-487,
     // decision t3) the rebuild reports that replay WAC and keeps the item's WAC; «اصلاح بها» is the separate action.
     if (rebuilt.replayWac !== 750000) {
       throw new Error(`بهای تمام‌شده میانگین موزون (WAC) پس از تخلیه موجودی باید نرخ ۷۵۰,۰۰۰ را حفظ می‌کرد، اما مقدار ${rebuilt.replayWac} ثبت شد.`);
     }
     if (Number(refreshedItem.weightedAverageCost) !== 500000) {
-      throw new Error(`بازسازی کاردکس نباید WAC کالا را تغییر دهد (v9.0.84، TD-487)، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
+      throw new Error(`بازسازی کاردکس نباید WAC کالا را تغییر دهد (v9.0.90، TD-487)، اما مقدار ${refreshedItem.weightedAverageCost} ثبت شد.`);
     }
 
     // Clean up test data
@@ -2193,9 +2194,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }
 
       // 2. Transition received cheque to 'spent' (واگذاری و خرج چک به تامین‌کننده)
+      // v9.0.85 (TD-498): spending a cheque needs the supplier's id; the payee name comes from the supplier row
+      const { createTestCustomer: createSpendSupplier } = await import('../fixtures/factories.js');
+      const spendSupplier = await createSpendSupplier({ name: `بازرگانی فلزات البرز ${Date.now()}`, partyType: 'supplier' });
       const spentChq = await AccountingService.updateChequeStatus(recChq.id, {
         status: 'spent',
-        transfereePartyName: 'بازرگانی فلزات البرز',
+        transfereePartyId: spendSupplier.id,
         notes: 'واگذاری به تامین‌کننده بابت تسویه شمش طلا'
       });
 
@@ -2203,7 +2207,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         throw new Error(`وضعیت چک پس از واگذاری باید spent باشد اما ${spentChq.status} است`);
       }
 
-      if (spentChq.payeeName !== 'بازرگانی فلزات البرز') {
+      if (spentChq.payeeName !== spendSupplier.name) {
         throw new Error(`نام تحویل‌گیرنده در payeeName چک درج نشد: ${spentChq.payeeName}`);
       }
 
@@ -2257,7 +2261,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       try {
         await AccountingService.updateChequeStatus(paidChq.id, {
           status: 'spent',
-          transfereePartyName: 'شخص ثالث'
+          transfereePartyId: spendSupplier.id
         });
       } catch (err: any) {
         if (err.message?.includes('تنها چک‌های دریافتی') || err.message?.includes('مجاز نیست')) {
@@ -6144,7 +6148,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       }).returning();
       createdBankId = bank.id;
       const receipt = await TreasuryTransactionService.createTreasuryTransaction({
-        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id,
+        type: 'receipt', method: 'cash', amount: 0.0001, bankAccountId: bank.id, contraAccountId: await miscContraAccountId(),
         partyName: 'ERP-TEST-MARKER', createVoucher: false, allowNoVoucher: true,
       });
       createdTxIds.push(receipt.id);
@@ -10516,6 +10520,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 4 (v9.0.67 on): treasury money and vouchers (TD-499..TD-504)
   const { runTreasuryMoneyVoucherTests } = await import('../regression/treasuryMoneyVoucherTests.js');
   results.push(...await runTreasuryMoneyVoucherTests(shouldRun));
+  // Package 4 (v9.0.82 on): treasury and cheque party accounts (TD-507, TD-501, TD-497, TD-498)
+  const { runTreasuryPartyTests } = await import('../regression/treasuryPartyTests.js');
+  results.push(...await runTreasuryPartyTests(shouldRun));
   // Package 6 (v9.0.79, TD-483): no future-dated stock movement, transfer date normalized, future rows in the health check
   const { runStockMovementFutureDateTests } = await import('../regression/stockMovementFutureDateTests.js');
   results.push(...await runStockMovementFutureDateTests(shouldRun));
@@ -10525,19 +10532,19 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.81, TD-494): typed transfer and rebuild errors, shared warehouse resolver, missing item Kardex 404
   const { runInventoryBusinessErrorsTests } = await import('../regression/inventoryBusinessErrorsTests.js');
   results.push(...await runInventoryBusinessErrorsTests(shouldRun));
-  // Package 6 (v9.0.82, TD-486): the integrity report checks WAC against the Kardex replay
+  // Package 6 (v9.0.88, TD-486): the integrity report checks WAC against the Kardex replay
   const { runIntegrityReportReplayWacTests } = await import('../regression/integrityReportReplayWacTests.js');
   results.push(...await runIntegrityReportReplayWacTests(shouldRun));
-  // Package 6 (v9.0.84, TD-487): the Kardex rebuild keeps WAC; WAC correction is a separate permission with a draft voucher
+  // Package 6 (v9.0.90, TD-487): the Kardex rebuild keeps WAC; WAC correction is a separate permission with a draft voucher
   const { runKardexWacCorrectionTests } = await import('../regression/kardexWacCorrectionTests.js');
   results.push(...await runKardexWacCorrectionTests(shouldRun));
-  // Package 6 (v9.0.85, TD-491): an unchanged item gets no version bump, outbox event or audit row from the rebuild
+  // Package 6 (v9.0.91, TD-491): an unchanged item gets no version bump, outbox event or audit row from the rebuild
   const { runKardexRebuildQuietTests } = await import('../regression/kardexRebuildQuietTests.js');
   results.push(...await runKardexRebuildQuietTests(shouldRun));
-  // Package 6 (v9.0.86, TD-488): the initial Kardex backfill never reprices its earlier rows
+  // Package 6 (v9.0.92, TD-488): the initial Kardex backfill never reprices its earlier rows
   const { runKardexBackfillNoRewriteTests } = await import('../regression/kardexBackfillNoRewriteTests.js');
   results.push(...await runKardexBackfillNoRewriteTests(shouldRun));
-  // Package 6 (v9.0.87, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
+  // Package 6 (v9.0.93, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
   const { runItemOpeningVoucherValueTests } = await import('../regression/itemOpeningVoucherValueTests.js');
   results.push(...await runItemOpeningVoucherValueTests(shouldRun));
 

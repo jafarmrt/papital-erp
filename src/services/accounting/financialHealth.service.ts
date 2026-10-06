@@ -6,6 +6,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
+import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
 import { buildFutureStockMovementHealthTest, findFutureStockMovements } from '../inventory/futureStockMovements.js';
 import { buildOpeningVoucherHealthTest, findOpeningVoucherMismatches } from '../inventory/itemOpeningValue.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
@@ -1044,6 +1045,8 @@ export class FinancialHealthService {
 
     // آزمون ۱۳: v8.0.118 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
     tests.push(buildNoVoucherTreasuryHealthTest(await findTreasuryEntriesWithoutVoucher()));
+    // v9.0.84 (TD-497): چک‌های پیشین که سندشان با نوع طرف حساب نمی‌خواند (بازنویسی نمی‌شوند)
+    tests.push(buildLegacyChequePartyHealthTest(await findLegacyChequePartyMismatches()));
 
     // آزمون ۱۴: v9.0.8 (TD-420) یکتایی نام طرف حساب‌های فعال (مهاجرت 0052)
     const [duplicateCustomerNames, customerNameIndexPresent] = await Promise.all([findDuplicateCustomerNames(), hasCustomerNameUniqueIndex()]);
@@ -1089,7 +1092,7 @@ export class FinancialHealthService {
     overallScore += futureMovementTest.scoreImpact;
     tests.push(futureMovementTest);
 
-    // آزمون ۲۲: v9.0.87 (TD-481) سند افتتاحیه کالا برابر ردیف‌های افتتاحیه کاردکس (فقط فهرست، بی بازنویسی)
+    // آزمون ۲۲: v9.0.93 (TD-481) سند افتتاحیه کالا برابر ردیف‌های افتتاحیه کاردکس (فقط فهرست، بی بازنویسی)
     const openingVoucherTest = buildOpeningVoucherHealthTest(await findOpeningVoucherMismatches());
     overallScore += openingVoucherTest.scoreImpact;
     tests.push(openingVoucherTest);

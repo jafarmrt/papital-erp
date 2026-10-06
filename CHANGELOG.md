@@ -19,24 +19,41 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.87 — Item Opening Voucher From Opening Kardex Rows
+### v9.0.93 — Item Opening Voucher From Opening Kardex Rows
 - **Item Opening Voucher:** the opening voucher is worth the item's opening Kardex rows with or without the item workflow, no Kardex row is repriced, and mismatched opening vouchers are listed by the health check (TD-481, `reg_item_opening_voucher_value_td_481`).
 
-### v9.0.86 — Initial Kardex Backfill Never Reprices Its Rows
+### v9.0.92 — Initial Kardex Backfill Never Reprices Its Rows
 - **Kardex Backfill:** a second run of the initial Kardex backfill no longer reprices its earlier zero-cost rows with the WAC of the day, so the Kardex replay keeps the live WAC (TD-488, `reg_kardex_backfill_no_rewrite_td_488`).
 
-### v9.0.85 — Kardex Rebuild Writes Only for Changed Items
+### v9.0.91 — Kardex Rebuild Writes Only for Changed Items
 - **Kardex Rebuild:** an item whose warehouse stock already matches its Kardex gets no version bump, outbox event or audit row; only changed items do (TD-491, `reg_kardex_rebuild_quiet_td_491`).
 
-### v9.0.84 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
+### v9.0.90 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
 - **Kardex Rebuild and WAC Correction:** the rebuild only rebuilds quantities and lists items whose WAC differs from the Kardex; correcting the WAC is a separate action with its own permission that issues a draft voucher for the value difference against 7012 (TD-487, `reg_kardex_wac_correction_td_487`).
 
-### v9.0.83 — Inventory Integrity Table Reads the Server Report
+### v9.0.89 — Inventory Integrity Table Reads the Server Report
 - **Inventory Integrity Tab:** the table and Excel export read the report the server sends (one shared type), so discrepant items are listed and exported instead of an always-empty table (TD-485, Vitest `inventoryIntegrityReport.test.tsx`).
 
-### v9.0.82 — Integrity Report WAC Uses the Kardex Replay
+### v9.0.88 — Integrity Report WAC Uses the Kardex Replay
 - **Inventory Integrity Report:** the WAC check compares the live WAC with the same Kardex replay the rebuild and invariant I13 use, so an item that ran out and was bought again at another price is no longer reported as mismatched (TD-486, `reg_integrity_report_replay_wac_td_486`).
 
+### v9.0.87 — One Permission Check and Permission Ratchets
+- **Permission Check:** `can()` and `requirePermission` ask catalog permission keys only (an unknown key or a role code fails when the router is built); `npm run ratchet:permissions` keeps role-code literals and stray permission keys from growing (TD-881).
+
+### v9.0.86 — Role Permissions Carry Their Requirements
+- **Permission Dependencies:** the permission catalog is one shared file where every action requires its section's view; saving a role adds the missing requirements and the role form ticks them (TD-880).
+
+### v9.0.85 — Spent Cheques Need a Supplier
+- **Spent Cheque Supplier (P1):** spending a cheque needs a supplier picked from the list and posts to that supplier's detail; before, the form sent only a typed name and the voucher missed the supplier's account card (TD-498, `reg_cheque_spent_needs_supplier_td_498`).
+
+### v9.0.84 — Cheque Vouchers Follow the Party Type
+- **Cheque Party Account (P1):** a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to a chosen account) and its bounce and return follow it; before, a personnel cheque landed on the customer with the same id (TD-497, `reg_cheque_voucher_follows_party_type_td_497`).
+
+### v9.0.83 — Treasury Links Are Checked
+- **Treasury Links (P2):** a receipt or payment is refused when its document is missing, voided, of the other direction or of another party, or its party id is not in the table of its type; before, a receipt from one customer settled another customer's invoice (TD-501, `reg_treasury_document_and_party_links_td_501`).
+
+### v9.0.82 — Misc Receipts and Payments Take a Chosen Account
+- **Misc Counter Account (P2):** a misc receipt or payment and a personnel «other» payment post to the counter account the user chooses, and a personnel payment requires its purpose; before, they went to trade receivables and wages payable (TD-507, `reg_treasury_misc_contra_account_td_507`).
 ### v9.0.81 — Clear Errors for Transfers and Kardex Rebuild
 - **Inventory Errors:** a transfer accepts a warehouse code or name in any case, and transfer and Kardex rebuild errors answer 422 or 404 with Persian messages instead of 500; the running Kardex of a missing item is 404 (TD-494, `reg_inventory_business_errors_td_494`).
 

@@ -270,7 +270,10 @@ export interface TreasuryTransaction {
   reconciled?: number | null;
   reconciledAt?: string | null;
   reconciledBatch?: string | null;
+  // v9.0.82 (TD-507): هدف دریافت و پرداخت پرسنل و سرفصل طرف مقابلی که کاربر برای «متفرقه» و «سایر» انتخاب کرده است
   purpose?: string | null;
+  contraAccountId?: number | null;
+  contraAccountName?: string | null;
   description?: string | null;
   status?: 'completed' | 'voided' | 'cancelled' | string | null;
   attachments?: FinancialAttachment[];
