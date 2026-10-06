@@ -138,3 +138,14 @@ export function renameDesignStateKey<N extends { stateKey: string }, E extends {
     })),
   };
 }
+
+/** v9.0.47 (TD-454): ترتیب گامی که طراح می‌خواند یا می‌سازد؛ ترتیب ذخیره‌شده، وگرنه جای گام در فهرست */
+export function designStepOrder(stored: unknown, index: number): number {
+  const n = Number(stored);
+  return Number.isInteger(n) && n > 0 ? n : index + 1;
+}
+
+/** ترتیب گام تازه طراح: یکی بیش از بزرگ‌ترین ترتیب موجود */
+export function nextDesignStepOrder(nodes: Array<{ stepOrder?: number }>): number {
+  return nodes.reduce((max, n) => Math.max(max, Number(n.stepOrder) || 0), 0) + 1;
+}

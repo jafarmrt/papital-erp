@@ -132,6 +132,35 @@ export async function runWorkflowDesignerTests(shouldRun: ShouldRun): Promise<Te
     });
   }
 
+  if (shouldRun('sec_workflow_step_order_td_454', 'security', 'td454', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_step_order_td_454',
+      name: 'v9.0.47: ذخیره طرح ترتیب گام‌ها را نگه می‌دارد؛ گام بی ترتیب جای خودش در فهرست را می‌گیرد (TD-454)',
+      details: 'طرح سه‌گامی بی stepOrder (مانند بدنه طراح پیش از v9.0.47) ترتیب ۱، ۲، ۳ می‌گیرد، نه ۱، ۱، ۱؛ ترتیب صریح طراح همان‌طور ذخیره می‌شود',
+    }, async (h, wrong) => {
+      const codes = [designCode(h, 'ORDER'), designCode(h, 'ORDER')];
+      try {
+        const orderOf = async (code: string) => (await h.q(
+          `SELECT s.state_key, s.step_order FROM workflow_states s JOIN workflow_definitions d ON d.id = s.workflow_definition_id WHERE d.code = $1 ORDER BY s.id`, [code],
+        )).map(r => `${String(r.state_key)}:${String(r.step_order)}`).join(',');
+        const transitions = [{ fromStateKey: 'draft', toStateKey: 'review', actionKey: 'send', title: 'ارسال' }, { fromStateKey: 'review', toStateKey: 'done', actionKey: 'ok', title: 'تأیید' }];
+
+        const bare = await h.post('/api/workflow/definitions', { code: codes[0], title: 'ترتیب ضمنی', entityType: 'document', states: validStates, transitions });
+        if (bare.status !== 200) wrong.push(`طرح بی ترتیب ${bare.status} داد`);
+        const implicit = await orderOf(codes[0]);
+        if (implicit !== 'draft:1,review:2,done:3') wrong.push(`ترتیب گام‌های طرح بی ترتیب «${implicit}» شد، نه draft:1,review:2,done:3`);
+
+        const ordered = validStates.map((s, i) => ({ ...s, stepOrder: [2, 3, 1][i] }));
+        const explicit = await h.post('/api/workflow/definitions', { code: codes[1], title: 'ترتیب صریح', entityType: 'document', states: ordered, transitions });
+        if (explicit.status !== 200) wrong.push(`طرح با ترتیب ${explicit.status} داد`);
+        const kept = await orderOf(codes[1]);
+        if (kept !== 'draft:2,review:3,done:1') wrong.push(`ترتیب صریح «${kept}» ذخیره شد، نه draft:2,review:3,done:1`);
+      } finally {
+        for (const code of codes) await dropDefinition(h, code);
+      }
+    });
+  }
+
   return results;
 }
 

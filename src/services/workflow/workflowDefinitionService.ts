@@ -285,14 +285,15 @@ export class WorkflowDefinitionService {
 
         const stateIdMap = new Map<number | string, number>();
 
-        for (const st of payload.states) {
+        for (const [index, st] of payload.states.entries()) {
           const [insertedSt] = await tx.insert(workflowStates).values({
             workflowDefinitionId: finalDefId,
             stateKey: st.stateKey || st.key || 'state',
             title: st.title || 'وضعیت',
             stateType: st.stateType || 'normal',
             color: st.color || 'gray',
-            stepOrder: st.stepOrder || 1,
+            // v9.0.47 (TD-454): گام بی ترتیب جای خودش در فهرست را می‌گیرد (پیش‌تر همه گام‌ها ترتیب ۱ می‌گرفتند)
+            stepOrder: Number.isInteger(st.stepOrder) && Number(st.stepOrder) > 0 ? Number(st.stepOrder) : index + 1,
             slaHours: Number(st.slaHours) || 24,
             positionX: Number(st.positionX) || Number(st.x) || 100,
             positionY: Number(st.positionY) || Number(st.y) || 100

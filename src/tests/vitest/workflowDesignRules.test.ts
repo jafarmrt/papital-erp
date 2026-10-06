@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
+import { designStepOrder, nextDesignStepOrder, renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
 // v9.0.45 (TD-452): قواعد ساختاری طرح گردش کار، مشترک طراح و سرور
 const states = [
@@ -42,5 +42,15 @@ describe('renameDesignStateKey', () => {
     expect(renamed.edges.filter(e => e.fromStateKey === 'review' || e.toStateKey === 'review')).toHaveLength(0);
     expect(renamed.edges.filter(e => e.fromStateKey === 'warehouse_review' || e.toStateKey === 'warehouse_review')).toHaveLength(3);
     expect(workflowDesignErrors(renamed.nodes, renamed.edges)).toEqual([]);
+  });
+});
+
+// v9.0.47 (TD-454): طراح ترتیب گام را از سرور می‌خواند و گام تازه ترتیب بعدی را می‌گیرد
+describe('designStepOrder', () => {
+  it('keeps a stored order and falls back to the list position', () => {
+    expect(designStepOrder(3, 0)).toBe(3);
+    expect(designStepOrder(null, 1)).toBe(2);
+    expect(designStepOrder(0, 4)).toBe(5);
+    expect(nextDesignStepOrder([{ stepOrder: 1 }, { stepOrder: 4 }, { stepOrder: 2 }])).toBe(5);
   });
 });
