@@ -167,7 +167,8 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
       const lower = await admin.post('/api/accounting/bank-accounts', { title: `Dollar bank ${tagOf()}`, type: 'bank', currency: 'usd', initialBalance: 0 });
       if (lower.status !== 201 || lower.body?.currency !== 'USD') problems.push(`create with currency usd returned ${lower.status} ${lower.body?.currency}, expected 201 USD`);
       const unknown = await admin.post('/api/accounting/bank-accounts', { title: `Odd bank ${tagOf()}`, type: 'bank', currency: 'XYZ', initialBalance: 0 });
-      if (unknown.status !== 422) problems.push(`create with currency XYZ returned ${unknown.status}, expected 422 (before: 201)`);
+      // 422 from the service (v9.0.90); since v9.0.92 the route schema refuses it first with 400
+      if (unknown.status !== 422 && unknown.status !== 400) problems.push(`create with currency XYZ returned ${unknown.status}, expected 400 or 422 (before: 201)`);
 
       // a fresh rial account becomes a dollar account (before: 200 and the currency stayed IRR)
       const bank = await createBank('Currency bank');
