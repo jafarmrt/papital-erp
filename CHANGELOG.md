@@ -19,13 +19,13 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.54 — Session End Clears the Browser Cache
+### v9.0.56 — Session End Clears the Browser Cache
 - **Session Cache:** logout and a 401 clear the React Query cache, so the next user of the same browser never sees the previous user's cached data (TD-518, `sessionCacheClear.test.tsx`).
 
-### v9.0.53 — New-User Form Preselects No Role
+### v9.0.55 — New-User Form Preselects No Role
 - **New-User Role:** the new-user form opens with an empty «choose a role» option and sends nothing until a role is picked; the system admin is listed last with a full-access warning (TD-517, `userFormRole.test.tsx`).
 
-### v9.0.52 — Package 2 Access and Audit Log Documentation
+### v9.0.54 — Package 2 Access and Audit Log Documentation
 - **Stability Audit, Package 2 (Authentication, Access and Audit Log):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 2 section with the approved permission model; its 27 proven findings are registered as open rows TD-516 to TD-542 (four P1: role codes in route guards, the new-user form preselecting the system admin, the browser cache surviving logout, and a deleted username reviving the old account). Documentation only; no behaviour change.
 
 ### v9.0.51 — Workflow Tables Get Foreign Keys and Indexes

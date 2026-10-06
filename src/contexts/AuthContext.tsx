@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setCsrfToken(null);
       setAuthToken(null);
-      // v9.0.54 (TD-518): داده کاربر قبلی در کش نمی‌ماند تا کاربر بعدی همین مرورگر آن را بی درخواست به سرور نبیند
+      // v9.0.56 (TD-518): داده کاربر قبلی در کش نمی‌ماند تا کاربر بعدی همین مرورگر آن را بی درخواست به سرور نبیند
       queryClient.clear();
       setUser(null);
       setUserPermissions({ permissions: [], isAdmin: false });
