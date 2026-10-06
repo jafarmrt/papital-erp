@@ -236,5 +236,45 @@ export async function runTreasuryInputTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  const decimalId = 'reg_treasury_decimal_inputs_td_514';
+  if (shouldRun(decimalId, 'td514', 'treasury', 'decimal', 'currency', 'package4')) {
+    await runCase(results, decimalId, 'v9.0.90: treasury and cheque amounts, opening balances and exchange rates accept Persian digits and thousands separators, text is refused with a Persian message, and the currency comes from the supported list (TD-514)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const bank = await createBank('Decimal bank');
+      const other = await createBank('Decimal bank two');
+      const receipt = { type: 'receipt', method: 'bank_transfer', bankAccountId: bank.id, partyType: 'other', partyName: 'owner deposit', contraAccountId: await accountId('4101') };
+
+      for (const [input, expected] of [['۲۵۰۰۰۰۰', 2_500_000], ['2,500,000', 2_500_000], ['۱٬۲۵۰٫۵', 1_250.5]] as const) {
+        const res = await admin.post('/api/accounting/treasury', { ...receipt, amount: input });
+        if (res.status !== 201 || Number(res.body?.amount) !== expected) problems.push(`receipt amount ${input} returned ${res.status} ${res.body?.amount}, expected 201 ${expected} (before: 400 «expected number, received NaN»)`);
+      }
+      const text = await admin.post('/api/accounting/treasury', { ...receipt, amount: 'دو میلیون' });
+      const textMessage = JSON.stringify(text.body);
+      if (text.status < 400 || text.status >= 500 || !textMessage.includes('مبلغ تراکنش') || /Invalid input|NaN/.test(textMessage)) problems.push(`receipt amount as words returned ${text.status} ${textMessage.slice(0, 200)}, expected a Persian message naming the amount`);
+      const zero = await admin.post('/api/accounting/treasury', { ...receipt, amount: '۰' });
+      if (zero.status < 400 || zero.status >= 500) problems.push(`receipt amount ۰ returned ${zero.status}, expected a 4xx`);
+
+      const transfer = await admin.post('/api/accounting/treasury/transfer', { amount: '۱٬۰۰۰', fromBankAccountId: bank.id, toBankAccountId: other.id });
+      if (transfer.status !== 201 && transfer.status !== 200) problems.push(`transfer amount ۱٬۰۰۰ returned ${transfer.status}: ${JSON.stringify(transfer.body).slice(0, 200)}`);
+
+      const cheque = await admin.post('/api/accounting/cheques', {
+        type: 'received', chequeNumber: `N${tagOf()}`, bankName: 'ملت', amount: '۱٬۰۰۰٬۰۰۰', issueDate: '1405/07/01', dueDate: '1405/09/01',
+        partyType: 'other', partyName: 'misc drawer', contraAccountId: await accountId('4101'),
+      });
+      if (cheque.status !== 201 || Number(cheque.body?.amount) !== 1_000_000) problems.push(`cheque amount ۱٬۰۰۰٬۰۰۰ returned ${cheque.status} ${cheque.body?.amount}, expected 201 1000000`);
+
+      const opened = await admin.post('/api/accounting/bank-accounts', { title: `Decimal opening ${tagOf()}`, type: 'bank', initialBalance: '۵۰۰۰', accountId: bank.ledgerId });
+      if (opened.status !== 201 || Number(opened.body?.initialBalance) !== 5000) problems.push(`bank initial balance ۵۰۰۰ returned ${opened.status} ${opened.body?.initialBalance}, expected 201 5000`);
+
+      const lower = await admin.post('/api/accounting/treasury', { ...receipt, amount: 1000, currency: 'usd', exchangeRate: '۱٬۰۰۰٬۰۰۰' });
+      if (lower.status !== 422 || !JSON.stringify(lower.body).includes('(USD)')) problems.push(`receipt currency usd on a rial bank returned ${lower.status} ${JSON.stringify(lower.body).slice(0, 160)}, expected the currency mismatch naming USD (before: «usd»)`);
+      const odd = await admin.post('/api/accounting/treasury', { ...receipt, amount: 1000, currency: 'XYZ' });
+      if (odd.status < 400 || odd.status >= 500 || !JSON.stringify(odd.body).includes('ارز پشتیبانی نمی‌شود')) problems.push(`receipt currency XYZ returned ${odd.status} ${JSON.stringify(odd.body).slice(0, 160)}, expected «ارز پشتیبانی نمی‌شود»`);
+      assertNoProblems(problems);
+      return 'receipt ۲۵۰۰۰۰۰ / 2,500,000: 201 2500000; ۱٬۲۵۰٫۵: 1250.5; words: Persian message; transfer ۱٬۰۰۰: 201; cheque ۱٬۰۰۰٬۰۰۰: 201 1000000; opening ۵۰۰۰: 5000; usd: mismatch names USD; XYZ: «ارز پشتیبانی نمی‌شود»';
+    });
+  }
+
   return results;
 }

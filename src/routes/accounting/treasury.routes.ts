@@ -211,7 +211,7 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
     action: 'CREATE',
     entity: 'treasury_transfer',
     entityId: `${result.payment.id}/${result.receipt.id}`,
-    description: `انتقال وجه ${req.body.amount.toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
+    description: `انتقال وجه ${Number(req.body.amount).toLocaleString('fa-IR')} بین حساب‌ها (سند ${result.voucherId || 'بدون سند'})`,
     details: { paymentId: result.payment.id, receiptId: result.receipt.id, voucherId: result.voucherId },
     ipAddress: req.ip || '',
   });
