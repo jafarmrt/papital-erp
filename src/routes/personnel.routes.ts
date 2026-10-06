@@ -18,6 +18,7 @@ import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
+import { assertPersonnelDeletable } from '../services/personnel/personnelDeleteGuard.js';
 import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
@@ -665,19 +666,21 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
 
 // DELETE /api/personnel/:id - Soft delete
 router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  try {
-    const id = Number(req.params.id);
+  const id = Number(req.params.id);
 
-    const [existing] = await orm
+  // v9.0.29 (TD-441، تصمیم D4 الف): زیر قفل ردیف پرسنل، فیش تسویه‌نشده، کارکرد بی فیش، مانده حساب دائم یا سند پیش‌نویس
+  // حذف را با ۴۰۹ و دلیل فارسی رد می‌کند؛ راه جایگزین «قطع همکاری» است
+  const deleted = await orm.transaction(async (tx) => {
+    const [existing] = await tx
       .select()
       .from(personnel)
-      .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)));
+      .where(and(eq(personnel.id, id), eq(personnel.isDeleted, 0)))
+      .for('update');
+    if (!existing) return null;
 
-    if (!existing) {
-      return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
-    }
+    await assertPersonnelDeletable(existing, tx);
 
-    await orm
+    await tx
       .update(personnel)
       .set({
         isDeleted: 1,
@@ -693,13 +696,16 @@ router.delete('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'
       entityId: id,
       description: `حذف پرسنل «${existing.fullName}» (کد ${id})`,
       details: { before: personnelAuditSnapshot(existing) },
-      req
+      req,
+      tx
     });
+    return existing;
+  });
 
-    res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });
-  } catch (err) {
-    throw err;
+  if (!deleted) {
+    return res.status(404).json({ error: 'اطلاعات پرسنل مورد نظر یافت نشد' });
   }
+  res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت حذف شد' });
 }));
 
 // Asynchronous background remediation: Ensure existing records have leading zeros for phone and nationalId

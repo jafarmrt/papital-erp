@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.29 — Personnel With Open Business Is Not Deleted
+- **Personnel Delete Guard:** A personnel with an unsettled payroll, a work log without a payroll, an account balance or a draft voucher is no longer deleted; the refusal lists the reasons and suggests «قطع همکاری» (owner decision D4; TD-441, `reg_personnel_delete_guard_td_441`).
+
 ### v9.0.28 — Unique Personnel Code
 - **Personnel Code:** A personnel code is unique among active personnel regardless of letter case and surrounding spaces, now also under concurrent saves (partial unique index, migration 0054); old duplicates are listed by the financial health check (owner decision D6; TD-439, `reg_personnel_code_unique_td_439`).
 

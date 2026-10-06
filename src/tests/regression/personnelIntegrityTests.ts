@@ -2,7 +2,8 @@ import request from 'supertest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { activityLogs, personnel } from '../../db/schema.js';
+import { accounts, activityLogs, journalVoucherItems, journalVouchers, personnel, pieceworkLogs, pieceworkPayrolls, pieceworkTasks } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
 
 /**
  * بسته ۱۲ (بخش پرسنل) — یکپارچگی داده پرسنل در مسیرهای واقعی Express؛ هر آزمون روی کد پیشین قرمز است.
@@ -254,6 +255,104 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
 
       if (wrong.length > 0) throw new Error(wrong.join('؛ '));
       return 'پنج ثبت هم‌زمان یک پرسنل (چهار ۴۰۰ فارسی)؛ ویرایش به کد تکراری ۴۰۰؛ ورود اکسل کد با حروف دیگر را به‌روزرسانی کرد؛ کد پرسنل حذف‌شده آزاد؛ تکرار قدیمی در بازرس سلامت';
+    });
+  }
+
+  const deleteId = 'reg_personnel_delete_guard_td_441';
+  if (shouldRun(deleteId, 'td441', 'personnel', 'delete', 'package12')) {
+    await runCase(results, deleteId, 'v9.0.29: پرسنل دارای فیش تسویه‌نشده، کارکرد بی فیش، مانده حساب دائم یا سند پیش‌نویس حذف نمی‌شود (۴۰۹ با دلیل و پیشنهاد «قطع همکاری»)؛ پرسنل تسویه‌شده حذف می‌شود (TD-441)', async (ids) => {
+      const { send } = await adminClient();
+      const { VoucherService } = await import('../../services/accounting/voucher.service.js');
+      const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+      const today = await businessTodayIsoDate();
+      const tag = tagOf();
+      const wrong: string[] = [];
+      const payrollIds: number[] = [];
+      const logIds: number[] = [];
+      const voucherIds: number[] = [];
+      let taskId: number | null = null;
+      try {
+        const accountOf = async (type: string) => {
+          const [a] = await orm.select({ id: accounts.id }).from(accounts).where(eq(accounts.accountType, type)).orderBy(accounts.id).limit(1);
+          if (!a) throw new Error(`حسابی از نوع ${type} نیست`);
+          return a.id;
+        };
+        const [assetAcc, liabilityAcc, expenseAcc] = [await accountOf('asset'), await accountOf('liability'), await accountOf('expense')];
+        const person = async (label: string) => {
+          const res = await send('post', '/api/personnel', { firstName: label, lastName: `حذف ${tag}`, personnelCode: `DEL-${tag}-${ids.length}` });
+          if (res.status !== 201) throw new Error(`ثبت پرسنل ${res.status} داد`);
+          ids.push(Number(res.body.id));
+          return { id: Number(res.body.id), fullName: String(res.body.fullName) };
+        };
+        const voucher = async (status: string, rows: Array<{ accountId: number; debit: number; credit: number; personnelId?: number }>) => {
+          const total = rows.reduce((t, r) => t + r.debit, 0);
+          const [v] = await orm.insert(journalVouchers).values({
+            voucherNumber: await VoucherService.getNextVoucherNumber(), date: today, description: `آزمون حذف پرسنل ${tag}`, status,
+            totalDebit: money(total), totalCredit: money(total),
+          }).returning({ id: journalVouchers.id });
+          voucherIds.push(v.id);
+          await orm.insert(journalVoucherItems).values(rows.map((r, i) => ({
+            voucherId: v.id, accountId: r.accountId, rowOrder: i + 1, debit: money(r.debit), credit: money(r.credit),
+            detailedType: r.personnelId ? 'personnel' : 'none', detailedId: r.personnelId ?? null,
+          })));
+        };
+        const isActive = async (pid: number) => (await orm.select({ id: personnel.id }).from(personnel)
+          .where(and(eq(personnel.id, pid), eq(personnel.isDeleted, 0)))).length === 1;
+        const expectRefused = async (pid: number, label: string, mustMention: string) => {
+          const res = await send('delete', `/api/personnel/${pid}`);
+          const message = String(res.body?.error ?? res.body?.message ?? '');
+          if (res.status !== 409 || !message.includes(mustMention) || !message.includes('قطع همکاری')) wrong.push(`${label}: حذف ${res.status} با پیام «${message.slice(0, 160)}»`);
+          if (!(await isActive(pid))) wrong.push(`${label}: پرسنل حذف شد`);
+        };
+
+        // ۱) فیش تأییدشده پرداخت‌نشده ۸۷٬۰۰۰٬۰۰۰ ریالی
+        const unpaid = await person('فیش‌دار');
+        const [pay] = await orm.insert(pieceworkPayrolls).values({
+          payrollNumber: `PAY-DEL-${tag}`, personnelId: unpaid.id, startDate: today, endDate: today, title: 'فیش آزمون', netPayable: money(87000000), status: 'approved',
+        }).returning({ id: pieceworkPayrolls.id });
+        payrollIds.push(pay.id);
+        await expectRefused(unpaid.id, 'پرسنل با فیش تأییدشده پرداخت‌نشده', `PAY-DEL-${tag}`);
+
+        // ۲) کارکرد بی فیش
+        const worker = await person('کارکرددار');
+        const [task] = await orm.insert(pieceworkTasks).values({ code: `T-DEL-${tag}`, title: `کار آزمون ${tag}` }).returning({ id: pieceworkTasks.id });
+        taskId = task.id;
+        const [log] = await orm.insert(pieceworkLogs).values({ personnelId: worker.id, taskId: task.id, date: today, quantity: 3, unitRate: money(100000), totalAmount: money(300000) }).returning({ id: pieceworkLogs.id });
+        logIds.push(log.id);
+        await expectRefused(worker.id, 'پرسنل با کارکرد بی فیش', 'کارکرد');
+
+        // ۳) مانده مساعده در سند تأییدشده (حساب دائم)
+        const advance = await person('مساعده‌دار');
+        await voucher('approved', [{ accountId: assetAcc, debit: 5000000, credit: 0, personnelId: advance.id }, { accountId: liabilityAcc, debit: 0, credit: 5000000 }]);
+        await expectRefused(advance.id, 'پرسنل با مانده مساعده', 'مانده حساب');
+
+        // ۴) سند حسابداری پیش‌نویس
+        const drafted = await person('پیش‌نویس‌دار');
+        await voucher('draft', [{ accountId: expenseAcc, debit: 2000000, credit: 0, personnelId: drafted.id }, { accountId: liabilityAcc, debit: 0, credit: 2000000, personnelId: drafted.id }]);
+        await expectRefused(drafted.id, 'پرسنل با سند پیش‌نویس', 'سند حسابداری پیش‌نویس');
+
+        // ۵) تسویه‌شده: فیش پرداخت‌شده، هزینه حقوق (حساب موقت) و بدهی پرداخت‌شده ← حذف آزاد است
+        const settled = await person('تسویه‌شده');
+        const [paid] = await orm.insert(pieceworkPayrolls).values({
+          payrollNumber: `PAY-DEL-${tag}-P`, personnelId: settled.id, startDate: today, endDate: today, title: 'فیش پرداخت‌شده', netPayable: money(4000000), paidAmount: money(4000000), status: 'paid',
+        }).returning({ id: pieceworkPayrolls.id });
+        payrollIds.push(paid.id);
+        await voucher('approved', [{ accountId: expenseAcc, debit: 4000000, credit: 0, personnelId: settled.id }, { accountId: liabilityAcc, debit: 0, credit: 4000000, personnelId: settled.id }]);
+        await voucher('approved', [{ accountId: liabilityAcc, debit: 4000000, credit: 0, personnelId: settled.id }, { accountId: assetAcc, debit: 0, credit: 4000000 }]);
+        const freed = await send('delete', `/api/personnel/${settled.id}`);
+        if (freed.status !== 200 || await isActive(settled.id)) wrong.push(`پرسنل تسویه‌شده با ${freed.status} حذف نشد: ${JSON.stringify(freed.body).slice(0, 160)}`);
+
+        if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+        return 'فیش تأییدشده پرداخت‌نشده، کارکرد بی فیش، مانده مساعده و سند پیش‌نویس هر یک ۴۰۹ با دلیل و «قطع همکاری»؛ پرسنل با فیش پرداخت‌شده و فقط مانده هزینه حذف شد';
+      } finally {
+        if (voucherIds.length > 0) {
+          await orm.delete(journalVoucherItems).where(inArray(journalVoucherItems.voucherId, voucherIds)).catch(() => undefined);
+          await orm.delete(journalVouchers).where(inArray(journalVouchers.id, voucherIds)).catch(() => undefined);
+        }
+        if (logIds.length > 0) await orm.delete(pieceworkLogs).where(inArray(pieceworkLogs.id, logIds)).catch(() => undefined);
+        if (payrollIds.length > 0) await orm.delete(pieceworkPayrolls).where(inArray(pieceworkPayrolls.id, payrollIds)).catch(() => undefined);
+        if (taskId !== null) await orm.delete(pieceworkTasks).where(eq(pieceworkTasks.id, taskId)).catch(() => undefined);
+      }
     });
   }
 

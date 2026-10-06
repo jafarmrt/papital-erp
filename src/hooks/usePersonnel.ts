@@ -217,8 +217,9 @@ export function usePersonnel() {
 
   const handleDelete = async (p: Personnel) => {
     if (await confirmAction({ title: 'حذف پرسنل', message: `آیا از حذف اطلاعات پرسنل «${p.fullName}» اطمینان دارید؟` })) {
-      await deleteMutation.mutateAsync(p.id);
-      if (selectedPersonnel?.id === p.id) {
+      // v9.0.29 (TD-441): حذف ردشده (۴۰۹ با دلیل) را پیام خطای mutation نشان می‌دهد؛ پنجره جزئیات باز می‌ماند
+      const removed = await deleteMutation.mutateAsync(p.id).then(() => true, () => false);
+      if (removed && selectedPersonnel?.id === p.id) {
         setShowDetailModal(false);
         setSelectedPersonnel(null);
       }
