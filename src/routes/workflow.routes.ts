@@ -56,31 +56,7 @@ const router = Router();
 // Protect all workflow routes
 router.use(authenticateToken);
 
-/**
- * GET /api/workflow/inbox
- * Get approval inbox for current user's role
- */
-router.get('/inbox', authorizePermission('workflow.view', 'workflow.approve', 'workflow.execute', 'workflow.manage', 'workflow.admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  try {
-    const page = parseInt(req.query.page as string || '1');
-    const limit = parseInt(req.query.limit as string || '50');
-    const userRole = req.user?.role;
-    const userId = req.user?.id;
-
-    const inbox = await WorkflowEngineService.getApprovalInbox({
-      role: userRole,
-      userId,
-      page,
-      limit
-    });
-
-    res.json(inbox);
-  } catch (err: unknown) {
-    const errMsg = getErrorMessage(err);
-    logger.error(`[Workflow Route /inbox] Error: ${errMsg}`);
-    throw err;
-  }
-}));
+// v9.0.42 (TD-449، ت۷ الف): «نمای نمونه‌ها» (`GET /workflow/inbox`) حذف شد؛ کارتابل فقط نمای کارها (`/tasks/my-tasks`) را دارد
 
 /**
  * GET /api/workflow/tasks/my-tasks

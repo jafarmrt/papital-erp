@@ -1,11 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  useWorkflowInboxQuery, 
-  useExecuteTransitionMutation,
   useMyTasksQuery,
   useTaskStatsQuery,
   useExecuteTaskMutation,
-  WorkflowTransition,
   WorkflowState,
   WorkflowInstance
 } from '../hooks/queries';
@@ -31,7 +28,6 @@ import { fetchJson } from '../api';
 import toast from 'react-hot-toast';
 // V9 Phase 5.2: مودال‌های مودولار کارتابل — استخراج از بدنه صفحه (FE-003)
 import TaskExecuteModal from '../components/approval/TaskExecuteModal';
-import TransitionExecuteModal from '../components/approval/TransitionExecuteModal';
 import PrintDocModal from '../components/approval/PrintDocModal';
 import type { ApprovalDocumentDetails } from '../components/approval/DocumentDetailsPreview';
 import { PurchaseRequisition } from '../types';
@@ -83,22 +79,6 @@ interface TaskItem {
   notes?: string;
 }
 
-interface InboxItem {
-  instance: WorkflowInstance;
-  definition?: {
-    id: number;
-    code: string;
-    title: string;
-    entityType: string;
-  };
-  currentState?: WorkflowState;
-  availableTransitions?: WorkflowTransition[];
-  entityContext?: EntityContextData;
-  entityType?: string;
-  entityId?: string | number;
-  id?: number;
-  createdAt?: string | Date;
-}
 
 // v7.0.86 (TD-108): نشان اولویت کارتابل؛ برچسب‌های فارسی هم پذیرفته می‌شوند
 const APPROVAL_PRIORITY_BASE = 'px-2 py-0.5 rounded-md text-[10px] font-bold border';
@@ -117,11 +97,9 @@ function ApprovalPriorityBadge({ priority }: { priority?: string }) {
 }
 
 export function ApprovalInboxPage() {
-  const [inboxView, setInboxView] = useState<'tasks' | 'instances'>('tasks');
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>('pending');
   const [activeTab, setActiveTab] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<{ item: InboxItem; transition: WorkflowTransition } | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [taskAction, setTaskAction] = useState<'approve' | 'reject'>('approve');
   const [comment, setComment] = useState<string>('');
@@ -133,21 +111,17 @@ export function ApprovalInboxPage() {
   const [requisitionDetails, setRequisitionDetails] = useState<PurchaseRequisition | null>(null);
   const [isLoadingRequisition, setIsLoadingRequisition] = useState<boolean>(false);
 
-  const { data: inboxData, isLoading, refetch, isFetching } = useWorkflowInboxQuery();
-  const { data: myTasksData, isLoading: isTasksLoading, refetch: refetchTasks } = useMyTasksQuery(taskStatusFilter);
+  const { data: myTasksData, isLoading: isTasksLoading, isFetching, refetch: refetchTasks } = useMyTasksQuery(taskStatusFilter);
   const { data: taskStats, refetch: refetchStats } = useTaskStatsQuery();
 
-  const executeTransitionMutation = useExecuteTransitionMutation();
   const executeTaskMutation = useExecuteTaskMutation();
 
-  const rawItems = Array.isArray(inboxData) ? inboxData : (Array.isArray(inboxData?.data) ? inboxData.data : []);
-  const items: InboxItem[] = rawItems;
   const rawTasks = Array.isArray(myTasksData) ? myTasksData : (Array.isArray(myTasksData?.data) ? myTasksData.data : []);
   const myTasks: TaskItem[] = rawTasks;
 
   // Fetch document details or requisition details when a task or transition item is opened
   useEffect(() => {
-    if (!selectedTask && !selectedItem) {
+    if (!selectedTask) {
       setDocDetails(null);
       setIsLoadingDoc(false);
       setRequisitionDetails(null);
@@ -155,9 +129,9 @@ export function ApprovalInboxPage() {
       return;
     }
 
-    const itemObj = selectedTask || selectedItem?.item;
-    const entityType = selectedTask?.instance?.entityType || selectedTask?.entityType || selectedTask?.entity_type || selectedItem?.item?.instance?.entityType || selectedItem?.item?.entityType || '';
-    const entityId = selectedTask?.instance?.entityId || selectedTask?.entityId || selectedTask?.entity_id || selectedItem?.item?.instance?.entityId || selectedItem?.item?.entityId;
+    const itemObj = selectedTask;
+    const entityType = selectedTask.instance?.entityType || selectedTask.entityType || selectedTask.entity_type || '';
+    const entityId = selectedTask.instance?.entityId || selectedTask.entityId || selectedTask.entity_id;
 
     const isRequisition = entityType === 'purchase_requisition' || entityType === 'requisition';
     const isDoc = !isRequisition && (entityType === 'document' || entityType === 'doc' || entityType === 'invoice' || entityType === 'proforma' || entityType === '');
@@ -240,39 +214,12 @@ export function ApprovalInboxPage() {
       setRequisitionDetails(null);
       setIsLoadingRequisition(false);
     }
-  }, [selectedTask, selectedItem]);
+  }, [selectedTask]);
 
   const handleRefreshAll = () => {
-    void refetch();
     void refetchTasks();
     void refetchStats();
   };
-
-  const filteredItems = useMemo(() => {
-    const seenInstances = new Set<number | string>();
-    return items.filter((item) => {
-      if (!item) return false;
-      const instId = item.instance?.id || item.id;
-      if (instId && seenInstances.has(instId)) {
-        return false;
-      }
-      if (instId) seenInstances.add(instId);
-
-      const itemEntityType = item.instance?.entityType || item.entityType || 'document';
-      const itemEntityId = item.instance?.entityId || item.entityId || '';
-      if (activeTab !== 'all' && itemEntityType !== activeTab) {
-        return false;
-      }
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const entityIdMatch = String(itemEntityId).toLowerCase().includes(q);
-        const defMatch = item.definition?.title?.toLowerCase().includes(q);
-        const stateMatch = item.currentState?.title?.toLowerCase().includes(q);
-        return entityIdMatch || defMatch || stateMatch;
-      }
-      return true;
-    });
-  }, [items, activeTab, search]);
 
   const filteredTasks = useMemo(() => {
     const seenInstances = new Set<number | string>();
@@ -299,30 +246,6 @@ export function ApprovalInboxPage() {
       return true;
     });
   }, [myTasks, activeTab, search]);
-
-  const handleExecuteTransition = () => {
-    if (!selectedItem) return;
-    const instId = selectedItem.item?.instance?.id || selectedItem.item?.id || 0;
-    const entType = selectedItem.item?.instance?.entityType || selectedItem.item?.entityType || 'document';
-    const entId = selectedItem.item?.instance?.entityId || selectedItem.item?.entityId;
-
-    executeTransitionMutation.mutate(
-      {
-        instanceId: instId,
-        transitionId: selectedItem.transition?.id,
-        comment,
-        entityType: entType,
-        entityId: entId
-      },
-      {
-        onSuccess: () => {
-          setSelectedItem(null);
-          setComment('');
-          handleRefreshAll();
-        }
-      }
-    );
-  };
 
   const handleExecuteTask = () => {
     if (!selectedTask) return;
@@ -356,25 +279,6 @@ export function ApprovalInboxPage() {
     }
   };
 
-  const getStateColorClass = (color: string) => {
-    switch (color) {
-      case 'emerald':
-      case 'green':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400';
-      case 'amber':
-      case 'yellow':
-        return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400';
-      case 'rose':
-      case 'red':
-        return 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/30 dark:text-rose-400';
-      case 'sky':
-      case 'indigo':
-      case 'blue':
-        return 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-700 dark:text-gray-300';
-    }
-  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -410,9 +314,9 @@ export function ApprovalInboxPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <button
           type="button"
-          onClick={() => { setTaskStatusFilter('pending'); setInboxView('tasks'); }}
+          onClick={() => setTaskStatusFilter('pending')}
           className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm flex items-center justify-between text-right transition-all cursor-pointer ${
-            taskStatusFilter === 'pending' && inboxView === 'tasks'
+            taskStatusFilter === 'pending'
               ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/20 dark:bg-blue-950/20'
               : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
           }`}
@@ -428,9 +332,9 @@ export function ApprovalInboxPage() {
 
         <button
           type="button"
-          onClick={() => { setTaskStatusFilter('overdue'); setInboxView('tasks'); }}
+          onClick={() => setTaskStatusFilter('overdue')}
           className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm flex items-center justify-between text-right transition-all cursor-pointer ${
-            taskStatusFilter === 'overdue' && inboxView === 'tasks'
+            taskStatusFilter === 'overdue'
               ? 'ring-2 ring-rose-500 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20'
               : 'border-gray-200 dark:border-gray-700 hover:border-rose-300'
           }`}
@@ -446,9 +350,9 @@ export function ApprovalInboxPage() {
 
         <button
           type="button"
-          onClick={() => { setTaskStatusFilter('delegated'); setInboxView('tasks'); }}
+          onClick={() => setTaskStatusFilter('delegated')}
           className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm flex items-center justify-between text-right transition-all cursor-pointer ${
-            taskStatusFilter === 'delegated' && inboxView === 'tasks'
+            taskStatusFilter === 'delegated'
               ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/20'
               : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300'
           }`}
@@ -464,9 +368,9 @@ export function ApprovalInboxPage() {
 
         <button
           type="button"
-          onClick={() => { setTaskStatusFilter('completed'); setInboxView('tasks'); }}
+          onClick={() => setTaskStatusFilter('completed')}
           className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm flex items-center justify-between text-right transition-all cursor-pointer ${
-            taskStatusFilter === 'completed' && inboxView === 'tasks'
+            taskStatusFilter === 'completed'
               ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20'
               : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300'
           }`}
@@ -484,29 +388,6 @@ export function ApprovalInboxPage() {
       {/* Main Mode View Toggle */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6 shadow-sm">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setInboxView('tasks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                inboxView === 'tasks'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-              }`}
-            >
-              نمایش بر اساس وظایف کارتابل
-            </button>
-            <button
-              onClick={() => setInboxView('instances')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                inboxView === 'instances'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-              }`}
-            >
-              نمایش بر اساس نمونه‌های ورکفلو
-            </button>
-          </div>
-
           {/* Search Box */}
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute right-3 top-2.5 text-gray-400" />
@@ -548,9 +429,8 @@ export function ApprovalInboxPage() {
         </div>
       </div>
 
-      {/* View Mode 1: Tasks Inbox (workflow_tasks) */}
-      {inboxView === 'tasks' && (
-        <>
+      {/* کارتابل کارها (workflow_tasks)؛ v9.0.42 (TD-449، ت۷ الف): «نمای نمونه‌ها» حذف شد */}
+      <>
           {isTasksLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3].map((i) => (
@@ -690,125 +570,7 @@ export function ApprovalInboxPage() {
               })}
             </div>
           )}
-        </>
-      )}
-
-      {/* View Mode 2: Classic Instances Inbox */}
-      {inboxView === 'instances' && (
-        <>
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 animate-pulse">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-3"></div>
-                  <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-2/3 mb-4"></div>
-                  <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded w-full"></div>
-                </div>
-              ))}
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
-              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
-                کارتابل نمونه‌های شما خالی است!
-              </h3>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map((item, idx) => {
-                const itemEntityType = item?.instance?.entityType || item?.entityType || 'document';
-                const itemEntityId = item?.instance?.entityId || item?.entityId || '';
-                const typeMeta = getEntityTypeLabel(itemEntityType);
-                const TypeIcon = typeMeta.icon;
-                const currentState = item?.currentState;
-                const amount = item?.entityContext?.amount || item?.entityContext?.totalAmount;
-                const requesterName = item?.instance?.startedByName || item?.entityContext?.buyerName || item?.entityContext?.createdByName || 'ثبت‌کننده سیستم';
-                const itemKey = item?.instance?.id || item?.id || idx;
-
-                return (
-                  <div
-                    key={itemKey}
-                    className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow flex flex-col justify-between"
-                  >
-                    <div>
-                      {/* Badges Bar */}
-                      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${typeMeta.color}`}>
-                          <TypeIcon className="w-3.5 h-3.5" />
-                          <span>{typeMeta.label} #{formatPersianNumber(itemEntityId)}</span>
-                        </span>
-
-                        <div className="flex items-center gap-1">
-                          <ApprovalPriorityBadge priority={item?.entityContext?.priority} />
-
-                          {currentState && (
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${getStateColorClass(currentState.color)}`}>
-                              {currentState.title}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-1">
-                        {item?.definition?.title || 'گردش کار'}
-                      </h3>
-
-                      {/* Context Grid */}
-                      <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 dark:bg-gray-700/40 p-2.5 rounded-lg mb-3">
-                        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                          <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate">متقاضی: <strong className="text-gray-800 dark:text-gray-100">{requesterName}</strong></span>
-                        </div>
-
-                        {amount !== undefined && amount !== null && (
-                          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                            <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{formatPersianPrice(amount)}</strong></span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1 mb-4">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-gray-400" />
-                          <span>تاریخ ثبت: {formatPersianDate(item?.instance?.createdAt || item?.createdAt || new Date())}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                      <span className="block text-[11px] text-gray-400 mb-2">اقدامات قابل انجام:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {item.availableTransitions && item.availableTransitions.length > 0 ? (
-                          item.availableTransitions.map((tr) => (
-                            <button
-                              key={tr.id}
-                              onClick={() => setSelectedItem({ item, transition: tr })}
-                              className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all shadow-sm ${
-                                tr.actionKey === 'approve' || tr.actionKey === 'qc_pass' || tr.actionKey === 'approve_material'
-                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
-                                  : tr.actionKey === 'reject' || tr.actionKey === 'qc_fail' || tr.actionKey === 'reject_material'
-                                  ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600'
-                                  : 'bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600'
-                              }`}
-                            >
-                              <span>{tr.title}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">اقدام ارجاع‌شده‌ای در این گام برای شما فعال نیست</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+      </>
 
       {/* V9 Phase 5.2: مودال‌های مودولار استخراج‌شده */}
       {selectedTask && (
@@ -826,22 +588,6 @@ export function ApprovalInboxPage() {
           onCommentChange={setComment}
           onExecute={handleExecuteTask}
           isExecuting={executeTaskMutation.isPending}
-        />
-      )}
-
-      {selectedItem && (
-        <TransitionExecuteModal
-          selectedItem={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          docDetails={docDetails}
-          isLoadingDoc={isLoadingDoc}
-          requisitionDetails={requisitionDetails}
-          isLoadingRequisition={isLoadingRequisition}
-          onPrintDoc={setPrintDoc}
-          comment={comment}
-          onCommentChange={setComment}
-          onExecute={handleExecuteTransition}
-          isExecuting={executeTransitionMutation.isPending}
         />
       )}
 

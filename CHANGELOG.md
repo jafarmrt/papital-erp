@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.42 — Instances View Removed From the Approval Inbox
+- **Instances View Removed:** `GET /workflow/inbox` and the inbox «instances» view are removed; the approval inbox has only the tasks view (TD-449, `sec_workflow_instances_inbox_removed_td_449`).
+
 ### v9.0.41 — Approval Inbox Tabs Show Their Own Tasks
 - **Inbox Tabs:** `GET /workflow/tasks/my-tasks` serves pending, overdue (`due_at < now()` in SQL), delegated and completed (the user's own actions from history, paginated in SQL); `/tasks/stats` counts each with the same rule; status, page and limit are validated (TD-448, `sec_workflow_inbox_tabs_td_448`).
 

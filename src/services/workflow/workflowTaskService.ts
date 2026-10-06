@@ -1,15 +1,12 @@
 import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { 
   workflowInstances, 
-  workflowPendingApprovals, 
   workflowTasks, 
   workflowDefinitions,
-  workflowTransitions,
   workflowHistoryLogs
 } from '../../db/schema.js';
 import { eq, desc, sql } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
-import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
 import { lockWorkflowEntity } from './workflowTransitionActions.js';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
@@ -426,93 +423,6 @@ export class WorkflowTaskService {
     if (allowed.length === 1) return allowed[0].id;
     if (rejects.length === 1) return rejects[0].id;
     throw new ValidationError(`این گام چند انتقال «رد» دارد (${rejects.map(t => t.title).join('، ')})؛ یکی را انتخاب کنید (WF_TASK_REJECT_AMBIGUOUS)`);
-  }
-
-  /**
-   * Get pending approvals list for a user / role
-   */
-  static async getPendingApprovalsForUser(userId: number, roleNames: string[]) {
-    const userRoles = roleNames.map(r => r.toLowerCase());
-    const isAdmin = userRoles.includes('admin');
-
-    const rawPendingList = await orm.select({
-      approval: workflowPendingApprovals,
-      instance: workflowInstances,
-      transition: workflowTransitions
-    })
-    .from(workflowPendingApprovals)
-    .innerJoin(workflowInstances, eq(workflowPendingApprovals.instanceId, workflowInstances.id))
-    .leftJoin(workflowTransitions, eq(workflowPendingApprovals.transitionId, workflowTransitions.id));
-
-    // Consolidate per workflow instance: Ensure only ONE approval card is shown per instance in the inbox.
-    // If an instance has both forward approval and negative rejection actions, prioritize the forward action.
-    const instanceMap = new Map<number, typeof rawPendingList[0]>();
-    for (const item of rawPendingList) {
-      const instId = item.instance.id;
-      const isNeg = WorkflowTransitionExecutor.isNegativeTransition(item.transition?.actionKey, item.transition?.title);
-      const existing = instanceMap.get(instId);
-      if (!existing) {
-        instanceMap.set(instId, item);
-      } else {
-        const existingIsNeg = WorkflowTransitionExecutor.isNegativeTransition(existing.transition?.actionKey, existing.transition?.title);
-        if (existingIsNeg && !isNeg) {
-          instanceMap.set(instId, item);
-        }
-      }
-    }
-
-    const consolidatedPendingList = Array.from(instanceMap.values());
-
-    const matched: any[] = [];
-    for (const item of consolidatedPendingList) {
-      const app = item.approval;
-      const inst = item.instance;
-
-      if (isAdmin || app.assignedUserId === userId || userRoles.includes((app.assignedRole || '').toLowerCase())) {
-        const context = await getEntityContext(inst.entityType, inst.entityId);
-        matched.push({
-          ...app,
-          entityType: inst.entityType,
-          entityId: inst.entityId,
-          status: inst.status,
-          instance: {
-            id: inst.id,
-            workflowDefinitionId: inst.workflowDefinitionId,
-            entityType: inst.entityType,
-            entityId: inst.entityId,
-            currentStateId: inst.currentStateId,
-            status: inst.status,
-            createdAt: inst.createdAt,
-            updatedAt: inst.updatedAt
-          },
-          refNumber: context.refNumber || context.code || inst.entityId,
-          buyerName: context.buyerName || '',
-          amount: context.amount || context.totalAmount || 0
-        });
-      }
-    }
-
-    return matched;
-  }
-
-  /**
-   * Get Approval Inbox (delegated to getPendingApprovalsForUser)
-   */
-  static async getApprovalInbox(params: {
-    role?: string;
-    userId?: number;
-    page?: number;
-    limit?: number;
-  }) {
-    const userId = params.userId || 0;
-    const role = params.role || '';
-    const pending = await WorkflowTaskService.getPendingApprovalsForUser(userId, [role]);
-    return {
-      data: pending,
-      total: pending.length,
-      page: params.page || 1,
-      limit: params.limit || 50
-    };
   }
 
   /**

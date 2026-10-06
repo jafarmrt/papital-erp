@@ -70,8 +70,6 @@ export class WorkflowEngineService {
   static getTasksForInstance = WorkflowTaskService.getTasksForInstance;
   static executeTaskById = WorkflowTaskService.executeTaskById;
   static delegateTask = WorkflowTaskService.delegateTask;
-  static getPendingApprovalsForUser = WorkflowTaskService.getPendingApprovalsForUser;
-  static getApprovalInbox = WorkflowTaskService.getApprovalInbox;
   static processMultiSignApproval = WorkflowApprovalRules.processMultiSignApproval;
   static evaluateAndAddSignature = WorkflowQuorumService.evaluateAndAddSignature;
   static getRequiredSignaturesCount = WorkflowQuorumService.getRequiredSignaturesCount;

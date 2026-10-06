@@ -267,5 +267,18 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     });
   }
 
+  if (shouldRun('sec_workflow_instances_inbox_removed_td_449', 'security', 'td449', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_instances_inbox_removed_td_449',
+      name: 'v9.0.42: «نمای نمونه‌ها» و `GET /workflow/inbox` حذف شدند؛ کارتابل فقط نمای کارها را دارد (TD-449)',
+      details: 'مسیر `/api/workflow/inbox` دیگر وجود ندارد (۴۰۴) و نمای کارها پاسخ می‌دهد',
+    }, async (h, wrong) => {
+      const res = await h.get('/api/workflow/inbox?limit=1');
+      if (res.status !== 404) wrong.push(`GET /api/workflow/inbox ${res.status} داد، نه ۴۰۴ (${Array.isArray(res.body?.data) ? res.body.data.length : '?'} ردیف)`);
+      const tasks = await h.get('/api/workflow/tasks/my-tasks?limit=1');
+      if (tasks.status !== 200 || !Array.isArray(tasks.body?.data)) wrong.push(`نمای کارها ${tasks.status} داد`);
+    });
+  }
+
   return results;
 }
