@@ -10,7 +10,7 @@ import { isoToJalaliDate, toPersianDigits } from '../utils.js';
 import { requireStorageDate, optionalStorageDate, crmTodayActivityDates } from '../lib/storageDate.js';
 import { businessTodayIsoDate, systemNowUtcIso } from '../lib/businessClock.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { NotFoundError, BadRequestError } from '../errors/customErrors.js';
 import { logger } from '../middleware/logger.js';
@@ -22,10 +22,21 @@ import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
+import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 
 const router = Router();
 router.use(authenticateToken);
+
+// v9.0.18 (TD-427): مبلغ و احتمال با `decimalInput` (متن = خطای اعتبارسنجی، نه صفر بی‌صدا یا ۵۰۰)؛ مبلغ نامنفی، احتمال عدد
+// صحیح ۰ تا ۱۰۰، و مرحله، وضعیت و ارز فقط از فهرست‌های `src/lib/crm/leadFields.ts`
+const leadEstimatedValueInput = decimalInput('ارزش تخمینی معامله')
+  .refine(v => v === undefined || Number(v) >= 0, { message: 'ارزش تخمینی معامله نمی‌تواند منفی باشد' });
+const leadProbabilityInput = decimalInput('احتمال موفقیت')
+  .refine(v => v === undefined || isLeadProbability(v), { message: 'احتمال موفقیت باید عدد صحیح بین ۰ تا ۱۰۰ باشد' });
+const leadStageInput = z.enum(CRM_LEAD_STAGES, { message: 'مرحله پرونده فروش نامعتبر است' });
+const leadStatusInput = z.enum(CRM_LEAD_STATUSES, { message: 'وضعیت پرونده فروش نامعتبر است' });
+const leadCurrencyInput = z.preprocess(normalizeLeadCurrency, z.enum(CRM_LEAD_CURRENCIES, { message: 'ارز پرونده فروش پشتیبانی نمی‌شود (ریال، دلار، یورو، درهم یا پوند)' }));
 
 const createCrmLeadSchema = z.object({
   body: z.object({
@@ -36,10 +47,10 @@ const createCrmLeadSchema = z.object({
     company: z.string().optional(),
     contacts: z.array(z.any()).optional(),
     source: z.string().optional(),
-    stage: z.string().optional(),
-    estimatedValue: z.union([z.number(), z.string()]).optional(),
-    currency: z.string().optional(),
-    probability: z.union([z.number(), z.string()]).optional(),
+    stage: leadStageInput.optional(),
+    estimatedValue: leadEstimatedValueInput.optional(),
+    currency: leadCurrencyInput.optional(),
+    probability: leadProbabilityInput.optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
     expectedCloseDate: z.string().optional(),
@@ -56,15 +67,15 @@ const updateCrmLeadSchema = z.object({
     company: z.string().optional(),
     contacts: z.array(z.any()).optional(),
     source: z.string().optional(),
-    stage: z.string().optional(),
-    estimatedValue: z.union([z.number(), z.string()]).optional(),
-    currency: z.string().optional(),
-    probability: z.union([z.number(), z.string()]).optional(),
+    stage: leadStageInput.optional(),
+    estimatedValue: leadEstimatedValueInput.optional(),
+    currency: leadCurrencyInput.optional(),
+    probability: leadProbabilityInput.optional(),
     assignedTo: z.string().optional(),
     assignedPersonnelId: z.union([z.number(), z.string(), z.null()]).optional(),
     expectedCloseDate: z.string().optional(),
     notes: z.string().optional(),
-    status: z.string().optional(),
+    status: leadStatusInput.optional(),
   }),
   params: z.object({
     id: numericIdString

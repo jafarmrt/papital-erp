@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.18 — Sales Lead Input Validation
+- **Sales Lead Input:** Lead amounts and probabilities go through `decimalInput`; the amount is non-negative, the probability an integer 0 to 100, and stage, status and currency come from fixed lists (`src/lib/crm/leadFields.ts`; TD-427, package-9 finding B09-12).
+
 ### v9.0.17 — CRM Activity Parents Exist
 - **CRM Activity Parents:** A CRM activity is saved only when its sales lead and party exist and are not deleted; otherwise 422 (`resolveActivityParents`; TD-426, package-9 finding B09-11).
 

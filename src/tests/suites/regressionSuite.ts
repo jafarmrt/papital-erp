@@ -10487,6 +10487,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
   const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
   results.push(...await runCrmActivityParentsTests(shouldRun));
+  // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
+  const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
+  results.push(...await runCrmLeadInputTests(shouldRun));
 
   return results;
 }
