@@ -145,5 +145,48 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
     });
   }
 
+  const salaryId = 'reg_personnel_salary_decimal_input_td_438';
+  if (shouldRun(salaryId, 'td438', 'personnel', 'salary', 'package12')) {
+    await runCase(results, salaryId, 'v9.0.27: حقوق ماهانه پرسنل با decimalInput خوانده می‌شود: متن و منفی رد می‌شود، ارقام فارسی پذیرفته و خانه خالی صفر است (TD-438)', async (ids) => {
+      const { send } = await adminClient();
+      const tag = tagOf();
+      const wrong: string[] = [];
+      const base = (n: string) => ({ firstName: 'سارا', lastName: `حقوق ${tag} ${n}`, salaryType: 'monthly_fixed' });
+      const salaryOf = async (pid: number) => Number((await orm.select({ s: personnel.monthlySalary }).from(personnel).where(eq(personnel.id, pid)))[0]?.s);
+      const countOf = async (n: string) => (await orm.select({ id: personnel.id }).from(personnel)
+        .where(and(eq(personnel.lastName, `حقوق ${tag} ${n}`), eq(personnel.isDeleted, 0)))).map(r => r.id);
+
+      // ۱) ثبت با متن یا منفی رد می‌شود و پرسنلی ساخته نمی‌شود
+      for (const [n, value] of [['متن', 'abc'], ['منفی', '-5000000'], ['منفی عددی', -1]] as const) {
+        const res = await send('post', '/api/personnel', { ...base(n), monthlySalary: value });
+        const made = await countOf(n);
+        ids.push(...made);
+        if (res.status !== 400 || made.length > 0) wrong.push(`ثبت با «${value}»: ${res.status} و ${made.length} پرسنل`);
+      }
+      // ۲) ارقام فارسی و جداکننده هزارگان پذیرفته می‌شود؛ خانه خالی صفر است
+      const fa = await send('post', '/api/personnel', { ...base('فارسی'), monthlySalary: '۴۵٬۰۰۰٬۰۰۰' });
+      if (fa.status === 201) ids.push(Number(fa.body.id));
+      if (fa.status !== 201 || await salaryOf(Number(fa.body.id)) !== 45000000) wrong.push(`ثبت با «۴۵٬۰۰۰٬۰۰۰»: ${fa.status}`);
+      const empty = await send('post', '/api/personnel', { ...base('خالی'), monthlySalary: '' });
+      if (empty.status === 201) ids.push(Number(empty.body.id));
+      if (empty.status !== 201 || await salaryOf(Number(empty.body.id)) !== 0) wrong.push(`ثبت با خانه خالی: ${empty.status}`);
+
+      // ۳) ویرایش: متن و منفی رد می‌شود و حقوق دست نمی‌خورد؛ نیامدن فیلد حقوق را نگه می‌دارد؛ خانه خالی صفر می‌کند
+      if (fa.status === 201) {
+        const pid = Number(fa.body.id);
+        for (const value of ['abc', '-5000000']) {
+          const res = await send('put', `/api/personnel/${pid}`, { ...base('فارسی'), monthlySalary: value });
+          if (res.status !== 400 || await salaryOf(pid) !== 45000000) wrong.push(`ویرایش با «${value}»: ${res.status} و حقوق ${await salaryOf(pid)}`);
+        }
+        const keep = await send('put', `/api/personnel/${pid}`, { ...base('فارسی'), jobTitle: 'زرگر' });
+        if (keep.status !== 200 || await salaryOf(pid) !== 45000000) wrong.push(`ویرایش بی فیلد حقوق: ${keep.status} و حقوق ${await salaryOf(pid)}`);
+        const clear = await send('put', `/api/personnel/${pid}`, { ...base('فارسی'), monthlySalary: '' });
+        if (clear.status !== 200 || await salaryOf(pid) !== 0) wrong.push(`ویرایش با خانه خالی: ${clear.status} و حقوق ${await salaryOf(pid)}`);
+      }
+      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      return 'متن و منفی در ثبت و ویرایش ۴۰۰ بی تغییر؛ ارقام فارسی ۴۵٬۰۰۰٬۰۰۰ پذیرفته؛ خانه خالی صفر؛ نیامدن فیلد حقوق را نگه داشت';
+    });
+  }
+
   return results;
 }

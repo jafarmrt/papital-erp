@@ -9,13 +9,14 @@ import { logActivity } from '../lib/auditLogger.js';
 import { personnelAuditChanges, personnelAuditSnapshot } from '../services/personnel/personnelAudit.js';
 import { logger } from '../middleware/logger.js';
 import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema, numericIdString, decimalInput } from '../middleware/validate.js';
 import { normalizePhoneNumber, normalizeNationalId, isoToJalaliDate } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { canAccessSensitivePersonnelData, sanitizePersonnelRecord } from '../lib/piiMasker.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
-import { money, moneyOr } from '../lib/money.js';
+import { money } from '../lib/money.js';
+import { fin } from '../lib/financialDecimal.js';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
@@ -93,6 +94,13 @@ async function nextNobitexPassword(
 
 router.use(authenticateToken);
 
+// v9.0.27 (TD-438، TD-385): حقوق ماهانه با decimalInput (ارقام فارسی و جداکننده هزارگان پذیرفته، متن خطا) و نامنفی؛
+// خانه خالی فرم یعنی صفر، نیامدن فیلد در ویرایش یعنی حقوق فعلی. پیش‌تر «abc» صفر و «-5000000» منفی ذخیره می‌شد.
+const monthlySalaryInput = z.preprocess(
+  v => (typeof v === 'string' && v.trim() === '' ? '0' : v),
+  decimalInput('حقوق ماهانه'),
+).refine(v => v === undefined || !fin(v).isNegative(), 'حقوق ماهانه نمی‌تواند منفی باشد');
+
 // v7.0.140: بدنه ثبت و ویرایش پرسنل یکی است (پیش‌تر دو بار تکرار شده بود)
 const personnelBodySchema = z.object({
   firstName: z.string().optional(),
@@ -107,7 +115,7 @@ const personnelBodySchema = z.object({
   phone: z.string().optional(),
   employmentStatus: z.string().optional(),
   salaryType: z.enum(['none', 'piecework', 'monthly_fixed', 'mixed']).optional(),
-  monthlySalary: z.union([z.number(), z.string()]).optional(),
+  monthlySalary: monthlySalaryInput.optional(),
   jobTitle: z.string().optional(),
   education: z.string().optional(),
   endDate: z.string().optional(),
@@ -504,7 +512,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
           phone: normalizePhoneNumber(phone),
           employmentStatus,
           salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-          monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
+          monthlySalary: money(monthlySalary ?? 0),
           jobTitle: jobTitle.trim(),
           education: education.trim(),
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),
@@ -633,7 +641,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
           employmentStatus,
           // V10-4.4: مدل حقوق ثابت/ترکیبی
           salaryType: salaryType && ['none', 'piecework', 'monthly_fixed', 'mixed'].includes(String(salaryType)) ? String(salaryType) : 'none',
-          monthlySalary: monthlySalary !== undefined ? moneyOr(monthlySalary, 0) : money(0),
+          monthlySalary: money(monthlySalary ?? 0),
           jobTitle: jobTitle ? jobTitle.trim() : '',
           education: education ? education.trim() : '',
           endDate: requireStorageDate(endDate, 'تاریخ پایان همکاری'),

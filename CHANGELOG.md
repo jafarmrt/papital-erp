@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.27 — Personnel Monthly Salary Validated
+- **Personnel Salary:** The monthly salary on the personnel form now rejects text and negative values instead of saving 0 or a negative salary; Persian digits and thousands separators are accepted (TD-438, `reg_personnel_salary_decimal_input_td_438`).
+
 ### v9.0.26 — Personnel Audit Rows Carry Before and After
 - **Personnel Audit:** Creating, editing, deleting and importing personnel now records the changed values (before/after) and the user's IP in the activity log, one row per person; the Nobitex password is never logged (TD-437, `reg_personnel_audit_snapshot_td_437`).
 
