@@ -262,7 +262,7 @@ export async function createApp(): Promise<express.Express> {
   activeLoginLimiter = loginLimiter;
 
   app.use('/api', generalLimiter);
-  // v9.0.62 (TD-528): ورود، خروج و راه‌اندازی فقط از مبدأ خود سامانه (این سه از CSRF معاف‌اند)
+  // v9.0.71 (TD-528): ورود، خروج و راه‌اندازی فقط از مبدأ خود سامانه (این سه از CSRF معاف‌اند)
   app.use('/api', sessionEndpointOriginGuard);
   app.use('/api', csrfProtection);
   app.post(['/api/login', '/api/auth/login'], loginLimiter);

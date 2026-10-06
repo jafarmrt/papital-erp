@@ -1,5 +1,5 @@
 /**
- * v9.0.58 (TD-517, B02-02): the new-user form preselects no role. It used to take the first role of `GET /roles`
+ * v9.0.67 (TD-517, B02-02): the new-user form preselects no role. It used to take the first role of `GET /roles`
  * (the system admin, seeded first), so a manager who filled only the username and password created a system admin.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

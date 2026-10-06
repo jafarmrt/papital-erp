@@ -19,25 +19,25 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
-### v9.0.63 — Persian Validation Messages
+### v9.0.72 — Persian Validation Messages
 - **Validation Messages:** every 400 validation message is a Persian sentence naming the field and what to change, with Persian digits; schema-written messages are kept (TD-529, `persianValidationMessages.test.ts`).
 
-### v9.0.62 — Login and Logout Only From the Application Itself
+### v9.0.71 — Login and Logout Only From the Application Itself
 - **Session Endpoints:** login, logout and setup accept only the application's own origin, and logout of a valid session needs its CSRF header, so a forged form on another site can no longer log a user out or into another account (TD-528, `sec_session_endpoints_same_origin_td_528`).
 
-### v9.0.61 — Test-Prefixed Usernames Are Refused and Listed
+### v9.0.70 — Test-Prefixed Usernames Are Refused and Listed
 - **Synthetic Usernames:** `POST /users` and `/setup` refuse usernames starting with `test_`, `e2e_` or `testuser_` (422); user lists show every active user and the financial health check lists existing ones (TD-521, `sec_synthetic_username_refused_td_521`).
 
-### v9.0.60 — Last System Admin Keeps the Admin Role
+### v9.0.69 — Last System Admin Keeps the Admin Role
 - **Last Admin:** editing a user can no longer move the last active system admin out of the admin role (409); edits and deletes of users run under one admin-set lock, so two concurrent changes cannot both remove an admin (TD-524, `sec_last_admin_role_change_td_524`).
 
-### v9.0.59 — Session End Clears the Browser Cache
+### v9.0.68 — Session End Clears the Browser Cache
 - **Session Cache:** logout and a 401 clear the React Query cache, so the next user of the same browser never sees the previous user's cached data (TD-518, `sessionCacheClear.test.tsx`).
 
-### v9.0.58 — New-User Form Preselects No Role
+### v9.0.67 — New-User Form Preselects No Role
 - **New-User Role:** the new-user form opens with an empty «choose a role» option and sends nothing until a role is picked; the system admin is listed last with a full-access warning (TD-517, `userFormRole.test.tsx`).
 
-### v9.0.57 — Package 2 Access and Audit Log Documentation
+### v9.0.66 — Package 2 Access and Audit Log Documentation
 - **Stability Audit, Package 2 (Authentication, Access and Audit Log):** `docs/audit/STABILITY_AUDIT_V9.md` gets the package 2 section with the approved permission model; its 27 proven findings are registered as open rows TD-516 to TD-542 (four P1: role codes in route guards, the new-user form preselecting the system admin, the browser cache surviving logout, and a deleted username reviving the old account). Documentation only; no behaviour change.
 
 ### v9.0.56 — Changing the Stock-Count Warehouse Clears the Counts

@@ -603,7 +603,7 @@ router.post('/users', authorizePermission('users.manage'), validate(userCreateSc
       return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
     }
     const tUsername = (username || '').trim();
-    // v9.0.61 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
+    // v9.0.70 (TD-521): پیشوند کاربران آزمون رد می‌شود؛ چنین کاربری پیش‌تر در فهرست‌ها پنهان می‌ماند
     if (isSyntheticTestUsername(tUsername)) {
       throw new ValidationError(SYNTHETIC_USERNAME_REFUSED);
     }
@@ -719,7 +719,7 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
     const passwordChanged = Boolean(password && password.trim());
     const passwordHash = passwordChanged ? await bcrypt.hash(password, await bcrypt.genSalt(10)) : null;
 
-    // v9.0.60 (TD-524): ویرایش زیر قفل مجموعه مدیران و قفل ردیف کاربر؛ آخرین مدیر سیستم از نقش خود بیرون نمی‌رود
+    // v9.0.69 (TD-524): ویرایش زیر قفل مجموعه مدیران و قفل ردیف کاربر؛ آخرین مدیر سیستم از نقش خود بیرون نمی‌رود
     await orm.transaction(async (tx) => {
       await lockSystemAdminSet(tx);
       const [prevUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
@@ -815,7 +815,7 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
     let deletedUserInfo: { fullName: string | null; username: string; role: string } | undefined = undefined;
 
     await orm.transaction(async (tx) => {
-      // v9.0.60 (TD-524): همان قفل مجموعه مدیران ویرایش، پیش از قفل ردیف
+      // v9.0.69 (TD-524): همان قفل مجموعه مدیران ویرایش، پیش از قفل ردیف
       await lockSystemAdminSet(tx);
       const [delUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
       if (!delUser || delUser.isDeleted === 1) {
