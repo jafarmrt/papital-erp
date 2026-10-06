@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { personnel, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -18,6 +18,7 @@ import { encryptSecret, decryptSecret } from '../lib/secretBox.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
 import { PERSONNEL_IMPORT_DEFAULTS, parseEmploymentStatusCell, parseGenderCell, parseNationalityCell } from '../lib/personnel/personnelImportCells.js';
+import { assertPersonnelCodeAvailable, guardPersonnelCode, isPersonnelCodeUniqueViolation, personnelCodeKey, personnelCodeTakenMessage } from '../services/personnel/personnelCode.js';
 import { guardPersonnelUserLink, parsePersonnelUserId, resolvePersonnelUserLink } from '../services/personnel/personnelUserLink.js';
 import { matchesPersonnelSearch, personnelReadScope, scopePersonnelRow, withoutNobitexPassword } from '../services/personnel/personnelFieldScope.js';
 
@@ -230,9 +231,9 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
 
     const codeMap = new Map<string, typeof personnel.$inferSelect>();
     existingPersonnel.forEach((p) => {
-      if (p.personnelCode && p.personnelCode.trim()) {
-        codeMap.set(p.personnelCode.trim(), p);
-      }
+      // v9.0.28 (TD-439): کد با همان کلید یکتایی (بی حساسیت به حروف و فاصله)؛ با تکرار قدیمی نخستین پرسنل می‌ماند
+      const key = personnelCodeKey(p.personnelCode);
+      if (key && !codeMap.has(key)) codeMap.set(key, p);
     });
 
     const nowIso = new Date().toISOString();
@@ -277,7 +278,7 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
         const notes = String(item.notes || '').trim();
 
         // Check if existing by personnelCode
-        const existing = personnelCode ? codeMap.get(personnelCode) : null;
+        const existing = personnelCode ? codeMap.get(personnelCodeKey(personnelCode)) : null;
 
         if (existing) {
           if (updateIfExists) {
@@ -315,7 +316,7 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
               description: `به‌روزرسانی پرسنل «${updated.fullName}» از ورود اکسل (ردیف ${rowIndex})`,
               details: personnelAuditChanges(existing, updated)
             });
-            codeMap.set(personnelCode, updated);
+            codeMap.set(personnelCodeKey(personnelCode), updated);
             updatedCount++;
           } else {
             errors.push({
@@ -361,14 +362,16 @@ router.post('/personnel/bulk-import', authorize('admin', 'manager', 'personnel.m
             details: { after: personnelAuditSnapshot(newRecord) }
           });
           if (personnelCode) {
-            codeMap.set(personnelCode, newRecord);
+            codeMap.set(personnelCodeKey(personnelCode), newRecord);
           }
           createdCount++;
         }
       } catch (rowErr) {
         errors.push({
           row: rowIndex,
-          message: rowErr instanceof Error ? rowErr.message : (typeof rowErr === 'string' ? rowErr : 'خطا در ثبت ردیف')
+          message: isPersonnelCodeUniqueViolation(rowErr)
+            ? personnelCodeTakenMessage(String(item.personnelCode ?? ''))
+            : rowErr instanceof Error ? rowErr.message : (typeof rowErr === 'string' ? rowErr : 'خطا در ثبت ردیف')
         });
       }
     }
@@ -481,21 +484,12 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
       ? reqFullName.trim() 
       : `${firstName} ${lastName}`.trim() || 'بدون نام';
 
-    // Uniqueness check for personnelCode if provided
-    if (personnelCode.trim()) {
-      const [existing] = await orm
-        .select()
-        .from(personnel)
-        .where(and(eq(personnel.personnelCode, personnelCode.trim()), eq(personnel.isDeleted, 0)));
-      if (existing) {
-        return res.status(400).json({ error: `کد پرسنلی «${personnelCode}» قبلاً برای پرسنل دیگری ثبت شده است.` });
-      }
-    }
-
     const nowIso = new Date().toISOString();
 
     // v9.0.24 (TD-435): کاربر متصل زیر قفل ردیف کاربر سنجیده می‌شود (ناموجود ۴۲۲، وصل به پرسنل فعال دیگر ۴۰۹)
-    const inserted = await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+    // v9.0.28 (TD-439): کد پرسنلی با کلید lower(btrim) میان پرسنل فعال یکتاست؛ نقض ایندکس 0054 همان پیام فارسی ۴۰۰ است
+    const inserted = await guardPersonnelCode(personnelCode, () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+      await assertPersonnelCodeAvailable(personnelCode, tx);
       const linkedUserId = await resolvePersonnelUserLink(tx, userId);
       const [row] = await tx
         .insert(personnel)
@@ -545,7 +539,7 @@ router.post('/personnel', authorize('admin', 'manager', 'personnel.manage'), val
         tx
       });
       return row;
-    }));
+    })));
 
     res.status(201).json(openPersonnelSecret(inserted));
   } catch (err) {
@@ -603,26 +597,13 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
       ? reqFullName.trim() 
       : `${firstName} ${lastName}`.trim() || existing.fullName;
 
-    // Check code uniqueness if changed
-    if (personnelCode && personnelCode.trim() !== existing.personnelCode) {
-      const [other] = await orm
-        .select()
-        .from(personnel)
-        .where(and(
-          eq(personnel.personnelCode, personnelCode.trim()),
-          eq(personnel.isDeleted, 0),
-          sql`${personnel.id} != ${id}`
-        ));
-      if (other) {
-        return res.status(400).json({ error: `کد پرسنلی «${personnelCode}» قبلاً برای پرسنل دیگری ثبت شده است.` });
-      }
-    }
-
     const nowIso = new Date().toISOString();
     const nextNobitex = await nextNobitexPassword(nobitexPassword, existing, req.user);
 
     // v9.0.24 (TD-435): پیوند تازه یا عوض‌شده کاربر زیر قفل ردیف کاربر سنجیده می‌شود؛ پیوند فعلی دست نمی‌خورد
-    await guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+    const codeChanged = personnelCodeKey(personnelCode) !== personnelCodeKey(existing.personnelCode);
+    await guardPersonnelCode(personnelCode ?? '', () => guardPersonnelUserLink(() => orm.transaction(async (tx) => {
+      if (codeChanged) await assertPersonnelCodeAvailable(personnelCode ?? '', tx, id);
       const requestedUserId = parsePersonnelUserId(userId);
       const linkedUserId = requestedUserId === existing.userId ? requestedUserId : await resolvePersonnelUserLink(tx, requestedUserId, id);
       const [updated] = await tx
@@ -673,7 +654,7 @@ router.put('/personnel/:id', authorize('admin', 'manager', 'personnel.manage'), 
         req,
         tx
       });
-    }));
+    })));
 
     res.json({ status: 'ok', message: 'اطلاعات پرسنل با موفقیت ویرایش شد' });
   } catch (err) {

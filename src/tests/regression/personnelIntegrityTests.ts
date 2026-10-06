@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
 import { activityLogs, personnel } from '../../db/schema.js';
@@ -185,6 +185,75 @@ export async function runPersonnelIntegrityTests(shouldRun: ShouldRun): Promise<
       }
       if (wrong.length > 0) throw new Error(wrong.join('؛ '));
       return 'متن و منفی در ثبت و ویرایش ۴۰۰ بی تغییر؛ ارقام فارسی ۴۵٬۰۰۰٬۰۰۰ پذیرفته؛ خانه خالی صفر؛ نیامدن فیلد حقوق را نگه داشت';
+    });
+  }
+
+  const codeId = 'reg_personnel_code_unique_td_439';
+  if (shouldRun(codeId, 'td439', 'personnel', 'code', 'concurrency', 'package12')) {
+    await runCase(results, codeId, 'v9.0.28: کد پرسنلی میان پرسنل فعال یکتاست (بی حساسیت به حروف و فاصله)، با ایندکس یکتای جزئی؛ ثبت هم‌زمان یک پرسنل می‌سازد و تکرار قدیمی را بازرس سلامت می‌یابد (TD-439)', async (ids) => {
+      const { send } = await adminClient();
+      const tag = tagOf();
+      const code = `PC-${tag}`;
+      const wrong: string[] = [];
+      const activeWithCode = async () => (await orm.select({ id: personnel.id }).from(personnel)
+        .where(and(sql`lower(btrim(${personnel.personnelCode})) = ${code.toLowerCase()}::text`, eq(personnel.isDeleted, 0)))).map(r => r.id);
+
+      // ۱) پنج ثبت هم‌زمان با یک کد (با تفاوت حروف و فاصله): فقط یکی ۲۰۱
+      const variants = [code, code.toLowerCase(), ` ${code} `, code, `${code.toLowerCase()} `];
+      const burst = await Promise.all(variants.map((c, i) => send('post', '/api/personnel', { firstName: 'هم‌زمان', lastName: `${tag} ${i}`, personnelCode: c })));
+      const made = await activeWithCode();
+      ids.push(...made);
+      const statuses = burst.map(r => r.status).sort().join(',');
+      if (made.length !== 1 || statuses !== '201,400,400,400,400') wrong.push(`ثبت هم‌زمان ${made.length} پرسنل فعال با یک کد ساخت (وضعیت‌ها ${statuses})`);
+      if (burst.some(r => r.status === 400 && !String(r.body?.error ?? '').includes('کد پرسنلی'))) wrong.push(`پیام تکرار فارسی نیست: ${JSON.stringify(burst.find(r => r.status === 400)?.body).slice(0, 120)}`);
+
+      // ۲) ویرایش پرسنل دیگر به همین کد با حروف کوچک رد می‌شود
+      const other = await send('post', '/api/personnel', { firstName: 'دیگر', lastName: tag, personnelCode: `${code}-B` });
+      if (other.status === 201) ids.push(Number(other.body.id));
+      const put = await send('put', `/api/personnel/${other.body.id}`, { firstName: 'دیگر', lastName: tag, personnelCode: ` ${code.toLowerCase()}` });
+      if (put.status !== 400) wrong.push(`ویرایش به کد تکراری ${put.status} داد`);
+
+      // ۳) ورود اکسل همان کد را با حروف دیگر پرسنل موجود می‌شناسد، نه پرسنل تازه
+      const imp = await send('post', '/api/personnel/bulk-import', { rows: [{ personnelCode: ` ${code.toLowerCase()} `, firstName: 'هم‌زمان', phone: '09131234567' }] });
+      const afterImport = await activeWithCode();
+      ids.push(...afterImport.filter(x => !ids.includes(x)));
+      if (imp.status !== 200 || imp.body?.createdCount !== 0 || imp.body?.updatedCount !== 1 || afterImport.length !== 1) {
+        wrong.push(`ورود اکسل با کد ${JSON.stringify(imp.body).slice(0, 120)} و ${afterImport.length} پرسنل فعال`);
+      }
+
+      // ۴) کد پرسنل حذف‌شده دوباره قابل استفاده است
+      if (made[0]) {
+        await send('delete', `/api/personnel/${made[0]}`);
+        const reuse = await send('post', '/api/personnel', { firstName: 'جانشین', lastName: tag, personnelCode: code });
+        if (reuse.status === 201) ids.push(Number(reuse.body.id));
+        if (reuse.status !== 201) wrong.push(`کد پرسنل حذف‌شده ${reuse.status} داد`);
+      }
+
+      // ۵) تکرار قدیمی (پایگاه‌داده‌ای که مهاجرت 0054 ایندکس را نساخت) در بازرس سلامت
+      try {
+        await orm.transaction(async (tx) => {
+          await tx.execute(sql`DROP INDEX IF EXISTS uq_personnel_code_active`);
+          const [dup] = await tx.insert(personnel).values({ fullName: `کد تکراری قدیمی ${tag}`, personnelCode: code.toLowerCase() }).returning({ id: personnel.id });
+          const { findDuplicatePersonnelCodes, buildPersonnelCodeHealthTest } = await import('../../services/personnel/personnelCode.js');
+          const dups = await findDuplicatePersonnelCodes(tx);
+          const health = buildPersonnelCodeHealthTest(dups, false);
+          if (!dups.some(r => r.id === dup.id) || health.status !== 'warning' || health.count < 1) wrong.push(`بازرس سلامت کد تکراری را نیافت ${JSON.stringify({ n: dups.length, status: health.status })}`);
+          tx.rollback();
+        }).catch((err: unknown) => {
+          if (!(err instanceof Error && err.message.toLowerCase().includes('rollback'))) throw err;
+        });
+      } catch (err) {
+        wrong.push(`کد تکراری قدیمی: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      // ۶) بازرس سلامت روی داده تمیز: قید در پایگاه‌داده هست
+      const { FinancialHealthService } = await import('../../services/accounting/financialHealth.service.js');
+      const report = await FinancialHealthService.runHealthCheck();
+      const check = report.tests.find(t => t.id === 'personnel_code_uniqueness');
+      if (!check || check.metrics?.uniqueIndexPresent !== 1) wrong.push(`آزمون سلامت کد پرسنلی ${JSON.stringify(check?.metrics ?? null)}`);
+
+      if (wrong.length > 0) throw new Error(wrong.join('؛ '));
+      return 'پنج ثبت هم‌زمان یک پرسنل (چهار ۴۰۰ فارسی)؛ ویرایش به کد تکراری ۴۰۰؛ ورود اکسل کد با حروف دیگر را به‌روزرسانی کرد؛ کد پرسنل حذف‌شده آزاد؛ تکرار قدیمی در بازرس سلامت';
     });
   }
 

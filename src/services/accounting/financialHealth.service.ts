@@ -7,6 +7,7 @@ import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
+import { buildPersonnelCodeHealthTest, findDuplicatePersonnelCodes, hasPersonnelCodeUniqueIndex } from '../personnel/personnelCode.js';
 import { buildPersonnelUserLinkHealthTest, findDuplicatePersonnelUserLinks, hasPersonnelUserUniqueIndex } from '../personnel/personnelUserLink.js';
 import {
   findDuplicatePieceworkTaskCodes,
@@ -1049,6 +1050,12 @@ export class FinancialHealthService {
     const personnelUserLinkTest = buildPersonnelUserLinkHealthTest(duplicateUserLinks, personnelUserIndexPresent);
     overallScore += personnelUserLinkTest.scoreImpact;
     tests.push(personnelUserLinkTest);
+
+    // آزمون ۱۶: v9.0.28 (TD-439) یکتایی کد پرسنلی پرسنل فعال (مهاجرت 0054)
+    const [duplicatePersonnelCodes, personnelCodeIndexPresent] = await Promise.all([findDuplicatePersonnelCodes(), hasPersonnelCodeUniqueIndex()]);
+    const personnelCodeTest = buildPersonnelCodeHealthTest(duplicatePersonnelCodes, personnelCodeIndexPresent);
+    overallScore += personnelCodeTest.scoreImpact;
+    tests.push(personnelCodeTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
