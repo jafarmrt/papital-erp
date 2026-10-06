@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.46 — node_modules No Longer Tracked by Git
+- **Deployment:** the `node_modules` symlink committed in v9.0.25 is removed, `.gitignore` uses `/node_modules` (also matches a symlink), and `update.sh` untracks a leftover symlink entry before `git pull`; servers on v9.0.25+ run `git rm -q --cached node_modules` once before updating (TD-472, B01-03, `node_modules_never_tracked_td_472`).
+
 ### v9.0.45 — CI Actions on Node 24 and a Pinned Ubuntu Runner
 - **CI Maintenance:** `actions/checkout`, `actions/setup-node` and `actions/upload-artifact` move from v4 (Node 20) to v7 (Node 24) and every job runs on `ubuntu-24.04` instead of the moving `ubuntu-latest` label (TD-471, `ci_actions_node24_runner_pinned_td_471`).
 
