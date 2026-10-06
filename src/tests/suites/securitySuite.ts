@@ -1389,6 +1389,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۴، PR ب (از v9.0.39، TD-446 به بعد): چرخه عمر فرایند و کارتابل
   const { runWorkflowLifecycleTests } = await import('../security/workflowLifecycleTests.js');
   results.push(...await runWorkflowLifecycleTests(shouldRunAccess));
+  // بسته ۱۴، PR ج (از v9.0.45، TD-452 به بعد): طراح، قاعده‌ها و پایگاه‌داده
+  const { runWorkflowDesignerTests } = await import('../security/workflowDesignerTests.js');
+  results.push(...await runWorkflowDesignerTests(shouldRunAccess));
 
   return results;
 }
