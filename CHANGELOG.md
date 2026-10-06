@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.41 — Approval Inbox Tabs Show Their Own Tasks
+- **Inbox Tabs:** `GET /workflow/tasks/my-tasks` serves pending, overdue (`due_at < now()` in SQL), delegated and completed (the user's own actions from history, paginated in SQL); `/tasks/stats` counts each with the same rule; status, page and limit are validated (TD-448, `sec_workflow_inbox_tabs_td_448`).
+
 ### v9.0.40 — Voiding or Deleting an Entity Closes Its Workflow
 - **Workflow Closes on Void:** voiding a document or deleting a draft voucher, item, bank account or purchase requisition terminates its running workflow in the same transaction (tasks canceled, one history row); migration 0058 closes the open workflows of entities deleted earlier (TD-447, `sec_workflow_void_closes_instance_td_447`).
 

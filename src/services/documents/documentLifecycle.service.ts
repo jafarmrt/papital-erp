@@ -363,10 +363,7 @@ export class DocumentLifecycleService {
       }).where(eq(documents.id, id));
 
       // v9.0.40 (TD-447، ت۵): فرایند تأیید در جریان سند در همان تراکنش ابطال بسته می‌شود (سند پیش از نمونه قفل شده است)
-      await terminateOpenWorkflows(tx, {
-        entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند',
-        comment: 'ابطال سند', userName: deletedByUser,
-      });
+      await terminateOpenWorkflows(tx, { entityType: 'document', entityId: id, actionKey: 'terminate', actionTitle: 'بستن فرایند با ابطال سند', comment: 'ابطال سند', userName: deletedByUser });
 
       // 2. Cascade soft-delete document_items
       await tx.update(documentItems).set({

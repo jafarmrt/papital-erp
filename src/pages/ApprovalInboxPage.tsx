@@ -64,6 +64,8 @@ interface TaskItem {
   delegatedToId?: number;
   isDelegated?: boolean;
   dueAt?: string;
+  /** v9.0.41 (TD-448): تأخیر از زمان پایگاه‌داده */
+  isOverdue?: boolean;
   createdAt: string;
   completedAt?: string;
   instance?: WorkflowInstance;
@@ -374,11 +376,6 @@ export function ApprovalInboxPage() {
     }
   };
 
-  const isOverdue = (dueAt?: string) => {
-    if (!dueAt) return false;
-    return new Date(dueAt).getTime() < new Date().getTime();
-  };
-
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Page Header */}
@@ -589,7 +586,7 @@ export function ApprovalInboxPage() {
               {filteredTasks.map((t) => {
                 const typeMeta = getEntityTypeLabel(t.instance?.entityType || 'document');
                 const TypeIcon = typeMeta.icon;
-                const overdue = isOverdue(t.dueAt);
+                const overdue = t.isOverdue === true;
                 const amount = t.entityContext?.amount || t.entityContext?.totalAmount;
                 const requesterName = t.instance?.startedByName || t.entityContext?.buyerName || t.entityContext?.createdByName || 'ثبت‌کننده سیستم';
                 const isCompletedTask = t.status === 'approved' || t.status === 'rejected' || t.status === 'completed';

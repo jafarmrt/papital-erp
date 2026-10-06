@@ -193,5 +193,79 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     });
   }
 
+  if (shouldRun('sec_workflow_inbox_tabs_td_448', 'security', 'td448', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_inbox_tabs_td_448',
+      name: 'v9.0.41: زبانه‌های «دارای تأخیر»، «دریافتی از تفویض» و «تکمیل‌شده» کارتابل داده دارند و آمار همان‌ها را می‌شمارد؛ تأخیر با زمان پایگاه‌داده (TD-448)',
+      details: 'کار با موعد یک ساعت بعد دارای تأخیر نیست و کار با موعد گذشته هست؛ جانشین کارهای تفویض‌شده را در زبانه خود می‌بیند؛ کار اجراشده در «تکمیل‌شده» می‌آید؛ وضعیت و صفحه نامعتبر ۴۰۰',
+    }, async (h, wrong) => {
+      const { createTestVoucher } = await import('../fixtures/factories.js');
+      const { businessTodayIsoDate } = await import('../../lib/businessClock.js');
+      const today = await businessTodayIsoDate();
+      const accountant = await h.sessionWith('accountant');
+      const deputy = await h.sessionWith(['workflow.view', 'workflow.approve']);
+      const startVoucherWorkflow = async () => {
+        const { voucher } = await createTestVoucher({ status: 'draft', date: today, totalDebit: 1000, totalCredit: 1000 } as never);
+        const res = await h.post('/api/workflow/start', { workflowCode: 'JOURNAL_VOUCHER_WORKFLOW', entityType: 'journal_voucher', entityId: voucher.id });
+        const id = Number(res.body?.data?.id);
+        if (!(id > 0)) throw new Error(`شروع گردش کار سند حسابداری ${res.status} داد`);
+        return id;
+      };
+      const soon = await startVoucherWorkflow();
+      const late = await startVoucherWorkflow();
+      await h.q(`UPDATE workflow_tasks SET due_at = now() + interval '1 hour' WHERE instance_id = $1 AND status = 'pending'`, [soon]);
+      await h.q(`UPDATE workflow_tasks SET due_at = now() - interval '1 hour' WHERE instance_id = $1 AND status = 'pending'`, [late]);
+
+      const tab = async (s: typeof accountant, status: string) => {
+        const res = await h.get(`/api/workflow/tasks/my-tasks?status=${status}&limit=1000`, s);
+        if (res.status !== 200) { wrong.push(`زبانه ${status}: ${res.status}`); return [] as Row[]; }
+        return Array.isArray(res.body?.data) ? (res.body.data as Row[]) : [];
+      };
+      const instanceIds = (rows: Row[]) => new Set(rows.map(r => Number(r.instanceId ?? (r.instance as Row | undefined)?.id)));
+
+      // ۱) تأخیر: فقط کار با موعد گذشته
+      const overdue = instanceIds(await tab(accountant, 'overdue'));
+      if (!overdue.has(late)) wrong.push('کار با موعد گذشته در زبانه «دارای تأخیر» نیامد');
+      if (overdue.has(soon)) wrong.push('کار با موعد یک ساعت بعد «دارای تأخیر» شمرده شد');
+      const pendingRows = await tab(accountant, 'pending');
+      const soonRow = pendingRows.find(r => Number(r.instanceId) === soon);
+      if (soonRow?.isOverdue !== false) wrong.push(`کار با موعد آینده isOverdue=${String(soonRow?.isOverdue)} گرفت`);
+      const stats1 = (await h.get('/api/workflow/tasks/stats', accountant)).body ?? {};
+      const statsOverdueBefore = Number(stats1.overdueCount);
+      await h.q(`UPDATE workflow_tasks SET due_at = now() - interval '2 hours' WHERE instance_id = $1 AND status = 'pending'`, [soon]);
+      const stats2 = (await h.get('/api/workflow/tasks/stats', accountant)).body ?? {};
+      if (Number(stats2.overdueCount) !== statsOverdueBefore + 1) wrong.push(`آمار تأخیر با گذشتن موعد یک کار ${statsOverdueBefore} ← ${String(stats2.overdueCount)} شد، نه یکی بیشتر`);
+      await h.q(`UPDATE workflow_tasks SET due_at = now() + interval '1 hour' WHERE instance_id = $1 AND status = 'pending'`, [soon]);
+
+      // ۲) تفویض: جانشین کارهای حسابدار را در زبانه «دریافتی از تفویض» می‌بیند
+      const start = new Date(Date.now() - 3600_000).toISOString();
+      const end = new Date(Date.now() + 86_400_000).toISOString();
+      const del = await h.post('/api/workflow/delegations', { toUserId: deputy.userId, scope: 'ALL', startDate: start, endDate: end, reason: 'آزمون ۴۴۸' }, accountant);
+      if (del.status !== 200) wrong.push(`ثبت تفویض ${del.status} داد: ${JSON.stringify(del.body).slice(0, 160)}`);
+      const delegated = instanceIds(await tab(deputy, 'delegated'));
+      if (!delegated.has(soon) || !delegated.has(late)) wrong.push('کارهای تفویض‌شده در زبانه «دریافتی از تفویض» جانشین نیامدند');
+      const ownDelegated = instanceIds(await tab(accountant, 'delegated'));
+      if (ownDelegated.has(soon)) wrong.push('کار خود حسابدار در زبانه «دریافتی از تفویض» او آمد');
+      const deputyStats = (await h.get('/api/workflow/tasks/stats', deputy)).body ?? {};
+      if (!(Number(deputyStats.delegatedCount) >= 2)) wrong.push(`آمار تفویض جانشین ${String(deputyStats.delegatedCount)} است`);
+
+      // ۳) تکمیل‌شده: کاری که حسابدار اجرا کرد
+      const soonTask = (await h.q(`SELECT id FROM workflow_tasks WHERE instance_id = $1 AND status = 'pending' ORDER BY id LIMIT 1`, [soon]))[0];
+      const exec = await h.post(`/api/workflow/tasks/${soonTask?.id}/execute`, { action: 'approve' }, accountant);
+      if (exec.status !== 200) wrong.push(`اجرای کار ${exec.status} داد: ${JSON.stringify(exec.body).slice(0, 160)}`);
+      const completed = await tab(accountant, 'completed');
+      if (!instanceIds(completed).has(soon)) wrong.push('کار اجراشده در زبانه «تکمیل‌شده» نیامد');
+      const statsAfter = (await h.get('/api/workflow/tasks/stats', accountant)).body ?? {};
+      if (!(Number(statsAfter.completedCount) >= 1)) wrong.push(`آمار تکمیل‌شده ${String(statsAfter.completedCount)} است`);
+      if (instanceIds(await tab(deputy, 'completed')).has(soon)) wrong.push('کار اجراشده حسابدار در «تکمیل‌شده» جانشین آمد');
+
+      // ۴) ورودی نادرست
+      for (const bad of [`status=${encodeURIComponent("x' OR 1=1")}`, 'page=-3', 'limit=0']) {
+        const res = await h.get(`/api/workflow/tasks/my-tasks?${bad}`, accountant);
+        if (res.status !== 400) wrong.push(`پرس‌وجوی «${bad}» ${res.status} داد، نه ۴۰۰`);
+      }
+    });
+  }
+
   return results;
 }
