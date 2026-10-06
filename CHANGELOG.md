@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.5 — Sales Leads No Longer Change an Existing Customer
+- **CRM ↔ Customer Master:** Creating, editing or converting a sales lead only links a customer (by id, then exact phone, then exact name) or creates a new one; it never rewrites an existing customer's name, phone or contact person, so the customer's optimistic lock and the `customers.manage` permission can no longer be bypassed. A differing phone or company name is noted once in the lead's notes (TD-418, package-9 finding B09-03).
+
 ### v9.0.4 — Party Account Card by Id
 - **Party Balance:** The customers page «تراز مالی» card and the customer dossier load the account card from `GET /customers/:id/account-card`, which selects customer and supplier voucher rows by the party's detailed id; legacy rows without an id match the current name exactly. A similarly named party is no longer added in, and renaming a party no longer empties its card (TD-416, package-9 finding B09-01).
 
