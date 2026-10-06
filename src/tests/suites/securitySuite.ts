@@ -1392,6 +1392,9 @@ export async function runSecurityTests(filter?: string): Promise<TestCaseResult[
   // بسته ۱۴، PR ج (از v9.0.45، TD-452 به بعد): طراح، قاعده‌ها و پایگاه‌داده
   const { runWorkflowDesignerTests } = await import('../security/workflowDesignerTests.js');
   results.push(...await runWorkflowDesignerTests(shouldRunAccess));
+  // بسته ۲ (از v9.0.57، TD-524 به بعد): کاربران، دسترسی و سجل
+  const { runAccessPackageTwoTests } = await import('../security/accessPackageTwoTests.js');
+  results.push(...await runAccessPackageTwoTests(shouldRunAccess));
 
   return results;
 }

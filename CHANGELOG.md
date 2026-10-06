@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.57 — Last System Admin Keeps the Admin Role
+- **Last Admin:** editing a user can no longer move the last active system admin out of the admin role (409); edits and deletes of users run under one admin-set lock, so two concurrent changes cannot both remove an admin (TD-524, `sec_last_admin_role_change_td_524`).
+
 ### v9.0.56 — Session End Clears the Browser Cache
 - **Session Cache:** logout and a 401 clear the React Query cache, so the next user of the same browser never sees the previous user's cached data (TD-518, `sessionCacheClear.test.tsx`).
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
 import { users, roles } from '../db/schema.js';
 import { authenticateToken, invalidateUserAuthCache } from '../middleware/auth.js';
@@ -9,7 +9,8 @@ import { authorizePermission, ROLE_CODE_PATTERN } from '../middleware/authorize.
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
 import { logActivity, computeAuditDiff } from '../lib/auditLogger.js';
-import { NotFoundError, ConflictError, ForbiddenError } from '../errors/customErrors.js';
+import { NotFoundError, ForbiddenError, BadRequestError } from '../errors/customErrors.js';
+import { lockSystemAdminSet, assertAnotherActiveAdmin, SYSTEM_ADMIN_ROLE } from '../services/users/lastAdminGuard.js';
 import { uploadBase64ToStorage } from '../lib/storage.js';
 import { invalidateRoleCache } from '../lib/memoryCache.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
@@ -711,66 +712,74 @@ router.put('/users/:id', authorizePermission('users.manage'), validate(userUpdat
   try {
     const { password, full_name, role } = req.body;
     const targetUserId = Number(req.params.id);
-
-    const [prevUser] = await orm.select().from(users).where(eq(users.id, targetUserId));
-    if (!prevUser || prevUser.isDeleted === 1) {
-      return res.status(404).json({ error: 'کاربر یافت نشد' });
-    }
-    if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
-      return res.status(403).json({ error: ONLY_ADMIN_MANAGES_ADMINS });
-    }
-
-    const tFullName = (full_name !== undefined && full_name !== null && String(full_name).trim())
-      ? String(full_name).trim()
-      : (prevUser.fullName || prevUser.username);
-
-    // اعتبارسنجی نقش
-    if (role && role !== 'admin') {
-      const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role)).limit(1);
-      if (!roleRecord) {
-        return res.status(400).json({ error: 'نقش انتخاب‌شده در سیستم معتبر نیست' });
-      }
-    }
-
-    const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
     const passwordChanged = Boolean(password && password.trim());
-    const roleChanged = Boolean(role && role !== prevUser.role);
+    const passwordHash = passwordChanged ? await bcrypt.hash(password, await bcrypt.genSalt(10)) : null;
 
-    if (passwordChanged) {
-      const salt = await bcrypt.genSalt(10);
-      updateData.password = await bcrypt.hash(password, salt);
-      updateData.mustResetPassword = 0;
-    }
-
-    // V9-2.2: تغییر نقش یا رمز عبور نشست‌های فعال کاربر هدف را باطل می‌کند (tokenVersion)
-    if (passwordChanged || roleChanged) {
-      updateData.tokenVersion = (prevUser.tokenVersion || 0) + 1;
-    }
-
-    await orm.update(users).set(updateData).where(eq(users.id, targetUserId));
-    invalidateUserAuthCache(targetUserId);
-
-    const { diff, hasChanges } = computeAuditDiff(
-      { fullName: prevUser.fullName, role: prevUser.role },
-      { fullName: tFullName, role: role }
-    );
-
-    await logActivity({
-      req,
-      action: 'UPDATE',
-      entity: 'کاربران سیستم',
-      entityId: targetUserId,
-      description: `ویرایش مشخصات کاربر شناسه #${targetUserId} (${prevUser.username})${passwordChanged ? ' (شامل بازنشانی کلمه عبور)' : ''}`,
-      details: {
-        userId: targetUserId,
-        username: prevUser.username,
-        before: { fullName: prevUser.fullName, role: prevUser.role },
-        after: { fullName: tFullName, role: role },
-        changes: diff,
-        hasChanges,
-        passwordChanged
+    // v9.0.57 (TD-524): ویرایش زیر قفل مجموعه مدیران و قفل ردیف کاربر؛ آخرین مدیر سیستم از نقش خود بیرون نمی‌رود
+    await orm.transaction(async (tx) => {
+      await lockSystemAdminSet(tx);
+      const [prevUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
+      if (!prevUser || prevUser.isDeleted === 1) {
+        throw new NotFoundError('کاربر یافت نشد');
       }
+      if (touchesAdminAccount(req.user?.role, [prevUser.role, role])) {
+        throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
+      }
+
+      // اعتبارسنجی نقش
+      if (role && role !== SYSTEM_ADMIN_ROLE) {
+        const [roleRecord] = await tx.select().from(roles).where(eq(roles.code, role)).limit(1);
+        if (!roleRecord) {
+          throw new BadRequestError('نقش انتخاب‌شده در سیستم معتبر نیست');
+        }
+      }
+
+      const roleChanged = Boolean(role && role !== prevUser.role);
+      if (roleChanged && prevUser.role === SYSTEM_ADMIN_ROLE) {
+        await assertAnotherActiveAdmin(tx, targetUserId, 'demote');
+      }
+
+      const tFullName = (full_name !== undefined && full_name !== null && String(full_name).trim())
+        ? String(full_name).trim()
+        : (prevUser.fullName || prevUser.username);
+
+      const updateData: Partial<typeof users.$inferInsert> = { fullName: tFullName, role };
+      if (passwordHash) {
+        updateData.password = passwordHash;
+        updateData.mustResetPassword = 0;
+      }
+
+      // V9-2.2: تغییر نقش یا رمز عبور نشست‌های فعال کاربر هدف را باطل می‌کند (tokenVersion)
+      if (passwordChanged || roleChanged) {
+        updateData.tokenVersion = (prevUser.tokenVersion || 0) + 1;
+      }
+
+      await tx.update(users).set(updateData).where(eq(users.id, targetUserId));
+
+      const { diff, hasChanges } = computeAuditDiff(
+        { fullName: prevUser.fullName, role: prevUser.role },
+        { fullName: tFullName, role: role }
+      );
+
+      await logActivity({
+        req,
+        tx,
+        action: 'UPDATE',
+        entity: 'کاربران سیستم',
+        entityId: targetUserId,
+        description: `ویرایش مشخصات کاربر شناسه #${targetUserId} (${prevUser.username})${passwordChanged ? ' (شامل بازنشانی کلمه عبور)' : ''}`,
+        details: {
+          userId: targetUserId,
+          username: prevUser.username,
+          before: { fullName: prevUser.fullName, role: prevUser.role },
+          after: { fullName: tFullName, role: role },
+          changes: diff,
+          hasChanges,
+          passwordChanged
+        }
+      });
     });
+    invalidateUserAuthCache(targetUserId);
 
     res.json({ success: true });
   } catch (err: any) {
@@ -802,6 +811,8 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
     let deletedUserInfo: { fullName: string | null; username: string; role: string } | undefined = undefined;
 
     await orm.transaction(async (tx) => {
+      // v9.0.57 (TD-524): همان قفل مجموعه مدیران ویرایش، پیش از قفل ردیف
+      await lockSystemAdminSet(tx);
       const [delUser] = await tx.select().from(users).where(eq(users.id, targetUserId)).for('update');
       if (!delUser || delUser.isDeleted === 1) {
         throw new NotFoundError('کاربر یافت نشد');
@@ -810,16 +821,9 @@ router.delete('/users/:id', authorizePermission('users.manage'), validate(userPa
         throw new ForbiddenError(ONLY_ADMIN_MANAGES_ADMINS);
       }
 
-      // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه) — با قفل سطری ردیف‌های ادمین‌ها
-      if (delUser.role === 'admin') {
-        const adminRows = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.role, 'admin'), eq(users.isDeleted, 0)))
-          .for('update');
-        if (adminRows.length <= 1) {
-          throw new ConflictError('آخرین مدیر سیستم قابل حذف نیست؛ ابتدا باید مدیر دیگری تعریف شود.');
-        }
+      // ممنوعیت حذف آخرین مدیر فعال سیستم (قفل‌شدن سامانه)
+      if (delUser.role === SYSTEM_ADMIN_ROLE) {
+        await assertAnotherActiveAdmin(tx, targetUserId, 'delete');
       }
 
       // Soft-Delete + ابطال فوری تمام نشست‌های فعال (افزایش tokenVersion)
