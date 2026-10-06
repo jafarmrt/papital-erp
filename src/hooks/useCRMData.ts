@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, FormEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchJson, isAbortError } from '../api';
 import { CRMLead, CRMActivity } from '../types';
@@ -417,6 +417,7 @@ export function useCRMData(user: any) {
     }
   };
 
+  const reopeningFollowupIds = useRef(new Set<number>());
   const handleToggleFollowup = async (actInput: number | CRMActivity) => {
     const act = typeof actInput === 'number'
       ? activities.find((a) => a.id === actInput) || drawerActivities.find((a) => a.id === actInput)
@@ -432,13 +433,18 @@ export function useCRMData(user: any) {
       });
       setIsFollowupResultModalOpen(true);
     } else {
+      // v9.0.19 (TD-430): «بازگشایی» عمل صریح است و تا پاسخ درخواست قبلی همان پیگیری دوباره فرستاده نمی‌شود
+      if (reopeningFollowupIds.current.has(act.id)) return;
+      reopeningFollowupIds.current.add(act.id);
       try {
-        await fetchJson(`/crm/activities/${act.id}/toggle-followup`, { method: 'PUT' });
-        toast.success('وضعیت پیگیری به حالت معوق تغییر کرد');
+        await fetchJson(`/crm/activities/${act.id}/reopen-followup`, { method: 'PUT' });
+        toast.success('پیگیری دوباره باز شد');
         void loadAllData();
         if (selectedLeadDrawer) void openLeadDrawer(selectedLeadDrawer);
       } catch (err) {
-        toast.error('خطا در به‌روزرسانی پیگیری');
+        toast.error(errorMessageOf(err) || 'خطا در بازگشایی پیگیری');
+      } finally {
+        reopeningFollowupIds.current.delete(act.id);
       }
     }
   };
@@ -449,7 +455,7 @@ export function useCRMData(user: any) {
 
     setIsSubmittingFollowupResult(true);
     try {
-      await fetchJson(`/crm/activities/${selectedFollowupAct.id}/toggle-followup`, {
+      await fetchJson(`/crm/activities/${selectedFollowupAct.id}/complete-followup`, {
         method: 'PUT',
         body: JSON.stringify({
           result: followupResultForm.result,

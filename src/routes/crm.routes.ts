@@ -21,6 +21,7 @@ import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/
 import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
+import { setFollowupCompleted } from '../services/crm/crmFollowupStatus.js';
 import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
@@ -99,10 +100,10 @@ const createCrmActivitySchema = z.object({
   })
 });
 
-const toggleFollowupSchema = z.object({
+const followupActionSchema = z.object({
   body: z.object({
-    result: z.string().optional(),
-    resultNote: z.string().optional()
+    result: z.string().max(500).optional(),
+    resultNote: z.string().max(2000).optional()
   }).optional(),
   params: z.object({
     id: numericIdString
@@ -923,36 +924,38 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   res.status(201).json(formatActivity(newAct));
 }));
 
-// PUT /api/crm/activities/:id/toggle-followup
-router.put('/crm/activities/:id/toggle-followup', authorizePermission('crm.manage'), validate(toggleFollowupSchema), asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { result, resultNote } = req.body || {};
-  const [act] = await orm.select().from(crmActivities).where(and(eq(crmActivities.id, id), eq(crmActivities.isDeleted, 0)));
+// v9.0.19 (TD-430): «انجام» و «بازگشایی» پیگیری دو عمل صریح با وضعیت هدف (`setFollowupCompleted`، زیر قفل ردیف اقدام)؛
+// تکرار درخواست چیزی را عوض نمی‌کند و هر تغییر یک لاگ ممیزی با «قبل و بعد» در همان تراکنش دارد. کلید دوطرفه
+// `toggle-followup` حذف شد: دو درخواست پشت‌سرهم پیگیری انجام‌شده را دوباره باز می‌کرد و ممیزی نداشت.
+function followupStatusHandler(completed: boolean) {
+  return asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { result, resultNote } = req.body || {};
+    const currentUser = req.user;
+    const change = await orm.transaction(async (tx) => {
+      const outcome = await setFollowupCompleted(tx, id, completed, { result, resultNote });
+      if (outcome.changed) {
+        const pick = (a: typeof outcome.before) => ({ isFollowUpCompleted: a.isFollowUpCompleted, result: a.result, description: a.description });
+        await logActivity({
+          userId: currentUser?.id,
+          username: currentUser?.username || 'user',
+          userFullName: currentUser?.full_name || currentUser?.username || '',
+          action: 'UPDATE',
+          entity: 'اقدام و تماس CRM',
+          entityId: String(id),
+          description: `${completed ? 'انجام' : 'بازگشایی'} پیگیری «${outcome.after.nextFollowUpTask || outcome.after.title}»`,
+          details: { before: pick(outcome.before), after: pick(outcome.after) },
+          ipAddress: req.ip || '',
+          tx,
+        });
+      }
+      return outcome;
+    });
+    res.json({ ...formatActivity(change.after), changed: change.changed });
+  });
+}
 
-  if (!act) {
-    throw new NotFoundError('اقدام یافت نشد');
-  }
-
-  const newCompleted = act.isFollowUpCompleted === 1 ? 0 : 1;
-  const updateData: Partial<typeof crmActivities.$inferInsert> = { isFollowUpCompleted: newCompleted };
-
-  if (result && typeof result === 'string' && result.trim()) {
-    updateData.result = result.trim();
-  }
-
-  if (resultNote && typeof resultNote === 'string' && resultNote.trim()) {
-    const currentDesc = act.description || '';
-    const todayJalali = isoToJalaliDate(await businessTodayIsoDate());
-    const noteAppend = `\n[نتیجه پیگیری (${todayJalali})]: ${resultNote.trim()}`;
-    updateData.description = currentDesc ? `${currentDesc}${noteAppend}` : `[نتیجه پیگیری (${todayJalali})]: ${resultNote.trim()}`;
-  }
-
-  const [updated] = await orm.update(crmActivities)
-    .set(updateData)
-    .where(eq(crmActivities.id, id))
-    .returning();
-
-  res.json(formatActivity(updated));
-}));
+router.put('/crm/activities/:id/complete-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(true));
+router.put('/crm/activities/:id/reopen-followup', authorizePermission('crm.manage'), validate(followupActionSchema), followupStatusHandler(false));
 
 export default router;

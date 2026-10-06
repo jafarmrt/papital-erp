@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.19 — CRM Follow-up Explicit Actions
+- **CRM Follow-up Actions:** The two-way `toggle-followup` is replaced by `complete-followup` and `reopen-followup` with a target state, under the activity row lock and with an audit row per change (`setFollowupCompleted`; TD-430, package-9 finding B09-15).
+
 ### v9.0.18 — Sales Lead Input Validation
 - **Sales Lead Input:** Lead amounts and probabilities go through `decimalInput`; the amount is non-negative, the probability an integer 0 to 100, and stage, status and currency come from fixed lists (`src/lib/crm/leadFields.ts`; TD-427, package-9 finding B09-12).
 

@@ -10490,6 +10490,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.18، TD-427): اعتبارسنجی ورودی پرونده فروش
   const { runCrmLeadInputTests } = await import('../regression/crmLeadInputTests.js');
   results.push(...await runCrmLeadInputTests(shouldRun));
+  // بسته ۹ (v9.0.19، TD-430): «انجام» و «بازگشایی» صریح پیگیری
+  const { runCrmFollowupActionTests } = await import('../regression/crmFollowupActionTests.js');
+  results.push(...await runCrmFollowupActionTests(shouldRun));
 
   return results;
 }
