@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.52 — Merge-Time Renumbering Tool for Parallel Lanes
+- **Release Renumbering:** `npm run release:renumber -- origin/master` (`scripts/release-renumber.ts`) merges the base without committing, resolves the conflicts of the release files, moves the branch's own versions, migrations (file, journal idx, tag and a later `when`) and audit report sections after those of the base, rewrites only lines the branch added, sorts the active changelog, sets the four version locations, recounts TECH_DEBT.md and runs `check:version` and the migration plan test (TD-473, `releaseRenumber.test.ts`).
+
 ### v9.0.51 — Workflow Tables Get Foreign Keys and Indexes
 - **Workflow Referential Integrity:** migration 0059 adds foreign keys between the workflow tables (NOT VALID, validated only on clean data; instance children cascade), the instance-by-entity and by-instance indexes and a unique definition version; the health check lists gaps as `workflow_reference_integrity` (TD-461, `sec_workflow_db_constraints_td_461`).
 
