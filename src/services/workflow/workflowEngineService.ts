@@ -15,9 +15,8 @@ import { WorkflowTaskService } from './workflowTaskService.js';
 import { WorkflowDelegationService } from './workflowDelegationService.js';
 import { WorkflowEventPublisher } from './workflowEventPublisher.js';
 import { WorkflowQuorumService } from './workflowQuorumService.js';
-import { logger } from '../../middleware/logger.js';
 import { workflowDefinitions, workflowInstances } from '../../db/schema.js';
-import type { DbExecutor } from '../../db/drizzle.js';
+import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { and, asc, eq } from 'drizzle-orm';
 
 export { WorkflowRuleEngine, WorkflowQuorumService };
@@ -99,9 +98,12 @@ export class WorkflowEngineService {
   static publishWorkflowRejected = WorkflowEventPublisher.publishWorkflowRejected;
 
   /**
-   * V2.0.0: شروع شرطی workflow — اگر تعریف فعال/منتشرشده‌ای برای entityType وجود داشته باشد
-   * instance ساخته می‌شود؛ در غیر این صورت null (موجودیت بدون workflow مستقیم ادامه می‌دهد).
-   * الگوی استفاده: تعریف کالا، حساب خزانه و سایر موجودیت‌های آینده.
+   * V2.0.0: شروع شرطی workflow — اگر تعریف فعالی برای entityType وجود داشته باشد instance ساخته می‌شود؛ در غیر این صورت
+   * null (موجودیت بدون workflow مستقیم ادامه می‌دهد). الگوی استفاده: تعریف کالا، حساب خزانه و سایر موجودیت‌های آینده.
+   *
+   * v9.0.36 (TD-451، یافته B14-09): فقط «تعریف فعالی نیست» null است؛ خطای شروع (تعریف بی گام آغازین، خطای اتصال یا
+   * تصویر) پرتاب می‌شود و عملیات اصلی را رد می‌کند. پیش‌تر خطا بلعیده می‌شد و فراخواننده آن را «بی گردش‌کار» می‌فهمید:
+   * سند افتتاحیه حساب خزانه و کالا بی تأیید صادر می‌شد. تعریف فعال با همان اتصال خوانده می‌شود، بی seed.
    */
   static async maybeStartWorkflow(params: {
     entityType: string;
@@ -111,40 +113,21 @@ export class WorkflowEngineService {
     /** v8.0.77 (TD-324): تراکنش فراخواننده؛ گردش‌کار درون savepoint همان تراکنش شروع می‌شود */
     tx?: DbExecutor;
   }): Promise<typeof workflowInstances.$inferSelect | null> {
-    try {
-      if (params.tx) {
-        // تعریف فعال با همان تراکنش خوانده می‌شود (نه getDefinitions که seed و آمار را روی اتصال جدا می‌خواند)؛ شکست
-        // فقط savepoint را برمی‌گرداند و عملیات اصلی ادامه می‌یابد
-        return await params.tx.transaction(async (sp) => {
-          const [def] = await sp.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
-            .where(and(eq(workflowDefinitions.entityType, params.entityType), eq(workflowDefinitions.isActive, 1)))
-            .orderBy(asc(workflowDefinitions.id))
-            .limit(1);
-          if (!def) return null;
-          return WorkflowTransitionExecutor.startInstance({
-            workflowCode: def.code,
-            entityType: params.entityType,
-            entityId: String(params.entityId),
-            userId: params.userId,
-            userName: params.userName || 'سیستم',
-            tx: sp
-          });
-        });
-      }
-      const defs = await WorkflowDefinitionService.getDefinitions({ isActive: true, entityType: params.entityType });
-      if (!defs || defs.length === 0) return null;
-      const def = defs[0];
-      return await WorkflowTransitionExecutor.startInstance({
+    const start = async (db: DbExecutor) => {
+      const [def] = await db.select({ code: workflowDefinitions.code }).from(workflowDefinitions)
+        .where(and(eq(workflowDefinitions.entityType, params.entityType), eq(workflowDefinitions.isActive, 1)))
+        .orderBy(asc(workflowDefinitions.id))
+        .limit(1);
+      if (!def) return null;
+      return WorkflowTransitionExecutor.startInstance({
         workflowCode: def.code,
         entityType: params.entityType,
         entityId: String(params.entityId),
         userId: params.userId,
-        userName: params.userName || 'سیستم'
+        userName: params.userName || 'سیستم',
+        tx: db
       });
-    } catch (err: unknown) {
-      // workflow هرگز نباید عملیات اصلی اصلی را مسدود کند
-      logger.warn({ message: `maybeStartWorkflow failed for ${params.entityType}#${params.entityId}`, error: err });
-      return null;
-    }
+    };
+    return params.tx ? params.tx.transaction(start) : orm.transaction(start);
   }
 }

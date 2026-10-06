@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.36 — Workflow Start Failures Are Not Swallowed
+- **Workflow Start Failures (P1):** `maybeStartWorkflow` returns null only when no active definition exists and otherwise throws, so a broken active definition rejects the bank account or item instead of issuing its opening voucher without approval; item creation and its workflow start share one transaction (TD-451, `sec_workflow_start_failure_td_451`).
+
 ### v9.0.35 — Document Workflow Steps Guarded by Permissions
 - **Document Workflow Permissions (P1):** the default document workflow's warehouse and accounting steps require `warehouse.out` / `accounting.vouchers` (direct approval `workflow.admin`), an untouched installed definition is upgraded, and a step that runs a domain action requires the entity's own permission from the signer (TD-445, `sec_workflow_document_steps_permission_td_445`).
 

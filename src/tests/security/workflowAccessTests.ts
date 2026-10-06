@@ -314,5 +314,57 @@ export async function runWorkflowAccessTests(shouldRun: ShouldRun): Promise<Test
     });
   }
 
+  if (shouldRun('sec_workflow_start_failure_td_451', 'security', 'td451', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_start_failure_td_451',
+      name: 'v9.0.36: خطای شروع گردش کار تعریف فعال بلعیده نمی‌شود؛ حساب خزانه و کالا بی تأیید سند افتتاحیه نمی‌گیرند (TD-451)',
+      details: 'تعریف فعال بی گام آغازین برای حساب خزانه و کالا: ثبت رد می‌شود، نه حساب یا کالا ساخته می‌شود نه سند افتتاحیه',
+    }, async (h, wrong) => {
+      const { getDefaultWarehouseCode } = await import('../../services/inventory/warehouseResolver.js');
+      // تعریف‌های فعال دیگر این دو نوع موقتاً غیرفعال می‌شوند تا تعریف خراب انتخاب شود
+      const others = await h.q(`SELECT id FROM workflow_definitions WHERE entity_type IN ('bank_account', 'item') AND is_active = 1`);
+      const otherIds = others.map(r => Number(r.id));
+      if (otherIds.length > 0) await h.q(`UPDATE workflow_definitions SET is_active = 0 WHERE id = ANY($1::int[])`, [otherIds]);
+      const broken = await h.q(
+        `INSERT INTO workflow_definitions (code, title, entity_type, version, is_active)
+         VALUES ($1, 'گردش کار خراب حساب خزانه', 'bank_account', 1, 1), ($2, 'گردش کار خراب کالا', 'item', 1, 1) RETURNING id`,
+        [`WF451_BANK_${h.tag}`, `WF451_ITEM_${h.tag}`],
+      );
+      try {
+        const title = `بانک آزمون ۴۵۱ ${h.tag}`;
+        const [parent] = await h.q(`SELECT id FROM accounts WHERE code = '1003' AND is_deleted = 0`);
+        const [ledger] = await h.q(
+          `INSERT INTO accounts (code, name, level, parent_id, account_type, nature, is_system, is_active, is_deleted)
+           VALUES ($1, $2, 'subsidiary', $3, 'asset', 'debit', 0, 1, 0) RETURNING id`,
+          [`1003451${h.tag}`, title, parent?.id ?? null],
+        );
+        const bank = await h.post('/api/accounting/bank-accounts', { title, type: 'bank', bankName: 'ملت', currency: 'IRR', initialBalance: 7000000, accountId: ledger?.id });
+        if (bank.status < 400) wrong.push(`ثبت حساب خزانه با گردش کار خراب ${bank.status} داد`);
+        const banks = await h.q(`SELECT id FROM bank_accounts WHERE title = $1 AND is_deleted = 0`, [title]);
+        if (banks.length > 0) {
+          wrong.push('حساب خزانه با گردش کار خراب ساخته شد');
+          const vouchers = await h.q(`SELECT count(*)::int AS n FROM journal_vouchers WHERE is_deleted = 0 AND reference_module = 'treasury_opening' AND reference_id = $1`, [banks[0].id]);
+          if (Number(vouchers[0]?.n) > 0) wrong.push('سند افتتاحیه حساب خزانه بی تأیید صادر شد');
+        }
+
+        const code = `WF451-${h.tag}`;
+        const item = await h.post('/api/items', {
+          type: 'raw_material', name: `کالای آزمون ۴۵۱ ${h.tag}`, code, unit: 'عدد', category: 'دستبند',
+          weighted_average_cost: 1000, [`stock_${await getDefaultWarehouseCode(orm)}`]: 5,
+        });
+        if (item.status < 400) wrong.push(`ثبت کالا با گردش کار خراب ${item.status} داد`);
+        const created = await h.q(`SELECT id FROM items WHERE code = $1 AND is_deleted = 0`, [code]);
+        if (created.length > 0) {
+          wrong.push('کالا با گردش کار خراب ساخته شد');
+          const opening = await h.q(`SELECT count(*)::int AS n FROM journal_vouchers WHERE is_deleted = 0 AND reference_module = 'item_opening' AND reference_id = $1`, [created[0].id]);
+          if (Number(opening[0]?.n) > 0) wrong.push('سند افتتاحیه کالا بی تأیید صادر شد');
+        }
+      } finally {
+        await h.q(`UPDATE workflow_definitions SET is_active = 0 WHERE id = ANY($1::int[])`, [broken.map(r => Number(r.id))]);
+        if (otherIds.length > 0) await h.q(`UPDATE workflow_definitions SET is_active = 1 WHERE id = ANY($1::int[])`, [otherIds]);
+      }
+    });
+  }
+
   return results;
 }

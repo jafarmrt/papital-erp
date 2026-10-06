@@ -278,10 +278,20 @@ router.get('/items', authorizePermission(...READ_PERMISSIONS.items), asyncHandle
 // POST /items
 router.post('/items', authorize('admin', 'manager', 'products.create'), validate(itemCreateUpdateSchema), asyncHandler(async (req, res) => {
   try {
-    const { insertedId, stockValues, computedStock, imageUrl, thumbnailUrl } = await ItemCatalogService.createItem(
-      req.body,
-      req.user
-    );
+    // v9.0.36 (TD-451): کالا و شروع گردش‌کار افتتاحیه در یک تراکنش؛ شروع ناموفقِ تعریف فعال ثبت کالا را رد می‌کند (پیش‌تر
+    // کالا ثبت می‌شد، خطا بلعیده می‌شد و سند افتتاحیه بی تأیید صادر می‌شد)
+    const { created, wfInstance } = await orm.transaction(async (tx) => {
+      const created = await ItemCatalogService.createItem(req.body, req.user, tx);
+      const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
+        entityType: 'item',
+        entityId: String(created.insertedId),
+        userId: req.user?.id,
+        userName: req.user?.fullName || req.user?.username,
+        tx
+      });
+      return { created, wfInstance };
+    });
+    const { insertedId, stockValues, computedStock, imageUrl, thumbnailUrl } = created;
 
     const { type, name, code, unit, category, reorder_point, weighted_average_cost, color, weight, material, size } = req.body;
 
@@ -293,12 +303,6 @@ router.post('/items', authorize('admin', 'manager', 'products.create'), validate
     // در غیر این صورت فوری صادر می‌شود (رفتار مستقیم)
     let openingVoucherId: number | null = null;
     try {
-      const wfInstance = await WorkflowEngineService.maybeStartWorkflow({
-        entityType: 'item',
-        entityId: String(insertedId),
-        userId: req.user?.id,
-        userName: req.user?.fullName || req.user?.username
-      });
       if (!wfInstance) {
         const opening = await ItemOpeningService.issueItemOpeningVoucher(insertedId, {
           userId: req.user?.id,
