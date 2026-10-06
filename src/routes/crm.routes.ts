@@ -21,6 +21,7 @@ import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/
 import { getCrmStats } from '../services/crm/crmStats.js';
 import { listFollowups, liveLeadActivityCondition, type FollowupStatus } from '../services/crm/crmFollowups.js';
 import { deleteLead } from '../services/crm/crmLeadDelete.js';
+import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 
 const router = Router();
@@ -787,10 +788,12 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
     personnelId: assignedPersonnelId
   });
   const mentionsList = Array.isArray(mentions) ? mentions : [];
+  // v9.0.17 (TD-426): پرونده و طرف حساب ناموجود یا حذف‌شده با ۴۲۲ رد می‌شوند (`resolveActivityParents`)
+  const parents = await resolveActivityParents(orm, { leadId, customerId });
 
   const [newAct] = await orm.insert(crmActivities).values({
-    leadId: leadId ? Number(leadId) : null,
-    customerId: customerId ? Number(customerId) : null,
+    leadId: parents.leadId,
+    customerId: parents.customerId,
     type: type || 'call',
     title: title.trim(),
     description: description || '',
@@ -889,10 +892,10 @@ router.post('/crm/activities', authorizePermission('crm.manage'), validate(creat
   }
 
   // Update lead's updatedAt timestamp
-  if (leadId) {
+  if (parents.leadId) {
     await orm.update(crmLeads)
       .set({ updatedAt: nowIso })
-      .where(eq(crmLeads.id, Number(leadId)));
+      .where(eq(crmLeads.id, parents.leadId));
   }
 
   await logActivity({

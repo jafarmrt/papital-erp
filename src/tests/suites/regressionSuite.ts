@@ -10484,6 +10484,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.16، TD-425): حذف پرونده فروش (ناموجود، سند فعال، پیگیری‌های پرونده حذف‌شده)
   const { runCrmLeadDeleteTests } = await import('../regression/crmLeadDeleteTests.js');
   results.push(...await runCrmLeadDeleteTests(shouldRun));
+  // بسته ۹ (v9.0.17، TD-426): اقدام CRM با پرونده یا طرف حساب ناموجود رد می‌شود
+  const { runCrmActivityParentsTests } = await import('../regression/crmActivityParentsTests.js');
+  results.push(...await runCrmActivityParentsTests(shouldRun));
 
   return results;
 }
