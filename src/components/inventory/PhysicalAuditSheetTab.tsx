@@ -157,7 +157,7 @@ export function PhysicalAuditSheetTab({
               onClick={handleApplyCurrentStockAsPhysical}
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
             >
-              کپی موجودی اسمی به موجودی فیزیکی برای تمام اقلام
+              کپی موجودی دفتری به موجودی فیزیکی برای همه اقلام
             </button>
 
             <button
@@ -167,7 +167,7 @@ export function PhysicalAuditSheetTab({
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
               <ClipboardCheck size={16} />
-              <span>{submitting ? 'در حال ثبت...' : `ثبت نهایی سند انبارگردانی (${auditedCount} کالا)`}</span>
+              <span>{submitting ? 'در حال ثبت...' : `ثبت نهایی سند انبارگردانی (${formatPersianNumber(auditedCount)} کالا)`}</span>
             </button>
           </div>
         </div>
@@ -184,7 +184,7 @@ export function PhysicalAuditSheetTab({
                 <th className="py-3 px-4">نام کالا و دسته‌بندی</th>
                 <th className="py-3 px-3 text-center">واحد</th>
                 <th className="py-3 px-3 text-center bg-blue-50 text-blue-900 border-x border-blue-100">
-                  موجودی سیستمی (موقعیت {locationLabel})
+                  موجودی دفتری (موقعیت {locationLabel})
                 </th>
                 <th className="py-3 px-3 text-center bg-emerald-50 text-emerald-900 border-x border-emerald-100 w-48">
                   موجودی فیزیکی واقعی (شمارش‌شده)
@@ -234,9 +234,9 @@ export function PhysicalAuditSheetTab({
                         ) : diff === 0 ? (
                           <span className="text-emerald-600">بدون مغایرت (۰)</span>
                         ) : diff > 0 ? (
-                          <span className="text-blue-600 font-bold dir-ltr inline-block">+{diff} (کسری سیستمی)</span>
+                          <span className="text-blue-600 font-bold dir-ltr inline-block">+{formatPersianNumber(diff)} (اضافی)</span>
                         ) : (
-                          <span className="text-rose-600 font-bold dir-ltr inline-block">{diff} (کسری فیزیکی)</span>
+                          <span className="text-rose-600 font-bold dir-ltr inline-block">−{formatPersianNumber(Math.abs(diff))} (کسری)</span>
                         )}
                       </td>
                     </tr>

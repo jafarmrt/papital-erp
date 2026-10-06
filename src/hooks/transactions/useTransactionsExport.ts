@@ -1,6 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
 import * as xlsx from 'xlsx';
 import { fetchJson } from '../../api';
+import { toast } from 'react-hot-toast';
+import { EXPORT_FAILED_MESSAGE, TRANSACTIONS_EXPORT_FILE } from '../../lib/inventoryAudit/exportFileNames';
 import { formatPersianDate } from '../../utils';
 import type { Transaction } from '../../types';
 
@@ -46,13 +48,13 @@ async function exportTransactions(filters: TransactionsExportFilters): Promise<v
   })));
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, 'تراکنش‌ها');
-  xlsx.writeFile(wb, `Transactions.xlsx`);
+  xlsx.writeFile(wb, TRANSACTIONS_EXPORT_FILE);
 }
 
 export function useTransactionsExport() {
   return useMutation<void, unknown, TransactionsExportFilters>({
     mutationFn: exportTransactions,
-    // مثل قبل خطا فقط در کنسول ثبت می‌شود (نه toast پیش‌فرض کلاینت)
-    onError: (err) => { console.error(err); },
+    // v9.0.90 (TD-496): the production build drops console output, so a failed export is told to the user
+    onError: () => { toast.error(EXPORT_FAILED_MESSAGE); },
   });
 }

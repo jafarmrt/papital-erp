@@ -10553,6 +10553,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.89, TD-493): a deleted transfer design answers 404 and its code can be saved again
   const { runTransferCodeLifecycleTests } = await import('../regression/transferCodeLifecycleTests.js');
   results.push(...await runTransferCodeLifecycleTests(shouldRun));
+  // Package 6 (v9.0.90, TD-496): the warehouse chart counts items with stock, not quantities of different units
+  const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
+  results.push(...await runWarehouseItemCountTests(shouldRun));
 
   return results;
 }

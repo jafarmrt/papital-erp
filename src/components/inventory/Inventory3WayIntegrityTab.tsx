@@ -120,7 +120,7 @@ export function Inventory3WayIntegrityTab({
             <div className="text-lg font-black text-slate-900 font-mono truncate">
               {formatPersianPrice(integrityReport?.summary?.totalInventoryValuationStored || 0)}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">{`${curLbl} (بر مبنای میانگین بهای خرید)`}</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">{`${curLbl} (بر پایه میانگین موزون بها)`}</div>
           </div>
         </div>
       </div>
@@ -243,7 +243,7 @@ export function Inventory3WayIntegrityTab({
                   مانده گردش کاردکس
                 </th>
                 <th className="py-3 px-3 text-center">مغایرت مقداری</th>
-                <th className="py-3 px-3 text-center">میانگین بهای خرید</th>
+                <th className="py-3 px-3 text-center">میانگین موزون بها</th>
                 <th className="py-3 px-3 text-center">وضعیت انطباق</th>
                 <th className="py-3 px-3 text-center">عملیات</th>
               </tr>
@@ -268,7 +268,7 @@ export function Inventory3WayIntegrityTab({
                         </p>
                       </div>
                     ) : (
-                      <span className="text-slate-400 font-medium">هیچ کالایی با فیلترهای انتخابی یافت نشد.</span>
+                      <span className="text-slate-400 font-medium">هیچ کالایی با پالایش انتخابی یافت نشد.</span>
                     )}
                   </td>
                 </tr>

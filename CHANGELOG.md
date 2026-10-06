@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.96 — Warehouse UI Wording, Export Names and Warehouse Chart
+- **Warehouse UI:** decided Persian terms, Persian digits and surplus/shortage labels on the count sheet, Persian export file names with a failure message, and a warehouse chart that counts items instead of adding units (TD-496, `reg_warehouse_item_count_td_496`).
+
 ### v9.0.95 — Deleted Transfer Codes Are Gone and Can Be Saved Again
 - **Transfer Codes:** a deleted design answers 404, saving its code again revives it instead of a 409, and the page lists every code (TD-493, `reg_transfer_code_lifecycle_td_493`).
 
