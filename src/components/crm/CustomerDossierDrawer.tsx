@@ -9,6 +9,8 @@ import { serverPayableOf, payableDecimalsOf } from '../../lib/invoices/documentP
 import { customerAccountCardUrl } from '../../lib/customers/customerAccountCard';
 import { customerDocumentsUrl, salesDocumentKindLabel } from '../../lib/customers/customerDocuments';
 import { documentStatusLabelOf } from '../../lib/invoices/invoiceListDocuments';
+import { sumByCurrency } from '../../lib/crm/leadCurrencyTotals';
+import { CurrencyTotalsLines } from './CurrencyTotals';
 import toast from 'react-hot-toast';
 
 interface CustomerDossierDrawerProps {
@@ -52,9 +54,10 @@ export function CustomerDossierDrawer({
 
   // Stats
   const totalLeadsCount = customerLeads.length;
-  const totalPipelineValue = customerLeads.reduce((acc, l) => acc + (l.estimatedValue || 0), 0);
+  // v9.0.11 (TD-422): ارزش پرونده‌ها به تفکیک ارز
+  const pipelineTotals = sumByCurrency(customerLeads);
   const wonLeads = customerLeads.filter((l) => l.stage === 'won');
-  const wonValue = wonLeads.reduce((acc, l) => acc + (l.estimatedValue || 0), 0);
+  const wonTotals = sumByCurrency(wonLeads);
 
   // Load documents and accounting read model for this customer
   useEffect(() => {
@@ -170,19 +173,22 @@ export function CustomerDossierDrawer({
 
           <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3">
             <span className="text-[10px] font-bold text-emerald-800 block mb-1">معاملات موفق (Won)</span>
-            <div className="flex items-center gap-1.5">
-              <Award size={16} className="text-emerald-600" />
-              <span className="text-base font-black text-emerald-900">
-                {formatPersianNumber(wonLeads.length)} مورد ({formatPersianPrice(wonValue)})
-              </span>
+            <div className="flex items-start gap-1.5">
+              <Award size={16} className="text-emerald-600 mt-1" />
+              <div>
+                <span className="block text-base font-black text-emerald-900">{formatPersianNumber(wonLeads.length)} مورد</span>
+                {wonTotals.length > 0 && <CurrencyTotalsLines totals={wonTotals} className="text-xs font-bold text-emerald-800" labelClassName="text-[10px] font-normal" />}
+              </div>
             </div>
           </div>
 
           <div className="bg-purple-50/60 border border-purple-200/80 rounded-xl p-3">
             <span className="text-[10px] font-bold text-purple-800 block mb-1">ارزش کل قیف مشتری</span>
-            <div className="flex items-center gap-1.5">
-              <TrendingUp size={16} className="text-purple-600" />
-              <span className="text-base font-black text-purple-900">{formatPersianPrice(totalPipelineValue)}</span>
+            <div className="flex items-start gap-1.5">
+              <TrendingUp size={16} className="text-purple-600 mt-1" />
+              <div>
+                <CurrencyTotalsLines totals={pipelineTotals} className="text-base font-black text-purple-900" labelClassName="text-[10px] font-normal" />
+              </div>
             </div>
           </div>
 

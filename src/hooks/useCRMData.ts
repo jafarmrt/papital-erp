@@ -5,6 +5,7 @@ import { getTodayJalaliDate, getFutureJalaliDate, errorMessageOf, isoToJalaliDat
 import toast from 'react-hot-toast';
 import { confirmAction } from '../components/ConfirmDialogHost';
 import { useCRMFilters, normalizeLeadStage, buildLeadQueryParams, buildActivityQueryParams } from './useCRMFilters';
+import type { CrmStats } from '../lib/crm/leadCurrencyTotals';
 
 export const STAGES = [
   { key: 'lead', title: 'مخاطب اولیه', color: 'bg-slate-100 border-slate-300 text-slate-700', badge: 'bg-slate-200 text-slate-800' },
@@ -21,7 +22,7 @@ export function useCRMData(user: any) {
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeTab, setActiveTab] = useState<'kanban' | 'list' | 'activities' | 'followups'>('kanban');
-  const [stats, setStats] = useState<any>({});
+  const [stats, setStats] = useState<Partial<CrmStats>>({});
   const [leads, setLeads] = useState<CRMLead[]>([]);
   const [activities, setActivities] = useState<CRMActivity[]>([]);
   const [customersList, setCustomersList] = useState<any[]>([]);

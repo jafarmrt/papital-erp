@@ -18,6 +18,7 @@ import { containsLikePattern } from '../lib/sqlLike.js';
 import { money } from '../lib/money.js';
 import { notSyntheticTestUsername } from '../lib/syntheticUsers.js';
 import { linkCustomerForLead, notesWithPartyDifferences } from '../services/crm/crmCustomerLink.js';
+import { getCrmStats } from '../services/crm/crmStats.js';
 
 const router = Router();
 router.use(authenticateToken);
@@ -204,60 +205,9 @@ function formatActivity(act: (Partial<typeof crmActivities.$inferSelect> & Recor
 }
 
 // GET /api/crm/stats - CRM KPI summary and stage totals
-router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (req, res) => {
-  // Total active leads
-  const [allActiveLeads] = await orm.select({
-    count: sql<number>`count(*)`,
-    totalValue: sql<number>`COALESCE(sum(estimated_value), 0)`
-  })
-  .from(crmLeads)
-  .where(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.status, 'active')));
-
-  // Won leads
-  const [wonLeads] = await orm.select({
-    count: sql<number>`count(*)`,
-    totalValue: sql<number>`COALESCE(sum(estimated_value), 0)`
-  })
-  .from(crmLeads)
-  .where(and(eq(crmLeads.isDeleted, 0), eq(crmLeads.stage, 'won')));
-
-  // Followups due today or overdue
-  const todayIso = await businessTodayIsoDate();
-  const pendingFollowups = await orm.select({
-    count: sql<number>`count(*)`
-  })
-  .from(crmActivities)
-  .where(and(
-    eq(crmActivities.isDeleted, 0),
-    eq(crmActivities.isFollowUpCompleted, 0),
-    // v7.0.132 (TD-232): سررسید میلادی ISO است و با «امروز» میلادی مقایسه می‌شود
-    sql`COALESCE(${crmActivities.nextFollowUpDate}, '') <> ''`,
-    sql`${crmActivities.nextFollowUpDate} <= ${todayIso}::text`
-  ));
-
-  // Stage counts
-  const stageCounts = await orm.select({
-    stage: crmLeads.stage,
-    count: sql<number>`count(*)`,
-    totalValue: sql<number>`COALESCE(sum(estimated_value), 0)`
-  })
-  .from(crmLeads)
-  .where(eq(crmLeads.isDeleted, 0))
-  .groupBy(crmLeads.stage);
-
-  res.json({
-    activeLeadsCount: Number(allActiveLeads?.count || 0),
-    totalPipelineValue: Number(allActiveLeads?.totalValue || 0),
-    wonLeadsCount: Number(wonLeads?.count || 0),
-    wonTotalValue: Number(wonLeads?.totalValue || 0),
-    pendingFollowupsCount: Number(pendingFollowups[0]?.count || 0),
-    stageCounts: stageCounts.reduce((acc: Record<string, { count: number; value: number }>, row: { stage: string | null; count: number | string; totalValue: number | string }) => {
-      if (row.stage) {
-        acc[row.stage] = { count: Number(row.count), value: Number(row.totalValue) };
-      }
-      return acc;
-    }, {})
-  });
+// v9.0.11 (TD-422): ارزش پرونده‌ها به تفکیک ارز (`getCrmStats`)
+router.get('/crm/stats', authorizePermission('crm.view', 'customers.view', 'customers.manage'), asyncHandler(async (_req, res) => {
+  res.json(await getCrmStats());
 }));
 
 // GET /api/crm/leads - Get list of leads

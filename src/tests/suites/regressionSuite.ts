@@ -10466,6 +10466,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // بسته ۹ (v9.0.10، TD-431): رد حذف طرف حساب دارای مانده یا کار باز
   const { runCustomerDeleteGuardTests } = await import('../regression/customerDeleteGuardTests.js');
   results.push(...await runCustomerDeleteGuardTests(shouldRun));
+  // بسته ۹ (v9.0.11، TD-422): آمار پرونده‌های فروش به تفکیک ارز
+  const { runCrmStatsCurrencyTests } = await import('../regression/crmStatsCurrencyTests.js');
+  results.push(...await runCrmStatsCurrencyTests(shouldRun));
 
   return results;
 }

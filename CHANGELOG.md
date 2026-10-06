@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.11 — CRM Lead Values Per Currency
+- **CRM Stats Per Currency:** The CRM stats card and the customer dossier show the pipeline, won and per-stage lead values per currency; amounts of different currencies are no longer added together (`getCrmStats`, `sumByCurrency`; TD-422, package-9 finding B09-07, product-owner decision).
+
 ### v9.0.10 — Customer Delete Refused With Open Items
 - **Customer Delete Guard:** Deleting a party is refused (409, Persian reasons) while it has a nonzero approved balance in any currency, draft voucher rows, a draft or proforma document under its name, an active sales lead, an open project or an open cheque; the check runs under the customer row lock (`assertCustomerDeletable`; TD-431, package-9 finding B09-16, product-owner decision).
 
