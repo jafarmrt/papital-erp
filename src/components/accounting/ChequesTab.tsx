@@ -6,7 +6,7 @@ import { formatPersianPrice, formatPersianNumber, getTodayJalaliDate, formatPers
 import { SearchableSelect } from '../SearchableSelect';
 import { ActionMenu } from '../ActionMenu';
 import { useAppCurrency } from '../../hooks/useAppCurrency';
-import type { Cheque, ChequeType, ChequeStatus, BankAccount, Customer, Personnel, FinancialAttachment } from '../../types';
+import type { Cheque, ChequeType, ChequeStatus, BankAccountOption, Customer, Personnel, FinancialAttachment } from '../../types';
 import toast from 'react-hot-toast';
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -23,7 +23,8 @@ import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
 interface ChequesTabProps {
   cheques: Cheque[];
-  bankAccounts: BankAccount[];
+  /** v9.0.86 (TD-505): فهرست انتخاب حساب‌های خزانه، بی شماره حساب و مانده */
+  bankAccounts: BankAccountOption[];
   customers: Customer[];
   personnelList: Personnel[];
   loading: boolean;

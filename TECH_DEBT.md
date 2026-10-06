@@ -28,7 +28,6 @@
 | TD-493 | انبار و کاردکس (بسته ۶) | P2 (B06-14) — کد ترنسفر طرح: کد حذف‌شده با `GET` خوانده می‌شود، ذخیره دوباره‌اش ۴۰۹ با پیام کلی می‌گیرد و صفحه فقط ۵۰ کد اول را می‌بیند | transfers.routes.ts، transfer.service.ts، useTransferQueries.ts | open (P2) |
 | TD-495 | انبار و کاردکس (بسته ۶) | P3 (B06-16) — بررسی سلامت سامانه لایه انبار را با `status: 'ok'` ثابت گزارش می‌کند، حتی با مغایرت در گزارش سلامت انبار | systemReconciliation.service.ts | open (P3) |
 | TD-496 | انبار و کاردکس (بسته ۶) | P3 (B06-17) — رابط انبار: اصطلاح انگلیسی و آوانویسی (داشبورد، آلارم، متریال، فیلتر، WAC، کارتکس)، «بروزرسانی»، رقم لاتین، برچسب «کسری سیستمی» برای اضافی و «قلم» برای جمع مقدار، نام انگلیسی فایل‌های خروجی، پیام‌های کلی و `window.confirm` | InventoryStatusPage.tsx، InventoryAuditPage.tsx، PhysicalAuditSheetTab.tsx، WarehouseStockReconciliationPanel.tsx، auditSheet.ts، RunningKardexModal.tsx، useTransactionsExport.ts | open (P3، تصمیم ت۶) |
-| TD-505 | خزانه و چک (بسته ۴)؛ اثر روی ۲ | P2 (B04-09) — `GET /accounting/bank-accounts` با گارد درون‌خطی `warehouse.in` / `warehouse.out` / `documents.view` / `documents.create` همه ستون‌ها (شماره حساب، کارت، شبا) و مانده خزانه، مانده دفتر و مغایرت را می‌دهد، در حالی که همان کاربر `GET /accounting/treasury` را ۴۰۳ می‌گیرد | treasury.routes.ts، InvoiceSettlementModal.tsx، PayrollPaymentModal.tsx | open (P2، تصمیم ت۷ الف) |
 | TD-506 | خزانه و چک (بسته ۴) | P2 (B04-10) — چک با `issueDate` پنج ماه آینده (۲۰۱) و وصول با `actionDate` آینده (۲۰۰، مانده بانک همین امروز زیاد شد) پذیرفته می‌شود؛ پنجره وضعیت چک کادر تاریخ ندارد و چک دیروز پاس‌شده امروز در دفتر می‌نشیند | chequeLifecycle.service.ts، ChequesTab.tsx | open (P2، تصمیم ت۶ الف؛ با TD-669 (B16-05)) |
 | TD-508 | خزانه و چک (بسته ۴) | P2 (B04-12) — فرم حساب بانکی کادر ارز ندارد و `PUT currency USD` ۲۰۰ می‌گیرد ولی ارز `IRR` می‌ماند؛ پس مسیر ارزی خزانه (TD-274) فقط از API باز است | BankAccountModal.tsx، bankAccount.service.ts | open (P2، تصمیم ت۵ الف) |
 | TD-509 | خزانه و چک (بسته ۴) | P2 (B04-13) — `computeBankBalances` همه ردیف‌های تأییدشده دفتر کل را در هر درخواست می‌خواند (۲۰۰٬۰۰۰ ردیف ← ۱٬۶۳۹ ms برای ۱۵ بانک) و `GET /accounting/treasury` `page` / `limit` را نادیده می‌گیرد (۲۰٬۰۰۰ ردیف، ۱۵٫۸۸ MB) | bankAccount.service.ts، treasuryTransaction.service.ts | open (P2) |
@@ -64,8 +63,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۴۳ ردیف
-- **آرشیو شده (resolved):** ۴۴۴ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۴۲ ردیف
+- **آرشیو شده (resolved):** ۴۴۵ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 
@@ -74,4 +73,4 @@
 > **فاز ۰ ممیزی مستقل (v7.0.18 به بعد):** ردیف‌های TD-171 به بعد که در همان change-set حل شده‌اند مستقیماً در بخش «فاز ۰» فایل `TECH_DEBT_ARCHIVE.md` ثبت شده‌اند.
 > ✅ v7.0.44: ردیف‌های `resolved` که در جدول فعال مانده بودند (TD-110، TD-129، TD-132، TD-134، TD-160 تا TD-170) عیناً به بخش «نسخه ۷ — نقشه راه V7» آرشیو منتقل شدند.
 
-*آخرین بازبینی: v9.0.85 — TD-498 (گیرنده چک خرج‌شده، P1) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*
+*آخرین بازبینی: v9.0.86 — TD-505 (خوانندگان فهرست حساب‌های بانکی، P2) رفع و بایگانی شد. شناسه‌های رزروشده: `v9/PHASE4_LANES.md` §۷.۲.*

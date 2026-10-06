@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.86 — Bank Pick List for Forms
+- **Bank Account Readers (P2):** forms that only pick a bank account read a pick list without account, card or Sheba numbers or balances; the full list goes only to treasury readers. Before, warehouse and document users read every number and balance (TD-505, `reg_bank_account_options_td_505`).
+
 ### v9.0.85 — Spent Cheques Need a Supplier
 - **Spent Cheque Supplier (P1):** spending a cheque needs a supplier picked from the list and posts to that supplier's detail; before, the form sent only a typed name and the voucher missed the supplier's account card (TD-498, `reg_cheque_spent_needs_supplier_td_498`).
 

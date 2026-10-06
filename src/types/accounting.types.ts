@@ -112,6 +112,20 @@ export interface JournalVoucher {
 
 export type BankAccountType = 'bank' | 'cash' | 'pos' | 'petty_cash';
 
+/**
+ * v9.0.86 (TD-505): یک حساب خزانه در فهرست انتخاب فرم‌ها (`GET /accounting/bank-accounts/options`)؛ بی شماره حساب،
+ * کارت، شبا و مانده
+ */
+export interface BankAccountOption {
+  id: number;
+  code: string;
+  title: string;
+  type: BankAccountType;
+  bankName: string | null;
+  currency: string;
+  hasLedgerAccount: boolean;
+}
+
 export interface BankAccount {
   id: number;
   code: string;

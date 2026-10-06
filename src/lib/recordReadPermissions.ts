@@ -42,10 +42,18 @@ export const READ_PERMISSIONS = {
   /** فهرست کامل کاربران و نقش‌ها (فهرست ساده نام‌ها /users/list-simple برای همه باز است) */
   userDirectory: ['users.manage', 'roles.manage', 'personnel.manage', 'workflow.manage', 'settings.manage'],
   permissionCatalog: ['roles.manage', 'users.manage'],
-  /** فهرست و کارت حساب‌های خزانه (بانک و صندوق) */
-  bankAccounts: [
+  /**
+   * فهرست کامل حساب‌های خزانه با شماره حساب، کارت، شبا و مانده‌ها: همان خوانندگان تراکنش‌های خزانه (v9.0.86، TD-505،
+   * تصمیم ت۷ الف؛ پیش‌تر کاربران انبار، اسناد، چک و سند حسابداری هم آن را می‌خواندند)
+   */
+  bankAccounts: ['accounting.treasury', 'accounting.reports', 'accounting.view'],
+  /**
+   * فهرست انتخاب حساب‌های خزانه (`/accounting/bank-accounts/options`، بی شماره و مانده): فرم تسویه فاکتور، دفتر چک،
+   * سند حسابداری و پرداخت حقوق (`personnel.manage`، مجوز ثبت پرداخت فیش)
+   */
+  bankAccountOptions: [
     'accounting.treasury', 'accounting.cheques', 'accounting.vouchers', 'accounting.reports', 'accounting.view',
-    'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create'
+    'warehouse.in', 'warehouse.out', 'documents.view', 'documents.create', 'personnel.manage'
   ],
   /** درخواست‌های خرید (بی کد نقش؛ مدل مجوز بسته ۲) */
   purchaseRequisitions: ['procurement.view', 'projects.view'],
