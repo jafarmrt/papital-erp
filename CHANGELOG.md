@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.32 — Package 14 Workflow Audit Documentation
+- **Stability Audit, Package 14 (Workflow and Approvals):** `docs/audit/STABILITY_AUDIT_V9.md` gets the workflow section; its 28 proven findings are registered as open rows TD-443 to TD-470 (one P0: starting any workflow on any entity approves a journal voucher without permission). Documentation only; no behaviour change.
+
 ### v9.0.31 — Persian Wording in the Personnel UI
 - **Personnel Wording:** The personnel pages no longer show «(Update Existing)», «(IBAN)», «اکانت» or «کلیپ‌بورد»; a Vitest check keeps English words out of the Persian personnel UI (TD-440, `personnelWording.test.ts`).
 
