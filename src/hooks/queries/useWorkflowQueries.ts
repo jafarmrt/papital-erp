@@ -158,7 +158,7 @@ export function useExecuteTransitionMutation() {
 
 export function useWorkflowDefinitionsQuery() {
   return useQuery({
-    queryKey: ['workflow', 'definitions'],
+    queryKey: QUERY_KEYS.workflow.definitions(),
     queryFn: async () => {
       return fetchJson('/workflow/definitions');
     }
@@ -167,7 +167,7 @@ export function useWorkflowDefinitionsQuery() {
 
 export function useWorkflowDefinitionDetailQuery(id?: number) {
   return useQuery({
-    queryKey: ['workflow', 'definition', id],
+    queryKey: QUERY_KEYS.workflow.definition(id),
     queryFn: async () => {
       if (!id) return null;
       return fetchJson(`/workflow/definitions/${id}`);
@@ -207,7 +207,7 @@ export interface WorkflowDefinitionVersion {
 /** v7.0.87 (TD-112): تاریخچه فقط‌خواندنی نسخه‌های یک تعریف؛ ذخیره تعریف آن را تازه می‌کند (پیشوند کلید definitions) */
 export function useWorkflowDefinitionVersionsQuery(id?: number) {
   return useQuery({
-    queryKey: ['workflow', 'definitions', id, 'versions'],
+    queryKey: QUERY_KEYS.workflow.definitionVersions(id),
     queryFn: async (): Promise<WorkflowDefinitionVersion[]> => {
       const res = await fetchJson(`/workflow/definitions/${id}/versions`);
       return Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
@@ -227,7 +227,8 @@ export function useSaveWorkflowDefinitionMutation() {
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workflow', 'definitions'] });
+      // TD-469: پیشوند definitions جزئیات و نسخه‌ها را هم دربرمی‌گیرد (پیش‌تر کلید جزئیات ['workflow','definition',id] بود)
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definitions() });
       toast.success('تعریف ورکفلو با موفقیت ذخیره گردید');
     },
     onError: (err: any) => {
@@ -237,12 +238,17 @@ export function useSaveWorkflowDefinitionMutation() {
 }
 
 export function useUpdateCanvasPositionsMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ definitionId, positions }: { definitionId: number; positions: Array<{ id: number; positionX: number; positionY: number }> }) => {
       return fetchJson('/workflow/positions', {
         method: 'POST',
         body: JSON.stringify({ definitionId, positions })
       });
+    },
+    // TD-469: پیش‌تر کش جزئیات تازه نمی‌شد و باز کردن دوباره طراح مختصات قدیم را نشان می‌داد و ذخیره آن را برمی‌گرداند
+    onSuccess: (_res, variables) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workflow.definition(variables.definitionId) });
     }
   });
 }
