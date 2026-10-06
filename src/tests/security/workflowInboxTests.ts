@@ -84,5 +84,31 @@ export async function runWorkflowInboxTests(shouldRun: ShouldRun): Promise<TestC
     });
   }
 
+  if (shouldRun('sec_workflow_inbox_card_fields_td_465', 'security', 'td465', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_inbox_card_fields_td_465',
+      name: 'Inbox rows carry the current step title from the instance snapshot and the name of who started the instance (TD-465)',
+      details: 'the row of a new instance has currentStepTitle = its first step and instance.startedByName = the starter; the step title comes from the snapshot, so a later design rename does not change it',
+    }, async (h, wrong) => {
+      const code = inboxCode(h, 'CARD');
+      try {
+        const { instanceId } = await startTwoRejectWorkflow(h, code);
+        const [admin] = await h.q(`SELECT full_name FROM users WHERE username = 'pen_admin' AND is_deleted = 0`);
+        await h.q(`UPDATE workflow_states SET title = 'renamed after start' WHERE workflow_definition_id IN (SELECT id FROM workflow_definitions WHERE code = $1)`, [code]);
+        const row = await inboxRowOf(h, instanceId);
+        if (!row) {
+          wrong.push('the admin inbox has no row for the new instance');
+          return;
+        }
+        if (row.currentStepTitle !== 'بررسی کارشناس') wrong.push(`currentStepTitle is ${JSON.stringify(row.currentStepTitle)}, not the snapshot step title`);
+        const startedByName = (row.instance as Row | undefined)?.startedByName;
+        if (!startedByName || startedByName !== admin?.full_name) wrong.push(`instance.startedByName is ${JSON.stringify(startedByName)}, not ${JSON.stringify(admin?.full_name)}`);
+        if (typeof row.amount !== 'number') wrong.push(`amount is ${typeof row.amount}, not a number`);
+      } finally {
+        await dropDefinition(h, code);
+      }
+    });
+  }
+
   return results;
 }

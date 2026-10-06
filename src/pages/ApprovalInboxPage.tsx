@@ -56,7 +56,6 @@ interface TaskItem {
   priority?: string;
   assigneeId?: number;
   delegatedToId?: number;
-  isDelegated?: boolean;
   dueAt?: string;
   /** v9.0.41 (TD-448): تأخیر از زمان پایگاه‌داده */
   isOverdue?: boolean;
@@ -75,6 +74,10 @@ interface TaskItem {
   totalAmount?: number;
   currency?: string;
   notes?: string;
+  /** TD-465: عنوان گام جاری از تصویر فرایند */
+  currentStepTitle?: string;
+  /** TD-465: تفویضی که کار را به کاربر رسانده */
+  delegationInfo?: { delegatedFromUserId?: number; delegationScope?: string | null } | null;
   /** TD-463: اقدام‌های «رد» گام جاری */
   rejectTransitions?: ApprovalRejectOption[];
 }
@@ -383,8 +386,10 @@ export function ApprovalInboxPage() {
                 const typeMeta = getEntityTypeLabel(t.instance?.entityType || 'document');
                 const TypeIcon = typeMeta.icon;
                 const overdue = t.isOverdue === true;
-                const amount = t.entityContext?.amount || t.entityContext?.totalAmount;
-                const requesterName = t.instance?.startedByName || t.entityContext?.buyerName || t.entityContext?.createdByName || 'ثبت‌کننده سیستم';
+                // TD-465 (یافته B14-23): فیلدهایی که ردیف کارتابل واقعاً دارد؛ مبلغ ریالی است
+                const amount = Number(t.amount) || 0;
+                const requesterName = t.instance?.startedByName || 'نامشخص';
+                const stepTitle = t.currentStepTitle || t.currentState?.title || t.title;
                 const isCompletedTask = t.status === 'approved' || t.status === 'rejected' || t.status === 'completed';
 
                 return (
@@ -415,7 +420,7 @@ export function ApprovalInboxPage() {
                             <ApprovalPriorityBadge priority={t.priority || t.entityContext?.priority} />
                           )}
 
-                          {t.isDelegated && (
+                          {t.delegationInfo && (
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 flex items-center gap-1">
                               <UserCheck className="w-3 h-3" />
                               <span>از تفویض</span>
@@ -439,16 +444,16 @@ export function ApprovalInboxPage() {
                           <span className="truncate">متقاضی: <strong className="text-gray-800 dark:text-gray-100">{requesterName}</strong></span>
                         </div>
 
-                        {amount !== undefined && amount !== null && (
+                        {amount > 0 && (
                           <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                             <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{formatPersianPrice(amount)}</strong></span>
+                            <span className="truncate">ارزش: <strong className="text-emerald-700 dark:text-emerald-400">{formatPersianPrice(amount, 'IRR')}</strong></span>
                           </div>
                         )}
 
                         <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300 col-span-2">
                           <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="truncate">گام جاری: <strong className="text-indigo-700 dark:text-indigo-300">{t.currentState?.title || t.title}</strong></span>
+                          <span className="truncate">گام جاری: <strong className="text-indigo-700 dark:text-indigo-300">{stepTitle}</strong></span>
                         </div>
                       </div>
 

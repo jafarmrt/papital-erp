@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApprovalInboxPage } from '../../pages/ApprovalInboxPage';
+import { formatPersianPrice } from '../../utils';
 
 // Approval inbox page against the row shapes /workflow/tasks/* return (package 14, PR د)
 const fetchJson = vi.fn();
@@ -158,5 +159,29 @@ describe('TD-464 the task modal shows only the opened task entity', () => {
     fireEvent.click(openButtons()[0]);
     await screen.findByText('PR-7');
     expect(fetchJson.mock.calls.filter((c) => c[0] === '/procurement/requisitions/7')).toHaveLength(1);
+  });
+});
+
+describe('TD-465 the task card shows the fields the inbox row carries', () => {
+  it('amount in rials, the delegation badge, the current step and the starter', async () => {
+    routeFetch(inboxRoutes([taskRow(1, '1', {
+      delegationInfo: { delegatedFromUserId: 4, delegationScope: 'ALL' },
+      currentStepTitle: 'بررسی مالی',
+      instance: { ...instance(1, '1'), startedBy: 3, startedByName: 'مریم احمدی' },
+    })]));
+    renderPage();
+    await screen.findAllByText('تأیید سند 1');
+    expect(screen.getByText(formatPersianPrice(1_250_000, 'IRR'))).toBeTruthy();
+    expect(screen.getByText('از تفویض')).toBeTruthy();
+    expect(screen.getByText('بررسی مالی')).toBeTruthy();
+    expect(screen.getByText('مریم احمدی')).toBeTruthy();
+    expect(screen.queryByText('ثبت‌کننده سیستم')).toBeNull();
+  });
+
+  it('a task without delegation has no delegation badge', async () => {
+    routeFetch(inboxRoutes([taskRow(1, '1', { currentStepTitle: 'بررسی مالی' })]));
+    renderPage();
+    await screen.findAllByText('تأیید سند 1');
+    expect(screen.queryByText('از تفویض')).toBeNull();
   });
 });
