@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.44 — Roleless Step Reminders Only to Workflow Approvers
+- **SLA Reminder Recipients:** a roleless (`ALL`) task's due reminder goes only to admins and holders of `workflow.approve` / `workflow.execute` (plus their active delegates) (TD-460, `sec_workflow_sla_reminder_recipients_td_460`).
+
 ### v9.0.43 — Workflow SLA Analytics No Longer Fails
 - **SLA Analytics Route:** every `WorkflowEngineService` facade method is bound to its own class, so `GET /workflow/analytics/sla` answers instead of a 500 (TD-450, `sec_workflow_sla_analytics_route_td_450`).
 

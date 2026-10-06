@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { orm, DbExecutor } from '../../db/drizzle.js';
 import {
   notifications,
+  roles as rolesTable,
   users,
   workflowDefinitions,
   workflowInstances,
@@ -16,12 +17,14 @@ import { WorkflowDelegationService } from './workflowDelegationService.js';
  * v7.0.101 (TD-085 بند ۴، تصمیم مالک محصول «یک بار به مسئول کار»): وقتی مهلت کار تاییدی (due_at از slaHours مرحله)
  * می‌گذرد، مسئول همان کار یک اعلان درون‌برنامه‌ای می‌گیرد؛ بدون تکرار، بدون رونوشت به مدیر و بدون پیامک یا ایمیل.
  * مسئول کار همان کسی است که کار را در کارتابل می‌بیند: کاربر تعیین‌شده و کاربران نامزد (به‌علاوه جانشین فعال آن‌ها
- * در تفویض)، وگرنه کاربران نقش تعیین‌شده (نقش «همه» یعنی همه کاربران). هر فرایند برای هر کاربر یک اعلان می‌گیرد،
+ * در تفویض)، وگرنه کاربران نقش تعیین‌شده (نقش «همه» از v9.0.44 یعنی مدیر سیستم و دارندگان workflow.approve / execute). هر فرایند برای هر کاربر یک اعلان می‌گیرد،
  * حتی اگر مرحله چند کار هم‌زمان داشته باشد. sla_reminded_at در همان تراکنش اعلان پر می‌شود.
  */
 
 export const WORKFLOW_SLA_REMINDER_LINK = '/approval-inbox';
 const ALL_ROLES = new Set(['all', '*']);
+/** v9.0.44 (TD-460، ت۱۰ الف): گیرندگان یادآوری گام بی‌نقش */
+const ROLELESS_REMINDER_PERMISSIONS = ['workflow.approve', 'workflow.execute', '*'];
 
 type TaskRow = typeof workflowTasks.$inferSelect;
 
@@ -47,8 +50,12 @@ async function resolveRecipients(tx: DbExecutor, task: TaskRow, workflowCode: st
       .map((r) => String(r).trim().toLowerCase()).filter(Boolean);
     const roles = candidateRoles.length > 0 ? candidateRoles : [String(task.assignedRole || '').trim().toLowerCase()].filter(Boolean);
     if (roles.length === 0) return [];
+    // v9.0.44 (TD-460، ت۱۰ الف): گام بی‌نقش («همه») فقط به مدیر سیستم و دارندگان مجوز تأیید یا اجرای گردش کار (از
+    // مجوزهای نقش) یادآوری می‌دهد؛ پیش‌تر به همه کاربران فعال، حتی بی هیچ مجوز گردش کار، با شماره سند می‌رفت
     const byRole = roles.some((r) => ALL_ROLES.has(r))
-      ? await tx.select({ id: users.id }).from(users).where(eq(users.isDeleted, 0))
+      ? await tx.select({ id: users.id }).from(users)
+        .leftJoin(rolesTable, sql`lower(${rolesTable.code}) = lower(${users.role})`)
+        .where(and(eq(users.isDeleted, 0), sql`(lower(${users.role}) = 'admin' OR coalesce(${rolesTable.permissions}, '[]'::jsonb) ?| array[${sql.join(ROLELESS_REMINDER_PERMISSIONS.map(p => sql`${p}`), sql`, `)}]::text[])`))
       : await tx.select({ id: users.id }).from(users)
         .where(and(eq(users.isDeleted, 0), inArray(sql`lower(${users.role})`, roles)));
     owners = byRole.map((u) => u.id);

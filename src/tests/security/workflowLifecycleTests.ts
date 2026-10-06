@@ -306,5 +306,33 @@ export async function runWorkflowLifecycleTests(shouldRun: ShouldRun): Promise<T
     });
   }
 
+  if (shouldRun('sec_workflow_sla_reminder_recipients_td_460', 'security', 'td460', 'workflow', 'package14')) {
+    await runCase(results, {
+      id: 'sec_workflow_sla_reminder_recipients_td_460',
+      name: 'v9.0.44: یادآوری مهلت گام بی‌نقش فقط به دارندگان مجوز تأیید یا اجرای گردش کار می‌رسد (TD-460)',
+      details: 'کار گام بی‌نقش با موعد گذشته: دارنده workflow.approve و دارنده workflow.execute یادآوری می‌گیرند؛ کاربری بی مجوز گردش کار نه',
+    }, async (h, wrong) => {
+      const { createTestWorkflow, createTestWorkflowInstance } = await import('../fixtures/factories.js');
+      const { WorkflowSlaReminderService } = await import('../../services/workflow/workflowSlaReminderService.js');
+      const approver = await h.sessionWith(['workflow.view', 'workflow.approve']);
+      const executor = await h.sessionWith(['workflow.execute']);
+      const outsider = await h.sessionWith(['daily_logs.view']);
+      const wf = await createTestWorkflow({ definition: { entityType: 'test_document', isActive: 0 } });
+      const inst = await createTestWorkflowInstance(wf.definition.id, wf.states.draft.id, 'test_document', `460${h.tag}`);
+      await h.q(
+        `INSERT INTO workflow_tasks (instance_id, transition_id, title, status, assigned_role, candidate_roles, due_at)
+         VALUES ($1, $2, 'کار آزمون ۴۶۰', 'pending', '', '["ALL"]'::jsonb, now() - interval '1 hour')`,
+        [inst.id, wf.transitions[0].id],
+      );
+      await WorkflowSlaReminderService.sendDueReminders();
+      const got = async (userId: number) => Number((await h.q(
+        `SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND title = 'مهلت کار تاییدی گذشت'`, [userId],
+      ))[0]?.n ?? 0);
+      if (await got(approver.userId) !== 1) wrong.push(`دارنده workflow.approve ${await got(approver.userId)} یادآوری گرفت، نه ۱`);
+      if (await got(executor.userId) !== 1) wrong.push(`دارنده workflow.execute ${await got(executor.userId)} یادآوری گرفت، نه ۱`);
+      if (await got(outsider.userId) !== 0) wrong.push(`کاربر بی مجوز گردش کار ${await got(outsider.userId)} یادآوری گرفت`);
+    });
+  }
+
   return results;
 }
