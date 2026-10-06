@@ -247,6 +247,21 @@ export function ApprovalInboxPage() {
     });
   }, [myTasks, activeTab, search]);
 
+  // TD-462 (یافته B14-20): هر بار باز یا بسته شدن کار، تصمیم و توضیح از نو آغاز می‌شوند؛ پیش‌تر «رد» و دلیلِ کاری
+  // که انصراف خورده بود برای کار بعدی از پیش انتخاب‌شده می‌ماند و ثبت، کار دوم را با دلیل کار اول رد می‌کرد
+  const resetDecision = () => {
+    setTaskAction('approve');
+    setComment('');
+  };
+  const openTask = (task: TaskItem) => {
+    resetDecision();
+    setSelectedTask(task);
+  };
+  const closeTask = () => {
+    resetDecision();
+    setSelectedTask(null);
+  };
+
   const handleExecuteTask = () => {
     if (!selectedTask) return;
     executeTaskMutation.mutate(
@@ -257,9 +272,7 @@ export function ApprovalInboxPage() {
       },
       {
         onSuccess: () => {
-          setSelectedTask(null);
-          setComment('');
-          setTaskAction('approve');
+          closeTask();
           handleRefreshAll();
         }
       }
@@ -554,7 +567,7 @@ export function ApprovalInboxPage() {
                     {/* Action Button */}
                     <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-end">
                       <button
-                        onClick={() => setSelectedTask(t)}
+                        onClick={() => openTask(t)}
                         className={`flex items-center gap-1 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${
                           isCompletedTask
                             ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
@@ -576,7 +589,7 @@ export function ApprovalInboxPage() {
       {selectedTask && (
         <TaskExecuteModal
           selectedTask={selectedTask}
-          onClose={() => setSelectedTask(null)}
+          onClose={closeTask}
           docDetails={docDetails}
           isLoadingDoc={isLoadingDoc}
           requisitionDetails={requisitionDetails}
