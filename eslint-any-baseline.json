@@ -185,7 +185,6 @@
   "src/services/events/eventSourcingReplayService.ts": 1,
   "src/services/events/outboxService.ts": 1,
   "src/services/workflow/workflowDslParser.ts": 1,
-  "src/services/workflow/workflowEventBus.ts": 1,
   "src/services/workflow/workflowTaskService.ts": 1,
   "src/services/workflow/workflowTransitionExecutor.ts": 1,
   "src/tests/fixtures/dbTestHelper.ts": 14,

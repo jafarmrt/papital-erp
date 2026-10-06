@@ -1099,29 +1099,31 @@ export class VoucherService {
    * Set Voucher Status (draft, approved, permanent)
    */
   static async setVoucherStatus(id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<JournalVoucher> {
-    await orm.transaction(async (tx) => {
-      const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
-      if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
-      if (status === 'draft' && existing.status !== 'draft') await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
-      if (existing.status === 'permanent' && status !== 'permanent') {
-        throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
-      }
-
-      await this.checkFiscalPeriodOpen(existing.date, tx);
-
-      if (status === 'permanent') {
-        if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
-          throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
-        }
-      }
-
-      await tx.update(journalVouchers).set({
-        status,
-        approvedById: status === 'draft' ? null : (userId || existing.approvedById || null)
-      }).where(eq(journalVouchers.id, id));
-    });
-
+    await orm.transaction(async (tx) => this.applyVoucherStatus(tx, id, status, userId));
     return this.getJournalVoucherById(id);
+  }
+
+  /** v9.0.2 (TD-415): تغییر وضعیت درون تراکنش فراخواننده (اقدام پس از انتقال گردش‌کار سند حسابداری) */
+  static async applyVoucherStatus(tx: DbExecutor, id: number, status: 'draft' | 'approved' | 'permanent', userId?: number): Promise<void> {
+    const [existing] = await tx.select().from(journalVouchers).where(and(eq(journalVouchers.id, id), eq(journalVouchers.isDeleted, 0))).for('update');
+    if (!existing) throw new NotFoundError('سند حسابداری یافت نشد');
+    if (status === 'draft' && existing.status !== 'draft') await this.assertNoActiveReversal(tx, existing, 'به پیش‌نویس برنمی‌گردد');
+    if (existing.status === 'permanent' && status !== 'permanent') {
+      throw new BusinessLogicError('اسناد دائم و قطعی‌شده قابل تغییر وضعیت به پیش‌نویس یا تایید نشده نیستند. لطفاً از گزینه «صدور سند برگشتی (ابطال سند)» یا «سند اصلاحی» استفاده فرمایید.');
+    }
+
+    await this.checkFiscalPeriodOpen(existing.date, tx);
+
+    if (status === 'permanent') {
+      if (Math.abs(Number(existing.totalDebit) - Number(existing.totalCredit)) > VOUCHER_BALANCE_TOLERANCE) {
+        throw new UnbalancedVoucherError('امکان قطعی‌سازی سند نامتراز وجود ندارد');
+      }
+    }
+
+    await tx.update(journalVouchers).set({
+      status,
+      approvedById: status === 'draft' ? null : (userId || existing.approvedById || null)
+    }).where(eq(journalVouchers.id, id));
   }
 }
 

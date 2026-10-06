@@ -8,33 +8,21 @@ import { logActivity } from '../lib/auditLogger.js';
 import { logger } from '../middleware/logger.js';
 import { AppError, ValidationError, NotFoundError, ConflictError } from '../errors/customErrors.js';
 import { WorkflowTransitionExecutor, type WorkflowSnapshotDsl, type WorkflowStateSnapshot, type WorkflowTransitionSnapshot } from './workflow/workflowTransitionExecutor.js';
+import { hasWorkflowTransitionAction } from './workflow/workflowTransitionActions.js';
 import { WorkflowDefinitionService } from './workflow/workflowDefinitionService.js';
 import { isUsableSnapshot } from './workflow/workflowSnapshot.js';
 import { DocumentService } from './document.service.js';
 import { userHasRoleOrPermission } from '../middleware/authorize.js';
 import { BACKDATE_PERMISSION } from './inventory/stockMovementDate.js';
 
-const PROCUREMENT_INCOMING_TYPE_SET = new Set(PROCUREMENT_INCOMING_TYPES);
 /** اقدام‌های گردش‌کار «دریافت کالا»ی درخواست خرید */
 const RECEIVE_ACTION_KEYS = ['receive_items', 'mark_received', 'receive'];
-/** v8.0.71 (TD-326): درخواستی که کالایش دریافت شده دوباره دریافت یا سفارش داده نمی‌شود */
-const RECEIVED_REQUISITION_STATUSES = new Set(['received', 'completed']);
 /** v8.0.71 (TD-326): درخواست ردشده دریافت یا سفارش داده نمی‌شود، مگر پس از بازگشایی */
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
-
-/**
- * v8.0.10 (TD-267): تحویل تدارکات فقط سند ورودی خرید را نهایی می‌کند. پیش‌تر هر سند غیرنهایی (از جمله پیش‌فاکتور فروش)
- * از این مسیر نهایی می‌شد و نهایی‌سازی پیش‌فاکتور آن را فاکتور فروش با خروج کالا می‌کرد.
- */
-function assertProcurementIncomingDocument(doc: { id: number; type: string | null; refNumber: string | null }): void {
-  if (!PROCUREMENT_INCOMING_TYPE_SET.has(String(doc.type))) {
-    throw new ValidationError(`سند «${doc.refNumber ?? doc.id}» (نوع ${doc.type ?? '-'}) سند خرید نیست و از مسیر تحویل تدارکات به انبار نهایی نمی‌شود.`);
-  }
-}
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
 import { applyDeliveredLines, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
-import { PROCUREMENT_INCOMING_TYPES, receiveRequisitionItems } from './procurement/requisitionReceiveAction.js';
+import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
@@ -485,7 +473,10 @@ export class ProcurementService {
    *
    * v8.0.71 (TD-326): کل اقدام در یک تراکنش و زیر قفل ردیف درخواست اجرا می‌شود و درخواست زیر همان قفل دوباره خوانده
    * می‌شود. «دریافت کالا»ی درخواستِ دریافت‌شده یا ردشده رد می‌شود، و نمونه گردش‌کار تنبل در همان تراکنش ساخته می‌شود؛
-   * پیش‌تر دو «دریافت» هم‌زمان درخواست بی‌نمونه دو نمونه و دو رسید می‌ساختند. شاخه دریافت: receiveRequisitionItems.
+   * پیش‌تر دو «دریافت» هم‌زمان درخواست بی‌نمونه دو نمونه و دو رسید می‌ساختند.
+   *
+   * v9.0.2 (TD-415): وضعیت درخواست و دریافت کالا را اقدام پس از انتقال تدارکات (applyRequisitionTransition) در همان
+   * تراکنش انتقال می‌نویسد، همان که برای انتقال از کارتابل هم اجرا می‌شود؛ این‌جا فقط درخواست پس از انتقال خوانده می‌شود.
    */
   static async executeWorkflowAction(
     requisitionId: number,
@@ -493,6 +484,10 @@ export class ProcurementService {
     user: { id?: number; username?: string; role?: string; permissions?: string[] },
     comment?: string
   ): Promise<{ success: boolean; requisition: PurchaseRequisition; message?: string }> {
+    if (!hasWorkflowTransitionAction('purchase_requisition')) {
+      // بی اقدام ثبت‌شده، گام جابه‌جا می‌شد ولی درخواست نه وضعیت می‌گرفت و نه کالایش دریافت می‌شد
+      throw new AppError('اقدام گردش‌کار درخواست خرید در راه‌اندازی سرور ثبت نشده است (registerWorkflowDomainActions).', 500, 'WF_DOMAIN_ACTIONS_NOT_REGISTERED');
+    }
     const isReceive = RECEIVE_ACTION_KEYS.includes(actionKey);
     // v8.0.4 (TD-257): نهایی‌سازی رسید پیش‌نویس با تاریخ پیش از آخرین گردش کالا فقط با مجوز همین کاربر
     const allowBackdate = isReceive ? await userHasRoleOrPermission(user, BACKDATE_PERMISSION) : false;
@@ -583,6 +578,7 @@ export class ProcurementService {
             userPermissions: user.permissions || [],
             comment: comment || 'تأیید هنگام دریافت کالا',
             snapshotData: { id: req.id, code: req.code, totalAmount: Number(req.totalEstimatedAmount || 0), priority: req.priority, status: req.status },
+            allowBackdate,
             tx
           });
           if (!('toState' in approval) || !approval.toState) {
@@ -595,62 +591,35 @@ export class ProcurementService {
         }
       }
 
-      let mappedStatus = req.status;
-      let transitionTitle = actionKey;
-
-      if (matchedTransition) {
-        transitionTitle = matchedTransition.title || actionKey;
-        const result = await WorkflowTransitionExecutor.executeTransition({
-          instanceId: req.workflowInstanceId,
-          transitionId: matchedTransition.id,
-          userId: user.id,
-          userName: user.username,
-          userRole: user.role,
-          userPermissions: user.permissions || [],
-          comment,
-          snapshotData: {
-            id: req.id,
-            code: req.code,
-            totalAmount: Number(req.totalEstimatedAmount || 0),
-            priority: req.priority,
-            status: req.status
-          },
-          tx
-        });
-
-        const toStateKey = result.toState?.stateKey;
-        if (toStateKey) {
-          if (toStateKey === 'draft' || toStateKey === 'pending') mappedStatus = 'pending';
-          else if (toStateKey === 'procurement_review') mappedStatus = 'under_review';
-          else if (toStateKey === 'manager_approval') mappedStatus = 'manager_approval';
-          else if (toStateKey === 'ordered') mappedStatus = 'ordered';
-          else if (toStateKey === 'received') mappedStatus = 'received';
-          else if (toStateKey === 'rejected') mappedStatus = 'rejected';
-        }
-      } else {
+      if (!matchedTransition) {
         // v8.0.99 (TD-379): اقدامی که انتقالی از گام جاری ندارد رد می‌شود. پیش‌تر «میان‌بر» وضعیت درخواست را مستقیم
         // عوض می‌کرد: درخواستِ دریافت‌شده «بازگشایی» و دوباره سفارش و وارد انبار می‌شد و درخواستِ ردشده بی بازگشایی تأیید.
         const stepTitle = states.find(s => s.id === wfInst.currentStateId)?.title || req.status;
         throw new ConflictError(`اقدام «${actionKey}» در گام فعلی درخواست خرید ${req.code} («${stepTitle}») مجاز نیست (WF_ACTION_NOT_IN_STEP).`);
       }
+      const transitionTitle = matchedTransition.title || actionKey;
+      await WorkflowTransitionExecutor.executeTransition({
+        instanceId: req.workflowInstanceId,
+        transitionId: matchedTransition.id,
+        userId: user.id,
+        userName: user.username,
+        userRole: user.role,
+        userPermissions: user.permissions || [],
+        comment,
+        snapshotData: {
+          id: req.id,
+          code: req.code,
+          totalAmount: Number(req.totalEstimatedAmount || 0),
+          priority: req.priority,
+          status: req.status
+        },
+        allowBackdate,
+        tx
+      });
 
-      const updatedItems = mappedStatus === 'received'
-        ? await receiveRequisitionItems(tx, { code: req.code, projectName: req.projectName, items: req.items as RequisitionItemWithReceipt[] }, {
-          username: user.username || 'کارشناس تدارکات',
-          allowBackdate,
-          assertIncoming: assertProcurementIncomingDocument,
-        })
-        : req.items;
-
-      const [updatedReq] = await tx.update(purchaseRequisitions)
-        .set({
-          status: mappedStatus,
-          items: updatedItems,
-          updatedAt: new Date().toISOString()
-        })
-        .where(eq(purchaseRequisitions.id, req.id))
-        .returning();
-      return { req, updatedReq, mappedStatus, transitionTitle };
+      // وضعیت و ردیف‌ها را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش نوشته است
+      const [updatedReq] = await tx.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.id, req.id));
+      return { req, updatedReq, mappedStatus: updatedReq.status, transitionTitle };
     });
     const { req, updatedReq, mappedStatus, transitionTitle } = outcome;
 
@@ -1230,7 +1199,8 @@ export class ProcurementService {
             await WorkflowTransitionExecutor.executeTransition({
               instanceId: wfInst.id,
               transitionId: trToReceived.id,
-              userId: user.id || 1,
+              // v9.0.2 (TD-415): بی شناسه کاربر، انتقال به نام کاربر ۱ ثبت نمی‌شود
+              userId: user.id,
               userName: user.username || 'انباردار تحویل‌گیرنده',
               comment: `تحویل و ورود خودکار اقلام به انبار با فاکتور خرید ${doc.refNumber}`
             });
@@ -1263,7 +1233,7 @@ export class ProcurementService {
     }
 
     await logActivity({
-      userId: user.id || 1,
+      userId: user.id,
       username: user.username || 'سیستم تدارکات',
       action: 'UPDATE',
       entity: 'document',

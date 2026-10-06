@@ -10,6 +10,7 @@ import { eq, desc } from 'drizzle-orm';
 import { logActivity } from '../../lib/auditLogger.js';
 import { getEntityContext } from './workflowDslParser.js';
 import { WorkflowTransitionExecutor } from './workflowTransitionExecutor.js';
+import { lockWorkflowEntity } from './workflowTransitionActions.js';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
 import { snapshotTransitionsOf } from './workflowSnapshot.js';
 import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../../errors/customErrors.js';
@@ -233,6 +234,8 @@ export class WorkflowTaskService {
       if (!taskRef) {
         throw new NotFoundError('وظیفه مورد نظر یافت نشد');
       }
+      // v9.0.2 (TD-415): ردیف موجودیتی که اقدام پس از انتقال می‌نویسد پیش از ردیف فرایند، همان ترتیب انتقال مستقیم
+      await lockWorkflowEntity(tx, taskRef.instanceId);
       await tx.select({ id: workflowInstances.id }).from(workflowInstances).where(eq(workflowInstances.id, taskRef.instanceId)).for('update');
       const [task] = await tx.select().from(workflowTasks).where(eq(workflowTasks.id, params.taskId)).for('update');
       if (!task) {

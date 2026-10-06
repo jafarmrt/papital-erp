@@ -1,6 +1,7 @@
 import { logger } from '../../middleware/logger.js';
 import { runSeedWithLock } from '../../db/seed.js';
 import { WorkflowEngineService } from '../../services/workflow/workflowEngineService.js';
+import { registerWorkflowDomainActions } from '../../services/system/workflowDomainActions.js';
 
 /**
  * v7.0.24 (TD-174) — Production-equivalent master-data bootstrap for the test runner
@@ -14,6 +15,9 @@ import { WorkflowEngineService } from '../../services/workflow/workflowEngineSer
  *
  * Only idempotent master-data seeding is mirrored here — no users, no background workers,
  * no outbound webhooks, no voucher re-sync.
+ *
+ * v9.0.2 (TD-415): the workflow post-transition actions are registered exactly as server.ts does,
+ * so workflow tests run the same in-transaction domain actions as production.
  */
 export async function bootstrapTestMasterData(): Promise<void> {
   const seedResult = await runSeedWithLock();
@@ -21,5 +25,6 @@ export async function bootstrapTestMasterData(): Promise<void> {
     throw new Error(`[TestBootstrap] Master-data seed failed: ${seedResult.message}`);
   }
   await WorkflowEngineService.seedDefaultWorkflows();
+  registerWorkflowDomainActions();
   logger.info('[TestBootstrap] Production-equivalent master data seeded for the test run.');
 }

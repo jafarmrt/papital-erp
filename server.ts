@@ -11,7 +11,7 @@ import { runMigrations } from './src/db/migrator.js';
 import { warmDisplayTimezone } from './src/lib/businessClock.js';
 import { runSeedWithLock } from './src/db/seed.js';
 import { migratePlainPasswords } from './src/db/migratePlainPasswords.js';
-import { registerWorkflowListeners } from './src/services/workflow/workflowEventBus.js';
+import { registerWorkflowDomainActions } from './src/services/system/workflowDomainActions.js';
 import { registerDomainEventHandlers } from './src/services/events/domainEventHandlers.js';
 import { OutboxService } from './src/services/events/outboxService.js';
 import { WorkflowSlaReminderService } from './src/services/workflow/workflowSlaReminderService.js';
@@ -48,7 +48,7 @@ async function startServer() {
 
   // Run database migrations, seed, and plain password migration in background with retry so port binds immediately
   (async () => {
-    registerWorkflowListeners();
+    registerWorkflowDomainActions();
     registerDomainEventHandlers();
     let migrationSucceeded = false;
     for (let attempt = 1; attempt <= 5; attempt++) {
