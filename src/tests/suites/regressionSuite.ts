@@ -10547,6 +10547,15 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.93, TD-481): the item opening voucher is worth its opening Kardex rows and rewrites no row
   const { runItemOpeningVoucherValueTests } = await import('../regression/itemOpeningVoucherValueTests.js');
   results.push(...await runItemOpeningVoucherValueTests(shouldRun));
+  // Package 6 (v9.0.94, TD-492): the stock movement chart counts ledger rows only, within the window
+  const { runMovementTrendLedgerTests } = await import('../regression/movementTrendLedgerTests.js');
+  results.push(...await runMovementTrendLedgerTests(shouldRun));
+  // Package 6 (v9.0.95, TD-493): a deleted transfer design answers 404 and its code can be saved again
+  const { runTransferCodeLifecycleTests } = await import('../regression/transferCodeLifecycleTests.js');
+  results.push(...await runTransferCodeLifecycleTests(shouldRun));
+  // Package 6 (v9.0.96, TD-496): the warehouse chart counts items with stock, not quantities of different units
+  const { runWarehouseItemCountTests } = await import('../regression/warehouseItemCountTests.js');
+  results.push(...await runWarehouseItemCountTests(shouldRun));
 
   return results;
 }

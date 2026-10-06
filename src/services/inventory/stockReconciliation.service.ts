@@ -206,7 +206,7 @@ export class StockReconciliationService {
 
       if (kardexBalance < 0 || scalarStock < 0) {
         discrepancies.push('kardex_negative');
-        anomalyDetails.push(`مانده کالا منفی می‌باشد (موجودی اسمی: ${scalarStock}، کاردکس: ${kardexBalance}).`);
+        anomalyDetails.push(`مانده کالا منفی می‌باشد (موجودی دفتری: ${scalarStock}، کاردکس: ${kardexBalance}).`);
         negativeStockItemsCount++;
       }
 

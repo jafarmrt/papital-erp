@@ -19,6 +19,15 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.96 — Warehouse UI Wording, Export Names and Warehouse Chart
+- **Warehouse UI:** decided Persian terms, Persian digits and surplus/shortage labels on the count sheet, Persian export file names with a failure message, and a warehouse chart that counts items instead of adding units (TD-496, `reg_warehouse_item_count_td_496`).
+
+### v9.0.95 — Deleted Transfer Codes Are Gone and Can Be Saved Again
+- **Transfer Codes:** a deleted design answers 404, saving its code again revives it instead of a 409, and the page lists every code (TD-493, `reg_transfer_code_lifecycle_td_493`).
+
+### v9.0.94 — Stock Movement Chart Counts the Kardex Ledger
+- **Stock Movement Chart:** transfers between warehouses, voided documents and rows dated after the current month no longer enter the in/out chart (TD-492, `reg_movement_trend_ledger_td_492`).
+
 ### v9.0.93 — Item Opening Voucher From Opening Kardex Rows
 - **Item Opening Voucher:** the opening voucher is worth the item's opening Kardex rows with or without the item workflow, no Kardex row is repriced, and mismatched opening vouchers are listed by the health check (TD-481, `reg_item_opening_voucher_value_td_481`).
 

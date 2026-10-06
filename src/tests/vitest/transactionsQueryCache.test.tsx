@@ -150,7 +150,7 @@ describe('TransactionsPage (Kardex) — React Query', () => {
 
     await act(async () => { exportRes.resolve({ data: [tx(1, 'سیم نقره')] }); });
     await waitFor(() => expect(writeFile).toHaveBeenCalledTimes(1));
-    expect(writeFile.mock.calls[0][1]).toBe('Transactions.xlsx');
+    expect(writeFile.mock.calls[0][1]).toBe('تراکنش‌های-کاردکس.xlsx');
     await waitFor(() => expect(button.disabled).toBe(false));
   });
 

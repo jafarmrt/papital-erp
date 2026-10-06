@@ -5,6 +5,8 @@ import { formatPersianNumber, formatPersianPrice, formatPersianDate, errorMessag
 import { useAppCurrency } from '../hooks/useAppCurrency';
 import { useItemKardexQuery } from '../hooks/queries/useTransactionQueries';
 import { runningKardexEntryLabel, type RunningKardexEntry } from '../lib/transactions/runningKardex';
+import { toast } from 'react-hot-toast';
+import { EXPORT_FAILED_MESSAGE, kardexExportFileName } from '../lib/inventoryAudit/exportFileNames';
 
 interface RunningKardexModalProps {
   itemId: number;
@@ -66,7 +68,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
         'انبار / موقعیت': e.location,
         'مانده در این انبار': e.runningLocationStock,
         'مانده کل موجودی': e.runningGlobalStock ?? e.runningBalance,
-        'میانگین بهای خرید': e.runningWac,
+        'میانگین موزون بها': e.runningWac,
         'ارزش کل مانده': e.runningTotalValue,
         'شماره سند/عطف': e.documentRef,
         'نوع سند': e.documentType,
@@ -78,9 +80,9 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
       const ws = xlsx.utils.json_to_sheet(rows);
       const wb = xlsx.utils.book_new();
       xlsx.utils.book_append_sheet(wb, ws, 'کاردکس کالا');
-      xlsx.writeFile(wb, `Kardex_${data.item?.code || itemId}.xlsx`);
-    } catch (err) {
-      console.error('Error exporting kardex:', err);
+      xlsx.writeFile(wb, kardexExportFileName(data.item?.code || itemId));
+    } catch {
+      toast.error(EXPORT_FAILED_MESSAGE);
     }
   };
 
@@ -105,7 +107,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                 )}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                ردیابی جریان مقداری و ریالی، مانده متوالی بعد از هر تراکنش و میانگین بهای خرید
+                ردیابی جریان مقداری و ریالی، مانده متوالی بعد از هر تراکنش و میانگین موزون بها
               </p>
             </div>
           </div>
@@ -191,7 +193,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                 {/* Valuation */}
                 <div className="bg-amber-50/70 border border-amber-200 p-4 rounded-xl space-y-1 text-xs">
                   <div className="flex justify-between items-center text-amber-900">
-                    <span>میانگین بهای خرید:</span>
+                    <span>میانگین موزون بها:</span>
                     <strong className="text-amber-950 font-mono">{formatPersianPrice(data.item?.weightedAverageCost, appCurrency)}</strong>
                   </div>
                   <div className="flex justify-between items-center text-slate-500">
@@ -286,7 +288,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                       <th className="p-3 text-center">مانده انبار</th>
                       <th className="p-3 text-center">مانده کل لحظه‌ای</th>
                       <th className="p-3 text-center">قیمت واحد</th>
-                      <th className="p-3 text-center">میانگین بهای خرید</th>
+                      <th className="p-3 text-center">میانگین موزون بها</th>
                       <th className="p-3">شماره سند / عطف</th>
                       <th className="p-3">توضیحات و کاربر</th>
                     </tr>
@@ -295,7 +297,7 @@ export default function RunningKardexModal({ itemId, isOpen, onClose }: RunningK
                     {filteredEntries.length === 0 ? (
                       <tr>
                         <td colSpan={11} className="p-8 text-center text-slate-400">
-                          هیچ تراکنشی منطبق بر فیلترهای انتخابی یافت نشد.
+                          هیچ تراکنشی با پالایش انتخابی یافت نشد.
                         </td>
                       </tr>
                     ) : (
