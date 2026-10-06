@@ -188,10 +188,11 @@ export async function checkRebuildMatchesLiveEngine(wh: string): Promise<string[
   problems.push(...await invariantProblems(scope, 'پیش از بازسازی'));
   for (const [label, itemId] of [['ابطال رسید فروخته‌شده', voidedReceiptItem.id], ['رسید با تاریخ گذشته', backdatedItem.id]] as const) {
     const before = await itemState(itemId);
-    await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
+    const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
     const after = await itemState(itemId);
-    if (after.stock !== before.stock || fin(after.wac).subtract(fin(before.wac)).abs().greaterThan(fin(0.01))) {
-      problems.push(`${label}: بازسازی کاردکس WAC یا موجودی را تغییر داد (${before.wac} × ${before.stock} ← ${after.wac} × ${after.stock})`);
+    // v9.0.77 (TD-487): بازسازی فقط مقدار را می‌سازد؛ WAC بازپخش کاردکس که گزارش می‌کند همان WAC زنده است
+    if (after.stock !== before.stock || fin(rebuilt.replayWac).subtract(fin(before.wac)).abs().greaterThan(fin(0.01))) {
+      problems.push(`${label}: بازسازی کاردکس موجودی را تغییر داد یا بازپخش به WAC دیگری رسید (${before.wac} × ${before.stock} ← ${rebuilt.replayWac} × ${after.stock})`);
     }
   }
   problems.push(...await invariantProblems(scope, 'پس از بازسازی'));
@@ -271,9 +272,8 @@ export async function checkReplayStartsAtZeroWac(wh: string): Promise<string[]> 
   }
   problems.push(...await invariantProblems(scope, 'پیش از بازسازی'));
   for (const [label, itemId, wac] of expected) {
-    await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
-    const rebuilt = await itemState(itemId);
-    if (fin(rebuilt.wac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازسازی کاردکس WAC را ${wac} ← ${rebuilt.wac} کرد`);
+    const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(itemId, { user: 'inv' });
+    if (fin(rebuilt.replayWac).subtract(fin(wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازپخش کاردکس WAC را ${rebuilt.replayWac} داد، انتظار ${wac}`);
   }
   return problems;
 }

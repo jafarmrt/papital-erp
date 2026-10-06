@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.77 — Kardex Rebuild Keeps WAC; WAC Correction Posts a Voucher
+- **Kardex Rebuild and WAC Correction:** the rebuild only rebuilds quantities and lists items whose WAC differs from the Kardex; correcting the WAC is a separate action with its own permission that issues a draft voucher for the value difference against 7012 (TD-487, `reg_kardex_wac_correction_td_487`).
+
 ### v9.0.76 — Inventory Integrity Table Reads the Server Report
 - **Inventory Integrity Tab:** the table and Excel export read the report the server sends (one shared type), so discrepant items are listed and exported instead of an always-empty table (TD-485, Vitest `inventoryIntegrityReport.test.tsx`).
 

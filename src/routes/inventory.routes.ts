@@ -13,6 +13,7 @@ import { KardexBackfillService } from '../services/inventory/kardexBackfill.serv
 import { WarehouseStockReconciliationService } from '../services/inventory/warehouseStockReconciliation.service.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { WAC_CORRECTION_PERMISSION } from '../lib/inventoryAudit/wacCorrection.js';
 import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
@@ -33,8 +34,14 @@ export const paramsItemIdSchema = z.object({
 export const rebuildStockSchema = z.object({
   body: z.object({
     itemId: z.coerce.number().int().positive('شناسه کالا نامعتبر است').optional(),
-    fixWAC: z.boolean().optional().default(false)
   }).optional()
+});
+
+// v9.0.77 (TD-487، تصمیم ت۳): اصلاح WAC جدا از بازسازی، با مجوز خودش (WAC_CORRECTION_PERMISSION)
+export const correctWacSchema = z.object({
+  body: z.object({
+    itemId: z.coerce.number().int().positive('شناسه کالا نامعتبر است'),
+  })
 });
 
 export const transferStockSchema = z.object({
@@ -235,14 +242,13 @@ router.post(
   authorizePermission('inventory.reconcile'),
   validate(rebuildStockSchema),
   asyncHandler(async (req, res) => {
-    const { itemId, fixWAC } = req.body || {};
+    const { itemId } = req.body || {};
     const user: LegacyNamedUser | undefined = req.user;
     const userName = user?.name || user?.username || 'مدیر سیستم';
     const userId = user?.id;
 
     if (itemId) {
       const singleResult = await InventoryIntegrityService.rebuildItemFromLedger(itemId, {
-        fixWAC,
         userId,
         user: userName
       });
@@ -263,7 +269,6 @@ router.post(
       });
     } else {
       const fullResult = await InventoryIntegrityService.rebuildAllFromLedger({
-        fixWAC,
         userId,
         user: userName
       });
@@ -273,7 +278,7 @@ router.post(
         action: 'UPDATE',
         entity: 'انبارداری و موجودی',
         entityId: 'ALL',
-        description: `بازسازی جامع موجودی تمام کالاها بر پایه کاردکس (اقلام بررسی شده: ${fullResult.totalItemsChecked}، مغایرت‌های اصلاح‌شده: ${fullResult.discrepanciesFixed}، اصلاح میانگین موزون: ${fullResult.wacRepairedCount})`,
+        description: `بازسازی جامع موجودی تمام کالاها بر پایه کاردکس (اقلام بررسی شده: ${fullResult.totalItemsChecked}، مغایرت‌های اصلاح‌شده: ${fullResult.discrepanciesFixed}، کالاهای با بهای میانگین ناهمخوان با کاردکس: ${fullResult.wacDifferenceCount})`,
         details: fullResult
       });
 
@@ -283,6 +288,28 @@ router.post(
         data: fullResult
       });
     }
+  })
+);
+
+// POST /api/inventory/correct-wac
+// v9.0.77 (TD-487، تصمیم ت۳): WAC کالا برابر بازپخش کاردکس می‌شود و در همان تراکنش سند پیش‌نویس اختلاف ارزش در برابر ۷۰۱۲ صادر
+// می‌شود؛ بازسازی کاردکس دیگر WAC را تغییر نمی‌دهد
+router.post(
+  '/correct-wac',
+  authorizePermission(WAC_CORRECTION_PERMISSION),
+  validate(correctWacSchema),
+  asyncHandler(async (req, res) => {
+    const user: LegacyNamedUser | undefined = req.user;
+    const result = await InventoryIntegrityService.correctItemWacFromLedger(Number(req.body.itemId), {
+      userId: user?.id,
+      user: user?.name || user?.username || 'مدیر سیستم',
+    });
+    res.json({
+      success: true,
+      message: `بهای میانگین کالای «${result.itemName}» از ${result.oldWac} به ${result.newWac} اصلاح شد` +
+        (result.voucherNumber ? ` و سند پیش‌نویس ${result.voucherNumber} برای اختلاف ارزش صادر شد.` : '.'),
+      data: result,
+    });
   })
 );
 

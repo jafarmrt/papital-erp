@@ -10516,6 +10516,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 6 (v9.0.75, TD-486): the integrity report checks WAC against the Kardex replay
   const { runIntegrityReportReplayWacTests } = await import('../regression/integrityReportReplayWacTests.js');
   results.push(...await runIntegrityReportReplayWacTests(shouldRun));
+  // Package 6 (v9.0.77, TD-487): the Kardex rebuild keeps WAC; WAC correction is a separate permission with a draft voucher
+  const { runKardexWacCorrectionTests } = await import('../regression/kardexWacCorrectionTests.js');
+  results.push(...await runKardexWacCorrectionTests(shouldRun));
 
   return results;
 }

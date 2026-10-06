@@ -106,9 +106,9 @@ export async function checkVoidOutflowRestoresCost(wh: string): Promise<string[]
     if (state.stock !== 15 || fin(state.wac).subtract(fin('166666.6667')).abs().greaterThan(fin(0.01))) {
       problems.push(`${label}: پس از ابطال خروج موجودی ${state.stock} و WAC ${state.wac}، انتظار ۱۵ و ۱۶۶٬۶۶۶٫۶۶۶۷`);
     }
-    await KardexWacRecalculatorService.rebuildItemFromLedger(item.id, { user: 'inv' });
-    const rebuilt = await itemState(item.id);
-    if (fin(rebuilt.wac).subtract(fin(state.wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازسازی کاردکس WAC را ${state.wac} ← ${rebuilt.wac} کرد`);
+    // v9.0.77 (TD-487): بازسازی WAC را تغییر نمی‌دهد؛ WAC بازپخش کاردکس که گزارش می‌کند باید همان WAC زنده باشد
+    const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(item.id, { user: 'inv' });
+    if (fin(rebuilt.replayWac).subtract(fin(state.wac)).abs().greaterThan(fin(0.01))) problems.push(`${label}: بازپخش کاردکس WAC را ${rebuilt.replayWac} داد، WAC زنده ${state.wac}`);
   }
   problems.push(...await invariantProblems(scope, 'پس از ابطال خروج‌ها'));
   return problems;
@@ -150,9 +150,8 @@ export async function checkZeroPriceReceiptAtWac(wh: string): Promise<string[]> 
   if (afterVoid.stock !== 10 || !fin(afterVoid.wac).equals(100000)) {
     problems.push(`ابطال رسید با قیمت صفر: موجودی ${afterVoid.stock} و WAC ${afterVoid.wac}، انتظار ۱۰ و ۱۰۰٬۰۰۰`);
   }
-  await KardexWacRecalculatorService.rebuildItemFromLedger(single.id, { user: 'inv' });
-  const rebuilt = await itemState(single.id);
-  if (!fin(rebuilt.wac).equals(afterVoid.wac)) problems.push(`بازسازی کاردکس پس از ابطال رسید با قیمت صفر WAC را ${afterVoid.wac} ← ${rebuilt.wac} کرد`);
+  const rebuilt = await KardexWacRecalculatorService.rebuildItemFromLedger(single.id, { user: 'inv' });
+  if (!fin(rebuilt.replayWac).equals(afterVoid.wac)) problems.push(`بازپخش کاردکس پس از ابطال رسید با قیمت صفر WAC را ${rebuilt.replayWac} داد، WAC زنده ${afterVoid.wac}`);
 
   // یک رسید تولید با دو ردیف همان کالا: ۱۰ × ۰ (به WAC ۱۰۰٬۰۰۰) و ۵ × ۲۵۰٬۰۰۰ (WAC ← ۱۳۰٬۰۰۰) ← سند حسابداری ۲٬۲۵۰٬۰۰۰
   await production([[mixed.id, 10, 100000]], '2026-04-01');
