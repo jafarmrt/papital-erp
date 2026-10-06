@@ -4,6 +4,7 @@ import { AccountMappingService } from '../../services/accounting/accountMapping.
 import { createLedgerLocationResolver } from '../../services/inventory/warehouseResolver.js';
 import { activeLedgerRows, isInRow, isOutRow, QTY_TOLERANCE, rows } from './ledgerRows.js';
 import { checkKardexRebuildWac } from './kardexRebuildInvariant.js';
+import { checkBankInvariants } from './bankInvariants.js';
 
 /**
  * v8.0.1 — ناوردایی‌های قابل اجرای منطق کاری (V8_MASTER_ROADMAP.md بخش ۴).
@@ -27,7 +28,11 @@ export type InvariantId =
   | 'I6_void_trial_balance'
   | 'I13_kardex_rebuild_wac'
   /** شبیه‌ساز: برگشت از فروش بیش از مقدار فروخته‌شده پذیرفته شد */
-  | 'I14_return_within_sold';
+  | 'I14_return_within_sold'
+  /** v9.0.55 (TD-499): مانده بانک = ردیف‌های دفتری آن (هر وضعیت سند) + مانده اول دوره بی سند افتتاحیه */
+  | 'I15_bank_balance_matches_ledger'
+  /** v9.0.55 (TD-499): ردیف خزانه‌ای که اثر تراکنش باطل‌شده را بی سند برمی‌گرداند («احیا») نیست */
+  | 'I16_no_revived_treasury_without_voucher';
 
 export interface InvariantViolation {
   invariant: InvariantId;
@@ -44,6 +49,8 @@ export interface InvariantScope {
   documentIdAfter: number;
   /** فقط اسناد حسابداری با شناسه بزرگ‌تر از این مقدار */
   voucherIdAfter: number;
+  /** v9.0.55 (TD-499): حساب‌های خزانه‌ای که ناوردایی‌های بانک (I15، I16) روی آن‌ها سنجیده می‌شود */
+  bankAccountIds?: number[];
 }
 
 /** انواع سندی که هنگام ثبت نهایی سند حسابداری می‌گیرند (انبارگردانی از v8.0.3، TD-255) */
@@ -313,5 +320,6 @@ export async function checkBusinessInvariants(scope: InvariantScope): Promise<In
     ...(await checkInvoiceReceivable(scope)),
     ...(await checkVoidTrialBalance(scope)),
     ...(await checkKardexRebuildWac(scope)),
+    ...(await checkBankInvariants(scope.bankAccountIds ?? [])),
   ];
 }

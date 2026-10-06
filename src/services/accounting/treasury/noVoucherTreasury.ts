@@ -33,14 +33,23 @@ export interface NoVoucherTreasuryEntry {
   bankTitle: string | null;
 }
 
-/** تراکنش‌های خزانه فعال (نه باطل‌شده و نه ردیف معکوس) و چک‌های حذف‌نشده‌ای که سند حسابداری ندارند */
+/**
+ * تراکنش‌های خزانه فعال (نه باطل‌شده) و چک‌های حذف‌نشده‌ای که سند حسابداری ندارند. ردیف معکوسِ ساده (ابطال یک تراکنش)
+ * فهرست نمی‌شود، چون اثر اصل را خنثی می‌کند. v9.0.55 (TD-499، ت۱ الف): ردیفی که زنجیره ابطالش اثر اصل را برمی‌گرداند
+ * (عمق زوج ≥ ۲، «احیا»؛ پیش از v9.0.55 با ابطال ردیف معکوس ساخته می‌شد) فهرست می‌شود، چون پول را بی سند به بانک برگردانده است.
+ */
 export async function findTreasuryEntriesWithoutVoucher(): Promise<NoVoucherTreasuryEntry[]> {
   const res = await orm.execute(sql`
+    WITH RECURSIVE chain AS (
+      SELECT id, 0 AS depth FROM treasury_transactions WHERE reversal_of_id IS NULL
+      UNION ALL
+      SELECT t.id, c.depth + 1 FROM treasury_transactions t JOIN chain c ON t.reversal_of_id = c.id
+    )
     SELECT 'treasury' AS kind, t.id, t.transaction_number AS number, t.type AS entry_type, t.date::text AS date,
            t.amount::text AS amount, COALESCE(t.currency, 'IRR') AS currency, COALESCE(t.party_name, '') AS party_name,
            t.bank_account_id, b.title AS bank_title
-      FROM treasury_transactions t LEFT JOIN bank_accounts b ON b.id = t.bank_account_id
-     WHERE t.is_deleted = 0 AND t.voucher_id IS NULL AND t.reversal_of_id IS NULL AND COALESCE(t.status, 'completed') <> 'voided'
+      FROM treasury_transactions t JOIN chain c ON c.id = t.id LEFT JOIN bank_accounts b ON b.id = t.bank_account_id
+     WHERE t.is_deleted = 0 AND t.voucher_id IS NULL AND c.depth % 2 = 0 AND COALESCE(t.status, 'completed') <> 'voided'
     UNION ALL
     SELECT 'cheque' AS kind, c.id, c.cheque_number AS number, c.type AS entry_type, c.issue_date::text AS date,
            c.amount::text AS amount, COALESCE(c.currency, 'IRR') AS currency, COALESCE(c.party_name, '') AS party_name,
@@ -74,7 +83,7 @@ export function buildNoVoucherTreasuryHealthTest(entries: NoVoucherTreasuryEntry
     id: 'treasury_without_voucher',
     category: 'treasury',
     title: 'تراکنش‌های خزانه و چک‌های بدون سند حسابداری',
-    description: 'دریافت و پرداخت، انتقال بانکی یا چکی که با گزینه «بدون سند حسابداری» ثبت شده مانده بانک یا دفتر چک را بی‌سند تغییر داده است؛ این گزینه فقط با مجوز جدا (مثلاً برای مانده‌های افتتاحیه) در دسترس است',
+    description: 'دریافت و پرداخت، انتقال بانکی یا چکی که با گزینه «بدون سند حسابداری» ثبت شده مانده بانک یا دفتر چک را بی‌سند تغییر داده است؛ این گزینه فقط با مجوز جدا (مثلاً برای مانده‌های افتتاحیه) در دسترس است. ردیفی که پیش از نسخه ۹.۰.۵۵ با ابطال ردیف معکوس، تراکنش باطل‌شده را بی سند برگردانده است هم این‌جا می‌آید',
     status: entries.length > 0 ? 'warning' : 'healthy',
     scoreImpact: 0,
     count: entries.length,

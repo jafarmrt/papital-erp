@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.55 — Treasury Reversal Rows Can No Longer Be Voided
+- **Treasury Void (P0):** voiding the reversal row of a voided receipt or payment is refused with 409 and the button is gone; before, it put the money back in the bank with no voucher and without the no-voucher permission. Legacy revived rows are listed by the financial health check, and new bank invariants I15/I16 compare each bank with its ledger (TD-499, `reg_treasury_reversal_void_refused_td_499`, `inv_td_499_bank_invariants_hold`).
+
 ### v9.0.54 — Package 4 Treasury and Cheques Audit Documentation
 - **Stability Audit, Package 4 (Treasury and Cheques):** `docs/audit/STABILITY_AUDIT_V9.md` gets the treasury section; its 19 proven findings are registered as open rows TD-497 to TD-515 (one P0: voiding the reversal row of a voided receipt put the money back in the bank with no voucher). Documentation only; no behaviour change.
 
