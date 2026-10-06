@@ -47,6 +47,8 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
   const t1Start = Date.now();
   try {
     const wf = await createTestWorkflow({
+      // v9.0.33 (TD-443): شناسه ساختگی؛ نوع «document» فقط روی سند موجود شروع می‌شود
+      definition: { entityType: 'test_document' },
       states: [
         { key: 'draft', title: 'پیش‌نویس', type: 'initial' },
         { key: 'review', title: 'در حال بررسی', type: 'intermediate' },
@@ -61,7 +63,7 @@ export async function runIntegrationTests(): Promise<TestCaseResult[]> {
     const user = await createTestUser({ role: 'admin' });
     const instance = await WorkflowTransitionExecutor.startInstance({
       workflowDefinitionId: wf.definition.id,
-      entityType: 'document',
+      entityType: 'test_document',
       entityId: `DOC_WF_${Date.now()}`,
       userId: user.id,
       userName: user.username

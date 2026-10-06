@@ -28,6 +28,17 @@ const definitionVersionParamSchema = z.object({
   })
 });
 
+/** v9.0.33 (TD-443): بدنه شروع فرایند؛ شناسه موجودیت عدد یا رشته کوتاه است، نه شیء */
+const workflowEntityIdInput = z.union([z.number().int().positive(), z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_.:-]+$/, 'شناسه موجودیت نامعتبر است')])
+  .transform((v) => String(v));
+const startWorkflowSchema = z.object({
+  body: z.object({
+    workflowCode: z.string().trim().min(1, 'کد گردش کار الزامی است').max(100),
+    entityType: z.string().trim().min(1, 'نوع موجودیت الزامی است').max(50).regex(/^[a-z][a-z0-9_]*$/, 'نوع موجودیت نامعتبر است'),
+    entityId: workflowEntityIdInput,
+  }),
+});
+
 const router = Router();
 
 // Protect all workflow routes
@@ -190,18 +201,14 @@ router.get('/instance/:entityType/:entityId', authorizePermission('workflow.view
  * Start or attach a workflow instance to an entity
  */
 // حوزه H (TD-298): شروع فرآیند تغییر است؛ workflow.view (مشاهده) کافی نیست
-router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'documents.create', 'documents.edit'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+router.post('/start', authorizePermission('workflow.execute', 'workflow.manage', 'workflow.admin', 'workflow.approve', 'documents.create', 'documents.edit'), validate(startWorkflowSchema), asyncHandler(async (req: AuthenticatedRequest, res) => {
   try {
-    const { workflowCode, entityType, entityId } = req.body;
-
-    if (!workflowCode || !entityType || !entityId) {
-      return res.status(400).json({ error: 'اطلاعات کد ورکفلو، نوع و شناسه موجودیت الزامی است' });
-    }
+    const { workflowCode, entityType, entityId } = req.body as z.infer<typeof startWorkflowSchema>['body'];
 
     const instanceData = await WorkflowEngineService.startWorkflow({
       workflowCode,
       entityType,
-      entityId: String(entityId),
+      entityId,
       userId: req.user?.id,
       userName: req.user?.fullName || req.user?.username
     });

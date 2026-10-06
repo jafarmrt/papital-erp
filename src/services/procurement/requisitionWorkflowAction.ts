@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { purchaseRequisitions } from '../../db/schema.js';
-import { registerWorkflowTransitionAction, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
+import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
 import type { RequisitionItemWithReceipt } from './requisitionReceipt.js';
 import { assertProcurementIncomingDocument, receiveRequisitionItems, RECEIVED_REQUISITION_STATUSES } from './requisitionReceiveAction.js';
 
@@ -63,5 +63,13 @@ export function registerRequisitionWorkflowAction(): void {
       await lockRequisition(tx, entityId);
     },
     run: applyRequisitionTransition,
+    // v9.0.33 (TD-443): درخواست هست و حذف نشده است
+    entityExists: async (tx, entityId) => {
+      const id = workflowEntityNumericId(entityId);
+      if (id === undefined) return false;
+      const [row] = await tx.select({ id: purchaseRequisitions.id }).from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)));
+      return !!row;
+    },
   });
 }

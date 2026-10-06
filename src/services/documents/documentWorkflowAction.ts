@@ -1,5 +1,7 @@
+import { and, eq } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
-import { registerWorkflowTransitionAction, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
+import { documents } from '../../db/schema.js';
+import { registerWorkflowTransitionAction, workflowEntityNumericId, type WorkflowTransitionEvent } from '../workflow/workflowTransitionActions.js';
 import { DocumentLifecycleService } from './documentLifecycle.service.js';
 
 /**
@@ -15,6 +17,14 @@ export async function finalizeApprovedDocument(tx: DbExecutor, event: WorkflowTr
   await DocumentLifecycleService.finalizeDocument(documentId, event.performedByName || 'تایید خودکار گردش‌کار', tx, { allowBackdate: event.allowBackdate });
 }
 
+/** v9.0.33 (TD-443): سند هست و حذف نشده است */
+async function documentExists(tx: DbExecutor, entityId: string): Promise<boolean> {
+  const id = workflowEntityNumericId(entityId);
+  if (id === undefined) return false;
+  const [row] = await tx.select({ id: documents.id }).from(documents).where(and(eq(documents.id, id), eq(documents.isDeleted, 0)));
+  return !!row;
+}
+
 export function registerDocumentWorkflowAction(): void {
-  registerWorkflowTransitionAction(['document'], { run: finalizeApprovedDocument });
+  registerWorkflowTransitionAction(['document'], { run: finalizeApprovedDocument, entityExists: documentExists });
 }

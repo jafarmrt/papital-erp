@@ -32,6 +32,11 @@ export interface WorkflowTransitionAction {
    * کارتابل و اقدام هم‌زمان صفحه دامنه دو قفل را وارونه می‌گیرند
    */
   lockEntity?: (tx: DbExecutor, entityId: string) => Promise<void>;
+  /**
+   * v9.0.33 (TD-443): موجودیت هست و حذف نشده است؛ فرایند فقط روی موجودیت موجود شروع می‌شود (پیش‌تر `/workflow/start`
+   * فرایند را روی شناسه ناموجود هم می‌ساخت)
+   */
+  entityExists?: (tx: DbExecutor, entityId: string) => Promise<boolean>;
   /** پس از جابه‌جایی گام، درون همان تراکنش؛ خطای آن انتقال را رد می‌کند */
   run: (tx: DbExecutor, event: WorkflowTransitionEvent) => Promise<void>;
 }
@@ -54,6 +59,18 @@ export async function lockWorkflowEntity(tx: DbExecutor, instanceId: number): Pr
     .from(workflowInstances).where(eq(workflowInstances.id, instanceId));
   const lock = ref ? actions.get(ref.entityType)?.lockEntity : undefined;
   if (ref && lock) await lock(tx, ref.entityId);
+}
+
+/** v9.0.33 (TD-443): موجودیتِ نوعی که دامنه‌اش بررسی وجود ثبت کرده باید باشد؛ نوع بی دامنه (طرح آزمایشی طراح) آزاد است */
+export async function workflowEntityExists(tx: DbExecutor, entityType: string, entityId: string): Promise<boolean> {
+  const exists = actions.get(entityType)?.entityExists;
+  return exists ? exists(tx, entityId) : true;
+}
+
+/** شناسه عددی مثبت موجودیت، یا undefined */
+export function workflowEntityNumericId(entityId: string): number | undefined {
+  const id = Number(entityId);
+  return /^\d+$/.test(String(entityId).trim()) && Number.isSafeInteger(id) && id > 0 ? id : undefined;
 }
 
 export async function runWorkflowTransitionAction(tx: DbExecutor, event: WorkflowTransitionEvent): Promise<void> {

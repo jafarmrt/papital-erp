@@ -22,7 +22,7 @@ import { WorkflowRuleEngine, getEntityContext } from './workflowDslParser';
 import { WorkflowQuorumService } from './workflowQuorumService';
 import { WorkflowDefinitionService } from './workflowDefinitionService';
 import { WorkflowDelegationService, type ActingDelegation } from './workflowDelegationService.js';
-import { lockWorkflowEntity, runWorkflowTransitionAction } from './workflowTransitionActions.js';
+import { lockWorkflowEntity, runWorkflowTransitionAction, workflowEntityExists } from './workflowTransitionActions.js';
 import { buildDefinitionSnapshot, isUsableSnapshot, snapshotTransitionsOf } from './workflowSnapshot.js';
 import { describeUnmetWorkflowRule, describeWorkflowRule } from '../../lib/workflowRuleText.js';
 import type { RuleExpression } from '../ruleEngine.service.js';
@@ -450,6 +450,19 @@ export class WorkflowTransitionExecutor {
         throw new NotFoundError(`هیچ فرآیند کاری فعال برای موجودیت '${params.entityType}' پیدا نشد.`);
       }
 
+      // v9.0.33 (TD-443): فرایند فقط با تعریف فعالِ همان نوع موجودیت و روی موجودیت موجود شروع می‌شود. پیش‌تر هر کد
+      // گردش‌کاری روی هر نوع موجودیتی شروع می‌شد و اقدام دامنه نوع موجودیت را از نمونه برمی‌داشت: گردش‌کار بی‌نقش اسناد
+      // روی سند حسابداری، آن را بی مجوز حسابداری تأیید می‌کرد.
+      if (def.entityType !== params.entityType) {
+        throw new ValidationError(`گردش کار «${def.title}» برای نوع «${def.entityType}» است و روی «${params.entityType}» شروع نمی‌شود (WF_ENTITY_TYPE_MISMATCH)`);
+      }
+      if (Number(def.isActive) !== 1) {
+        throw new ValidationError(`گردش کار «${def.title}» فعال نیست`);
+      }
+      if (!(await workflowEntityExists(tx, params.entityType, String(params.entityId)))) {
+        throw new NotFoundError(`موجودیت «${params.entityType}» با شناسه ${params.entityId} یافت نشد`);
+      }
+
       // Check if instance already exists
       const [existing] = await tx.select().from(workflowInstances).where(and(
         eq(workflowInstances.workflowDefinitionId, def.id),
@@ -577,6 +590,15 @@ export class WorkflowTransitionExecutor {
       // پایین‌تر انتقال باید از گام جاری باشد. فرایند تکمیل‌شده هرگز ادامه نمی‌یابد.
       if (instance.status !== 'IN_PROGRESS' && instance.status !== 'REJECTED') {
         throw new ConflictError('این چرخه کاری قبلاً خاتمه یافته یا نهایی شده است');
+      }
+
+      // v9.0.33 (TD-443): فرایندی که تعریفش برای نوع دیگری است (ساخته‌شده پیش از v9.0.33 با کد دلخواه) پیش نمی‌رود؛
+      // اقدام دامنه فقط برای تعریفِ همان نوع موجودیت اجرا می‌شود
+      const definitionEntityType = (instance.snapshotDsl as WorkflowSnapshotDsl | null)?.entityType
+        ?? (await tx.select({ entityType: workflowDefinitions.entityType }).from(workflowDefinitions)
+          .where(eq(workflowDefinitions.id, instance.workflowDefinitionId)))[0]?.entityType;
+      if (definitionEntityType !== instance.entityType) {
+        throw new ConflictError(`این فرایند با گردش کار نوع «${definitionEntityType ?? 'نامعلوم'}» روی «${instance.entityType}» ساخته شده و پیش نمی‌رود (WF_ENTITY_TYPE_MISMATCH)`);
       }
 
       updateRequestContext({
@@ -958,10 +980,17 @@ export class WorkflowTransitionExecutor {
     userPermissions: string[] = [],
     txExecutor: DbClient = orm
   ) {
-    const [inst] = await txExecutor.select().from(workflowInstances).where(and(
-      eq(workflowInstances.entityType, entityType),
-      eq(workflowInstances.entityId, String(entityId))
-    )).orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id)); // v7.0.127 (TD-247): زمان برابر → بزرگ‌ترین شناسه
+    // v9.0.33 (TD-443): فقط فرایند تعریفِ همان نوع موجودیت؛ فرایند ناهمخوان جای فرایند واقعی را در ویجت نمی‌گیرد
+    const [row] = await txExecutor.select({ instance: workflowInstances }).from(workflowInstances)
+      .innerJoin(workflowDefinitions, and(
+        eq(workflowDefinitions.id, workflowInstances.workflowDefinitionId),
+        eq(workflowDefinitions.entityType, workflowInstances.entityType)
+      ))
+      .where(and(
+        eq(workflowInstances.entityType, entityType),
+        eq(workflowInstances.entityId, String(entityId))
+      )).orderBy(desc(workflowInstances.createdAt), desc(workflowInstances.id)); // v7.0.127 (TD-247): زمان برابر → بزرگ‌ترین شناسه
+    const inst = row?.instance;
 
     if (!inst) return null;
 
