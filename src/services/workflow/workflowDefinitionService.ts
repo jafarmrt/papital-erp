@@ -7,7 +7,8 @@ import {
 } from '../../db/schema.js';
 import { eq, and, sql, inArray, type SQL } from 'drizzle-orm';
 import { logger } from '../../middleware/logger.js';
-import { ConflictError, NotFoundError } from '../../errors/customErrors.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
+import { workflowDesignErrors } from '../../lib/workflow/workflowDesignRules.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
 import { DOC_APPROVAL_STEP_GUARDS, upgradeLegacyDocApprovalGuards } from './docApprovalGuards.js';
 import { 
@@ -77,6 +78,22 @@ export interface SaveWorkflowDefinitionPayload {
     [key: string]: unknown;
   }>;
   [key: string]: unknown;
+}
+
+/**
+ * v9.0.45 (TD-452، B14-10): طرح ناقص ذخیره نمی‌شود (۴۲۲ با پیام فارسی): کد، عنوان و نوع موجودیت متن‌اند؛ دقیقاً یک
+ * گام آغاز، دست‌کم یک گام پایان، کلید یکتا، هر اقدام با مبدأ و مقصد پیداشده و بی خروج از گام پایانی (جز «رد شده»).
+ */
+function assertSavableWorkflowDesign(payload: SaveWorkflowDefinitionPayload): void {
+  const header = [
+    typeof payload.code === 'string' && payload.code.trim() ? '' : 'کد گردش کار باید متن باشد.',
+    typeof payload.title === 'string' && payload.title.trim() ? '' : 'عنوان گردش کار باید متن باشد.',
+    typeof payload.entityType === 'string' && payload.entityType.trim() ? '' : 'نوع موجودیت گردش کار باید متن باشد.',
+  ].filter(Boolean);
+  const errors = [...header, ...workflowDesignErrors(payload.states, payload.transitions)];
+  if (errors.length > 0) {
+    throw new ValidationError(`طرح گردش کار ذخیره نشد: ${errors.join(' ')}`, { errors });
+  }
 }
 
 export class WorkflowDefinitionService {
@@ -230,6 +247,7 @@ export class WorkflowDefinitionService {
    * Save definition with states & transitions DSL structure
    */
   static async saveWorkflowDefinition(payload: SaveWorkflowDefinitionPayload) {
+    assertSavableWorkflowDesign(payload);
     // v7.0.87 (TD-112): تعریف، وضعیت‌ها، انتقال‌ها و نسخه تازه در یک تراکنش ذخیره می‌شوند
     const defId = await orm.transaction(async (tx) => {
       let finalDefId = payload.id;
@@ -298,22 +316,24 @@ export class WorkflowDefinitionService {
             const fromId = fromKey !== undefined ? stateIdMap.get(fromKey) : undefined;
             const toId = toKey !== undefined ? stateIdMap.get(toKey) : undefined;
 
-            if (fromId && toId) {
-              await tx.insert(workflowTransitions).values({
-                workflowDefinitionId: finalDefId,
-                fromStateId: fromId,
-                toStateId: toId,
-                actionKey: tr.actionKey || tr.key || 'action',
-                title: tr.title || 'انتقال',
-                requiredRole: tr.requiredRole || '',
-                requiredPermission: tr.requiredPermission || '',
-                approvalRuleType: tr.approvalRuleType || tr.parallelApprovalRule || 'SINGLE',
-                kValue: Number(tr.kValue) || 1,
-                ruleConditionsJson: tr.ruleConditionsJson || [],
-                autoActionKey: tr.autoActionKey || '',
-                isInitiatorExcluded: tr.isInitiatorExcluded === true || Number(tr.isInitiatorExcluded) === 1 ? 1 : 0
-              });
+            // v9.0.45 (TD-452): اقدامی که مبدأ یا مقصدش پیدا نشود رد می‌شود، نه بی‌صدا حذف
+            if (!fromId || !toId) {
+              throw new ValidationError(`طرح گردش کار ذخیره نشد: گام مبدأ یا مقصد اقدام «${tr.title || tr.actionKey}» پیدا نشد.`);
             }
+            await tx.insert(workflowTransitions).values({
+              workflowDefinitionId: finalDefId,
+              fromStateId: fromId,
+              toStateId: toId,
+              actionKey: tr.actionKey || tr.key || 'action',
+              title: tr.title || 'انتقال',
+              requiredRole: tr.requiredRole || '',
+              requiredPermission: tr.requiredPermission || '',
+              approvalRuleType: tr.approvalRuleType || tr.parallelApprovalRule || 'SINGLE',
+              kValue: Number(tr.kValue) || 1,
+              ruleConditionsJson: tr.ruleConditionsJson || [],
+              autoActionKey: tr.autoActionKey || '',
+              isInitiatorExcluded: tr.isInitiatorExcluded === true || Number(tr.isInitiatorExcluded) === 1 ? 1 : 0
+            });
           }
         }
       }

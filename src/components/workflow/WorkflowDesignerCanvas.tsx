@@ -9,6 +9,7 @@ import {
 } from '../../hooks/queries/useWorkflowQueries';
 import { toast } from 'react-hot-toast';
 import { WorkflowEdgeGuardFields } from './WorkflowEdgeGuardFields';
+import { renameDesignStateKey, workflowDesignErrors } from '../../lib/workflow/workflowDesignRules';
 
 interface WorkflowDesignerCanvasProps {
   definitionId: number;
@@ -220,6 +221,13 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
   const handleSaveAll = () => {
     if (!defTitle) {
       toast.error('عنوان ورکفلو الزامی است');
+      return;
+    }
+
+    // v9.0.45 (TD-452): همان قواعد ساختاری سرور پیش از ذخیره
+    const designErrors = workflowDesignErrors(nodes, edges);
+    if (designErrors.length > 0) {
+      toast.error(designErrors.join('\n'));
       return;
     }
 
@@ -453,7 +461,10 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                   value={selectedNode.stateKey}
                   onChange={(e) => {
                     const newKey = e.target.value;
-                    setNodes(prev => prev.map(n => n.stateKey === selectedNodeKey ? { ...n, stateKey: newKey } : n));
+                    // v9.0.45 (TD-452): اقدام‌های گام با کلید تازه همراهش می‌مانند
+                    const renamed = renameDesignStateKey(nodes, edges, selectedNode.stateKey, newKey);
+                    setNodes(renamed.nodes);
+                    setEdges(renamed.edges);
                     setSelectedNodeKey(newKey);
                   }}
                   className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.45 — Workflow Designs Are Validated Before Saving
+- **Workflow Design Validation:** a definition is saved only with exactly one initial step, at least one terminal step, unique keys and resolvable actions, no exit from a terminal step except `rejected` (422 otherwise); renaming a step key in the designer keeps its actions (TD-452, `sec_workflow_design_validation_td_452`).
+
 ### v9.0.44 — Roleless Step Reminders Only to Workflow Approvers
 - **SLA Reminder Recipients:** a roleless (`ALL`) task's due reminder goes only to admins and holders of `workflow.approve` / `workflow.execute` (plus their active delegates) (TD-460, `sec_workflow_sla_reminder_recipients_td_460`).
 
