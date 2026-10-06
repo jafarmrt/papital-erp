@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.54 — Package 4 Treasury and Cheques Audit Documentation
+- **Stability Audit, Package 4 (Treasury and Cheques):** `docs/audit/STABILITY_AUDIT_V9.md` gets the treasury section; its 19 proven findings are registered as open rows TD-497 to TD-515 (one P0: voiding the reversal row of a voided receipt put the money back in the bank with no voucher). Documentation only; no behaviour change.
+
 ### v9.0.53 — node_modules No Longer Tracked by Git
 - **Deployment:** the `node_modules` symlink committed in v9.0.25 is removed, `.gitignore` uses `/node_modules` (also matches a symlink), and `update.sh` untracks a leftover symlink entry before `git pull`; servers on v9.0.25+ run `git rm -q --cached node_modules` once before updating (TD-472, B01-03, `node_modules_never_tracked_td_472`).
 
