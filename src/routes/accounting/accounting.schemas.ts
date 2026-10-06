@@ -376,6 +376,9 @@ export const createChequeSchema = z.object({
     description: z.string().optional(),
     createVoucher: z.boolean().optional(),
     attachments: z.array(z.any()).optional(),
+    // v9.0.74 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
+    purpose: z.enum(['settlement', 'advance', 'other']).optional(),
+    contraAccountId: z.coerce.number().int().positive().nullable().optional(),
   })
 });
 

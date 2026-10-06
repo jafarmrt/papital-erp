@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.74 — Cheque Vouchers Follow the Party Type
+- **Cheque Party Account (P1):** a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to a chosen account) and its bounce and return follow it; before, a personnel cheque landed on the customer with the same id (TD-497, `reg_cheque_voucher_follows_party_type_td_497`).
+
 ### v9.0.73 — Treasury Links Are Checked
 - **Treasury Links (P2):** a receipt or payment is refused when its document is missing, voided, of the other direction or of another party, or its party id is not in the table of its type; before, a receipt from one customer settled another customer's invoice (TD-501, `reg_treasury_document_and_party_links_td_501`).
 

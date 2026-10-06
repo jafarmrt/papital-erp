@@ -6,6 +6,7 @@ import { fin } from '../../lib/financialDecimal.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { findDuplicateVoucherNumbers, hasVoucherNumberUniqueIndex } from './voucherNumberIntegrity.js';
 import { buildNoVoucherTreasuryHealthTest, findTreasuryEntriesWithoutVoucher } from './treasury/noVoucherTreasury.js';
+import { buildLegacyChequePartyHealthTest, findLegacyChequePartyMismatches } from './treasury/chequePartyAccount.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1041,6 +1042,8 @@ export class FinancialHealthService {
 
     // آزمون ۱۳: v8.0.118 (TD-409) تراکنش‌های خزانه و چک‌های ثبت‌شده «بدون سند حسابداری» (فقط با مجوز جدا)
     tests.push(buildNoVoucherTreasuryHealthTest(await findTreasuryEntriesWithoutVoucher()));
+    // v9.0.74 (TD-497): چک‌های پیشین که سندشان با نوع طرف حساب نمی‌خواند (بازنویسی نمی‌شوند)
+    tests.push(buildLegacyChequePartyHealthTest(await findLegacyChequePartyMismatches()));
 
     // آزمون ۱۴: v9.0.8 (TD-420) یکتایی نام طرف حساب‌های فعال (مهاجرت 0052)
     const [duplicateCustomerNames, customerNameIndexPresent] = await Promise.all([findDuplicateCustomerNames(), hasCustomerNameUniqueIndex()]);

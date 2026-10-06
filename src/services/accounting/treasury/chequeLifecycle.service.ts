@@ -17,6 +17,9 @@ import { containsLikePattern } from '../../../lib/sqlLike.js';
 import { requireStorageDate } from '../../../lib/storageDate.js';
 import { isoToJalaliDate } from '../../../utils/calendarDate.js';
 import { assertNoVoucherAllowed } from './noVoucherTreasury.js';
+import { normalizePartyPurpose, requireChoosableContraAccount } from './partyContraAccount.js';
+import { resolveTreasuryPartyName } from './treasuryLinks.js';
+import { chequePartyPosting, requireChequePartyAccount, resolveChequePartyAccountId } from './chequePartyAccount.js';
 
 // v9.0.69: جدول انتقال وضعیت چک در `src/lib/treasury/chequeTransitions.ts` است و مرورگر هم همان را می‌خواند
 export { CHEQUE_TRANSITIONS };
@@ -151,10 +154,17 @@ export class ChequeLifecycleService {
     /** v8.0.118 (TD-409): کاربر مجوز «ثبت خزانه و چک بدون سند حسابداری» را دارد (روت می‌سنجد) */
     allowNoVoucher?: boolean;
     attachments?: unknown[];
+    /** v9.0.74 (TD-497): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر» (همان قاعده فرم خزانه، TD-507) */
+    purpose?: string;
+    contraAccountId?: number | null;
   }): Promise<Cheque> {
     const amount = Number(data.amount) || 0;
     if (amount <= 0) throw new ValidationError('مبلغ چک باید بزرگتر از صفر باشد');
     assertNoVoucherAllowed(data.createVoucher, data.allowNoVoucher, 'چک');
+    // v9.0.74 (TD-497، ت۲ الف): نوع طرف حساب سرفصل سند چک را تعیین می‌کند؛ پرسنل هدف و «متفرقه» سرفصل انتخابی می‌خواهند
+    // بی نوع: دریافتی از مشتری و پرداختی به تأمین‌کننده (همان سندی که پیش از v9.0.74 برای هر چک صادر می‌شد)
+    const partyType = data.partyType || (data.type === 'paid' ? 'supplier' : 'customer');
+    const party = normalizePartyPurpose(partyType, data.purpose, data.contraAccountId);
     // v8.0.23 (TD-275، تصمیم مالک محصول — گزینه ج): چک ارزی پذیرفته نمی‌شود. جدول چک نرخ تسعیر ندارد و اسناد چک ارزی
     // با نرخ ۱ ثبت می‌شدند (۵۰ دلار = ۵۰ ریال). چک‌های ارزی ثبت‌شده پیش از این نسخه چرخه عمر خود را ادامه می‌دهند.
     if ((data.currency || 'IRR').toUpperCase() !== 'IRR') {
@@ -176,6 +186,10 @@ export class ChequeLifecycleService {
     // V1.4.0: صدور چک اتمیک است — سند دوبل و ثبت چک در یک تراکنش دیتابیس؛
     // در نبود کدینگ، خطای صریح (به‌جای skip بی‌صدای قبلی) تا چک بدون رد دفتری ثبت نشود.
     const inserted = await orm.transaction(async (txEngine) => {
+      if (party.contraAccountId) await requireChoosableContraAccount(txEngine, party.contraAccountId);
+      // شناسه طرف حساب در جدول همان نوع (B04-05)
+      await resolveTreasuryPartyName(txEngine, partyType, data.partyId);
+      const partyAccountId = await resolveChequePartyAccountId(txEngine, partyType, party.purpose, party.contraAccountId);
       // v8.0.19 (TD-271): ابتدا چک ثبت می‌شود تا سند ثبت آن با source_cheque_id به همین چک پیوند بخورد
       const [row] = await txEngine.insert(cheques).values({
         type: data.type,
@@ -187,9 +201,11 @@ export class ChequeLifecycleService {
         dueDate,
         amount: money(amount),
         currency: data.currency || 'IRR',
-        partyType: data.partyType || 'customer',
+        partyType,
         partyId: data.partyId || null,
         partyName: data.partyName.trim(),
+        purpose: party.purpose,
+        partyAccountId,
         status: (data.type === 'received' ? 'received' : 'in_treasury'),
         drawerName: data.drawerName?.trim() || '',
         payeeName: data.payeeName?.trim() || '',
@@ -204,14 +220,16 @@ export class ChequeLifecycleService {
       if (data.createVoucher !== false) {
         // V1.7.0: کدینگ از مپینگ قابل‌تنظیم (تنظیمات حسابداری) — نه هاردکد
         const chequeReceivableAcc = await AccountMappingService.getChequeReceivableAccount(txEngine);
-        const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
         const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-        const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
+        // v9.0.74 (TD-497): ردیف طرف حساب از سرفصل و نوع خود چک (نه همیشه مشتری یا تأمین‌کننده)
+        requireChequePartyAccount(partyAccountId, data.partyName);
+        const posting = await chequePartyPosting(txEngine, row);
+        if (!posting) throw new ValidationError('سرفصل طرف حساب چک یافت نشد');
         let voucherId: number;
 
         if (data.type === 'received') {
-          if (!chequeReceivableAcc || !customerAcc) {
-            throw new ValidationError('کدینگ لازم برای ثبت چک دریافتی یافت نشد (حساب‌های 1101 اسناد دریافتنی و 1201 حساب‌های دریافتنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
+          if (!chequeReceivableAcc) {
+            throw new ValidationError('کدینگ لازم برای ثبت چک دریافتی یافت نشد (حساب 1101 اسناد دریافتنی). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
             date: issueDate,
@@ -234,21 +252,18 @@ export class ChequeLifecycleService {
                 description: `اسناد دریافتنی نزد صندوق بابت چک ${data.chequeNumber}`
               },
               {
-                accountId: customerAcc.id,
-                detailedType: 'customer',
-                detailedId: data.partyId,
-                detailedName: data.partyName,
+                ...posting,
                 debit: 0,
                 credit: amount,
                 currency: data.currency || 'IRR',
-                description: `بستانکاری مشتری بابت تسویه با چک شماره ${data.chequeNumber}`
+                description: `بستانکاری ${data.partyName} بابت چک دریافتی شماره ${data.chequeNumber}`
               }
             ]
           }, txEngine);
           voucherId = v.id;
         } else {
-          if (!chequePayableAcc || !supplierAcc) {
-            throw new ValidationError('کدینگ لازم برای ثبت چک پرداختی یافت نشد (حساب‌های 3101 اسناد پرداختنی و 3001 حساب‌های پرداختنی تجاری). ابتدا کدینگ حسابداری را تکمیل کنید.');
+          if (!chequePayableAcc) {
+            throw new ValidationError('کدینگ لازم برای ثبت چک پرداختی یافت نشد (حساب 3101 اسناد پرداختنی). ابتدا کدینگ حسابداری را تکمیل کنید.');
           }
           const v = await VoucherService.createJournalVoucher({
             date: issueDate,
@@ -262,14 +277,11 @@ export class ChequeLifecycleService {
             username: data.username,
             items: [
               {
-                accountId: supplierAcc.id,
-                detailedType: 'supplier',
-                detailedId: data.partyId,
-                detailedName: data.partyName,
+                ...posting,
                 debit: amount,
                 credit: 0,
                 currency: data.currency || 'IRR',
-                description: `بدهکار شدن تامین‌کننده بابت پرداخت با چک شماره ${data.chequeNumber}`
+                description: `بدهکار شدن ${data.partyName} بابت پرداخت با چک شماره ${data.chequeNumber}`
               },
               {
                 accountId: chequePayableAcc.id,
@@ -508,15 +520,17 @@ export class ChequeLifecycleService {
           }, txEngine);
         }
       } else if (data.status === 'bounced') {
-        const bouncedAcc = (await AccountMappingService.getChequeProtestAccount(txEngine))
-          || (await AccountMappingService.getTradeReceivablesAccount(txEngine));
+        // v9.0.74 (TD-497، ت۲ الف): برگشت همان طرف حساب و نوع ثبت چک را می‌گیرد (چک پیشین: قاعده پیشین)
+        const posting = await chequePartyPosting(txEngine, existing);
+        const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
+        const bouncedAccId = protestAcc?.id ?? posting?.accountId ?? null;
         // P2-01: اگر چک مستقیماً از نزد صندوق واخواست شده باشد، سرفصل اسناد نزد صندوق (۱۱۰۱) بستانکار می‌شود؛ و اگر در جریان وصول بوده، ۱۱۰۲
         const isDirectFromTreasury = existing.status === 'received' || existing.status === 'in_treasury' || existing.status === 'in_safe';
         const creditAcc = isDirectFromTreasury
           ? ((await AccountMappingService.getChequeReceivableAccount(txEngine)) || (await AccountMappingService.getChequeInCollectionAccount(txEngine)))
           : ((await AccountMappingService.getChequeInCollectionAccount(txEngine)) || (await AccountMappingService.getChequeReceivableAccount(txEngine)));
 
-        if (bouncedAcc && creditAcc && existing.type === 'received') {
+        if (bouncedAccId && posting && creditAcc && existing.type === 'received') {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'adjustment',
@@ -529,10 +543,10 @@ export class ChequeLifecycleService {
             username: data.username,
             items: [
               {
-                accountId: bouncedAcc.id,
-                detailedType: 'customer',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                accountId: bouncedAccId,
+                detailedType: posting.detailedType,
+                detailedId: posting.detailedId,
+                detailedName: posting.detailedName,
                 debit: amount,
                 credit: 0,
                 description: `برگشت چک ${existing.chequeNumber}`
@@ -553,8 +567,7 @@ export class ChequeLifecycleService {
           // v8.0.21 (TD-272): برگشت چک پرداختی — بدهی ما به تأمین‌کننده برمی‌گردد: بدهکار اسناد پرداختنی، بستانکار
           // حساب تأمین‌کننده. پیش‌تر سندی صادر نمی‌شد؛ ۳۱۰۱ بستانکار می‌ماند و تأمین‌کننده پرداخت‌شده دیده می‌شد.
           const chequePayableAcc = await AccountMappingService.getChequePayableAccount(txEngine);
-          const supplierAcc = await AccountMappingService.getTradePayablesAccount(txEngine);
-          if (!chequePayableAcc || !supplierAcc) {
+          if (!chequePayableAcc || !posting) {
             throw new ValidationError('کدینگ لازم برای ثبت برگشت چک پرداختی یافت نشد (اسناد پرداختنی و حساب‌های پرداختنی تجاری).');
           }
           await VoucherService.createJournalVoucher({
@@ -577,10 +590,7 @@ export class ChequeLifecycleService {
                 description: `بستن اسناد پرداختنی بابت برگشت چک ${existing.chequeNumber}`
               },
               {
-                accountId: supplierAcc.id,
-                detailedType: 'supplier',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                ...posting,
                 debit: 0,
                 credit: amount,
                 description: `بازگشت بدهی به ${existing.partyName} بابت برگشت چک ${existing.chequeNumber}`
@@ -593,13 +603,14 @@ export class ChequeLifecycleService {
         // حساب جاری مشتری برمی‌گرداند (بدهکار مشتری، بستانکار اسناد واخواستی) تا دریافت بعدی از مشتری درست تسویه شود.
         // پیش‌تر سندی صادر نمی‌شد و مطالبه برای همیشه در اسناد واخواستی می‌ماند. اگر برگشت به خود حساب مشتری ثبت شده
         // باشد (نبود حساب اسناد واخواستی در کدینگ) سندی لازم نیست.
+        // v9.0.74 (TD-497): مطالبه به حساب همان طرف حساب و نوع ثبت چک برمی‌گردد (چک پیشین: حساب مشتری)
         const protestAcc = await AccountMappingService.getChequeProtestAccount(txEngine);
-        const customerAcc = await AccountMappingService.getTradeReceivablesAccount(txEngine);
-        if (protestAcc && customerAcc && protestAcc.id !== customerAcc.id) {
+        const posting = await chequePartyPosting(txEngine, existing);
+        if (protestAcc && posting && protestAcc.id !== posting.accountId) {
           await VoucherService.createJournalVoucher({
             date: voucherIsoDate,
             voucherType: 'adjustment',
-            description: `عودت چک برگشتی شماره ${existing.chequeNumber} به ${existing.partyName} و انتقال مطالبه به حساب مشتری`,
+            description: `عودت چک برگشتی شماره ${existing.chequeNumber} به ${existing.partyName} و انتقال مطالبه به حساب طرف حساب`,
             referenceModule: 'cheque',
             referenceNumber: existing.chequeNumber,
             sourceChequeId: existing.id,
@@ -608,19 +619,16 @@ export class ChequeLifecycleService {
             username: data.username,
             items: [
               {
-                accountId: customerAcc.id,
-                detailedType: 'customer',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                ...posting,
                 debit: amount,
                 credit: 0,
-                description: `مطالبه چک برگشتی ${existing.chequeNumber} به حساب جاری مشتری`
+                description: `مطالبه چک برگشتی ${existing.chequeNumber} به حساب جاری ${existing.partyName}`
               },
               {
                 accountId: protestAcc.id,
-                detailedType: 'customer',
-                detailedId: existing.partyId,
-                detailedName: existing.partyName,
+                detailedType: posting.detailedType,
+                detailedId: posting.detailedId,
+                detailedName: posting.detailedName,
                 debit: 0,
                 credit: amount,
                 description: `بستن اسناد واخواستی بابت عودت چک ${existing.chequeNumber}`

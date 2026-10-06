@@ -173,6 +173,10 @@ export const cheques = pgTable('cheques', {
   partyType: text('party_type').default('customer'), // 'customer', 'personnel', 'supplier', 'other'
   partyId: integer('party_id'),
   partyName: text('party_name').notNull(),
+  // v9.0.74 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف حسابی که سند ثبت چک با آن صادر شد (مهاجرت 0061)؛ برگشت و عودت
+  // همین سرفصل را می‌گیرند. چک‌های پیشین NULL دارند و قاعده پیشین را ادامه می‌دهند.
+  purpose: text('purpose'),
+  partyAccountId: integer('party_account_id').references(() => accounts.id),
   status: text('status').default('received'), // 'received', 'in_treasury', 'in_collection', 'passed', 'bounced', 'returned', 'spent'
   drawerName: text('drawer_name').default(''),
   payeeName: text('payee_name').default(''),

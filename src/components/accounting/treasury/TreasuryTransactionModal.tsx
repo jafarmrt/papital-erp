@@ -13,7 +13,7 @@ import { fetchJson } from '../../../api';
 import { useHasPermission } from '../../../contexts/AuthContext';
 import { NO_VOUCHER_TREASURY_PERMISSION } from '../../../lib/noVoucherPermission';
 import { needsChosenContraAccount, type PersonnelPurpose } from '../../../lib/treasury/partyPurpose';
-import { ContraAccountField } from './ContraAccountField';
+import { PartyPurposeFields } from './PartyPurposeFields';
 import type { BankAccount, Customer, Personnel, FinancialAttachment } from '../../../types';
 
 interface TreasuryTransactionModalProps {
@@ -408,32 +408,14 @@ export const TreasuryTransactionModal: React.FC<TreasuryTransactionModalProps> =
               </div>
             </div>
 
-            {/* Purpose for personnel payment */}
-            {formData.partyType === 'personnel' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  {isReceipt ? 'نوع دریافت از پرسنل *' : 'نوع پرداخت به پرسنل *'}
-                </label>
-                <select
-                  required
-                  value={formData.purpose}
-                  onChange={e => setFormData({ ...formData, purpose: e.target.value as PersonnelPurpose | '', contraAccountId: null })}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
-                >
-                  <option value="">انتخاب کنید...</option>
-                  <option value="settlement">تسویه حقوق و دستمزد → «حقوق پرداختنی»</option>
-                  <option value="advance">مساعده / وام → «مساعده و وام پرسنل»</option>
-                  <option value="other">سایر → سرفصلی که انتخاب می‌کنید</option>
-                </select>
-              </div>
-            )}
-
-            {needsChosenContraAccount(formData.partyType, formData.purpose) && (
-              <ContraAccountField
-                value={formData.contraAccountId}
-                onChange={id => setFormData(prev => ({ ...prev, contraAccountId: id }))}
-              />
-            )}
+            {/* Purpose for personnel payment; counter account for «other» (TD-507) */}
+            <PartyPurposeFields
+              partyType={formData.partyType}
+              purpose={formData.purpose}
+              contraAccountId={formData.contraAccountId}
+              isReceipt={isReceipt}
+              onChange={patch => setFormData(prev => ({ ...prev, ...patch }))}
+            />
 
             <div className="grid grid-cols-2 gap-3 items-start">
               <div>

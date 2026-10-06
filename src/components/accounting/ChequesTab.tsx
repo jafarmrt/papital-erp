@@ -18,6 +18,8 @@ import { FinancialAmountInput } from '../common/FinancialAmountInput';
 import { useChequeReconciliationReport } from '../../hooks/accounting/useChequeQueries';
 import { copyToClipboard } from '../../utils/clipboard';
 import { CHEQUE_TRANSITIONS, chequeHasNextStep } from '../../lib/treasury/chequeTransitions';
+import { needsChosenContraAccount, type PersonnelPurpose } from '../../lib/treasury/partyPurpose';
+import { PartyPurposeFields } from './treasury/PartyPurposeFields';
 
 interface ChequesTabProps {
   cheques: Cheque[];
@@ -61,7 +63,8 @@ export function ChequesTab({
       const pt = c.partyType || (c as any).party_type;
       return pt === 'supplier' || pt === 'both';
     });
-    return list.length > 0 ? list : safeCustomers;
+    // v9.0.74 (TD-497): سرور فقط تأمین‌کننده (یا «هر دو») را می‌پذیرد؛ پیش‌تر نبود تأمین‌کننده همه مشتریان را فهرست می‌کرد
+    return list;
   }, [safeCustomers]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,6 +90,9 @@ export function ChequesTab({
     partyType: 'customer' as 'customer' | 'personnel' | 'supplier' | 'other',
     partyId: null as number | null,
     partyName: '',
+    // v9.0.74 (TD-497، ت۲ الف): هدف چک پرسنل و سرفصل طرف مقابل «متفرقه» و «سایر»
+    purpose: '' as PersonnelPurpose | '',
+    contraAccountId: null as number | null,
     drawerName: '',
     payeeName: '',
     bankAccountId: null as number | null,
@@ -177,10 +183,19 @@ export function ChequesTab({
       toast.error('مبلغ چک باید بزرگتر از صفر باشد');
       return;
     }
+    const needsContra = needsChosenContraAccount(newFormData.partyType, newFormData.purpose);
+    if (needsContra && !newFormData.contraAccountId) {
+      toast.error('سرفصل طرف مقابل را انتخاب کنید.');
+      return;
+    }
 
     setIsSaving(true);
     try {
-      await onCreateCheque(newFormData);
+      await onCreateCheque({
+        ...newFormData,
+        purpose: newFormData.partyType === 'personnel' ? newFormData.purpose : undefined,
+        contraAccountId: needsContra ? newFormData.contraAccountId : null,
+      });
       toast.success('چک با موفقیت در سیستم ثبت شد');
       setIsNewModalOpen(false);
     } catch (err) {
@@ -355,6 +370,8 @@ export function ChequesTab({
               partyType: 'customer',
               partyId: null,
               partyName: '',
+              purpose: '',
+              contraAccountId: null,
               drawerName: '',
               payeeName: '',
               bankAccountId: null,
@@ -809,7 +826,7 @@ export function ChequesTab({
                     </label>
                     <select
                       value={newFormData.partyType}
-                      onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '' })}
+                      onChange={e => setNewFormData({ ...newFormData, partyType: e.target.value as any, partyId: null, partyName: '', purpose: '', contraAccountId: null })}
                       className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-bold"
                     >
                       <option value="customer">مشتری</option>
@@ -874,6 +891,14 @@ export function ChequesTab({
                     )}
                   </div>
                 </div>
+
+                <PartyPurposeFields
+                  partyType={newFormData.partyType}
+                  purpose={newFormData.purpose}
+                  contraAccountId={newFormData.contraAccountId}
+                  isReceipt={newFormData.type === 'received'}
+                  onChange={patch => setNewFormData(prev => ({ ...prev, ...patch }))}
+                />
 
                 <div>
                   <FinancialAmountInput

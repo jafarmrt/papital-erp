@@ -2,7 +2,7 @@ import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { TestCaseResult, makeTestCase } from '../types.js';
 import { orm } from '../../db/drizzle.js';
-import { accounts, journalVoucherItems, personnel, treasuryTransactions } from '../../db/schema.js';
+import { accounts, cheques, journalVoucherItems, journalVouchers, personnel, treasuryTransactions } from '../../db/schema.js';
 
 /**
  * Package 4 (treasury and cheques), PR «ب» party accounts: real Express routes on PostgreSQL. Each test is red on the
@@ -21,6 +21,7 @@ async function client() {
   return {
     get: (url: string) => request(app).get(url).set('Cookie', s.cookie),
     post: (url: string, body: object = {}) => request(app).post(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body),
+    patch: (url: string, body: object = {}) => request(app).patch(url).set('Cookie', s.cookie).set('x-csrf-token', s.csrfToken).send(body),
   };
 }
 
@@ -47,6 +48,17 @@ async function voucherRows(voucherId: number) {
     accountId: journalVoucherItems.accountId, debit: journalVoucherItems.debit, credit: journalVoucherItems.credit,
     detailedType: journalVoucherItems.detailedType, detailedId: journalVoucherItems.detailedId,
   }).from(journalVoucherItems).where(and(eq(journalVoucherItems.voucherId, voucherId), eq(journalVoucherItems.isDeleted, 0)));
+}
+
+/** Rows of a cheque's vouchers (registration and lifecycle), in voucher order */
+async function chequeVoucherRows(chequeId: number) {
+  return orm.select({
+    voucherId: journalVoucherItems.voucherId, accountId: journalVoucherItems.accountId, debit: journalVoucherItems.debit,
+    credit: journalVoucherItems.credit, detailedType: journalVoucherItems.detailedType, detailedId: journalVoucherItems.detailedId,
+  }).from(journalVoucherItems)
+    .innerJoin(journalVouchers, eq(journalVouchers.id, journalVoucherItems.voucherId))
+    .where(and(eq(journalVouchers.sourceChequeId, chequeId), eq(journalVouchers.isDeleted, 0), eq(journalVoucherItems.isDeleted, 0)))
+    .orderBy(journalVoucherItems.voucherId, journalVoucherItems.id);
 }
 
 const errorCode = (res: request.Response) => String(res.body?.code ?? '');
@@ -193,6 +205,83 @@ export async function runTreasuryPartyTests(shouldRun: ShouldRun): Promise<TestC
       if (paid.status !== 201) problems.push(`supplier payment on its purchase returned ${paid.status}: ${JSON.stringify(paid.body).slice(0, 200)}`);
       assertNoProblems(problems);
       return 'Receipt from A on B\'s invoice, supplier payment on a sales invoice, missing or voided document and party ids that do not exist in their table: all 422 with no row; B on its own invoice and the supplier on its purchase: 201';
+    });
+  }
+
+  const chequeId = 'reg_cheque_voucher_follows_party_type_td_497';
+  if (shouldRun(chequeId, 'td497', 'cheque', 'party', 'package4')) {
+    await runCase(results, chequeId, 'v9.0.74: a cheque voucher posts to the account and detail of its party type (personnel by purpose, misc to the chosen account), its bounce and return use the same party, and legacy mismatches are listed by the health check (TD-497)', async () => {
+      const { findLegacyChequePartyMismatches } = await import('../../services/accounting/treasury/chequePartyAccount.js');
+      const api = await client();
+      const problems: string[] = [];
+      const [worker] = await orm.insert(personnel).values({ fullName: `ERP-TEST-MARKER p04 cheque worker ${tagOf()}` }).returning({ id: personnel.id });
+      const advanceAcc = await accountId('1301');
+      const wagesAcc = await accountId('3201');
+      const partnerAcc = await accountId('4101');
+      const protestAcc = await accountId('1103');
+      const base = { bankName: 'ملت', issueDate: '2026-03-01', dueDate: '2026-04-01' };
+      const person = { partyType: 'personnel', partyId: worker.id, partyName: 'p04 cheque worker' };
+      const create = async (body: object) => {
+        const res = await api.post('/api/accounting/cheques', { ...base, chequeNumber: `P04${tagOf()}`, ...body });
+        if (res.status !== 201) throw new Error(`cheque create returned ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
+        return Number(res.body.id);
+      };
+      const partyRow = (rows: Awaited<ReturnType<typeof chequeVoucherRows>>, accountIdWanted: number) => rows.find(r => r.accountId === accountIdWanted);
+
+      const noPurpose = await api.post('/api/accounting/cheques', { ...base, chequeNumber: `P04${tagOf()}`, type: 'received', amount: 4_000_000, ...person });
+      if (noPurpose.status !== 422 || errorCode(noPurpose) !== 'TREASURY_PURPOSE_REQUIRED') problems.push(`personnel cheque without a purpose returned ${noPurpose.status} ${errorCode(noPurpose)}, expected 422`);
+
+      // received 4,000,000 from personnel (advance repayment): Dr 1101 / Cr 1301 personnel
+      const received = await create({ type: 'received', amount: 4_000_000, ...person, purpose: 'advance' });
+      const recRows = await chequeVoucherRows(received);
+      const recParty = recRows.find(r => r.credit.toNumber() > 0);
+      if (recParty?.accountId !== advanceAcc || recParty?.detailedType !== 'personnel' || recParty?.detailedId !== worker.id) {
+        problems.push(`received personnel cheque credited ${recParty?.accountId} ${recParty?.detailedType} ${recParty?.detailedId}, expected 1301 personnel ${worker.id} (before: 1201 customer)`);
+      }
+      // paid 1,500,000 to personnel (wages): Dr 3201 personnel / Cr 3101
+      const paid = await create({ type: 'paid', amount: 1_500_000, ...person, purpose: 'settlement' });
+      const paidParty = (await chequeVoucherRows(paid)).find(r => r.debit.toNumber() > 0);
+      if (paidParty?.accountId !== wagesAcc || paidParty?.detailedType !== 'personnel' || paidParty?.detailedId !== worker.id) {
+        problems.push(`paid personnel cheque debited ${paidParty?.accountId} ${paidParty?.detailedType} ${paidParty?.detailedId}, expected 3201 personnel ${worker.id} (before: 3001 supplier)`);
+      }
+      // misc 700,000 received: Cr the chosen 4101
+      const misc = await create({ type: 'received', amount: 700_000, partyType: 'other', partyName: 'partner deposit', contraAccountId: partnerAcc });
+      const miscParty = (await chequeVoucherRows(misc)).find(r => r.credit.toNumber() > 0);
+      if (miscParty?.accountId !== partnerAcc || miscParty?.detailedType !== 'other') problems.push(`misc cheque credited ${miscParty?.accountId} ${miscParty?.detailedType}, expected 4101 other`);
+
+      // no row of these cheques sits on a customer or supplier detail
+      const allRows = [...await chequeVoucherRows(received), ...await chequeVoucherRows(paid), ...await chequeVoucherRows(misc)];
+      if (allRows.some(r => r.detailedType === 'customer' || r.detailedType === 'supplier')) problems.push('a personnel or misc cheque voucher row sits on a customer or supplier detail');
+
+      // bounce and return of the received personnel cheque: Dr 1103 personnel, then Dr 1301 personnel / Cr 1103 personnel
+      const bounced = await api.patch(`/api/accounting/cheques/${received}/status`, { status: 'bounced' });
+      if (bounced.status !== 200) problems.push(`bounce returned ${bounced.status}: ${JSON.stringify(bounced.body).slice(0, 160)}`);
+      const returned = await api.patch(`/api/accounting/cheques/${received}/status`, { status: 'returned' });
+      if (returned.status !== 200) problems.push(`return returned ${returned.status}: ${JSON.stringify(returned.body).slice(0, 160)}`);
+      const lifecycle = (await chequeVoucherRows(received)).filter(r => r.accountId === protestAcc || r.accountId === advanceAcc);
+      const protestRows = lifecycle.filter(r => r.accountId === protestAcc);
+      if (protestRows.length !== 2 || protestRows.some(r => r.detailedType !== 'personnel' || r.detailedId !== worker.id)) {
+        problems.push(`protest rows: ${JSON.stringify(protestRows.map(r => [r.detailedType, r.detailedId]))}, expected two personnel rows (before: customer)`);
+      }
+      const backToPerson = partyRow((await chequeVoucherRows(received)).filter(r => r.debit.toNumber() > 0), advanceAcc);
+      if (!backToPerson || backToPerson.detailedType !== 'personnel') problems.push('return did not debit 1301 with the personnel detail (before: 1201 customer)');
+      // bounce of the paid personnel cheque: Cr 3201 personnel
+      const paidBounce = await api.patch(`/api/accounting/cheques/${paid}/status`, { status: 'bounced' });
+      if (paidBounce.status !== 200) problems.push(`paid bounce returned ${paidBounce.status}`);
+      const paidBack = (await chequeVoucherRows(paid)).find(r => r.credit.toNumber() > 0 && r.accountId === wagesAcc);
+      if (!paidBack || paidBack.detailedType !== 'personnel') problems.push('paid personnel cheque bounce did not credit 3201 with the personnel detail (before: 3001 supplier)');
+
+      // legacy: a cheque written before v9.0.74 (no party account) from personnel is listed by the health check
+      await orm.update(cheques).set({ partyAccountId: null, purpose: null }).where(eq(cheques.id, misc));
+      try {
+        const listed = (await findLegacyChequePartyMismatches()).map(e => e.id);
+        if (!listed.includes(misc)) problems.push('health check «cheque_party_account_legacy» does not list a legacy misc cheque');
+        if (listed.includes(paid)) problems.push('health check lists a cheque registered under the new rule');
+      } finally {
+        await orm.update(cheques).set({ partyAccountId: partnerAcc }).where(eq(cheques.id, misc));
+      }
+      assertNoProblems(problems);
+      return 'Personnel cheque without purpose 422; received 4,000,000 Cr 1301 personnel, paid 1,500,000 Dr 3201 personnel, misc 700,000 Cr 4101; bounce/return on 1103 and 1301 with the personnel detail; paid bounce Cr 3201 personnel; legacy cheque listed';
     });
   }
 
