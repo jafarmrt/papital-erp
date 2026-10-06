@@ -1,5 +1,7 @@
 # .github/workflows/ci.yml — Papital ERP GitHub Actions CI/CD Pipeline (v7.0.19 / TD-172: lockfile + Node 22 + blocking audit gate)
 # Multi-stage CI: lint-and-typecheck (+version-sync) → database-integration-tests → coverage-soft-gate (non-blocking) + e2e-critical-path (Playwright) → client-server-build → docker-build-gate
+# TD-471: actions on their Node 24 majors (v7) and runners pinned to ubuntu-24.04 (ubuntu-latest moves to Ubuntu 26 on 2026-10-19);
+# raise the pin deliberately in its own change after checking the PostgreSQL service, Playwright and Docker steps.
 #
 # Environment & Secrets:
 #   DATABASE_URL: Service container PostgreSQL 16
@@ -22,13 +24,13 @@ concurrency:
 jobs:
   lint-and-typecheck:
     name: Lint & Type Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -64,7 +66,7 @@ jobs:
   test:
     name: Database & Domain Test Suites
     needs: lint-and-typecheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -81,10 +83,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -123,7 +125,7 @@ jobs:
   coverage-gate:
     name: Code Coverage Hard Gate (TD-129)
     needs: lint-and-typecheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -139,10 +141,10 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -191,7 +193,7 @@ jobs:
 
       - name: Upload Coverage Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ github.sha }}
           path: coverage/
@@ -200,14 +202,14 @@ jobs:
   build:
     name: Client & Server Production Build
     needs: [test, coverage-gate, e2e]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -219,7 +221,7 @@ jobs:
         run: npm run build
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-${{ github.sha }}
           path: dist/
@@ -228,7 +230,7 @@ jobs:
   e2e:
     name: End-to-End Critical Path (Playwright, v7.0.77 / audit P3-7)
     needs: lint-and-typecheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -245,10 +247,10 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 22.x
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -270,7 +272,7 @@ jobs:
 
       - name: Upload Playwright Report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ github.sha }}
           path: |
@@ -281,11 +283,11 @@ jobs:
   docker-gate:
     name: Docker Container Build Verification
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolve Application Version
         run: |
@@ -329,7 +331,7 @@ jobs:
   deploy-staging:
     name: Deploy to Staging Environment
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/staging'
     environment: staging
     steps:
@@ -340,11 +342,11 @@ jobs:
   smoke-test-staging:
     name: Staging Post-Deployment Smoke Tests
     needs: deploy-staging
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run Smoke Tests Against Staging Cluster
         env:

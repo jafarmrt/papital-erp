@@ -19,6 +19,12 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.53 — node_modules No Longer Tracked by Git
+- **Deployment:** the `node_modules` symlink committed in v9.0.25 is removed, `.gitignore` uses `/node_modules` (also matches a symlink), and `update.sh` untracks a leftover symlink entry before `git pull`; servers on v9.0.25+ run `git rm -q --cached node_modules` once before updating (TD-472, B01-03, `node_modules_never_tracked_td_472`).
+
+### v9.0.52 — CI Actions on Node 24 and a Pinned Ubuntu Runner
+- **CI Maintenance:** `actions/checkout`, `actions/setup-node` and `actions/upload-artifact` move from v4 (Node 20) to v7 (Node 24) and every job runs on `ubuntu-24.04` instead of the moving `ubuntu-latest` label (TD-471, `ci_actions_node24_runner_pinned_td_471`).
+
 ### v9.0.51 — Workflow Tables Get Foreign Keys and Indexes
 - **Workflow Referential Integrity:** migration 0059 adds foreign keys between the workflow tables (NOT VALID, validated only on clean data; instance children cascade), the instance-by-entity and by-instance indexes and a unique definition version; the health check lists gaps as `workflow_reference_integrity` (TD-461, `sec_workflow_db_constraints_td_461`).
 
