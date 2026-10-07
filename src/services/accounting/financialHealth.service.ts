@@ -24,6 +24,7 @@ import {
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
 import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
+import { buildProcurementOrderLinkHealthTest, findUnresolvedProcurementOrderLinks } from '../procurement/procurementOrderLinks.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1181,6 +1182,10 @@ export class FinancialHealthService {
     const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
     overallScore += categoryIntegrityTest.scoreImpact;
     tests.push(categoryIntegrityTest);
+    // آزمون ۳۷: v9.0.272 (TD-691) سند با برچسب یا ردیف درخواست خرید که پیوند سفارش تدارکاتش روشن نیست (فقط فهرست)
+    const procurementOrderLinkTest = buildProcurementOrderLinkHealthTest(await findUnresolvedProcurementOrderLinks());
+    overallScore += procurementOrderLinkTest.scoreImpact;
+    tests.push(procurementOrderLinkTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

@@ -5,6 +5,7 @@ import { authorizePermission } from '../middleware/authorize.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { ProcurementService } from '../services/procurement.service.js';
+import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import {
   consolidateRequisitionsSchema, convertToOrdersSchema, createRequisitionSchema, listProcurementOrdersSchema, listRequisitionsSchema,
   updateRequisitionSchema, workflowActionSchema,
@@ -30,7 +31,7 @@ router.get('/inbox/summary', authorizePermission('procurement.view'), asyncHandl
  * GET /api/procurement/requisitions
  * List purchase requisitions
  */
-router.get('/requisitions', authorizePermission('procurement.view', 'projects.view'), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
+router.get('/requisitions', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(listRequisitionsSchema), asyncHandler(async (req, res) => {
   const { status, projectId, priority, search, page, limit } = req.query as z.infer<typeof listRequisitionsSchema>['query'];
 
   const result = await ProcurementService.getRequisitions({
@@ -55,7 +56,7 @@ router.get('/requisitions', authorizePermission('procurement.view', 'projects.vi
  * GET /api/procurement/requisitions/:id
  * Get single requisition
  */
-router.get('/requisitions/:id', authorizePermission('procurement.view', 'projects.view'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/requisitions/:id', authorizePermission(...READ_PERMISSIONS.purchaseRequisitions), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const requisition = await ProcurementService.getRequisitionById(id);
   res.json({ success: true, data: requisition });
@@ -182,9 +183,9 @@ router.post('/consolidate', authorizePermission('procurement.manage'), validate(
 
 /**
  * GET /api/procurement/orders
- * List purchase orders / invoices created through procurement
+ * v9.0.272 (TD-691): only documents linked to a requisition (documents.procurement_requisition_id), paged in SQL
  */
-router.get('/orders', authorizePermission('procurement.view', 'projects.view'), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
+router.get('/orders', authorizePermission(...READ_PERMISSIONS.procurementOrders), validate(listProcurementOrdersSchema), asyncHandler(async (req, res) => {
   const { status, requisitionId, search, page, limit } = req.query as z.infer<typeof listProcurementOrdersSchema>['query'];
 
   const result = await ProcurementService.getProcurementOrders({
@@ -206,7 +207,8 @@ router.get('/orders', authorizePermission('procurement.view', 'projects.view'), 
 
 /**
  * POST /api/procurement/orders/:id/deliver
- * Deliver a purchase order/invoice to warehouse (finalizes document, increases stock, updates Kardex)
+ * Deliver a procurement order to the warehouse (finalizes it, moves stock in, updates Kardex); v9.0.272 (TD-691): only
+ * a document linked to a requisition, else 422 PROCUREMENT_ORDER_NOT_LINKED
  */
 router.post('/orders/:id/deliver', authorizePermission('procurement.order', 'procurement.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);

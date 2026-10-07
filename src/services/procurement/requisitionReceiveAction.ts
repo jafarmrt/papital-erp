@@ -1,8 +1,7 @@
-import { and, eq, ilike, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.js';
 import { documentItems, documents } from '../../db/schema.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
-import { containsLikePattern } from '../../lib/sqlLike.js';
 import { DocumentService } from '../document.service.js';
 import { ValidationError } from '../../errors/customErrors.js';
 import { applyDeliveredLines, isClosedRequisitionRow, type RequisitionItemWithReceipt } from './requisitionReceipt.js';
@@ -24,6 +23,7 @@ export function assertProcurementIncomingDocument(doc: { id: number; type: strin
 }
 
 interface ReceivedRequisition {
+  id: number;
   code: string;
   projectName?: string | null;
   items?: RequisitionItemWithReceipt[] | null;
@@ -35,7 +35,7 @@ interface ReceiveOptions {
   assertIncoming: (doc: { id: number; type: string | null; refNumber: string | null }) => void;
 }
 
-/** برچسب یادداشت سفارش‌هایی که «تبدیل به سفارش» برای درخواست می‌سازد */
+/** برچسب یادداشت سفارش‌هایی که «تبدیل به سفارش» برای درخواست می‌سازد (فقط برای خواندن کاربر؛ پیوند در ستون است) */
 export function requisitionOrderTag(code: string): string {
   return `[تدارکات: درخواست ${code}]`;
 }
@@ -48,13 +48,13 @@ export interface RequisitionOrderDocument {
 }
 
 /**
- * سندهای زنده سفارش یک درخواست خرید: سندهایی که ردیف‌های درخواست به آن‌ها پیوند دارند، و سند ورودی خریدی که برچسب
- * `[تدارکات: درخواست <کد>]` را در یادداشت دارد. v9.0.268 (TD-690): برچسب کامل جست‌وجو می‌شود، نه هر یادداشتی که کد
- * درخواست را دارد.
+ * سندهای زنده سفارش یک درخواست خرید: سندهایی که ستون پیوند `documents.procurement_requisition_id` آن‌ها همین درخواست
+ * است، و سندهایی که ردیف‌های درخواست به آن‌ها پیوند دارند (`linkedDocumentIds`). v9.0.272 (TD-691، ت۲): پیوند از ستون
+ * خوانده می‌شود؛ پیش‌تر هر سند ورودی که برچسب درخواست را در یادداشت داشت سفارش آن شمرده می‌شد (O28).
  */
 export async function requisitionOrderDocuments(
   tx: DbExecutor,
-  req: { code: string; items?: RequisitionItemWithReceipt[] | null },
+  req: { id: number; items?: RequisitionItemWithReceipt[] | null },
 ): Promise<RequisitionOrderDocument[]> {
   const linkedIds = new Set<number>();
   for (const row of Array.isArray(req.items) ? req.items : []) {
@@ -62,19 +62,14 @@ export async function requisitionOrderDocuments(
       if (Number(id) > 0) linkedIds.add(Number(id));
     }
   }
-  const columns = { id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status };
-  const linkedDocs = linkedIds.size === 0 ? [] : await tx.select(columns).from(documents)
-    .where(and(inArray(documents.id, [...linkedIds]), eq(documents.isDeleted, 0)));
-  // سفارش‌هایی که برچسب درخواست را در یادداشت دارند ولی به ردیفی پیوند نخورده‌اند (فقط سند ورودی خرید)
-  const notedDocs = await tx.select(columns).from(documents)
+  const byLink = eq(documents.procurementRequisitionId, req.id);
+  return tx.select({ id: documents.id, type: documents.type, refNumber: documents.refNumber, status: documents.status })
+    .from(documents)
     .where(and(
-      ilike(documents.notes, containsLikePattern(requisitionOrderTag(req.code))),
-      inArray(documents.type, PROCUREMENT_INCOMING_TYPES),
+      linkedIds.size === 0 ? byLink : or(byLink, inArray(documents.id, [...linkedIds])),
       eq(documents.isDeleted, 0)
-    ));
-  const byId = new Map<number, RequisitionOrderDocument>();
-  for (const doc of [...linkedDocs, ...notedDocs]) byId.set(doc.id, doc);
-  return [...byId.values()].sort((a, b) => a.id - b.id);
+    ))
+    .orderBy(asc(documents.id));
 }
 
 /**
@@ -94,7 +89,7 @@ export async function receiveRequisitionItems(
 ): Promise<RequisitionItemWithReceipt[]> {
   let rows = (Array.isArray(req.items) ? req.items : []).map(row => ({ ...row }));
 
-  const orderDocs = await requisitionOrderDocuments(tx, { code: req.code, items: rows });
+  const orderDocs = await requisitionOrderDocuments(tx, { id: req.id, items: rows });
   for (const doc of orderDocs) {
     if (doc.status === 'final') continue;
     opts.assertIncoming(doc);

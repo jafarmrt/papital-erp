@@ -9314,6 +9314,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
     const suffix = `${Date.now()}`;
     const docIds: number[] = [];
     let itemId = 0;
+    let requisitionId = 0;
     try {
       const { createTestItem, createTestDocument } = await import('../fixtures/factories.js');
       const { ProcurementService } = await import('../../services/procurement.service.js');
@@ -9328,6 +9329,12 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         { itemId: item.id, quantity: 1, unitPrice: 0.2 },
       ]);
       docIds.push(receipt.document.id);
+      // v9.0.272 (TD-691): سفارش تدارکات سندی است که ستون پیوندش به درخواست خرید پر است
+      const { purchaseRequisitions } = await import('../../db/schema.js');
+      const [requisition] = await orm.insert(purchaseRequisitions)
+        .values({ code: `TD239-${suffix}`, title: 'ERP-TEST-MARKER درخواست TD-239', items: [] }).returning({ id: purchaseRequisitions.id });
+      requisitionId = requisition.id;
+      await orm.update(documents).set({ procurementRequisitionId: requisition.id }).where(eq(documents.id, receipt.document.id));
       const orders = await ProcurementService.getProcurementOrders({ search: receiptRef });
       const order = orders.data.find(o => o.id === receipt.document.id);
       if (!order) violations.push('سفارش خرید آزمایشی در فهرست نیامد');
@@ -9358,6 +9365,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
         await cleanTestTableData('document_items', 'document_id', docIds);
         await cleanTestTableData('documents', 'id', docIds);
       }
+      if (requisitionId) await cleanTestTableData('purchase_requisitions', 'id', [requisitionId]);
       if (itemId) await cleanTestTableData('items', 'id', [itemId]);
     }
   }
@@ -10342,7 +10350,8 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const schema = await import('../../db/schema.js');
       const {
         users, productionProjects, fiscalPeriods, fileAttachments, legacyDateRepairs, refFiscalYearCorrections,
-        workflowTaskReopenLog, projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks, activityLogs, roles
+        workflowTaskReopenLog, projectReservationReleases, inventoryReconciliationAnomalies, itemWarehouseStocks, activityLogs, roles,
+        purchaseRequisitions
       } = schema;
 
       inner = await setupTestSchema();
@@ -10364,6 +10373,9 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const [doc] = await orm.insert(documents).values({ type: 'remittance', date: '2026-01-10 00:00:00', refNumber: 'TD245-REF', projectId: project.id }).returning({ id: documents.id });
       await orm.insert(projectReservationReleases).values({ documentId: doc.id, projectId: project.id, itemId: item.id, qtyField: 'reservedQty', quantity: 1, reservationRow: {} });
       await orm.insert(refFiscalYearCorrections).values({ documentId: doc.id, docType: 'remittance', refNumber: 'TD245-REF', documentDate: '2026-01-10 00:00:00', oldFiscalYear: 1405, newFiscalYear: 1404, status: 'corrected' });
+      // v9.0.272 (TD-691): a procurement order points to its purchase requisition (fk_documents_procurement_requisition)
+      const [requisition] = await orm.insert(purchaseRequisitions).values({ code: 'TD245-PR', title: 'درخواست TD-245', items: [] }).returning({ id: purchaseRequisitions.id });
+      await orm.insert(documents).values({ type: 'receipt', date: '2026-01-11 00:00:00', refNumber: 'TD245-PO', procurementRequisitionId: requisition.id });
       const voucherNumber = await VoucherService.getNextVoucherNumber();
       const [closing] = await orm.insert(journalVouchers).values({ voucherNumber, date: '2025-03-20', description: 'سند اختتامیه TD-245', voucherType: 'closing' }).returning({ id: journalVouchers.id });
       await orm.insert(fiscalPeriods).values({ fiscalYear: 1403, status: 'closed', closedAt: '2025-03-20 00:00:00', closedBy: 'td245_admin', closingVoucherId: closing.id });
@@ -10388,7 +10400,7 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
       const wipedTables = [
         'fiscal_periods', 'file_attachments', 'legacy_date_repairs', 'ref_fiscal_year_corrections', 'workflow_task_reopen_log',
         'project_reservation_releases', 'inventory_reconciliation_anomalies', 'item_warehouse_stocks',
-        'documents', 'journal_vouchers', 'production_projects', 'items', 'users'
+        'documents', 'journal_vouchers', 'production_projects', 'items', 'users', 'purchase_requisitions'
       ];
       const assertIntact = async (stage: string): Promise<void> => {
         for (const t of ['fiscal_periods', 'file_attachments', 'legacy_date_repairs', 'documents', 'users']) {
@@ -10660,6 +10672,10 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   // Package 10 PR A (v9.0.266+): purchase requisition contract, approval gate, delivery, delete and edit
   const { runProcurementRequisitionTests } = await import('../regression/procurementRequisitionTests.js');
   results.push(...await runProcurementRequisitionTests(shouldRun));
+
+  // Package 10 PR B (v9.0.272+): procurement order link, duplicate submissions, consolidation, receiving
+  const { runProcurementOrderTests } = await import('../regression/procurementOrderTests.js');
+  results.push(...await runProcurementOrderTests(shouldRun));
 
   return results;
 }

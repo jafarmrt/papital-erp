@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.272 — Procurement Orders Linked to Requisitions
+- **Fix (TD-691 / TD-698, B10-04 / B10-11):** a procurement order is a document with `documents.procurement_requisition_id` (migration 0076, backfilled only from an unambiguous requisition tag; the rest is listed by the health check `procurement_order_link_unresolved`); the order list, the desk summary and delivery read only linked documents (else 422 PROCUREMENT_ORDER_NOT_LINKED), and the list filters, counts and pages in SQL.
+
 ### v9.0.271 — Requisition Edit Before Approval
 - **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.
 

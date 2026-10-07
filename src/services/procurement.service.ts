@@ -1,7 +1,7 @@
 import { terminateOpenWorkflows } from './workflow/workflowTermination.js';
 import { sql, eq, and, desc, inArray, or, ilike } from 'drizzle-orm';
 import { orm, type DbExecutor } from '../db/drizzle.js';
-import { purchaseRequisitions, documentRefCounters, items, documents, documentItems, workflowInstances } from '../db/schema.js';
+import { purchaseRequisitions, documentRefCounters, documents, documentItems, workflowInstances } from '../db/schema.js';
 import { businessFiscalYear, businessTodayIsoDate } from '../lib/businessClock.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { logActivity } from '../lib/auditLogger.js';
@@ -23,13 +23,13 @@ import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithR
 import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
-import { fin } from '../lib/financialDecimal.js';
 import { canEditRequisition, REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
   ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
   type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
 } from './procurement/requisitionApproval.js';
 import { buildRequisitionRows, resolveRequisitionProject, type RequisitionRowFields } from './procurement/requisitionRows.js';
+import { listProcurementOrders, procurementOrderCounts, type ProcurementOrderListParams } from './procurement/procurementOrderList.js';
 
 type DbClient = DbExecutor;
 
@@ -351,7 +351,7 @@ export class ProcurementService {
         .for('update');
       if (!locked) throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
       const existing = toRequisitionDto(locked);
-      const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
+      const liveOrders = await requisitionOrderDocuments(tx, { id: locked.id, items: locked.items as RequisitionItemWithReceipt[] });
       if (!canEditRequisition(existing) || liveOrders.length > 0) {
         throw new ConflictError(
           `درخواست خرید ${existing.code} پس از تأیید یا صدور سفارش ویرایش نمی‌شود؛ برای تغییر، درخواست را رد و دوباره باز کنید.`,
@@ -405,7 +405,7 @@ export class ProcurementService {
       if (!locked) throw new NotFoundError('درخواست خرید یافت نشد.');
       // v9.0.270 (TD-695، B10-08): درخواستی که سند سفارش زنده دارد حذف نمی‌شود. پیش‌تر فقط وضعیت «سفارش‌شده» و
       // «دریافت‌شده» رد می‌شد: درخواستِ بخشی‌سفارش‌شده یا لغوشده حذف می‌شد و سفارشش بی درخواست تحویل می‌شد
-      const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
+      const liveOrders = await requisitionOrderDocuments(tx, { id: locked.id, items: locked.items as RequisitionItemWithReceipt[] });
       if (liveOrders.length > 0) {
         throw new ConflictError(
           `درخواست خرید ${locked.code} سفارش خرید ثبت‌شده دارد (${liveOrders.map(o => o.refNumber || String(o.id)).join('، ')}) و حذف نمی‌شود؛ ابتدا سفارش‌ها را باطل کنید.`,
@@ -730,6 +730,8 @@ export class ProcurementService {
           externalTx: tx
         });
 
+        // v9.0.272 (TD-691، ت۲): پیوند سفارش به درخواست در ستون؛ فهرست، خلاصه و تحویل تدارکات فقط همین سندها را می‌بینند
+        await tx.update(documents).set({ procurementRequisitionId: req.id }).where(eq(documents.id, createdDocId));
         const [createdDocRecord] = await tx.select().from(documents).where(eq(documents.id, createdDocId));
         createdDocuments.push(createdDocRecord || { id: createdDocId, refNumber: `DOC-${createdDocId}` });
 
@@ -878,184 +880,10 @@ export class ProcurementService {
   }
 
   /**
-   * Get purchase orders/invoices created from procurement requisitions
+   * سفارش‌های خرید تدارکات (سندهای دارای پیوند درخواست؛ فیلتر و صفحه‌بندی در SQL، v9.0.272، TD-691 / TD-698)
    */
-  static async getProcurementOrders(params: {
-    status?: string; // 'all' | 'draft' | 'final' | 'pending_delivery' | 'delivered'
-    requisitionId?: number;
-    search?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ data: ProcurementOrder[]; total: number; page: number; limit: number }> {
-    const { status, requisitionId, search, page = 1, limit = 50 } = params;
-
-    const allCandidateDocs = await orm.select().from(documents).where(and(
-      eq(documents.isDeleted, 0),
-      or(
-        eq(documents.type, 'receipt'),
-        eq(documents.type, 'proforma'),
-        ilike(documents.notes, '%[تدارکات:%')
-      )
-    )).orderBy(desc(documents.id));
-
-    const allReqs = await orm.select().from(purchaseRequisitions).where(eq(purchaseRequisitions.isDeleted, 0));
-    const reqCodeMap = new Map<string, typeof allReqs[0]>();
-    allReqs.forEach(r => {
-      reqCodeMap.set(r.code, r);
-    });
-
-    const filteredDocs: (typeof allCandidateDocs[0] & { _matchedReq?: typeof allReqs[0] })[] = [];
-
-    for (const doc of allCandidateDocs) {
-      let isProcurement = false;
-      let matchedReq: typeof allReqs[0] | undefined;
-
-      if (doc.notes && doc.notes.includes('[تدارکات:')) {
-        isProcurement = true;
-        const m = doc.notes.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
-        if (m) {
-          const c = m[1].trim();
-          matchedReq = reqCodeMap.get(c);
-        }
-      }
-
-      if (!isProcurement) {
-        for (const r of allReqs) {
-          if (Array.isArray(r.items) && r.items.some(it => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.includes(doc.id))) {
-            isProcurement = true;
-            matchedReq = r;
-            break;
-          }
-        }
-      }
-
-      if (!isProcurement && doc.type === 'receipt') {
-        isProcurement = true;
-      }
-
-      if (!isProcurement) continue;
-
-      if (requisitionId && matchedReq?.id !== requisitionId) {
-        continue;
-      }
-
-      if (status && status !== 'all') {
-        if (status === 'pending_delivery' || status === 'draft') {
-          if (doc.status === 'final') continue;
-        } else if (status === 'delivered' || status === 'final') {
-          if (doc.status !== 'final') continue;
-        }
-      }
-
-      if (search && search.trim()) {
-        const q = search.trim().toLowerCase();
-        const mRef = (doc.refNumber || '').toLowerCase().includes(q);
-        const mBuyer = (doc.buyerName || '').toLowerCase().includes(q);
-        const mNotes = (doc.notes || '').toLowerCase().includes(q);
-        const mReq = matchedReq ? (matchedReq.code.toLowerCase().includes(q) || matchedReq.title.toLowerCase().includes(q)) : false;
-        if (!mRef && !mBuyer && !mNotes && !mReq) continue;
-      }
-
-      const docWithReq = doc as typeof doc & { _matchedReq?: typeof allReqs[0] };
-      docWithReq._matchedReq = matchedReq;
-      filteredDocs.push(docWithReq);
-    }
-
-    const total = filteredDocs.length;
-    const offset = (page - 1) * limit;
-    const pagedDocs = filteredDocs.slice(offset, offset + limit);
-
-    if (pagedDocs.length === 0) {
-      return { data: [], total, page, limit };
-    }
-
-    const docIds = pagedDocs.map(d => d.id);
-    const lines = await orm.select().from(documentItems).where(inArray(documentItems.documentId, docIds));
-    const allItemIds = Array.from(new Set(lines.map(l => l.itemId)));
-
-    let catalogItems: (typeof items.$inferSelect)[] = [];
-    if (allItemIds.length > 0) {
-      catalogItems = await orm.select().from(items).where(inArray(items.id, allItemIds));
-    }
-    const itemMap = new Map<number, typeof items.$inferSelect>();
-    catalogItems.forEach(it => itemMap.set(it.id, it));
-
-    const result: ProcurementOrder[] = pagedDocs.map(doc => {
-      const docLines = lines.filter(l => l.documentId === doc.id);
-      const matchedReq = doc._matchedReq;
-
-      let projectN = matchedReq?.projectName || null;
-      if (!projectN && doc.notes) {
-        const pMatch = doc.notes.match(/\[پروژه:\s*([^\]]+)\]/);
-        if (pMatch) projectN = pMatch[1].trim();
-      }
-
-      let requisitionC = matchedReq?.code || null;
-      if (!requisitionC && doc.notes) {
-        const rMatch = doc.notes.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/);
-        if (rMatch) requisitionC = rMatch[1].trim();
-      }
-
-      // v7.0.113 (TD-239): جمع مبلغ سفارش خرید با FinancialDecimal؛ خروجی API عددی می‌ماند
-      let totalAmt = fin(0);
-      const mappedItems = docLines.map(l => {
-        const cat = itemMap.get(l.itemId);
-        const lineQty = Number(l.quantity || 0);
-        const linePrice = fin(l.unitPrice);
-        const lineTotal = linePrice.multiply(lineQty);
-        totalAmt = totalAmt.add(lineTotal);
-
-        return {
-          id: l.id,
-          itemId: l.itemId,
-          itemName: cat?.name || `کالای کد ${l.itemId}`,
-          itemCode: cat?.code || '',
-          unit: cat?.unit || 'عدد',
-          quantity: lineQty,
-          unitPrice: linePrice.toNumber(),
-          totalPrice: lineTotal.toNumber(),
-          location: l.location || docLines[0]?.location || ''
-        };
-      });
-
-      return {
-        id: doc.id,
-        refNumber: doc.refNumber,
-        docType: doc.type,
-        status: doc.status === 'final' ? 'final' : 'draft',
-        date: doc.date,
-        supplierName: doc.buyerName || 'تامین‌کننده تدارکات',
-        notes: doc.notes || '',
-        requisitionId: matchedReq?.id || null,
-        requisitionCode: requisitionC,
-        projectName: projectN,
-        location: docLines[0]?.location || '',
-        totalAmount: totalAmt.toNumber(),
-        itemsCount: mappedItems.length,
-        items: mappedItems,
-        user: doc.user || 'کارشناس تدارکات'
-      };
-    });
-
-    return { data: result, total, page, limit };
-  }
-
-  /**
-   * درخواست خرید سفارش تحویل‌شده: با کد درخواست در یادداشت سند، وگرنه درخواستی که این سند را در linkedDocumentIds دارد
-   */
-  private static async findDeliveredOrderRequisitionId(tx: DbExecutor, reqCode: string | null, documentId: number): Promise<number | null> {
-    if (reqCode) {
-      const [byCode] = await tx.select({ id: purchaseRequisitions.id }).from(purchaseRequisitions).where(and(
-        eq(purchaseRequisitions.code, reqCode),
-        eq(purchaseRequisitions.isDeleted, 0)
-      ));
-      if (byCode) return byCode.id;
-    }
-    const allReqs = await tx.select({ id: purchaseRequisitions.id, items: purchaseRequisitions.items }).from(purchaseRequisitions)
-      .where(eq(purchaseRequisitions.isDeleted, 0));
-    const linked = allReqs.find(r => Array.isArray(r.items)
-      && (r.items as PurchaseRequisitionItemRow[]).some(it => Array.isArray(it.linkedDocumentIds) && it.linkedDocumentIds.map(Number).includes(documentId)));
-    return linked?.id ?? null;
+  static async getProcurementOrders(params: ProcurementOrderListParams): Promise<{ data: ProcurementOrder[]; total: number; page: number; limit: number }> {
+    return listProcurementOrders(params);
   }
 
   /**
@@ -1078,12 +906,21 @@ export class ProcurementService {
       };
     }
     assertProcurementIncomingDocument(doc);
+    // v9.0.272 (TD-691، B10-04، ت۲): فقط سفارشی که «تبدیل به سفارش» برای درخواستی صادر کرده از این مسیر نهایی می‌شود؛
+    // پیش‌تر هر رسید پیش‌نویس انبار با مجوز تدارکات نهایی می‌شد (ورود کالا، کاردکس و سند حسابداری) در حالی که نهایی‌سازی
+    // سند خود `documents.edit` یا `warehouse.in` می‌خواهد
+    const linkedReqId = doc.procurementRequisitionId ?? null;
+    if (linkedReqId === null) {
+      throw new AppError(
+        `سند «${doc.refNumber ?? doc.id}» سفارش تدارکات نیست و از مسیر تحویل تدارکات نهایی نمی‌شود؛ آن را از «ورود و خروج انبار» نهایی کنید.`,
+        422, 'PROCUREMENT_ORDER_NOT_LINKED',
+      );
+    }
 
     // v8.0.4 (TD-257): سفارشی که تاریخش پیش از آخرین گردش کالاست فقط با مجوز همین کاربر به انبار تحویل می‌شود
     const allowBackdate = await userHasRoleOrPermission(user, BACKDATE_PERMISSION);
     // v9.0.269 (TD-692): حق تأیید پیش از تراکنش سنجیده می‌شود (TD-324)
     const mayApprove = await userHasRoleOrPermission(user, ...REQUISITION_APPROVE_PERMISSIONS);
-    const reqCode = doc.notes?.match(/\[تدارکات:\s*درخواست\s+([^\]]+)\]/)?.[1]?.trim() ?? null;
 
     // v8.0.36 (TD-290): نهایی‌سازی سند و به‌روزرسانی مقدار دریافتی درخواست خرید در یک تراکنش و زیر قفل ردیف درخواست.
     // پیش‌تر درخواست پس از نهایی‌سازی، بیرون از تراکنش و بی‌قفل خوانده و نوشته می‌شد؛ تحویلِ هم‌زمانِ سفارشی دیگر از همان
@@ -1096,15 +933,20 @@ export class ProcurementService {
     // می‌شد و شکستش با نوشتن مستقیم `workflow_instances` (COMPLETED)، حذف `workflow_pending_approvals` و بستن
     // `workflow_tasks` دور زده می‌شد (A02-03، A02-04، A02-08).
     await orm.transaction(async (tx) => {
-      const linkedReqId = await ProcurementService.findDeliveredOrderRequisitionId(tx, reqCode, documentId);
-      const [lockedReq] = linkedReqId === null ? [] : await tx.select().from(purchaseRequisitions)
+      const [lockedReq] = await tx.select().from(purchaseRequisitions)
         .where(and(eq(purchaseRequisitions.id, linkedReqId), eq(purchaseRequisitions.isDeleted, 0)))
         .for('update');
       const [current] = await tx.select({ status: documents.status }).from(documents).where(eq(documents.id, documentId));
       if (current?.status === 'final') return;
+      if (!lockedReq) {
+        throw new ConflictError(
+          `درخواست خرید سفارش «${doc.refNumber ?? doc.id}» حذف شده است؛ سفارش را از «ورود و خروج انبار» نهایی کنید.`,
+          undefined, 'PROCUREMENT_REQUISITION_DELETED',
+        );
+      }
 
-      const alreadyReceived = !!lockedReq && RECEIVED_REQUISITION_STATUSES.has(lockedReq.status);
-      if (lockedReq && !alreadyReceived) {
+      const alreadyReceived = RECEIVED_REQUISITION_STATUSES.has(lockedReq.status);
+      if (!alreadyReceived) {
         if (CLOSED_REQUISITION_STATUSES.has(lockedReq.status)) {
           throw new ConflictError(`درخواست خرید ${lockedReq.code} رد شده است و سفارش آن به انبار تحویل نمی‌شود؛ ابتدا درخواست را بازگشایی کنید.`, undefined, 'REQUISITION_NOT_APPROVED');
         }
@@ -1118,43 +960,41 @@ export class ProcurementService {
 
       await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
 
-      if (lockedReq) {
-        const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
-          .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
-        const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
-        await tx.update(purchaseRequisitions).set({
-          items: updatedReqItems,
-          updatedAt: new Date().toISOString()
-        }).where(eq(purchaseRequisitions.id, lockedReq.id));
+      const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
+        .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
+      const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
+      await tx.update(purchaseRequisitions).set({
+        items: updatedReqItems,
+        updatedAt: new Date().toISOString()
+      }).where(eq(purchaseRequisitions.id, lockedReq.id));
 
-        // v9.0.268 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
-        // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
-        // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
-        const openOrders = (await requisitionOrderDocuments(tx, { code: lockedReq.code, items: updatedReqItems }))
-          .filter(order => order.status !== 'final');
-        if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
-          // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
-          const flow = await requisitionFlow(tx, lockedReq, user);
-          const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
-          if (!receive) {
-            throw new ConflictError(
-              `گردش کار درخواست خرید ${lockedReq.code} از گام «${flow.stepTitle || flow.stepKey}» اقدامی به «دریافت‌شده» ندارد؛ طرح گردش کار را بررسی کنید.`,
-              undefined, 'WF_ACTION_NOT_IN_STEP',
-            );
-          }
-          await WorkflowTransitionExecutor.executeTransition({
-            instanceId: flow.instance.id,
-            transitionId: receive.id,
-            userId: user.id,
-            userName: user.username,
-            userRole: user.role,
-            userPermissions: user.permissions || [],
-            comment: `تحویل و ورود کالا به انبار با سفارش خرید ${doc.refNumber}`,
-            snapshotData: { id: lockedReq.id, code: lockedReq.code, priority: lockedReq.priority, status: lockedReq.status },
-            allowBackdate,
-            tx,
-          });
+      // v9.0.268 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
+      // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
+      // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
+      const openOrders = (await requisitionOrderDocuments(tx, { id: lockedReq.id, items: updatedReqItems }))
+        .filter(order => order.status !== 'final');
+      if (!alreadyReceived && openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow)) {
+        // وضعیت «دریافت‌شده» را اقدام پس از انتقال (applyRequisitionTransition) در همین تراکنش می‌نویسد
+        const flow = await requisitionFlow(tx, lockedReq, user);
+        const receive = transitionFromStep(flow, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY);
+        if (!receive) {
+          throw new ConflictError(
+            `گردش کار درخواست خرید ${lockedReq.code} از گام «${flow.stepTitle || flow.stepKey}» اقدامی به «دریافت‌شده» ندارد؛ طرح گردش کار را بررسی کنید.`,
+            undefined, 'WF_ACTION_NOT_IN_STEP',
+          );
         }
+        await WorkflowTransitionExecutor.executeTransition({
+          instanceId: flow.instance.id,
+          transitionId: receive.id,
+          userId: user.id,
+          userName: user.username,
+          userRole: user.role,
+          userPermissions: user.permissions || [],
+          comment: `تحویل و ورود کالا به انبار با سفارش خرید ${doc.refNumber}`,
+          snapshotData: { id: lockedReq.id, code: lockedReq.code, priority: lockedReq.priority, status: lockedReq.status },
+          allowBackdate,
+          tx,
+        });
       }
 
       await logActivity({
@@ -1169,7 +1009,7 @@ export class ProcurementService {
           documentId,
           refNumber: doc.refNumber,
           supplierName: doc.buyerName,
-          linkedRequisitionCode: reqCode || lockedReq?.code
+          linkedRequisitionCode: lockedReq.code
         }
       });
     });
@@ -1219,29 +1059,8 @@ export class ProcurementService {
       }
     }
 
-    // Also count purchase orders in pipeline
-    const procurementDocs = await orm.select({
-      id: documents.id,
-      status: documents.status
-    }).from(documents).where(and(
-      eq(documents.isDeleted, 0),
-      or(
-        eq(documents.type, 'receipt'),
-        eq(documents.type, 'proforma'),
-        ilike(documents.notes, '%[تدارکات:%')
-      )
-    ));
-
-    let pendingDeliveryOrdersCount = 0;
-    let deliveredOrdersCount = 0;
-
-    for (const d of procurementDocs) {
-      if (d.status === 'final') {
-        deliveredOrdersCount++;
-      } else {
-        pendingDeliveryOrdersCount++;
-      }
-    }
+    // v9.0.272 (TD-691): فقط سفارش‌های دارای پیوند درخواست؛ پیش‌تر هر رسید و پیش‌فاکتور فروش هم شمرده می‌شد
+    const orders = await procurementOrderCounts();
 
     return {
       totalRequisitions: rows.length,
@@ -1251,9 +1070,9 @@ export class ProcurementService {
       orderedCount,
       receivedCount,
       urgentCount,
-      pendingDeliveryOrdersCount,
-      deliveredOrdersCount,
-      totalOrdersCount: procurementDocs.length
+      pendingDeliveryOrdersCount: orders.pendingDelivery,
+      deliveredOrdersCount: orders.delivered,
+      totalOrdersCount: orders.total
     };
   }
 }

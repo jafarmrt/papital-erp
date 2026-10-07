@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { moneyNumeric } from './moneyColumn';
 import { users } from './auth';
 import { workflowInstances } from './workflow';
-import { baseRelations } from './baseRelations';
+import { baseRelations, registerColumnRef } from './baseRelations';
 
 export const purchaseRequisitions = pgTable('purchase_requisitions', {
   id: serial('id').primaryKey(),
@@ -34,3 +34,4 @@ export const purchaseRequisitions = pgTable('purchase_requisitions', {
   idx_pr_workflow: index('idx_pr_workflow').on(table.workflowInstanceId),
   idx_pr_deleted: index('idx_pr_deleted').on(table.isDeleted),
 }));
+registerColumnRef('purchaseRequisitions.id', () => purchaseRequisitions.id);
