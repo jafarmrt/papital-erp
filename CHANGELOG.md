@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.215 — v9.0.215 — Document Line Numbers Read as Decimals
+- **Documents:** quantity, price, discount and stock-count numbers of a document line are read with `decimalInput`: Persian digits and thousands separators are accepted, hex and exponent text is refused, and a price sent empty is an error instead of zero (TD-784).
+
 ### v9.0.214 — v9.0.214 — One Sellable Gate for Create and Finalize
 - **Documents:** every outgoing document recorded or finalized as final passes one sellable gate that sums each item and warehouse, with or without `inOut`, so a second line or a missing field no longer sells stock reserved for another customer (TD-775).
 

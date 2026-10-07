@@ -16,6 +16,9 @@ export async function runDocumentEntryTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_document_sellable_gate_td_775',
       'v9.0.214: create and finalize check the summed quantity of each item and warehouse against sellable stock, with or without inOut (TD-775)',
       ['td775', 'documents', 'sellable', 'reservation', 'package8'], sellableGateCase],
+    ['reg_document_line_numbers_decimal_td_784',
+      'v9.0.215: document line numbers are read with decimalInput: hex and exponent text is 400, an empty sent price is 400, Persian digits and thousands separators are read (TD-784)',
+      ['td784', 'documents', 'decimal', 'validation', 'package8'], lineNumbersCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -183,4 +186,44 @@ async function sellableGateCase(h: Harness, wrong: string[]): Promise<string> {
   const left = (await f.stock(b)) + (await f.stock(b, String(second.code)));
   if (left !== 0) wrong.push(`the two-warehouse item has ${left} left, expected 0`);
   return 'with sellable 4 an invoice of 5 without inOut, two lines of 4 and the finalize of a draft with two lines of 4 are 400 and move nothing; 4 passes and the reserving proforma finalizes; each warehouse is checked on its own stock';
+}
+
+/** B08-15 (TD-784): «0x10» شانزده و «1e3» هزار خوانده می‌شد، قیمت خالی صفر، و «۲» رد می‌شد */
+async function lineNumbersCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  const a = await f.item(10);
+  const lineOf = (fields: Record<string, unknown>) => [{ itemId: a, location: f.wh, ...fields }];
+  const fieldOf = (res: { body?: unknown }) => ((res.body as { details?: { issues?: Array<{ path?: string }> } })?.details?.issues ?? []).map(i => i.path).join(',');
+
+  // 1) text that Number() reads as a number is refused with 400 on its field, and nothing moves
+  const refused: Array<[string, Record<string, unknown>, string]> = [
+    ['quantity 0x10', { quantity: '0x10', unit_price: 1_000 }, 'quantity'],
+    ['quantity 1e3', { quantity: '1e3', unit_price: 1_000 }, 'quantity'],
+    ['unit_price 0x3E8', { quantity: 1, unit_price: '0x3E8' }, 'unit_price'],
+    ['unit_price empty', { quantity: 1, unit_price: '' }, 'unit_price'],
+    ['unitPrice empty', { quantity: 1, unitPrice: '  ' }, 'unitPrice'],
+    ['discount 1e2', { quantity: 1, unit_price: 1_000, discount: '1e2' }, 'discount'],
+  ];
+  for (const [label, fields, field] of refused) {
+    const res = await h.post('/api/documents', f.doc('receipt', 'final', lineOf(fields)));
+    if (res.status !== 400 || !fieldOf(res).includes(field)) wrong.push(`a receipt line with ${label} answered ${brief(res)}, expected 400 on ${field}`);
+  }
+  const draft = await h.post('/api/documents', f.doc('invoice', 'draft', lineOf({ quantity: 1, unit_price: '' })));
+  if (draft.status !== 400) wrong.push(`a draft invoice with an empty price answered ${brief(draft)}, expected 400`);
+  if (await f.stock(a) !== 10) wrong.push(`the stock moved to ${await f.stock(a)} after refused lines, expected 10`);
+
+  // 2) Persian digits and thousands separators are read
+  const persian = await h.post('/api/documents', f.doc('receipt', 'final', lineOf({ quantity: '۲', unit_price: '1,000', discount: '۱۰۰' })));
+  const docId = Number((persian.body as { docId?: unknown })?.docId);
+  if (persian.status !== 200 || !docId) wrong.push(`a receipt with quantity ۲, price 1,000 and discount ۱۰۰ answered ${brief(persian)}, expected 200`);
+  else {
+    const [stored] = await h.q('SELECT quantity::float8 AS q, unit_price::float8 AS p, discount::float8 AS d FROM document_items WHERE document_id = $1 AND is_deleted = 0', [docId]);
+    if (Number(stored?.q) !== 2 || Number(stored?.p) !== 1000 || Number(stored?.d) !== 100) wrong.push(`the line was stored as ${JSON.stringify(stored)}, expected quantity 2, price 1000, discount 100`);
+  }
+  if (await f.stock(a) !== 12) wrong.push(`the stock is ${await f.stock(a)} after a receipt of ۲, expected 12`);
+
+  // 3) a line without a price is still accepted (price 0), as before
+  const noPrice = await h.post('/api/documents', f.doc('remittance', 'final', [{ itemId: a, quantity: 1, location: f.wh }]));
+  if (noPrice.status !== 200) wrong.push(`a remittance line without a price answered ${brief(noPrice)}, expected 200`);
+  return 'quantity 0x10 and 1e3, price 0x3E8, an empty sent price and discount 1e2 are 400 on their field and move nothing; quantity ۲, price 1,000 and discount ۱۰۰ are stored as 2, 1000 and 100; a line without a price is accepted';
 }
