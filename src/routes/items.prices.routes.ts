@@ -58,7 +58,7 @@ router.get('/items/prices/all', authorizePermission(...READ_PERMISSIONS.itemPric
 }));
 
 // GET /items/:id/prices
-router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemPrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
+router.get('/items/:id/prices', authorizePermission(...READ_PERMISSIONS.itemSalePrices), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const prices = await orm.select().from(itemPrices).where(and(eq(itemPrices.itemId, Number(req.params.id)), eq(itemPrices.isDeleted, 0)));
     const activeStrategies = await ItemsService.getPricingStrategies();

@@ -81,7 +81,13 @@ export const READ_PERMISSIONS = {
   ],
   /** صفحه هشدار نقطه سفارش (همان کلیدهای صفحه در `PAGE_ACCESS`) */
   itemReorderAlerts: ['products.view', 'warehouse.view'],
-  itemPrices: ['products.view', 'products.edit_price', 'projects.view'],
+  /**
+   * همه قیمت‌های همه کالاها و تاریخچه قیمت فقط با مجوز بخش کالا: صفحه قیمت‌گذاری (v9.0.124، TD-891؛ پیش‌تر مشاهده پروژه هم
+   * آن را باز می‌کرد، برای فهرستی که پنجره پروژه می‌خواند و به کار نمی‌برد)
+   */
+  itemPrices: ['products.view', 'products.edit_price'],
+  /** فهرست قیمت فروش یک کالا (`/items/:id/prices`): صفحه قیمت‌گذاری و فرم فاکتور و حواله که قیمت را از آن پیشنهاد می‌کند */
+  itemSalePrices: ['products.view', 'products.edit_price', 'documents.create', 'documents.edit'],
   personnel: [
     'personnel.view', 'personnel.manage', 'piecework.view', 'projects.view', 'accounting.view', 'crm.view',
     'documents.view', 'documents.create', 'warehouse.in'

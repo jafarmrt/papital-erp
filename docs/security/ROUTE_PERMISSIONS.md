@@ -220,13 +220,13 @@
 | POST | `/api/items` | products.create |
 | DELETE | `/api/items/:id` | products.delete |
 | PUT | `/api/items/:id` | products.edit |
-| GET | `/api/items/:id/prices` | products.view \| products.edit_price \| projects.view |
+| GET | `/api/items/:id/prices` | products.view \| products.edit_price \| documents.create \| documents.edit |
 | POST | `/api/items/:id/prices` | products.edit_price |
-| GET | `/api/items/:id/prices/history` | products.view \| products.edit_price \| projects.view |
+| GET | `/api/items/:id/prices/history` | products.view \| products.edit_price |
 | GET | `/api/items/next-code` | products.view \| products.edit_price |
 | POST | `/api/items/next-code` | products.create \| products.edit |
 | GET | `/api/items/options` | products.view \| documents.view \| documents.create \| warehouse.view \| warehouse.in \| audit.view \| projects.view \| crm.view \| procurement.view |
-| GET | `/api/items/prices/all` | products.view \| products.edit_price \| projects.view |
+| GET | `/api/items/prices/all` | products.view \| products.edit_price |
 | POST | `/api/items/prices/batch-update` | products.edit_price |
 | GET | `/api/items/reorder-alerts` | products.view \| warehouse.view |
 | GET | `/api/items/unified-export` | products.view |

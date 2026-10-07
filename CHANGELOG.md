@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.124 — Item Price Read Scope
+- **Item Price Read Scope:** the invoice form reads the sale prices of the chosen item; all prices need the products permission (TD-891).
+
 ### v9.0.123 — Document Read Scope
 - **Document Read Scope:** the full document list needs a document permission; the stock count page reads only its own documents (TD-890).
 

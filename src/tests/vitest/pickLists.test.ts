@@ -51,6 +51,13 @@ const SECTIONS: Record<string, Section> = {
     fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/documents(?:\?|['"`])/g,
     ownPages: ['hooks/queries/useDocumentQueries.ts', 'hooks/invoices/useInvoiceReferenceData.ts', 'hooks/inventoryAudit/useInventoryAuditQueries.ts'],
   },
+  // v9.0.124 (TD-891): قیمت همه کالاها فقط برای صفحه قیمت‌گذاری؛ فرم فاکتور قیمت یک کالا را از /items/:id/prices می‌خواند
+  itemPrices: {
+    fullList: 'itemPrices',
+    ownGroups: ['products.'],
+    fullListFetch: /(?:fetch\w*(?:<[^>]*>)?\(\s*|fetchUrl=\{?\s*)['"`](?:\/api)?\/items\/prices\/all(?:\?|['"`])/g,
+    ownPages: ['pages/PricingPage.tsx'],
+  },
 };
 
 /** درخواست خواندن فهرست کامل در متن فایل؛ فراخوانی‌ای که در همان چند خط `method` نوشتن دارد (POST و …) خواندن نیست */

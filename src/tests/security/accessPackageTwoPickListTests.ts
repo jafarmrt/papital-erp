@@ -262,5 +262,36 @@ export async function runAccessPackageTwoPickListTests(shouldRun: ShouldRun): Pr
     });
   }
 
+  if (shouldRun('sec_item_prices_scope_td_891', 'security', 'td891', 'prices', 'pick', 'permissions', 'package2')) {
+    await runCase(results, {
+      id: 'sec_item_prices_scope_td_891',
+      name: 'v9.0.124: the invoice form reads an item\'s sale prices; all prices and the price history need a products key (TD-891)',
+      details: 'documents.create and documents.edit read GET /api/items/:id/prices (was 403 for the invoice form) and get 403 on GET /api/items/prices/all and the price history; projects.view gets 403 on all three (it opened every price for a list the project window never used); products.view and products.edit_price read all three',
+    }, async (h, wrong) => {
+      const { createTestItem } = await import('../fixtures/factories.js');
+      const item = await createTestItem({ code: `PRC${h.tag}` });
+      try {
+        const routes = [`/api/items/${item.id}/prices`, '/api/items/prices/all', `/api/items/${item.id}/prices/history`];
+        const expected: Array<[string, number[]]> = [
+          ['documents.create', [200, 403, 403]],
+          ['documents.edit', [200, 403, 403]],
+          ['projects.view', [403, 403, 403]],
+          ['warehouse.view', [403, 403, 403]],
+          ['products.view', [200, 200, 200]],
+          ['products.edit_price', [200, 200, 200]],
+        ];
+        for (const [key, statuses] of expected) {
+          const s = await h.sessionWith([key]);
+          for (const [i, url] of routes.entries()) {
+            const res = await h.get(url, s);
+            if (res.status !== statuses[i]) wrong.push(`${key}: GET ${url.replace(String(item.id), ':id')} returned ${res.status}, not ${statuses[i]}`);
+          }
+        }
+      } finally {
+        await orm.delete(items).where(inArray(items.id, [item.id])).catch(() => undefined);
+      }
+    });
+  }
+
   return results;
 }
