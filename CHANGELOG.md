@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.213 — v9.0.213 — بسته ۱۳ الف: دسترسی مدیریتی گزارش کار با مجوز
+- بازخورد، ویرایش و حذف گزارش کار دیگران و دیدن گزارش شخصی فقط با `daily_logs.manage_all`؛ نوشتن‌ها در یک تراکنش با ردیف ممیزی (TD-626).
+
 ### v9.0.212 — Package 13 Daily Logs and Attachments Audit
 - **Audit (package 13):** daily logs and attachments section of the stability audit report: 21 proven findings opened as TD-626..TD-646 plus TD-900 (decision t7) with the product-owner decisions t1-t7; documentation only.
 

@@ -108,9 +108,9 @@ export const PERMISSION_CATALOG: readonly PermissionGroupDefinition[] = [
   {
     category: 'گزارش کار روزانه و اعلان‌ها',
     permissions: [
-      { key: 'daily_logs.view', title: 'مشاهده گزارش کارهای روزانه', description: 'مشاهده گزارش کارهای عمومی، منشن‌شده و مجاز' },
+      { key: 'daily_logs.view', title: 'مشاهده گزارش کارهای روزانه', description: 'مشاهده گزارش کارهای خود و گزارش‌هایی که در آن‌ها به کاربر اشاره شده یا کاربر مجاز است' },
       { key: 'daily_logs.create', title: 'ثبت و ویرایش گزارش کار روزانه', description: 'امکان ثبت، ویرایش و حذف گزارش کار روزانه خود', requires: ['daily_logs.view'] },
-      { key: 'daily_logs.manage_all', title: 'مدیریت و نظارت کامل گزارش‌ها', description: 'مشاهده تمامی گزارش کارهای محرمانه و ثبت بازخورد و یادداشت مدیریتی', requires: ['daily_logs.view'] },
+      { key: 'daily_logs.manage_all', title: 'مدیریت و نظارت کامل گزارش‌ها', description: 'مشاهده همه گزارش‌های کار (شخصی هم)، ثبت بازخورد مدیریتی و ویرایش و حذف گزارش دیگران', requires: ['daily_logs.view'] },
     ]
   },
   {

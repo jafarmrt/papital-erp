@@ -124,7 +124,7 @@
 | DELETE | `/api/daily-logs/:id` | daily_logs.create |
 | GET | `/api/daily-logs/:id` | daily_logs.view |
 | PUT | `/api/daily-logs/:id` | daily_logs.create |
-| PUT | `/api/daily-logs/:id/review` | login-only |
+| PUT | `/api/daily-logs/:id/review` | daily_logs.manage_all |
 | GET | `/api/daily-logs/stats` | daily_logs.view |
 | GET | `/api/daily-logs/summary-report` | daily_logs.manage_all |
 | GET | `/api/dashboard-bi-stats` | reports.view \| warehouse.view |

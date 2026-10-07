@@ -1,11 +1,12 @@
 import React from 'react';
 import { 
-  Calendar as CalendarIcon, Clock, Building2, Laptop, Eye, AtSign, 
+  Calendar as CalendarIcon, Clock, Building2, Laptop, AtSign, 
   Lock, Tag, CheckCircle2, MessageSquare, Edit3, Trash2 
 } from 'lucide-react';
 import { DailyWorkLog, User } from '../../types';
 import { SimpleUserOption } from '../../hooks/useDailyLogs';
 import { formatPersianNumber, formatPersianDate, formatPersianDateTime } from '../../utils';
+import { useHasPermission } from '../../contexts/AuthContext';
 
 interface DailyLogsListProps {
   logs: DailyWorkLog[];
@@ -34,6 +35,8 @@ export function DailyLogsList({
   onDeleteLog,
   onOpenReviewModal
 }: DailyLogsListProps) {
+  // v9.0.213 (TD-626): review, edit and delete of another user's log follow daily_logs.manage_all, never a role code
+  const canManageAll = useHasPermission('daily_logs.manage_all');
   const getWorkModeBadge = (mode: string) => {
     switch (mode) {
       case 'onsite':
@@ -57,14 +60,6 @@ export function DailyLogsList({
 
   const getVisibilityBadge = (vis: string) => {
     switch (vis) {
-      case 'public':
-      case 'all':
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500" title="عمومی - همه همکاران">
-            <Eye className="w-3 h-3 text-slate-400" />
-            عمومی
-          </span>
-        );
       case 'mentioned_only':
       case 'custom':
         return (
@@ -117,7 +112,6 @@ export function DailyLogsList({
     <div className="space-y-3.5 font-farsi text-right">
       {paginatedLogs.map((log) => {
         const isOwner = log.userId === user.id || log.user_id === user.id;
-        const isManagerOrAdmin = user.role === 'admin' || user.role === 'manager';
         const mentionsList = Array.isArray(log.mentions) ? log.mentions : [];
         const mentionedUsersObj = systemUsers.filter((u) => mentionsList.includes(u.id));
 
@@ -239,7 +233,7 @@ export function DailyLogsList({
               </span>
 
               <div className="flex items-center gap-1.5">
-                {isManagerOrAdmin && (
+                {canManageAll && (
                   <button
                     onClick={() => onOpenReviewModal(log)}
                     className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
@@ -249,7 +243,7 @@ export function DailyLogsList({
                   </button>
                 )}
 
-                {(isOwner || isManagerOrAdmin) && (
+                {(isOwner || canManageAll) && (
                   <button
                     onClick={() => onOpenEditModal(log)}
                     className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
@@ -259,7 +253,7 @@ export function DailyLogsList({
                   </button>
                 )}
 
-                {(isOwner || isManagerOrAdmin) && (
+                {(isOwner || canManageAll) && (
                   <button
                     onClick={() => onDeleteLog(log.id)}
                     className="p-1 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
