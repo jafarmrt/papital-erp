@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.296 — v9.0.296 — Saves Are Not Resent Automatically After a Lost Connection
+- **No automatic resend of saves (TD-670):** after a network error only reads are retried automatically; a save tells the user to check whether it was recorded, and a resend by the user carries the same idempotency key.
+
 ### v9.0.295 — v9.0.295 — Form Drafts Expire
 - **Form draft expiry (TD-676):** a draft lives 1 to 90 days, an expired draft no longer offers «restore», and a daily job soft-deletes expired drafts.
 

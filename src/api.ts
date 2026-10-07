@@ -134,6 +134,9 @@ export function isPublicApiEndpoint(endpoint: string): boolean {
   return PUBLIC_API_PATHS.has(path);
 }
 
+/** v9.0.296 (TD-670): پیام قطع ارتباط هنگام ثبت؛ معلوم نیست کارساز ثبت را انجام داده است یا نه */
+export const UNCONFIRMED_MUTATION_MESSAGE = 'ارتباط با کارساز قطع شد و معلوم نیست ثبت انجام شد یا نه. وضعیت را بررسی کنید و اگر ثبت نشده بود، دوباره بفرستید.';
+
 /** بیشینه بار انتظار برای نتیجه درخواستی که سرور «در حال پردازش» گزارش می‌کند (هر بار به اندازه Retry-After) */
 const IN_FLIGHT_MAX_WAITS = 15;
 
@@ -200,10 +203,14 @@ export async function fetchJson<T = any>(endpoint: string, options?: RequestInit
       abortErr.name = 'AbortError';
       throw (err?.name === 'AbortError' ? err : abortErr);
     }
-    if (retries > 0) {
+    // v9.0.296 (TD-670، B16-06، تصمیم ت۳-الف): فقط خواندن خودکار دوباره فرستاده می‌شود. درخواست تغییردهنده شاید به کارساز
+    // رسیده و ثبت شده باشد و بیشتر مسیرها کلید تکرار را نمی‌خوانند؛ کاربر وضعیت را می‌بیند و اگر لازم بود خودش دوباره
+    // می‌فرستد، با همان کلید (کلید پس از خطای شبکه آزاد نمی‌شود)
+    if (retries > 0 && !isMutation) {
       await new Promise(resolve => setTimeout(resolve, 800));
       return fetchJson(endpoint, sameKeyOptions(), retries - 1, inFlightWaits);
     }
+    if (isMutation) throw new ApiError(UNCONFIRMED_MUTATION_MESSAGE, 'NETWORK_ERROR', 0);
     throw new ApiError(`ارتباط با کارساز برقرار نشد: ${err?.message || 'خطای شبکه'}`, 'NETWORK_ERROR', 0);
   }
 

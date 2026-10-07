@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchJson, setCsrfToken } from '../../api';
+import { fetchJson, setCsrfToken, UNCONFIRMED_MUTATION_MESSAGE } from '../../api';
 import { resetSubmissionKeys } from '../../lib/submissionKey';
 
 // TD-329: کلید تکرار درخواست مرورگر از محتوای ارسال ساخته می‌شود و تا پاسخ قطعی همان می‌ماند؛ ۴۰۹ «در حال پردازش» با همان کلید منتظر نتیجه می‌ماند.
@@ -44,11 +44,11 @@ describe('کلید تکرار درخواست از محتوای ارسال (TD-32
     expect(sentKey(2)).not.toBe(sentKey(0));
   });
 
-  it('ارسال دوباره پس از خطای شبکه همان کلید را دارد و پس از پاسخ موفق کلید تازه', async () => {
+  it('ارسال دوباره کاربر پس از خطای شبکه همان کلید را دارد و پس از پاسخ موفق کلید تازه', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
-    await expect(fetchJson('/accounting/treasury', pay(500))).rejects.toThrow('ارتباط با کارساز برقرار نشد');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(sentKey(1)).toBe(sentKey(0));
+    await expect(fetchJson('/accounting/treasury', pay(500))).rejects.toThrow(UNCONFIRMED_MUTATION_MESSAGE);
+    // v9.0.296 (TD-670): ثبت خودکار دوباره فرستاده نمی‌شود
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const lostKey = sentKey(0);
     fetchMock.mockReset();
