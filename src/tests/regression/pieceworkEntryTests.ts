@@ -369,5 +369,83 @@ export async function runPieceworkEntryTests(shouldRun: ShouldRun): Promise<Test
     }));
   }
 
+  const auditId = 'reg_piecework_payroll_audit_td_810';
+  if (shouldRun(auditId, 'td810', 'piecework', 'payroll', 'package12')) {
+    await runCase(results, auditId, 'v9.0.241: every work log create, edit and delete and every payslip issue, status change and delete writes its own audit row inside its transaction with the request IP and before / after details, and payslip statuses are written with Persian labels (TD-810)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      type AuditRow = { action: string; entity_id: string; description: string; ip_address: string; details: Record<string, Record<string, unknown> | unknown> };
+      const auditsOf = async (entity: 'logs' | 'payroll', entityId: number) => (await pool.query<AuditRow>(
+        'SELECT action, entity_id, description, ip_address, details FROM activity_logs WHERE entity = $1 AND entity_id = $2 ORDER BY id',
+        [entity === 'logs' ? 'کارکرد پرکیسی' : 'فیش حقوقی', String(entityId)])).rows;
+      const field = (row: AuditRow | undefined, part: string, key: string) => (row?.details?.[part] as Record<string, unknown> | undefined)?.[key];
+
+      // 1) a batch of two logs writes one audit row per log, with the log id, the amounts and the IP
+      const task = await rateTask(100_000);
+      const worker = await newWorker('TD-810 logs');
+      const posted = await admin.post('/api/piecework/logs', { items: [
+        { personnelId: worker, taskId: task, date: '1405/06/10', quantity: 4, unitRate: 100_000 },
+        { personnelId: worker, taskId: task, date: '1405/06/11', quantity: 2, unitRate: 100_000 },
+      ] });
+      const [logA, logB] = (posted.body?.insertedIds ?? []) as number[];
+      if (posted.status !== 201 || !logA || !logB) problems.push(`the log batch answered ${posted.status} ${brief(posted.body)}`);
+      for (const id of [logA, logB].filter(Boolean)) {
+        const rows = await auditsOf('logs', id);
+        if (rows.length !== 1 || rows[0].action !== 'CREATE' || field(rows[0], 'after', 'totalAmount') === undefined || !rows[0].ip_address) {
+          problems.push(`log ${id} has audit rows ${brief(rows.map(r => ({ a: r.action, ip: r.ip_address, after: field(r, 'after', 'totalAmount') })))}, expected one CREATE with amounts and IP`);
+        }
+      }
+
+      // 2) editing 4 x 100,000 to 40 x 500,000 = 20,000,000 leaves a row with only the changed fields
+      if (logA) {
+        const edit = await admin.put(`/api/piecework/logs/${logA}`, { quantity: 40, unitRate: 500_000 });
+        if (edit.status !== 200) problems.push(`editing log A answered ${edit.status} ${brief(edit.body)}`);
+        const upd = (await auditsOf('logs', logA)).find(r => r.action === 'UPDATE');
+        const changes = Object.keys((upd?.details?.changes as Record<string, unknown> | undefined) ?? {}).sort().join(',');
+        if (!upd || !fin(String(field(upd, 'before', 'totalAmount'))).equals(400_000) || !fin(String(field(upd, 'after', 'totalAmount'))).equals(20_000_000) || changes !== 'quantity,totalAmount,unitRate' || !upd.ip_address) {
+          problems.push(`the edit of log A left ${brief(upd ?? null)}, expected before 400000, after 20000000 and changes quantity, totalAmount, unitRate`);
+        }
+      }
+
+      // 3) deleting log B leaves a row with the deleted log
+      if (logB) {
+        const del = await admin.del(`/api/piecework/logs/${logB}`);
+        if (del.status !== 200) problems.push(`deleting log B answered ${del.status}`);
+        const gone = (await auditsOf('logs', logB)).find(r => r.action === 'DELETE');
+        if (!gone || !fin(String(field(gone, 'before', 'totalAmount'))).equals(200_000)) problems.push(`the delete of log B left ${brief(gone ?? null)}`);
+      }
+
+      // 4) a payslip: issue, status change and delete each leave a row with details, IP and Persian statuses
+      const payee = await newWorker('TD-810 payslip');
+      const payTask = await rateTask(1);
+      await PieceworkService.logWorkEntries([{ personnelId: payee, taskId: payTask, date: '2026-04-05', quantity: 1, unitRate: 800_000 }]);
+      const issued = await admin.post('/api/piecework/payrolls/generate', { personnelId: payee, startDate: '2026-04-01', endDate: '2026-04-30' });
+      const payrollId = Number(issued.body?.id);
+      if (issued.status !== 201 || !payrollId) problems.push(`issuing the payslip answered ${issued.status} ${brief(issued.body)}`);
+      if (payrollId) {
+        const toDraft = await admin.put(`/api/piecework/payrolls/${payrollId}/status`, { status: 'draft' });
+        if (toDraft.status !== 200) problems.push(`moving the payslip to draft answered ${toDraft.status}`);
+        const del = await admin.del(`/api/piecework/payrolls/${payrollId}`);
+        if (del.status !== 200) problems.push(`deleting the payslip answered ${del.status} ${brief(del.body)}`);
+        const rows = await auditsOf('payroll', payrollId);
+        const [created, updated, deleted] = ['CREATE', 'UPDATE', 'DELETE'].map(a => rows.find(r => r.action === a));
+        if (!created || !fin(String(field(created, 'after', 'netPayable'))).equals(800_000) || field(created, 'after', 'status') !== 'تأییدشده' || !created.ip_address) {
+          problems.push(`the payslip issue row is ${brief(created ?? null)}`);
+        }
+        const statusChange = (updated?.details?.changes as Record<string, { before?: unknown; after?: unknown }> | undefined)?.status;
+        if (!updated || statusChange?.before !== 'تأییدشده' || statusChange?.after !== 'پیش‌نویس' || /draft|approved/.test(updated.description) || !updated.ip_address) {
+          problems.push(`the payslip status row is ${brief(updated ?? null)}, expected Persian statuses and no status code`);
+        }
+        if (!deleted || field(deleted, 'before', 'payrollNumber') === undefined || !Array.isArray(deleted.details?.freedWorkLogIds) || (deleted.details.freedWorkLogIds as unknown[]).length !== 1 || !deleted.ip_address) {
+          problems.push(`the payslip delete row is ${brief(deleted ?? null)}`);
+        }
+        if (rows.length !== 3) problems.push(`the payslip has ${rows.length} audit rows, expected 3`);
+      }
+
+      assertNoProblems(problems);
+      return 'each log and payslip write has one audit row with IP, before / after and Persian statuses';
+    }));
+  }
+
   return results;
 }

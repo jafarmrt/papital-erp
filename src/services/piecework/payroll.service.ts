@@ -15,6 +15,7 @@ import { isLegacyPayrollVoucher, payrollVouchersWhere } from '../accounting/payr
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { workLogFreeOfLivePayroll } from './workLogPayrollLink.js';
+import { auditPayrollDeleted, auditPayrollIssued, auditPayrollUpdated } from './pieceworkAudit.js';
 
 /**
  * چرخه عمر فیش حقوقی پرکیسی: صدور، تغییر وضعیت، همگام‌سازی سند و ابطال.
@@ -43,6 +44,8 @@ export interface GeneratePayrollInput {
   notes?: string;
   userId?: number;
   username: string;
+  /** درخواست Express برای IP ردیف ممیزی (TD-810) */
+  req?: unknown;
 }
 
 export interface UpdatePayrollStatusInput {
@@ -50,6 +53,7 @@ export interface UpdatePayrollStatusInput {
   notes?: string;
   userId?: number;
   username: string;
+  req?: unknown;
 }
 
 export class PieceworkPayrollService {
@@ -248,6 +252,8 @@ export class PieceworkPayrollService {
         tx,
         { strict: true }
       );
+      // v9.0.241 (TD-810): ردیف ممیزی صدور با عکس فیش، کارکردها و سند، در همان تراکنش
+      await auditPayrollIssued(tx, newPayroll, { personnelName: pInfo.fullName, logIds, voucher: autoVoucher }, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 201,
@@ -315,6 +321,8 @@ export class PieceworkPayrollService {
           { strict: true }
         );
       }
+      // v9.0.241 (TD-810): قبل و بعد فیلدهای تغییرکرده و وضعیت با برچسب فارسی (پیش‌تر «به «draft»» پس از commit)
+      await auditPayrollUpdated(tx, pay, { ...pay, ...updates } as typeof pay, autoVoucher, { req: input.req, userId: currentUserId, username: currentUsername });
 
       return {
         status: 200,
@@ -359,6 +367,7 @@ export class PieceworkPayrollService {
       username?: string;
       reason?: string;
       externalTx?: DbExecutor;
+      req?: unknown;
     }
   ): Promise<typeof pieceworkPayrolls.$inferSelect> {
     const operatorName = options?.username || 'سیستم';
@@ -431,10 +440,11 @@ export class PieceworkPayrollService {
       }
 
       // Unlink logs back to pending
-      await tx
+      const freedLogs = await tx
         .update(pieceworkLogs)
         .set({ payrollId: null, status: 'pending' })
-        .where(eq(pieceworkLogs.payrollId, payrollId));
+        .where(eq(pieceworkLogs.payrollId, payrollId))
+        .returning({ id: pieceworkLogs.id });
 
       // Soft delete payroll
       const [updatedPay] = await tx
@@ -442,6 +452,13 @@ export class PieceworkPayrollService {
         .set({ isDeleted: 1 })
         .where(eq(pieceworkPayrolls.id, payrollId))
         .returning();
+
+      // v9.0.241 (TD-810): عکس فیش، دلیل، سندهای باطل‌شده و کارکردهای آزادشده در همان تراکنش
+      await auditPayrollDeleted(tx, pay, {
+        reason,
+        voidedVoucherIds: linkedVouchers.map(v => v.id),
+        freedLogIds: freedLogs.map(l => l.id),
+      }, { req: options?.req, userId: operatorId ?? undefined, username: operatorName });
 
       return updatedPay || pay;
     };

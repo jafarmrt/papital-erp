@@ -6,6 +6,7 @@ import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
 import { PieceworkPayrollService } from './piecework/payroll.service.js';
 import { lockEditableWorkLog, workLogFreeOfLivePayroll } from './piecework/workLogPayrollLink.js';
+import { auditWorkLogCreated, auditWorkLogDeleted, auditWorkLogUpdated, type AuditActor } from './piecework/pieceworkAudit.js';
 import { activePersonnelRate, savePersonnelRate, type PersonnelRateInput, type RateActor } from './piecework/personnelRate.js';
 import { assertScheduleRowsFree, linkScheduleRows, lockProjectsOfLogMove, lockScheduleProjects, unlinkScheduleRow } from './piecework/scheduleRowLink.js';
 import type { ScheduleRowRef } from '../lib/projects/scheduleWorkLog.js';
@@ -266,13 +267,14 @@ export class PieceworkService {
    */
   static async logWorkEntries(
     items: CreatePieceworkLogInput[],
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<number[]> {
     const entries = normalizeWorkLogEntries(items);
     return inTransaction(executor, async (tx) => {
       // v9.0.238 (TD-736): نخست ردیف پروژه‌های ردیف‌های برنامه FOR UPDATE، سپس والدها FOR SHARE
       const schedules = await lockScheduleProjects(tx, entries);
-      await assertWorkLogParentsLive(tx, entries);
+      const names = await assertWorkLogParentsLive(tx, entries);
       await assertScheduleRowsFree(tx, entries, schedules);
       const insertedIds: number[] = [];
       const links: Array<{ projectId: number; ref: ScheduleRowRef; logId: number }> = [];
@@ -296,9 +298,11 @@ export class PieceworkService {
           createdById: createdById || null,
           createdByUsername: createdByUsername || 'سیستم',
           isDeleted: 0
-        }).returning({ id: pieceworkLogs.id });
+        }).returning();
 
         insertedIds.push(inserted.id);
+        // v9.0.241 (TD-810): یک ردیف ممیزی برای هر کارکرد، در همان تراکنش
+        await auditWorkLogCreated(tx, inserted, { personnel: names.personnel.get(entry.personnelId), task: names.tasks.get(entry.taskId) }, actor);
         if (entry.scheduleRef && entry.projectId !== null) links.push({ projectId: entry.projectId, ref: entry.scheduleRef, logId: inserted.id });
       }
       await linkScheduleRows(tx, links, schedules);
@@ -698,7 +702,8 @@ export class PieceworkService {
       notes?: string;
       projectId?: number | string | null;
     },
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkLogs.$inferSelect> {
     return inTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): قفل ردیف و گارد «در فیش است» در همان تراکنش (کارکرد فیش حذف‌شده آزاد است، مانند صدور فیش)
@@ -731,6 +736,8 @@ export class PieceworkService {
         throw new ConflictError('کارکرد هم‌زمان در فیش حقوقی درج یا حذف شد؛ فهرست را دوباره بارگذاری کنید');
       }
       if (projectMoved) await unlinkScheduleRow(tx, existing.projectId, id);
+      // v9.0.241 (TD-810): فقط فیلدهای تغییرکرده با قبل و بعد
+      await auditWorkLogUpdated(tx, existing, updated, actor);
       return updated;
     });
   }
@@ -740,7 +747,8 @@ export class PieceworkService {
    */
   static async deleteWorkLog(
     id: number,
-    executor?: DbExecutor
+    executor?: DbExecutor,
+    actor: AuditActor = {}
   ): Promise<typeof pieceworkLogs.$inferSelect> {
     return inTransaction(executor, async (tx) => {
       // v8.0.76 (TD-328): همان قفل و گارد ویرایش
@@ -753,6 +761,7 @@ export class PieceworkService {
       }
       // v9.0.238 (TD-736): ردیف برنامه کارکرد حذف‌شده دوباره ثبت‌شدنی است
       await unlinkScheduleRow(tx, existing.projectId, id);
+      await auditWorkLogDeleted(tx, existing, actor);
       return existing;
     });
   }

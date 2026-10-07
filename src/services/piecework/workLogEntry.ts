@@ -88,25 +88,34 @@ export function normalizeWorkLogEntries(items: readonly WorkLogEntryInput[]): No
 const sortedUnique = (ids: Array<number | null>) => [...new Set(ids.filter((id): id is number => id !== null))].sort((a, b) => a - b);
 const idList = (ids: number[]) => ids.map(id => toPersianDigits(id)).join('، ');
 
+/** نام پرسنل و عنوان کار زنده‌ها (برای متن ردیف ممیزی، TD-810) */
+export interface WorkLogParentNames {
+  personnel: Map<number, string>;
+  tasks: Map<number, string>;
+}
+
 /** پرسنل، عنوان کار و پروژه ردیف‌ها زنده‌اند (۴۲۲ با شناسه‌های نادرست)؛ ردیف‌هایشان تا پایان تراکنش `FOR SHARE` قفل است */
-export async function assertWorkLogParentsLive(tx: DbExecutor, entries: readonly Pick<NormalizedWorkLogEntry, 'personnelId' | 'taskId' | 'projectId'>[]): Promise<void> {
+export async function assertWorkLogParentsLive(tx: DbExecutor, entries: readonly Pick<NormalizedWorkLogEntry, 'personnelId' | 'taskId' | 'projectId'>[]): Promise<WorkLogParentNames> {
+  const names: WorkLogParentNames = { personnel: new Map(), tasks: new Map() };
   const personnelIds = sortedUnique(entries.map(e => e.personnelId));
   if (personnelIds.length > 0) {
-    const live = await tx.select({ id: personnel.id }).from(personnel)
+    const live = await tx.select({ id: personnel.id, fullName: personnel.fullName }).from(personnel)
       .where(and(inArray(personnel.id, personnelIds), eq(personnel.isDeleted, 0))).orderBy(asc(personnel.id)).for('share');
     const missing = personnelIds.filter(id => !live.some(r => r.id === id));
     if (missing.length > 0) {
       throw new ValidationError(`پرسنل با شناسه ${idList(missing)} وجود ندارد یا حذف شده است؛ کارکردی ثبت نشد.`, { personnelIds: missing }, 'PIECEWORK_LOG_PERSONNEL_INVALID');
     }
+    for (const r of live) names.personnel.set(r.id, r.fullName ?? '');
   }
   const taskIds = sortedUnique(entries.map(e => e.taskId));
   if (taskIds.length > 0) {
-    const live = await tx.select({ id: pieceworkTasks.id }).from(pieceworkTasks)
+    const live = await tx.select({ id: pieceworkTasks.id, title: pieceworkTasks.title }).from(pieceworkTasks)
       .where(and(inArray(pieceworkTasks.id, taskIds), eq(pieceworkTasks.isDeleted, 0))).orderBy(asc(pieceworkTasks.id)).for('share');
     const missing = taskIds.filter(id => !live.some(r => r.id === id));
     if (missing.length > 0) {
       throw new ValidationError(`عنوان کاری با شناسه ${idList(missing)} وجود ندارد یا حذف شده است؛ کارکردی ثبت نشد.`, { taskIds: missing }, 'PIECEWORK_LOG_TASK_INVALID');
     }
+    for (const r of live) names.tasks.set(r.id, r.title);
   }
   const projectIds = sortedUnique(entries.map(e => e.projectId));
   if (projectIds.length > 0) {
@@ -117,4 +126,5 @@ export async function assertWorkLogParentsLive(tx: DbExecutor, entries: readonly
       throw new ValidationError(`پروژه با شناسه ${idList(missing)} وجود ندارد یا حذف شده است؛ کارکردی ثبت نشد.`, { projectIds: missing }, 'PIECEWORK_LOG_PROJECT_INVALID');
     }
   }
+  return names;
 }

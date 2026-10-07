@@ -584,16 +584,11 @@ router.post('/piecework/logs', authorizePermission('personnel.manage', 'piecewor
         unitRate: canSetRate ? item.unitRate : undefined,
         createdById: currentUserId,
         createdByUsername: currentUsername
-      }))
+      })),
+      undefined,
+      // v9.0.241 (TD-810): یک ردیف ممیزی برای هر کارکرد در تراکنش ثبت، با کاربر و IP
+      { req }
     );
-
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'CREATE',
-      entity: 'کارکرد پرکیسی',
-      description: `ثبت ${insertedIds.length} ردیف کارکرد پرکیسی جدید`
-    });
 
     res.status(201).json({ status: 'ok', insertedCount: insertedIds.length, insertedIds });
   } catch (err) {
@@ -608,7 +603,7 @@ router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), valid
     const id = Number(req.params.id);
     const { date, quantity, unitRate, notes, projectId } = req.body;
 
-    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate, notes, projectId });
+    await PieceworkService.updateWorkLog(id, { date, quantity, unitRate, notes, projectId }, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد ویرایش شد' });
   } catch (err) {
@@ -621,7 +616,7 @@ router.put('/piecework/logs/:id', authorizePermission('personnel.manage'), valid
 router.delete('/piecework/logs/:id', authorizePermission('personnel.manage'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
   try {
     const id = Number(req.params.id);
-    await PieceworkService.deleteWorkLog(id);
+    await PieceworkService.deleteWorkLog(id, undefined, { req });
 
     res.json({ status: 'ok', message: 'کارکرد حذف شد' });
   } catch (err) {
@@ -711,23 +706,16 @@ router.post(['/piecework/payrolls', '/piecework/payrolls/generate'], authorizePe
       advanceDeduction: reqAdvanceDeduction,
       notes,
       userId: currentUserId,
-      username: currentUsername
+      username: currentUsername,
+      // v9.0.241 (TD-810): ردیف ممیزی با جزئیات و IP در تراکنش صدور نوشته می‌شود
+      req
     });
 
     if (result.error || !result.payroll) {
       return res.status(result.status || 400).json({ error: result.error || 'خطا در صدور فیش حقوقی' });
     }
 
-    const { payroll, personnelName, voucher } = result;
-
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'CREATE',
-      entity: 'فیش حقوقی',
-      entityId: payroll.id,
-      description: `صدور فیش حقوقی پرکیسی ${payroll.payrollNumber} برای ${personnelName} (سند حسابداری: ${voucher ? voucher.voucherNumber : 'بدون سند'})`
-    });
+    const { payroll, voucher } = result;
 
     res.status(201).json({
       ...payroll,
@@ -754,21 +742,13 @@ router.put('/piecework/payrolls/:id/status', authorizePermission('personnel.mana
       status,
       notes,
       userId: currentUserId,
-      username: currentUsername
+      username: currentUsername,
+      req
     });
 
     if (result.error || !result.payroll) {
       return res.status(result.status || 400).json({ error: result.error || 'خطا در ویرایش وضعیت فیش حقوقی' });
     }
-
-    await logActivity({
-      userId: currentUserId,
-      username: currentUsername,
-      action: 'UPDATE',
-      entity: 'فیش حقوقی',
-      entityId: id,
-      description: `تغییر وضعیت فیش حقوقی ${result.payroll.payrollNumber} به «${status}»`
-    });
 
     res.json({
       status: 'ok',
@@ -914,16 +894,8 @@ router.delete('/piecework/payrolls/:id', authorizePermission('personnel.manage')
   const deletedPayroll = await PieceworkPayrollService.deletePayroll(id, {
     userId: req.user?.id,
     username: req.user?.username || 'سیستم',
-    reason: `ابطال و حذف فیش حقوقی توسط کاربر`
-  });
-
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'سیستم',
-    action: 'DELETE',
-    entity: 'فیش حقوقی',
-    entityId: id,
-    description: `ابطال و حذف فیش حقوقی ${deletedPayroll?.payrollNumber || id}`
+    reason: `ابطال و حذف فیش حقوقی توسط کاربر`,
+    req
   });
 
   res.json({ status: 'ok', message: 'فیش حقوقی با موفقیت باطل شد', payroll: deletedPayroll });
