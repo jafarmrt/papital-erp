@@ -50,7 +50,7 @@ export function buildForeignRateHealthTest(entries: VoucherWithoutForeignRate[])
     id: 'voucher_foreign_rows_without_rate',
     category: 'vouchers',
     title: 'ردیف ارزی بی نرخ تبدیل در اسناد حسابداری',
-    description: 'هر ردیف غیرریالی سند نرخ تبدیل مثبت لازم دارد. پیش از نسخه ۹.۰.۱۵۳ سند دستی ارز بی نرخ را با نرخ ۱ ذخیره می‌کرد و گزارش‌های ریالی مبلغ ارزی را همان مبلغ به ریال می‌شمردند؛ این ردیف‌ها خودکار عوض نمی‌شوند',
+    description: 'هر ردیف غیرریالی سند نرخ تبدیل مثبت لازم دارد. پیش از نسخه ۹.۰.۱۶۹ سند دستی ارز بی نرخ را با نرخ ۱ ذخیره می‌کرد و گزارش‌های ریالی مبلغ ارزی را همان مبلغ به ریال می‌شمردند؛ این ردیف‌ها خودکار عوض نمی‌شوند',
     status: entries.length > 0 ? 'warning' : 'healthy',
     scoreImpact: 0,
     count: entries.length,
