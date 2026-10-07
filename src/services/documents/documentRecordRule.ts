@@ -12,8 +12,9 @@ import { ValidationError } from '../../errors/customErrors.js';
  * گردش کار مجوز را از همین‌جا می‌گیرند تا با رفتار سرویس یکی بماند.
  *
  * v9.0.213 (TD-770، تصمیم ت۲ «الف» بسته ۸): جهت گردش فقط از نوع سند (`documentStockDirection`)، در ثبت و نهایی‌سازی؛
- * `inOut` ناسازگار با نوع ۴۲۲ است (نه نادیده) تا فراخواننده‌ای که جهت دیگری می‌فرستد خطایش را ببیند، و نوعی که جهت ندارد
- * (انتقال بین انبارها یا نوع ناشناخته) از مسیر ثبت سند پذیرفته نمی‌شود.
+ * `inOut` ناسازگار با نوع ۴۲۲ است (نه نادیده) تا فراخواننده‌ای که جهت دیگری می‌فرستد خطایش را ببیند، انتقال بین انبارها
+ * از مسیر ثبت سند پذیرفته نمی‌شود، و نوع ناشناخته فقط سربرگ بی‌ردیف است (کالایی جابه‌جا نمی‌کند؛ route فقط نوع‌های ثبت‌شدنی
+ * را می‌پذیرد و آزمون‌های شماره‌گذاری سری جدا را با سربرگ نوع ساختگی می‌سازند).
  */
 
 /** وضعیت سند تازه: وضعیت فرستاده‌شده، وگرنه پیش‌فاکتور برای نوع پیش‌فاکتور و قطعی برای بقیه */
@@ -24,14 +25,15 @@ export function createdDocumentStatus(docType: string, status?: string | null): 
 
 /**
  * سند از این نوع با این `inOut` ثبت‌شدنی است: نوع جهت‌دار یا انبارگردانی، و `inOut` (اگر آمده) همان جهت نوع. انبارگردانی جهت
- * نوعی ندارد و `inOut` آن خوانده نمی‌شود.
+ * نوعی ندارد و `inOut` آن خوانده نمی‌شود. انتقال هرگز پذیرفته نمی‌شود؛ نوع ناشناخته فقط وقتی سند ردیف ندارد (`hasLines`
+ * false)، چون ردیفش جهت گردش و سند حسابداری ندارد.
  */
-export function assertRecordableDocument(docType: string, inOut?: string | null): void {
-  if (!isRecordableDocumentType(docType)) {
+export function assertRecordableDocument(docType: string, inOut?: string | null, hasLines = true): void {
+  if (docType === 'transfer' || (hasLines && !isRecordableDocumentType(docType))) {
     throw new ValidationError(
       docType === 'transfer'
         ? 'انتقال بین انبارها فقط از صفحه «انتقال بین انبارها» ثبت می‌شود.'
-        : `نوع سند «${docType}» از مسیر ثبت سند پذیرفته نمی‌شود.`,
+        : `نوع سند «${docType}» جهت گردش کالا ندارد و ردیف کالا نمی‌پذیرد.`,
       { docType },
       'DOCUMENT_TYPE_NOT_RECORDABLE',
     );

@@ -565,8 +565,9 @@ export async function runDatabaseTests(): Promise<TestCaseResult[]> {
       throw new Error('هیچ کالایی برای ساخت سند تست یافت نشد.');
     }
 
+    // v9.0.213 (TD-770): نوع ساختگی دیگر ردیف نمی‌گیرد؛ پیش‌نویس رسید کالایی جابه‌جا نمی‌کند
     const testDocId = await DocumentService.createDocument({
-      docType: 'draft',
+      docType: 'receipt',
       refNumber: 'TEST-CASCADE-' + Date.now(),
       date: new Date().toISOString(),
       user: 'test_audit_user',

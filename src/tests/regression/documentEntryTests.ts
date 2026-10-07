@@ -111,6 +111,9 @@ async function directionFromTypeCase(h: Harness, wrong: string[]): Promise<strin
   const serviceCode = await DocumentService.createDocument({ docType: 'transfer', status: 'final', date: f.today, items: line(a, 1) } as never)
     .then(() => 'recorded', (err: { code?: string }) => String(err?.code));
   if (serviceCode !== 'DOCUMENT_TYPE_NOT_RECORDABLE') wrong.push(`the document service recorded a transfer (${serviceCode}), expected DOCUMENT_TYPE_NOT_RECORDABLE`);
+  const unknownCode = await DocumentService.createDocument({ docType: 'td770_unknown', status: 'final', date: f.today, items: line(a, 1) } as never)
+    .then(() => 'recorded', (err: { code?: string }) => String(err?.code));
+  if (unknownCode !== 'DOCUMENT_TYPE_NOT_RECORDABLE') wrong.push(`the document service recorded lines of a type without a direction (${unknownCode}), expected DOCUMENT_TYPE_NOT_RECORDABLE`);
 
   // 3) consistent or missing inOut: the type decides; a receipt adds, an invoice removes, a sales voucher is issued
   const receipt = await h.post('/api/documents', f.doc('receipt', 'final', line(a, 2)));
@@ -127,7 +130,7 @@ async function directionFromTypeCase(h: Harness, wrong: string[]): Promise<strin
   const plainReceipt = await h.post('/api/documents', f.doc('receipt', 'final', line(a, 4)), outOnly);
   if (plainReceipt.status !== 403) wrong.push(`warehouse.out recorded a receipt with ${brief(plainReceipt)}, expected 403`);
   if (await f.stock(a) !== 8) wrong.push(`the stock ended at ${await f.stock(a)}, expected 8`);
-  return 'receipt/out, invoice/in, remittance/in, return/out, proforma/in and waste/in drafts are 422 and move nothing; a transfer is 400 on the route and DOCUMENT_TYPE_NOT_RECORDABLE in the service; documents without inOut move by their type; warehouse.out cannot record a receipt';
+  return 'receipt/out, invoice/in, remittance/in, return/out, proforma/in and waste/in drafts are 422 and move nothing; a transfer is 400 on the route and DOCUMENT_TYPE_NOT_RECORDABLE in the service, like lines of a type without a direction; documents without inOut move by their type; warehouse.out cannot record a receipt';
 }
 
 /** B08-06 (TD-775): قابل فروش ۴ (موجودی ۱۰، پیش‌فاکتور دیگری ۶): فاکتور ۵ بی inOut، دو ردیف ۴ و نهایی‌سازی پیش‌نویس دو ردیف ۴ */

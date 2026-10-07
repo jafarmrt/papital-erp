@@ -236,9 +236,9 @@ export class DocumentCreationService {
     } = body;
 
     const docType = rawDocType || rawType || 'invoice';
-    // v9.0.213 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲ و انتقال یا نوع ناشناخته پذیرفته نمی‌شود.
-    // پیش‌تر «رسید» با `inOut: out` کالا را خارج و سند حسابداری خرید صادر می‌کرد، و `transfer` بی ردیف مقصد خارج می‌کرد
-    assertRecordableDocument(docType, inOut);
+    // v9.0.213 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲، انتقال پذیرفته نمی‌شود و نوع ناشناخته
+    // ردیف نمی‌گیرد. پیش‌تر «رسید» با `inOut: out` کالا را خارج و سند حسابداری خرید صادر می‌کرد، و `transfer` بی ردیف مقصد خارج می‌کرد
+    assertRecordableDocument(docType, inOut, Array.isArray(docLines) && docLines.length > 0);
     // P0-02 (F17 & ACC-03): تعیین امن وضعیت سند؛ پیش‌فاکتور هرگز نباید به عنوان سند نهایی ثبت شود
     const docStatus = status || (docType === 'proforma' ? 'proforma' : 'final');
 
