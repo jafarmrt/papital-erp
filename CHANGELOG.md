@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.271 — Requisition Edit Before Approval
+- **Fix (TD-696, B10-09):** `PUT /procurement/requisitions/:id` edits only an unapproved (or rejected) requisition without orders (else 409 REQUISITION_NOT_EDITABLE), in one transaction under the row lock, with the create contract, the stored row ids kept and a before/after audit row.
+
 ### v9.0.270 — Requisitions With Orders Are Not Deleted
 - **Fix (TD-695, B10-08):** a purchase requisition with a live purchase order is not deleted (409 REQUISITION_HAS_ORDERS naming the orders), under the requisition row lock with the workflow terminated in the same transaction; the desk shows the delete button only for a requisition without orders.
 

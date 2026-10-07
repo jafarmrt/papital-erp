@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRequisitionSchema, updateRequisitionSchema } from '../../routes/procurement.schemas';
-import { canDeleteRequisition, REQUISITION_PRIORITIES } from '../../lib/procurement/requisitionFields';
+import { canDeleteRequisition, canEditRequisition, REQUISITION_PRIORITIES } from '../../lib/procurement/requisitionFields';
 import { persianIssueMessage } from '../../lib/validationMessages';
 
 /**
@@ -71,5 +71,17 @@ describe('requisition delete button (TD-695)', () => {
     expect(canDeleteRequisition({ status: 'rejected', items: [{ ...row, orderedQty: 5, linkedDocumentIds: [12] }] })).toBe(false);
     expect(canDeleteRequisition({ status: 'ordered', items: [row] })).toBe(false);
     expect(canDeleteRequisition({ status: 'received', items: [{ ...row, receivedQty: 5 }] })).toBe(false);
+  });
+});
+
+describe('requisition edit rule (TD-696)', () => {
+  const row = { itemId: 7, requestedQty: 8, orderedQty: 0, receivedQty: 0, linkedDocumentIds: [] as number[] };
+  it('edits a requisition only before approval (or after rejection) and before any order', () => {
+    expect(canEditRequisition({ status: 'pending', items: [row] })).toBe(true);
+    expect(canEditRequisition({ status: 'rejected', items: [row] })).toBe(true);
+    expect(canEditRequisition({ status: 'ordered', items: [row] })).toBe(false);
+    expect(canEditRequisition({ status: 'under_review', items: [row] })).toBe(false);
+    expect(canEditRequisition({ status: 'received', items: [{ ...row, orderedQty: 8, receivedQty: 8, linkedDocumentIds: [11] }] })).toBe(false);
+    expect(canEditRequisition({ status: 'pending', items: [{ ...row, orderedQty: 3, linkedDocumentIds: [12] }] })).toBe(false);
   });
 });

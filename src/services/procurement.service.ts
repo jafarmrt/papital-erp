@@ -24,7 +24,7 @@ import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requi
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
-import { REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
+import { canEditRequisition, REQUISITION_PRIORITIES, type RequisitionPriority } from '../lib/procurement/requisitionFields.js';
 import {
   ensureRequisitionApproved, RECEIVE_ACTION_KEYS, RECEIVED_STEP_KEY, requisitionFlow, requisitionWorkflowGraph, transitionFromStep,
   type RequisitionActor, type WorkflowStateRef, type WorkflowTransitionRef,
@@ -49,14 +49,14 @@ export interface CreateRequisitionInput {
   items: RequisitionRowFields[];
 }
 
+/** v9.0.271 (TD-696): بدنه ویرایش درخواست خرید (قرارداد `updateRequisitionSchema`)؛ فیلدی که نیامده بی تغییر می‌ماند */
 export interface UpdateRequisitionInput {
   title?: string;
-  priority?: 'urgent' | 'high' | 'normal' | 'low';
+  projectId?: number | null;
+  priority?: RequisitionPriority;
   requiredDate?: string;
   notes?: string;
-  items?: PurchaseRequisitionItemRow[];
-  assignedToId?: number | null;
-  assignedToName?: string;
+  items?: RequisitionRowFields[];
 }
 
 export interface GetRequisitionsFilter {
@@ -328,71 +328,69 @@ export class ProcurementService {
 
   /**
    * Update requisition items, assignments, or estimates
+   *
+   * v9.0.271 (TD-696، B10-09): ویرایش فقط پیش از تأیید (یا پس از رد) و برای درخواستی که هیچ ردیفش سفارش نشده، در یک
+   * تراکنش و زیر قفل ردیف درخواست؛ وگرنه ۴۰۹ `REQUISITION_NOT_EDITABLE`. ردیف‌ها با همان قرارداد ثبت ساخته می‌شوند
+   * (`buildRequisitionRows`) و شناسه ردیف ذخیره‌شده نگه داشته می‌شود؛ ممیزی پیش و پس از ویرایش با همان `tx`. پیش‌تر
+   * ویرایش در هر وضعیتی، بی تراکنش، مقدار درخواستی، سفارش‌شده و دریافتی را صفر و پیوند سفارش‌ها را پاک می‌کرد.
    */
   static async updateRequisition(
     id: number,
     updates: UpdateRequisitionInput,
     user: { id?: number; username?: string }
   ): Promise<PurchaseRequisition> {
-    const existing = await this.getRequisitionById(id);
-
-    let newItems = existing.items;
-    let newTotalEst = fin(existing.totalEstimatedAmount);
-
-    if (updates.items && Array.isArray(updates.items)) {
-      newTotalEst = fin(0);
-      newItems = updates.items.map((item, idx) => {
-        const qty = Number(item.requestedQty || item.requested_qty || 0);
-        const ordered = Number(item.orderedQty || item.ordered_qty || 0);
-        const price = Number(item.unitPriceEstimate || item.unit_price_estimate || 0);
-        newTotalEst = newTotalEst.add(fin(qty).multiply(price));
-        return {
-          id: item.id || `item-${Date.now()}-${idx}`,
-          itemId: item.itemId ?? item.item_id ?? null,
-          itemCode: item.itemCode || item.item_code || '',
-          itemName: item.itemName || item.item_name || 'کالای سفارشی',
-          category: item.category || '',
-          unit: item.unit || 'عدد',
-          requestedQty: qty,
-          orderedQty: ordered,
-          remainingQty: Math.max(0, qty - ordered),
-          unitPriceEstimate: price,
-          targetSupplierId: item.targetSupplierId ?? item.target_supplier_id ?? null,
-          targetSupplierName: item.targetSupplierName || item.target_supplier_name || '',
-          status: item.status || (ordered >= qty ? 'ordered' : 'pending'),
-          linkedDocumentIds: item.linkedDocumentIds || item.linked_document_ids || [],
-          notes: item.notes || ''
-        };
-      });
+    if (updates.priority !== undefined && !(REQUISITION_PRIORITIES as readonly string[]).includes(updates.priority)) {
+      throw new ValidationError('اولویت درخواست خرید یکی از «فوری»، «بالا»، «عادی» یا «پایین» است.');
     }
-
-    const [updated] = await orm.update(purchaseRequisitions).set({
-      title: updates.title !== undefined ? updates.title.trim() : existing.title,
-      priority: updates.priority || existing.priority,
-      requiredDate: (updates.requiredDate ? requireStorageDate(updates.requiredDate, 'تاریخ نیاز') : '') || existing.requiredDate,
-      notes: updates.notes !== undefined ? updates.notes : existing.notes,
-      items: newItems,
-      totalEstimatedAmount: money(newTotalEst),
-      assignedToId: updates.assignedToId !== undefined ? updates.assignedToId : existing.assignedToId,
-      assignedToName: updates.assignedToName !== undefined ? updates.assignedToName : existing.assignedToName,
-      updatedAt: new Date().toISOString()
-    }).where(eq(purchaseRequisitions.id, id)).returning();
-
-    await logActivity({
-      userId: user.id,
-      username: user.username || 'سیستم',
-      action: 'UPDATE',
-      entity: 'درخواست خرید',
-      entityId: id,
-      description: `ویرایش درخواست خرید ${updated.code}`,
-      details: {
-        code: updated.code,
-        before: { title: existing.title, itemsCount: existing.items.length },
-        after: { title: updated.title, itemsCount: newItems.length, totalEstimatedAmount: newTotalEst.toNumber() }
+    if (updates.title !== undefined && !updates.title.trim()) {
+      throw new ValidationError('عنوان درخواست خرید را وارد کنید.');
+    }
+    return orm.transaction(async (tx) => {
+      const [locked] = await tx.select().from(purchaseRequisitions)
+        .where(and(eq(purchaseRequisitions.id, id), eq(purchaseRequisitions.isDeleted, 0)))
+        .for('update');
+      if (!locked) throw new NotFoundError(`درخواست خرید با شناسه #${id} یافت نشد.`);
+      const existing = toRequisitionDto(locked);
+      const liveOrders = await requisitionOrderDocuments(tx, { code: locked.code, items: locked.items as RequisitionItemWithReceipt[] });
+      if (!canEditRequisition(existing) || liveOrders.length > 0) {
+        throw new ConflictError(
+          `درخواست خرید ${existing.code} پس از تأیید یا صدور سفارش ویرایش نمی‌شود؛ برای تغییر، درخواست را رد و دوباره باز کنید.`,
+          { status: existing.status }, 'REQUISITION_NOT_EDITABLE',
+        );
       }
-    });
 
-    return toRequisitionDto(updated);
+      const storedRowIds = new Set((Array.isArray(existing.items) ? existing.items : []).map(row => String(row.id ?? '')).filter(Boolean));
+      const rebuilt = updates.items === undefined ? null : await buildRequisitionRows(tx, updates.items, storedRowIds);
+      const project = updates.projectId === undefined ? null : await resolveRequisitionProject(tx, updates.projectId);
+
+      const [updated] = await tx.update(purchaseRequisitions).set({
+        title: updates.title !== undefined ? updates.title.trim() : existing.title,
+        priority: updates.priority ?? existing.priority,
+        requiredDate: (updates.requiredDate ? requireStorageDate(updates.requiredDate, 'تاریخ نیاز') : '') || existing.requiredDate,
+        notes: updates.notes !== undefined ? updates.notes : existing.notes,
+        ...(project ? { projectId: project.projectId, projectCode: project.projectCode, projectName: project.projectName } : {}),
+        ...(rebuilt ? { items: rebuilt.rows, totalEstimatedAmount: money(rebuilt.total) } : {}),
+        updatedAt: new Date().toISOString()
+      }).where(eq(purchaseRequisitions.id, id)).returning();
+      const after = toRequisitionDto(updated);
+
+      const snapshot = (r: PurchaseRequisition) => ({
+        title: r.title, priority: r.priority, requiredDate: r.requiredDate, notes: r.notes, projectId: r.projectId ?? null,
+        totalEstimatedAmount: r.totalEstimatedAmount, items: r.items,
+      });
+      await logActivity({
+        tx,
+        userId: user.id,
+        username: user.username || 'سیستم',
+        action: 'UPDATE',
+        entity: 'درخواست خرید',
+        entityId: id,
+        description: `ویرایش درخواست خرید ${updated.code}`,
+        details: { code: updated.code, before: snapshot(existing), after: snapshot(after) }
+      });
+
+      return after;
+    });
   }
 
   /**
