@@ -11,6 +11,7 @@ export const AUDIT_ACTION_LABELS = {
   UPDATE: 'ویرایش',
   DELETE: 'حذف',
   RESTORE: 'بازگردانی',
+  REVIEW: 'بازخورد مدیریتی',
   SETTING_CHANGE: 'تغییر تنظیمات',
   VIEW: 'مشاهده',
   EXPORT: 'دریافت خروجی',

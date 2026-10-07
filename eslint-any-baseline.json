@@ -128,7 +128,7 @@
   "src/hooks/queries/useUserQueries.ts": 2,
   "src/hooks/queries/useWorkflowQueries.ts": 12,
   "src/hooks/useCRMData.ts": 14,
-  "src/hooks/useDailyLogs.ts": 10,
+  "src/hooks/useDailyLogs.ts": 7,
   "src/hooks/useEntitySelectors.ts": 6,
   "src/hooks/usePiecework.ts": 8,
   "src/hooks/useProjectInventory.ts": 21,

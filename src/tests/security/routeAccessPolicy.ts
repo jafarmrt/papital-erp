@@ -30,7 +30,6 @@ export const LOGIN_ONLY_ROUTES = new Set([
   'GET /api/users/my-permissions', 'GET /api/users/profile', 'PUT /api/users/profile', 'GET /api/users/list-simple',
   'GET /api/system/business-date', 'GET /api/settings', 'GET /api/global-search',
   'GET /api/categories', 'GET /api/warehouses',
-  'PUT /api/daily-logs/:id/review',
   'GET /api/notifications', 'GET /api/notifications/unread-count', 'PUT /api/notifications/:id/read',
   'PUT /api/notifications/read-all', 'DELETE /api/notifications/:id',
   'GET /api/piecework/payrolls/mine',

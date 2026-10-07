@@ -1,91 +1,26 @@
 import { Router } from 'express';
 import { eq, desc, and } from 'drizzle-orm';
 import { orm } from '../db/drizzle.js';
-import { dailyWorkLogs, notifications, users, roles } from '../db/schema.js';
+import { dailyWorkLogs, users } from '../db/schema.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission } from '../middleware/authorize.js';
-import { logActivity } from '../lib/auditLogger.js';
+import { authorizePermission, requirePermission } from '../middleware/authorize.js';
 import { isoToJalaliDate, toEnglishDigits } from '../utils.js';
 import { requireStorageDate } from '../lib/storageDate.js';
 import { businessTodayIsoDate } from '../lib/businessClock.js';
-import { z } from 'zod';
-import { validate, paramsIdSchema, numericIdString } from '../middleware/validate.js';
+import { validate, paramsIdSchema } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { NotFoundError, UnauthorizedError, ForbiddenError, ValidationError } from '../errors/customErrors.js';
+import { NotFoundError, UnauthorizedError, ValidationError } from '../errors/customErrors.js';
+import { DEFAULT_DAILY_LOG_VISIBILITY, canSeeDailyLog, idList } from '../lib/dailyLogs/dailyLogVisibility.js';
+import { canManageAllDailyLogs } from '../services/dailyLogs/dailyLogAccess.js';
+import { createDailyLog, deleteDailyLog, reviewDailyLog, updateDailyLog } from '../services/dailyLogs/dailyLogWrite.service.js';
+import { createDailyLogSchema, reviewDailyLogSchema, updateDailyLogSchema } from './dailyLogs.schemas.js';
 
 const router = Router();
 router.use(authenticateToken);
 
-const createDailyLogSchema = z.object({
-  body: z.object({
-    date: z.string().optional(),
-    start_time: z.string().optional(),
-    end_time: z.string().optional(),
-    work_mode: z.enum(['onsite', 'remote', 'hybrid', 'mission', 'leave']).optional(),
-    title: z.string().min(1, 'عنوان گزارش کار الزامی است'),
-    content: z.string().min(1, 'شرح گزارش کار الزامی است'),
-    project_id: z.union([z.number(), z.string(), z.null()]).optional(),
-    project_name: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    mentions: z.array(z.union([z.number(), z.string()])).optional(),
-    visibility: z.enum(['public', 'managers', 'mentioned_only', 'custom', 'private', 'all']).optional(),
-    allowed_users: z.array(z.union([z.number(), z.string()])).optional(),
-  })
-});
-
-const updateDailyLogSchema = z.object({
-  body: z.object({
-    date: z.string().optional(),
-    start_time: z.string().optional(),
-    end_time: z.string().optional(),
-    work_mode: z.enum(['onsite', 'remote', 'hybrid', 'mission', 'leave']).optional(),
-    title: z.string().min(1, 'عنوان گزارش کار الزامی است').optional(),
-    content: z.string().min(1, 'شرح گزارش کار الزامی است').optional(),
-    project_id: z.union([z.number(), z.string(), z.null()]).optional(),
-    project_name: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    mentions: z.array(z.union([z.number(), z.string()])).optional(),
-    visibility: z.enum(['public', 'managers', 'mentioned_only', 'custom', 'private', 'all']).optional(),
-    allowed_users: z.array(z.union([z.number(), z.string()])).optional(),
-  }),
-  params: z.object({
-    id: numericIdString
-  })
-});
-
-const reviewDailyLogSchema = z.object({
-  body: z.object({
-    manager_notes: z.string().optional()
-  }),
-  params: z.object({
-    id: numericIdString
-  })
-});
-
-function calculateWorkHours(startTime: string, endTime: string): number {
-  try {
-    if (!startTime || !endTime) return 8;
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 8;
-
-    let startTotal = startH * 60 + startM;
-    let endTotal = endH * 60 + endM;
-
-    if (endTotal < startTotal) {
-      endTotal += 24 * 60; // Overnight shift
-    }
-
-    const diffMinutes = endTotal - startTotal;
-    return Math.max(0, Math.round((diffMinutes / 60) * 100) / 100);
-  } catch (e) {
-    return 8;
-  }
-}
-
 function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<string, unknown>)) {
-  const mentionsArr = Array.isArray(l.mentions) ? l.mentions : [];
-  const allowedArr = Array.isArray(l.allowedUsers) ? l.allowedUsers : [];
+  const mentionsArr = idList(l.mentions);
+  const allowedArr = idList(l.allowedUsers);
   const tagsArr = Array.isArray(l.tags) ? l.tags : [];
   // v7.0.134 (TD-232): ستون اصلی میلادی ISO است و date_iso همان مقدار را دارد
   const computedDateIso = String(l.date || '');
@@ -117,7 +52,8 @@ function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<
     projectName: l.projectName || '',
     tags: tagsArr,
     mentions: mentionsArr,
-    visibility: l.visibility || 'public',
+    // v9.0.236 (TD-900): there is no public visibility; an empty value reads as mentioned_only
+    visibility: l.visibility || DEFAULT_DAILY_LOG_VISIBILITY,
     allowed_users: allowedArr,
     allowedUsers: allowedArr,
     status: l.status || 'submitted',
@@ -128,40 +64,12 @@ function formatDailyLog(l: (Partial<typeof dailyWorkLogs.$inferSelect> & Record<
   };
 }
 
-/** مدیر سیستم، مدیر، یا نقش دارای daily_logs.manage_all همه گزارش‌ها (محرمانه هم) را می‌بیند */
-async function canManageAllDailyLogs(role: string | undefined): Promise<boolean> {
-  if (role === 'admin' || role === 'manager') return true;
-  const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, role || ''));
-  const perms = roleRecord && Array.isArray(roleRecord.permissions) ? (roleRecord.permissions as string[]) : [];
-  return perms.includes('daily_logs.manage_all') || perms.includes('*');
-}
-
-/** قاعده محرمانگی یک گزارش کار برای کاربر (فهرست و دریافت تکی، حوزه H / TD-301) */
-function canSeeDailyLog(l: typeof dailyWorkLogs.$inferSelect, userId: number | undefined, canManageAll: boolean): boolean {
-  if (canManageAll) return true;
-  if (userId === undefined) return false;
-  if (l.userId === userId) return true; // Author can always see their own log
-
-  const visibility = l.visibility || 'public';
-  if (visibility === 'public' || visibility === 'all') return true;
-
-  const mentionsArr = Array.isArray(l.mentions) ? l.mentions : [];
-  if (visibility === 'mentioned_only') return mentionsArr.includes(userId);
-
-  const allowedArr = Array.isArray(l.allowedUsers) ? l.allowedUsers : [];
-  if (visibility === 'custom') return allowedArr.includes(userId) || mentionsArr.includes(userId);
-
-  // 'managers' و 'private' فقط برای مدیران
-  return false;
-}
-
 // GET all accessible daily work logs
 router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
-  const currentUserRole = req.user?.role;
-  if (!currentUserId) throw new UnauthorizedError('احراز هویت انجام نشده است');
+    if (!currentUserId) throw new UnauthorizedError('احراز هویت انجام نشده است');
 
-  const canManageAll = await canManageAllDailyLogs(currentUserRole);
+  const canManageAll = await canManageAllDailyLogs(req.user);
 
   const { date, user_id, work_mode, search, filter_type } = req.query;
 
@@ -177,7 +85,7 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
     if (canManageAll) {
       if (filter_type === 'mine') return l.userId === currentUserId;
       if (filter_type === 'mentioned') {
-        const mList = Array.isArray(l.mentions) ? l.mentions : [];
+        const mList = idList(l.mentions);
         return mList.includes(currentUserId);
       }
       return true;
@@ -189,7 +97,7 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
     }
 
     if (filter_type === 'mentioned') {
-      const mList = Array.isArray(l.mentions) ? l.mentions : [];
+      const mList = idList(l.mentions);
       if (!mList.includes(currentUserId)) return false;
     }
 
@@ -232,7 +140,7 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), asyncHandler(a
 router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
   if (!currentUserId) throw new UnauthorizedError('احراز هویت انجام نشده است');
-  const canManageAll = await canManageAllDailyLogs(req.user?.role);
+  const canManageAll = await canManageAllDailyLogs(req.user);
 
   // v8.0.125 (TD-406): آمار فقط گزارش‌هایی را می‌شمارد که همین کاربر در فهرست می‌بیند (قاعده محرمانگی TD-301)؛ پیش‌تر
   // شمار کل، حضوری/دورکاری و «اشاره به من» گزارش‌های محرمانه دیگران را هم می‌شمرد.
@@ -258,7 +166,7 @@ router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHan
 
   // Mentioned logs count
   const myMentions = allLogs.filter(l => {
-    const m = Array.isArray(l.mentions) ? l.mentions : [];
+    const m = idList(l.mentions);
     return m.includes(currentUserId);
   }).length;
 
@@ -417,238 +325,38 @@ router.get('/daily-logs/:id', authorizePermission('daily_logs.view'), validate(p
   const logId = Number(req.params.id);
   const [l] = await orm.select().from(dailyWorkLogs).where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.isDeleted, 0)));
   // حوزه H (TD-301): همان قاعده محرمانگی فهرست؛ گزارشی که کاربر نمی‌بیند «یافت نشد» است
-  if (!l || !canSeeDailyLog(l, req.user?.id, await canManageAllDailyLogs(req.user?.role))) {
+  if (!l || !canSeeDailyLog(l, req.user?.id, await canManageAllDailyLogs(req.user))) {
     throw new NotFoundError('گزارش کار یافت نشد');
   }
 
   res.json(formatDailyLog(l));
 }));
 
-// POST create new daily work log
+// POST create new daily work log (v9.0.231+: one transaction with its notifications and audit row)
 router.post('/daily-logs', authorizePermission('daily_logs.create'), validate(createDailyLogSchema), asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const username = req.user?.username;
-  const userFullName = req.user?.full_name || username;
-
-  if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
-
-  const {
-    date,
-    start_time,
-    end_time,
-    work_mode,
-    title,
-    content,
-    project_id,
-    project_name,
-    tags,
-    mentions,
-    visibility,
-    allowed_users
-  } = req.body;
-
-  const startTime = start_time || '08:00';
-  const endTime = end_time || '17:00';
-  const computedHours = calculateWorkHours(startTime, endTime);
-
-  const mentionsList = Array.isArray(mentions) ? mentions.map(Number) : [];
-  const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : [];
-  const tagsList = Array.isArray(tags) ? tags : [];
-
-  // v7.0.134 (TD-232): تاریخ کارکرد میلادی ISO در هر دو ستون؛ ورودی شمسی تبدیل و نامعتبر 422
-  const computedDateIso = requireStorageDate(date, 'تاریخ کارکرد') || await businessTodayIsoDate();
-
-  const [newLog] = await orm
-    .insert(dailyWorkLogs)
-    .values({
-      userId,
-      username: username || 'user',
-      userFullName: userFullName || 'کاربر سیستم',
-      date: computedDateIso,
-      dateIso: computedDateIso,
-      startTime,
-      endTime,
-      workHours: computedHours,
-      workMode: work_mode || 'onsite',
-      title,
-      content,
-      projectId: project_id ? Number(project_id) : null,
-      projectName: project_name || '',
-      tags: tagsList,
-      mentions: mentionsList,
-      visibility: visibility || 'public',
-      allowedUsers: allowedList,
-      status: 'submitted'
-    })
-    .returning();
-
-  // Send notifications to mentioned users
-  if (mentionsList.length > 0) {
-    for (const mUserId of mentionsList) {
-      if (mUserId !== userId) {
-        await orm.insert(notifications).values({
-          userId: mUserId,
-          senderId: userId,
-          senderName: userFullName,
-          type: 'mention',
-          title: 'منشن در گزارش کار روزانه',
-          message: `${userFullName} شما را در گزارش کار روزانه ("${title}") منشن کرد.`,
-          link: `/daily-logs?id=${newLog.id}`,
-          isRead: 0
-        });
-      }
-    }
-  }
-
-  await logActivity({
-    userId,
-    username,
-    userFullName,
-    action: 'CREATE',
-    entity: 'گزارش کار روزانه',
-    entityId: newLog.id,
-    description: `ثبت گزارش کار روزانه "${title}" (${work_mode === 'remote' ? 'دورکاری' : 'حضوری'}) - کارکرد: ${computedHours} ساعت`
-  });
-
-  res.json(formatDailyLog(newLog));
+  if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
+  const log = await createDailyLog(req.user, req.body);
+  res.json(formatDailyLog(log));
 }));
 
-// PUT edit daily work log
+// PUT edit daily work log: the author, or a holder of daily_logs.manage_all (v9.0.231, TD-626)
 router.put('/daily-logs/:id', authorizePermission('daily_logs.create'), validate(updateDailyLogSchema), asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const userRole = req.user?.role;
-  const logId = Number(req.params.id);
-
-  const [existing] = await orm
-    .select()
-    .from(dailyWorkLogs)
-    .where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.isDeleted, 0)));
-
-  if (!existing) throw new NotFoundError('گزارش کار یافت نشد');
-
-  // Only author or admin/manager can edit
-  if (existing.userId !== userId && userRole !== 'admin' && userRole !== 'manager') {
-    throw new ForbiddenError('شما فقط مجاز به ویرایش گزارش کار خود هستید');
-  }
-
-  const {
-    date,
-    start_time,
-    end_time,
-    work_mode,
-    title,
-    content,
-    project_id,
-    project_name,
-    tags,
-    mentions,
-    visibility,
-    allowed_users
-  } = req.body;
-
-  const startTime = start_time !== undefined ? start_time : existing.startTime;
-  const endTime = end_time !== undefined ? end_time : existing.endTime;
-  const computedHours = calculateWorkHours(startTime, endTime);
-
-  const mentionsList = Array.isArray(mentions) ? mentions.map(Number) : existing.mentions;
-  const allowedList = Array.isArray(allowed_users) ? allowed_users.map(Number) : existing.allowedUsers;
-  const tagsList = Array.isArray(tags) ? tags : existing.tags;
-
-  const updatedDateIso = (date ? requireStorageDate(date, 'تاریخ کارکرد') : '') || existing.date;
-
-  await orm
-    .update(dailyWorkLogs)
-    .set({
-      date: updatedDateIso,
-      dateIso: updatedDateIso,
-      startTime,
-      endTime,
-      workHours: computedHours,
-      workMode: work_mode || existing.workMode,
-      title: title || existing.title,
-      content: content || existing.content,
-      projectId: project_id !== undefined ? (project_id ? Number(project_id) : null) : existing.projectId,
-      projectName: project_name !== undefined ? project_name : existing.projectName,
-      tags: tagsList,
-      mentions: mentionsList,
-      visibility: visibility || existing.visibility,
-      allowedUsers: allowedList
-    })
-    .where(eq(dailyWorkLogs.id, logId));
-
-  const [updated] = await orm.select().from(dailyWorkLogs).where(eq(dailyWorkLogs.id, logId));
-
+  if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
+  const updated = await updateDailyLog(req.user, Number(req.params.id), req.body);
   res.json(formatDailyLog(updated));
 }));
 
-// PUT Manager review / feedback
-router.put('/daily-logs/:id/review', validate(reviewDailyLogSchema), asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const userRole = req.user?.role;
-  const userFullName = req.user?.full_name || req.user?.username;
-  const logId = Number(req.params.id);
-
-  if (userRole !== 'admin' && userRole !== 'manager') {
-    throw new ForbiddenError('ثبت بازخورد مدیریتی صرفاً برای مدیران ارشد مجاز است');
-  }
-
-  const { manager_notes } = req.body;
-
-  const [existing] = await orm
-    .select()
-    .from(dailyWorkLogs)
-    .where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.isDeleted, 0)));
-
-  if (!existing) throw new NotFoundError('گزارش کار یافت نشد');
-
-  await orm
-    .update(dailyWorkLogs)
-    .set({
-      status: 'reviewed',
-      managerNotes: manager_notes || ''
-    })
-    .where(eq(dailyWorkLogs.id, logId));
-
-  // Notify author
-  if (existing.userId !== userId) {
-    await orm.insert(notifications).values({
-      userId: existing.userId,
-      senderId: userId,
-      senderName: userFullName,
-      type: 'work_log_review',
-      title: 'بازخورد مدیریتی بر گزارش کار',
-      message: `${userFullName} برای گزارش کار "${existing.title}" یادداشت و بازخورد ثبت کرد.`,
-      link: `/daily-logs?id=${logId}`,
-      isRead: 0
-    });
-  }
-
-  const [updated] = await orm.select().from(dailyWorkLogs).where(eq(dailyWorkLogs.id, logId));
+// PUT manager review / feedback: only holders of daily_logs.manage_all (v9.0.231, TD-626)
+router.put('/daily-logs/:id/review', requirePermission('daily_logs.manage_all'), validate(reviewDailyLogSchema), asyncHandler(async (req, res) => {
+  if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
+  const updated = await reviewDailyLog(req.user, Number(req.params.id), req.body.manager_notes);
   res.json(formatDailyLog(updated));
 }));
 
-// DELETE soft delete daily log
+// DELETE soft delete daily log: the author, or a holder of daily_logs.manage_all (v9.0.231, TD-626)
 router.delete('/daily-logs/:id', authorizePermission('daily_logs.create'), validate(paramsIdSchema), asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const userRole = req.user?.role;
-  const logId = Number(req.params.id);
-
-  const [existing] = await orm
-    .select()
-    .from(dailyWorkLogs)
-    .where(and(eq(dailyWorkLogs.id, logId), eq(dailyWorkLogs.isDeleted, 0)));
-
-  if (!existing) throw new NotFoundError('گزارش کار یافت نشد');
-
-  if (existing.userId !== userId && userRole !== 'admin' && userRole !== 'manager') {
-    throw new ForbiddenError('شما فقط مجاز به حذف گزارش کار خود هستید');
-  }
-
-  await orm
-    .update(dailyWorkLogs)
-    .set({ isDeleted: 1 })
-    .where(eq(dailyWorkLogs.id, logId));
-
+  if (!req.user?.id) throw new UnauthorizedError('احراز هویت انجام نشده است');
+  await deleteDailyLog(req.user, Number(req.params.id));
   res.json({ success: true });
 }));
 

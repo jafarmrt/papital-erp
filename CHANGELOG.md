@@ -19,6 +19,27 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.236 — بسته ۱۳ الف: حالت دید «عمومی» گزارش کار برداشته شد
+- فرم دو حالت دید دارد؛ مهاجرت ۰۰۷۵ گزارش‌های عمومی را به «اشاره‌شده‌ها و خودم» برد و مقدار پیشین را نگه داشت (TD-900، تصمیم ت۷).
+
+### v9.0.235 — بسته ۱۳ الف: CSV گزارش تجمیعی بی فرمول زنده
+- خانه‌های CSV گزارش تجمیعی در گیومه و بی فرمول زنده؛ نام فایل فارسی (TD-640).
+
+### v9.0.234 — بسته ۱۳ الف: اشاره و پروژه گزارش کار پیش از ذخیره سنجیده می‌شوند
+- شناسه نادرست ۴۰۰، کاربر یا پروژه ناموجود ۴۲۲ بی ذخیره چیزی؛ گزارش و اعلان در یک تراکنش (TD-629).
+
+### v9.0.233 — بسته ۱۳ الف: اعلان اشاره فقط برای خواننده گزارش
+- اشاره در گزارش شخصی اعلان نمی‌دهد و فرم هشدار می‌دهد؛ ویرایش فقط به اشاره‌های تازه اعلان می‌دهد (TD-633).
+
+### v9.0.232 — بسته ۱۳ الف: اشاره با بلندترین نام کامل
+- «@علی رضایی» دیگر «علی» را اشاره‌شده نمی‌کند و اشاره پاک‌شده از متن از فهرست می‌رود (TD-628).
+
+### v9.0.231 — بسته ۱۳ الف: دسترسی مدیریتی گزارش کار با مجوز
+- بازخورد، ویرایش و حذف گزارش کار دیگران و دیدن گزارش شخصی فقط با `daily_logs.manage_all`؛ نوشتن‌ها در یک تراکنش با ردیف ممیزی (TD-626).
+
+### v9.0.230 — Package 13 Daily Logs and Attachments Audit
+- **Audit (package 13):** daily logs and attachments section of the stability audit report: 21 proven findings opened as TD-626..TD-646 plus TD-900 (decision t7) with the product-owner decisions t1-t7; documentation only.
+
 ### v9.0.229 — Party Statement Print Follows the Data
 - **Party Statement Print (P2):** the header and final balance read the range and currency from the response, a filter change reloads, and «this month» / «this year» start on the Jalali month and year (TD-572).
 
