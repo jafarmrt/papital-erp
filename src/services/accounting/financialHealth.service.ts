@@ -23,6 +23,7 @@ import {
   findAccountMappingIssues, findDeletedAccountsWithVoucherRows, findNonLatinAccountCodes, findVouchersOnNonPostingAccounts,
 } from './chartOfAccountsHealth.js';
 import { buildAccountingIntegrityHealthTest, findAccountingIntegrityGaps } from './accountingConstraintHealth.js';
+import { buildCategoryIntegrityHealthTest, findCategoryIntegrityIssues, hasCategoryNameUniqueIndex } from '../items/itemCategoryIdentity.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1176,6 +1177,10 @@ export class FinancialHealthService {
     tests.push(buildNonLatinAccountCodeHealthTest(await findNonLatinAccountCodes()));
     // آزمون ۳۵: v9.0.202 (TD-562) قید پایگاه‌داده سند و سرفصل اعتبارسنجی‌نشده یا ردیف قدیمی ناسازگار (فقط فهرست)
     tests.push(buildAccountingIntegrityHealthTest(await findAccountingIntegrityGaps()));
+    // آزمون ۳۶: v9.0.205 (TD-658) نام دسته‌بندی تکراری و کالای فعال با دسته‌ای که نیست (فقط فهرست، بی تغییر خودکار)
+    const categoryIntegrityTest = buildCategoryIntegrityHealthTest(await findCategoryIntegrityIssues(), await hasCategoryNameUniqueIndex());
+    overallScore += categoryIntegrityTest.scoreImpact;
+    tests.push(categoryIntegrityTest);
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها

@@ -120,7 +120,8 @@ export async function checkExcelAdjustmentVoucher(wh: string): Promise<string[]>
     expectNet(problems, net, acc.raw, -120000, 'موجودی مواد اولیه');
   }
   const opening = await pool.query<{ id: number }>(
-    `SELECT id FROM journal_vouchers WHERE is_deleted = 0 AND reference_module = 'item_opening' AND reference_id = $1`, [newItemId]);
+    `SELECT jv.id FROM item_opening_voucher_items l JOIN journal_vouchers jv ON jv.id = l.voucher_id AND jv.is_deleted = 0
+      WHERE l.item_id = $1`, [newItemId]);
   if (opening.rows.length !== 1) {
     problems.push(`کالای تازه با موجودی باید سند افتتاحیه بگیرد: ${opening.rows.length}`);
   } else {

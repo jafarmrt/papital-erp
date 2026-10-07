@@ -7,7 +7,7 @@ import {
   projectStages, projectProductStageProgress, dailyWorkLogs, transfers, notifications, crmLeads, crmActivities,
   users, personnel, taskCategories, pieceworkTasks, pieceworkPersonnelRates, pieceworkTaskRateHistory,
   pieceworkLogs, pieceworkPayrolls, pendingMaterials, accounts, journalVouchers,
-  journalVoucherItems, bankAccounts, cheques, treasuryTransactions, accountingSettings,
+  journalVoucherItems, itemOpeningVoucherItems, bankAccounts, cheques, treasuryTransactions, accountingSettings,
   outboxEvents, deadLetterEvents, workflowInstances, workflowTasks,
   workflowHistoryLogs, workflowPendingApprovals, workflowDelegations,
   workflowDefinitionVersions, workflowTransitions, workflowStates, workflowDefinitions,
@@ -172,6 +172,7 @@ export class FactoryResetService {
       await wipe('fiscal_periods', fiscalPeriods);
       await wipe('treasury_transactions', treasuryTransactions);
       await wipe('cheques', cheques);
+      await wipe('item_opening_voucher_items', itemOpeningVoucherItems);
       await wipe('journal_voucher_items', journalVoucherItems);
       await wipe('journal_vouchers', journalVouchers);
       await wipe('accounting_settings', accountingSettings);

@@ -2,7 +2,7 @@ import React from 'react';
 import { fetchJson } from '../../api';
 import { toast } from 'react-hot-toast';
 import { Category } from '../../types';
-import { errorMessageOf } from '../../utils';
+import { errorMessageOf, formatPersianNumber } from '../../utils';
 
 interface ImportErrorItem {
   rowIndex: number;
@@ -33,7 +33,7 @@ export function ImportErrorsModal({
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
-          <h2 className="font-bold text-red-600">گزارش خطاهای ایمپورت ({importErrors.length} خطا)</h2>
+          <h2 className="font-bold text-red-600">گزارش خطاهای ورود از اکسل ({formatPersianNumber(importErrors.length)} خطا)</h2>
           <button onClick={() => setImportErrors([])} className="text-slate-500 hover:text-slate-700">✕</button>
         </div>
         <div className="p-4 overflow-auto flex-1">
@@ -45,7 +45,7 @@ export function ImportErrorsModal({
               <div key={idx} className="border border-red-200 bg-red-50 p-4 rounded-lg">
                 <div className="flex flex-wrap gap-4 items-start">
                   <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs font-medium text-slate-700 mb-1">نام کالا (ردیف {err.rowIndex})</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">نام کالا (ردیف {formatPersianNumber(err.rowIndex)})</label>
                     <input 
                       type="text" 
                       value={err.parsed?.name || ''} 

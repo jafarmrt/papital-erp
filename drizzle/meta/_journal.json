@@ -505,6 +505,27 @@
       "when": 1793060000000,
       "tag": "0071_accounting_check_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793070000000,
+      "tag": "0072_category_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793080000000,
+      "tag": "0073_category_name_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793090000000,
+      "tag": "0074_item_opening_voucher_items",
+      "breakpoints": true
     }
   ]
 }
