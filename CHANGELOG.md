@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.244 — v9.0.244 — Invoice With a Live Return Is Not Voided
+- **Documents:** voiding a sales invoice that still has a sales return (in any status) is refused with 409 naming the returns; before, the returned goods came back to stock twice and the customer kept a credit for a sale that no longer existed (TD-773).
+
 ### v9.0.243 — v9.0.243 — Zero-Price Invoice Gets Its Cost Voucher
 - **Accounting:** a final sales invoice with zero gross (free sample, gift) now gets a voucher that moves its Kardex cost from inventory to cost of sales, with zero revenue; before, no voucher was issued and inventory stayed overstated in the ledger (TD-772).
 

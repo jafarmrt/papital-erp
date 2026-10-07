@@ -13,6 +13,9 @@ export async function runSalesDocumentTests(shouldRun: ShouldRun): Promise<TestC
     ['reg_zero_price_invoice_voucher_td_772',
       'v9.0.243: a final sales invoice with zero gross gets a voucher that moves its Kardex cost from inventory to cost of sales (TD-772)',
       ['td772', 'documents', 'voucher', 'cogs', 'package8'], zeroPriceInvoiceCase],
+    ['reg_void_invoice_with_returns_td_773',
+      'v9.0.244: an invoice with a sales return that is not voided is not voided (409 naming the returns); after the return is voided it is (TD-773)',
+      ['td773', 'documents', 'void', 'return', 'package8'], voidWithReturnsCase],
   ];
   for (const [id, name, tags, run] of cases) {
     if (!shouldRun(id, ...tags)) continue;
@@ -86,4 +89,48 @@ async function zeroPriceInvoiceCase(h: Harness, wrong: string[]): Promise<string
   else await expectCostOnly(proformaId, 30_000, 'finalized zero-price proforma');
 
   return 'a final invoice of 2 units at price 0 and WAC 50,000, and a finalized zero-price proforma, each get one voucher: Dr cost of sales / Cr finished goods at the Kardex cost, with no revenue or customer row';
+}
+
+/** B08-04 (TD-773): voiding an invoice with an active return brought the returned goods back twice */
+async function voidWithReturnsCase(h: Harness, wrong: string[]): Promise<string> {
+  const f = await fixture(h);
+  // the stock enters through a receipt, so the Kardex holds it and the return can be voided (TD-265 reads the ledger)
+  const a = await f.item(0, 1_000);
+  const receipt = await h.post('/api/documents', f.doc('receipt', 'final', [{ itemId: a, quantity: 10, unit_price: 1_000, location: f.wh }]));
+  if (receipt.status !== 200) throw new Error(`setup: receipt ${brief(receipt)}`);
+  const codeOf = (res: { body?: unknown }) => (res.body as { code?: string })?.code;
+  const textOf = (res: { body?: unknown }) => String((res.body as { error?: unknown })?.error ?? (res.body as { message?: unknown })?.message ?? '');
+  const isDeleted = async (id: number) => Number((await h.q(`SELECT is_deleted FROM documents WHERE id = $1`, [id]))[0]?.is_deleted);
+
+  const invoice = await h.post('/api/documents', f.doc('invoice', 'final', [{ itemId: a, quantity: 5, unit_price: 3_000, location: f.wh }]));
+  const invoiceId = docIdOf(invoice);
+  const ret = await h.post('/api/documents', f.doc('return', 'final', [{ itemId: a, quantity: 2, unit_price: 3_000, location: f.wh }], { returnOfDocumentId: invoiceId }));
+  const returnId = docIdOf(ret);
+  if (invoice.status !== 200 || ret.status !== 200 || await f.stock(a) !== 7) {
+    throw new Error(`setup: invoice ${brief(invoice)}, return ${brief(ret)}, stock ${await f.stock(a)} (expected 200, 200 and 7)`);
+  }
+  const [retRow] = await h.q(`SELECT ref_number FROM documents WHERE id = $1`, [returnId]);
+
+  // 1) the invoice is not voided while its final return stands: 409 naming the return, nothing moves
+  const refused = await h.del(`/api/documents/${invoiceId}`);
+  if (refused.status !== 409 || codeOf(refused) !== 'DOCUMENT_HAS_ACTIVE_RETURNS' || !textOf(refused).includes(String(retRow?.ref_number))) {
+    wrong.push(`voiding an invoice with a final return answered ${brief(refused)}, expected 409 DOCUMENT_HAS_ACTIVE_RETURNS naming the return`);
+  }
+  if (await isDeleted(invoiceId) !== 0 || await f.stock(a) !== 7) wrong.push(`the refused void left the invoice deleted=${await isDeleted(invoiceId)} and stock ${await f.stock(a)}, expected 0 and 7`);
+
+  // 2) a draft return counts too
+  const returnVoided = await h.del(`/api/documents/${returnId}`);
+  if (returnVoided.status !== 200) wrong.push(`voiding the final return answered ${brief(returnVoided)}, expected 200`);
+  const draft = await h.post('/api/documents', f.doc('return', 'draft', [{ itemId: a, quantity: 1, unit_price: 3_000, location: f.wh }], { returnOfDocumentId: invoiceId }));
+  const draftRefused = await h.del(`/api/documents/${invoiceId}`);
+  if (draft.status !== 200 || draftRefused.status !== 409) wrong.push(`a draft return (${brief(draft)}) did not stop the void: ${brief(draftRefused)}, expected 409`);
+
+  // 3) once its returns are voided, the invoice is voided and the stock is the purchase quantity again
+  const draftVoided = await h.del(`/api/documents/${docIdOf(draft)}`);
+  if (draftVoided.status !== 200) wrong.push(`voiding the draft return answered ${brief(draftVoided)}, expected 200`);
+  const voided = await h.del(`/api/documents/${invoiceId}`);
+  if (voided.status !== 200 || await isDeleted(invoiceId) !== 1 || await f.stock(a) !== 10) {
+    wrong.push(`voiding the invoice after its returns answered ${brief(voided)} with stock ${await f.stock(a)}, expected 200 and 10`);
+  }
+  return 'an invoice of 5 with a final return of 2 is not voided (409 naming the return, stock stays 7), a draft return also stops it, and after both returns are voided the invoice is voided and stock is 10';
 }
