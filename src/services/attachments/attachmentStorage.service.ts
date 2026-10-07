@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { MAX_ATTACHMENT_FILE_MB } from '../../lib/attachments/attachmentBodyLimit.js';
 import fs from 'fs';
 import path from 'path';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
@@ -26,8 +27,8 @@ import type { FinancialAttachment } from '../../types';
  */
 
 export const ATTACHMENT_URL_PREFIX = '/api/attachments/';
-/** سقف حجم هر فایل پس از رمزگشایی (بدنه JSON درخواست‌ها خودش ۵ مگابایت سقف دارد) */
-export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+/** سقف حجم هر فایل پس از رمزگشایی؛ همان سقف کادر بارگذاری (v9.0.243، TD-641: بدنه مسیرهای پیوست‌دار ۱۴ مگابایت) */
+export const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_FILE_MB * 1024 * 1024;
 /** نوع‌هایی که درون صفحه نمایش داده می‌شوند؛ بقیه (از جمله SVG و HTML) فقط دانلود می‌شوند */
 export const INLINE_SAFE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);
 

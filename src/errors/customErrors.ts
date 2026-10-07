@@ -1,3 +1,4 @@
+import { BODY_TOO_LARGE_MESSAGE } from '../lib/attachments/attachmentBodyLimit.js';
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
@@ -114,6 +115,17 @@ export function normalizeError(err: unknown): NormalizedError {
   }
 
   const errObj = (err && typeof err === 'object') ? (err as Record<string, unknown>) : null;
+
+  // v9.0.243 (TD-641): body-parser's 413 reaches the user in Persian, not as "request entity too large"
+  if (errObj && errObj.type === 'entity.too.large') {
+    return {
+      message: BODY_TOO_LARGE_MESSAGE,
+      statusCode: 413,
+      code: 'PAYLOAD_TOO_LARGE',
+      details: { limit: errObj.limit, length: errObj.length },
+      stack: typeof errObj.stack === 'string' ? errObj.stack : undefined,
+    };
+  }
 
   // Handle OptimisticLockError
   if (errObj && (errObj.name === 'OptimisticLockError' || errObj.code === 'OCC_CONFLICT')) {

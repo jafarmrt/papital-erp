@@ -20,6 +20,11 @@ import { getAttachmentsRoot } from './attachmentStorage.service.js';
  */
 
 export const DEFAULT_ORPHAN_MIN_AGE_MINUTES = 60;
+/**
+ * v9.0.245 (TD-643, finding B13-18): the youngest file a cleanup may remove; a smaller age (0 included) is raised to
+ * this floor, so a file of a save transaction still in progress is never taken for an orphan.
+ */
+export const MIN_ORPHAN_AGE_MINUTES = 5;
 const STORED_FILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]{1,10}$/i;
 const MAX_LISTED_PATHS = 200;
 
@@ -62,7 +67,7 @@ export class AttachmentOrphanCleanupService {
     actor: string;
     minAgeMinutes?: number;
   }): Promise<OrphanAttachmentCleanupReport> {
-    const minAgeMinutes = Math.max(0, options.minAgeMinutes ?? DEFAULT_ORPHAN_MIN_AGE_MINUTES);
+    const minAgeMinutes = Math.max(MIN_ORPHAN_AGE_MINUTES, options.minAgeMinutes ?? DEFAULT_ORPHAN_MIN_AGE_MINUTES);
     const report: OrphanAttachmentCleanupReport = {
       dryRun: !options.apply, minAgeMinutes, scannedFiles: 0,
       unregistered: { files: 0, bytes: 0, removed: 0, paths: [] },

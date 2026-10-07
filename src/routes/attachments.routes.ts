@@ -5,10 +5,14 @@ import { authenticateToken } from '../middleware/auth.js';
 import { userHasRoleOrPermission, requireSystemAdmin } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { NotFoundError } from '../errors/customErrors.js';
+import { AppError, NotFoundError } from '../errors/customErrors.js';
+import { logger } from '../middleware/logger.js';
+import { errorMessageOf } from '../utils.js';
 import { RECORD_READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
 import { AttachmentStorageService, INLINE_SAFE_MIME_TYPES } from '../services/attachments/attachmentStorage.service.js';
-import { AttachmentOrphanCleanupService } from '../services/attachments/attachmentOrphanCleanup.service.js';
+import { AttachmentOrphanCleanupService, MIN_ORPHAN_AGE_MINUTES } from '../services/attachments/attachmentOrphanCleanup.service.js';
+
+const MIN_ORPHAN_AGE_MINUTES_FA = '۵';
 
 /**
  * v7.0.56 (audit P2-9): دریافت فایل پیوست فقط با نشست معتبر و مجوز خواندن رکورد مالک آن (RECORD_READ_PERMISSIONS).
@@ -27,9 +31,27 @@ const migrateInlineSchema = z.object({
 const cleanupOrphansSchema = z.object({
   body: z.object({
     apply: z.boolean().optional(),
-    minAgeMinutes: z.number().int().min(0).max(525600).optional(),
+    minAgeMinutes: z.number().int().min(MIN_ORPHAN_AGE_MINUTES, `کمترین عمر فایل یتیم ${MIN_ORPHAN_AGE_MINUTES_FA} دقیقه است`).max(525600).optional(),
   }).optional().default({})
 });
+
+/** Opens an attachment file for reading; a missing path or a directory is 404, any other open error 500 */
+async function openAttachmentFile(absolutePath: string): Promise<{ handle: fs.promises.FileHandle; size: number }> {
+  let handle: fs.promises.FileHandle;
+  try {
+    handle = await fs.promises.open(absolutePath, 'r');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') throw new NotFoundError('فایل پیوست روی دیسک یافت نشد');
+    logger.error(`[attachments] cannot open ${absolutePath}: ${errorMessageOf(err)}`);
+    throw new AppError('فایل پیوست خوانده نشد؛ به مدیر سیستم خبر دهید', 500, 'ATTACHMENT_READ_FAILED');
+  }
+  const stat = await handle.stat().catch(() => null);
+  if (!stat || !stat.isFile()) {
+    await handle.close().catch(() => undefined);
+    throw new NotFoundError('فایل پیوست روی دیسک یافت نشد');
+  }
+  return { handle, size: stat.size };
+}
 
 function contentDisposition(kind: 'inline' | 'attachment', name: string): string {
   const asciiFallback = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_') || 'attachment';
@@ -46,21 +68,26 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
     return res.status(403).json({ error: 'دسترسی غیرمجاز به این پیوست' });
   }
 
-  const absolutePath = AttachmentStorageService.absolutePath(row.storagePath);
-  if (!fs.existsSync(absolutePath)) {
-    throw new NotFoundError('فایل پیوست روی دیسک یافت نشد');
-  }
+  // v9.0.242 (TD-627, finding B13-02): the file is opened before any header is sent, so a missing, unreadable or
+  // non-file path answers an error instead of an uncaught stream error, which the process policy turns into a
+  // shutdown; a read error after the response started only closes that response.
+  const file = await openAttachmentFile(AttachmentStorageService.absolutePath(row.storagePath));
 
   const inline = INLINE_SAFE_MIME_TYPES.has(row.mimeType);
   res.setHeader('Content-Type', row.mimeType);
-  res.setHeader('Content-Length', String(row.sizeBytes));
+  res.setHeader('Content-Length', String(file.size));
   res.setHeader('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', row.originalName || 'attachment'));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, max-age=86400');
   if (row.mimeType !== 'application/pdf') {
     res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
   }
-  fs.createReadStream(absolutePath).pipe(res);
+  const stream = file.handle.createReadStream();
+  stream.on('error', (err) => {
+    logger.warn(`[attachments] read of attachment ${row.id} failed after the response started: ${errorMessageOf(err)}`);
+    res.destroy();
+  });
+  stream.pipe(res);
 }));
 
 // انتقال دستی پیوست‌های قدیمی داخل پایگاه‌داده به دیسک (پیش‌فرض آزمایشی؛ همان `npm run attachments:migrate`)

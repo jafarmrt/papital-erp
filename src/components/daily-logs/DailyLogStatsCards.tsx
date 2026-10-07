@@ -26,7 +26,7 @@ export function DailyLogStatsCards({
           <div>
             <h1 className="text-lg font-black text-slate-900 tracking-tight">گزارش کار روزانه و فعالیت‌ها</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              ثبت سریع کارکرد روزانه، منشن همکاران، تقویم هجری شمسی و سطح دسترسی محرمانه
+              ثبت سریع کارکرد روزانه، اشاره به همکاران، تقویم هجری شمسی و سطح دسترسی محرمانه
             </p>
           </div>
         </div>
@@ -92,7 +92,7 @@ export function DailyLogStatsCards({
             <AtSign className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[11px] font-bold text-slate-400">منشن‌های من</p>
+            <p className="text-[11px] font-bold text-slate-400">اشاره‌های من</p>
             <p className="text-base font-black text-slate-800">
               {formatPersianNumber(stats.my_mentions_count)} <span className="text-[11px] font-normal text-slate-500">مورد</span>
             </p>

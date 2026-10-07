@@ -49,9 +49,9 @@ export async function runDailyLogAccessTests(shouldRun: ShouldRun): Promise<Test
 }
 
 interface Session { cookie: string; csrfToken: string }
-interface Actor { id: number; username: string; session: Session; roleCode: string }
+export interface Actor { id: number; username: string; session: Session; roleCode: string }
 
-interface Ctx {
+export interface Ctx {
   /** a user with a new role holding exactly these permissions */
   userWith(permissions: string[], roleCode?: string): Promise<Actor>;
   send(actor: Actor, method: 'get' | 'post' | 'put' | 'delete', url: string, body?: unknown): Promise<request.Response>;
@@ -60,7 +60,7 @@ interface Ctx {
   cleanup(): Promise<void>;
 }
 
-async function makeCtx(): Promise<Ctx> {
+export async function makeCtx(): Promise<Ctx> {
   const { getTestApp, loginTestUserWithSession } = await import('../fixtures/httpTestHelper.js');
   const { createTestRole, createTestUser } = await import('../fixtures/factories.js');
   const app = await getTestApp();
@@ -286,3 +286,7 @@ async function publicVisibilityRemovedCase(ctx: Ctx): Promise<string> {
   if (wrong.length > 0) throw new Error(wrong.join('; '));
   return 'public and all refused with 400; a log without visibility is mentioned_only and hidden from others; the migration moved public, all and empty logs to mentioned_only, recorded the old values and validated the CHECK';
 }
+
+/** Shared with the package 13 PR B read tests */
+export { makeCtx as makeDailyLogTestCtx };
+export type DailyLogTestCtx = Ctx;

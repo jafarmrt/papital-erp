@@ -5,6 +5,7 @@ import { computeAuditDiff, logActivity } from '../../lib/auditLogger.js';
 import { requireStorageDate } from '../../lib/storageDate.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { DEFAULT_DAILY_LOG_VISIBILITY, idList, mentionNotifies } from '../../lib/dailyLogs/dailyLogVisibility.js';
+import { workHoursBetween, workTimeError } from '../../lib/dailyLogs/workHours.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../errors/customErrors.js';
 import type { AuthUserPayload } from '../../types.js';
 import type { DailyLogBody, DailyLogUpdateBody } from '../../routes/dailyLogs.schemas.js';
@@ -23,19 +24,14 @@ export const DAILY_LOG_AUDIT_ENTITY = 'گزارش کار روزانه';
  * `daily_logs.manage_all` (and the system admin), never by role code; the author edits and deletes their own log.
  * v9.0.234 (TD-629): mentioned and allowed users and the project must exist; the project name comes from the project.
  */
-export function calculateWorkHours(startTime: string, endTime: string): number {
-  try {
-    if (!startTime || !endTime) return 8;
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 8;
-    const startTotal = startH * 60 + startM;
-    let endTotal = endH * 60 + endM;
-    if (endTotal < startTotal) endTotal += 24 * 60; // Overnight shift
-    return Math.max(0, Math.round(((endTotal - startTotal) / 60) * 100) / 100);
-  } catch {
-    return 8;
-  }
+/**
+ * v9.0.247 (TD-634, decision ت۵ الف): hours from the shared rule; an end not after the start (or an invalid time) is
+ * refused with 422, never stored as 8 hours or counted as an overnight shift.
+ */
+function requireWorkHours(startTime: string, endTime: string): number {
+  const error = workTimeError(startTime, endTime);
+  if (error) throw new ValidationError(error, { startTime, endTime }, 'DAILY_LOG_WORK_TIME_INVALID');
+  return workHoursBetween(startTime, endTime)!;
 }
 
 const actorName = (actor: AuthUserPayload) => actor.full_name || actor.fullName || actor.username;
@@ -109,7 +105,7 @@ async function assertAuthorOrManager(row: DailyLogRow, actor: AuthUserPayload, m
 export async function createDailyLog(actor: AuthUserPayload, body: DailyLogBody): Promise<DailyLogRow> {
   const startTime = body.start_time || '08:00';
   const endTime = body.end_time || '17:00';
-  const workHours = calculateWorkHours(startTime, endTime);
+  const workHours = requireWorkHours(startTime, endTime);
   // v7.0.134 (TD-232): ISO work date; Jalali input is converted and an invalid date is 422
   const date = requireStorageDate(body.date, 'تاریخ کارکرد') || await businessTodayIsoDate();
   const name = actorName(actor);
@@ -173,7 +169,8 @@ export async function updateDailyLog(actor: AuthUserPayload, logId: number, body
       dateIso: date,
       startTime,
       endTime,
-      workHours: calculateWorkHours(startTime, endTime),
+      // an edit that leaves both times keeps the stored hours, so a legacy log stays editable
+      workHours: body.start_time !== undefined || body.end_time !== undefined ? requireWorkHours(startTime, endTime) : existing.workHours,
       workMode: body.work_mode || existing.workMode,
       title: body.title || existing.title,
       content: body.content || existing.content,
