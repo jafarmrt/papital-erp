@@ -1,7 +1,6 @@
-import { Item, User } from '../../types';
+import { Item } from '../../types';
 import { ChevronRight, ChevronLeft, Cloud, Edit2, Archive, Lock, CheckCircle2 } from 'lucide-react';
 import { cn, formatPersianNumber, formatPersianPrice, parseMultiValue, formatMultiValue } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
 import { SafeImage } from '../SafeImage';
 import { ActionMenu } from '../ActionMenu';
 
@@ -13,10 +12,10 @@ interface ItemsTableProps {
   sortConfig: { key: string; direction: 'asc' | 'desc' } | null;
   requestSort: (key: string) => void;
   loading: boolean;
-  user: User;
   onViewImage: (url: string) => void;
-  onEditItem: (item: Item) => void;
-  onArchiveItem: (itemId: number) => void;
+  /** v9.0.182 (O14): هر کار فقط وقتی داده می‌شود که کاربر مجوز همان مسیر سرور را دارد (ویرایش، حذف، همگام‌سازی) */
+  onEditItem?: (item: Item) => void;
+  onArchiveItem?: (itemId: number) => void;
   onSyncItem?: (itemId: number) => void;
   syncingItemId?: number | null;
   page: number;
@@ -31,7 +30,6 @@ export function ItemsTable({
   sortConfig,
   requestSort,
   loading,
-  user,
   onViewImage,
   onEditItem,
   onArchiveItem,
@@ -42,7 +40,7 @@ export function ItemsTable({
   totalItems,
   onPageChange
 }: ItemsTableProps) {
-  const appCurrency = useAppCurrency();
+  const hasActions = Boolean(onEditItem || onArchiveItem || onSyncItem);
   return (
     <div className="flex-1 flex flex-col min-h-[300px] justify-between">
       <div className="overflow-auto relative flex-1">
@@ -70,13 +68,13 @@ export function ItemsTable({
                 نقطه سفارش {sortConfig?.key === 'reorder_point' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
               </th>
               <th className="p-3 text-center cursor-pointer hover:bg-slate-200/80 transition-colors" onClick={() => requestSort('weighted_average_cost')}>
-                میانگین بهای خرید {sortConfig?.key === 'weighted_average_cost' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
+                میانگین موزون بها {sortConfig?.key === 'weighted_average_cost' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
               </th>
               <th className="p-3 text-center cursor-pointer hover:bg-slate-200/80 transition-colors" onClick={() => requestSort('current_stock')}>
                 وضعیت موجودی {sortConfig?.key === 'current_stock' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
               </th>
               <th className="p-3">واحد</th>
-              {user.role !== 'viewer' && <th className="p-3 text-center">عملیات</th>}
+              {hasActions && <th className="p-3 text-center">عملیات</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
@@ -165,11 +163,11 @@ export function ItemsTable({
                     ) : <span className="text-slate-300">-</span>}
                   </td>
 
-                  {/* Average Purchase Cost Badge (WAC) */}
+                  {/* Weighted average cost, always in IRR (O11) */}
                   <td className="p-3 text-center font-mono font-bold text-slate-800">
                     {avgCost > 0 ? (
-                      <span className="bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-[11px]" title="هزینه میانگین برای کل دوره‌ها">
-                        {formatPersianPrice(avgCost, appCurrency)}
+                      <span className="bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-[11px]" title="میانگین موزون بهای هر واحد، به ریال">
+                        {formatPersianPrice(avgCost, 'IRR')}
                       </span>
                     ) : <span className="text-slate-300">-</span>}
                   </td>
@@ -209,18 +207,18 @@ export function ItemsTable({
                   <td className="p-3 text-slate-600 font-medium">{item.unit}</td>
                   
                   {/* Soft Delete & Operations Control */}
-                  {user.role !== 'viewer' && (
+                  {hasActions && (
                     <td className="p-3 text-center">
                       <div className="flex justify-center items-center gap-1.5">
-                        <button
+                        {onEditItem && <button
                           onClick={() => onEditItem(item)}
                           className="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold px-2.5 py-1 rounded-lg text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
                           title="ویرایش قلم کالا"
                         >
                           <Edit2 size={12} />
                           ویرایش
-                        </button>
-                        <ActionMenu
+                        </button>}
+                        {(onSyncItem || onArchiveItem) && <ActionMenu
                           align="left"
                           title="عملیات کالا"
                           items={[
@@ -230,14 +228,14 @@ export function ItemsTable({
                               onClick: () => onSyncItem(item.id),
                               disabled: syncingItemId === item.id || !item.code,
                             }] : []),
-                            {
-                              label: 'آرشیو کالا',
+                            ...(onArchiveItem ? [{
+                              label: 'بایگانی کالا',
                               icon: Archive,
                               onClick: () => onArchiveItem(item.id),
                               variant: 'danger' as const,
-                            }
+                            }] : []),
                           ]}
-                        />
+                        />}
                       </div>
                     </td>
                   )}
@@ -246,7 +244,7 @@ export function ItemsTable({
             })}
             {!loading && sortedItems.length === 0 && (
               <tr>
-                <td colSpan={user.role === 'viewer' ? 10 : 11} className="p-12 text-center text-slate-400 font-medium">هیچ کالایی برای نمایش یافت نشد.</td>
+                <td colSpan={hasActions ? 11 : 10} className="p-12 text-center text-slate-400 font-medium">هیچ کالایی برای نمایش یافت نشد.</td>
               </tr>
             )}
           </tbody>

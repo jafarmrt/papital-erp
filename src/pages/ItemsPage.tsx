@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Item, User } from '../types';
+import { Item } from '../types';
+import { useHasPermission } from '../contexts/AuthContext';
 import { Search, Plus, FileSpreadsheet, CheckSquare, Package, Box, AlertTriangle, Layers, Tag } from 'lucide-react';
 import { useSearch } from '../SearchContext';
 import { cn, formatPersianNumber } from '../utils';
@@ -19,7 +20,12 @@ import {
   useSyncItemMutation
 } from '../hooks/queries';
 
-export default function ItemsPage({ user }: { user: User }) {
+export default function ItemsPage() {
+  // v9.0.182 (O14): دکمه‌ها با مجوز همان مسیر سرور (ساخت، ویرایش، حذف کالا، همگام‌سازی ووکامرس)، نه نقش «viewer»
+  const canCreate = useHasPermission('products.create');
+  const canEdit = useHasPermission('products.edit');
+  const canDelete = useHasPermission('products.delete');
+  const canSyncShop = useHasPermission('woocommerce.manage');
   const { searchQuery: search, debouncedSearchQuery, setSearchQuery: setSearch } = useSearch();
   const [page, setPage] = useState(1);
 
@@ -161,7 +167,7 @@ export default function ItemsPage({ user }: { user: User }) {
               </h1>
               <p className="text-xs text-slate-300 mt-1">
                 {type === 'product' 
-                  ? 'ثبت و کاتالوگ محصولات نهایی، کدگذاری دقیق، مشخصات فنی و توزیع انبارها'
+                  ? 'ثبت و فهرست محصولات نهایی، کدگذاری دقیق، مشخصات فنی و توزیع انبارها'
                   : 'مدیریت و دسته‌بندی مواد اولیه، کنترل نقطه سفارش و زنجیره تامین انبار'}
               </p>
             </div>
@@ -184,7 +190,7 @@ export default function ItemsPage({ user }: { user: User }) {
               <FileSpreadsheet size={16} className="text-emerald-400" />
               ورود و خروج اکسل
             </button>
-            {user.role !== 'viewer' && (
+            {canCreate && (
               <button 
                 onClick={handleAddNew}
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
@@ -277,11 +283,10 @@ export default function ItemsPage({ user }: { user: User }) {
           sortConfig={sortConfig}
           requestSort={requestSort}
           loading={loading}
-          user={user}
           onViewImage={setViewImage}
-          onEditItem={handleEdit}
-          onArchiveItem={(itemId) => setConfirmState({ isOpen: true, itemId })}
-          onSyncItem={handleSyncItem}
+          onEditItem={canEdit ? handleEdit : undefined}
+          onArchiveItem={canDelete ? (itemId) => setConfirmState({ isOpen: true, itemId }) : undefined}
+          onSyncItem={canSyncShop ? handleSyncItem : undefined}
           syncingItemId={syncingItemId}
           page={page}
           totalPages={totalPages}
@@ -302,11 +307,11 @@ export default function ItemsPage({ user }: { user: User }) {
 
       <ConfirmModal 
         isOpen={confirmState.isOpen}
-        title="آرشیو و بایگانی کالا"
-        message="آیا از حذف (آرشیو) این کالا اطمینان دارید؟ با انتقال کالا به آرشیو، این مورد دیگر در جداول فعال محصولات و مواد اولیه نشان داده نخواهد شد. اما برای حفظ ثبات و صحت اسناد مالی و فاکتورهای قبلی، تمام تراکنش‌ها و اقلام فاکتورهای ثبت شده با این کالا کماکان به طور دقیق نگهداری می‌شوند."
+        title="بایگانی کالا"
+        message="آیا از حذف (بایگانی) این کالا اطمینان دارید؟ با انتقال کالا به بایگانی، این مورد دیگر در جداول فعال محصولات و مواد اولیه نشان داده نخواهد شد. اما برای حفظ ثبات و صحت اسناد مالی و فاکتورهای قبلی، تمام تراکنش‌ها و اقلام فاکتورهای ثبت شده با این کالا کماکان به طور دقیق نگهداری می‌شوند."
         onConfirm={executeArchive}
         onCancel={() => setConfirmState({ isOpen: false, itemId: 0 })}
-        confirmText="بله، انتقال به آرشیو"
+        confirmText="بله، انتقال به بایگانی"
         cancelText="انصراف"
       />
 

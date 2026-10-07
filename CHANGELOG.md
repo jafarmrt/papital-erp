@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.182 — Item Page Actions by Permission
+- **Item Page Actions by Permission:** the items and pricing pages show buttons and price fields by the permission of the server route (`products.create` / `edit` / `delete`, `woocommerce.manage`, `products.edit_price`) instead of the role code «viewer»; the average cost is shown in rials and the margin badge and markup buttons use rial prices only (TD-840, `itemActionsByPermission.test.tsx`).
+
 ### v9.0.181 — Excel Template From the Server
 - **Excel Template From the Server:** `GET /items/excel-template` builds the import template with the columns the import reads (active warehouses with a matching total, every price list with its currency) without reading items or writing an export audit row (TD-842, `reg_excel_template_from_server_td_842`).
 
