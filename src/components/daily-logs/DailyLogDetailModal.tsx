@@ -8,7 +8,7 @@ interface DailyLogDetailModalProps {
   onClose: () => void;
 }
 
-/** v9.0.251 (TD-645): one daily log opened from a notification link (`/daily-logs?id=N`) */
+/** v9.0.263 (TD-645): one daily log opened from a notification link (`/daily-logs?id=N`) */
 export function DailyLogDetailModal({ log, onClose }: DailyLogDetailModalProps) {
   if (!log) return null;
   const author = log.user_full_name || log.userFullName || log.username;

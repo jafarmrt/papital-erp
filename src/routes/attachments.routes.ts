@@ -68,7 +68,7 @@ router.get('/attachments/:id', validate(attachmentIdSchema), asyncHandler(async 
     return res.status(403).json({ error: 'دسترسی غیرمجاز به این پیوست' });
   }
 
-  // v9.0.242 (TD-627, finding B13-02): the file is opened before any header is sent, so a missing, unreadable or
+  // v9.0.254 (TD-627, finding B13-02): the file is opened before any header is sent, so a missing, unreadable or
   // non-file path answers an error instead of an uncaught stream error, which the process policy turns into a
   // shutdown; a read error after the response started only closes that response.
   const file = await openAttachmentFile(AttachmentStorageService.absolutePath(row.storagePath));

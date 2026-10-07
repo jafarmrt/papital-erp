@@ -1,4 +1,5 @@
 import type { Item } from '../../types';
+import { getSellableStock } from '../stockAvailability';
 
 /**
  * TD-080 (بخش ۳): منطق خالص رزرو کالا در فرم رسید/حواله انبار — منتقل‌شده بدون تغییر رفتار از DocumentsPage.
@@ -150,14 +151,23 @@ export interface ItemReservationSummary {
   totalReservedQty: number;
   reservedForSelectedProject: number;
   reservedForOtherProjects: number;
+  /** موجودی کالا در انبار انتخاب‌شده (بی انبار: موجودی کل) */
+  locationStock: number;
   maxAllowedForExit: number;
 }
 
-/** معیارهای رزرو یک کالا برای پروژه انتخاب‌شده (getItemReservationSummary صفحه) */
+/**
+ * معیارهای رزرو یک کالا برای پروژه انتخاب‌شده (getItemReservationSummary صفحه).
+ *
+ * v9.0.242 (TD-799، یافته B08-30): سقف خروج = min(موجودی انبار انتخاب‌شده، موجودی کل − رزرو دیگران)، همان قاعده
+ * `computeSellable` سرور و `getSellableStock` فرم فاکتور. پیش‌تر فقط موجودی کل منهای رزرو بود: با انبار ۱ صفر و انبار ۲ ده عدد،
+ * حواله ۱۰ عددی از انبار ۱ در فرم پذیرفته و در سرور رد می‌شد.
+ */
 export function itemReservationSummary(
   reservations: GlobalReservation[],
-  it: Pick<Item, 'id' | 'code' | 'name' | 'current_stock'>,
+  it: Pick<Item, 'id' | 'code' | 'name' | 'current_stock'> & Partial<Pick<Item, 'stocks'>>,
   selectedProjectId: string,
+  location = '',
 ): ItemReservationSummary {
   const matchingReservations = reservations.filter(r => reservationMatchesItem(r, it));
 
@@ -170,13 +180,15 @@ export function itemReservationSummary(
   const reservedForOtherProjects = totalReservedQty - reservedForSelectedProject;
 
   // Max allowed exit for this document selection
-  const maxAllowedForExit = Math.max(0, it.current_stock - reservedForOtherProjects);
+  const locationStock = getSellableStock(it, location).loc;
+  const maxAllowedForExit = Math.max(0, Math.min(locationStock, it.current_stock - reservedForOtherProjects));
 
   return {
     matchingReservations,
     totalReservedQty,
     reservedForSelectedProject,
     reservedForOtherProjects,
+    locationStock,
     maxAllowedForExit
   };
 }

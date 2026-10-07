@@ -19,9 +19,9 @@ const atMost = (label: string, max: number) => `${label} حداکثر ${toPersia
  * numbers); anything else is 400 before the log is written. Whether the users and the project exist is checked by the
  * service in the save transaction (422).
  * v9.0.236 (TD-900, decision ت۷): `public` and `all` are no longer accepted.
- * v9.0.246 (TD-644): title, content, tags, project name and manager notes have length caps (`dailyLogLimits.ts`).
- * v9.0.247 (TD-634): a start or end time is «HH:MM» from 00:00 to 23:59; the end after the start is checked by the
- * service with the shared rule (`workHours.ts`). v9.0.248 (TD-635, decision ت۳ ب): the work mode is onsite or remote.
+ * v9.0.258 (TD-644): title, content, tags, project name and manager notes have length caps (`dailyLogLimits.ts`).
+ * v9.0.259 (TD-634): a start or end time is «HH:MM» from 00:00 to 23:59; the end after the start is checked by the
+ * service with the shared rule (`workHours.ts`). v9.0.260 (TD-635, decision ت۳ ب): the work mode is onsite or remote.
  */
 const timeOfDay = (label: string) => z.string()
   .transform(normalizeTimeOfDay)
@@ -100,7 +100,7 @@ const boundedInt = (label: string, min: number, max: number, fallback: number) =
   return n;
 });
 
-/** v9.0.237 (TD-630): the list query; the server pages it (at most 100 rows a page) */
+/** v9.0.249 (TD-630): the list query; the server pages it (at most 100 rows a page) */
 export const dailyLogListQuerySchema = z.object({
   query: z.object({
     filter_type: z.enum(['all', 'mine', 'mentioned', 'summary']).optional(),
@@ -114,7 +114,7 @@ export const dailyLogListQuerySchema = z.object({
 });
 export type DailyLogListQueryParsed = z.infer<typeof dailyLogListQuerySchema>['query'];
 
-/** v9.0.237 (TD-630): the management summary covers one day (default today) or one month (default this month) */
+/** v9.0.249 (TD-630): the management summary covers one day (default today) or one month (default this month) */
 export const dailyLogSummaryQuerySchema = z.object({
   query: z.object({
     report_type: z.enum(['daily', 'monthly']).optional().default('daily'),

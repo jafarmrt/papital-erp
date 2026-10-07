@@ -52,7 +52,7 @@ export const ModernPersianDropzone: React.FC<ModernPersianDropzoneProps> = ({
   description,
   helperText,
   maxFiles = 10,
-  maxSizeMB = MAX_ATTACHMENT_FILE_MB, // v9.0.243 (TD-641): the server's per-file limit
+  maxSizeMB = MAX_ATTACHMENT_FILE_MB, // v9.0.255 (TD-641): the server's per-file limit
   accept = 'image/*,application/pdf,.xlsx,.xls,.csv,.doc,.docx,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel',
   className = '',
   autoCompressImages = true

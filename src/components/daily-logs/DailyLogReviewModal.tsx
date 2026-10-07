@@ -12,7 +12,7 @@ interface DailyLogReviewModalProps {
 }
 
 /**
- * v9.0.249 (TD-637, finding B13-12): the review notes reach only the log's author, so the form offers no «@» and says
+ * v9.0.261 (TD-637, finding B13-12): the review notes reach only the log's author, so the form offers no «@» and says
  * so; it never promises a notification to anyone else.
  */
 export function DailyLogReviewModal({

@@ -29,7 +29,7 @@ const log = {
   start_time: '08:00', end_time: '16:00', work_hours: 8, work_mode: 'onsite', mentions: [7], tags: [],
 } as unknown as DailyWorkLog;
 
-// v9.0.249 (TD-637, finding B13-12): the review form mentions nobody; its notification goes only to the author
+// v9.0.261 (TD-637, finding B13-12): the review form mentions nobody; its notification goes only to the author
 describe('daily log review form (TD-637)', () => {
   it('has no @ mention picker and says the notification goes to the author', () => {
     render(<DailyLogReviewModal reviewModalLog={log} onClose={() => {}} reviewNotes="" setReviewNotes={() => {}} isSubmittingReview={false} onSaveReview={() => {}} />);
@@ -42,7 +42,7 @@ describe('daily log review form (TD-637)', () => {
   });
 });
 
-// v9.0.250 (TD-639, finding B13-14): the dashboard reads daily logs only with `daily_logs.view`, with its own requests
+// v9.0.262 (TD-639, finding B13-14): the dashboard reads daily logs only with `daily_logs.view`, with its own requests
 describe('dashboard daily logs (TD-639)', () => {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
@@ -70,7 +70,7 @@ describe('dashboard daily logs (TD-639)', () => {
   });
 });
 
-// v9.0.251 (TD-645, finding B13-20): `/daily-logs?id=N` opens that log; the widget links to it
+// v9.0.263 (TD-645, finding B13-20): `/daily-logs?id=N` opens that log; the widget links to it
 describe('daily log link (TD-645)', () => {
   function Focus() {
     const { focusedLog, closeFocusedLog } = useDailyLogFocus();

@@ -6,7 +6,7 @@ import type { DailyWorkLog, User } from '../../types';
 
 afterEach(cleanup);
 
-// v9.0.241 (TD-638, finding B13-13): the dashboard widget reads the API field `mentions`, not «@name» in the text
+// v9.0.253 (TD-638, finding B13-13): the dashboard widget reads the API field `mentions`, not «@name» in the text
 describe('dashboard mentions widget (TD-638)', () => {
   const me = { id: 7, username: 'ali', full_name: 'علی', role: 'viewer' } as unknown as User;
 

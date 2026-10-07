@@ -4,7 +4,7 @@ import { getTodayJalaliDate } from '../../utils/dateUtils';
 export const SUMMARY_PAST_YEARS = 5;
 
 /**
- * v9.0.239 (TD-632, finding B13-07): the years of the monthly management summary come from the business today (the
+ * v9.0.251 (TD-632, finding B13-07): the years of the monthly management summary come from the business today (the
  * current Jalali year and the five before it), plus the selected year when it is outside that range. The picker was a
  * fixed 1402 to 1405, so from Nowruz 1406 the current year could not be chosen.
  */

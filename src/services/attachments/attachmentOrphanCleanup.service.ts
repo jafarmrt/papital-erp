@@ -21,7 +21,7 @@ import { getAttachmentsRoot } from './attachmentStorage.service.js';
 
 export const DEFAULT_ORPHAN_MIN_AGE_MINUTES = 60;
 /**
- * v9.0.245 (TD-643, finding B13-18): the youngest file a cleanup may remove; a smaller age (0 included) is raised to
+ * v9.0.257 (TD-643, finding B13-18): the youngest file a cleanup may remove; a smaller age (0 included) is raised to
  * this floor, so a file of a save transaction still in progress is never taken for an orphan.
  */
 export const MIN_ORPHAN_AGE_MINUTES = 5;

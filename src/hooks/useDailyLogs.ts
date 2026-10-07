@@ -28,7 +28,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export function useDailyLogs(user: User) {
   const [logs, setLogs] = useState<DailyWorkLog[]>([]);
-  // v9.0.237 (TD-630): the server pages the list; `total` is every log the filters match
+  // v9.0.249 (TD-630): the server pages the list; `total` is every log the filters match
   const [total, setTotal] = useState<number>(0);
   const [stats, setStats] = useState<DailyLogStats>(EMPTY_DAILY_LOG_STATS);
   const [systemUsers, setSystemUsers] = useState<SimpleUserOption[]>([]);
@@ -40,7 +40,7 @@ export function useDailyLogs(user: User) {
   // Filters
   const [activeTab, setActiveTab] = useState<'all' | 'mine' | 'mentioned' | 'summary'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  // v9.0.237 (TD-630): the search box asks the server only after typing pauses
+  // v9.0.249 (TD-630): the search box asks the server only after typing pauses
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
@@ -214,7 +214,7 @@ export function useDailyLogs(user: User) {
     toast.success(SUMMARY_CSV_DOWNLOADED);
   };
 
-  const currentFormHours = workHoursBetween(formStartTime, formEndTime) ?? 0; // v9.0.247 (TD-634): the server's rule
+  const currentFormHours = workHoursBetween(formStartTime, formEndTime) ?? 0; // v9.0.259 (TD-634): the server's rule
 
   const resetForm = () => {
     setEditingLog(null);

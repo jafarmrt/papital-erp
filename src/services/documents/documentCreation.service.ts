@@ -12,7 +12,6 @@ import { VoucherSyncService } from '../accounting/voucherSync.service.js';
 import { syncStockAdjustmentVoucher } from '../accounting/stockAdjustmentVoucher.js';
 import { createWarehouseResolver } from '../inventory/warehouseResolver.js';
 import { assertBookStocksUnchanged } from '../inventory/stockCountSheet.js';
-import { ItemStockReservationService } from '../items/itemStockReservation.service.js';
 import { sortIdsForLocking } from '../../lib/lockOrder.js';
 import { lockStockItems } from '../inventory/stockItemLocks.js';
 import { DocumentRefNumberService } from './documentRefNumber.service.js';
@@ -28,7 +27,8 @@ import { releaseReservationsForDocument, type ProjectReservationRelease } from '
 import { AttachmentStorageService } from '../attachments/attachmentStorage.service.js';
 import { money } from '../../lib/money.js';
 import { fin, type FinancialDecimal } from '../../lib/financialDecimal.js';
-import { createdStockDirection } from './documentRecordRule.js';
+import { assertRecordableDocument, stockDirectionOf } from './documentRecordRule.js';
+import { assertOutflowWithinSellable } from './documentSellableGate.js';
 
 type DocumentLineRow = typeof documentItems.$inferInsert;
 
@@ -236,6 +236,9 @@ export class DocumentCreationService {
     } = body;
 
     const docType = rawDocType || rawType || 'invoice';
+    // v9.0.238 (TD-770، تصمیم ت۲ الف): جهت گردش فقط از نوع سند؛ `inOut` ناسازگار ۴۲۲، انتقال پذیرفته نمی‌شود و نوع ناشناخته
+    // ردیف نمی‌گیرد. پیش‌تر «رسید» با `inOut: out` کالا را خارج و سند حسابداری خرید صادر می‌کرد، و `transfer` بی ردیف مقصد خارج می‌کرد
+    assertRecordableDocument(docType, inOut, Array.isArray(docLines) && docLines.length > 0);
     // P0-02 (F17 & ACC-03): تعیین امن وضعیت سند؛ پیش‌فاکتور هرگز نباید به عنوان سند نهایی ثبت شود
     const docStatus = status || (docType === 'proforma' ? 'proforma' : 'final');
 
@@ -428,67 +431,15 @@ export class DocumentCreationService {
         // TD-164: ایجاد حل‌کننده انبار قبل از ورود به حلقه‌ها
         const resolveWh = await createWarehouseResolver(tx);
 
-        // V6 Sub-phase 2.4 (TD-139) & P1-05 (H-02): گیت رزرویشن Fail-Closed در تراکنش خروج قطعی
-        if (docStatus === 'final' && inOut === 'out') {
-          const reservationReport = await ItemStockReservationService.getReservedStockDetailsOrThrow(tx);
-          const excludeDocId = body.excludeDocumentId ? Number(body.excludeDocumentId) : undefined;
-
-          // H-06 & TD-159: اخذ قفل سطری اقلام خروجی بر اساس ترتیب اکید شناسه‌ها برای ممانعت از Deadlock
-          const distinctSortedIds = sortIdsForLocking(
-            Array.from(new Set(docLines.map(l => Number(l.itemId)).filter(id => !isNaN(id) && id > 0)))
-          );
-          const lockedDbItems = await tx
-            .select({
-              id: items.id,
-              code: items.code,
-              name: items.name,
-              unit: items.unit,
-              currentStock: items.currentStock,
-            })
-            .from(items)
-            .where(and(inArray(items.id, distinctSortedIds), eq(items.isDeleted, 0)))
-            .for('no key update');
-          const dbItemMap = new Map(lockedDbItems.map(it => [it.id, it]));
-          // v7.0.45 (audit P2-1): موجودی انبارها از جدول نرمال (منبع حقیقت)، نه کش JSONB
-          const tableStockMap = await ItemWarehouseStockService.getStocksForItems(tx, distinctSortedIds);
-
-          for (const item of docLines) {
-            const itId = Number(item.itemId);
-            const reqQty = Number(item.quantity || 0);
-            if (reqQty <= 0) continue;
-
-            const targetLoc = resolveWh(item.location ? String(item.location).trim() : (docLocation || ''));
-            const dbItem = dbItemMap.get(itId);
-
-            if (!dbItem) {
-              throw new NotFoundError(`کالا با شناسه ${itId} در سیستم یافت نشد.`);
-            }
-
-            const summary = reservationReport.itemSummaries.find(s => s.itemId === itId);
-            const sellableInfo = ItemStockReservationService.computeSellable(
-              summary,
-              tableStockMap.get(itId)?.byCode ?? {},
-              {
-                location: targetLoc,
-                excludeDocumentId: excludeDocId,
-                projectId: finalProjectId,
-              }
-            );
-
-            if (reqQty > sellableInfo.sellable) {
-              const otherReservations = (summary?.reservations || []).filter(
-                r => !(r.sourceType === 'proforma' && excludeDocId && Number(r.sourceId) === excludeDocId) &&
-                     !(r.sourceType === 'project' && finalProjectId && Number(r.sourceId) === finalProjectId)
-              );
-              const otherNames = otherReservations.length > 0
-                ? ` (${otherReservations.map(r => `«${r.sourceRef || r.sourceTitle}» [${r.reservedQty} ${r.unit}]`).join('، ')})`
-                : '';
-
-              throw new ValidationError(
-                `امکان خروج بیش از ${sellableInfo.sellable} ${dbItem.unit || 'عدد'} برای کالا «${dbItem.name}» (${dbItem.code}) وجود ندارد. موجودی انبار «${targetLoc}»: ${sellableInfo.locationStock}، رزرو سایر مصارف: ${sellableInfo.reservedForOthers}${otherNames}، قابل فروش: ${sellableInfo.sellable}.`
-              );
-            }
-          }
+        // V6 Sub-phase 2.4 (TD-139) & P1-05 (H-02): گیت رزرویشن Fail-Closed در تراکنش خروج قطعی. v9.0.239 (TD-775): با جهت
+        // نوع سند (نه `inOut` بدنه) و جمع مقدار هر (کالا، انبار)، همان تابع نهایی‌سازی (documentSellableGate.ts)
+        const stockDirection = stockDirectionOf(docType);
+        if (docStatus === 'final' && stockDirection === 'out') {
+          await assertOutflowWithinSellable(tx, docLines, {
+            docLocation,
+            excludeDocumentId: body.excludeDocumentId ? Number(body.excludeDocumentId) : null,
+            projectId: finalProjectId,
+          });
         }
 
         // v7.0.81 (TD-230، تصمیم مالک محصول): کالای برگشت از فروش با بهای خروج فاکتور اصلی (یا WAC جاری بدون فاکتور
@@ -502,8 +453,6 @@ export class DocumentCreationService {
           await assertReturnableInvoice(tx, returnOfDocumentId);
         }
 
-        // v9.0.125 (TD-541): همان قاعده‌ای که مجوز ثبت سند از آن خوانده می‌شود (documentRecordRule.ts)
-        const stockDirection = createdStockDirection(docType, inOut);
         const lineRows: DocumentLineRow[] = [];
         for (const item of docLines) {
           const { itemId, quantity, unit_price, discount, location: itemLoc, price: directPrice, unitPrice: camelUnitPrice } = item;

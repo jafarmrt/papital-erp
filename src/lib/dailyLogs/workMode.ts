@@ -1,5 +1,5 @@
 /**
- * v9.0.248 (TD-635, finding B13-10, product-owner decision ت۳ ب): a daily log is recorded only as onsite or remote,
+ * v9.0.260 (TD-635, finding B13-10, product-owner decision ت۳ ب): a daily log is recorded only as onsite or remote,
  * like the form. Logs stored earlier as leave, mission or hybrid keep their value and are shown and counted as such:
  * never as onsite or remote, and the hours of a leave are not work hours.
  */

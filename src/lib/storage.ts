@@ -20,7 +20,7 @@ export function isDataUrl(value: unknown): value is string {
 }
 
 /**
- * v9.0.244 (TD-642, finding B13-17): a refused image is a `ValidationError` (422 with its Persian message, also in
+ * v9.0.256 (TD-642, finding B13-17): a refused image is a `ValidationError` (422 with its Persian message, also in
  * production), and any `data:` value that is not a base64 image of an allowed format is refused instead of being
  * returned unchanged and stored in the record column. A value that is not a data URL (a stored path) is returned as is.
  */

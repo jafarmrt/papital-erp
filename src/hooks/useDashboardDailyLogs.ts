@@ -11,7 +11,7 @@ const listData = (res: unknown): DailyWorkLog[] => {
 };
 
 /**
- * v9.0.250 (TD-639, finding B13-14): the dashboard reads daily logs only for a holder of `daily_logs.view` (`enabled`),
+ * v9.0.262 (TD-639, finding B13-14): the dashboard reads daily logs only for a holder of `daily_logs.view` (`enabled`),
  * with just the requests it shows: the latest visible logs for the calendar, the logs that mention the user for the
  * widget, and the statistics. It never loads the users and projects of the log form and shows no error toast; a user
  * without the permission sends no request at all.

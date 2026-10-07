@@ -1,4 +1,4 @@
-/** The answer of `GET /daily-logs/stats` (counted in SQL over the logs the user sees; v9.0.237, TD-630) */
+/** The answer of `GET /daily-logs/stats` (counted in SQL over the logs the user sees; v9.0.249, TD-630) */
 export interface DailyLogStats {
   today_hours: number;
   my_total_logs: number;

@@ -11,10 +11,10 @@ export async function runDailyLogWorkTimeTests(shouldRun: ShouldRun): Promise<Te
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: DailyLogTestCtx) => Promise<string>]> = [
     ['reg_daily_log_work_time_validated_td_634',
-      'v9.0.247: a daily log\'s start and end are valid times of day and the end is after the start; an overnight shift is refused (TD-634)',
+      'v9.0.259: a daily log\'s start and end are valid times of day and the end is after the start; an overnight shift is refused (TD-634)',
       ['td634', 'daily_log', 'work_hours', 'package13'], workTimeCase],
     ['reg_daily_log_work_mode_onsite_remote_td_635',
-      'v9.0.248: a daily log is onsite or remote; a legacy leave log is neither onsite nor work hours in the summary and statistics (TD-635)',
+      'v9.0.260: a daily log is onsite or remote; a legacy leave log is neither onsite nor work hours in the summary and statistics (TD-635)',
       ['td635', 'daily_log', 'work_mode', 'package13'], workModeCase],
   ];
   for (const [id, name, tags, run] of cases) {

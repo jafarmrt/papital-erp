@@ -10641,15 +10641,19 @@ export async function runRegressionTests(filter?: string): Promise<TestCaseResul
   const { runDailyLogAccessTests } = await import('../regression/dailyLogAccessTests.js');
   results.push(...await runDailyLogAccessTests(shouldRun));
 
-  // Package 13 PR B (v9.0.237+): reading daily work logs (list, statistics, timestamps)
+  // Package 8 PR A (v9.0.238+): stock direction, sellable gate and line numbers of POST /documents
+  const { runDocumentEntryTests } = await import('../regression/documentEntryTests.js');
+  results.push(...await runDocumentEntryTests(shouldRun));
+
+  // Package 13 PR B (v9.0.249+): reading daily work logs (list, statistics, timestamps)
   const { runDailyLogReadTests } = await import('../regression/dailyLogReadTests.js');
   results.push(...await runDailyLogReadTests(shouldRun));
 
-  // Package 13 PR C (v9.0.242+): attachment download, body limits, image uploads, orphan cleanup, log length caps
+  // Package 13 PR C (v9.0.254+): attachment download, body limits, image uploads, orphan cleanup, log length caps
   const { runAttachmentUploadTests } = await import('../regression/attachmentUploadTests.js');
   results.push(...await runAttachmentUploadTests(shouldRun));
 
-  // Package 13 PR D (v9.0.247+): work time and work mode of a daily log
+  // Package 13 PR D (v9.0.259+): work time and work mode of a daily log
   const { runDailyLogWorkTimeTests } = await import('../regression/dailyLogWorkTimeTests.js');
   results.push(...await runDailyLogWorkTimeTests(shouldRun));
 

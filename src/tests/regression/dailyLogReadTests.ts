@@ -12,13 +12,13 @@ export async function runDailyLogReadTests(shouldRun: ShouldRun): Promise<TestCa
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: DailyLogTestCtx) => Promise<string>]> = [
     ['reg_daily_log_list_paginated_td_630',
-      'v9.0.237: the daily log list is paged in SQL with its total, applies the visibility rule in SQL and refuses a negative limit (TD-630)',
+      'v9.0.249: the daily log list is paged in SQL with its total, applies the visibility rule in SQL and refuses a negative limit (TD-630)',
       ['td630', 'daily_log', 'pagination', 'package13'], listPaginatedCase],
     ['reg_daily_log_today_hours_by_work_date_td_631',
-      'v9.0.238: today\'s hours count only logs whose work date is today, not older logs created today (TD-631)',
+      'v9.0.250: today\'s hours count only logs whose work date is today, not older logs created today (TD-631)',
       ['td631', 'daily_log', 'stats', 'package13'], todayHoursCase],
     ['reg_daily_log_created_at_utc_td_636',
-      'v9.0.240: a daily log\'s created_at reaches the browser as UTC with a Z (TD-636)',
+      'v9.0.252: a daily log\'s created_at reaches the browser as UTC with a Z (TD-636)',
       ['td636', 'daily_log', 'timestamp', 'package13'], createdAtUtcCase],
   ];
   for (const [id, name, tags, run] of cases) {

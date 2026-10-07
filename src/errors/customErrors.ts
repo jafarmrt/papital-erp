@@ -116,7 +116,7 @@ export function normalizeError(err: unknown): NormalizedError {
 
   const errObj = (err && typeof err === 'object') ? (err as Record<string, unknown>) : null;
 
-  // v9.0.243 (TD-641): body-parser's 413 reaches the user in Persian, not as "request entity too large"
+  // v9.0.255 (TD-641): body-parser's 413 reaches the user in Persian, not as "request entity too large"
   if (errObj && errObj.type === 'entity.too.large') {
     return {
       message: BODY_TOO_LARGE_MESSAGE,

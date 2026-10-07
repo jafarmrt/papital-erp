@@ -25,7 +25,7 @@ export const DAILY_LOG_AUDIT_ENTITY = 'گزارش کار روزانه';
  * v9.0.234 (TD-629): mentioned and allowed users and the project must exist; the project name comes from the project.
  */
 /**
- * v9.0.247 (TD-634, decision ت۵ الف): hours from the shared rule; an end not after the start (or an invalid time) is
+ * v9.0.259 (TD-634, decision ت۵ الف): hours from the shared rule; an end not after the start (or an invalid time) is
  * refused with 422, never stored as 8 hours or counted as an overnight shift.
  */
 function requireWorkHours(startTime: string, endTime: string): number {

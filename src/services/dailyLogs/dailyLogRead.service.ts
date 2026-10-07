@@ -14,12 +14,12 @@ type DailyLogRow = typeof dailyWorkLogs.$inferSelect;
 /**
  * Package 13: reading daily work logs (list, statistics, management summary).
  *
- * v9.0.237 (TD-630, finding B13-05): the visibility rule, the filters and the paging run in SQL; the list answers
+ * v9.0.249 (TD-630, finding B13-05): the visibility rule, the filters and the paging run in SQL; the list answers
  * `{ data, total, page, limit }` instead of the first 200 rows of the whole table read into memory, the statistics are
  * `COUNT` / `SUM` and the summary reads only its day or month.
- * v9.0.238 (TD-631): «today's hours» are the hours of logs whose work date is the business today, never logs of other
+ * v9.0.250 (TD-631): «today's hours» are the hours of logs whose work date is the business today, never logs of other
  * days created today.
- * v9.0.240 (TD-636): `created_at` goes to the browser as UTC with a `Z`.
+ * v9.0.252 (TD-636): `created_at` goes to the browser as UTC with a `Z`.
  */
 
 /** A JSONB id list (mentions, allowed users) that holds `userId` as a number or as a legacy digit string */
@@ -48,7 +48,7 @@ export function formatDailyLog(l: DailyLogRow) {
   const tagsArr = Array.isArray(l.tags) ? l.tags : [];
   // v7.0.134 (TD-232): ستون اصلی میلادی ISO است و date_iso همان مقدار را دارد
   const computedDateIso = String(l.date || '');
-  // v9.0.240 (TD-636): server timestamp (UTC, no zone) with a Z, so the browser shows Tehran time
+  // v9.0.252 (TD-636): server timestamp (UTC, no zone) with a Z, so the browser shows Tehran time
   const createdAt = serverTimestampToUtcIso(l.createdAt);
 
   return {
@@ -120,7 +120,7 @@ const round1 = (n: unknown) => Math.round(Number(n || 0) * 10) / 10;
 export async function dailyLogStats(userId: number, canManageAll: boolean) {
   const today = await businessTodayIsoDate();
   const mine = eq(dailyWorkLogs.userId, userId);
-  // v9.0.248 (TD-635): the hours of a legacy leave log are not work hours
+  // v9.0.260 (TD-635): the hours of a legacy leave log are not work hours
   const worked = sql`${dailyWorkLogs.workMode} is distinct from 'leave'`;
   const [row] = await orm.select({
     total: sql<number>`count(*)::int`,
@@ -210,7 +210,7 @@ export async function dailyLogSummary(q: SummaryQuery) {
       s = entry(l.userId, l.username, l.userFullName || '', 'کاربر');
       byUser.set(l.userId, s);
     }
-    // v9.0.248 (TD-635): only onsite and remote logs are counted as such; a legacy leave, mission or hybrid log is
+    // v9.0.260 (TD-635): only onsite and remote logs are counted as such; a legacy leave, mission or hybrid log is
     // «other», and a leave's hours are not work hours
     const hours = countsAsWorkHours(l.workMode) ? Number(l.workHours || 0) : 0;
     s.totalHours += hours;

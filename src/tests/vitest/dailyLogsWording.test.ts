@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-// v9.0.252 (TD-646، تصمیم مالک محصول ت۶): متن فارسی گزارش کار روزانه «اشاره» و «اعلان» می‌گوید، نه «منشن» و «نوتیفیکیشن»،
+// v9.0.264 (TD-646، تصمیم مالک محصول ت۶): متن فارسی گزارش کار روزانه «اشاره» و «اعلان» می‌گوید، نه «منشن» و «نوتیفیکیشن»،
 // و مجوز را با نام فارسی‌اش می‌آورد، نه با کلید انگلیسی
 
 const ROOT = join(__dirname, '..', '..');

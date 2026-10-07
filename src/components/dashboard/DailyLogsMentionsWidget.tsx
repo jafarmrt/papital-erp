@@ -26,7 +26,7 @@ export function DailyLogsMentionsWidget({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const currentUserId = user?.id;
 
-  // v9.0.241 (TD-638): a log mentions me when its `mentions` (the API field, user ids) holds my id; a text match on
+  // v9.0.253 (TD-638): a log mentions me when its `mentions` (the API field, user ids) holds my id; a text match on
   // «@name» found the wrong user for prefix names (TD-628) and missed logs after a rename
   const mentionedLogs = useMemo(
     () => logs.filter((log) => currentUserId !== undefined && idList(log.mentions).includes(currentUserId)),

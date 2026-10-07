@@ -13,7 +13,7 @@ interface DailyLogsListProps {
   logs: DailyWorkLog[];
   loading: boolean;
   page: number;
-  /** v9.0.237 (TD-630): every log the filters match; the server sends one page */
+  /** v9.0.249 (TD-630): every log the filters match; the server sends one page */
   total: number;
   setPage: React.Dispatch<React.SetStateAction<number>>;
   limit: number;
@@ -58,7 +58,7 @@ export function DailyLogsList({
           </span>
         );
       default:
-        // v9.0.248 (TD-635): a legacy leave, mission or hybrid log shows its own label
+        // v9.0.260 (TD-635): a legacy leave, mission or hybrid log shows its own label
         return mode ? (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
             {workModeLabel(mode)}

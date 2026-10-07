@@ -9,6 +9,7 @@ import type { WarehouseItem } from '../../../hooks/queries/useSettingsQueries';
 import type { StockDocProject } from '../../../lib/documents/stockReservations';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
 import { StockCounterpartyField } from './StockCounterpartyField';
+import { STOCK_PAGE_DOC_TYPE_LABELS } from '../../../lib/documents/stockDocumentAccess';
 
 interface StockDocumentDetailsFieldsProps {
   form: StockDocumentForm;
@@ -17,13 +18,15 @@ interface StockDocumentDetailsFieldsProps {
   projectsList: StockDocProject[];
   personnelList: Personnel[];
   suppliersList: Customer[];
+  /** v9.0.241 (TD-791): نوع‌های سندی که فهرست نشان می‌دهد (`stockPageTypeOptions`) */
+  typeOptions: readonly string[];
 }
 
 /**
  * TD-080 (بخش ۳): مشخصات سند انبار (نوع، شماره، ارز و نرخ، پروژه، فاکتور مرجع برگشتی، طرف حساب، انبار،
  * تاریخ، صادرکننده، توضیحات) — استخراج‌شده از DocumentsPage.
  */
-export function StockDocumentDetailsFields({ form, currentUser, warehouses, projectsList, personnelList, suppliersList }: StockDocumentDetailsFieldsProps) {
+export function StockDocumentDetailsFields({ form, currentUser, warehouses, projectsList, personnelList, suppliersList, typeOptions }: StockDocumentDetailsFieldsProps) {
   const {
     actionType, docType, setDocType, refNumber, setRefNumber, currency, setCurrency, exchangeRate, setExchangeRate,
     selectedProjectId, setSelectedProjectId, returnInvoiceRef, setReturnInvoiceRef, returnInvoiceId, setReturnInvoiceId,
@@ -48,18 +51,9 @@ export function StockDocumentDetailsFields({ form, currentUser, warehouses, proj
             value={docType} 
             onChange={e => setDocType(e.target.value)}
           >
-            {actionType === 'in' ? (
-              <>
-                <option value="receipt">رسید خرید مواد اولیه / کالا (فاکتور خرید)</option>
-                <option value="production_receipt">رسید انبار تولید (تحویل محصولات ساخته‌شده)</option>
-                <option value="return">برگشت از فروش / مرجوعی مشتری</option>
-              </>
-            ) : (
-              <>
-                <option value="remittance">حواله خروج مصرف (تولید / کارگاه)</option>
-                <option value="waste">ضایعات و اسقاط</option>
-              </>
-            )}
+            {typeOptions.map(type => (
+              <option key={type} value={type}>{STOCK_PAGE_DOC_TYPE_LABELS[type] ?? type}</option>
+            ))}
           </select>
         </div>
 

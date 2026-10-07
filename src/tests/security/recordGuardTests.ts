@@ -86,7 +86,7 @@ export async function runRecordGuardTests(shouldRun: (id: string, ...extra: stri
           const stats = await send(viewer.session, 'get', '/api/daily-logs/stats');
           const list = await send(viewer.session, 'get', '/api/daily-logs?limit=100');
           const authorStats = await send(author.session, 'get', '/api/daily-logs/stats');
-          // v9.0.237 (TD-630): the list is paged; `total` counts every visible log
+          // v9.0.249 (TD-630): the list is paged; `total` counts every visible log
           const rows: Array<{ title?: string; work_mode?: string }> = Array.isArray(list.body?.data) ? list.body.data : [];
           const visible = typeof list.body?.total === 'number' ? list.body.total : -1;
           const wrong: string[] = [];

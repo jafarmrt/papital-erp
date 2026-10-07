@@ -24,7 +24,7 @@ export default function Dashboard() {
     loadAllData: fetchCRMData
   } = useCRMData(user);
 
-  // v9.0.250 (TD-639): daily logs only for holders of daily_logs.view, with the dashboard's own requests
+  // v9.0.262 (TD-639): daily logs only for holders of daily_logs.view, with the dashboard's own requests
   const canViewDailyLogs = useHasPermission('daily_logs.view');
   const {
     logs: dailyLogs,

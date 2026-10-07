@@ -19,7 +19,7 @@ import {
 const router = Router();
 router.use(authenticateToken);
 
-// GET the daily work logs the user may see, one page (v9.0.237, TD-630: visibility, filters and paging in SQL)
+// GET the daily work logs the user may see, one page (v9.0.249, TD-630: visibility, filters and paging in SQL)
 router.get('/daily-logs', authorizePermission('daily_logs.view'), validate(dailyLogListQuerySchema), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');
@@ -27,7 +27,7 @@ router.get('/daily-logs', authorizePermission('daily_logs.view'), validate(daily
   res.json(await listDailyLogs(userId, await canManageAllDailyLogs(req.user), query));
 }));
 
-// GET statistics over the logs the user sees in the list (TD-406), counted in SQL (v9.0.237 / v9.0.238)
+// GET statistics over the logs the user sees in the list (TD-406), counted in SQL (v9.0.249 / v9.0.250)
 router.get('/daily-logs/stats', authorizePermission('daily_logs.view'), asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError('احراز هویت انجام نشده است');

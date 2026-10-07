@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ATTACHMENT_BODY_LIMIT, MAX_ATTACHMENT_FILE_MB, acceptsAttachmentBody } from '../../lib/attachments/attachmentBodyLimit';
 
-// v9.0.243 (TD-641, finding B13-16): only the save routes of records with attachments take the larger body
+// v9.0.255 (TD-641, finding B13-16): only the save routes of records with attachments take the larger body
 describe('attachment body limit routes', () => {
   it('accepts the larger body only on save routes of records with attachments', () => {
     expect(acceptsAttachmentBody('POST', '/api/documents')).toBe(true);

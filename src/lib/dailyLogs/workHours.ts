@@ -1,5 +1,5 @@
 /**
- * v9.0.247 (TD-634, finding B13-09, product-owner decision ت۵ الف): the one work-hours rule of a daily log, shared by
+ * v9.0.259 (TD-634, finding B13-09, product-owner decision ت۵ الف): the one work-hours rule of a daily log, shared by
  * the server and the form. A time is «HH:MM» from 00:00 to 23:59 (Persian digits read), the end must be after the
  * start (an overnight shift is refused, never counted as the next day), and the hours are rounded to two decimals.
  * An invalid time is refused instead of being stored as 8 hours.

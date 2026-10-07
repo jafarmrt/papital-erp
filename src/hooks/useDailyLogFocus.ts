@@ -13,7 +13,7 @@ const withoutId = (prev: URLSearchParams) => {
 };
 
 /**
- * v9.0.251 (TD-645, finding B13-20): the link `/daily-logs?id=N` of a mention or review notification, the dashboard
+ * v9.0.263 (TD-645, finding B13-20): the link `/daily-logs?id=N` of a mention or review notification, the dashboard
  * widget and the calendar opens that one log, read with `GET /daily-logs/:id` (the same visibility rule as the list),
  * whatever page of the list it is on; closing it removes `id` from the address.
  */

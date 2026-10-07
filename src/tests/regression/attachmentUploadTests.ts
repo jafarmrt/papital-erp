@@ -16,19 +16,19 @@ export async function runAttachmentUploadTests(shouldRun: ShouldRun): Promise<Te
   const results: TestCaseResult[] = [];
   const cases: Array<[string, string, string[], (ctx: DailyLogTestCtx) => Promise<string>]> = [
     ['reg_attachment_stream_error_no_crash_td_627',
-      'v9.0.242: an attachment file that cannot be read answers 404 and raises no uncaught exception that would stop the server (TD-627)',
+      'v9.0.254: an attachment file that cannot be read answers 404 and raises no uncaught exception that would stop the server (TD-627)',
       ['td627', 'attachment', 'package13'], streamErrorCase],
     ['reg_attachment_body_limit_413_persian_td_641',
-      'v9.0.243: routes with attachments accept a body up to 14 MB, other routes refuse more than 5 MB with a Persian 413 (TD-641)',
+      'v9.0.255: routes with attachments accept a body up to 14 MB, other routes refuse more than 5 MB with a Persian 413 (TD-641)',
       ['td641', 'attachment', 'body_limit', 'package13'], bodyLimitCase],
     ['reg_image_upload_validation_422_td_642',
-      'v9.0.244: an invalid image data URL is a Persian 422 and is never stored as it is (TD-642)',
+      'v9.0.256: an invalid image data URL is a Persian 422 and is never stored as it is (TD-642)',
       ['td642', 'attachment', 'image', 'package13'], imageValidationCase],
     ['reg_orphan_cleanup_min_age_floor_td_643',
-      'v9.0.245: the orphan attachment cleanup never removes files younger than 5 minutes (TD-643)',
+      'v9.0.257: the orphan attachment cleanup never removes files younger than 5 minutes (TD-643)',
       ['td643', 'attachment', 'cleanup', 'package13'], orphanFloorCase],
     ['reg_daily_log_length_caps_td_644',
-      'v9.0.246: a daily log\'s title, content and tags have length caps (TD-644)',
+      'v9.0.258: a daily log\'s title, content and tags have length caps (TD-644)',
       ['td644', 'daily_log', 'validation', 'package13'], lengthCapsCase],
   ];
   for (const [id, name, tags, run] of cases) {
