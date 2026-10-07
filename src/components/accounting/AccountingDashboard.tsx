@@ -10,6 +10,13 @@ interface AccountingDashboardProps {
   onOpenNewVoucher: () => void;
   onOpenNewTreasury: () => void;
   onOpenNewCheque: () => void;
+  /**
+   * v9.0.228 (TD-567، B03-25): هر دکمه سرآیند فقط برای دارنده کلید API خودش (سند `accounting.vouchers`، دریافت و پرداخت
+   * `accounting.treasury`، چک `accounting.cheques`)؛ پیش‌تر خزانه‌دار فرم کامل سند را باز می‌کرد و ذخیره ۴۰۳ می‌شد
+   */
+  canRecordVoucher: boolean;
+  canRecordTreasury: boolean;
+  canRecordCheque: boolean;
 }
 
 export function AccountingDashboard({
@@ -20,6 +27,9 @@ export function AccountingDashboard({
   onOpenNewVoucher,
   onOpenNewTreasury,
   onOpenNewCheque,
+  canRecordVoucher,
+  canRecordTreasury,
+  canRecordCheque,
 }: AccountingDashboardProps) {
   const isNetProfitPositive = (stats?.netProfit || 0) >= 0;
   const safeRecentVouchers = Array.isArray(recentVouchers) ? recentVouchers : [];
@@ -40,27 +50,33 @@ export function AccountingDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={onOpenNewVoucher}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-emerald-900/30"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>ثبت سند دوبل جدید</span>
-          </button>
-          <button
-            onClick={onOpenNewTreasury}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-blue-900/30"
-          >
-            <ArrowDownLeft className="w-4 h-4" />
-            <span>دریافت / پرداخت نقد و بانک</span>
-          </button>
-          <button
-            onClick={onOpenNewCheque}
-            className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-amber-900/30"
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>ثبت چک جدید</span>
-          </button>
+          {canRecordVoucher && (
+            <button
+              onClick={onOpenNewVoucher}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-emerald-900/30"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>ثبت سند دوبل جدید</span>
+            </button>
+          )}
+          {canRecordTreasury && (
+            <button
+              onClick={onOpenNewTreasury}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-blue-900/30"
+            >
+              <ArrowDownLeft className="w-4 h-4" />
+              <span>دریافت / پرداخت نقد و بانک</span>
+            </button>
+          )}
+          {canRecordCheque && (
+            <button
+              onClick={onOpenNewCheque}
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-amber-900/30"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>ثبت چک جدید</span>
+            </button>
+          )}
         </div>
       </div>
 

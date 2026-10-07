@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { User } from '../types';
 import { fetchJson, setAuthToken, setCsrfToken } from '../api';
 import { queryClient } from '../lib/queryClient';
+import { isSystemAdminViewer } from '../lib/permissions/pageAccess';
 
 export interface UserPermissions {
   permissions: string[];
@@ -179,4 +180,14 @@ export function useHasPermission(permission: string): boolean {
   const ctx = useContext(AuthContext);
   if (!ctx) return false;
   return ctx.userPermissions.isAdmin || (Array.isArray(ctx.userPermissions.permissions) && ctx.userPermissions.permissions.includes(permission));
+}
+
+/**
+ * v9.0.228 (TD-567، B03-25): آیا کاربر جاری مدیر سیستم است (همان گارد `requireSystemAdmin`)؛ بیرون از AuthProvider false.
+ * فقط برای نمایش دکمه‌های نگهداری سیستم است؛ سرور خودش می‌سنجد.
+ */
+export function useIsSystemAdmin(): boolean {
+  const ctx = useContext(AuthContext);
+  if (!ctx) return false;
+  return isSystemAdminViewer({ isAdmin: ctx.userPermissions.isAdmin, role: ctx.user?.role });
 }

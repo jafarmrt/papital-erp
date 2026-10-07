@@ -19,6 +19,21 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.229 — Party Statement Print Follows the Data
+- **Party Statement Print (P2):** the header and final balance read the range and currency from the response, a filter change reloads, and «this month» / «this year» start on the Jalali month and year (TD-572).
+
+### v9.0.228 — Accounting Buttons Only for Their Key Holders
+- **Accounting Buttons (P2):** the dashboard voucher, treasury and cheque buttons, the year-closing execute button and the chart-of-accounts seed button show only for holders of their API key (TD-567).
+
+### v9.0.227 — Journal Book Paged
+- **Journal Book (P3):** one page of rows per request, sent once; row numbers and the running balance continue from the start of the range and totals cover the whole range (TD-561).
+
+### v9.0.226 — Party Statement Counts Only the Party's Own Rows
+- **Party Statement (P1):** rows belong to a party only by its own detailed type and id, or legacy rows without an id under its exact name; never another table's id or a longer name (TD-548).
+
+### v9.0.225 — Ledger Reports Only for Accounting Keys
+- **Accounting Reports (P1):** the account card, ledger, party statement and party list need `accounting.reports` or `accounting.view`; a card with no account or party and a statement with no party are 422 (TD-547, decision ت۵).
+
 ### v9.0.224 — Users, Roles and Audit Screens in Plain Persian
 - **Users, Roles and Audit Screens in Plain Persian:** the users, roles, audit log, login, setup and profile screens and the permission list drop English words and transliterations, show counts in Persian digits and name roles instead of showing their codes (TD-540).
 

@@ -1,5 +1,6 @@
 import { BookOpen } from 'lucide-react';
 import { formatPersianPrice, formatPersianNumber, formatPersianDate, formatCurrencyLabel } from '../../../utils';
+import { journalBookPageCount, type JournalBookReport } from '../../../lib/accounting/journalBook';
 
 /** v9.0.190 (TD-551): ردیف ارزی در نمای همه ارزها به ریال می‌آید و مبلغ خودش با نرخ زیر آن دیده می‌شود */
 function OriginalAmount({ amount, currency, rate }: { amount?: number; currency?: string; rate?: number }) {
@@ -13,14 +14,51 @@ function OriginalAmount({ amount, currency, rate }: { amount?: number; currency?
 
 interface JournalBookViewProps {
   journalLoading: boolean;
-  journalBookData: any;
+  journalBookData: JournalBookReport | null;
   onFetchJournalBook: () => void;
+  /** v9.0.227 (TD-561): رفتن به صفحه دیگر همان بازه */
+  onPageChange: (page: number) => void;
+}
+
+/** v9.0.227 (TD-561): صفحه‌بندی دفتر روزنامه؛ جمع‌های پانویس همه بازه را می‌گیرند */
+function JournalBookPager({ report, loading, onPageChange }: { report: JournalBookReport; loading: boolean; onPageChange: (page: number) => void }) {
+  const pages = journalBookPageCount(report);
+  const page = report.page || 1;
+  const first = report.total === 0 ? 0 : (page - 1) * report.limit + 1;
+  const last = Math.min(report.total, page * report.limit);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 no-print">
+      <span>
+        ردیف {formatPersianNumber(first)} تا {formatPersianNumber(last)} از {formatPersianNumber(report.total)} ردیف
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={loading || page <= 1}
+          className="px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-600 disabled:opacity-40"
+        >
+          صفحه قبل
+        </button>
+        <span>صفحه {formatPersianNumber(page)} از {formatPersianNumber(pages)}</span>
+        <button
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={loading || page >= pages}
+          className="px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-600 disabled:opacity-40"
+        >
+          صفحه بعد
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function JournalBookView({
   journalLoading,
   journalBookData,
-  onFetchJournalBook
+  onFetchJournalBook,
+  onPageChange,
 }: JournalBookViewProps) {
   return (
     <div className="space-y-4">
@@ -75,7 +113,7 @@ export function JournalBookView({
                   <td colSpan={9} className="text-center py-12 text-slate-400">سندی در این بازه ثبت نشده است</td>
                 </tr>
               ) : (
-                journalBookData.items.map((item: any) => (
+                journalBookData.items.map((item) => (
                   <tr key={`${item.voucherId}-${item.rowNumber}`} className="hover:bg-slate-50/70 dark:hover:bg-slate-750">
                     <td className="py-2 px-3 text-center border-l border-slate-200 dark:border-slate-700 font-mono text-slate-400">
                       {formatPersianNumber(item.rowNumber)}
@@ -117,7 +155,7 @@ export function JournalBookView({
               <tfoot>
                 <tr className="bg-slate-100 dark:bg-slate-700/80 font-black text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-600">
                   <td colSpan={6} className="py-3 px-4 text-center border-l border-slate-300 dark:border-slate-600">
-                    جمع کل دفتر روزنامه ({formatPersianNumber(journalBookData.vouchersCount)} سند)
+                    جمع کل دفتر روزنامه در بازه ({formatPersianNumber(journalBookData.vouchersCount)} سند)
                   </td>
                   <td className="py-3 px-3 text-left border-l border-slate-300 dark:border-slate-600 font-mono text-emerald-700 dark:text-emerald-300">
                     {formatPersianPrice(journalBookData.totalDebit)}
@@ -133,6 +171,9 @@ export function JournalBookView({
             )}
           </table>
         </div>
+        {journalBookData && journalBookData.total > 0 && (
+          <JournalBookPager report={journalBookData} loading={journalLoading} onPageChange={onPageChange} />
+        )}
       </div>
     </div>
   );

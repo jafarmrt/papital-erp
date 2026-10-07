@@ -50,11 +50,11 @@ const SETTINGS_PAGE_KEYS = [...new Set(Object.values(SETTINGS_TAB_ACCESS).flatMa
 
 const ACCOUNTING_TABS = {
   '/accounting/dashboard': { gate: anyOf('accounting.view'), api: ['GET /api/accounting/summary'] },
-  '/accounting/explorer': { gate: anyOf('accounting.reports'), api: ['GET /api/accounting/accounts/tree'] },
+  '/accounting/explorer': { gate: anyOf('accounting.reports'), api: ['GET /api/accounting/accounts/tree', 'GET /api/accounting/reports/ledger'] },
   '/accounting/vouchers': { gate: anyOf('accounting.vouchers'), api: ['GET /api/accounting/vouchers'] },
   '/accounting/treasury': { gate: anyOf('accounting.treasury'), api: ['GET /api/accounting/treasury', 'GET /api/accounting/bank-accounts'] },
   '/accounting/cheques': { gate: anyOf('accounting.cheques'), api: ['GET /api/accounting/cheques'] },
-  '/accounting/reports': { gate: anyOf('accounting.reports'), api: ['GET /api/accounting/reports/trial-balance'] },
+  '/accounting/reports': { gate: anyOf('accounting.reports'), api: ['GET /api/accounting/reports/trial-balance', 'GET /api/accounting/reports/party-ledger', 'GET /api/accounting/reports/parties', 'GET /api/accounting/reports/journal-book'] },
   '/accounting/fiscal-closing': { gate: anyOf('accounting.vouchers'), api: ['GET /api/accounting/fiscal-closing/preview'] },
 } as const satisfies Record<string, PageAccessRule>;
 

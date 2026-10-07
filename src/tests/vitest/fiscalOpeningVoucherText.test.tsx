@@ -13,7 +13,8 @@ vi.mock('../../api', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: toastFn, toast: toastFn, Toaster: () => null }));
 vi.mock('../../components/ConfirmDialogHost', () => ({ confirmAction: vi.fn() }));
-vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: () => false }));
+// v9.0.228 (TD-567): the execute button shows only for holders of accounting.fiscal_close
+vi.mock('../../contexts/AuthContext', () => ({ useHasPermission: (key: string) => key === 'accounting.fiscal_close' }));
 
 import { FiscalYearClosingTab } from '../../components/accounting/FiscalYearClosingTab';
 
