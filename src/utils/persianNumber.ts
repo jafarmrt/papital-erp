@@ -26,6 +26,11 @@ export function toPersianDigits(val: string | number | null | undefined, maxDeci
   }
 }
 
+/** v9.0.227 (TD-678): فقط ارقام لاتین را فارسی می‌کند، بی تبدیل دوباره به عدد و بی گرد کردن متنی که قالب گرفته است */
+function persianDigitsOf(formatted: string): string {
+  return formatted.replace(/[0-9]/g, (w) => '۰۱۲۳۴۵۶۷۸۹'[Number(w)]);
+}
+
 export function toEnglishDigits(str: string | number | null | undefined): string {
   if (str === null || str === undefined || typeof str === 'object') return '';
   const faDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -74,7 +79,7 @@ export function formatPersianPrice(num: number | string | null | undefined, curr
       maximumFractionDigits: effDecimals,
       minimumFractionDigits: 0
     });
-    const persianVal = toPersianDigits(formatted);
+    const persianVal = persianDigitsOf(formatted);
     return currency ? `${persianVal} ${formatCurrencyLabel(currency)}` : persianVal;
   } catch {
     const zero = '۰';
@@ -91,7 +96,7 @@ export function formatPersianNumber(val: number | string | null | undefined, max
       maximumFractionDigits: maxDecimals,
       minimumFractionDigits: 0
     });
-    return toPersianDigits(formatted);
+    return persianDigitsOf(formatted);
   }
   
   try {
@@ -110,7 +115,7 @@ export function formatPersianNumber(val: number | string | null | undefined, max
         maximumFractionDigits: maxDecimals,
         minimumFractionDigits: 0
       });
-      return toPersianDigits(formatted);
+      return persianDigitsOf(formatted);
     }
 
     return toPersianDigits(rawStr);

@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.227 — v9.0.227 — Numbers Below 1,000 Keep Their Decimals
+- **Number formatting (TD-678):** `formatPersianNumber` and `formatPersianPrice` no longer re-round their formatted text to two decimals below 1,000, so four-decimal quantities and work hours (`numeric(18,4)`) show in full on payslips and work logs.
+
 ### v9.0.226 — v9.0.226 — Amount Input Keeps Decimals and Persian Separators
 - **Amount input (TD-665, TD-666):** the shared amount field keeps the typed text until editing ends, so «12.5» dollars is no longer stored as 125, allows the currency's decimals only (rial none, foreign two), reads the Persian «٫» and «٬», spaces and a copied currency label, and keeps the previous amount with a message instead of zeroing it on a stray character; the shared number parsers use the server's `normalizeDecimalString`.
 
