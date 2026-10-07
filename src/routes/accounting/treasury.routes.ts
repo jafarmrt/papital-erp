@@ -227,24 +227,14 @@ router.post('/accounting/treasury/transfer', authorizePermission('accounting.tre
 
 router.post('/accounting/treasury/reconcile', authorizePermission('accounting.treasury'), validate(reconcileSchema), asyncHandler(async (req, res) => {
   const { bankAccountId, txIds, batch, reconciled } = req.body;
+  // v9.0.103 (TD-511): ممیزی فقط ردیف‌های تغییرکرده، درون همان تراکنش
   const result = await AccountingService.reconcileTransactions({
     bankAccountId,
     txIds,
     batch: batch || `stmt-${Date.now()}`,
     reconciled,
-    userId: req.user?.id,
-    username: req.user?.fullName || req.user?.username,
-  });
-  await logActivity({
-    userId: req.user?.id,
-    username: req.user?.username || 'system',
-    userFullName: req.user?.fullName || '',
-    action: reconciled ? 'UPDATE' : 'UPDATE',
-    entity: 'treasury_reconciliation',
-    entityId: String(bankAccountId),
-    description: `${reconciled ? 'آشتی‌سنجی' : 'لغو آشتی‌سنجی'} ${txIds.length} تراکنش حساب بانکی شناسه ${bankAccountId}`,
-    details: { bankAccountId, txIds, batch, reconciled },
-    ipAddress: req.ip || '',
+    req,
+    userFullName: req.user?.fullName,
   });
   res.json(result);
 }));

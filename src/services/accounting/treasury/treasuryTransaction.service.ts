@@ -18,6 +18,7 @@ import { NotFoundError, ValidationError, ConflictError, BusinessLogicError } fro
 import { businessTodayIsoDate } from '../../../lib/businessClock.js';
 import { AttachmentStorageService } from '../../attachments/attachmentStorage.service.js';
 import { resolveTreasuryWriteDate } from './treasuryDate.js';
+import { reconcileTreasuryRows, type ReconcileParams, type ReconcileResult } from './bankReconciliation.js';
 import { listTreasuryTransactions, pageTreasuryTransactions, type TreasuryListFilters, type TreasuryTransactionPage } from './treasuryTransactionList.js';
 
 /**
@@ -783,49 +784,10 @@ export class TreasuryTransactionService {
 
   /**
    * V1.6.0: آشتی‌سنجی بانکی — علامت‌گذاری گروهی تراکنش‌های تطبیق‌یافته با صورت‌حساب بانک
-   * (matching سمت کلاینت انجام می‌شود؛ این متد فقط ثبت وضعیت گروهی اتمیک است)
+   * (matching سمت کلاینت انجام می‌شود). v9.0.103 (TD-511): قواعد و ممیزی در `reconcileTreasuryRows`.
    */
-  static async reconcileTransactions(params: {
-    bankAccountId: number;
-    txIds: number[];
-    batch: string;
-    reconciled: boolean;
-    userId?: number;
-    username?: string;
-  }): Promise<{ success: boolean; updated: number }> {
-    if (!params.txIds.length) return { success: true, updated: 0 };
-
-    return await orm.transaction(async (txEngine) => {
-      const rows = await txEngine.select().from(treasuryTransactions)
-        .where(and(
-          inArray(treasuryTransactions.id, params.txIds),
-          eq(treasuryTransactions.bankAccountId, params.bankAccountId),
-          eq(treasuryTransactions.isDeleted, 0)
-        ))
-        .for('update');
-
-      const nowIso = await businessTodayIsoDate();
-
-      // P2-05: گارد ممانعت از ثبت مجدد تراکنش‌های قبلاً تطبیق‌یافته در سرور
-      if (params.reconciled) {
-        const alreadyReconciledRow = rows.find(r => r.reconciled === 1);
-        if (alreadyReconciledRow) {
-          throw new BusinessLogicError(
-            `تراکنش شماره «${alreadyReconciledRow.transactionNumber}» قبلاً در دسته «${alreadyReconciledRow.reconciledBatch || 'نامشخص'}» تطبیق داده شده است و امکان تطبیق مجدد ندارد.`
-          );
-        }
-      }
-
-      for (const row of rows) {
-        await txEngine.update(treasuryTransactions).set({
-          reconciled: params.reconciled ? 1 : 0,
-          reconciledAt: params.reconciled ? nowIso : '',
-          reconciledBatch: params.reconciled ? (params.batch || '') : '',
-        }).where(eq(treasuryTransactions.id, row.id));
-      }
-
-      return { success: true, updated: rows.length };
-    });
+  static async reconcileTransactions(params: ReconcileParams): Promise<ReconcileResult> {
+    return reconcileTreasuryRows(params);
   }
 }
 

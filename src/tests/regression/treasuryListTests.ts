@@ -1,8 +1,8 @@
 import request from 'supertest';
 import pg from 'pg';
-import { and, eq, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { bankAccounts, cheques, journalVoucherItems, journalVouchers, treasuryTransactions } from '../../db/schema.js';
+import { activityLogs, bankAccounts, cheques, journalVoucherItems, journalVouchers, treasuryTransactions } from '../../db/schema.js';
 import { fin } from '../../lib/financialDecimal.js';
 import { money } from '../../lib/money.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
@@ -181,6 +181,59 @@ export async function runTreasuryListTests(shouldRun: ShouldRun): Promise<TestCa
     });
   }
 
-  void errorCode;
+  const reconcileId = 'reg_treasury_reconcile_rows_td_511';
+  if (shouldRun(reconcileId, 'td511', 'treasury', 'reconcile', 'package4')) {
+    await runCase(results, reconcileId, 'v9.0.103: bank reconciliation refuses a row of another bank or a voided row with 422 and the list, audits only the rows it changed and stamps reconciled_at with the server UTC time (TD-511)', async () => {
+      const admin = await adminClient();
+      const problems: string[] = [];
+      const contra = await accountId('4101');
+      const bankA = await createBank('Reconcile bank A');
+      const bankB = await createBank('Reconcile bank B');
+      const post = async (bankAccountId: number, amount: number) => {
+        const res = await admin.post('/api/accounting/treasury', { type: 'receipt', method: 'bank_transfer', bankAccountId, partyType: 'other', contraAccountId: contra, amount, partyName: `Statement row ${tagOf()}` });
+        if (res.status !== 201) throw new Error(`receipt ${amount} returned ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
+        return Number(res.body.id);
+      };
+      const a1 = await post(bankA.id, 400_000);
+      const a2 = await post(bankA.id, 250_000);
+      const a3 = await post(bankA.id, 90_000);
+      const b1 = await post(bankB.id, 600_000);
+      const voided = await admin.post(`/api/accounting/treasury/${a2}/void`, { reason: 'Entered twice' });
+      if (voided.status !== 200) throw new Error(`void returned ${voided.status}: ${JSON.stringify(voided.body).slice(0, 200)}`);
+      const state = async () => orm.select({ id: treasuryTransactions.id, reconciled: treasuryTransactions.reconciled, reconciledAt: treasuryTransactions.reconciledAt })
+        .from(treasuryTransactions).where(inArray(treasuryTransactions.id, [a1, a2, a3, b1]));
+      const lastAudit = async () => (await orm.select({ details: activityLogs.details }).from(activityLogs)
+        .where(and(eq(activityLogs.entity, 'treasury_reconciliation'), eq(activityLogs.entityId, String(bankA.id))))
+        .orderBy(desc(activityLogs.id)).limit(1))[0]?.details as { changedIds?: number[]; txIds?: number[] } | undefined;
+
+      // bank A row, bank B row and the voided bank A row: before, 200 {"updated": 2} and the voided row became reconciled
+      const mixed = await admin.post('/api/accounting/treasury/reconcile', { bankAccountId: bankA.id, txIds: [a1, b1, a2], batch: 'stmt-mixed', reconciled: true });
+      if (mixed.status !== 422 || errorCode(mixed) !== 'TREASURY_RECONCILE_ROWS_INVALID') {
+        problems.push(`mixed ids returned ${mixed.status} ${errorCode(mixed)} ${JSON.stringify(mixed.body).slice(0, 160)}, expected 422 TREASURY_RECONCILE_ROWS_INVALID`);
+      } else {
+        const refused = (mixed.body?.details?.refused ?? []) as Array<{ id: number }>;
+        if (JSON.stringify(refused.map(r => r.id).sort((x, y) => x - y)) !== JSON.stringify([a2, b1].sort((x, y) => x - y))) problems.push(`refused ids ${JSON.stringify(refused)}, expected ${a2} and ${b1}`);
+      }
+      const untouched = (await state()).filter(r => r.reconciled === 1);
+      if (untouched.length > 0) problems.push(`after the refused request rows ${JSON.stringify(untouched.map(r => r.id))} are reconciled, expected none`);
+
+      // a1 and a3 reconciled: both change, reconciled_at is a UTC timestamp, the audit lists both
+      const ok = await admin.post('/api/accounting/treasury/reconcile', { bankAccountId: bankA.id, txIds: [a1, a3], batch: 'stmt-ok', reconciled: true });
+      if (ok.status !== 200 || ok.body?.updated !== 2) problems.push(`reconcile a1,a3 returned ${ok.status} updated ${ok.body?.updated}, expected 200 / 2`);
+      for (const r of (await state()).filter(x => x.id === a1 || x.id === a3)) {
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(String(r.reconciledAt ?? ''))) problems.push(`row ${r.id} reconciled_at «${r.reconciledAt}», expected a UTC timestamp (before: the business date only)`);
+      }
+      // undo a1, then undo a1 and a3: only a3 still changes, and the audit names only a3
+      const undo = await admin.post('/api/accounting/treasury/reconcile', { bankAccountId: bankA.id, txIds: [a1], batch: '', reconciled: false });
+      if (undo.status !== 200 || undo.body?.updated !== 1) problems.push(`undo a1 returned ${undo.status} updated ${undo.body?.updated}, expected 200 / 1`);
+      const undoAgain = await admin.post('/api/accounting/treasury/reconcile', { bankAccountId: bankA.id, txIds: [a1, a3], batch: '', reconciled: false });
+      const audit = await lastAudit();
+      if (undoAgain.status !== 200 || undoAgain.body?.updated !== 1) problems.push(`undo a1,a3 returned ${undoAgain.status} updated ${undoAgain.body?.updated}, expected 200 / 1 (a1 was already undone)`);
+      if (JSON.stringify(audit?.changedIds) !== JSON.stringify([a3])) problems.push(`last audit ${JSON.stringify(audit).slice(0, 200)}, expected changedIds [${a3}] (before: every id sent)`);
+      assertNoProblems(problems);
+      return `refused [${a2}, ${b1}] with ${errorCode(mixed)}; audit changedIds ${JSON.stringify(audit?.changedIds)}`;
+    });
+  }
+
   return results;
 }
