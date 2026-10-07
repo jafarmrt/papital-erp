@@ -48,7 +48,6 @@
 | TD-579 | حسابداری (بسته ۳) | P3 (B03-37) — واژه بیگانه در رابط حسابداری («داشبورد»، «دوبل»، «آرتیکل»، «ورکفلو»، «مپینگ»، «اتوماتیک»، «سوییچ»، «چارت»، «کیبورد»، «ERP»، ۲۳ واژه انگلیسی، «جستجو»)، کلید خام «(accounting.reports)» و دکمه «ثبت قطعی سند» برای ذخیره پیش‌نویس | AccountingPage.tsx، NewVoucherModal.tsx، components/accounting/** | open (P3) |
 | TD-580 | حسابداری (بسته ۳) | P3 (B03-38) — رقم لاتین و `%` در متن فارسی («25.0%»، «#11»)، کد ISO ارز، «ریال» پیش‌فرض برای صورت‌حساب ارزی، و `new Date()` / `toISOString()` به جای `getTodayJalaliDate` (TD-312) | IncomeStatementView.tsx، JournalBookView.tsx، VoucherPrintModal.tsx، FinancialRatiosView.tsx، PartyLedgerReportView.tsx، AccountExplorerTab.tsx | open (P3) |
 | TD-594 | زیرساخت (بسته ۱)؛ رفع در بسته ۱۶ | P2 (B01-14) — در تولید، پاسخ خطا `details` را دور می‌ریزد؛ کادر «تحویل بیش از برنامه» فهرست کالاها را نمی‌گیرد؛ پیام خطای قالب بدنه انگلیسی است: همان ۴۲۲ با `NODE_ENV=test` فهرست `overDeliveries` دارد و با `production` `details=undefined`؛ JSON ناقص ← ۴۰۰ `"Unexpected end of JSON input"` با کد `INTERNAL_ERROR`؛ بدنه ۶ مگابایتی ← ۴۱۳ `"request entity too large"` | middleware/logger.ts، customErrors.ts | open (P2، با PR د بسته ۱۶) |
-| TD-667 | پوسته و تنظیمات (بسته ۱۶) | P2 (B16-03) — «واحد پول اصلی» فقط برچسب مبالغ ریالی را عوض می‌کند: ارزش انبار ۲۵٬۰۰۰٬۰۰۰ ریال با تنظیم TOMAN «۲۵,۰۰۰,۰۰۰ TOMAN» (درست ۲٬۵۰۰٬۰۰۰ تومان) و با USD «۲۵,۰۰۰,۰۰۰ دلار» نمایش داده می‌شود (حدود ۳۰ مؤلفه)؛ سرور `currency=«ریال؟»` را با ۲۰۰ ذخیره کرد | GeneralSettingsTab.tsx، useAppCurrency.ts، formatters.ts | open (P2، تصمیم ت۱ الف) |
 | TD-670 | پوسته (بسته ۱۶) | P2 (B16-06) — تکرار خودکار درخواست تغییردهنده پس از قطع ارتباط، روی routeهای بی idempotency ثبت تکراری یا خطای کاذب می‌سازد: `fetchJson` پس از `TypeError('Failed to fetch')` همان `POST /crm/activities` را با همان کلید دوباره فرستاد؛ روی سرور واقعی `POST /crm/activities` ← ۲۰۱، ۲۰۱ و ۲ ردیف، `POST /customers` ← ۲۰۰ و سپس ۴۰۰ «طرف حساب با این نام قبلاً ثبت شده است.»؛ فقط ۲۵ route کلید idempotency را می‌خوانند | api.ts | open (P2، تصمیم ت۳ الف) |
 | TD-671 | پیشخوان (بسته ۱۶) | P2 (B16-07) — شاخص‌های داشبورد انبار نادرست شمرده می‌شوند: ردیف معکوس ابطال «مصرف» شمرده می‌شود (رسید ابطال‌شده «رسید اشتباه: ۱۰۰» نفر اول «کالاهای تند گردش / پرمصرف» شد و از «راکد» بیرون رفت)؛ «گردش اسناد (۷ روز اخیر): N سند» ردیف کاردکس می‌شمارد (سه سند ← ۵ و پس از ابطال یکی باز ۵)؛ بازه از `current_date` پایگاه‌داده (UTC) است، نه `businessClock` | dashboard.routes.ts | open (P2) |
 | TD-672 | پوسته و تنظیمات (بسته ۱۶) | P2 (B16-08) — مقدار تنظیمات اعتبارسنجی نمی‌شود؛ خالی کردن یک کادر داشبورد انبار را برای همه می‌شکند: `fast_moving_days` = `""` یا `"abc"` ← `POST /settings` ۲۰۰ و `GET /dashboard-bi-stats` ۵۰۰ (`params: NaN`)؛ `"-30"` ← «کمتر از ۳۰- روز» و فهرست خالی؛ `currency` هر رشته‌ای را می‌پذیرد | systemSettings.service.ts، dashboard.routes.ts، GeneralSettingsTab.tsx، useSettings.ts | open (P2، تصمیم ت۴ الف) |
@@ -112,8 +111,8 @@
 
 ## 📊 آمار رجیستری
 
-- **فعال:** ۹۱ ردیف
-- **آرشیو شده (resolved):** ۶۰۲ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
+- **فعال:** ۹۰ ردیف
+- **آرشیو شده (resolved):** ۶۰۳ ردیف — تاریخچه کامل در `TECH_DEBT_ARCHIVE.md`
 - مبنای آمار و IDs یکتا: هر دو فایل مجموعاً فضای ID مشترک دارند؛ IDs جدید باید
   از بزرگ‌ترین ID موجود در **هر دو** فایل + ۱ انتخاب شود.
 

@@ -1,12 +1,19 @@
+import { useMemo } from 'react';
 import { useSettingsQuery, SettingItem } from './queries/useSettingsQueries';
+import { normalizeRialDisplayUnit, rialDisplayOf, type RialDisplay, type RialDisplayUnit } from '../lib/rialDisplay';
 
 /**
- * V9 Phase 3: ارز پیش‌فرض سامانه از تنظیمات (appSettings.currency).
- * برای نمایش‌هایی که رکورد فیلد currency اختصاصی ندارد (مانند نرخ‌های پرکیسی
- * و ارزش‌گذاری انبار) استفاده می‌شود تا برچسب ارز هرگز هاردکد نشود.
+ * v9.0.249 (TD-667، تصمیم ت۱): تنظیم `currency` واحد نمایش مبالغ ریالی است، ریال یا تومان، نه ارز سند.
+ * مبلغی که ارز خود را دارد با همان ارز نشان داده می‌شود؛ مبلغ ریالی (ارزش انبار، حقوق، مانده‌ها)
+ * با `useRialDisplay()` در واحد نمایش و با برچسب درست آن.
  */
-export function useAppCurrency(): string {
+export function useAppCurrency(): RialDisplayUnit {
   const { data } = useSettingsQuery();
   const items = Array.isArray(data) ? data : ([] as SettingItem[]);
-  return items.find((s: SettingItem) => s?.key === 'currency')?.value || 'IRR';
+  return normalizeRialDisplayUnit(items.find((s: SettingItem) => s?.key === 'currency')?.value);
+}
+
+export function useRialDisplay(): RialDisplay {
+  const unit = useAppCurrency();
+  return useMemo(() => rialDisplayOf(unit), [unit]);
 }

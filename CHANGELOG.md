@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.249 — v9.0.249 — Currency Setting Is the Rial Display Unit
+- **Rial display unit (TD-667):** the currency setting is now only the display unit of rial amounts, rial or toman (toman = rial ÷ 10); a record with its own foreign currency keeps it, and amount inputs and Excel exports stay in rial.
+
 ### v9.0.248 — v9.0.248 — National ID Is Exactly Ten Digits
 - **National ID (TD-673):** a personnel national ID must be exactly ten digits with a valid check digit; forms and the server never zero-pad a short one (422 `NATIONAL_ID_INVALID`), and only the Excel import pads 8 or 9 digits, which Excel drops, and lists those rows for review.
 

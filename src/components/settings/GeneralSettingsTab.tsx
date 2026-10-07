@@ -1,6 +1,7 @@
 import { Building2, List, Download, Database, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { compressTo300KB } from '../../utils/imageCompression';
+import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../../lib/rialDisplay';
 
 const TIMEZONE_OPTIONS = [
   'Asia/Tehran',
@@ -100,17 +101,13 @@ export function GeneralSettingsTab({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700">واحد پول اصلی فاکتورها</label>
+            <label className="block text-sm font-medium mb-1 text-slate-700">واحد نمایش مبالغ ریالی</label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 bg-white border-slate-300 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none"
             >
-              <option value="IRR">ریال (IRR)</option>
-              <option value="TOMAN">تومان (Toman)</option>
-              <option value="USD">دلار ($)</option>
-              <option value="EUR">یورو (€)</option>
-              <option value="AED">درهم (AED)</option>
+              {RIAL_DISPLAY_UNITS.map(unit => <option key={unit} value={unit}>{RIAL_DISPLAY_UNIT_LABELS[unit]}</option>)}
             </select>
           </div>
           <div>

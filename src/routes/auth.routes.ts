@@ -25,6 +25,7 @@ import { SYSTEM_ADMIN_ROLE } from '../lib/permissions/permissionCatalog.js';
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT_MESSAGE } from '../lib/auth/passwordPolicy.js';
 import { FULL_NAME_MAX_LENGTH, FULL_NAME_TOO_LONG_MESSAGE } from '../lib/users/profileFields.js';
 import { roleDisplayName } from '../lib/users/roleDisplayName.js';
+import { normalizeRialDisplayUnit } from '../lib/rialDisplay.js';
 
 const router = Router();
 
@@ -85,7 +86,7 @@ router.get('/public-settings', asyncHandler(async (req, res) => {
   const rawName = settings.find(s => s.key === 'company_name')?.value || '';
   const name = (rawName === 'سامانه انبارداری' || rawName === 'سامانه انبار پاپیتال') ? 'سامانه جامع ERP پاپیتال' : (rawName || 'سامانه جامع ERP پاپیتال');
   const logo = settings.find(s => s.key === 'company_logo')?.value || '';
-  const currency = settings.find(s => s.key === 'currency')?.value || 'IRR';
+  const currency = normalizeRialDisplayUnit(settings.find(s => s.key === 'currency')?.value);
 
   res.json({
     companyName: name,
@@ -105,7 +106,8 @@ const setupSchema = z.object({
     phone: z.string().optional().default(''),
     address: z.string().optional().default(''),
     logo: z.string().optional().default(''),
-    currency: z.string().optional().default('IRR'),
+    // v9.0.249 (TD-667، تصمیم ت۱): واحد نمایش مبالغ ریالی، فقط ریال یا تومان
+    currency: z.enum(['IRR', 'TOMAN'], { message: 'واحد نمایش مبالغ فقط «ریال» یا «تومان» است' }).optional().default('IRR'),
     setupToken: z.string().optional(),
   })
 });

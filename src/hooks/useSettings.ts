@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchJson } from '../api';
 import { toast } from 'react-hot-toast';
+import { normalizeRialDisplayUnit } from '../lib/rialDisplay';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset } from '../constants/presets';
 import { DEFAULT_INVENTORY_CONTROL_SECTIONS, InventoryControlPresetSection } from '../constants/inventoryControlPresets';
 import {
@@ -140,7 +141,7 @@ export function useSettings() {
     if (compLogo) setCompanyLogo(compLogo.value);
 
     const curr = data.find((s) => s.key === 'currency');
-    if (curr) setCurrency(curr.value);
+    if (curr) setCurrency(normalizeRialDisplayUnit(curr.value));
 
     // V10-1.1: ساعت توافقی واحد
     const tzSetting = data.find((s) => s.key === 'display_timezone');

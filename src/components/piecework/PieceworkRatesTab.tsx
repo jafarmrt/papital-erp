@@ -1,8 +1,8 @@
 import { DollarSign, Save } from 'lucide-react';
 import { PieceworkTask } from '../../types';
 import { SearchableSelect } from '../SearchableSelect';
-import { formatPersianPrice, formatCurrencyLabel } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { formatCurrencyLabel } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 
 interface PieceworkRatesTabProps {
   personnelSelectOptions: { value: string; label: string }[];
@@ -21,8 +21,9 @@ export function PieceworkRatesTab({
   customRatesMap,
   onSaveCustomRate
 }: PieceworkRatesTabProps) {
-  const appCurrency = useAppCurrency();
-  const curLbl = formatCurrencyLabel(appCurrency);
+  const rial = useRialDisplay();
+  const curLbl = rial.label;
+  const inputCurLbl = formatCurrencyLabel('IRR');
   return (
     <div className="space-y-4">
       {/* Personnel Selector Banner */}
@@ -62,7 +63,7 @@ export function PieceworkRatesTab({
                   <th className="p-3">دسته‌بندی</th>
                   <th className="p-3 text-center">واحد</th>
                   <th className="p-3 text-center">{`نرخ پایه سامانه (${curLbl})`}</th>
-                  <th className="p-3 text-center">{`نرخ اختصاصی این پرسنل (${curLbl})`}</th>
+                  <th className="p-3 text-center">{`نرخ اختصاصی این پرسنل (${inputCurLbl})`}</th>
                   <th className="p-3 text-center">عملیات</th>
                 </tr>
               </thead>
@@ -81,7 +82,7 @@ export function PieceworkRatesTab({
                       </td>
                       <td className="p-3 text-center text-slate-600">{task.unit || 'عدد'}</td>
                       <td className="p-3 text-center font-mono text-slate-600">
-                        {formatPersianPrice(task.defaultRate)}
+                        {rial.number(task.defaultRate)}
                       </td>
                       <td className="p-3 text-center">
                         <input

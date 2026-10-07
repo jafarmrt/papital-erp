@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { compressTo300KB } from '../utils/imageCompression';
 import { MIN_PASSWORD_LENGTH, passwordLengthError } from '../lib/auth/passwordPolicy';
 import { FULL_NAME_MAX_LENGTH } from '../lib/users/profileFields';
+import { RIAL_DISPLAY_UNITS, RIAL_DISPLAY_UNIT_LABELS } from '../lib/rialDisplay';
 
 interface SetupPageProps {
   onLogin: (user: User, token: string) => void;
@@ -380,7 +381,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">واحد پول اصلی فاکتورها</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">واحد نمایش مبالغ ریالی</label>
                   <div className="relative">
                     <DollarSign className="absolute right-3 top-3 text-slate-400" size={18} />
                     <select
@@ -388,11 +389,7 @@ export default function SetupPage({ onLogin }: SetupPageProps) {
                       onChange={e => setCurrency(e.target.value)}
                       className="w-full pr-10 pl-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     >
-                      <option value="IRR">ریال (IRR)</option>
-                      <option value="TOMAN">تومان</option>
-                      <option value="USD">دلار ($)</option>
-                      <option value="EUR">یورو (€)</option>
-                      <option value="AED">درهم (AED)</option>
+                      {RIAL_DISPLAY_UNITS.map(unit => <option key={unit} value={unit}>{RIAL_DISPLAY_UNIT_LABELS[unit]}</option>)}
                     </select>
                   </div>
                 </div>

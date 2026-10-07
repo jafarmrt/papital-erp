@@ -9,8 +9,8 @@ import {
 } from '../../types';
 import { fetchJson } from '../../api';
 import { DEFAULT_WORKFLOW_PRESETS, WorkflowPreset, StageTaskTemplate } from '../../constants/presets';
-import { extractDateString, formatPersianPrice, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
-import { useAppCurrency } from '../../hooks/useAppCurrency';
+import { extractDateString, errorMessageOf, isoToJalaliDate, formatPersianDate } from '../../utils';
+import { useRialDisplay } from '../../hooks/useAppCurrency';
 import toast from 'react-hot-toast';
 
 interface ProjectScheduleTabProps {
@@ -26,7 +26,7 @@ export default function ProjectScheduleTab({
   pieceworkTasksList: initialPieceworkTasksList = [],
   onUpdate
 }: ProjectScheduleTabProps) {
-  const appCurrency = useAppCurrency();
+  const rial = useRialDisplay();
   const [saving, setSaving] = useState<boolean>(false);
   const [personnelList, setPersonnelList] = useState<any[]>(initialPersonnelList);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>(initialPieceworkTasksList);
@@ -567,7 +567,7 @@ export default function ProjectScheduleTab({
           <div>
             <span className="text-[10px] text-slate-400 block">برآورد کل دستمزد:</span>
             <span className="text-base font-bold font-mono text-emerald-400">
-              {formatPersianPrice(totalLaborBudget, appCurrency)}
+              {rial.amount(totalLaborBudget)}
             </span>
           </div>
 
@@ -796,7 +796,7 @@ export default function ProjectScheduleTab({
                                   {/* Estimated Cost & Piecework Action */}
                                   <div className="sm:col-span-2 flex items-center justify-between gap-1">
                                     <span className="font-mono font-bold text-emerald-700 text-xs">
-                                      {formatPersianPrice(task.estimatedCost || 0, appCurrency)}
+                                      {rial.amount(task.estimatedCost || 0)}
                                     </span>
                                     
                                     {/* Action to log to piecework */}
@@ -897,21 +897,21 @@ export default function ProjectScheduleTab({
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <span className="text-slate-500 block text-[11px]">کل برآورد بودجه دستمزد:</span>
                 <span className="font-bold font-mono text-slate-800 text-sm mt-0.5 block">
-                  {formatPersianPrice(totalLaborBudget, appCurrency)}
+                  {rial.amount(totalLaborBudget)}
                 </span>
               </div>
 
               <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
                 <span className="text-emerald-700 block text-[11px]">مجموع کارمزدهای قطعی ثبت‌شده:</span>
                 <span className="font-bold font-mono text-emerald-900 text-sm mt-0.5 block">
-                  {formatPersianPrice(totalActualRecordedCost, appCurrency)}
+                  {rial.amount(totalActualRecordedCost)}
                 </span>
               </div>
 
               <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200">
                 <span className="text-amber-800 block text-[11px]">انحراف از برآورد اولیه:</span>
                 <span className={`font-bold font-mono text-sm mt-0.5 block ${totalActualRecordedCost > totalLaborBudget ? 'text-rose-600' : 'text-slate-700'}`}>
-                  {formatPersianPrice(Math.abs(totalActualRecordedCost - totalLaborBudget), appCurrency)}
+                  {rial.amount(Math.abs(totalActualRecordedCost - totalLaborBudget))}
                   <span className="text-[10px] font-sans mr-1">
                     {totalActualRecordedCost > totalLaborBudget ? '(مازاد بر بودجه)' : '(باقی‌مانده تا سقف بودجه)'}
                   </span>
@@ -949,9 +949,9 @@ export default function ProjectScheduleTab({
                         {log.taskTitle || log.task_title || log.taskCode || log.notes || 'کارکرد کارمزدی'}
                       </td>
                       <td className="p-2 text-center font-mono font-bold text-slate-800">{qty}</td>
-                      <td className="p-2 text-center font-mono text-slate-600">{formatPersianPrice(rate, appCurrency)}</td>
+                      <td className="p-2 text-center font-mono text-slate-600">{rial.amount(rate)}</td>
                       <td className="p-2 text-center font-mono font-bold text-emerald-700">
-                        {formatPersianPrice(qty * rate, appCurrency)}
+                        {rial.amount(qty * rate)}
                       </td>
                     </tr>
                   );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Search,
   Download,
@@ -13,7 +13,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
 } from 'lucide-react';
-import { formatPersianPrice, formatCurrencyLabel, formatPersianDate } from '../../../utils';
+import { formatPersianPrice, formatPersianDate } from '../../../utils';
+import { isRialCurrency, rialDisplayOf } from '../../../lib/rialDisplay';
 import { JalaliDateInput } from '../../common/JalaliDateInput';
 import { treasuryMethodLabel, treasuryPartyTypeLabel } from '../../../lib/treasury/treasuryExport';
 import type { BankAccount, TreasuryTransaction, FinancialAttachment } from '../../../types';
@@ -74,6 +75,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
   onViewAttachments,
   onVoidTransaction,
 }) => {
+  const rial = useMemo(() => rialDisplayOf(appCurrency), [appCurrency]);
   const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
   // v9.0.102 (TD-509): `transactions` همان صفحه جاری است که سرور برگردانده (شمار کل در totalFilteredCount)
   const pagedTransactions = transactions;
@@ -198,7 +200,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
               <th className="py-3 px-3">طرف حساب</th>
               <th className="py-3 px-3">روش و حساب</th>
               <th className="py-3 px-3">شرح</th>
-              <th className="py-3 px-3 text-left">مبلغ ({formatCurrencyLabel(appCurrency)})</th>
+              <th className="py-3 px-3 text-left">مبلغ ({rial.label})</th>
               {txAccountFilter !== 'all' && (
                 <th className="py-3 px-3 text-left">مانده جاری</th>
               )}
@@ -316,7 +318,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                     {/* Amount */}
                     <td className="py-3 px-3 text-left font-mono font-bold">
                       <span className={isReceipt ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
-                        {isReceipt ? '+' : '-'}{formatPersianPrice(tx.amount)}
+                        {isReceipt ? '+' : '-'}{isRialCurrency(tx.currency) ? rial.number(tx.amount) : formatPersianPrice(tx.amount, String(tx.currency).trim())}
                       </span>
                     </td>
 
@@ -325,7 +327,7 @@ export const TreasuryTransactionsTable: React.FC<TreasuryTransactionsTableProps>
                       <td className="py-3 px-3 text-left font-mono font-bold text-slate-700 dark:text-slate-200">
                         {runningBal !== undefined ? (
                           <span className={runningBal >= 0 ? 'text-slate-800 dark:text-slate-200' : 'text-rose-500'}>
-                            {formatPersianPrice(runningBal)}
+                            {rial.money(runningBal, tx.currency)}
                           </span>
                         ) : '—'}
                       </td>
