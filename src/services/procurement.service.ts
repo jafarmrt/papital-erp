@@ -22,8 +22,8 @@ const REQUISITION_APPROVE_PERMISSIONS = ['procurement.approve', 'procurement.man
 const CLOSED_REQUISITION_STATUSES = new Set(['rejected', 'cancelled']);
 import type { PurchaseRequisition, PurchaseRequisitionItemRow, ProcurementOrder } from '../types.js';
 import { containsLikePattern } from '../lib/sqlLike.js';
-import { applyDeliveredLines, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
-import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES } from './procurement/requisitionReceiveAction.js';
+import { applyDeliveredLines, isSettledRequisitionRow, type RequisitionItemWithReceipt } from './procurement/requisitionReceipt.js';
+import { assertProcurementIncomingDocument, RECEIVED_REQUISITION_STATUSES, requisitionOrderDocuments } from './procurement/requisitionReceiveAction.js';
 import { describeOverOrders, findOverOrders } from './procurement/requisitionOrder.js';
 import { money } from '../lib/money.js';
 import { fin } from '../lib/financialDecimal.js';
@@ -1093,34 +1093,16 @@ export class ProcurementService {
       await DocumentService.finalizeDocument(documentId, user.username || 'کارشناس تدارکات', tx, { allowBackdate });
       if (!lockedReq) return null;
 
-      const allDocIds = new Set<number>();
-      for (const it of ((lockedReq.items || []) as PurchaseRequisitionItemRow[])) {
-        if (Array.isArray(it.linkedDocumentIds)) {
-          for (const dId of it.linkedDocumentIds) {
-            allDocIds.add(Number(dId));
-          }
-        }
-      }
-      const otherDocs = await tx.select({ id: documents.id }).from(documents).where(and(
-        ilike(documents.notes, containsLikePattern(lockedReq.code)),
-        eq(documents.isDeleted, 0)
-      ));
-      for (const od of otherDocs) {
-        allDocIds.add(od.id);
-      }
-
-      let allDelivered = true;
-      if (allDocIds.size > 0) {
-        const checkDocs = await tx.select({ id: documents.id, status: documents.status }).from(documents).where(and(
-          inArray(documents.id, Array.from(allDocIds)),
-          eq(documents.isDeleted, 0)
-        ));
-        allDelivered = checkDocs.every(cd => cd.id === documentId || cd.status === 'final');
-      }
-
       const docLines = await tx.select({ itemId: documentItems.itemId, quantity: documentItems.quantity }).from(documentItems)
         .where(and(eq(documentItems.documentId, documentId), eq(documentItems.isDeleted, 0)));
       const updatedReqItems = applyDeliveredLines((lockedReq.items || []) as RequisitionItemWithReceipt[], docLines);
+
+      // v9.0.268 (TD-690، B10-03): درخواست فقط وقتی «دریافت‌شده» است که هیچ سفارش زنده‌اش نهایی‌نشده نمانده و هر ردیف
+      // دریافت یا بسته شده است. پیش‌تر فقط سندهای موجود درخواست سنجیده می‌شد: تحویل تنها سفارشِ درخواستی که بخشی‌اش
+      // سفارش شده بود، درخواست را «دریافت‌شده» می‌کرد و ردیف‌های مانده دیگر سفارش داده نمی‌شدند
+      const openOrders = (await requisitionOrderDocuments(tx, { code: lockedReq.code, items: updatedReqItems }))
+        .filter(order => order.id !== documentId && order.status !== 'final');
+      const allDelivered = openOrders.length === 0 && updatedReqItems.every(isSettledRequisitionRow);
 
       await tx.update(purchaseRequisitions).set({
         items: updatedReqItems,

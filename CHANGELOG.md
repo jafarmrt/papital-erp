@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.268 — Requisition Received After Every Row
+- **Fix (TD-690, B10-03):** delivering an order marks its purchase requisition received only when no live order is left undelivered and every row is received or was closed at ordering; a row closed at ordering carries `closed` and is never received without an order.
+
 ### v9.0.267 — Requisition Orders Need Approval
 - **Fix (TD-689, B10-02, decision t1):** a purchase requisition is ordered only from its approved step; for an unapproved one, a holder of the approval right first runs the approval transition in their own name, others get 409 REQUISITION_NOT_APPROVED; the workflow step moves only through executeTransition (the direct step writes of the conversion, A02-15, are gone).
 
