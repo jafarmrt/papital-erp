@@ -17,6 +17,7 @@ import { assertVoucherRowsBalanced, isVoucherBalancedForFinalize, resolveManualV
 
 // v7.0.49 (audit P2-5): ثابت یگانه تلورانس تراز؛ v7.0.76 به src/lib/voucherBalance.ts منتقل شد تا فرم‌ها هم آن را بخوانند
 import { VOUCHER_BALANCE_TOLERANCE } from '../../lib/voucherBalance.js';
+import { assertPostingAccounts } from './postingAccounts.js';
 export { VOUCHER_BALANCE_TOLERANCE };
 
 /** v7.0.72 (audit P3-5): حداکثر ردیف در هر INSERT چندردیفی (۱۲ پارامتر در هر ردیف، زیر سقف ۶۵۵۳۵ پارامتر PostgreSQL) */
@@ -301,6 +302,8 @@ export class VoucherService {
       // v7.0.49 (audit P2-5): اسناد اختتامیه هم بررسی می‌شوند؛ در فرایند بستن سال، سال تا پایان همان تراکنش باز
       // است و پس از بستن هیچ سندی (از جمله سند از نوع اختتامیه) وارد آن نمی‌شود
       await this.checkFiscalPeriodOpen(voucherDate, tx);
+      // v9.0.198 (TD-549، B03-07): ردیف سند دستی فقط روی حساب فعال معین یا تفصیلیِ بی زیرحساب فعال
+      if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId));
 
       const voucherNum = await this.getNextVoucherNumber(tx);
       const [voucher] = await tx.insert(journalVouchers).values({
@@ -403,6 +406,7 @@ export class VoucherService {
         const manualRows = data.manualEntry ? resolveManualVoucherRows(data.items, existing.currency) : null;
         const items = manualRows?.rows ?? data.items;
         ({ sumDebit, sumCredit } = manualRows?.totals ?? assertVoucherRowsBalanced(data.items, existing.currency));
+        if (data.manualEntry) await assertPostingAccounts(tx, items.map(item => item.accountId)); // v9.0.198 (TD-549)
 
         // V6.0.21 (TD-157): Soft-delete old items instead of physical hard delete (RULE 09)
         await tx.update(journalVoucherItems).set({ isDeleted: 1 }).where(and(eq(journalVoucherItems.voucherId, id), eq(journalVoucherItems.isDeleted, 0)));
@@ -795,6 +799,7 @@ export class VoucherService {
       // 2. Validate new items — v9.0.190 (TD-551، ت۷): ردیف‌های جایگزین قاعده سند دستی را دارند (ارز بی ارز = ارز
       // سند اصلی، نرخ ردیف غیرریالی الزامی، تراز چندارزی به ریال)؛ پیش‌تر ردیف بی ارز ریالی با نرخ ۱ ذخیره می‌شد
       const { rows: newItems, totals: { sumDebit, sumCredit } } = resolveManualVoucherRows(params.newItems, original.currency);
+      await assertPostingAccounts(tx, newItems.map(item => item.accountId)); // v9.0.198 (TD-549): ردیف جایگزین هم فقط روی حساب قابل ثبت
 
       // 3. Create Corrected Voucher
       const corrNumber = await this.getNextVoucherNumber(tx);

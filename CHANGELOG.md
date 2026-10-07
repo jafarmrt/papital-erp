@@ -19,6 +19,9 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.198 — Voucher Rows Only on Posting Accounts
+- **Posting Accounts (P2):** a manual, edited or correction voucher row goes only on an active subsidiary or detailed account without an active sub-account (422 `VOUCHER_ACCOUNT_NOT_POSTABLE`); the forms offer only those and the health check lists legacy rows elsewhere (TD-549).
+
 ### v9.0.197 — Accounts With Voucher Rows Are Not Deleted
 - **Chart of Accounts (P1):** deleting an account that an active voucher row uses is refused with 409 `ACCOUNT_HAS_VOUCHER_ROWS`; the code of a deleted account always makes a new account, and deleted accounts that still carry rows are listed by the health check (TD-546, decision ت۴).
 

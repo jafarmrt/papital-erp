@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { orm } from '../../db/drizzle.js';
-import { accounts, journalVoucherItems } from '../../db/schema.js';
+import { accounts, journalVoucherItems, journalVouchers } from '../../db/schema.js';
+import { money } from '../../lib/money.js';
 import { businessTodayIsoDate } from '../../lib/businessClock.js';
 import { VoucherService } from '../../services/accounting/voucher.service.js';
 import { AccountingReportService } from '../../services/accounting/accountingReport.service.js';
@@ -33,6 +34,25 @@ async function activeRowsOn(accountId: number): Promise<number> {
   const rows = await orm.select({ id: journalVoucherItems.id }).from(journalVoucherItems)
     .where(and(eq(journalVoucherItems.accountId, accountId), eq(journalVoucherItems.isDeleted, 0)));
   return rows.length;
+}
+
+/** A voucher written straight into the tables, as versions before the posting rule could store it */
+async function insertLegacyVoucher(date: string, status: string, description: string, rows: Array<{ accountId: number; debit: number; credit: number }>): Promise<number> {
+  const voucherNumber = await VoucherService.getNextVoucherNumber();
+  const total = rows.reduce((s, r) => s + r.debit, 0);
+  const [v] = await orm.insert(journalVouchers).values({
+    voucherNumber, manualVoucherNumber: '', date, voucherType: 'general', status, totalDebit: money(total), totalCredit: money(total),
+    description, referenceModule: 'manual', referenceNumber: '', currency: 'IRR', attachments: [],
+  }).returning({ id: journalVouchers.id });
+  await orm.insert(journalVoucherItems).values(rows.map((r, i) => ({
+    voucherId: v.id, accountId: r.accountId, rowOrder: i + 1, detailedType: 'none', detailedName: '',
+    debit: money(r.debit), credit: money(r.credit), currency: 'IRR', exchangeRate: money(1), description,
+  })));
+  return v.id;
+}
+
+async function voucherCount(): Promise<number> {
+  return (await orm.select({ id: journalVouchers.id }).from(journalVouchers)).length;
 }
 
 export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<TestCaseResult[]> {
@@ -94,6 +114,70 @@ export async function runChartOfAccountsTests(shouldRun: ShouldRun): Promise<Tes
 
       assertNoProblems(problems);
       return 'Accounts with approved or draft rows refused (409), the trial balance kept, an unused account deleted, its code reused as a new id, and the legacy deleted account with rows listed by the health check.';
+    }));
+  }
+
+  const postingId = 'reg_voucher_rows_only_on_posting_accounts_td_549';
+  if (shouldRun(postingId, 'td549', 'voucher', 'account', 'chart', 'package3')) {
+    await runCase(results, postingId, 'v9.0.198: manual, edited and correction voucher rows go only on an active subsidiary or detailed account without an active sub-account (422 VOUCHER_ACCOUNT_NOT_POSTABLE), and the health check lists vouchers already on such accounts (TD-549)', async () => inFiscalSandbox(async () => {
+      const problems: string[] = [];
+      const admin = await sandboxAdminClient();
+      const acc = await accountIdsByCode('7', '14', '1001', '1201', '5001', '7002', '7009');
+      const today = await businessTodayIsoDate();
+      const base = { date: today, status: 'approved', description: 'TD-549 manual voucher' };
+      const pair = (debitAccountId: number, creditAccountId: number, amount: number) => [
+        { accountId: debitAccountId, debit: amount, credit: 0 }, { accountId: creditAccountId, debit: 0, credit: amount },
+      ];
+      const refused = (label: string, res: { status: number; body?: { code?: string } }) => {
+        if (res.status !== 422 || res.body?.code !== 'VOUCHER_ACCOUNT_NOT_POSTABLE') problems.push(`${label} answered ${res.status} ${JSON.stringify(res.body).slice(0, 200)}, expected 422 VOUCHER_ACCOUNT_NOT_POSTABLE`);
+      };
+      const before = await voucherCount();
+
+      // 1) B03-07 S04: «Dr 14 (general) 300,000» and «Dr 7 (group) 200,000» were stored (201) and the subsidiary trial balance lost the debits
+      refused('a row on general account 14', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['14'], acc['1001'], 300_000) }));
+      refused('a row on group account 7', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['7'], acc['1001'], 200_000) }));
+      // 2) a deactivated account (was 201)
+      const deactivate = await admin.put(`/api/accounting/accounts/${acc['7009']}`, { isActive: false });
+      if (deactivate.status !== 200) problems.push(`deactivating 7009 answered ${deactivate.status}`);
+      refused('a row on deactivated 7009', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['7009'], acc['1001'], 100_000) }));
+      // 3) a subsidiary with an active detailed account under it takes no row; the detailed account does
+      const detail = await admin.post('/api/accounting/accounts', { code: '700201', name: 'TD-549 rent of the workshop', level: 'detailed', parentId: acc['7002'], accountType: 'expense', nature: 'debit' });
+      if (detail.status !== 201) problems.push(`creating detailed account 700201 answered ${detail.status}`);
+      refused('a row on 7002 with an active detailed account', await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['7002'], acc['1001'], 100_000) }));
+      if ((await voucherCount()) !== before) problems.push(`${(await voucherCount()) - before} refused vouchers were stored`);
+      const onDetail = await admin.post('/api/accounting/vouchers', { ...base, items: pair(Number(detail.body?.id), acc['1001'], 100_000) });
+      if (onDetail.status !== 201) problems.push(`a row on detailed account 700201 answered ${onDetail.status} ${JSON.stringify(onDetail.body).slice(0, 200)}`);
+
+      // 4) editing a draft and correcting an approved voucher follow the same rule
+      const draft = await admin.post('/api/accounting/vouchers', { ...base, status: 'draft', items: pair(acc['1201'], acc['5001'], 400_000) });
+      if (draft.status !== 201) problems.push(`a valid draft answered ${draft.status}`);
+      else refused('editing a draft onto 14', await admin.put(`/api/accounting/vouchers/${draft.body.id}`, { ...base, status: 'draft', items: pair(acc['14'], acc['5001'], 400_000) }));
+      const approved = await admin.post('/api/accounting/vouchers', { ...base, items: pair(acc['1201'], acc['5001'], 500_000) });
+      if (approved.status !== 201) problems.push(`a valid approved voucher answered ${approved.status}`);
+      else {
+        const beforeCorrection = await voucherCount();
+        refused('a correction onto 14', await admin.post(`/api/accounting/vouchers/${approved.body.id}/correct`, { date: today, reason: 'TD-549', newItems: pair(acc['14'], acc['5001'], 500_000) }));
+        if ((await voucherCount()) !== beforeCorrection) problems.push('the refused correction left a reversal voucher');
+      }
+      const tb = await AccountingReportService.getTrialBalance({ level: 'subsidiary', endDate: today });
+      const debit = tb.reduce((s, r) => s + amountOf(r.debitBalance), 0);
+      const credit = tb.reduce((s, r) => s + amountOf(r.creditBalance), 0);
+      if (debit !== credit) problems.push(`subsidiary trial balance out of balance: debit ${debit}, credit ${credit}`);
+
+      // 5) vouchers stored before the rule: on a general account (approved), on an inactive account (draft); an approved
+      //    voucher on an account deactivated later is history and is not listed
+      const onGeneral = await insertLegacyVoucher(today, 'approved', 'TD-549 legacy general', pair(acc['14'], acc['1001'], 300_000));
+      const draftInactive = await insertLegacyVoucher(today, 'draft', 'TD-549 legacy draft on inactive', pair(acc['7009'], acc['1001'], 50_000));
+      const history = await insertLegacyVoucher(today, 'approved', 'TD-549 history on inactive', pair(acc['7009'], acc['1001'], 20_000));
+      const report = await FinancialHealthService.runHealthCheck();
+      const health = report.tests.find(t => t.id === 'voucher_rows_on_non_posting_accounts');
+      const listed = (health?.items ?? []).map(i => Number(i.id)).sort((a, b) => a - b);
+      if (!health || health.status !== 'warning' || JSON.stringify(listed) !== JSON.stringify([onGeneral, draftInactive].sort((a, b) => a - b))) {
+        problems.push(`health check voucher_rows_on_non_posting_accounts: ${health?.status} ${JSON.stringify(listed)}, expected ${onGeneral} and ${draftInactive}, not ${history}`);
+      }
+
+      assertNoProblems(problems);
+      return 'Rows on group, general, inactive and parent accounts refused in new, edited and correction vouchers (422) with nothing stored, a detailed account accepted, and legacy vouchers listed by the health check.';
     }));
   }
 

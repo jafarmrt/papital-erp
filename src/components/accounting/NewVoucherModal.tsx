@@ -15,6 +15,7 @@ import { FinancialAttachmentUploader } from './FinancialAttachmentUploader';
 import { useServerDraft } from '../../hooks/useServerDraft';
 import toast from 'react-hot-toast';
 import { JalaliDateInput } from '../common/JalaliDateInput';
+import { postingAccountsOf } from '../../lib/accounting/postingAccount';
 
 interface NewVoucherModalProps {
   isOpen: boolean;
@@ -155,10 +156,8 @@ export function NewVoucherModal({
     }
   }, [editingVoucher, isOpen]);
 
-  // Accounts for selection
-  const selectableAccounts = useMemo(() => {
-    return safeAccounts.filter(a => a.level === 'subsidiary' || a.level === 'detailed' || a.level === 'general');
-  }, [safeAccounts]);
+  // v9.0.198 (TD-549، B03-07): فقط حساب قابل ثبت (فعال، معین یا تفصیلی، بی زیرحساب فعال)؛ پیش‌تر حساب کل هم بود
+  const selectableAccounts = useMemo(() => postingAccountsOf(safeAccounts), [safeAccounts]);
 
   // v7.0.76 (P3-6): جمع اعشاری دقیق و تلورانس سرور. v9.0.191 (TD-564): با ارز و نرخ هر ردیف؛ سند چندارزی یا چندنرخی به ریال
   const balance = useMemo(() => voucherFormBalance(items, header), [items, header]);

@@ -18,7 +18,9 @@ import { buildUnknownPriceTitleHealthTest, findUnknownPriceTitles } from '../ite
 import { buildForeignRateHealthTest, findVouchersWithoutForeignRate } from './voucherForeignRateHealth.js';
 import { buildItemIdentityHealthTest, findDuplicateItemIdentities, hasItemIdentityIndexes } from '../items/itemIdentity.js';
 import { buildDuplicateActivePriceHealthTest, buildInvalidActivePriceHealthTest, findDuplicateActivePrices, findInvalidActivePrices } from '../items/itemPriceIntegrity.js';
-import { buildDeletedAccountRowsHealthTest, findDeletedAccountsWithVoucherRows } from './chartOfAccountsHealth.js';
+import {
+  buildDeletedAccountRowsHealthTest, buildNonPostingRowsHealthTest, findDeletedAccountsWithVoucherRows, findVouchersOnNonPostingAccounts,
+} from './chartOfAccountsHealth.js';
 import { buildCustomerNameHealthTest, findDuplicateCustomerNames, hasCustomerNameUniqueIndex } from '../customers/customerNameIntegrity.js';
 import { buildOpenInstanceHealthTest, findDuplicateOpenInstances, hasOpenInstanceUniqueIndex } from '../workflow/workflowOpenInstances.js';
 import { buildWorkflowReferenceHealthTest, findWorkflowReferenceGaps } from '../workflow/workflowReferenceIntegrity.js';
@@ -1164,6 +1166,8 @@ export class FinancialHealthService {
 
     // آزمون ۳۱: v9.0.197 (TD-546) حساب حذف‌شده‌ای که ردیف سند دارد (فقط فهرست، بی احیای خودکار)
     tests.push(buildDeletedAccountRowsHealthTest(await findDeletedAccountsWithVoucherRows()));
+    // آزمون ۳۲: v9.0.198 (TD-549) ردیف سند روی حساب گروه، کل یا دارای زیرحساب (فقط فهرست، بی بازنویسی)
+    tests.push(buildNonPostingRowsHealthTest(await findVouchersOnNonPostingAccounts()));
 
     // =========================================================================
     // محاسبه امتیاز نهایی، سطح کیفی و خلاصه آزمون‌ها
