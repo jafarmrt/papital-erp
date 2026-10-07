@@ -209,7 +209,7 @@
 - **AsyncHandler & Global Error Handler (OBS-002):** Routes wrapped in `asyncHandler` return uniform error schema with `traceId`. Every async route handler and every async middleware factory (`authorizePermission`, `validate`, `idempotency`) MUST go through `asyncHandler` (v7.0.66, TD-229); `express-async-errors` is only a safety net, never the mechanism. Enforced by unit test `unit_route_async_handler_td_229`.
 - **Structured Logging (OBS-001, OBS-006):** Winston logger with daily rotation into `logs/application-%DATE%.log` and `logs/error-%DATE%.log`.
 - **Recursive Sanitization (OBS-009):** Sensitive fields scrubbed with `[REDACTED]`.
-- **Lifecycle Probes (OBS-007):** Kubernetes probes at `/health/live`, `/health/ready`, `/health/startup`.
+- **Lifecycle Probes (OBS-007):** Kubernetes probes at `/health/live`, `/health/ready`, `/health/startup`. `/health` gives everyone only `version`; its `buildInfo` (commit and build time from `dist/build-info.json`, written by `npm run build`) goes only to the `METRICS_TOKEN` or a live system-admin session (`metricsReaderStatus`; v9.0.152, TD-601).
 - **Prometheus Metrics (OBS-008):** System metrics exposed at `/metrics` and `/api/metrics`.
 - **Graceful Shutdown (OBS-004, OBS-005):** Handles `SIGTERM`/`SIGINT` with a 10s force-exit timeout.
 

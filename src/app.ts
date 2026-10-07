@@ -9,7 +9,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { logger, morganMiddleware, errorHandler } from './middleware/logger.js';
 import { metricsMiddleware, updateDbPoolMetrics, updateOutboxMetrics, dbPoolStats } from './middleware/metrics.js';
-import { metricsAuthMiddleware } from './middleware/metricsAuth.js';
+import { metricsAuthMiddleware, metricsReaderStatus } from './middleware/metricsAuth.js';
 import { asyncHandler } from './middleware/asyncHandler.js';
 import { buildCspDirectives } from './lib/cspDirectives.js';
 import promClient from 'prom-client';
@@ -296,13 +296,16 @@ export async function createApp(): Promise<express.Express> {
   });
 
   // 4. Diagnostic Health Probe
-  app.get(['/api/health', '/health'], asyncHandler(async (_req, res) => {
+  app.get(['/api/health', '/health'], asyncHandler(async (req, res) => {
     try {
       await orm.execute(sql`SELECT 1`);
+      // v9.0.152 (TD-601): the version stays public (verify-startup.sh reads it); commit, build time, Node
+      // version and environment only for the metrics token or a live system-admin session
+      const reader = await metricsReaderStatus(req);
       res.json({
         status: 'ok',
         version: BUILD_INFO.version,
-        buildInfo: BUILD_INFO,
+        ...(reader.ok ? { buildInfo: BUILD_INFO } : {}),
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });

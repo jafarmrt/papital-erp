@@ -18,7 +18,15 @@ export { safeCompareTokens };
  * - Authenticated non-admin users receive 403 Forbidden.
  * - v9.0.146 (TD-599): the session is checked live like `authenticateToken` (deleted user, stale tokenVersion, current role).
  */
-export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+type MetricsReaderResult =
+  | { ok: true; user?: AuthUserPayload }
+  | { ok: false; status: 401 | 403 | 500; error: string };
+
+/**
+ * Whether the request may read internal system data: the METRICS_TOKEN or a live system-admin session.
+ * v9.0.152 (TD-601): shared by the metrics guard and the build details of `/health`.
+ */
+export async function metricsReaderStatus(req: Request): Promise<MetricsReaderResult> {
   const configuredMetricsToken = process.env.METRICS_TOKEN?.trim();
 
   // 1. Extract bearer token or X-Metrics-Token if provided
@@ -32,7 +40,7 @@ export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Resp
 
   // 2. Check if candidate token matches configured METRICS_TOKEN
   if (configuredMetricsToken && candidateScrapeToken && safeCompareTokens(candidateScrapeToken, configuredMetricsToken)) {
-    return next();
+    return { ok: true };
   }
 
   // 3. Fallback: Authenticate via admin JWT token (cookie or Authorization Bearer)
@@ -40,9 +48,7 @@ export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Resp
   const candidateJwt = bearerToken || (typeof cookieToken === 'string' ? cookieToken.trim() : null);
 
   if (!candidateJwt) {
-    return res.status(401).json({
-      error: 'دسترسی به متریک‌های پرومتئوس نیازمند توکن اختصاصی معتبر (METRICS_TOKEN) یا نشست مدیر است.'
-    });
+    return { ok: false, status: 401, error: 'دسترسی به متریک‌های پرومتئوس نیازمند توکن اختصاصی معتبر (METRICS_TOKEN) یا نشست مدیر است.' };
   }
 
   // 4. Verify the candidate JWT
@@ -50,26 +56,31 @@ export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Resp
   try {
     decoded = jwt.verify(candidateJwt, getJwtSecret(), JWT_VERIFY_OPTIONS) as AuthUserPayload;
   } catch {
-    return res.status(401).json({
-      error: 'احراز هویت متریک‌ها ناموفق بود: توکن ارائه شده نامعتبر یا منقضی است.'
-    });
+    return { ok: false, status: 401, error: 'احراز هویت متریک‌ها ناموفق بود: توکن ارائه شده نامعتبر یا منقضی است.' };
   }
   if (!decoded || !decoded.id) {
-    return res.status(401).json({ error: 'توکن احراز هویت نامعتبر است.' });
+    return { ok: false, status: 401, error: 'توکن احراز هویت نامعتبر است.' };
   }
 
   // 5. Live session: a deleted or demoted admin (tokenVersion bumped) is refused like on every other route
   const live = await resolveLiveSession(decoded);
   if (!live.ok) {
-    return res.status(live.status).json({ error: live.error });
+    return { ok: false, status: live.status, error: live.error };
   }
 
   // Role check: Only the system admin may inspect internal system metrics (live role, not the token's)
   if (live.user.role !== SYSTEM_ADMIN_ROLE) {
     logger.warn(`[Metrics] Non-admin user (ID: ${live.user.id}, Role: ${live.user.role}) attempted to access metrics`);
-    return res.status(403).json({ error: 'تنها کاربران با نقش مدیر (Admin) مجاز به مشاهده متریک‌های سامانه هستند.' });
+    return { ok: false, status: 403, error: 'تنها کاربران با نقش مدیر (Admin) مجاز به مشاهده متریک‌های سامانه هستند.' };
   }
+  return { ok: true, user: live.user };
+}
 
-  req.user = live.user;
+export const metricsAuthMiddleware = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const reader = await metricsReaderStatus(req);
+  if (!reader.ok) {
+    return res.status(reader.status).json({ error: reader.error });
+  }
+  if (reader.user) req.user = reader.user;
   return next();
 });
