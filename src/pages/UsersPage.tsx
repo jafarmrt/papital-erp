@@ -5,7 +5,6 @@ import {
   Users,
   ShieldCheck,
   KeyRound,
-  Lock,
   UserCheck,
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
@@ -13,6 +12,7 @@ import { UsersTab } from '../components/users/UsersTab';
 import { RolesTab } from '../components/users/RolesTab';
 import { UserFormModal } from '../components/users/UserFormModal';
 import { RoleFormModal } from '../components/users/RoleFormModal';
+import { roleDraftFromTemplate, type RoleDraft } from '../lib/permissions/roleTemplates';
 import {
   useUsersQuery,
   useRolesQuery,
@@ -21,9 +21,26 @@ import {
   useDeleteRoleMutation,
 } from '../hooks/queries';
 import { QUERY_KEYS } from '../lib/queryKeys';
+import { isSystemAdminRole } from '../lib/permissions/permissionCatalog';
+import { canGrantPermission, grantorPermissionsOf, type GrantorPermissions } from '../lib/permissions/grantBoundary';
 
-export default function UsersPage({ currentUser }: { currentUser: User }) {
-  const [activeTab, setActiveTab] = React.useState<'users' | 'roles'>('users');
+interface UsersPageProps {
+  currentUser: User;
+  userPermissions?: { permissions?: string[]; isAdmin?: boolean } | null;
+}
+
+/**
+ * v9.0.130 (TD-525، یافته B02-10، تصمیم ت۳ الف): صفحه برای دارندگان «مدیریت کاربران» و «مدیریت نقش‌ها» باز است (همان
+ * مجوزهای مسیر و API)، نه فقط برای کد مدیر سیستم. هر دکمه همان مجوز API خودش را می‌پرسد و فرم‌ها فقط آنچه کاربر جاری
+ * می‌تواند بدهد پیشنهاد می‌کنند (قاعده مشترک `grantBoundary`).
+ */
+export default function UsersPage({ currentUser, userPermissions }: UsersPageProps) {
+  const fullGrantor: GrantorPermissions = userPermissions?.isAdmin
+    ? 'all'
+    : grantorPermissionsOf(currentUser.role, userPermissions?.permissions);
+  const canManageUsers = canGrantPermission(fullGrantor, 'users.manage');
+  const canManageRoles = canGrantPermission(fullGrantor, 'roles.manage');
+  const [activeTab, setActiveTab] = React.useState<'users' | 'roles'>(canManageUsers || !canManageRoles ? 'users' : 'roles');
 
   // V9 Phase 5.1: مهاجرت به React Query — کش مشترک، حذف fetch دستی و AbortController تکراری
   const queryClient = useQueryClient();
@@ -48,6 +65,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
   // Role Modal State
   const [showRoleModal, setShowRoleModal] = React.useState(false);
   const [editingRole, setEditingRole] = React.useState<Role | null>(null);
+  // v9.0.134 (TD-526): پیش‌نویس نقش تازه از الگو
+  const [roleDraft, setRoleDraft] = React.useState<RoleDraft | null>(null);
   const [confirmRoleState, setConfirmRoleState] = React.useState<{
     isOpen: boolean;
     roleId: number;
@@ -80,18 +99,6 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
       // Handled in mutation onError
     }
   };
-
-  if (currentUser.role !== 'admin') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500">
-        <Lock size={56} className="mb-4 text-slate-400" />
-        <h2 className="text-xl font-bold mb-2 text-slate-800">دسترسی محدود</h2>
-        <p className="text-sm">
-          تنها مدیران ارشد سیستم به مدیریت کاربران و ماتریس نقش‌ها دسترسی دارند.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -177,7 +184,7 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
                 مدیران ارشد (Admin)
               </span>
               <strong className="text-base text-slate-800 font-bold">
-                {users.filter((u: any) => u.role === 'admin').length} کاربر
+                {users.filter((u: any) => isSystemAdminRole(u.role)).length} کاربر
               </strong>
             </div>
           </div>
@@ -201,6 +208,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
           onDeleteUser={(userId) => {
             setConfirmUserState({ isOpen: true, userId });
           }}
+          canManage={canManageUsers}
+          grantor={fullGrantor}
         />
       )}
 
@@ -212,15 +221,24 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
           totalCatalogPermsCount={totalCatalogPermsCount}
           onAddRole={() => {
             setEditingRole(null);
+            setRoleDraft(null);
+            setShowRoleModal(true);
+          }}
+          onAddRoleFromTemplate={(t) => {
+            setEditingRole(null);
+            setRoleDraft(roleDraftFromTemplate(t, rolesList.map((r: Role) => r.code), fullGrantor));
             setShowRoleModal(true);
           }}
           onEditRole={(r) => {
             setEditingRole(r);
+            setRoleDraft(null);
             setShowRoleModal(true);
           }}
           onDeleteRole={(roleId, roleName) => {
             setConfirmRoleState({ isOpen: true, roleId, roleName });
           }}
+          canManage={canManageRoles}
+          ownRoleCode={currentUser.role}
         />
       )}
 
@@ -234,6 +252,8 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
         editingUser={editingUser}
         rolesList={rolesList}
         onSuccess={loadData}
+        grantor={fullGrantor}
+        currentUserId={currentUser.id}
       />
 
       {/* ROLE & PERMISSION MATRIX MODAL */}
@@ -242,10 +262,13 @@ export default function UsersPage({ currentUser }: { currentUser: User }) {
         onClose={() => {
           setShowRoleModal(false);
           setEditingRole(null);
+          setRoleDraft(null);
         }}
         editingRole={editingRole}
         permCatalog={permCatalog}
         onSuccess={loadData}
+        grantor={fullGrantor}
+        draft={roleDraft}
       />
 
       {/* CONFIRM DELETE USER */}

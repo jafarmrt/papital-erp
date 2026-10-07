@@ -13,6 +13,7 @@ import ProjectGanttTab from './project/ProjectGanttTab';
 import ProjectStockEntryTab from './project/ProjectStockEntryTab';
 import ProjectProductProgressTab from './project/ProjectProductProgressTab';
 import { WorkflowStepperWidget } from './workflow/WorkflowStepperWidget';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 interface ProjectDetailModalProps {
   projectId: number | null;
@@ -67,8 +68,6 @@ export default function ProjectDetailModal({
   const [itemsList, setItemsList] = useState<Item[]>([]);
   const [personnelList, setPersonnelList] = useState<any[]>([]);
   const [pieceworkTasksList, setPieceworkTasksList] = useState<any[]>([]);
-  const [, setPricesMap] = useState<Record<number, any[]>>({});
-  const [, setPieceworkLogs] = useState<any[]>([]);
 
   // Stage editing inline state
   const [editingStageId, setEditingStageId] = useState<number | null>(null);
@@ -104,8 +103,8 @@ export default function ProjectDetailModal({
 
   const loadAuxiliaryData = async (signal?: AbortSignal) => {
     try {
-      const [items, personnel, tasks, prices, logs] = await Promise.all([
-        fetchJson('/items', { signal }).catch((err) => {
+      const [items, personnel, tasks] = await Promise.all([
+        fetchJson(PICK_LIST_URLS.items, { signal }).catch((err) => {
           if (err?.name === 'AbortError') throw err;
           console.error('Failed to load items in project detail modal:', err);
           toast.error('خطا در دریافت لیست کالاها و مواد اولیه');
@@ -123,15 +122,11 @@ export default function ProjectDetailModal({
           toast.error('خطا در دریافت لیست عناوین کارمزدی');
           return [];
         }),
-        fetchJson('/items/prices/all', { signal }).catch(() => ({})),
-        fetchJson(`/piecework/logs?projectId=${projectId}`, { signal }).catch(() => [])
       ]);
       const rawItems = Array.isArray(items) ? items : (items?.data && Array.isArray(items.data) ? items.data : []);
       setItemsList(rawItems);
       setPersonnelList(Array.isArray(personnel) ? personnel : []);
       setPieceworkTasksList(Array.isArray(tasks) ? tasks : []);
-      setPricesMap(prices && typeof prices === 'object' ? prices : {});
-      setPieceworkLogs(Array.isArray(logs) ? logs : []);
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       console.error('Error fetching auxiliary project data:', err);

@@ -25,6 +25,9 @@ import { resolveActivityParents } from '../services/crm/crmActivityParents.js';
 import { CRM_LEAD_CURRENCIES, CRM_LEAD_STAGES, CRM_LEAD_STATUSES, isLeadProbability, normalizeLeadCurrency } from '../lib/crm/leadFields.js';
 import { leadCustomerCondition } from '../services/crm/crmLeadCustomerFilter.js';
 import { canSeePartyBankInfo, withoutBankInfo } from '../services/customers/partyBankInfoAccess.js';
+import { permissionHolderUserIds } from '../services/notifications/notificationRecipients.js';
+
+const WON_LEAD_NOTIFY_PERMISSION = 'crm.manage';
 
 const router = Router();
 router.use(authenticateToken);
@@ -340,22 +343,15 @@ router.get('/crm/leads/:id', authorizePermission('crm.view'), validate(paramsIdS
   });
 }));
 
-async function notifyWarehouseOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>), authorName: string, senderId?: number) {
+// v9.0.127 (TD-883، مدل مجوز §۴.۲): «معامله موفق» به دارندگان «مدیریت فرصت‌های فروش» می‌رود؛ پیش‌تر به پنج کد نقش ثابت
+async function notifySalesOnWonLead(lead: (Partial<typeof crmLeads.$inferSelect> & Record<string, unknown>), authorName: string, senderId?: number) {
   try {
-    const targetUsers = await orm.select({ id: users.id, role: users.role }).from(users).where(
-      or(
-        eq(users.role, 'admin'),
-        eq(users.role, 'manager'),
-        eq(users.role, 'sales_manager'),
-        eq(users.role, 'sales'),
-        eq(users.role, 'super_admin')
-      )
-    );
+    const targetUserIds = await permissionHolderUserIds(WON_LEAD_NOTIFY_PERMISSION);
 
-    for (const u of targetUsers) {
-      if (senderId && u.id === senderId) continue;
+    for (const userId of targetUserIds) {
+      if (senderId && userId === senderId) continue;
       await orm.insert(notifications).values({
-        userId: u.id,
+        userId,
         senderId: senderId || null,
         senderName: authorName,
         type: 'system',
@@ -430,7 +426,7 @@ router.post('/crm/leads', authorizePermission('crm.manage'), validate(createCrmL
   }).returning();
 
   if (stage === 'won') {
-    await notifyWarehouseOnWonLead(newLead, authorName, currentUser?.id);
+    await notifySalesOnWonLead(newLead, authorName, currentUser?.id);
   }
 
   // Log initial creation activity
@@ -550,7 +546,7 @@ router.put('/crm/leads/:id', authorizePermission('crm.manage'), validate(updateC
   }).where(eq(crmLeads.id, id)).returning();
 
   if (stage === 'won' && existing.stage !== 'won') {
-    await notifyWarehouseOnWonLead(updated, authorName, currentUser?.id);
+    await notifySalesOnWonLead(updated, authorName, currentUser?.id);
   }
 
   // Log stage change activity if stage changed

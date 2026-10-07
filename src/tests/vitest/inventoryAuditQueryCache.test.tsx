@@ -30,7 +30,7 @@ const auditItem = { id: 7, code: 'R-7', name: 'سیم نقره', category: 'سی
 function baseResponse(url: string, init?: RequestInitLike): unknown {
   const method = init?.method ?? 'GET';
   if (url === '/inventory/integrity-audit') return { summary: { discrepancyItems: 0 }, audits: [], warehouses: [] };
-  if (url === '/items?limit=1000') return { data: [] };
+  if (url === '/items/options') return { data: [] };
   if (url === '/documents/next-ref?type=audit') return { nextRef: 'AUD-2001' };
   if (url === AUDIT_ITEMS_URL) return [auditItem];
   if (url === '/warehouses') return [{ id: 1, name: LOCATION, code: LOCATION_CODE, is_active: 1 }];
@@ -105,7 +105,7 @@ describe('InventoryAuditPage — React Query cache', () => {
 
   it('cancels in-flight reads (page data and the audit document being opened) on unmount', async () => {
     const signals = new Map<string, AbortSignal | undefined>();
-    const hanging = new Set(['/inventory/integrity-audit', '/items?limit=1000', '/documents/next-ref?type=audit', '/warehouses', '/documents/9']);
+    const hanging = new Set(['/inventory/integrity-audit', '/items/options', '/documents/next-ref?type=audit', '/warehouses', '/documents/9']);
     fetchJson.mockImplementation((url: string, init?: RequestInitLike) => {
       if (hanging.has(url)) {
         signals.set(url, init?.signal);

@@ -6,6 +6,7 @@ import { QUERY_KEYS } from '../../lib/queryKeys';
 import { listFromResponse } from '../../lib/invoices/invoiceForm';
 import { normalizeAuditItems, type AuditItemRow } from '../../lib/inventoryAudit/auditSheet';
 import type { InventoryIntegrityReport } from '../../types';
+import { PICK_LIST_URLS } from '../../lib/permissions/pickLists';
 
 /**
  * صفحه انبارگردانی: خواندنی‌های صفحه با React Query (FE-005) به‌جای fetchJson/useState دستی.
@@ -75,7 +76,7 @@ export function useInventoryAuditQueries(activeTab: InventoryAuditTab, selectedL
     queryKey: REBUILD_ITEMS_KEY,
     queryFn: async ({ signal }) => {
       try {
-        return listFromResponse<Record<string, unknown>>(await fetchJson<unknown>('/items?limit=1000', { signal }));
+        return listFromResponse<Record<string, unknown>>(await fetchJson<unknown>(PICK_LIST_URLS.items, { signal }));
       } catch (err: unknown) {
         logUnlessAborted(signal, 'Error loading items:', err);
         throw err;

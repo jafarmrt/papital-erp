@@ -31,3 +31,12 @@ export function parsePagination(
 
   return { page, limit, offset: (page - 1) * limit };
 }
+
+/** فهرست انتخاب (مدل مجوز ت۱۰): بی سقف وقتی limit نیامده، صفر یا نامعتبر است؛ وگرنه حداکثر MAX_PICK_LIST_LIMIT ردیف */
+export const MAX_PICK_LIST_LIMIT = 5000;
+
+export function parsePickListLimit(raw: unknown): number | undefined {
+  const limit = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(limit) || limit <= 0) return undefined;
+  return Math.min(limit, MAX_PICK_LIST_LIMIT);
+}

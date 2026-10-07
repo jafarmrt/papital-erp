@@ -5,7 +5,6 @@ import {
   Trash2,
   Edit2,
   ShieldCheck,
-  Shield,
   KeyRound,
   Search,
   Copy,
@@ -13,6 +12,8 @@ import {
 import { ActionMenu } from '../ActionMenu';
 import toast from 'react-hot-toast';
 import { copyToClipboard } from '../../utils/clipboard';
+import { isSystemAdminRole, SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog';
+import { roleWithinGrant, type GrantorPermissions } from '../../lib/permissions/grantBoundary';
 
 interface UsersTabProps {
   users: User[];
@@ -21,6 +22,9 @@ interface UsersTabProps {
   onAddUser: () => void;
   onEditUser: (user: User) => void;
   onDeleteUser: (userId: number) => void;
+  /** v9.0.130 (TD-525، ت۳): دارنده «مدیریت کاربران»؛ حساب‌هایی را ویرایش و حذف می‌کند که همه مجوزهای نقششان را دارد */
+  canManage?: boolean;
+  grantor?: GrantorPermissions;
 }
 
 export const UsersTab: React.FC<UsersTabProps> = ({
@@ -30,6 +34,8 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onAddUser,
   onEditUser,
   onDeleteUser,
+  canManage = true,
+  grantor = 'all',
 }) => {
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<string>('ALL');
@@ -47,27 +53,18 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     });
   }, [users, userSearch, userRoleFilter]);
 
+  // حسابی که کاربر جاری ویرایش یا حذف می‌کند: حساب خودش، یا حسابی که همه مجوزهای نقشش را دارد (همان قاعده سرور)
+  const canManageAccount = (u: User) => canManage && (u.id === currentUser.id
+    || roleWithinGrant(grantor, rolesList.find((r) => r.code === u.role) ?? { code: u.role, permissions: [] }));
+
   const getRoleBadge = (roleCode: string) => {
     const roleObj = rolesList.find((r) => r.code === roleCode);
-    const roleTitle = roleObj
-      ? roleObj.name
-      : roleCode === 'admin'
-      ? 'مدیر سیستم'
-      : roleCode === 'manager'
-      ? 'سرپرست'
-      : 'تماشاگر';
+    const roleTitle = roleObj ? roleObj.name : isSystemAdminRole(roleCode) ? 'مدیر سیستم' : roleCode;
 
-    if (roleCode === 'admin') {
+    if (isSystemAdminRole(roleCode)) {
       return (
         <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg text-xs font-semibold inline-flex items-center gap-1">
           <ShieldCheck size={14} /> {roleTitle}
-        </span>
-      );
-    }
-    if (roleObj?.isSystem === 1) {
-      return (
-        <span className="bg-blue-100 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-lg text-xs font-semibold inline-flex items-center gap-1">
-          <Shield size={14} /> {roleTitle}
         </span>
       );
     }
@@ -100,7 +97,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             className="text-xs border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="ALL">همه نقش‌ها ({users.length})</option>
-            <option value="admin">مدیر سیستم</option>
+            <option value={SYSTEM_ADMIN_ROLE}>مدیر سیستم</option>
             {rolesList.map((r) => (
               <option key={r.id} value={r.code}>
                 {r.name}
@@ -109,12 +106,14 @@ export const UsersTab: React.FC<UsersTabProps> = ({
           </select>
         </div>
 
+        {canManage && (
         <button
           onClick={onAddUser}
           className="px-3.5 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm shrink-0 w-full md:w-auto justify-center"
         >
           <Plus size={16} /> ثبت کاربر جدید
         </button>
+        )}
       </div>
 
       {/* Table */}
@@ -150,6 +149,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                   <td className="p-3.5">{getRoleBadge(u.role)}</td>
                   <td className="p-3.5 text-center">
                     <div className="flex items-center justify-center gap-1.5">
+                      {canManageAccount(u) && (
                       <button
                         onClick={() => onEditUser(u)}
                         className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -157,13 +157,16 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                       >
                         <Edit2 size={16} />
                       </button>
+                      )}
                       <ActionMenu
                         items={[
-                          {
-                            label: 'ویرایش اطلاعات کاربر',
-                            icon: Edit2,
-                            onClick: () => onEditUser(u),
-                          },
+                          ...(canManageAccount(u)
+                            ? [{
+                                label: 'ویرایش اطلاعات کاربر',
+                                icon: Edit2,
+                                onClick: () => onEditUser(u),
+                              }]
+                            : []),
                           {
                             label: `کپی نام کاربری (${u.username})`,
                             icon: Copy,
@@ -174,7 +177,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                               });
                             },
                           },
-                          ...(u.id !== currentUser.id
+                          ...(u.id !== currentUser.id && canManageAccount(u)
                             ? [
                                 {
                                   label: 'حذف کاربر',

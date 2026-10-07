@@ -69,8 +69,7 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
     staleTime: 5 * 60 * 1000
   });
 
-  const permissionOptions = [...new Set((dbRoles || []).flatMap(r => (Array.isArray(r.permissions) ? r.permissions : []).map(String)))]
-    .filter(p => p.includes('.')).sort();
+  const roleOptions = (Array.isArray(dbRoles) ? dbRoles : []).map(r => ({ code: r.code, name: r.name }));
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [edges, setEdges] = useState<CanvasEdge[]>([]);
@@ -579,44 +578,9 @@ export const WorkflowDesignerCanvas: React.FC<WorkflowDesignerCanvasProps> = ({ 
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">نقش مجاز تأییدکننده</label>
-                <select
-                  value={selectedEdge.requiredRole}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setEdges(prev => prev.map((eg, idx) => idx === selectedEdgeIndex ? { ...eg, requiredRole: val } : eg));
-                  }}
-                  className="w-full text-xs p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">همه کاربران (بدون محدودیت نقش)</option>
-                  {dbRoles && dbRoles.length > 0 ? (
-                    dbRoles.map((r) => (
-                      <option key={r.code} value={r.code}>
-                        {r.name}
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="admin">مدیر سیستم</option>
-                      <option value="warehouse_keeper">انباردار</option>
-                      <option value="accountant">حسابدار</option>
-                      <option value="sales_manager">مدیر فروش</option>
-                      <option value="production_manager">مدیر تولید</option>
-                    </>
-                  )}
-                  {selectedEdge.requiredRole && 
-                   (!dbRoles || !dbRoles.some(r => r.code === selectedEdge.requiredRole)) && (
-                    <option value={selectedEdge.requiredRole}>
-                      نقشی که دیگر تعریف نشده است
-                    </option>
-                  )}
-                </select>
-              </div>
-
               <WorkflowEdgeGuardFields
                 value={selectedEdge}
-                permissionOptions={permissionOptions}
+                roles={roleOptions}
                 onChange={(patch) => setEdges(prev => prev.map((eg, idx) => idx === selectedEdgeIndex ? { ...eg, ...patch } : eg))}
               />
 

@@ -4,6 +4,8 @@
  * مقصدش پیدا نمی‌شد بی‌صدا حذف می‌شد.
  */
 
+import { isCatalogPermission } from '../permissions/permissionCatalog';
+
 export const WORKFLOW_STATE_TYPES = ['initial', 'intermediate', 'normal', 'terminal'] as const;
 export const WORKFLOW_APPROVAL_RULE_TYPES = ['SINGLE', 'AND_ALL', 'OR_ANY', 'K_OF_N'] as const;
 
@@ -31,6 +33,8 @@ export interface WorkflowDesignTransition {
   approvalRuleType?: unknown;
   parallelApprovalRule?: unknown;
   kValue?: unknown;
+  requiredRole?: unknown;
+  requiredPermission?: unknown;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -119,6 +123,15 @@ export function workflowDesignErrors(states: unknown, transitions: unknown): str
     }
     if (tr.kValue !== undefined && tr.kValue !== null && !(Number.isInteger(tr.kValue) && Number(tr.kValue) >= 1)) {
       errors.push(`شمار امضای اقدام ${transitionLabel(tr, i)} باید عدد درست و دست‌کم ۱ باشد.`);
+    }
+    // v9.0.128 (TD-542، مدل مجوز §۴.۲): هر اقدام یک مجوز از فهرست مجوزها می‌خواهد و اختیاراً یک نقش مشخص؛ وجود نقش را
+    // سرور هنگام ذخیره می‌سنجد
+    const permission = text(tr.requiredPermission);
+    if (permission && !isCatalogPermission(permission)) {
+      errors.push(`مجوز لازم اقدام ${transitionLabel(tr, i)} («${permission}») در فهرست مجوزها نیست؛ آن را از فهرست برگزینید.`);
+    }
+    if (text(tr.requiredRole).includes('.')) {
+      errors.push(`نقش اقدام ${transitionLabel(tr, i)} کلید مجوز است؛ آن را در «مجوز لازم» بگذارید و نقش را از فهرست نقش‌ها برگزینید.`);
     }
   });
 

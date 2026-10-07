@@ -3,6 +3,7 @@ import { Item } from '../../../types';
 import { formatPersianNumber } from '../../../utils';
 import { SearchableSelect } from '../../SearchableSelect';
 import type { StockDocumentForm } from '../../../hooks/documents/useStockDocumentForm';
+import { PICK_LIST_URLS } from '../../../lib/permissions/pickLists';
 
 interface StockItemPickerProps {
   form: StockDocumentForm;
@@ -55,7 +56,7 @@ export function StockItemPicker({ form, onItemSelect, onAddItem, onCreateItem }:
             </div>
             <SearchableSelect
               className="w-full shadow-2xs rounded-xl"
-              fetchUrl="/items"
+              fetchUrl={PICK_LIST_URLS.items}
               mapResultToOption={(it: Item) => {
                 const { totalReservedQty, reservedForOtherProjects, reservedForSelectedProject, maxAllowedForExit } = getItemReservationSummary(it);
 

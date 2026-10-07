@@ -3,6 +3,7 @@ import { orm, type DbExecutor } from '../../db/drizzle.js';
 import { workflowDefinitions, workflowStates, workflowTransitions } from '../../db/schema.js';
 import type { HealthCheckTestResult } from '../../types.js';
 import { recordDefinitionVersion } from './workflowSnapshot.js';
+import { SYSTEM_ADMIN_ROLE } from '../../lib/permissions/permissionCatalog.js';
 
 /**
  * v9.0.35 (TD-445، یافته B14-03، تصمیم مالک محصول ت۲ «فقط مجوز»): گام‌های گردش‌کار پیش‌فرض اسناد با مجوز بسته می‌شوند،
@@ -28,7 +29,7 @@ export const DOC_APPROVAL_STEP_GUARDS: ReadonlyArray<StepGuard> = [
 /** نگهبان گام‌ها در seed پیش از v9.0.35؛ فقط تعریفی که دقیقاً همین است (دست‌نخورده) خودکار به‌روز می‌شود */
 const LEGACY_DOC_APPROVAL_GUARDS: ReadonlyArray<StepGuard> = DOC_APPROVAL_STEP_GUARDS.map(g => ({
   ...g,
-  requiredRole: g.actionKey === 'direct_approve' ? 'admin' : '',
+  requiredRole: g.actionKey === 'direct_approve' ? SYSTEM_ADMIN_ROLE : '',
   requiredPermission: g.actionKey === 'direct_approve' ? 'workflow.approve' : '',
 }));
 

@@ -1,7 +1,4 @@
-import { orm } from '../db/drizzle.js';
-import { roles } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
-import { rolePermissionsCache } from './memoryCache.js';
+import { can } from '../middleware/authorize.js';
 
 /**
  * Mask payment card number to protect PII.
@@ -68,55 +65,35 @@ export function maskNobitexUsername(username?: string | null): string {
 }
 
 /**
- * Check if the given authenticated user has permissions to view sensitive financial/PII data.
- * Permissions granting access:
- * - Admin role (`role === 'admin'`)
- * - Explicit permissions: `*`, `payroll.view_sensitive`, `personnel.manage`, `personnel.view_sensitive`
- * - Record owner (if `recordOwnerUserId` matches `user.id`)
+ * v9.0.126 (TD-882، مدل مجوز §۴.۲ و §۴.۴): اطلاعات بانکی بی پوشش فقط با مجوز، از راه `can` (مدیر سیستم همیشه). پیش‌تر
+ * کد نقش `manager` و «*» هم همه را باز می‌کردند و دو کلید این‌جا بیرون از کاتالوگ بودند، پس هیچ نقشی نمی‌توانست آن‌ها
+ * را بگیرد. پرونده پرسنل و فیش حقوق هر کدام کلید خود را دارند؛ «مدیریت کامل پرسنل» هر دو را باز می‌کند.
  */
-export async function canAccessSensitivePersonnelData(
-  user: { id?: number; role?: string } | undefined,
-  recordOwnerUserId?: number | null
-): Promise<boolean> {
+export const SENSITIVE_PERSONNEL_PERMISSIONS = ['personnel.view_sensitive', 'personnel.manage'] as const;
+export const SENSITIVE_PAYROLL_PERMISSIONS = ['payroll.view_sensitive', 'personnel.manage'] as const;
+
+type SensitiveReader = { id?: number; role?: string } | undefined;
+
+async function canSeeUnmasked(user: SensitiveReader, recordOwnerUserId: number | null | undefined, keys: readonly string[]): Promise<boolean> {
   if (!user || !user.role) return false;
-
-  // 1. Super admin always has access
-  if (user.role === 'admin') return true;
-
-  // 2. Record owner accessing their own profile/payslip
-  if (recordOwnerUserId && user.id && Number(user.id) === Number(recordOwnerUserId)) {
-    return true;
-  }
-
-  // 3. Check role permissions cache
+  // صاحب پرونده یا فیش، داده خودش را می‌بیند
+  if (recordOwnerUserId && user.id && Number(user.id) === Number(recordOwnerUserId)) return true;
   try {
-    const roleData = await rolePermissionsCache.getOrSet(user.role, async () => {
-      const [roleRecord] = await orm.select().from(roles).where(eq(roles.code, user.role!));
-      if (!roleRecord) return null;
-      return {
-        permissions: Array.isArray(roleRecord.permissions) ? (roleRecord.permissions as string[]) : [],
-        isSystem: roleRecord.isSystem ?? 0
-      };
-    }, 60_000);
-
-    if (roleData) {
-      const perms = roleData.permissions;
-      if (
-        perms.includes('*') ||
-        perms.includes('payroll.view_sensitive') ||
-        perms.includes('personnel.manage') ||
-        perms.includes('personnel.view_sensitive') ||
-        user.role === 'manager'
-      ) {
-        return true;
-      }
-    }
-  } catch (err) {
-    // If DB check fails, default to safe false
+    return await can(user, ...keys);
+  } catch {
+    // خطای خواندن نقش: پوشش می‌ماند
     return false;
   }
+}
 
-  return false;
+/** شماره کارت، شبا، حساب و نام کاربری نوبیتکس پرونده پرسنل بی پوشش */
+export function canAccessSensitivePersonnelData(user: SensitiveReader, recordOwnerUserId?: number | null): Promise<boolean> {
+  return canSeeUnmasked(user, recordOwnerUserId, SENSITIVE_PERSONNEL_PERMISSIONS);
+}
+
+/** شماره کارت، شبا و نام کاربری نوبیتکس فیش حقوق بی پوشش */
+export function canAccessSensitivePayrollData(user: SensitiveReader, recordOwnerUserId?: number | null): Promise<boolean> {
+  return canSeeUnmasked(user, recordOwnerUserId, SENSITIVE_PAYROLL_PERMISSIONS);
 }
 
 /**

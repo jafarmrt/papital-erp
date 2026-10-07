@@ -17,6 +17,7 @@ import {
   roundToOneDecimal
 } from '../components/project/projectInventoryUtils';
 import { errorMessageOf } from '../utils';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 /** پاسخ PUT /projects/:id؛ رزرو پروژه را سرور می‌نویسد (v8.0.58، TD-306) */
 interface SavedProjectInventory {
@@ -156,7 +157,7 @@ export function useProjectInventory(
     async function loadData() {
       try {
         const [itemsRes, catRes, settingsRes] = await Promise.all([
-          fetchJson<any>('/api/items', { signal: controller.signal }),
+          fetchJson<any>(PICK_LIST_URLS.items, { signal: controller.signal }),
           fetchJson<any>('/api/categories', { signal: controller.signal }),
           fetchJson<any>('/api/settings', { signal: controller.signal }).catch((err) => {
             if (err?.name === 'AbortError') throw err;

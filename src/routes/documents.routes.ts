@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { authorizePermission, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { authorizePermission, can, userHasRoleOrPermission } from '../middleware/authorize.js';
+import { permissionDefinition } from '../lib/permissions/permissionCatalog.js';
+import { SALES_FINALIZE_PERMISSION } from '../lib/permissions/documentPermissions.js';
+import { createdDocumentStatus, permissionToCreateDocument, permissionToFinalizeDocument } from '../services/documents/documentRecordRule.js';
 import { BACKDATE_PERMISSION } from '../services/inventory/stockMovementDate.js';
 import { z } from 'zod';
 import { validate, paramsIdSchema, numericIdString, storageDateParam } from '../middleware/validate.js';
@@ -19,6 +22,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { parsePagination } from '../lib/pagination.js';
 import { getStockCountSheetItems } from '../services/inventory/stockCountSheet.js';
 import { READ_PERMISSIONS } from '../lib/recordReadPermissions.js';
+import { assertDocumentTypeReadable, readableDocumentTypes } from '../services/documents/documentReadScope.js';
 import type { AuthUserPayload } from '../types.js';
 
 const router = Router();
@@ -224,7 +228,7 @@ export const auditItemsQuerySchema = z.object({
 
 // V9-1.2: نگاه غیرمخرب (Peek) — شماره بعدی را بدون افزایش شمارنده برمی‌گرداند تا
 // بارگذاری فرم‌ها و فرم‌های رهاشده هرگز شماره سند نسوزانند.
-router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documents), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents/next-ref', authorizePermission(...READ_PERMISSIONS.documentNextRef), validate(nextRefQuerySchema), asyncHandler(async (req, res) => {
   const nextRef = await DocumentService.peekNextRef(String(req.query.type));
   res.json({ nextRef });
 }));
@@ -241,24 +245,23 @@ const docTypeTitles: Record<string, string> = {
   waste: 'سند ضایعات'
 };
 
-router.post('/documents', authorizePermission('documents.create', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
-  const userRole = req.user?.role;
-  const isSalesUser = userRole === 'sales_manager' || (userRole !== 'admin' && userRole !== 'manager' && userRole !== 'warehouse_keeper' && userRole !== 'accountant');
-  
-  if (isSalesUser) {
-    if (req.body.status === 'final') {
-      throw new ForbiddenError('کاربران فروش فقط مجاز به صدور پیش‌فاکتور می‌باشند. ثبت فاکتور نهایی و کسر از انبار باید توسط انباردار یا مدیر تایید گردد.');
-    }
-    // P0-02 (F17): کاربران فروش نباید با حذف فیلد status یا ارسال invoice به وضعیت قطعی برسند
-    if (!req.body.status || req.body.status === 'draft') {
-      req.body.status = 'proforma';
-    }
-    if (req.body.docType === 'invoice') {
-      req.body.docType = 'proforma';
-    }
-    if (req.body.status !== 'proforma') {
-      throw new ForbiddenError('کاربران فروش فقط مجاز به صدور پیش‌فاکتور (proforma) می‌باشند.');
-    }
+/** v9.0.125 (TD-541 / TD-771): کاربر مجوز این کار را دارد، وگرنه ۴۰۳ با نام فارسی مجوز */
+async function assertMayRecordDocument(user: AuthUserPayload | undefined, permission: string, action: string): Promise<void> {
+  if (await can(user, permission)) return;
+  throw new ForbiddenError(`${action} مجوز «${permissionDefinition(permission)?.title ?? permission}» را می‌خواهد.`, { permission }, 'DOCUMENT_PERMISSION_REQUIRED');
+}
+
+// v9.0.125 (TD-541 / TD-771، تصمیم ت۱ بسته ۸): مجوز هر سند از جدول «نوع سند و وضعیت ← مجوز» (documentPermissions.ts)
+// خوانده می‌شود. پیش‌تر هر نقشی جز چهار کد ثابت «کاربر فروش» بود: سند قطعی نمی‌زد و پیش‌نویسش پیش‌فاکتور می‌شد
+router.post('/documents', authorizePermission('documents.create', 'documents.finalize', 'warehouse.in', 'warehouse.out', 'audit.apply'), idempotency({ scope: 'documents' }), validate(documentCreateSchema), asyncHandler(async (req, res) => {
+  const requestedType = String(req.body.docType);
+  const recordStatus = createdDocumentStatus(requestedType, req.body.status);
+  await assertMayRecordDocument(req.user, permissionToCreateDocument(req.body),
+    `ثبت ${docTypeTitles[requestedType] ?? 'سند'}${recordStatus === 'final' ? ' به‌صورت قطعی' : ''}`);
+  // پیش‌فاکتورِ کسی که سند فروش را قطعی نمی‌کند، مانند پیش، نوع «پیش‌فاکتور» می‌گیرد (شماره و تاریخش هنگام نهایی‌سازی
+  // از سری فاکتور، TD-317 و TD-410). یکی شدن دو شکل پیش‌فاکتور کار B08-31 است؛ پیش‌نویس همیشه پیش‌نویس می‌ماند
+  if (requestedType === 'invoice' && recordStatus === 'proforma' && !await can(req.user, SALES_FINALIZE_PERMISSION)) {
+    req.body.docType = 'proforma';
   }
 
   // V10-4.3: اتصال سند به پرونده CRM فقط با فیلد صریح crmLeadId — حذف اتکا به تگ متنی «CRM #n»
@@ -336,8 +339,10 @@ router.post('/documents', authorizePermission('documents.create', 'warehouse.in'
   res.json({ success: true, docId: newDocId, projectReservation });
 }));
 
-router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
+// v9.0.140 (TD-890، ت۱۰ الف): فهرست کامل با مجوز بخش اسناد؛ مجوز انبارگردانی فقط فهرست سندهای شمارش و انتقال
+router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents, ...READ_PERMISSIONS.stockCountDocuments), validate(documentsQuerySchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
+  assertDocumentTypeReadable(await readableDocumentTypes(req.user, READ_PERMISSIONS.documents), type);
   const status = req.query.status as string;
   const search = req.query.search as string;
   const startDate = req.query.startDate as string;
@@ -363,8 +368,10 @@ router.get('/documents', authorizePermission(...READ_PERMISSIONS.documents), val
   res.json(result);
 }));
 
-router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsRefSchema), asyncHandler(async (req, res) => {
+router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsRefSchema), asyncHandler(async (req, res) => {
   const type = req.query.type as string;
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
+  assertDocumentTypeReadable(readable, type);
   const ref = req.params.ref;
   const docsResult = await DocumentService.getDocuments(type);
   const docList = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
@@ -373,23 +380,28 @@ router.get('/documents/by-ref/:ref', authorizePermission(...READ_PERMISSIONS.doc
     throw new NotFoundError('سند یافت نشد');
   }
   const doc = await DocumentService.getDocumentById(docSummary.id);
+  assertDocumentTypeReadable(readable, doc?.type);
   res.json(doc);
 }));
 
-router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.documents), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
+router.get('/documents/audit-items', authorizePermission(...READ_PERMISSIONS.stockCountSheet), validate(auditItemsQuerySchema), asyncHandler(async (req, res) => {
   // v9.0.55 (TD-480): موقعیت با کد یا نام انبار (خالی = انبار پیش‌فرض)؛ موقعیت ناشناخته ۴۲۲. پیش‌تر موجودی با کلید خام
   // خوانده می‌شد و نام انبار (که برگه می‌فرستاد) ستون موجودی را برای همه کالاها ۰ می‌کرد
   res.json(await getStockCountSheetItems(orm, req.query.location));
 }));
 
-router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documents), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
+router.get('/documents/:id', authorizePermission(...READ_PERMISSIONS.documentRecord, ...READ_PERMISSIONS.stockCountDocuments), validate(paramsDocIdOrRefSchema), asyncHandler(async (req, res) => {
   const rawId = req.params.id;
+  const readable = await readableDocumentTypes(req.user, READ_PERMISSIONS.documentRecord);
   const doc = await DocumentService.getDocumentByIdOrRef(rawId);
   if (!doc) throw new NotFoundError(`سند با شناسه یا عطف ${rawId} یافت نشد`);
+  assertDocumentTypeReadable(readable, doc.type);
   res.json(doc);
 }));
 
-router.put('/documents/:id/finalize', authorizePermission('documents.edit', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
+// v9.0.125 (TD-541 / TD-771): نهایی‌سازی همان مجوز ثبت قطعی همان نوع سند را می‌خواهد (پیش‌تر «ویرایش فاکتورها» بس بود و
+// فروشنده پیش‌فاکتوری را که خودش قطعی نمی‌توانست ثبت کند از این مسیر قطعی می‌کرد)
+router.put('/documents/:id/finalize', authorizePermission('documents.finalize', 'warehouse.in', 'warehouse.out'), idempotency({ scope: 'documents' }), validate(finalizeDocumentSchema), asyncHandler(async (req, res) => {
   const docId = Number(req.params.id);
   const { vatAmount, vatPercent, exchangeRate } = req.body || {};
   const user = sessionUserLabel(req.user);
@@ -397,6 +409,9 @@ router.put('/documents/:id/finalize', authorizePermission('documents.edit', 'war
   if (!beforeDoc) {
     throw new NotFoundError('سند مورد نظر یافت نشد.');
   }
+  // نوع سند پس از ثبت عوض نمی‌شود، پس مجوز پیش از تراکنش سنجیده می‌شود
+  const storedType = String(beforeDoc.type ?? '');
+  await assertMayRecordDocument(req.user, permissionToFinalizeDocument(storedType), `قطعی کردن ${docTypeTitles[storedType] ?? 'سند'}`);
 
   const parsedVatAmount = vatAmount !== undefined && vatAmount !== null ? Number(vatAmount) : undefined;
   const parsedVatPercent = vatPercent !== undefined && vatPercent !== null ? Number(vatPercent) : undefined;

@@ -4,6 +4,7 @@ import { X, RefreshCw, ArrowLeftRight, Warehouse, AlertTriangle, CheckCircle2 } 
 import { SearchableSelect } from './SearchableSelect';
 import { formatPersianNumber, parseCleanNumber, errorMessageOf, toStorageDate, getTodayJalaliDate } from '../utils';
 import { JalaliDateInput } from './common/JalaliDateInput';
+import { PICK_LIST_URLS } from '../lib/permissions/pickLists';
 
 interface WarehouseTransferModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ export default function WarehouseTransferModal({
       setSuccessMsg(null);
 
       Promise.all([
-        fetchJson('/items?limit=0'),
+        fetchJson(PICK_LIST_URLS.items),
         fetchJson('/warehouses'),
         fetchJson('/documents/next-ref?type=transfer')
       ])

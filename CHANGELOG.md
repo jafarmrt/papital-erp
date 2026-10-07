@@ -19,6 +19,60 @@ going forward.
 
 ## Version 9.x Series (Active — see `src/data/changelogs/9.ts`)
 
+### v9.0.142 — Piecework Read Scope
+- **Piecework Read Scope:** every personnel's work logs and special rates need a piecework permission; a project reads only its own logs (TD-892).
+
+### v9.0.141 — Item Price Read Scope
+- **Item Price Read Scope:** the invoice form reads the sale prices of the chosen item; all prices need the products permission (TD-891).
+
+### v9.0.140 — Document Read Scope
+- **Document Read Scope:** the full document list needs a document permission; the stock count page reads only its own documents (TD-890).
+
+### v9.0.139 — Project Pick List for Forms
+- **Project Pick List for Forms:** forms of other sections pick projects from a short list; the full project list needs the projects permission (TD-889).
+
+### v9.0.138 — Item Pick List for Forms
+- **Item Pick List for Forms:** forms of other sections pick items from a list without the average cost; the full item list needs the products permission (TD-888).
+
+### v9.0.137 — Customer Pick List for Forms
+- **Customer Pick List for Forms:** forms of other sections pick parties from a list without notes; the full customer list needs the customers view permission (TD-887).
+
+### v9.0.136 — System Admin Role Ticks Are Fixed
+- **System Admin Role Ticks Are Fixed:** the system admin role lists every permission, locked; its permissions cannot be edited (TD-886).
+
+### v9.0.135 — Only the System Admin Role Is Fixed
+- **Only the System Admin Role Is Fixed:** former default roles are ordinary roles that the admin edits and deletes (TD-885).
+
+### v9.0.134 — Fresh Install With the System Admin Only
+- **Fresh Install With the System Admin Only:** a fresh production install gets its base data at boot and only the system admin role; other roles come from role templates (TD-526).
+
+### v9.0.133 — Seed Inserts Only What Is Missing
+- **Seed Inserts Only What Is Missing:** the boot seed no longer restores permissions, categories, settings or account natures an admin changed (TD-591).
+
+### v9.0.132 — Menu From Permissions Only
+- **Menu From Permissions Only:** the per-role menu hiding is removed; a role sees exactly the pages its permissions open (TD-884).
+
+### v9.0.131 — One Page-Access Table
+- **One Page-Access Table:** menu, page routes, dashboard shortcuts and settings tabs read one table checked against the API guards (TD-668).
+
+### v9.0.130 — Users and Roles Page by Permission
+- **Users and Roles Page by Permission:** the page and menu open for user and role managers, and the forms offer only what the user may grant (TD-525).
+
+### v9.0.129 — No Self-Escalation by User and Role Managers
+- **No Self-Escalation:** a non-admin user or role manager no longer edits its own role, grants keys it lacks, or takes over an account stronger than its own (TD-520).
+
+### v9.0.128 — Workflow Steps by Permission and Exact Role
+- **Workflow Steps by Permission and Exact Role:** a step role matches only that role and the system admin and who signs is the step's required permission; designs keep only defined roles and catalog keys, and migration 0065 lists the steps another role used to sign (TD-542).
+
+### v9.0.127 — Notification Recipients by Permission
+- **Notification Recipients:** event-rule notifications and the won-lead notice go to the holders of a catalog permission instead of fixed role codes; the rule editor picks the permission from the catalog (TD-883).
+
+### v9.0.126 — Personnel Bank Details by Permission
+- **Personnel Bank Details:** unmasked card, Sheba and account numbers of personnel and payslips need a catalog permission; the role code manager and «*» no longer open them, and migration 0064 grants the keys to the roles that saw them before (TD-882).
+
+### v9.0.125 — Document Permissions by Type
+- **Document Permissions:** a document is recorded and finalized with the permission of its type and status, never the role code; the new documents.finalize finalizes sales documents, and migration 0063 grants it to the roles that finalized before (TD-541, TD-771).
+
 ### v9.0.124 — Update Checks Startup on the Configured Port
 - **Update Port:** `update.sh` waits for `/health/startup` on `PORT` from `.env` (written by `install.sh`, read by the server; an `APP_PORT` environment variable still wins, default 3000). Before, a server installed on another port reported "Update NOT completed" after a good update and was offered a backup restore. `setup-domain.sh` reads the port the same way (not covered by a test: it needs root, apt and certbot).
 

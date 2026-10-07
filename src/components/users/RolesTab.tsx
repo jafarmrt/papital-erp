@@ -1,7 +1,8 @@
 import React from 'react';
 import { Role, User } from '../../types';
-import { Plus, Trash2, Edit2, Users, Check, ShieldCheck } from 'lucide-react';
-import { MenuVisibilityPanel } from './MenuVisibilityPanel';
+import { Plus, Trash2, Edit2, Users, Check, ShieldCheck, Layers } from 'lucide-react';
+import { isSystemAdminRole, withRequiredPermissions } from '../../lib/permissions/permissionCatalog';
+import { ROLE_TEMPLATES, type RoleTemplate } from '../../lib/permissions/roleTemplates';
 
 interface RolesTabProps {
   rolesList: Role[];
@@ -10,6 +11,11 @@ interface RolesTabProps {
   onAddRole: () => void;
   onEditRole: (role: Role) => void;
   onDeleteRole: (roleId: number, roleName: string) => void;
+  /** v9.0.130 (TD-525، ت۳): دارنده «مدیریت نقش‌ها»؛ نقش خودش را (اگر مدیر سیستم نیست) ویرایش نمی‌کند */
+  canManage?: boolean;
+  ownRoleCode?: string;
+  /** v9.0.134 (TD-526): «ساخت نقش از الگو»؛ فرم نقش تازه با نام و تیک‌های الگو باز می‌شود */
+  onAddRoleFromTemplate?: (template: RoleTemplate) => void;
 }
 
 export const RolesTab: React.FC<RolesTabProps> = ({
@@ -19,12 +25,14 @@ export const RolesTab: React.FC<RolesTabProps> = ({
   onAddRole,
   onEditRole,
   onDeleteRole,
+  canManage = true,
+  ownRoleCode,
+  onAddRoleFromTemplate,
 }) => {
+  const [showTemplates, setShowTemplates] = React.useState(false);
+  const isOwnRole = (code: string) => Boolean(ownRoleCode) && !isSystemAdminRole(ownRoleCode) && code === ownRoleCode;
   return (
     <div className="space-y-6">
-      {/* کنترل نمایش منو برای هر نقش */}
-      <MenuVisibilityPanel />
-
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border rounded-xl p-4 shadow-sm">
         <div>
           <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
@@ -34,13 +42,51 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             امکان تعریف نقش‌های جدید انبارداری، تولید، حسابداری، فروش و تنظیم دقیق ماتریس دسترسی‌ها
           </p>
         </div>
-        <button
-          onClick={onAddRole}
-          className="px-3.5 py-2 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-sm shrink-0"
-        >
-          <Plus size={16} /> تعریف نقش جدید
-        </button>
+        {canManage && (
+        <div className="flex items-center gap-2 shrink-0">
+          {onAddRoleFromTemplate && (
+          <button
+            onClick={() => setShowTemplates((v) => !v)}
+            aria-expanded={showTemplates}
+            className="px-3.5 py-2 text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1.5"
+          >
+            <Layers size={16} /> ساخت نقش از الگو
+          </button>
+          )}
+          <button
+            onClick={onAddRole}
+            className="px-3.5 py-2 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-sm"
+          >
+            <Plus size={16} /> تعریف نقش جدید
+          </button>
+        </div>
+        )}
       </div>
+
+      {canManage && onAddRoleFromTemplate && showTemplates && (
+        <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3">
+          <p className="text-xs text-slate-600">
+            الگو فقط نام و تیک‌ها را پیشنهاد می‌دهد؛ پیش از ذخیره آن‌ها را ویرایش کنید. نقش ساخته‌شده مثل هر نقش دیگری ویرایش و حذف می‌شود.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {ROLE_TEMPLATES.map((t) => (
+              <button
+                key={t.code}
+                type="button"
+                onClick={() => {
+                  setShowTemplates(false);
+                  onAddRoleFromTemplate(t);
+                }}
+                className="text-right bg-white border rounded-lg p-3 hover:border-amber-400 hover:shadow-sm transition-all"
+              >
+                <span className="block font-bold text-xs text-slate-800">{t.name}</span>
+                <span className="block text-[11px] text-slate-500 mt-1 line-clamp-2">{t.description}</span>
+                <span className="block text-[11px] text-amber-800 mt-1.5">{withRequiredPermissions(t.permissions).length} مجوز</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(!Array.isArray(rolesList) || rolesList.length === 0) && (
@@ -52,17 +98,20 @@ export const RolesTab: React.FC<RolesTabProps> = ({
             <p className="text-xs text-slate-500 max-w-xs">
               برای کنترل دقیق دسترسی کاربران، اولین نقش سفارشی خود را با انتخاب کلیدهای مجاز ایجاد کنید.
             </p>
+            {canManage && (
             <button
               onClick={onAddRole}
               className="mt-1 px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <Plus size={15} /> تعریف اولین نقش
             </button>
+            )}
           </div>
         )}
         {rolesList.map((r) => {
           const permCount = Array.isArray(r.permissions) ? r.permissions.length : 0;
-          const isSys = r.isSystem === 1 || r.code === 'admin';
+          // v9.0.135 (TD-885، ت۹ الف): فقط «مدیر سیستم» ثابت است؛ هر نقش دیگر ویرایش و حذف می‌شود
+          const isSys = isSystemAdminRole(r.code);
           const userCountWithRole = users.filter((u) => u.role === r.code).length;
 
           return (
@@ -100,20 +149,27 @@ export const RolesTab: React.FC<RolesTabProps> = ({
                   </span>
                   <span className="text-slate-500 font-medium flex items-center gap-1">
                     <Check size={14} className="text-emerald-600" />
-                    {r.code === 'admin'
+                    {isSystemAdminRole(r.code)
                       ? 'دسترسی نامحدود'
                       : `${permCount} از ${totalCatalogPermsCount} کلید`}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
+                  {canManage && !isOwnRole(r.code) && (
                   <button
                     onClick={() => onEditRole(r)}
                     className="flex-1 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md font-medium text-xs transition-colors flex items-center justify-center gap-1"
                   >
                     <Edit2 size={13} /> ماتریس دسترسی
                   </button>
-                  {!isSys && (
+                  )}
+                  {isOwnRole(r.code) && (
+                    <span className="flex-1 py-1.5 text-center text-slate-500 text-[11px]">
+                      نقش خودتان؛ کاربر دیگری که «مدیریت نقش‌ها» دارد آن را ویرایش می‌کند.
+                    </span>
+                  )}
+                  {canManage && !isSys && (
                     <button
                       onClick={() => onDeleteRole(r.id, r.name)}
                       className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
